@@ -1,0 +1,79 @@
+# ========== 环境变量 ==========
+.env
+.env.*
+!.env.example
+!.env.prod.example
+
+# ========== 日志与压缩包 ==========
+*.log
+*.tar.gz
+
+# ========== OS ==========
+.DS_Store
+Thumbs.db
+
+# ========== IDE / 编辑器 ==========
+.idea/
+.vscode/
+*.swp
+*.swo
+*.sublime-*
+
+# ========== Python ==========
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+
+# ========== Node.js ==========
+node_modules/
+.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+.npm/
+.pnpm-store/
+*.tsbuildinfo
+next-env.d.ts
+
+# ========== Next.js ==========
+.next/
+out/
+.vercel
+
+# ========== Docker 运行时 ==========
+uploads/
+backups/
+storage/
+logs/
+sessions/
+memory/
+memories/
+cache/
+
+# ========== CI / 测试 ==========
+.superpowers
+docs/superpowers
+
+# ========== Claude Code ==========
+.claude
+CLAUDE.local.md
