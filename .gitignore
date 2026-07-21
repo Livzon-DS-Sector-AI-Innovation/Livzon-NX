@@ -1,6 +1,21 @@
 # Root workspace local state
 .DS_Store
 Thumbs.db
+desktop.ini
+**/.idea/
+**/.vscode/
+**/*.swp
+**/*.swo
+
+# Local AI assistant state
+**/.codex/
+**/.agents/
+**/.claude/
+**/.superpowers/
+**/CLAUDE.local.md
+**/prompt.md
+**/MEMORY.md
+**/USER.md
 
 # Local documentation and helper scripts
 /docs/
@@ -13,12 +28,35 @@ Thumbs.db
 **/.mypy_cache/
 **/.venv/
 **/venv/
+**/*.py[cod]
+**/*.egg-info/
+**/htmlcov/
+**/.coverage
+**/.coverage.*
+**/coverage.xml
+**/dist/
+**/build/
 
 # Node / Next.js
 **/node_modules/
 **/.next/
 **/out/
 **/coverage/
+**/.turbo/
+**/.npm/
+**/.pnpm-store/
+**/.eslintcache
+**/*.tsbuildinfo
+**/next-env.d.ts
+
+# Temporary and generated leftovers
+**/tmp/
+**/temp/
+**/*.bak
+**/*.orig
+**/*.rej
+**/*.tmp
+**/*.temp
 
 # Local environment and logs
 **/.env
