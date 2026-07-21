@@ -1,0 +1,266 @@
+"""CPV Products API routes."""
+
+import uuid
+from datetime import date
+
+from fastapi import APIRouter, Depends, Query
+from fastapi.responses import JSONResponse
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.database import get_db
+from app.core.deps import CurrentUser
+from app.core.response import paginated_response, success_response
+from app.modules.quality import service
+from app.modules.quality.schemas import (
+    CpvBatchWideResponse,
+    CpvParameterCreate,
+    CpvParameterResponse,
+    CpvParameterUpdate,
+    CpvProductCreate,
+    CpvProductListResponse,
+    CpvProductResponse,
+    CpvProductUpdate,
+    CpvStatisticsResponse,
+    CpvTrendResponse,
+)
+
+router = APIRouter()
+
+
+# ==================== 产品管理 ====================
+@router.post("/products", summary="创建产品")
+async def create_product(
+    data: CpvProductCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> JSONResponse:
+    """创建CPV产品"""
+    product = await service.create_product(db, data)
+    return success_response(data=CpvProductResponse.model_validate(product))
+
+
+@router.get("/products", summary="获取产品列表")
+async def get_products(
+    keyword: str | None = Query(None, description="关键词搜索"),
+    status: str | None = Query(None, description="状态筛选"),
+    page: int = Query(1, ge=1, description="页码"),
+    page_size: int = Query(20, ge=1, le=200, description="每页数量"),
+    db: AsyncSession = Depends(get_db),
+) -> JSONResponse:
+    """获取CPV产品列表（带统计摘要）"""
+    from app.modules.quality import repository as repo
+    
+    products, total = await service.get_products(db, keyword, status, page, page_size)
+    
+    # 获取每个产品的统计信息
+    result = []
+    for p in products:
+        cpp_count = await repo.count_parameters(db, p.id, "CPP")
+        cqa_count = await repo.count_parameters(db, p.id, "CQA")
+        cpp_batch_count = await repo.count_batches(db, p.id, "CPP")
+        cqa_batch_count = await repo.count_batches(db, p.id, "CQA")
+        
+        result.append(
+            CpvProductListResponse(
+                id=p.id,
+                name=p.name,
+                specification=p.specification,
+                process_version=p.process_version,
+                status=p.status,
+                description=p.description,
+                created_at=p.created_at,
+                updated_at=p.updated_at,
+                created_by=p.created_by,
+                updated_by=p.updated_by,
+                cpp_parameter_count=cpp_count,
+                cqa_parameter_count=cqa_count,
+                cpp_batch_count=cpp_batch_count,
+                cqa_batch_count=cqa_batch_count,
+            )
+        )
+    
+    return paginated_response(data=result, page=page, page_size=page_size, total=total)
+
+
+@router.get("/products/{product_id}", summary="获取产品详情")
+async def get_product(
+    product_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+) -> JSONResponse:
+    """获取CPV产品详情"""
+    product = await service.get_product_by_id(db, product_id)
+    return success_response(data=CpvProductResponse.model_validate(product))
+
+
+@router.put("/products/{product_id}", summary="更新产品")
+async def update_product(
+    product_id: uuid.UUID,
+    data: CpvProductUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> JSONResponse:
+    """更新CPV产品"""
+    product = await service.update_product(db, product_id, data)
+    return success_response(data=CpvProductResponse.model_validate(product))
+
+
+@router.delete("/products/{product_id}", summary="删除产品")
+async def delete_product(
+    product_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> JSONResponse:
+    """删除CPV产品（软删除）"""
+    await service.delete_product(db, product_id)
+    return success_response(message="删除成功")
+
+
+# ==================== 参数配置 ====================
+@router.get("/products/{product_id}/parameters", summary="获取参数列表")
+async def get_parameters(
+    product_id: uuid.UUID,
+    type: str | None = Query(None, description="参数类型: CPP/CQA"),
+    db: AsyncSession = Depends(get_db),
+) -> JSONResponse:
+    """获取产品参数列表"""
+    parameters = await service.get_parameters(db, product_id, type)
+    return success_response(
+        data=[CpvParameterResponse.model_validate(p) for p in parameters]
+    )
+
+
+@router.post("/products/{product_id}/parameters", summary="新增参数")
+async def create_parameter(
+    product_id: uuid.UUID,
+    data: CpvParameterCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> JSONResponse:
+    """新增产品参数"""
+    parameter = await service.create_parameter(db, product_id, data)
+    return success_response(data=CpvParameterResponse.model_validate(parameter))
+
+
+@router.put("/parameters/{parameter_id}", summary="更新参数")
+async def update_parameter(
+    parameter_id: uuid.UUID,
+    data: CpvParameterUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> JSONResponse:
+    """更新参数"""
+    parameter = await service.update_parameter(db, parameter_id, data)
+    return success_response(data=CpvParameterResponse.model_validate(parameter))
+
+
+@router.delete("/parameters/{parameter_id}", summary="删除参数")
+async def delete_parameter(
+    parameter_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> JSONResponse:
+    """删除参数"""
+    await service.delete_parameter(db, parameter_id)
+    return success_response(message="删除成功")
+
+
+# ==================== 批次数据 ====================
+@router.get("/products/{product_id}/batches", summary="获取批次列表")
+async def get_batches(
+    product_id: uuid.UUID,
+    data_type: str | None = Query(None, description="数据类型: CPP/CQA"),
+    batch_no: str | None = Query(None, description="批号"),
+    start_date: date | None = Query(None, description="开始日期"),
+    end_date: date | None = Query(None, description="结束日期"),
+    page: int = Query(1, ge=1, description="页码"),
+    page_size: int = Query(20, ge=1, le=200, description="每页数量"),
+    db: AsyncSession = Depends(get_db),
+) -> JSONResponse:
+    """获取批次列表"""
+    batches, total = await service.get_batches(
+        db, product_id, data_type, batch_no, start_date, end_date, page, page_size
+    )
+    from app.modules.quality.schemas import CpvBatchResponse
+    return paginated_response(
+        data=[CpvBatchResponse.model_validate(b) for b in batches],
+        page=page,
+        page_size=page_size,
+        total=total,
+    )
+
+
+@router.get("/products/{product_id}/cpp", summary="获取CPP批次数据（宽表）")
+async def get_cpp_batches(
+    product_id: uuid.UUID,
+    batch_no: str | None = Query(None, description="批号"),
+    start_date: date | None = Query(None, description="开始日期"),
+    end_date: date | None = Query(None, description="结束日期"),
+    page: int = Query(1, ge=1, description="页码"),
+    page_size: int = Query(20, ge=1, le=200, description="每页数量"),
+    db: AsyncSession = Depends(get_db),
+) -> JSONResponse:
+    """获取CPP批次数据（宽表格式）"""
+    batches, total = await service.get_batches_wide(
+        db, product_id, "CPP", batch_no, start_date, end_date, page, page_size
+    )
+    return paginated_response(
+        data=[b.model_dump() for b in batches],
+        page=page,
+        page_size=page_size,
+        total=total,
+    )
+
+
+@router.get("/products/{product_id}/cqa", summary="获取CQA批次数据（宽表）")
+async def get_cqa_batches(
+    product_id: uuid.UUID,
+    batch_no: str | None = Query(None, description="批号"),
+    start_date: date | None = Query(None, description="开始日期"),
+    end_date: date | None = Query(None, description="结束日期"),
+    page: int = Query(1, ge=1, description="页码"),
+    page_size: int = Query(20, ge=1, le=200, description="每页数量"),
+    db: AsyncSession = Depends(get_db),
+) -> JSONResponse:
+    """获取CQA批次数据（宽表格式）"""
+    batches, total = await service.get_batches_wide(
+        db, product_id, "CQA", batch_no, start_date, end_date, page, page_size
+    )
+    return paginated_response(
+        data=[b.model_dump() for b in batches],
+        page=page,
+        page_size=page_size,
+        total=total,
+    )
+
+
+# ==================== 统计分析 ====================
+@router.get("/products/{product_id}/statistics", summary="获取统计数据")
+async def get_statistics(
+    product_id: uuid.UUID,
+    parameter_id: uuid.UUID = Query(..., description="参数ID"),
+    batch_no: str | None = Query(None, description="批号"),
+    start_date: date | None = Query(None, description="开始日期"),
+    end_date: date | None = Query(None, description="结束日期"),
+    db: AsyncSession = Depends(get_db),
+) -> JSONResponse:
+    """获取统计数据（批次总数、均值、标准差、CPK、异常数）"""
+    stats = await service.get_statistics(
+        db, product_id, parameter_id, batch_no, start_date, end_date
+    )
+    return success_response(data=stats.model_dump())
+
+
+@router.get("/products/{product_id}/trend", summary="获取趋势图数据")
+async def get_trend(
+    product_id: uuid.UUID,
+    parameter_id: uuid.UUID = Query(..., description="参数ID"),
+    batch_no: str | None = Query(None, description="批号"),
+    start_date: date | None = Query(None, description="开始日期"),
+    end_date: date | None = Query(None, description="结束日期"),
+    db: AsyncSession = Depends(get_db),
+) -> JSONResponse:
+    """获取趋势图数据"""
+    trend = await service.get_trend_data(
+        db, product_id, parameter_id, batch_no, start_date, end_date
+    )
+    return success_response(data=trend.model_dump())

@@ -1,0 +1,3 @@
+我有一个文件在C:\Users\chenlinxin\Desktop\codex资料\生产管理\压差统计，帮我把“压差统计”转移到wsl2里，生产管理模块下
+
+

@@ -1,0 +1,80 @@
+[build-system]
+requires = ["setuptools>=77.0,<83"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hermes-lite"
+version = "1.0.0"
+description = "Hermes-Lite - lightweight trimmed Hermes Agent core"
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+authors = [{ name = "Hermes-Lite" }]
+license = "MIT"
+license-files = ["LICENSE"]
+
+dependencies = [
+  # === Core LLM ===
+  "openai==2.24.0",
+  
+  # === Config & Environment ===
+  "python-dotenv==1.2.2",
+  "pyyaml==6.0.3",
+  "pydantic==2.13.4",
+  
+  # === HTTP ===
+  "httpx[socks]==0.28.1",
+  "requests==2.33.0",
+  "fastapi>=0.115.0,<1",
+  "uvicorn[standard]>=0.30.0,<1",
+  
+  # === Display & Logging ===
+  "rich==14.3.3",
+  "jinja2==3.1.6",
+  
+  # === Retry & Resilience ===
+  "tenacity==9.1.4",
+  
+  # === Timezone (Windows) ===
+  "tzdata==2025.3; sys_platform == 'win32'",
+  
+  # === Process Management ===
+  "psutil==7.2.2",
+  
+  # === Terminal ===
+  "ptyprocess>=0.7.0,<1; sys_platform != 'win32'",
+  "pywinpty>=2.0.0,<3; sys_platform == 'win32'",
+]
+
+[project.scripts]
+hermes-lite-init-memory = "scripts.init_memory:main"
+
+[project.optional-dependencies]
+# DeepSeek provider (recommended for Hermes-Lite)
+deepseek = []
+# OpenRouter aggregator
+openrouter = []
+# Development
+dev = ["pytest==9.0.2", "pytest-asyncio==1.3.0", "ruff==0.15.10"]
+
+[tool.setuptools]
+py-modules = [
+  "hermes_bootstrap",
+  "hermes_constants",
+  "hermes_logging",
+  "hermes_time",
+  "model_tools",
+  "run_agent",
+  "toolsets",
+  "utils",
+]
+
+[tool.setuptools.packages.find]
+include = ["agent*", "tools*", "providers*", "hermes_cli*", "gateway*", "plugins*", "services*", "scripts*"]
+exclude = ["tests*", "website*", "docs*"]
+
+[tool.setuptools.package-data]
+"*" = ["*.yaml", "*.yml", "*.json", "*.md"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"

@@ -1,0 +1,182 @@
+[
+  {
+    "source": "NMPA",
+    "column": "法规文件",
+    "test_url": "https://www.nmpa.gov.cn/xxgk/fgwj/index.html",
+    "http_status": 412,
+    "samples": [],
+    "issues": [
+      "未找到列表项，可能需要JS渲染"
+    ],
+    "risk_level": "中",
+    "needs_js_rendering": true,
+    "needs_login": false,
+    "has_captcha": false,
+    "attachments_downloadable": true,
+    "recommended_tech_stack": [
+      "Playwright",
+      "BeautifulSoup"
+    ],
+    "tested_at": "2026-06-09T15:07:43.380373"
+  },
+  {
+    "source": "CDE",
+    "column": "指导原则",
+    "test_url": "https://www.cde.org.cn/main/xxgk/listpage/2de64bb2077a4070b79ae59373755684",
+    "http_status": 202,
+    "samples": [],
+    "issues": [
+      "未找到列表项，可能需要JS渲染"
+    ],
+    "risk_level": "中",
+    "needs_js_rendering": true,
+    "needs_login": false,
+    "has_captcha": false,
+    "attachments_downloadable": true,
+    "recommended_tech_stack": [
+      "Playwright",
+      "BeautifulSoup"
+    ],
+    "tested_at": "2026-06-09T15:07:44.581913"
+  },
+  {
+    "source": "CFDI",
+    "column": "公告通告",
+    "test_url": "https://www.nifdc.org.cn/nifdc/bshff/swjgg/index.html",
+    "http_status": 404,
+    "samples": [],
+    "issues": [
+      "未找到列表项，可能需要JS渲染"
+    ],
+    "risk_level": "中",
+    "needs_js_rendering": true,
+    "needs_login": false,
+    "has_captcha": false,
+    "attachments_downloadable": true,
+    "recommended_tech_stack": [
+      "Playwright",
+      "BeautifulSoup"
+    ],
+    "tested_at": "2026-06-09T15:07:45.747513"
+  },
+  {
+    "source": "国家药典委",
+    "column": "公告",
+    "test_url": "https://www.chp.org.cn",
+    "http_status": 200,
+    "samples": [],
+    "issues": [
+      "页面结构复杂，需进一步适配栏目选择器"
+    ],
+    "risk_level": "中",
+    "needs_js_rendering": true,
+    "needs_login": false,
+    "has_captcha": false,
+    "attachments_downloadable": true,
+    "recommended_tech_stack": [
+      "Playwright",
+      "BeautifulSoup"
+    ],
+    "tested_at": "2026-06-09T15:07:47.034389"
+  },
+  {
+    "source": "广东省药监局",
+    "column": "法规文件",
+    "test_url": "https://mpa.gd.gov.cn/zwgk/fgwj/index.html",
+    "http_status": 404,
+    "samples": [],
+    "issues": [
+      "页面结构复杂，需进一步适配栏目选择器"
+    ],
+    "risk_level": "中",
+    "needs_js_rendering": true,
+    "needs_login": false,
+    "has_captcha": false,
+    "attachments_downloadable": true,
+    "recommended_tech_stack": [
+      "Playwright",
+      "BeautifulSoup"
+    ],
+    "tested_at": "2026-06-09T15:07:48.217761"
+  },
+  {
+    "source": "FDA",
+    "column": "Guidance Documents",
+    "test_url": "https://www.fda.gov/drugs/guidance-compliance-regulatory-information/guidances-drugs",
+    "http_status": 404,
+    "samples": [],
+    "issues": [
+      "FDA页面结构复杂，可能需要调整选择器或使用RSS"
+    ],
+    "risk_level": "中",
+    "needs_js_rendering": true,
+    "needs_login": false,
+    "has_captcha": false,
+    "attachments_downloadable": true,
+    "recommended_tech_stack": [
+      "Playwright",
+      "BeautifulSoup"
+    ],
+    "tested_at": "2026-06-09T15:07:50.138461"
+  },
+  {
+    "source": "EMA",
+    "column": "Public Consultations",
+    "test_url": "https://www.ema.europa.eu/en/human-regulatory/overview/public-consultations",
+    "http_status": 200,
+    "samples": [],
+    "issues": [
+      "EMA页面可能需要调整选择器"
+    ],
+    "risk_level": "中",
+    "needs_js_rendering": true,
+    "needs_login": false,
+    "has_captcha": false,
+    "attachments_downloadable": true,
+    "recommended_tech_stack": [
+      "Playwright",
+      "BeautifulSoup"
+    ],
+    "tested_at": "2026-06-09T15:07:53.827991"
+  },
+  {
+    "source": "EDQM",
+    "column": "News & Events",
+    "test_url": "https://www.edqm.eu/en/news-and-events",
+    "http_status": 403,
+    "samples": [],
+    "issues": [
+      "EDQM页面可能需要调整选择器"
+    ],
+    "risk_level": "中",
+    "needs_js_rendering": true,
+    "needs_login": false,
+    "has_captcha": false,
+    "attachments_downloadable": true,
+    "recommended_tech_stack": [
+      "Playwright",
+      "BeautifulSoup"
+    ],
+    "tested_at": "2026-06-09T15:07:56.408868"
+  },
+  {
+    "source": "ICH",
+    "column": "Guidelines",
+    "test_url": "https://www.ich.org/page/guidelines",
+    "http_status": 200,
+    "samples": [],
+    "issues": [
+      "ICH页面可能需要调整选择器"
+    ],
+    "risk_level": "中",
+    "needs_js_rendering": true,
+    "needs_login": false,
+    "has_captcha": false,
+    "attachments_downloadable": true,
+    "recommended_tech_stack": [
+      "Playwright",
+      "BeautifulSoup"
+    ],
+    "tested_at": "2026-06-09T15:07:59.429767"
+  }
+]

@@ -1,0 +1,73 @@
+{
+  "id": "differential_pressure_inspection_image_ocr_1",
+  "pluginKey": "@official-plugins/ai-image-to-json",
+  "pluginVersion": "1.0.14",
+  "name": "压差巡检图片OCR识别",
+  "description": "从压差巡检图片中提取位点编号、压差值、记录时间等结构化数据，输出为包含多条巡检记录的数组",
+  "icon": "",
+  "paramsSchema": {
+    "required": [
+      "inspection_image"
+    ],
+    "type": "object",
+    "order": [
+      "inspection_image",
+      "additional_extraction_requirements"
+    ],
+    "properties": {
+      "inspection_image": {
+        "type": "array",
+        "format": "plugin-image-url",
+        "description": "待识别的压差巡检图片",
+        "items": {
+          "type": "string"
+        }
+      },
+      "additional_extraction_requirements": {
+        "description": "额外的提取要求（可选）",
+        "type": "string"
+      }
+    }
+  },
+  "formValue": {
+    "images": "{{input.inspection_image}}",
+    "jsonStructure": [
+      {
+        "paramDescription": "巡检记录数组，每一个元素对应表格中的一行数据",
+        "children": [
+          {
+            "paramType": "String",
+            "name": "pointId",
+            "paramDescription": "压差巡检位点的唯一编号，格式为PD-32-XXX"
+          },
+          {
+            "paramDescription": "巡检记录的压差值，数字类型，包含单位",
+            "paramType": "Number",
+            "name": "pressureValue"
+          },
+          {
+            "name": "recordTime",
+            "paramDescription": "巡检记录的时间，格式为YYYY-MM-DD HH:mm:ss",
+            "paramType": "String"
+          },
+          {
+            "paramDescription": "巡检记录人姓名或工号",
+            "paramType": "String",
+            "name": "recorder"
+          }
+        ],
+        "name": "records",
+        "paramType": "Array"
+      }
+    ],
+    "modelID": "2006",
+    "modelParams": {
+      "maxTokens": 8192,
+      "temperature": 0.5
+    },
+    "prompt": "你是一位专业的工业巡检数据提取专家，请从提供的压差巡检图片中按以下要求识别数据：1. 优先识别标准网格线表格结构，按行拆分数据，每一行对应一条巡检记录；2. 每条记录必须包含位点编号（格式PD-32-XXX）、压差值（数字）、记录时间（统一转换为YYYY-MM-DD HH:mm:ss格式）、记录人四个字段；3. 确保识别所有数据行，不要遗漏任何有效记录；4. 压差值请提取完整数值和单位。{{input.additional_extraction_requirements}}"
+  },
+  "createdAt": 1780988015739,
+  "updatedAt": 1781078115363,
+  "createdBy": 7307621506086109185
+}

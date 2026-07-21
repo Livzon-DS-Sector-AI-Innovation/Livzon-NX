@@ -1,0 +1,34 @@
+# Hermes-Lite - Agent Core Dependencies
+# Generated from pyproject.toml
+# Python >=3.11,<3.14
+
+# === Core LLM ===
+openai==2.24.0
+
+# === Config & Environment ===
+python-dotenv==1.2.2
+pyyaml==6.0.3
+pydantic==2.13.4
+
+# === HTTP ===
+httpx[socks]==0.28.1
+requests==2.33.0
+fastapi>=0.115.0,<1
+uvicorn[standard]>=0.30.0,<1
+
+# === Display & Logging ===
+rich==14.3.3
+jinja2==3.1.6
+
+# === Retry & Resilience ===
+tenacity==9.1.4
+
+# === Timezone (Windows) ===
+tzdata==2025.3; sys_platform == 'win32'
+
+# === Process Management ===
+psutil==7.2.2
+
+# === Terminal ===
+ptyprocess>=0.7.0,<1; sys_platform != 'win32'
+pywinpty>=2.0.0,<3; sys_platform == 'win32'

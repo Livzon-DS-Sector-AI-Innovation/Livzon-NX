@@ -1,0 +1,62 @@
+[
+  {
+    "source": "CDE",
+    "column": "法规政策",
+    "url": "https://www.cde.org.cn/main/policy/listpage/9f9c74c73e0f8f56a8bfbc646055026d",
+    "timestamp": "2026-06-10T09:56:49.586299",
+    "list_accessible": true,
+    "title_extractable": false,
+    "date_extractable": false,
+    "detail_url_extractable": false,
+    "detail_accessible": false,
+    "content_extractable": false,
+    "attachment_extractable": false,
+    "records": [],
+    "error": null
+  },
+  {
+    "source": "CDE",
+    "column": "指导原则专栏",
+    "url": "https://www.cde.org.cn/zdyz/index",
+    "timestamp": "2026-06-10T09:56:53.782031",
+    "list_accessible": true,
+    "title_extractable": false,
+    "date_extractable": false,
+    "detail_url_extractable": false,
+    "detail_accessible": false,
+    "content_extractable": false,
+    "attachment_extractable": false,
+    "records": [],
+    "error": null
+  },
+  {
+    "source": "NMPA",
+    "column": "药品法规文件",
+    "url": "https://www.nmpa.gov.cn/yaopin/ypfgwj/index.html",
+    "timestamp": "2026-06-10T09:56:57.385241",
+    "list_accessible": true,
+    "title_extractable": false,
+    "date_extractable": false,
+    "detail_url_extractable": false,
+    "detail_accessible": false,
+    "content_extractable": false,
+    "attachment_extractable": false,
+    "records": [],
+    "error": null
+  },
+  {
+    "source": "NMPA",
+    "column": "药品政策解读",
+    "url": "https://www.nmpa.gov.cn/yaopin/ypzhcjd/index.html",
+    "timestamp": "2026-06-10T09:57:02.710724",
+    "list_accessible": true,
+    "title_extractable": false,
+    "date_extractable": false,
+    "detail_url_extractable": false,
+    "detail_accessible": false,
+    "content_extractable": false,
+    "attachment_extractable": false,
+    "records": [],
+    "error": null
+  }
+]

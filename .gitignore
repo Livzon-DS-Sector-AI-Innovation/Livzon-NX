@@ -1,79 +1,34 @@
-# ========== 环境变量 ==========
-.env
-.env.*
-!.env.example
-!.env.prod.example
-
-# ========== 日志与压缩包 ==========
-*.log
-*.tar.gz
-
-# ========== OS ==========
+# Root workspace local state
 .DS_Store
 Thumbs.db
 
-# ========== IDE / 编辑器 ==========
-.idea/
-.vscode/
-*.swp
-*.swo
-*.sublime-*
+# Python
+**/__pycache__/
+**/.pytest_cache/
+**/.ruff_cache/
+**/.mypy_cache/
+**/.venv/
+**/venv/
 
-# ========== Python ==========
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-.venv/
-venv/
-env/
-*.egg-info/
-dist/
-build/
-.eggs/
-*.egg
-.mypy_cache/
-.pytest_cache/
-.ruff_cache/
-htmlcov/
-.coverage
-.coverage.*
-coverage.xml
+# Node / Next.js
+**/node_modules/
+**/.next/
+**/out/
+**/coverage/
 
-# ========== Node.js ==========
-node_modules/
-.pnp
-.pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/versions
-.npm/
-.pnpm-store/
-*.tsbuildinfo
-next-env.d.ts
+# Local environment and logs
+**/.env
+**/.env.*
+!**/.env.example
+*.log
+*.pid
 
-# ========== Next.js ==========
-.next/
-out/
-.vercel
-
-# ========== Docker 运行时 ==========
-uploads/
-backups/
-storage/
-logs/
-sessions/
-memory/
-memories/
-cache/
-
-# ========== CI / 测试 ==========
-.superpowers
-docs/superpowers
-
-# ========== Claude Code ==========
-.claude
-CLAUDE.local.md
+# Runtime data
+dazah-backend/uploads/
+dazah-backend/storage/
+dazah-backend/backups/
+Hermes-Lite/logs/
+Hermes-Lite/sessions/
+Hermes-Lite/memory/
+Hermes-Lite/memories/
+Hermes-Lite/cache/

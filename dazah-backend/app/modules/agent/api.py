@@ -1,0 +1,808 @@
+import uuid
+from datetime import datetime
+from typing import Any
+
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from fastapi.responses import JSONResponse, StreamingResponse
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.config import Settings, get_settings
+from app.core.database import get_db
+from app.core.response import success_response
+from app.platform.audit.models import AuditLog
+from app.platform.identity.deps import RequiredUser
+
+from .access_scope import AgentAccessScopeService
+from .audit_service import AgentAuditService
+from .automation_service import AgentAutomationService
+from .event_service import AgentDomainEventService
+from .llm_proxy import forward_chat_completion, list_active_text_models
+from .operations_service import AgentOperationsService
+from .push_delivery_service import PushDeliveryService
+from .schemas import (
+    AgentAccessScopeOut,
+    AgentAuditSessionDetail,
+    AgentAuditSessionPage,
+    AgentAutomationAuditItem,
+    AgentChatRequest,
+    AgentConfirmationExecuteResponse,
+    AgentSessionDetail,
+    AgentSessionItem,
+    AgentSessionPage,
+    AgentSkillCreate,
+    AgentSkillResolveRequest,
+    AgentSkillUpdate,
+    AgentToolExecuteRequest,
+)
+from .service import AgentService
+from .tool_registration import ensure_agent_tools_registered
+from .tools import tool_registry
+
+router = APIRouter()
+
+
+def _changed_definition_fields(
+    current: dict[str, Any], previous: dict[str, Any]
+) -> list[str]:
+    return sorted(
+        key
+        for key in set(current) | set(previous)
+        if current.get(key) != previous.get(key)
+    )
+
+
+@router.get(
+    "/audit/sessions",
+    summary="管理员查询 Livzon 对话审计",
+    response_model=AgentAuditSessionPage,
+)
+async def list_agent_audit_sessions(
+    page: int = 1,
+    page_size: int = 20,
+    keyword: str | None = None,
+    user_id: uuid.UUID | None = None,
+    channel: str | None = None,
+    started_at: datetime | None = None,
+    ended_at: datetime | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+):
+    if current_user.role != "admin":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Admin required")
+    result = await AgentAuditService().list_sessions(
+        db,
+        page=max(1, page),
+        page_size=min(max(1, page_size), 100),
+        keyword=keyword,
+        user_id=user_id,
+        channel=channel,
+        started_at=started_at,
+        ended_at=ended_at,
+    )
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            method="GET",
+            path="/api/v1/agent/audit/sessions",
+            status_code=200,
+            resource_type="agent_audit",
+            action="list_agent_conversation_audit",
+            extra={"user_id": str(user_id) if user_id else None, "channel": channel},
+        )
+    )
+    return success_response(data=result.model_dump(mode="json"))
+
+
+@router.get(
+    "/audit/sessions/{session_id}",
+    summary="管理员查看 Livzon 对话审计详情",
+    response_model=AgentAuditSessionDetail,
+)
+async def get_agent_audit_session(
+    session_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+):
+    if current_user.role != "admin":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Admin required")
+    result = await AgentAuditService().get_session_detail(db, session_id=session_id)
+    if result is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Livzon session not found")
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            method="GET",
+            path=f"/api/v1/agent/audit/sessions/{session_id}",
+            status_code=200,
+            resource_type="agent_session",
+            resource_id=session_id,
+            action="view_agent_conversation_audit",
+        )
+    )
+    return success_response(data=result.model_dump(mode="json"))
+
+
+def _audit_automation_query(
+    db: AsyncSession,
+    *,
+    user_id: uuid.UUID,
+    action: str,
+    resource_id: uuid.UUID | None = None,
+    extra: dict[str, Any] | None = None,
+) -> None:
+    db.add(
+        AuditLog(
+            user_id=user_id,
+            method="GET",
+            path="/api/v1/agent/automations",
+            status_code=200,
+            resource_type="agent_automation",
+            resource_id=resource_id,
+            action=action,
+            extra=extra or {},
+        )
+    )
+
+
+def _bearer_token(authorization: str | None) -> str | None:
+    if authorization and authorization.startswith("Bearer "):
+        return authorization.removeprefix("Bearer ").strip()
+    return None
+
+
+@router.get("/push-deliveries")
+async def list_push_deliveries(
+    status_value: str | None = None,
+    page: int = 1,
+    page_size: int = 20,
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+):
+    result = await PushDeliveryService().list_for_user(
+        db,
+        user=current_user,
+        status_value=status_value,
+        page=max(1, page),
+        page_size=min(max(1, page_size), 100),
+    )
+    _audit_automation_query(
+        db,
+        user_id=current_user.id,
+        action="list_agent_push_deliveries",
+        extra={"status": status_value},
+    )
+    return success_response(data=result)
+
+
+@router.get("/push-deliveries/{delivery_id}")
+async def get_push_delivery(
+    delivery_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+):
+    try:
+        result = await PushDeliveryService().get_for_user(
+            db, user=current_user, delivery_id=delivery_id
+        )
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, str(exc)) from exc
+    _audit_automation_query(
+        db,
+        user_id=current_user.id,
+        action="view_agent_push_delivery",
+        resource_id=delivery_id,
+    )
+    return success_response(data=result)
+
+
+def require_service_token(expected: str, authorization: str | None) -> None:
+    token = _bearer_token(authorization)
+    if not expected or token != expected:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid Agent service token")
+
+
+@router.get("/domain-events/{correlation_id}")
+async def list_domain_events(
+    correlation_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+):
+    result = await AgentDomainEventService().list_for_user(
+        db, user=current_user, correlation_id=correlation_id
+    )
+    _audit_automation_query(
+        db,
+        user_id=current_user.id,
+        action="list_agent_domain_events",
+        extra={"correlation_id": str(correlation_id)},
+    )
+    return success_response(data=result)
+
+
+@router.get("/automation-capability-impacts")
+async def list_automation_capability_impacts(
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+):
+    result = await AgentAutomationService().list_capability_impacts(
+        db, user=current_user
+    )
+    _audit_automation_query(
+        db,
+        user_id=current_user.id,
+        action="list_agent_automation_capability_impacts",
+    )
+    return success_response(data=result)
+
+
+@router.get("/operations/health")
+async def get_automation_health(
+    db: AsyncSession = Depends(get_db), current_user: RequiredUser = None
+):
+    result = await AgentOperationsService().health(db, user=current_user)
+    _audit_automation_query(
+        db, user_id=current_user.id, action="view_automation_health"
+    )
+    return success_response(data=result)
+
+
+@router.get("/operations/trends")
+async def get_automation_trends(
+    db: AsyncSession = Depends(get_db), current_user: RequiredUser = None
+):
+    result = await AgentOperationsService().trends(db, user=current_user)
+    _audit_automation_query(
+        db, user_id=current_user.id, action="view_automation_trends"
+    )
+    return success_response(data=result)
+
+
+@router.get("/operations/templates")
+async def list_automation_templates(
+    db: AsyncSession = Depends(get_db), current_user: RequiredUser = None
+):
+    _audit_automation_query(
+        db, user_id=current_user.id, action="list_automation_templates"
+    )
+    return success_response(data=AgentOperationsService.templates())
+
+
+@router.get("/operations/suggestions")
+async def list_automation_suggestions(
+    db: AsyncSession = Depends(get_db), current_user: RequiredUser = None
+):
+    result = await AgentOperationsService().suggestions(db, user=current_user)
+    _audit_automation_query(
+        db, user_id=current_user.id, action="view_automation_suggestions"
+    )
+    return success_response(data=result)
+
+
+@router.get("/operations/report")
+async def get_operations_report(
+    db: AsyncSession = Depends(get_db), current_user: RequiredUser = None
+):
+    result = await AgentOperationsService().admin_report(db, user=current_user)
+    _audit_automation_query(
+        db, user_id=current_user.id, action="view_operations_report"
+    )
+    return success_response(data=result)
+
+
+@router.get("/automations")
+async def list_automations(
+    scope: str = "mine",
+    status_value: str | None = None,
+    page: int = 1,
+    page_size: int = 20,
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+):
+    result = await AgentAutomationService().list_automations(
+        db,
+        user=current_user,
+        scope=scope,
+        status_value=status_value,
+        page=max(1, page),
+        page_size=min(max(1, page_size), 100),
+    )
+    _audit_automation_query(
+        db,
+        user_id=current_user.id,
+        action="list_agent_automations",
+        extra={"scope": scope, "status": status_value},
+    )
+    return success_response(data=result.model_dump(mode="json"))
+
+
+@router.get("/automations/{automation_id}")
+async def get_automation(
+    automation_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+):
+    result = await AgentAutomationService().get_automation_out(
+        db, user=current_user, automation_id=automation_id
+    )
+    _audit_automation_query(
+        db,
+        user_id=current_user.id,
+        action="view_agent_automation",
+        resource_id=automation_id,
+    )
+    return success_response(data=result.model_dump(mode="json"))
+
+
+@router.get("/automations/{automation_id}/versions")
+async def list_automation_versions(
+    automation_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+):
+    result = await AgentAutomationService().list_versions(
+        db, user=current_user, automation_id=automation_id
+    )
+    _audit_automation_query(
+        db,
+        user_id=current_user.id,
+        action="list_agent_automation_versions",
+        resource_id=automation_id,
+    )
+    return success_response(data=[item.model_dump(mode="json") for item in result])
+
+
+@router.get("/automation-audit", response_model=list[AgentAutomationAuditItem])
+async def list_automation_audit(
+    automation_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+):
+    versions = await AgentAutomationService().list_versions(
+        db, user=current_user, automation_id=automation_id
+    )
+    previous: dict[str, Any] = {}
+    result: list[AgentAutomationAuditItem] = []
+    for version in sorted(versions, key=lambda item: item.version):
+        result.append(
+            AgentAutomationAuditItem(
+                id=version.id,
+                automation_id=version.automation_id,
+                version=version.version,
+                actor_id=version.created_by,
+                change_summary=version.change_summary,
+                changed_fields=_changed_definition_fields(
+                    version.definition, previous
+                ),
+                created_at=version.created_at,
+            )
+        )
+        previous = version.definition
+    _audit_automation_query(
+        db,
+        user_id=current_user.id,
+        action="list_agent_automation_audit",
+        resource_id=automation_id,
+    )
+    return success_response(
+        data=[item.model_dump(mode="json") for item in reversed(result)]
+    )
+
+
+@router.get("/automations/{automation_id}/schedule-preview")
+async def preview_automation_schedule(
+    automation_id: uuid.UUID,
+    count: int = 5,
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+):
+    result = await AgentAutomationService().simulate_schedule(
+        db,
+        user=current_user,
+        automation_id=automation_id,
+        count=min(max(1, count), 20),
+    )
+    _audit_automation_query(
+        db,
+        user_id=current_user.id,
+        action="simulate_agent_automation_schedule",
+        resource_id=automation_id,
+    )
+    return success_response(data=result)
+
+
+@router.get("/scheduled-triggers")
+async def list_scheduled_triggers(
+    scope: str = "mine",
+    page: int = 1,
+    page_size: int = 20,
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+):
+    result = await AgentAutomationService().list_scheduled_triggers(
+        db,
+        user=current_user,
+        scope=scope,
+        page=max(1, page),
+        page_size=min(max(1, page_size), 100),
+    )
+    _audit_automation_query(
+        db,
+        user_id=current_user.id,
+        action="list_agent_scheduled_triggers",
+        extra={"scope": scope},
+    )
+    return success_response(data=result.model_dump(mode="json"))
+
+
+@router.get("/automation-runs")
+async def list_automation_runs(
+    scope: str = "mine",
+    status_value: str | None = None,
+    page: int = 1,
+    page_size: int = 20,
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+):
+    result = await AgentAutomationService().list_runs(
+        db,
+        user=current_user,
+        scope=scope,
+        status_value=status_value,
+        page=max(1, page),
+        page_size=min(max(1, page_size), 100),
+    )
+    _audit_automation_query(
+        db,
+        user_id=current_user.id,
+        action="list_agent_automation_runs",
+        extra={"scope": scope, "status": status_value},
+    )
+    return success_response(data=result.model_dump(mode="json"))
+
+
+@router.get("/automation-runs/{run_id}")
+async def get_automation_run(
+    run_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+):
+    result = await AgentAutomationService().get_run(
+        db, user=current_user, run_id=run_id
+    )
+    _audit_automation_query(
+        db,
+        user_id=current_user.id,
+        action="view_agent_automation_run",
+        resource_id=run_id,
+    )
+    return success_response(data=result)
+
+
+@router.get("/automation-runs/{run_id}/events")
+async def list_automation_run_events(
+    run_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+):
+    result = await AgentAutomationService().list_run_events(
+        db, user=current_user, run_id=run_id
+    )
+    _audit_automation_query(
+        db,
+        user_id=current_user.id,
+        action="list_agent_automation_run_events",
+        resource_id=run_id,
+    )
+    return success_response(data=[item.model_dump(mode="json") for item in result])
+
+
+@router.post("/chat")
+async def chat(
+    payload: AgentChatRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+    settings: Settings = Depends(get_settings),
+):
+    await AgentAccessScopeService().get_current_scope(db, user=current_user)
+    result = await AgentService(settings).chat(
+        db, request=payload, current_user=current_user
+    )
+    return success_response(data=result.model_dump(mode="json"))
+
+
+@router.get("/sessions", response_model=AgentSessionPage)
+async def list_my_agent_sessions(
+    page: int = 1,
+    page_size: int = 20,
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+    settings: Settings = Depends(get_settings),
+):
+    result = await AgentService(settings).list_sessions(
+        db,
+        current_user=current_user,
+        page=max(1, page),
+        page_size=min(max(1, page_size), 50),
+    )
+    return success_response(data=result.model_dump(mode="json"))
+
+
+@router.get("/sessions/{session_id}", response_model=AgentSessionDetail)
+async def get_my_agent_session(
+    session_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+    settings: Settings = Depends(get_settings),
+):
+    result = await AgentService(settings).get_session_detail(
+        db, session_id=session_id, current_user=current_user
+    )
+    return success_response(data=result.model_dump(mode="json"))
+
+
+@router.post("/sessions/{session_id}/archive", response_model=AgentSessionItem)
+async def archive_my_agent_session(
+    session_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+    settings: Settings = Depends(get_settings),
+):
+    result = await AgentService(settings).archive_session(
+        db, session_id=session_id, current_user=current_user
+    )
+    return success_response(data=result.model_dump(mode="json"))
+
+
+@router.post("/chat/stream")
+async def chat_stream(
+    payload: AgentChatRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+    settings: Settings = Depends(get_settings),
+):
+    await AgentAccessScopeService().get_current_scope(db, user=current_user)
+    return StreamingResponse(
+        AgentService(settings).stream_chat(
+            db,
+            request=payload,
+            current_user=current_user,
+        ),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@router.get("/access-scope", response_model=AgentAccessScopeOut)
+async def get_my_access_scope(
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+):
+    result = await AgentAccessScopeService().scope_out(db, user=current_user)
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            method="GET",
+            path="/api/v1/agent/access-scope",
+            status_code=200,
+            resource_type="agent_access_scope",
+            resource_id=current_user.id,
+            action="view_own_agent_access_scope",
+            extra={
+                "source_grant_version": result.source_grant_version,
+                "agent_scope_version": result.agent_scope_version,
+            },
+        )
+    )
+    return success_response(data=result.model_dump(mode="json"))
+
+
+@router.post("/tools/execute")
+async def execute_tool(
+    payload: AgentToolExecuteRequest,
+    db: AsyncSession = Depends(get_db),
+    authorization: str | None = Header(default=None),
+    settings: Settings = Depends(get_settings),
+):
+    require_service_token(settings.AGENT_TOOL_TOKEN, authorization)
+    result = await AgentService(settings).execute_tool(db, request=payload)
+    return success_response(data=result.model_dump(mode="json"))
+
+
+@router.post("/tools/execute/user")
+async def execute_tool_as_current_user(
+    payload: AgentToolExecuteRequest,
+    current_user: RequiredUser,
+    db: AsyncSession = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> JSONResponse:
+    context = {**payload.context, "user_id": str(current_user.id)}
+    trusted_payload = payload.model_copy(update={"context": context})
+    result = await AgentService(settings).execute_tool(db, request=trusted_payload)
+    return success_response(data=result.model_dump(mode="json"))
+
+
+@router.get("/tools")
+async def list_tools(
+    authorization: str | None = Header(default=None),
+    settings: Settings = Depends(get_settings),
+):
+    require_service_token(settings.AGENT_TOOL_TOKEN, authorization)
+    ensure_agent_tools_registered()
+    return success_response(data=[tool.public_dict() for tool in tool_registry.list()])
+
+
+@router.post("/skills/resolve")
+async def resolve_skills(
+    payload: AgentSkillResolveRequest,
+    db: AsyncSession = Depends(get_db),
+    authorization: str | None = Header(default=None),
+    settings: Settings = Depends(get_settings),
+):
+    require_service_token(settings.AGENT_TOOL_TOKEN, authorization)
+    result = await AgentService(settings).resolve_skills(db, request=payload)
+    return success_response(data=result.model_dump(mode="json"))
+
+
+@router.get("/skills")
+async def list_skills(
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+    settings: Settings = Depends(get_settings),
+):
+    if current_user.role != "admin":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Admin required")
+    result = await AgentService(settings).list_skills(db)
+    return success_response(data=[item.model_dump(mode="json") for item in result])
+
+
+@router.post("/skills")
+async def create_skill(
+    payload: AgentSkillCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+    settings: Settings = Depends(get_settings),
+):
+    if current_user.role != "admin":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Admin required")
+    result = await AgentService(settings).create_skill(
+        db, request=payload, current_user=current_user
+    )
+    return success_response(data=result.model_dump(mode="json"))
+
+
+@router.get("/skills/{skill_id}")
+async def get_skill(
+    skill_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+    settings: Settings = Depends(get_settings),
+):
+    if current_user.role != "admin":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Admin required")
+    result = await AgentService(settings).get_skill(db, skill_id=skill_id)
+    return success_response(data=result.model_dump(mode="json"))
+
+
+@router.put("/skills/{skill_id}")
+async def update_skill(
+    skill_id: uuid.UUID,
+    payload: AgentSkillUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+    settings: Settings = Depends(get_settings),
+):
+    if current_user.role != "admin":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Admin required")
+    result = await AgentService(settings).update_skill(
+        db, skill_id=skill_id, request=payload, current_user=current_user
+    )
+    return success_response(data=result.model_dump(mode="json"))
+
+
+@router.post("/skills/{skill_id}/enable")
+async def enable_skill(
+    skill_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+    settings: Settings = Depends(get_settings),
+):
+    if current_user.role != "admin":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Admin required")
+    result = await AgentService(settings).set_skill_status(
+        db, skill_id=skill_id, status_value="active", current_user=current_user
+    )
+    return success_response(data=result.model_dump(mode="json"))
+
+
+@router.post("/skills/{skill_id}/disable")
+async def disable_skill(
+    skill_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+    settings: Settings = Depends(get_settings),
+):
+    if current_user.role != "admin":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Admin required")
+    result = await AgentService(settings).set_skill_status(
+        db, skill_id=skill_id, status_value="disabled", current_user=current_user
+    )
+    return success_response(data=result.model_dump(mode="json"))
+
+
+@router.delete("/skills/{skill_id}")
+async def delete_skill(
+    skill_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+    settings: Settings = Depends(get_settings),
+):
+    if current_user.role != "admin":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Admin required")
+    await AgentService(settings).delete_skill(
+        db, skill_id=skill_id, current_user=current_user
+    )
+    return success_response(data={"ok": True})
+
+
+@router.post("/confirmations/{confirmation_id}/execute")
+async def execute_confirmation(
+    confirmation_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+    settings: Settings = Depends(get_settings),
+):
+    confirmation, result = await AgentService(settings).execute_confirmation(
+        db,
+        confirmation_id=confirmation_id,
+        current_user=current_user,
+    )
+    response = AgentConfirmationExecuteResponse(
+        confirmation=AgentService(settings)._confirmation_out(confirmation),
+        result=result,
+    )
+    return success_response(data=response.model_dump(mode="json"))
+
+
+@router.post("/confirmations/{confirmation_id}/cancel")
+async def cancel_confirmation(
+    confirmation_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+    settings: Settings = Depends(get_settings),
+):
+    confirmation = await AgentService(settings).cancel_confirmation(
+        db,
+        confirmation_id=confirmation_id,
+        current_user=current_user,
+    )
+    return success_response(
+        data=AgentService(settings)
+        ._confirmation_out(confirmation)
+        .model_dump(mode="json")
+    )
+
+
+@router.get("/llm/models")
+async def agent_llm_models(
+    authorization: str | None = Header(default=None),
+    settings: Settings = Depends(get_settings),
+):
+    require_service_token(settings.AGENT_LLM_PROXY_TOKEN, authorization)
+    return await list_active_text_models()
+
+
+@router.post("/llm/chat/completions")
+async def agent_llm_chat_completions(
+    request: Request,
+    authorization: str | None = Header(default=None),
+    settings: Settings = Depends(get_settings),
+):
+    require_service_token(settings.AGENT_LLM_PROXY_TOKEN, authorization)
+    payload: dict[str, Any] = await request.json()
+    return await forward_chat_completion(payload)

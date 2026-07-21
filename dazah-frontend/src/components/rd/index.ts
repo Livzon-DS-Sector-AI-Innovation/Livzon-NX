@@ -1,0 +1,5 @@
+export { ResearchPage } from './ResearchPage'
+export { ProjectTable } from './ProjectTable'
+export { ProjectDrawer } from './ProjectDrawer'
+export { ICHAnalysisPage } from './ICHAnalysisPage'
+export { BayesianOptimizationPage } from './BayesianOptimizationPage'

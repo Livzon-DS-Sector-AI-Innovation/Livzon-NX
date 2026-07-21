@@ -1,0 +1,43 @@
+{
+  "广东药监局": {
+    "list_accessible": false,
+    "title_extractable": false,
+    "date_extractable": false,
+    "detail_url_extractable": false,
+    "detail_accessible": false,
+    "content_extractable": false,
+    "attachment_extractable": false,
+    "records": [],
+    "error": null
+  },
+  "CFDI": {
+    "list_accessible": true,
+    "title_extractable": true,
+    "date_extractable": false,
+    "detail_url_extractable": true,
+    "detail_accessible": true,
+    "content_extractable": true,
+    "attachment_extractable": false,
+    "records": [
+      {
+        "source": "CFDI",
+        "title": "2026年全国药品检查机构质量管理体系暨评估员培训班成功举办",
+        "publish_date": null,
+        "original_url": "https://www.cfdi.org.cn/cfdi/resource/news/16767.html"
+      },
+      {
+        "source": "CFDI",
+        "title": "2026年度国家级生物制品检查员能力提升培训班成功举办",
+        "publish_date": null,
+        "original_url": "https://www.cfdi.org.cn/cfdi/resource/news/16759.html"
+      },
+      {
+        "source": "CFDI",
+        "title": "核查中心举办2026年第1期“专家讲坛”",
+        "publish_date": null,
+        "original_url": "https://www.cfdi.org.cn/cfdi/resource/news/16722.html"
+      }
+    ],
+    "error": null
+  }
+}

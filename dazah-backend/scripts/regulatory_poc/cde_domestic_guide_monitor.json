@@ -1,0 +1,323 @@
+{
+  "timestamp": "2026-06-10T12:39:57.049905",
+  "target_url": "https://www.cde.org.cn/zdyz/listpage/9cd8db3b7530c6fa0c86485e563f93c7",
+  "approach": "direct page load + listen only",
+  "waf_passed": true,
+  "page_title": "国家药品监督管理局药品审评中心",
+  "all_xhr_fetch": [
+    {
+      "url": "https://www.cde.org.cn/zdyz/getDomesticGuideList?MmEwMD=3yruT0D64GHGBfJ1UqyMQbdEsibNEDWA7Ohz6hdHGbDXLqzNw766lZV4cxGblzvGw5EfBeRORGumUd4Je9fGrAsjX.ABHOElCk59QNbm1kWS99Ttx56fo5gpfZso1Yp6Cnc6PC41LHD9FARBatwlMTKTzai__wfY_wxCUY7FPx5Ut49yzkkg_kNygHlzOicnKIFLhJnpvO9AHJ92r1fYXmFKLg2f4Rt6Uqw07EsqlzQ4C0kilt2_5w4APpiSCU9K1dmB.wfYiH_syna9gsK4L9fhQwQgPrWpcGxe82ko4wdbUqqL3m6Au15BtfmEAHG2LBScS04YhyiaVYsWMjZX48PQ.O.vX7mf.p0.yj24iRveirn",
+      "method": "POST",
+      "resource_type": "xhr",
+      "status": 200,
+      "timestamp": "2026-06-10T12:40:01.034536",
+      "post_data": "pageNum=1&pageSize=10&searchTitle=&zyfl1=&zyfl2=&issueDate1=&issueDate2=",
+      "query_params": {
+        "MmEwMD": [
+          "3yruT0D64GHGBfJ1UqyMQbdEsibNEDWA7Ohz6hdHGbDXLqzNw766lZV4cxGblzvGw5EfBeRORGumUd4Je9fGrAsjX.ABHOElCk59QNbm1kWS99Ttx56fo5gpfZso1Yp6Cnc6PC41LHD9FARBatwlMTKTzai__wfY_wxCUY7FPx5Ut49yzkkg_kNygHlzOicnKIFLhJnpvO9AHJ92r1fYXmFKLg2f4Rt6Uqw07EsqlzQ4C0kilt2_5w4APpiSCU9K1dmB.wfYiH_syna9gsK4L9fhQwQgPrWpcGxe82ko4wdbUqqL3m6Au15BtfmEAHG2LBScS04YhyiaVYsWMjZX48PQ.O.vX7mf.p0.yj24iRveirn"
+        ]
+      },
+      "response_length": 1653,
+      "is_json": true,
+      "response_json": {
+        "msg": "操作成功",
+        "code": 200,
+        "data": {
+          "records": [
+            {
+              "issueDate": "20260601",
+              "nowstate": "颁布",
+              "fclass": "生物制品",
+              "title": "预防用mRNA疫苗临床试验技术指导原则（试行）",
+              "isnew": 0,
+              "zdyzIdCODE": "9c92f5cfa79fc44da0ac28d2b3a0f6b3"
+            },
+            {
+              "issueDate": "20260601",
+              "nowstate": "颁布",
+              "fclass": "化学药,生物制品",
+              "title": "关于开发适宜药品包装规格的指导原则",
+              "isnew": 0,
+              "zdyzIdCODE": "981efd549bda05ee430ec550583776fc"
+            },
+            {
+              "issueDate": "20260520",
+              "nowstate": "颁布",
+              "fclass": "化学药",
+              "title": "化学仿制药生物等效性研究重大缺陷情形",
+              "isnew": 0,
+              "zdyzIdCODE": "6b02391b10ae8dab7868d00cadd3cce4"
+            },
+            {
+              "issueDate": "20260520",
+              "nowstate": "颁布",
+              "fclass": "化学药",
+              "title": "化学仿制药药学研究重大缺陷情形",
+              "isnew": 0,
+              "zdyzIdCODE": "795daa2ef7016be0dbb632ec9b26e319"
+            },
+            {
+              "issueDate": "20260508",
+              "nowstate": "颁布",
+              "fclass": "生物制品",
+              "title": "重组胰岛素类产品药学研究与评价技术指导原则（修订版）",
+              "isnew": 0,
+              "zdyzIdCODE": "b14ec1420b889839c402742350bc0141"
+            },
+            {
+              "issueDate": "20260420",
+              "nowstate": "颁布",
+              "fclass": "生物制品",
+              "title": "生物类似药首次申报临床试验药学资料撰写指导原则",
+              "isnew": 0,
+              "zdyzIdCODE": "0fc3587f2f789b575842fe80822b6974"
+            },
+            {
+              "issueDate": "20260420",
+              "nowstate": "颁布",
+              "fclass": "生物制品",
+              "title": "抗体偶联药物首次申报临床试验药学资料撰写指导原则",
+              "isnew": 0,
+              "zdyzIdCODE": "35b3cb99bff7e4991c176e90b20472e2"
+            },
+            {
+              "issueDate": "20260420",
+              "nowstate": "颁布",
+              "fclass": "生物制品",
+              "title": "治疗用重组蛋白药物首次申报临床试验药学资料撰写指导原则",
+              "isnew": 0,
+              "zdyzIdCODE": "f3f0edf900692d447578b37bdd83a085"
+            },
+            {
+              "issueDate": "20260413",
+              "nowstate": "颁布",
+              "fclass": "中药",
+              "title": "以患者为中心的中药新药临床研发技术指导原则",
+              "isnew": 0,
+              "zdyzIdCODE": "5eddf17d68db0383d4e8a486ed3190e0"
+            },
+            {
+              "issueDate": "20260408",
+              "nowstate": "颁布",
+              "fclass": "化学药,生物制品",
+              "title": "药物临床试验申请临床评价技术指导原则",
+              "isnew": 0,
+              "zdyzIdCODE": "d2aef47f7471430d0d9453bb40e5ebb4"
+            }
+          ],
+          "total": 640,
+          "size": 10,
+          "current": 1,
+          "orders": [],
+          "optimizeCountSql": true,
+          "searchCount": true,
+          "countId": null,
+          "maxLimit": null,
+          "pages": 64
+        }
+      },
+      "json_keys": [
+        "msg",
+        "code",
+        "data"
+      ]
+    }
+  ],
+  "getDomesticGuideList_captured": [
+    {
+      "url": "https://www.cde.org.cn/zdyz/getDomesticGuideList?MmEwMD=3yruT0D64GHGBfJ1UqyMQbdEsibNEDWA7Ohz6hdHGbDXLqzNw766lZV4cxGblzvGw5EfBeRORGumUd4Je9fGrAsjX.ABHOElCk59QNbm1kWS99Ttx56fo5gpfZso1Yp6Cnc6PC41LHD9FARBatwlMTKTzai__wfY_wxCUY7FPx5Ut49yzkkg_kNygHlzOicnKIFLhJnpvO9AHJ92r1fYXmFKLg2f4Rt6Uqw07EsqlzQ4C0kilt2_5w4APpiSCU9K1dmB.wfYiH_syna9gsK4L9fhQwQgPrWpcGxe82ko4wdbUqqL3m6Au15BtfmEAHG2LBScS04YhyiaVYsWMjZX48PQ.O.vX7mf.p0.yj24iRveirn",
+      "method": "POST",
+      "resource_type": "xhr",
+      "status": 200,
+      "timestamp": "2026-06-10T12:40:01.034536",
+      "post_data": "pageNum=1&pageSize=10&searchTitle=&zyfl1=&zyfl2=&issueDate1=&issueDate2=",
+      "query_params": {
+        "MmEwMD": [
+          "3yruT0D64GHGBfJ1UqyMQbdEsibNEDWA7Ohz6hdHGbDXLqzNw766lZV4cxGblzvGw5EfBeRORGumUd4Je9fGrAsjX.ABHOElCk59QNbm1kWS99Ttx56fo5gpfZso1Yp6Cnc6PC41LHD9FARBatwlMTKTzai__wfY_wxCUY7FPx5Ut49yzkkg_kNygHlzOicnKIFLhJnpvO9AHJ92r1fYXmFKLg2f4Rt6Uqw07EsqlzQ4C0kilt2_5w4APpiSCU9K1dmB.wfYiH_syna9gsK4L9fhQwQgPrWpcGxe82ko4wdbUqqL3m6Au15BtfmEAHG2LBScS04YhyiaVYsWMjZX48PQ.O.vX7mf.p0.yj24iRveirn"
+        ]
+      },
+      "response_length": 1653,
+      "is_json": true,
+      "response_json": {
+        "msg": "操作成功",
+        "code": 200,
+        "data": {
+          "records": [
+            {
+              "issueDate": "20260601",
+              "nowstate": "颁布",
+              "fclass": "生物制品",
+              "title": "预防用mRNA疫苗临床试验技术指导原则（试行）",
+              "isnew": 0,
+              "zdyzIdCODE": "9c92f5cfa79fc44da0ac28d2b3a0f6b3"
+            },
+            {
+              "issueDate": "20260601",
+              "nowstate": "颁布",
+              "fclass": "化学药,生物制品",
+              "title": "关于开发适宜药品包装规格的指导原则",
+              "isnew": 0,
+              "zdyzIdCODE": "981efd549bda05ee430ec550583776fc"
+            },
+            {
+              "issueDate": "20260520",
+              "nowstate": "颁布",
+              "fclass": "化学药",
+              "title": "化学仿制药生物等效性研究重大缺陷情形",
+              "isnew": 0,
+              "zdyzIdCODE": "6b02391b10ae8dab7868d00cadd3cce4"
+            },
+            {
+              "issueDate": "20260520",
+              "nowstate": "颁布",
+              "fclass": "化学药",
+              "title": "化学仿制药药学研究重大缺陷情形",
+              "isnew": 0,
+              "zdyzIdCODE": "795daa2ef7016be0dbb632ec9b26e319"
+            },
+            {
+              "issueDate": "20260508",
+              "nowstate": "颁布",
+              "fclass": "生物制品",
+              "title": "重组胰岛素类产品药学研究与评价技术指导原则（修订版）",
+              "isnew": 0,
+              "zdyzIdCODE": "b14ec1420b889839c402742350bc0141"
+            },
+            {
+              "issueDate": "20260420",
+              "nowstate": "颁布",
+              "fclass": "生物制品",
+              "title": "生物类似药首次申报临床试验药学资料撰写指导原则",
+              "isnew": 0,
+              "zdyzIdCODE": "0fc3587f2f789b575842fe80822b6974"
+            },
+            {
+              "issueDate": "20260420",
+              "nowstate": "颁布",
+              "fclass": "生物制品",
+              "title": "抗体偶联药物首次申报临床试验药学资料撰写指导原则",
+              "isnew": 0,
+              "zdyzIdCODE": "35b3cb99bff7e4991c176e90b20472e2"
+            },
+            {
+              "issueDate": "20260420",
+              "nowstate": "颁布",
+              "fclass": "生物制品",
+              "title": "治疗用重组蛋白药物首次申报临床试验药学资料撰写指导原则",
+              "isnew": 0,
+              "zdyzIdCODE": "f3f0edf900692d447578b37bdd83a085"
+            },
+            {
+              "issueDate": "20260413",
+              "nowstate": "颁布",
+              "fclass": "中药",
+              "title": "以患者为中心的中药新药临床研发技术指导原则",
+              "isnew": 0,
+              "zdyzIdCODE": "5eddf17d68db0383d4e8a486ed3190e0"
+            },
+            {
+              "issueDate": "20260408",
+              "nowstate": "颁布",
+              "fclass": "化学药,生物制品",
+              "title": "药物临床试验申请临床评价技术指导原则",
+              "isnew": 0,
+              "zdyzIdCODE": "d2aef47f7471430d0d9453bb40e5ebb4"
+            }
+          ],
+          "total": 640,
+          "size": 10,
+          "current": 1,
+          "orders": [],
+          "optimizeCountSql": true,
+          "searchCount": true,
+          "countId": null,
+          "maxLimit": null,
+          "pages": 64
+        }
+      },
+      "json_keys": [
+        "msg",
+        "code",
+        "data"
+      ]
+    }
+  ],
+  "cookies": [
+    {
+      "name": "Path",
+      "domain": "www.cde.org.cn",
+      "expires_human": "Session"
+    },
+    {
+      "name": "Path",
+      "domain": "www.cde.org.cn",
+      "expires_human": "Session"
+    },
+    {
+      "name": "Path",
+      "domain": "www.cde.org.cn",
+      "expires_human": "Session"
+    },
+    {
+      "name": "Path",
+      "domain": "www.cde.org.cn",
+      "expires_human": "Session"
+    },
+    {
+      "name": "Path",
+      "domain": "www.cde.org.cn",
+      "expires_human": "Session"
+    },
+    {
+      "name": "Path",
+      "domain": "www.cde.org.cn",
+      "expires_human": "Session"
+    },
+    {
+      "name": "Path",
+      "domain": "www.cde.org.cn",
+      "expires_human": "Session"
+    },
+    {
+      "name": "Path",
+      "domain": "www.cde.org.cn",
+      "expires_human": "Session"
+    },
+    {
+      "name": "Path",
+      "domain": "www.cde.org.cn",
+      "expires_human": "Session"
+    },
+    {
+      "name": "Path",
+      "domain": "www.cde.org.cn",
+      "expires_human": "Session"
+    },
+    {
+      "name": "Path",
+      "domain": "www.cde.org.cn",
+      "expires_human": "Session"
+    },
+    {
+      "name": "Path",
+      "domain": "www.cde.org.cn",
+      "expires_human": "Session"
+    },
+    {
+      "name": "FSSBBIl1UgzbN7N80S",
+      "domain": "www.cde.org.cn",
+      "expires_human": "2027-07-15T12:39:57.959886"
+    },
+    {
+      "name": "FSSBBIl1UgzbN7N80T",
+      "domain": "www.cde.org.cn",
+      "expires_human": "2027-07-15T12:39:59.857822"
+    },
+    {
+      "name": "Path",
+      "domain": "www.cde.org.cn",
+      "expires_human": "Session"
+    }
+  ],
+  "errors": []
+}

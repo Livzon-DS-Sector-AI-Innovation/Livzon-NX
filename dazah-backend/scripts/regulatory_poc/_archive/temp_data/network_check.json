@@ -1,0 +1,138 @@
+{
+  "exit_ip": {
+    "ip": "219.131.220.246",
+    "city": "Shenzhen",
+    "region": "Guangdong",
+    "country": "CN",
+    "loc": "22.5455,114.0683",
+    "org": "AS4134 CHINANET BACKBONE",
+    "postal": "518000",
+    "timezone": "Asia/Shanghai",
+    "readme": "https://ipinfo.io/missingauth"
+  },
+  "dns": {
+    "www.nmpa.gov.cn": {
+      "ip": "47.93.95.89",
+      "status": "ok"
+    },
+    "www.cde.org.cn": {
+      "ip": "210.12.88.50",
+      "status": "ok"
+    },
+    "www.cfdi.org.cn": {
+      "ip": "123.127.238.43",
+      "status": "ok"
+    },
+    "www.chp.org.cn": {
+      "ip": "114.247.108.139",
+      "status": "ok"
+    },
+    "mpa.gd.gov.cn": {
+      "ip": "120.197.33.7",
+      "status": "ok"
+    },
+    "www.fda.gov": {
+      "ip": "23.222.17.231",
+      "status": "ok"
+    },
+    "www.ema.europa.eu": {
+      "ip": "13.249.74.40",
+      "status": "ok"
+    },
+    "www.edqm.eu": {
+      "ip": "104.18.18.123",
+      "status": "ok"
+    },
+    "www.ich.org": {
+      "ip": "5.148.183.79",
+      "status": "ok"
+    },
+    "www.federalregister.gov": {
+      "ip": "75.2.36.59",
+      "status": "ok"
+    }
+  },
+  "network": {
+    "NMPA": {
+      "status_code": 412,
+      "content_length": 2561,
+      "final_url": "https://www.nmpa.gov.cn/",
+      "cookies": [
+        "acw_tc",
+        "NfBCSins2OywS"
+      ],
+      "server": "******"
+    },
+    "CDE": {
+      "status_code": 200,
+      "content_length": 83535,
+      "final_url": "https://www.cde.org.cn/",
+      "cookies": [
+        "Path",
+        "FSSBBIl1UgzbN7N80T",
+        "FSSBBIl1UgzbN7N80S"
+      ],
+      "server": "******"
+    },
+    "CFDI": {
+      "status_code": 200,
+      "content_length": 41521,
+      "final_url": "https://www.cfdi.org.cn/cfdi/index",
+      "cookies": [],
+      "server": "nginx"
+    },
+    "ChP": {
+      "status_code": 200,
+      "content_length": 14738,
+      "final_url": "https://www.chp.org.cn/",
+      "cookies": [],
+      "server": "unknown"
+    },
+    "GDPA": {
+      "status_code": 200,
+      "content_length": 84929,
+      "final_url": "https://mpa.gd.gov.cn/",
+      "cookies": [
+        "Path"
+      ],
+      "server": "nginx"
+    },
+    "FDA": {
+      "status_code": 404,
+      "content_length": 10,
+      "final_url": "https://www.fda.gov/apology_objects/abuse-detection-apology.html",
+      "cookies": [],
+      "server": "AkamaiNetStorage"
+    },
+    "FDA-API": {
+      "status_code": 200,
+      "content_length": 43477,
+      "final_url": "https://www.federalregister.gov/api/v1/documents.json?conditions[agencies][]=food-and-drug-administration&per_page=1",
+      "cookies": [],
+      "server": "unknown"
+    },
+    "EMA": {
+      "status_code": 200,
+      "content_length": 85196,
+      "final_url": "https://www.ema.europa.eu/en/homepage",
+      "cookies": [],
+      "server": "unknown"
+    },
+    "EDQM": {
+      "status_code": 403,
+      "content_length": 5688,
+      "final_url": "https://www.edqm.eu/en/",
+      "cookies": [
+        "__cf_bm"
+      ],
+      "server": "cloudflare"
+    },
+    "ICH": {
+      "status_code": 200,
+      "content_length": 687,
+      "final_url": "https://www.ich.org/",
+      "cookies": [],
+      "server": "Apache"
+    }
+  }
+}

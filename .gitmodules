@@ -1,9 +1,0 @@
-[submodule "dazah-backend"]
-	path = dazah-backend
-	url = https://github.com/Livzon-DS-Sector-AI-Innovation/dazah-backend.git
-[submodule "dazah-frontend"]
-	path = dazah-frontend
-	url = https://github.com/Livzon-DS-Sector-AI-Innovation/dazah-frontend.git
-[submodule "Hermes-Lite"]
-	path = Hermes-Lite
-	url = https://github.com/ddlllooo/Livzon-Hermes-Lite.git

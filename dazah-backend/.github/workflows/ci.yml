@@ -1,0 +1,93 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [main, dev/livzon-syntpharm]
+  pull_request:
+    branches: [main, dev/livzon-syntpharm]
+  workflow_dispatch:
+
+jobs:
+  openapi-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install uv
+          uv sync
+
+      - name: Export OpenAPI spec
+        run: uv run python scripts/export_openapi.py
+
+      - name: Check for drift
+        run: |
+          if ! git diff --exit-code openapi.json; then
+            echo "❌ OpenAPI spec is out of date!"
+            echo "Run 'uv run python scripts/export_openapi.py' and commit the changes."
+            exit 1
+          fi
+          echo "✓ OpenAPI spec is up to date"
+
+  alembic-check:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: dazah_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/dazah_ci
+      FEISHU_APP_ID: ci_dummy_app_id
+      FEISHU_APP_SECRET: ci_dummy_app_secret
+      FEISHU_REDIRECT_URI: http://localhost:3000/callback
+      FRONTEND_URL: http://localhost:3000
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install uv
+          uv sync
+
+      - name: Apply all migrations to empty database
+        run: uv run alembic upgrade head
+
+      - name: Check for model/migration drift
+        run: |
+          if ! uv run alembic check 2>&1 | tee /tmp/alembic-check.log; then
+            echo ""
+            echo "❌ Model changes detected without corresponding Alembic migration!"
+            echo ""
+            echo "You modified SQLAlchemy models but didn't include a migration."
+            echo "Please run:"
+            echo "  docker compose exec app .venv/bin/alembic revision --autogenerate -m 'describe your changes'"
+            echo ""
+            echo "Then review and commit the generated migration file alongside your model changes."
+            exit 1
+          fi
+          echo "✓ All models are covered by migrations"

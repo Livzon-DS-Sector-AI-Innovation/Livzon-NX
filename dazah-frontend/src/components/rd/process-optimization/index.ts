@@ -1,0 +1,8 @@
+export { ProcessOptimizationPage } from './ProcessOptimizationPage'
+export { ProcessOptimizationWorkflowPage } from './ProcessOptimizationWorkflowPage'
+export { ModuleDOE } from './ModuleDOE'
+export { ModuleImpurity } from './ModuleImpurity'
+export { ModuleCrystalForm } from './ModuleCrystalForm'
+export { ModuleQualityStandard } from './ModuleQualityStandard'
+export { ModuleScaleUp } from './ModuleScaleUp'
+export { ModuleReport } from './ModuleReport'

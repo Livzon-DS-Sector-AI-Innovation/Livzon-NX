@@ -1,0 +1,15 @@
+fastapi==0.104.1
+uvicorn==0.24.0
+python-multipart==0.0.6
+pandas==1.3.4
+botorch==0.5.0
+gpytorch==1.5.1
+idaes-pse==1.5.1
+mordred==1.2.0
+pareto==1.1.1.post3
+pymoo==0.5.0
+sympy==1.9
+numpy==1.21.5
+scikit-learn>=1.4
+scipy>=1.10.0
+ordered-set==4.0.2

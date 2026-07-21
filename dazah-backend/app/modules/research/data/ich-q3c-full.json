@@ -1,0 +1,127 @@
+{
+  "source": "ICH Q3C(R9) Guideline for Residual Solvents",
+  "version": "Step 4, 24 January 2024",
+  "url": "https://database.ich.org/sites/default/files/ICH_Q3C-R9_Guideline_2024_2024_Approved.pdf",
+  "classes": {
+    "class1": {
+      "name": "Class 1 - Solvents to Be Avoided",
+      "description": "Known human carcinogens, strongly suspected carcinogens, and environmental hazards",
+      "rule": "Should not be employed in manufacture unless use is unavoidable with benefit/risk justification",
+      "solvents": [
+        {"name": "Benzene", "ppm": 2, "concern": "Carcinogen"},
+        {"name": "Carbon tetrachloride", "ppm": 4, "concern": "Toxic and environmental hazard"},
+        {"name": "1,2-Dichloroethane", "ppm": 5, "concern": "Toxic"},
+        {"name": "1,1-Dichloroethene", "ppm": 8, "concern": "Toxic"},
+        {"name": "1,1,1-Trichloroethane", "ppm": 1500, "concern": "Environmental hazard"}
+      ]
+    },
+    "class2": {
+      "name": "Class 2 - Solvents to Be Limited",
+      "description": "Non-genotoxic animal carcinogens or possible causative agents of other irreversible toxicity such as neurotoxicity or teratogenicity",
+      "rule": "Should be limited in pharmaceutical products; PDE given to nearest 0.1 mg/day, concentrations to nearest 10 ppm",
+      "solvents": [
+        {"name": "Acetonitrile", "pde_mg_day": 4.1, "ppm": 410},
+        {"name": "Chlorobenzene", "pde_mg_day": 3.6, "ppm": 360},
+        {"name": "Chloroform", "pde_mg_day": 0.6, "ppm": 60},
+        {"name": "Cumene", "pde_mg_day": 0.7, "ppm": 70},
+        {"name": "Cyclohexane", "pde_mg_day": 38.8, "ppm": 3880},
+        {"name": "Cyclopentyl methyl ether", "pde_mg_day": 15.0, "ppm": 1500},
+        {"name": "1,2-Dichloroethene", "pde_mg_day": 18.7, "ppm": 1870},
+        {"name": "Dichloromethane", "pde_mg_day": 6.0, "ppm": 600},
+        {"name": "1,2-Dimethoxyethane", "pde_mg_day": 1.0, "ppm": 100},
+        {"name": "N,N-Dimethylacetamide", "pde_mg_day": 10.9, "ppm": 1090},
+        {"name": "N,N-Dimethylformamide", "pde_mg_day": 8.8, "ppm": 880},
+        {"name": "1,4-Dioxane", "pde_mg_day": 3.8, "ppm": 380},
+        {"name": "2-Ethoxyethanol", "pde_mg_day": 1.6, "ppm": 160},
+        {"name": "Ethyleneglycol", "pde_mg_day": 6.2, "ppm": 620},
+        {"name": "Formamide", "pde_mg_day": 2.2, "ppm": 220},
+        {"name": "Hexane", "pde_mg_day": 2.9, "ppm": 290},
+        {"name": "Methanol", "pde_mg_day": 30.0, "ppm": 3000},
+        {"name": "2-Methoxyethanol", "pde_mg_day": 0.5, "ppm": 50},
+        {"name": "Methylbutyl ketone", "pde_mg_day": 0.5, "ppm": 50},
+        {"name": "Methylcyclohexane", "pde_mg_day": 11.8, "ppm": 1180},
+        {"name": "Methylisobutylketone", "pde_mg_day": 45.0, "ppm": 4500},
+        {"name": "N-Methylpyrrolidone", "pde_mg_day": 5.3, "ppm": 530},
+        {"name": "Nitromethane", "pde_mg_day": 0.5, "ppm": 50},
+        {"name": "Pyridine", "pde_mg_day": 2.0, "ppm": 200},
+        {"name": "Sulfolane", "pde_mg_day": 1.6, "ppm": 160},
+        {"name": "Tertiary-butyl alcohol", "pde_mg_day": 35.0, "ppm": 3500},
+        {"name": "Tetrahydrofuran", "pde_mg_day": 7.2, "ppm": 720},
+        {"name": "Tetralin", "pde_mg_day": 1.0, "ppm": 100},
+        {"name": "Toluene", "pde_mg_day": 8.9, "ppm": 890},
+        {"name": "1,1,2-Trichloroethene", "pde_mg_day": 0.8, "ppm": 80},
+        {"name": "Xylene", "pde_mg_day": 21.7, "ppm": 2170, "note": "usually 60% m-xylene, 14% p-xylene, 9% o-xylene with 17% ethyl benzene"}
+      ]
+    },
+    "class3": {
+      "name": "Class 3 - Solvents with Low Toxic Potential",
+      "description": "Low toxic potential to man; no long-term toxicity or carcinogenicity studies for many, but negative in genotoxicity studies",
+      "rule": "Amounts of 50 mg/day or less (5000 ppm or 0.5% under Option 1) acceptable without justification",
+      "solvents": [
+        "Acetic acid",
+        "Acetone",
+        "Anisole",
+        "1-Butanol",
+        "2-Butanol",
+        "Butyl acetate",
+        "tert-Butylmethyl ether",
+        "Dimethyl sulfoxide",
+        "Ethanol",
+        "Ethyl acetate",
+        "Ethyl ether",
+        "Ethyl formate",
+        "Formic acid",
+        "Heptane",
+        "Isobutyl acetate",
+        "Isopropyl acetate",
+        "Methyl acetate",
+        "3-Methyl-1-butanol",
+        "Methylethyl ketone",
+        "2-Methyl-1-propanol",
+        "2-Methyltetrahydrofuran",
+        "Pentane",
+        "1-Pentanol",
+        "1-Propanol",
+        "2-Propanol",
+        "Propyl acetate",
+        "Triethylamine"
+      ]
+    },
+    "unlisted": {
+      "name": "Unlisted Solvents",
+      "description": "Solvents not included in Class 1, 2, or 3",
+      "rule": "Manufacturer should supply justification for residual levels based on toxicological data"
+    }
+  },
+  "reporting_levels": {
+    "section": "3.5 Reporting levels of residual solvents",
+    "acceptable_supplier_statements": [
+      "Only Class 3 solvents are likely to be present. Loss on drying is less than 0.5%.",
+      "Only Class 2 solvents X, Y, ... are likely to be present. All are below the Option 1 limit.",
+      "Only Class 2 solvents X, Y, ... and Class 3 solvents are likely to be present. Residual Class 2 solvents are below the Option 1 limit and residual Class 3 solvents are below 0.5%."
+    ],
+    "testing_requirements": {
+      "class1": "If likely to be present, must be identified and quantified",
+      "class2_class3_above_limit": "If present at greater than Option 1 limits (Class 2) or 0.5% (Class 3), must be identified and quantified",
+      "likely_to_be_present_definition": "Solvent used in final manufacturing step AND solvents used in earlier steps not removed consistently by validated process"
+    }
+  },
+  "testing_options": {
+    "option1": {
+      "name": "Option 1 - Use concentration limits from Table 2",
+      "description": "Concentration limits in ppm stated in Table 2 can be used. Calculated using assumed daily dose of 10 g."
+    },
+    "option2": {
+      "name": "Option 2 - Use PDE from Table 2",
+      "description": "PDE in terms of mg/day as stated in Table 2 can be used with known maximum daily dose to calculate allowed concentration in drug substance."
+    },
+    "class3_control": {
+      "name": "Class 3 Solvent Control",
+      "methods": [
+        "Loss on Drying (LOD) ≤ 0.5%",
+        "GC test for individual Class 3 solvents"
+      ],
+      "note": "LOD is acceptable control method for Class 3 solvents when used in final isolation step"
+    }
+  }
+}

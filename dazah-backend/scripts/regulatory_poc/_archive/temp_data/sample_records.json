@@ -1,0 +1,232 @@
+{
+  "test_metadata": {
+    "test_time": "2026-06-09 16:00 - 16:35",
+    "phase": "Phase 2 - Playwright Browser Rendering",
+    "status": "ABORTED",
+    "abort_reason": "Chromium download timeout (10 min threshold exceeded, only 10% of 175.4 MiB downloaded)",
+    "network_info": {
+      "exit_ip": "219.131.220.246",
+      "location": "Shenzhen, China Telecom",
+      "dns": "All target domains resolved successfully"
+    }
+  },
+  "playwright_installation": {
+    "python_package": "SUCCESS",
+    "python_package_version": "1.60.0",
+    "chromium_engine": "FAILED",
+    "chromium_download_url": "https://cdn.playwright.dev/builds/cft/148.0.7778.96/linux64/chrome-linux64.zip",
+    "chromium_file_size": "175.4 MiB",
+    "download_progress": "10% (17.5 MiB)",
+    "download_time": "10 minutes",
+    "estimated_total_time": "~100 minutes"
+  },
+  "planned_tests": [
+    {
+      "source": "CDE",
+      "source_full": "国家药品监督管理局药品审评中心",
+      "target_url": "https://www.cde.org.cn/main/xxgk/listpage/9f3cde5f7e8c4e9a8c3b5e6f7d8e9f0a",
+      "target_column": "指导原则专栏",
+      "status": "NOT_EXECUTED",
+      "reason": "Playwright Chromium not installed",
+      "planned_verification": [
+        "Page load success",
+        "JavaScript rendering produces list",
+        "Extract title, publish_date, detail_url",
+        "Access detail page for content_preview"
+      ]
+    },
+    {
+      "source": "NMPA",
+      "source_full": "国家药品监督管理局",
+      "target_url": "https://www.nmpa.gov.cn/xxgk/fgwj/index.html",
+      "target_column": "法律法规",
+      "status": "NOT_EXECUTED",
+      "reason": "Playwright Chromium not installed",
+      "planned_verification": [
+        "Bypass 412 Precondition Failed",
+        "Browser rendering produces list",
+        "Extract regulation list fields",
+        "Retrieve attachment links"
+      ]
+    }
+  ],
+  "successful_samples": {
+    "note": "These samples were collected during Phase 1 using httpx (without Playwright)",
+    "sources": [
+      {
+        "source": "广东省药品监督管理局",
+        "source_en": "Guangdong Provincial Medical Products Administration",
+        "url": "http://mpa.gd.gov.cn/zwgk/gzwj/index.html",
+        "http_status": 200,
+        "risk_level": "LOW",
+        "anti_crawl": false,
+        "needs_playwright": false,
+        "records": [
+          {
+            "title": "广东省药品监督管理局关于发布2026年广东省生物医药行业专业技术人员继续教育专业科目学习指南的通告",
+            "publish_date": "2026-05-26",
+            "detail_url": "http://mpa.gd.gov.cn/zwgk/gzwj/content/post_4901461.html",
+            "category": "通告"
+          },
+          {
+            "title": "广东省药品监督管理局关于印发广东省出具医疗器械出口销售证明操作指引的通知",
+            "publish_date": "2026-05-08",
+            "detail_url": "http://mpa.gd.gov.cn/zwgk/gzwj/content/post_4893691.html",
+            "category": "通知"
+          },
+          {
+            "title": "广东省药品监督管理局关于启用新版药品生产许可证及调整许可证相关事项的通告",
+            "publish_date": "2026-04-15",
+            "detail_url": "http://mpa.gd.gov.cn/zwgk/gzwj/content/post_4884002.html",
+            "category": "通告"
+          }
+        ],
+        "field_coverage": {
+          "title": true,
+          "publish_date": true,
+          "detail_url": true,
+          "category": true,
+          "content_preview": "pending_detail_test",
+          "attachment_urls": "pending_detail_test"
+        }
+      },
+      {
+        "source": "FDA",
+        "source_en": "Food and Drug Administration",
+        "url": "https://www.federalregister.gov/api/v1/documents.json?conditions[agencies][]=food-and-drug-administration&per_page=3&order=newest",
+        "http_status": 200,
+        "risk_level": "LOW",
+        "anti_crawl": false,
+        "needs_playwright": false,
+        "api_type": "JSON",
+        "records": [
+          {
+            "title": "Determination That Protamine Sulfate (Protamine Sulfate) Intravenous; Solution, 50 Milligrams/5",
+            "publish_date": "2026-06-08",
+            "detail_url": "https://www.federalregister.gov/documents/2026/06/08/2026-11429/determination-that-protamine-sulfate-protamine-sulfate-intravenous-solution-50-milligrams5",
+            "type": "Notice",
+            "abstract": "The Food and Drug Administration (FDA or Agency) has determined that the drug products listed in this document..."
+          },
+          {
+            "title": "Medical Devices; Orthopedic Devices; Classification of the Resorbable Calcium Salt Bone Void Filler",
+            "publish_date": "2026-06-05",
+            "detail_url": "https://www.federalregister.gov/documents/2026/06/05/2026-11308/medical-devices-orthopedic-devices-classification-of-the-resorbable-calcium-salt-bone-void-filler",
+            "type": "Rule",
+            "effective_date": "2026-06-05"
+          },
+          {
+            "title": "Medical Devices; Orthopedic Devices; Classification of the Shoulder Joint Humeral Hemi-Shoulder",
+            "publish_date": "2026-06-05",
+            "detail_url": "https://www.federalregister.gov/documents/2026/06/05/2026-11306/medical-devices-orthopedic-devices-classification-of-the-shoulder-joint-humeral-hemi-shoulder",
+            "type": "Rule",
+            "effective_date": "2026-06-05"
+          }
+        ],
+        "field_coverage": {
+          "title": true,
+          "publish_date": true,
+          "detail_url": true,
+          "type": true,
+          "abstract": true,
+          "effective_date": "when_available",
+          "attachment_urls": "pending_detail_test"
+        }
+      }
+    ]
+  },
+  "unverified_sources": {
+    "note": "These sources require Playwright but could not be tested due to installation failure",
+    "sources": [
+      {
+        "source": "CFDI",
+        "source_full": "中国食品药品检定研究院",
+        "http_status": 200,
+        "risk_level": "MEDIUM",
+        "issue": "Vue SPA, httpx cannot get rendered content",
+        "needs_playwright": true,
+        "playwright_tested": false
+      },
+      {
+        "source": "国家药典委员会",
+        "source_en": "Chinese Pharmacopoeia Commission",
+        "http_status": 200,
+        "risk_level": "MEDIUM",
+        "issue": "JavaScript dynamic loading",
+        "needs_playwright": true,
+        "playwright_tested": false
+      },
+      {
+        "source": "EMA",
+        "source_full": "European Medicines Agency",
+        "http_status": 200,
+        "risk_level": "MEDIUM",
+        "issue": "AJAX dynamic loading",
+        "needs_playwright": true,
+        "playwright_tested": false
+      },
+      {
+        "source": "ICH",
+        "source_full": "International Council for Harmonisation",
+        "http_status": 200,
+        "risk_level": "MEDIUM",
+        "issue": "Angular SPA, empty HTML shell",
+        "needs_playwright": true,
+        "playwright_tested": false
+      },
+      {
+        "source": "NMPA",
+        "source_full": "国家药品监督管理局",
+        "http_status": 412,
+        "risk_level": "HIGH",
+        "issue": "412 Precondition Failed, possible WAF",
+        "needs_playwright": true,
+        "playwright_tested": false
+      },
+      {
+        "source": "CDE",
+        "source_full": "药品审评中心",
+        "http_status": 202,
+        "risk_level": "HIGH",
+        "issue": "202 Accepted, JavaScript challenge page",
+        "needs_playwright": true,
+        "playwright_tested": false
+      },
+      {
+        "source": "EDQM",
+        "source_full": "European Directorate for the Quality of Medicines",
+        "http_status": 403,
+        "risk_level": "HIGH",
+        "issue": "403 Forbidden, Cloudflare protection",
+        "needs_playwright": true,
+        "playwright_tested": false
+      }
+    ]
+  },
+  "summary": {
+    "total_sources": 9,
+    "successfully_tested": 2,
+    "successfully_tested_sources": ["广东省药品监督管理局", "FDA"],
+    "failed_to_test": 7,
+    "failed_sources": ["CFDI", "国家药典委员会", "EMA", "ICH", "NMPA", "CDE", "EDQM"],
+    "coverage_rate": "22%",
+    "ready_for_development": 2,
+    "needs_playwright": 7,
+    "high_risk_sources": 3
+  },
+  "recommendations": {
+    "immediate_actions": [
+      "Develop scraper for 广东省药品监督管理局 (httpx + BeautifulSoup)",
+      "Develop scraper for FDA Federal Register API (httpx + JSON)"
+    ],
+    "next_steps": [
+      "Resolve Playwright Chromium download issue (manual download or proxy)",
+      "After successful installation, test CDE and NMPA with Playwright",
+      "Develop remaining sources based on test results"
+    ],
+    "alternative_solutions": [
+      "Use Selenium + ChromeDriver (Chrome already installed)",
+      "Use requests-html for JavaScript rendering",
+      "Manual collection for high-risk sources"
+    ]
+  }
+}

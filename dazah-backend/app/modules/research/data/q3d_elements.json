@@ -1,0 +1,316 @@
+{
+  "metadata": {
+    "version": "R2",
+    "date": "2022-04-26",
+    "source": "ICH Q3D(R2) Guideline for Elemental Impurities"
+  },
+  "routes": {
+    "oral": {"description": "口服给药"},
+    "parenteral": {"description": "注射给药"},
+    "inhalation": {"description": "吸入给药"},
+    "cutaneous": {"description": "皮肤给药（附录5）"}
+  },
+  "control_threshold": {
+    "description": "控制阈值 = 30% of PDE",
+    "purpose": "用于确定是否需要额外控制措施"
+  },
+  "classes": {
+    "Class 1": {
+      "description": "人体毒物，自然界中相对稀少，通常用于药品生产中的有意添加",
+      "assessment_rule": "必须在风险评估中评估所有潜在来源和给药途径",
+      "elements": {
+        "Cd": {
+          "oral_pde": 5,
+          "parenteral_pde": 2,
+          "inhalation_pde": 3,
+          "cutaneous_pde": 20,
+          "ctcl": null,
+          "notes": "致癌性",
+          "oral_assess": true,
+          "parenteral_assess": true,
+          "inhalation_assess": true,
+          "cutaneous_assess": true
+        },
+        "Pb": {
+          "oral_pde": 5,
+          "parenteral_pde": 5,
+          "inhalation_pde": 5,
+          "cutaneous_pde": 50,
+          "ctcl": null,
+          "notes": "神经毒性、发育毒性",
+          "oral_assess": true,
+          "parenteral_assess": true,
+          "inhalation_assess": true,
+          "cutaneous_assess": true
+        },
+        "As": {
+          "oral_pde": 15,
+          "parenteral_pde": 15,
+          "inhalation_pde": 2,
+          "cutaneous_pde": 30,
+          "ctcl": null,
+          "notes": "致癌性",
+          "oral_assess": true,
+          "parenteral_assess": true,
+          "inhalation_assess": true,
+          "cutaneous_assess": true
+        },
+        "Hg": {
+          "oral_pde": 30,
+          "parenteral_pde": 3,
+          "inhalation_pde": 1,
+          "cutaneous_pde": 30,
+          "ctcl": null,
+          "notes": "神经毒性",
+          "oral_assess": true,
+          "parenteral_assess": true,
+          "inhalation_assess": true,
+          "cutaneous_assess": true
+        }
+      }
+    },
+    "Class 2A": {
+      "description": "在药品中出现概率相对较高，需要对所有潜在来源进行风险评估",
+      "assessment_rule": "出现概率较高，需要对所有潜在来源进行风险评估",
+      "elements": {
+        "Co": {
+          "oral_pde": 50,
+          "parenteral_pde": 5,
+          "inhalation_pde": 3,
+          "cutaneous_pde": 50,
+          "ctcl": 35,
+          "notes": "皮肤途径致敏性关注（CTCL = 35 μg/g）",
+          "oral_assess": true,
+          "parenteral_assess": true,
+          "inhalation_assess": true,
+          "cutaneous_assess": true
+        },
+        "V": {
+          "oral_pde": 100,
+          "parenteral_pde": 10,
+          "inhalation_pde": 1,
+          "cutaneous_pde": 100,
+          "ctcl": null,
+          "notes": "",
+          "oral_assess": true,
+          "parenteral_assess": true,
+          "inhalation_assess": true,
+          "cutaneous_assess": true
+        },
+        "Ni": {
+          "oral_pde": 200,
+          "parenteral_pde": 20,
+          "inhalation_pde": 5,
+          "cutaneous_pde": 200,
+          "ctcl": 35,
+          "notes": "皮肤途径致敏性关注（CTCL = 35 μg/g）",
+          "oral_assess": true,
+          "parenteral_assess": true,
+          "inhalation_assess": true,
+          "cutaneous_assess": true
+        }
+      }
+    },
+    "Class 2B": {
+      "description": "出现概率较低，除非有意添加，否则可从风险评估中排除",
+      "assessment_rule": "除非有意添加，否则可从风险评估中排除",
+      "elements": {
+        "Tl": {"oral_pde": 8, "parenteral_pde": 8, "inhalation_pde": 8, "cutaneous_pde": 8, "ctcl": null, "notes": "", "oral_assess": false, "parenteral_assess": false, "inhalation_assess": false, "cutaneous_assess": false},
+        "Au": {"oral_pde": 100, "parenteral_pde": 100, "inhalation_pde": 1, "cutaneous_pde": 3000, "ctcl": null, "notes": "", "oral_assess": false, "parenteral_assess": false, "inhalation_assess": false, "cutaneous_assess": false},
+        "Pd": {"oral_pde": 100, "parenteral_pde": 10, "inhalation_pde": 1, "cutaneous_pde": 100, "ctcl": null, "notes": "", "oral_assess": false, "parenteral_assess": false, "inhalation_assess": false, "cutaneous_assess": false},
+        "Ir": {"oral_pde": 100, "parenteral_pde": 10, "inhalation_pde": 1, "cutaneous_pde": 100, "ctcl": null, "notes": "皮肤PDE采用Pd值（数据不足）", "oral_assess": false, "parenteral_assess": false, "inhalation_assess": false, "cutaneous_assess": false},
+        "Os": {"oral_pde": 100, "parenteral_pde": 10, "inhalation_pde": 1, "cutaneous_pde": 100, "ctcl": null, "notes": "皮肤PDE采用Pd值（数据不足）", "oral_assess": false, "parenteral_assess": false, "inhalation_assess": false, "cutaneous_assess": false},
+        "Rh": {"oral_pde": 100, "parenteral_pde": 10, "inhalation_pde": 1, "cutaneous_pde": 100, "ctcl": null, "notes": "皮肤PDE采用Pd值（数据不足）", "oral_assess": false, "parenteral_assess": false, "inhalation_assess": false, "cutaneous_assess": false},
+        "Ru": {"oral_pde": 100, "parenteral_pde": 10, "inhalation_pde": 1, "cutaneous_pde": 100, "ctcl": null, "notes": "皮肤PDE采用Pd值（数据不足）", "oral_assess": false, "parenteral_assess": false, "inhalation_assess": false, "cutaneous_assess": false},
+        "Se": {"oral_pde": 150, "parenteral_pde": 80, "inhalation_pde": 130, "cutaneous_pde": 800, "ctcl": null, "notes": "", "oral_assess": false, "parenteral_assess": false, "inhalation_assess": false, "cutaneous_assess": false},
+        "Ag": {"oral_pde": 150, "parenteral_pde": 10, "inhalation_pde": 7, "cutaneous_pde": 150, "ctcl": null, "notes": "", "oral_assess": false, "parenteral_assess": false, "inhalation_assess": false, "cutaneous_assess": false},
+        "Pt": {"oral_pde": 100, "parenteral_pde": 10, "inhalation_pde": 1, "cutaneous_pde": 100, "ctcl": null, "notes": "", "oral_assess": false, "parenteral_assess": false, "inhalation_assess": false, "cutaneous_assess": false}
+      }
+    },
+    "Class 3": {
+      "description": "口服毒性相对较低，除非有意添加，否则口服途径无需评估",
+      "assessment_rule": "口服：除非有意添加，否则无需评估；注射/吸入：部分元素需要评估",
+      "elements": {
+        "Li": {"oral_pde": 550, "parenteral_pde": 250, "inhalation_pde": 25, "cutaneous_pde": 2500, "ctcl": null, "notes": "", "oral_assess": false, "parenteral_assess": true, "inhalation_assess": true, "cutaneous_assess": false},
+        "Sb": {"oral_pde": 1200, "parenteral_pde": 90, "inhalation_pde": 20, "cutaneous_pde": 900, "ctcl": null, "notes": "", "oral_assess": false, "parenteral_assess": true, "inhalation_assess": true, "cutaneous_assess": false},
+        "Ba": {"oral_pde": 1400, "parenteral_pde": 700, "inhalation_pde": 300, "cutaneous_pde": 7000, "ctcl": null, "notes": "", "oral_assess": false, "parenteral_assess": false, "inhalation_assess": true, "cutaneous_assess": false},
+        "Mo": {"oral_pde": 3000, "parenteral_pde": 1500, "inhalation_pde": 10, "cutaneous_pde": 15000, "ctcl": null, "notes": "", "oral_assess": false, "parenteral_assess": false, "inhalation_assess": true, "cutaneous_assess": false},
+        "Cu": {"oral_pde": 3000, "parenteral_pde": 300, "inhalation_pde": 30, "cutaneous_pde": 3000, "ctcl": null, "notes": "", "oral_assess": false, "parenteral_assess": true, "inhalation_assess": true, "cutaneous_assess": false},
+        "Sn": {"oral_pde": 6000, "parenteral_pde": 600, "inhalation_pde": 60, "cutaneous_pde": 6000, "ctcl": null, "notes": "", "oral_assess": false, "parenteral_assess": false, "inhalation_assess": true, "cutaneous_assess": false},
+        "Cr": {"oral_pde": 11000, "parenteral_pde": 1100, "inhalation_pde": 3, "cutaneous_pde": 11000, "ctcl": null, "notes": "", "oral_assess": false, "parenteral_assess": false, "inhalation_assess": true, "cutaneous_assess": false}
+      }
+    },
+    "Other": {
+      "description": "未建立PDE的元素，由于固有毒性低和/或地区法规差异",
+      "assessment_rule": "需要逐案进行毒理学论证",
+      "elements": {
+        "Al": {"oral_pde": null, "parenteral_pde": null, "inhalation_pde": null, "cutaneous_pde": null, "ctcl": null, "notes": "肾功能不全患者需关注"},
+        "B": {"oral_pde": null, "parenteral_pde": null, "inhalation_pde": null, "cutaneous_pde": null, "ctcl": null, "notes": ""},
+        "Ca": {"oral_pde": null, "parenteral_pde": null, "inhalation_pde": null, "cutaneous_pde": null, "ctcl": null, "notes": ""},
+        "Fe": {"oral_pde": null, "parenteral_pde": null, "inhalation_pde": null, "cutaneous_pde": null, "ctcl": null, "notes": ""},
+        "K": {"oral_pde": null, "parenteral_pde": null, "inhalation_pde": null, "cutaneous_pde": null, "ctcl": null, "notes": ""},
+        "Mg": {"oral_pde": null, "parenteral_pde": null, "inhalation_pde": null, "cutaneous_pde": null, "ctcl": null, "notes": ""},
+        "Mn": {"oral_pde": null, "parenteral_pde": null, "inhalation_pde": null, "cutaneous_pde": null, "ctcl": null, "notes": "肝功能不全患者需关注"},
+        "Na": {"oral_pde": null, "parenteral_pde": null, "inhalation_pde": null, "cutaneous_pde": null, "ctcl": null, "notes": ""},
+        "W": {"oral_pde": null, "parenteral_pde": null, "inhalation_pde": null, "cutaneous_pde": null, "ctcl": null, "notes": "治疗性蛋白质质量考虑"},
+        "Zn": {"oral_pde": null, "parenteral_pde": null, "inhalation_pde": null, "cutaneous_pde": null, "ctcl": null, "notes": "肝功能不全患者需关注"}
+      }
+    }
+  },
+  "cutaneous_route": {
+    "description": "皮肤/经皮给药途径（附录5）",
+    "cmf": {
+      "description": "转换系数 (Concentration Modifying Factor)",
+      "default": 10,
+      "exceptions": {
+        "As": 2,
+        "Tl": 1
+      }
+    },
+    "ctcl": {
+      "description": "皮肤毒性浓度限度 (Cutaneous Toxicity Concentration Limit)",
+      "Ni": 35,
+      "Co": 35,
+      "notes": "基于致敏性而非全身毒性"
+    },
+    "calculation": {
+      "description": "Cutaneous PDE = Parenteral PDE × CMF",
+      "control_threshold": "30% of PDE AND 30% of CTCL"
+    }
+  },
+  "option_1_concentrations": {
+    "description": "选项1浓度限度（μg/g），适用于日剂量≤10g的药品",
+    "source": "Table A.2.2 and Table A.5.2",
+    "elements": {
+      "Cd": {"oral": 0.5, "parenteral": 0.2, "inhalation": 0.3, "cutaneous": 2.0},
+      "Pb": {"oral": 0.5, "parenteral": 0.5, "inhalation": 0.5, "cutaneous": 5.0},
+      "As": {"oral": 1.5, "parenteral": 1.5, "inhalation": 0.2, "cutaneous": 3.0},
+      "Hg": {"oral": 3, "parenteral": 0.3, "inhalation": 0.1, "cutaneous": 3.0},
+      "Co": {"oral": 5, "parenteral": 0.5, "inhalation": 0.3, "cutaneous": 5.0},
+      "V": {"oral": 10, "parenteral": 1, "inhalation": 0.1, "cutaneous": 10.0},
+      "Ni": {"oral": 20, "parenteral": 2, "inhalation": 0.6, "cutaneous": 20.0},
+      "Tl": {"oral": 0.8, "parenteral": 0.8, "inhalation": 0.8, "cutaneous": 0.8},
+      "Au": {"oral": 30, "parenteral": 30, "inhalation": 0.3, "cutaneous": 300.0},
+      "Pd": {"oral": 10, "parenteral": 1, "inhalation": 0.1, "cutaneous": 10.0},
+      "Ir": {"oral": 10, "parenteral": 1, "inhalation": 0.1, "cutaneous": 10.0},
+      "Os": {"oral": 10, "parenteral": 1, "inhalation": 0.1, "cutaneous": 10.0},
+      "Rh": {"oral": 10, "parenteral": 1, "inhalation": 0.1, "cutaneous": 10.0},
+      "Ru": {"oral": 10, "parenteral": 1, "inhalation": 0.1, "cutaneous": 10.0},
+      "Se": {"oral": 15, "parenteral": 8, "inhalation": 13, "cutaneous": 80.0},
+      "Ag": {"oral": 15, "parenteral": 1.5, "inhalation": 0.7, "cutaneous": 15.0},
+      "Pt": {"oral": 10, "parenteral": 1, "inhalation": 0.1, "cutaneous": 10.0},
+      "Li": {"oral": 55, "parenteral": 25, "inhalation": 2.5, "cutaneous": 250.0},
+      "Sb": {"oral": 120, "parenteral": 9, "inhalation": 2, "cutaneous": 90.0},
+      "Ba": {"oral": 140, "parenteral": 70, "inhalation": 30, "cutaneous": 700.0},
+      "Mo": {"oral": 300, "parenteral": 150, "inhalation": 1, "cutaneous": 1500.0},
+      "Cu": {"oral": 300, "parenteral": 30, "inhalation": 3, "cutaneous": 300.0},
+      "Sn": {"oral": 600, "parenteral": 60, "inhalation": 6, "cutaneous": 600.0},
+      "Cr": {"oral": 1100, "parenteral": 110, "inhalation": 0.3, "cutaneous": 1100.0}
+    }
+  },
+  "calculation_options": {
+    "option_1": {
+      "name": "选项1",
+      "description": "日剂量≤10g的药品各组分中元素的通用允许浓度限度",
+      "formula": "Concentration (μg/g) = PDE (μg/day) / 10 (g/day)",
+      "applicability": "所有组分中目标元素浓度不超过选项1限度"
+    },
+    "option_2a": {
+      "name": "选项2a",
+      "description": "指定日剂量的药品各组分中元素的通用允许浓度限度",
+      "formula": "Concentration (μg/g) = PDE (μg/day) / Actual Daily Intake (g/day)",
+      "applicability": "使用实际最大日剂量计算"
+    },
+    "option_2b": {
+      "name": "选项2b",
+      "description": "指定日剂量的药品各组分中元素的允许浓度限度",
+      "formula": "Σ(Ck × Mk) ≤ PDE",
+      "variables": {
+        "Ck": "组分k中元素允许浓度 (μg/g)",
+        "Mk": "药品最大日剂量中组分k的质量 (g)"
+      },
+      "applicability": "基于元素在组分中的分布设置不同限度"
+    },
+    "option_3": {
+      "name": "选项3",
+      "description": "成品分析",
+      "formula": "Concentration (μg/g) = PDE (μg/day) / Daily Intake (g/day)",
+      "applicability": "测量最终药品中各元素浓度"
+    }
+  },
+  "guidance_sections": {
+    "potential_sources": {
+      "title": "潜在来源 (Section 5.2)",
+      "sources": [
+        "有意添加的残留杂质（如催化剂）",
+        "非有意添加但可能存在的杂质（原料药、水、辅料中）",
+        "生产设备引入的杂质",
+        "容器密封系统浸出的杂质"
+      ],
+      "key_considerations": "需评估每个来源对药品中元素杂质的潜在贡献"
+    },
+    "evaluation": {
+      "title": "评估 (Section 5.5)",
+      "outcomes": [
+        "未识别潜在元素杂质：记录风险评估结论和支持信息",
+        "识别潜在元素杂质：考虑是否有多个来源，记录评估结论和支持数据"
+      ],
+      "data_sources": [
+        "先前知识",
+        "已发表文献",
+        "类似工艺数据",
+        "供应商信息或数据",
+        "药品组分检测",
+        "药品检测"
+      ]
+    },
+    "control_threshold": {
+      "title": "控制阈值 (Section 5.6)",
+      "definition": "30% of established PDE",
+      "application": "如果药品中元素杂质总量持续低于控制阈值，则无需额外控制措施",
+      "variability_sources": [
+        "分析方法变异",
+        "特定来源中元素杂质水平的变异",
+        "药品中元素杂质水平的变异"
+      ],
+      "data_requirements": "3批代表性生产规模批次或6批代表性中试规模批次的数据"
+    },
+    "speciation": {
+      "title": "形态分析 (Section 8)",
+      "rule": "可使用总元素含量评估合规性",
+      "exception": "如已知特定形态毒性不同，可调整限度"
+    },
+    "container_closure": {
+      "title": "容器密封系统 (Section 5.2 / 8)",
+      "solid_forms": "固体制剂中元素浸出概率极低，无需进一步考虑",
+      "liquid_semi_solid": "液体制剂和半固体制剂有较高概率在货架期内浸出元素",
+      "factors_to_consider": [
+        "亲水性/疏水性",
+        "离子含量",
+        "pH",
+        "温度（冷链 vs 室温及工艺条件）",
+        "接触表面积",
+        "容器/组件组成",
+        "终端灭菌",
+        "包装工艺",
+        "组件灭菌",
+        "储存时间"
+      ]
+    },
+    "biotech_products": {
+      "title": "生物技术衍生产品 (Section 5.7)",
+      "rule": "原料药阶段元素杂质风险较低，通常不需要特定控制",
+      "reasons": [
+        "元素通常不用作催化剂或试剂",
+        "元素在培养基中以痕量添加，无累积且后续处理可显著稀释/去除",
+        "典型纯化方案（萃取、色谱、透析/超滤）可将元素清除至可忽略水平"
+      ],
+      "exception": "含合成结构的生物技术产品（如抗体药物偶联物）需评估小分子组分的元素杂质"
+    },
+    "lifecycle_management": {
+      "title": "生命周期管理 (Section 10)",
+      "rule": "变更可能影响元素杂质含量时需重新评估",
+      "examples": ["合成路线变更", "辅料供应商变更", "设备变更", "容器密封系统变更"]
+    }
+  }
+}

@@ -1,0 +1,106 @@
+[
+  {
+    "team": "AI创新组",
+    "department": "AI创新部"
+  },
+  {
+    "team": "安全部",
+    "department": "安全环保部"
+  },
+  {
+    "team": "环保部",
+    "department": "安全环保部"
+  },
+  {
+    "team": "财务组",
+    "department": "财务部"
+  },
+  {
+    "team": "采购组",
+    "department": "采购部"
+  },
+  {
+    "team": "二车间",
+    "department": "发酵工程部"
+  },
+  {
+    "team": "一车间",
+    "department": "发酵工程部"
+  },
+  {
+    "team": "工会组",
+    "department": "工会部门"
+  },
+  {
+    "team": "公司",
+    "department": "经营层"
+  },
+  {
+    "team": "后勤组",
+    "department": "人事行政部"
+  },
+  {
+    "team": "人事行政组",
+    "department": "人事行政部"
+  },
+  {
+    "team": "动力车间",
+    "department": "设备动力部"
+  },
+  {
+    "team": "公共部分",
+    "department": "设备动力部"
+  },
+  {
+    "team": "仓储组",
+    "department": "生产制造部"
+  },
+  {
+    "team": "生产管理组",
+    "department": "生产制造部"
+  },
+  {
+    "team": "销售后勤",
+    "department": "市场开发部"
+  },
+  {
+    "team": "二车间",
+    "department": "提炼二部"
+  },
+  {
+    "team": "一车间",
+    "department": "提炼二部"
+  },
+  {
+    "team": "二车间",
+    "department": "提炼三部"
+  },
+  {
+    "team": "生产部",
+    "department": "提炼三部"
+  },
+  {
+    "team": "二车间",
+    "department": "提炼一部"
+  },
+  {
+    "team": "公用",
+    "department": "提炼一部"
+  },
+  {
+    "team": "IC",
+    "department": "质量管理部"
+  },
+  {
+    "team": "QA",
+    "department": "质量管理部"
+  },
+  {
+    "team": "QC",
+    "department": "质量管理部"
+  },
+  {
+    "team": "药政注册",
+    "department": "质量管理部"
+  }
+]

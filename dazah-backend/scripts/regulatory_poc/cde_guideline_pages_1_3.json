@@ -1,0 +1,266 @@
+{
+  "timestamp": "2026-06-10T12:34:56.820416",
+  "approach": "page-driven (listen only, no manual API calls)",
+  "target_url": "https://www.cde.org.cn/zdyz/index",
+  "waf_passed": true,
+  "page_title": "指导原则专栏",
+  "captured_pages": [],
+  "all_api_responses": [
+    {
+      "url": "https://www.cde.org.cn/zdyz/news/homepageNewsList?type=zqyj&size=7&MmEwMD=3cPh3IkMw4cOigRXt4KJB77y7RvhaMxuSPaGzn3vpV.nYsaQ0w_rrd3qm94pAvHLvh0_iGBSexJeu5DSAQeQfQr8_vOYv.cgUa45GhJaI3DTgEfJQ4eui7D8ndC5RECFVa2zWQARa3VAX9M.eJOF9G4m.RZ0UyIbT8TjqAdEDYFhHA45RI8z5P99vcQpAOSFiq6zqLqlHfkb6OrhYMxAKcdLLcYNlOaeBRIzVlFqwmRWNTsxUJbAlv.oEi04yKfSQ0tlHWf66PSZ2LVt9Fw87gNdDABo5xbJg_ZE363y6oN21EAFJ9pXlZgZH9vka8y_fDnX2_kesEVrdJ2ndCcQYRnS6V.TrVJVPx9k4YeLUWjWYe3",
+      "status": 200,
+      "timestamp": "2026-06-10T12:35:00.081815",
+      "is_json": true,
+      "json_keys": [
+        "msg",
+        "code",
+        "data"
+      ],
+      "data": {
+        "msg": "操作成功",
+        "code": 200,
+        "data": [
+          {
+            "issueDate": "2026-06-02",
+            "fclass": "征求意见",
+            "title": "关于公开征求《培植牛黄研究技术指导原则（征求意见稿）》意见的通知",
+            "isnew": 1,
+            "externalLinks": "https://www.cde.org.cn/main/news/viewInfoCommon/4ce024c433d04011ca2544dfa6cf08ba",
+            "zdyzIdCODE": "0fe7458d0fae557badfc605a8854361d"
+          },
+          {
+            "issueDate": "2026-05-29",
+            "nowstate": "征求意见",
+            "fclass": "征求意见",
+            "title": "关于公开征求《蔗糖铁注射液生物等效性研究技术指导原则（征求意见稿）》意见的通知",
+            "isnew": 1,
+            "externalLinks": "https://www.cde.org.cn/main/news/viewInfoCommon/752856826dff4f9b2c53ffdd9d6e8794",
+            "zdyzIdCODE": "401f8622065776fd23d99e6c39c1c118"
+          },
+          {
+            "issueDate": "2026-05-29",
+            "nowstate": "征求意见",
+            "fclass": "征求意见",
+            "title": "关于公开征求《儿童药物临床试验中应用患者报告结局（PRO）技术指导原则（征求意见稿）》意见的通知",
+            "isnew": 1,
+            "externalLinks": "https://www.cde.org.cn/main/news/viewInfoCommon/f85a4aa09c85872973d074e7075267a8",
+            "zdyzIdCODE": "13bcfa3f0177a95f87050434286ceb9b"
+          },
+          {
+            "issueDate": "2026-05-29",
+            "nowstate": "征求意见",
+            "fclass": "征求意见",
+            "title": "关于公开征求《青少年体重管理适应症临床试验设计指导原则（征求意见稿）》意见的通知",
+            "isnew": 1,
+            "externalLinks": "https://www.cde.org.cn/main/news/viewInfoCommon/bf38a20e56f0ed2b2dc98ee9c1ce02e7",
+            "zdyzIdCODE": "0fec32f77d0bcb654e796d4ac0743a3c"
+          },
+          {
+            "issueDate": "2026-05-27",
+            "fclass": "征求意见",
+            "title": "关于公开征求《细胞外囊泡药物申报临床试验药学研究的问答文件（征求意见稿）》意见的通知",
+            "isnew": 1,
+            "externalLinks": "https://www.cde.org.cn/main/news/viewInfoCommon/10d635c8fe59d1910925c20ca7bb9e58",
+            "zdyzIdCODE": "3e1f764338b128dc3b8dcf20232e3078"
+          },
+          {
+            "issueDate": "2026-05-27",
+            "fclass": "征求意见",
+            "title": "关于公开征求《eCTD v4.0指导原则》意见的通知",
+            "isnew": 1,
+            "externalLinks": "https://www.cde.org.cn/main/news/viewInfoCommon/7898f68946d8e8e44d074657c7112002",
+            "zdyzIdCODE": "331cde7bd8d39af91c4a8df82e69e867"
+          },
+          {
+            "issueDate": "2026-05-11",
+            "fclass": "已结束",
+            "title": "关于公开征求《间充质干细胞产品药学研究与评价技术指导原则（征求意见稿）》意见的通知",
+            "isnew": 0,
+            "externalLinks": "https://www.cde.org.cn/main/news/viewInfoCommon/483c58e835b4072a9646021319acb2b9",
+            "zdyzIdCODE": "062938657f2e2b59755257cc39896975"
+          }
+        ]
+      }
+    },
+    {
+      "url": "https://www.cde.org.cn/zdyz/news/homepageNewsList?type=fbtg&size=5&MmEwMD=3OjRQ5hxRFtStRpZiF8I.J9.LgBR0_rfTkgnNsATYTOGpngiaZnsm8A1rmukVDo_OjZLtrvOyLmB6IiOVeTi2exW59coO997BXEwQ28Jl85uHoqkfEZY.aS4Wd3YzJcygboCYL6Gpf8c62eLwVFPgauOsmFiqlYJ6kb9PNjvfL5KW0pUC0oYwOA3UfWH0gVpN_W5lm_rgDPsQ6wTLiAfP9LiOmFYIM3M8bG2yjlbaiOHOrHjH4Ucdy5O1zC.Y_WhKRvxCk5Gg0aOS2piXZBM0tszJzHnjvw36J_DVyhwwZdW43aCAiTG089YE2_Pdqx2XoyYZkEBtJmkvtvMC84Aqg.3oZ8njrbwtzANFPsZEICl4WC",
+      "status": 200,
+      "timestamp": "2026-06-10T12:35:00.081915",
+      "is_json": true,
+      "json_keys": [
+        "msg",
+        "code",
+        "data"
+      ],
+      "data": {
+        "msg": "操作成功",
+        "code": 200,
+        "data": [
+          {
+            "issueDate": "20260601",
+            "fclass": "通知公告",
+            "title": "国家药监局药审中心关于发布《预防用mRNA疫苗临床试验技术指导原则（试行）》的通告（2026年第38号）",
+            "isnew": 0,
+            "externalLinks": "https://www.cde.org.cn/main/news/viewInfoCommon/e03ac90e7b8df4a89328af1976dbfe83",
+            "zdyzIdCODE": "c92da9aca88c0d5a0b25839fbf3a1f79"
+          },
+          {
+            "issueDate": "20260601",
+            "fclass": "通知公告",
+            "title": "国家药监局药审中心关于发布《关于开发适宜药品包装规格的指导原则》的通告（2026年第37号）",
+            "isnew": 0,
+            "externalLinks": "https://www.cde.org.cn/main/news/viewInfoCommon/e9ea51cbefc600990adcf2d786ee5e51",
+            "zdyzIdCODE": "6df45c6352fa5222d9607372d9dc8841"
+          },
+          {
+            "issueDate": "20260520",
+            "fclass": "通知公告",
+            "title": "国家药监局药审中心关于发布《化学仿制药药学研究重大缺陷情形》和《化学仿制药生物等效性研究重大缺陷情形》的通告（2026年第36号）",
+            "isnew": 0,
+            "externalLinks": "https://www.cde.org.cn/main/news/viewInfoCommon/4b9bc30439f2c64fa87ec503210d3c75",
+            "zdyzIdCODE": "eefa90b4a7b0c99d5ef84db369c1effa"
+          },
+          {
+            "issueDate": "20260508",
+            "fclass": "通知公告",
+            "title": "国家药监局药审中心关于发布《重组胰岛素类产品药学研究与评价技术指导原则（修订版）》的通告（2026年第32号）",
+            "isnew": 0,
+            "externalLinks": "https://www.cde.org.cn/main/news/viewInfoCommon/bdd9ebabcd1ba3f6c9850f53fa889f6e",
+            "zdyzIdCODE": "69bb83882df998371e98ddde25cfecc7"
+          },
+          {
+            "issueDate": "20260420",
+            "fclass": "通知公告",
+            "title": "国家药监局药审中心关于发布《治疗用重组蛋白药物首次申报临床试验药学资料撰写指导原则》等3个文件的通告（2026年第30号）",
+            "isnew": 0,
+            "externalLinks": "https://www.cde.org.cn/main/news/viewInfoCommon/89378e5303c7955f8b50bbdbb7fce126",
+            "zdyzIdCODE": "e34a97ca74003d0703eb0d84cc79bc3e"
+          }
+        ]
+      }
+    }
+  ],
+  "pagination_works": false,
+  "cookies": [
+    {
+      "name": "Path",
+      "domain": "www.cde.org.cn",
+      "expires": -1,
+      "expires_human": "Session",
+      "httpOnly": true
+    },
+    {
+      "name": "Path",
+      "domain": "www.cde.org.cn",
+      "expires": -1,
+      "expires_human": "Session",
+      "httpOnly": true
+    },
+    {
+      "name": "Path",
+      "domain": "www.cde.org.cn",
+      "expires": -1,
+      "expires_human": "Session",
+      "httpOnly": true
+    },
+    {
+      "name": "Path",
+      "domain": "www.cde.org.cn",
+      "expires": -1,
+      "expires_human": "Session",
+      "httpOnly": true
+    },
+    {
+      "name": "Path",
+      "domain": "www.cde.org.cn",
+      "expires": -1,
+      "expires_human": "Session",
+      "httpOnly": true
+    },
+    {
+      "name": "Path",
+      "domain": "www.cde.org.cn",
+      "expires": -1,
+      "expires_human": "Session",
+      "httpOnly": true
+    },
+    {
+      "name": "Path",
+      "domain": "www.cde.org.cn",
+      "expires": -1,
+      "expires_human": "Session",
+      "httpOnly": true
+    },
+    {
+      "name": "Path",
+      "domain": "www.cde.org.cn",
+      "expires": -1,
+      "expires_human": "Session",
+      "httpOnly": true
+    },
+    {
+      "name": "Path",
+      "domain": "www.cde.org.cn",
+      "expires": -1,
+      "expires_human": "Session",
+      "httpOnly": true
+    },
+    {
+      "name": "Path",
+      "domain": "www.cde.org.cn",
+      "expires": -1,
+      "expires_human": "Session",
+      "httpOnly": true
+    },
+    {
+      "name": "Path",
+      "domain": "www.cde.org.cn",
+      "expires": -1,
+      "expires_human": "Session",
+      "httpOnly": true
+    },
+    {
+      "name": "Path",
+      "domain": "www.cde.org.cn",
+      "expires": -1,
+      "expires_human": "Session",
+      "httpOnly": true
+    },
+    {
+      "name": "Path",
+      "domain": "www.cde.org.cn",
+      "expires": -1,
+      "expires_human": "Session",
+      "httpOnly": true
+    },
+    {
+      "name": "Path",
+      "domain": "www.cde.org.cn",
+      "expires": -1,
+      "expires_human": "Session",
+      "httpOnly": true
+    },
+    {
+      "name": "FSSBBIl1UgzbN7N80S",
+      "domain": "www.cde.org.cn",
+      "expires": 1815626097.718392,
+      "expires_human": "2027-07-15T12:34:57.718392",
+      "httpOnly": true
+    },
+    {
+      "name": "Path",
+      "domain": "www.cde.org.cn",
+      "expires": -1,
+      "expires_human": "Session",
+      "httpOnly": true
+    },
+    {
+      "name": "FSSBBIl1UgzbN7N80T",
+      "domain": "www.cde.org.cn",
+      "expires": 1815626130.503952,
+      "expires_human": "2027-07-15T12:35:30.503952",
+      "httpOnly": false
+    }
+  ],
+  "errors": []
+}

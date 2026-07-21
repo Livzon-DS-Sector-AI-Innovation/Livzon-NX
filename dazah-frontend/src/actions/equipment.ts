@@ -1,0 +1,657 @@
+'use server'
+
+import { getServerApiBaseUrl } from '@/lib/server-api'
+import { revalidatePath } from 'next/cache'
+import { getServerToken } from '@/lib/auth'
+import {
+  CreateCategoryInput, UpdateCategoryInput, CreateLocationInput, UpdateLocationInput, CreateEquipmentInput, UpdateEquipmentInput,
+  CreateFailureCodeInput, UpdateFailureCodeInput,
+  CreateWorkOrderInput, UpdateWorkOrderInput, AssignWorkOrderInput, CompleteWorkOrderInput, VerifyWorkOrderInput,
+  CreateCalibrationPlanInput, UpdateCalibrationPlanInput, CreateCalibrationRecordInput,
+  CreateSparePartInput, UpdateSparePartInput, StockInboundInput, StockAdjustInput,
+  CreateMaintenancePlanInput, UpdateMaintenancePlanInput,
+  CreateInspectionTemplateInput, UpdateInspectionTemplateInput,
+  CreateInspectionTemplateItemInput, UpdateInspectionTemplateItemInput,
+  InspectionCompleteInput, MaterialConsumeInput,
+} from '@/types/equipment'
+
+const API_BASE_URL = getServerApiBaseUrl()
+
+async function actionFetch<T>(url: string, options?: RequestInit): Promise<T | null> {
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${await getServerToken()}`,
+      ...options?.headers,
+    },
+  })
+  if (!response.ok) {
+    const errorBody = await response.text().catch(() => '')
+    let errorMessage = `请求失败: ${response.status} ${response.statusText}`
+    try {
+      const errorJson = JSON.parse(errorBody)
+      if (errorJson.message) errorMessage = errorJson.message
+    } catch {}
+    throw new Error(errorMessage)
+  }
+  const text = await response.text()
+  if (!text) return null
+  const json = JSON.parse(text)
+  return json.data ?? json
+}
+
+// 设备分类
+export async function createCategory(data: CreateCategoryInput) {
+  const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/categories`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+  revalidatePath('/equipment')
+  return result
+}
+
+export async function updateCategory(id: string, data: UpdateCategoryInput) {
+  const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/categories/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
+  revalidatePath('/equipment')
+  return result
+}
+
+export async function deleteCategory(id: string) {
+  const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/categories/${id}`, {
+    method: 'DELETE',
+  })
+  revalidatePath('/equipment')
+  return result
+}
+
+// 位置管理
+export async function createLocation(data: CreateLocationInput) {
+  const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/locations`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+  revalidatePath('/equipment')
+  return result
+}
+
+export async function updateLocation(id: string, data: UpdateLocationInput) {
+  const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/locations/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
+  revalidatePath('/equipment')
+  return result
+}
+
+export async function deleteLocation(id: string) {
+  const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/locations/${id}`, {
+    method: 'DELETE',
+  })
+  revalidatePath('/equipment')
+  return result
+}
+
+// 设备管理
+export async function createEquipment(data: CreateEquipmentInput) {
+  const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/equipments`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+  revalidatePath('/equipment')
+  return result
+}
+
+export async function updateEquipment(id: string, data: UpdateEquipmentInput) {
+  const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/equipments/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
+  revalidatePath('/equipment')
+  return result
+}
+
+export async function deleteEquipment(id: string) {
+  const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/equipments/${id}`, {
+    method: 'DELETE',
+  })
+  revalidatePath('/equipment')
+  return result
+}
+
+// ==================== 故障代码 ====================
+type FailureCodePath = 'symptoms' | 'causes' | 'actions'
+
+export async function createFailureCode(path: FailureCodePath, data: CreateFailureCodeInput) {
+  const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/maintenance/failure-codes/${path}`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+  revalidatePath('/equipment')
+  return result
+}
+
+export async function updateFailureCode(path: FailureCodePath, id: string, data: UpdateFailureCodeInput) {
+  const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/maintenance/failure-codes/${path}/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
+  revalidatePath('/equipment')
+  return result
+}
+
+export async function deleteFailureCode(path: FailureCodePath, id: string) {
+  const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/maintenance/failure-codes/${path}/${id}`, {
+    method: 'DELETE',
+  })
+  revalidatePath('/equipment')
+  return result
+}
+
+// ==================== 维修工单 ====================
+export async function createWorkOrder(data: CreateWorkOrderInput) {
+  const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/maintenance/work-orders/`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+  revalidatePath('/equipment')
+  return result
+}
+
+export async function updateWorkOrder(id: string, data: UpdateWorkOrderInput) {
+  const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/maintenance/work-orders/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
+  revalidatePath('/equipment')
+  return result
+}
+
+export async function assignWorkOrder(id: string, data: AssignWorkOrderInput) {
+  const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/maintenance/work-orders/${id}/assign`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
+  revalidatePath('/equipment')
+  return result
+}
+
+export async function startWorkOrder(id: string) {
+  const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/maintenance/work-orders/${id}/start`, {
+    method: 'PUT',
+  })
+  revalidatePath('/equipment')
+  return result
+}
+
+export async function completeWorkOrder(id: string, data: CompleteWorkOrderInput) {
+  const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/maintenance/work-orders/${id}/complete`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
+  revalidatePath('/equipment')
+  return result
+}
+
+export async function verifyWorkOrder(id: string, data: VerifyWorkOrderInput) {
+  const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/maintenance/work-orders/${id}/verify`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
+  revalidatePath('/equipment')
+  return result
+}
+
+export async function closeWorkOrder(id: string) {
+  const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/maintenance/work-orders/${id}/close`, {
+    method: 'PUT',
+  })
+  revalidatePath('/equipment')
+  return result
+}
+
+// ==================== 校准计划 ====================
+export async function createCalibrationPlan(data: CreateCalibrationPlanInput) {
+  const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/maintenance/calibration/plans`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+  revalidatePath('/equipment')
+  return result
+}
+
+export async function updateCalibrationPlan(id: string, data: UpdateCalibrationPlanInput) {
+  const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/maintenance/calibration/plans/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
+  revalidatePath('/equipment')
+  return result
+}
+
+export async function deleteCalibrationPlan(id: string) {
+  const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/maintenance/calibration/plans/${id}`, {
+    method: 'DELETE',
+  })
+  revalidatePath('/equipment')
+  return result
+}
+
+// ==================== 校准记录 ====================
+export async function createCalibrationRecord(data: CreateCalibrationRecordInput) {
+  const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/maintenance/calibration/records`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+  revalidatePath('/equipment')
+  return result
+}
+
+// ==================== 备件管理 ====================
+export async function createSparePart(data: CreateSparePartInput) {
+  const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/spare-parts/`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+  revalidatePath('/equipment')
+  return result
+}
+
+export async function updateSparePart(id: string, data: UpdateSparePartInput) {
+  const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/spare-parts/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
+  revalidatePath('/equipment')
+  return result
+}
+
+export async function deleteSparePart(id: string) {
+  const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/spare-parts/${id}`, {
+    method: 'DELETE',
+  })
+  revalidatePath('/equipment')
+  return result
+}
+
+export async function stockInbound(sparePartId: string, data: StockInboundInput) {
+  const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/spare-parts/${sparePartId}/stock/inbound`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+  revalidatePath('/equipment')
+  return result
+}
+
+export async function stockAdjust(sparePartId: string, data: StockAdjustInput) {
+  const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/spare-parts/${sparePartId}/stock/adjust`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+  revalidatePath('/equipment')
+  return result
+}
+
+// ==================== 维护计划 ====================
+export async function createMaintenancePlan(data: CreateMaintenancePlanInput) {
+  const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/maintenance/plans/`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+  revalidatePath('/equipment')
+  return result
+}
+
+export async function updateMaintenancePlan(id: string, data: UpdateMaintenancePlanInput) {
+  const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/maintenance/plans/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
+  revalidatePath('/equipment')
+  return result
+}
+
+export async function deleteMaintenancePlan(id: string) {
+  const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/maintenance/plans/${id}`, {
+    method: 'DELETE',
+  })
+  revalidatePath('/equipment')
+  return result
+}
+
+// ==================== 巡检模板 ====================
+export async function createInspectionTemplate(data: CreateInspectionTemplateInput) {
+  const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/maintenance/inspection-templates/`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+  revalidatePath('/equipment')
+  return result
+}
+
+export async function updateInspectionTemplate(id: string, data: UpdateInspectionTemplateInput) {
+  const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/maintenance/inspection-templates/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
+  revalidatePath('/equipment')
+  return result
+}
+
+export async function deleteInspectionTemplate(id: string) {
+  const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/maintenance/inspection-templates/${id}`, {
+    method: 'DELETE',
+  })
+  revalidatePath('/equipment')
+  return result
+}
+
+export async function createInspectionTemplateItem(templateId: string, data: CreateInspectionTemplateItemInput) {
+  const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/maintenance/inspection-templates/${templateId}/items`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+  revalidatePath('/equipment')
+  return result
+}
+
+export async function updateInspectionTemplateItem(itemId: string, data: UpdateInspectionTemplateItemInput) {
+  const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/maintenance/inspection-templates/items/${itemId}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
+  revalidatePath('/equipment')
+  return result
+}
+
+export async function deleteInspectionTemplateItem(itemId: string) {
+  const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/maintenance/inspection-templates/items/${itemId}`, {
+    method: 'DELETE',
+  })
+  revalidatePath('/equipment')
+  return result
+}
+
+export async function completeInspection(workOrderId: string, data: InspectionCompleteInput) {
+  const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/maintenance/inspection-templates/complete/${workOrderId}`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+  revalidatePath('/equipment')
+  return result
+}
+
+// ==================== 工单物料领用 ====================
+export async function consumeMaterials(workOrderId: string, data: MaterialConsumeInput) {
+  const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/maintenance/work-orders/${workOrderId}/materials`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+  revalidatePath('/equipment')
+  return result
+}
+
+// ==================== 工单图片 ====================
+export async function uploadWorkOrderImages(workOrderId: string, formData: FormData) {
+  const token = await getServerToken()
+  const result = await fetch(`${API_BASE_URL}/api/v1/equipment/maintenance/work-orders/${workOrderId}/images`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  })
+  if (!result.ok) {
+    const err = await result.json().catch(() => ({}))
+    throw new Error((err as any).message || '上传失败')
+  }
+  revalidatePath('/equipment')
+  const json = await result.json()
+  return json.data
+}
+
+export async function deleteWorkOrderImage(workOrderId: string, imageId: string) {
+  const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/maintenance/work-orders/${workOrderId}/images/${imageId}`, {
+    method: 'DELETE',
+  })
+  revalidatePath('/equipment')
+  return result
+}
+
+// ==================== 抢单 ====================
+export async function claimWorkOrder(id: string) {
+  const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/maintenance/work-orders/${id}/claim`, {
+    method: 'PUT',
+  })
+  revalidatePath('/equipment')
+  return result
+}
+
+// ==================== 配置 ====================
+export async function updateClaimTimeoutConfig(data: { emergency?: number; high?: number; medium?: number; low?: number }) {
+  const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/maintenance/config/claim-timeout`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
+  revalidatePath('/equipment')
+  return result
+}
+
+// ─── Server-side fetch functions (for Server Components) ───
+
+export async function fetchCategoryTree(): Promise<any> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/equipment/categories/tree`, {
+    cache: 'no-store',
+  })
+  if (!res.ok) return []
+  const json = await res.json()
+  return json.data || []
+}
+
+export async function fetchLocationTree(): Promise<any> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/equipment/locations/tree`, {
+    cache: 'no-store',
+  })
+  if (!res.ok) return []
+  const json = await res.json()
+  return json.data || []
+}
+
+export async function fetchEquipments(filters: any = {}): Promise<any> {
+  const params = new URLSearchParams()
+  if (filters.category_id) params.append('category_id', filters.category_id)
+  if (filters.location_id) params.append('location_id', filters.location_id)
+  if (filters.department_id) params.append('department_id', filters.department_id)
+  if (filters.status) params.append('status', filters.status)
+  if (filters.keyword) params.append('keyword', filters.keyword)
+  params.append('page', String(filters.page || 1))
+  params.append('page_size', String(filters.page_size || 20))
+
+  const res = await fetch(`${API_BASE_URL}/api/v1/equipment/equipments?${params.toString()}`, {
+    cache: 'no-store',
+  })
+  if (!res.ok) return { items: [], total: 0, page: 1, page_size: 20 }
+  const json = await res.json()
+  return {
+    items: json.data || [],
+    total: json.meta?.total || 0,
+    page: json.meta?.page || 1,
+    page_size: json.meta?.page_size || 20,
+  }
+}
+
+export async function fetchEquipmentStatistics(): Promise<any> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/equipment/equipments/statistics`, {
+    cache: 'no-store',
+  })
+  if (!res.ok) return { total: 0, by_status: {}, by_category: {}, by_location: {} }
+  const json = await res.json()
+  return json.data
+}
+
+export async function fetchDepartments(): Promise<any[]> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/equipment/departments`, {
+    cache: 'no-store',
+  })
+  if (!res.ok) return []
+  const json = await res.json()
+  return json.data || []
+}
+
+export async function fetchWorkOrders(filters: any = {}): Promise<any> {
+  const params = new URLSearchParams()
+  if (filters.status) params.append('status', filters.status)
+  if (filters.priority) params.append('priority', filters.priority)
+  if (filters.equipment_id) params.append('equipment_id', filters.equipment_id)
+  if (filters.keyword) params.append('keyword', filters.keyword)
+  params.append('page', String(filters.page || 1))
+  params.append('page_size', String(filters.page_size || 20))
+
+  const res = await fetch(`${API_BASE_URL}/api/v1/equipment/work-orders?${params.toString()}`, {
+    cache: 'no-store',
+  })
+  if (!res.ok) return { items: [], total: 0, page: 1, page_size: 20 }
+  const json = await res.json()
+  return {
+    items: json.data || [],
+    total: json.meta?.total || 0,
+    page: json.meta?.page || 1,
+    page_size: json.meta?.page_size || 20,
+  }
+}
+
+export async function fetchWorkOrderStatistics(): Promise<any> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/equipment/work-orders/statistics`, {
+    cache: 'no-store',
+  })
+  if (!res.ok) return { total: 0, by_status: {}, by_type: {}, by_priority: {} }
+  const json = await res.json()
+  return json.data
+}
+
+export async function fetchFailureCodes(type: 'symptoms' | 'causes' | 'actions'): Promise<any[]> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/equipment/maintenance/failure-codes/${type}`, {
+    cache: 'no-store',
+  })
+  if (!res.ok) return []
+  const json = await res.json()
+  return json.data || []
+}
+
+export async function fetchCalibrationPlans(filters: any = {}): Promise<any> {
+  const params = new URLSearchParams()
+  if (filters.equipment_id) params.append('equipment_id', filters.equipment_id)
+  if (filters.status) params.append('status', filters.status)
+  params.append('page', String(filters.page || 1))
+  params.append('page_size', String(filters.page_size || 20))
+
+  const res = await fetch(`${API_BASE_URL}/api/v1/equipment/calibration-plans?${params.toString()}`, {
+    cache: 'no-store',
+  })
+  if (!res.ok) return { items: [], total: 0 }
+  const json = await res.json()
+  return json.data
+}
+
+export async function fetchCalibrationRecords(filters: any = {}): Promise<any> {
+  const params = new URLSearchParams()
+  if (filters.equipment_id) params.append('equipment_id', filters.equipment_id)
+  if (filters.plan_id) params.append('plan_id', filters.plan_id)
+  if (filters.status) params.append('status', filters.status)
+  params.append('page', String(filters.page || 1))
+  params.append('page_size', String(filters.page_size || 20))
+
+  const res = await fetch(`${API_BASE_URL}/api/v1/equipment/calibration-records?${params.toString()}`, {
+    cache: 'no-store',
+  })
+  if (!res.ok) return { items: [], total: 0 }
+  const json = await res.json()
+  return {
+    items: json.data || [],
+    total: json.meta?.total || 0,
+  }
+}
+
+export async function fetchMaintenancePlans(filters: any = {}): Promise<any> {
+  const params = new URLSearchParams()
+  if (filters.equipment_id) params.append('equipment_id', filters.equipment_id)
+  if (filters.maintenance_type) params.append('maintenance_type', filters.maintenance_type)
+  if (filters.status) params.append('status', filters.status)
+  params.append('page', String(filters.page || 1))
+  params.append('page_size', String(filters.page_size || 20))
+
+  const res = await fetch(`${API_BASE_URL}/api/v1/equipment/maintenance-plans?${params.toString()}`, {
+    cache: 'no-store',
+  })
+  if (!res.ok) return { items: [], total: 0 }
+  const json = await res.json()
+  return {
+    items: json.data || [],
+    total: json.meta?.total || 0,
+  }
+}
+
+export async function fetchInspectionTemplates(filters: any = {}): Promise<any> {
+  const params = new URLSearchParams()
+  if (filters.equipment_id) params.append('equipment_id', filters.equipment_id)
+  if (filters.is_active !== undefined) params.append('is_active', String(filters.is_active))
+  params.append('page', String(filters.page || 1))
+  params.append('page_size', String(filters.page_size || 20))
+
+  const res = await fetch(`${API_BASE_URL}/api/v1/equipment/inspection-templates?${params.toString()}`, {
+    cache: 'no-store',
+  })
+  if (!res.ok) return { items: [], total: 0 }
+  const json = await res.json()
+  return {
+    items: json.data || [],
+    total: json.meta?.total || 0,
+  }
+}
+
+export async function fetchCategories(): Promise<any[]> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/equipment/categories`, {
+    cache: 'no-store',
+  })
+  if (!res.ok) return []
+  const json = await res.json()
+  return json.data || []
+}
+
+export async function fetchSpareParts(filters: any = {}): Promise<any> {
+  const params = new URLSearchParams()
+  if (filters.equipment_id) params.append('equipment_id', filters.equipment_id)
+  if (filters.category_id) params.append('category_id', filters.category_id)
+  if (filters.keyword) params.append('keyword', filters.keyword)
+  params.append('page', String(filters.page || 1))
+  params.append('page_size', String(filters.page_size || 20))
+
+  const res = await fetch(`${API_BASE_URL}/api/v1/equipment/spare-parts?${params.toString()}`, {
+    cache: 'no-store',
+  })
+  if (!res.ok) return { items: [], total: 0 }
+  const json = await res.json()
+  return {
+    items: json.data || [],
+    total: json.meta?.total || 0,
+  }
+}
+
+export async function fetchStockWarnings(): Promise<any> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/equipment/spare-parts/stock-warnings`, {
+    cache: 'no-store',
+  })
+  if (!res.ok) return []
+  const json = await res.json()
+  return json.data || []
+}
+
+export async function fetchOverdueMaintenancePlans(): Promise<any> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/equipment/maintenance-plans/overdue`, {
+    cache: 'no-store',
+  })
+  if (!res.ok) return []
+  const json = await res.json()
+  return json.data || []
+}
