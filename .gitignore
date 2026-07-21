@@ -2,6 +2,10 @@
 .DS_Store
 Thumbs.db
 
+# Local documentation and helper scripts
+/docs/
+/scripts/
+
 # Python
 **/__pycache__/
 **/.pytest_cache/
