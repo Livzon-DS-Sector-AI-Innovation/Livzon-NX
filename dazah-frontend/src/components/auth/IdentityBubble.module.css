@@ -1,0 +1,1037 @@
+.loginExperience {
+  --ink: #172754;
+  --blue: #3154d9;
+  --blue-soft: rgba(54, 88, 218, 0.44);
+  --line: rgba(60, 94, 222, 0.2);
+  position: relative;
+  display: grid;
+  min-height: 100dvh;
+  overflow: hidden;
+  grid-template-rows: 4.75rem minmax(0, 1fr) 3.25rem;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 50% 49%, rgba(118, 165, 255, 0.09), transparent 32rem),
+    radial-gradient(circle at 7% 13%, rgba(153, 205, 255, 0.08), transparent 24rem),
+    linear-gradient(145deg, #fbfdff, #f7faff 50%, #fbfdff);
+  isolation: isolate;
+}
+
+.loginHeader,
+.loginFooter {
+  position: relative;
+  z-index: 8;
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  padding-inline: 1.6rem;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.62rem;
+  border-left: 2px solid #3154ff;
+  padding-left: 1rem;
+}
+
+.brandMark {
+  width: 1.7rem;
+  height: 1.7rem;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: url("/brand/livzon-mark.png") center / 132% auto no-repeat;
+  mix-blend-mode: multiply;
+}
+
+.brandName {
+  margin: 0;
+  color: #111d42;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.34em;
+  line-height: 1;
+}
+
+.companyName {
+  margin: 0.34rem 0 0;
+  color: #354c9a;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 0.37rem;
+  font-weight: 650;
+  letter-spacing: 0.07em;
+  line-height: 1.4;
+}
+
+.internalFlag {
+  position: relative;
+  display: grid;
+  min-width: 8.5rem;
+  justify-items: end;
+  gap: 0.48rem;
+  border-top: 1px solid rgba(49, 84, 217, 0.72);
+  border-right: 1px solid rgba(49, 84, 217, 0.72);
+  padding: 0.52rem 0.9rem 0.2rem 0;
+  color: #2946b1;
+  font-family: var(--font-geist-mono), monospace;
+  line-height: 1;
+}
+
+.internalFlag::after {
+  position: absolute;
+  top: 100%;
+  right: -1px;
+  width: 1px;
+  height: 1rem;
+  background: rgba(49, 84, 217, 0.72);
+  content: "";
+}
+
+.internalFlag strong {
+  font-size: 0.45rem;
+  letter-spacing: 0.32em;
+}
+
+.internalFlag small {
+  color: #5871c8;
+  font-size: 0.34rem;
+  letter-spacing: 0.08em;
+}
+
+.internalFlag small::after {
+  margin-left: 0.32rem;
+  color: #4a69ff;
+  content: "●";
+}
+
+.loginStage {
+  position: relative;
+  z-index: 2;
+  min-height: 0;
+}
+
+.stageContent {
+  position: absolute;
+  z-index: 5;
+  inset: 0;
+  pointer-events: none;
+  transform: translateY(1.5rem);
+}
+
+.loginFooter {
+  color: #3451ad;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 0.42rem;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+}
+
+.atmosphere {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.atmosphereCanvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.35;
+}
+
+.mist {
+  position: absolute;
+  width: min(48rem, 58vw);
+  aspect-ratio: 1.4;
+  border-radius: 50%;
+  filter: blur(6rem);
+  opacity: 0.08;
+}
+
+.mistBlue {
+  top: 20%;
+  left: 23%;
+  background: rgba(94, 140, 255, 0.36);
+  animation: mist-drift 16s ease-in-out infinite alternate;
+}
+
+.mistCyan {
+  top: 30%;
+  left: 45%;
+  background: rgba(89, 223, 255, 0.25);
+  animation: mist-drift 20s ease-in-out -8s infinite alternate-reverse;
+}
+
+.mistIce {
+  top: 42%;
+  left: 30%;
+  background: rgba(195, 226, 255, 0.38);
+}
+
+.centerAura {
+  position: absolute;
+  top: 52%;
+  left: 50%;
+  width: min(54rem, 72vw);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: repeating-radial-gradient(
+    circle,
+    transparent 0 5rem,
+    rgba(51, 84, 207, 0.025) 5rem 5.08rem
+  );
+  transform: translate(-50%, -50%) scaleY(0.68);
+}
+
+.circuitField {
+  position: absolute;
+  z-index: 1;
+  inset: 0 1.25rem;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.circuitSvg {
+  position: absolute;
+  top: calc(50% + 1.5rem);
+  left: 50%;
+  width: min(100%, 108rem);
+  height: 100%;
+  overflow: visible;
+  transform: translate(-50%, -50%);
+}
+
+.circuitWord {
+  transform-origin: 800px 325px;
+  animation: word-breathe 8s ease-in-out infinite;
+}
+
+.circuitWordContour {
+  fill: none;
+  stroke: #5877e3;
+  stroke-width: 0.82;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 580px;
+  font-weight: 900;
+  letter-spacing: -0.075em;
+  vector-effect: non-scaling-stroke;
+}
+
+.circuitWordContour:first-child {
+  stroke: #3658d6;
+  stroke-width: 1.05;
+  opacity: 0.68;
+}
+
+.signalBands,
+.radialTraces,
+.fieldBrackets {
+  fill: none;
+  stroke: rgba(61, 96, 214, 0.35);
+  stroke-linecap: square;
+  stroke-width: 0.72;
+}
+
+.signalBands path {
+  stroke-dasharray: 3 7 20 8;
+  animation: signal-band-flow 7.5s linear infinite;
+}
+
+.signalBands g:nth-child(2n) path {
+  stroke: rgba(76, 127, 231, 0.3);
+  stroke-dasharray: 12 5 2 8;
+  animation-direction: reverse;
+  animation-duration: 9.5s;
+}
+
+.signalBands circle,
+.radialTraces circle {
+  fill: rgba(42, 73, 205, 0.78);
+  stroke: none;
+  animation: node-pulse 3.2s ease-in-out infinite;
+}
+
+.signalBands g:nth-child(3n) circle,
+.radialTraces g:nth-child(3n) circle {
+  animation-delay: -1.6s;
+}
+
+.radialTraces {
+  stroke: rgba(57, 91, 210, 0.38);
+  stroke-dasharray: 2 5 18 7;
+}
+
+.radialTraces polyline {
+  animation: trace-flow 8s linear infinite;
+}
+
+.fieldBrackets {
+  stroke: rgba(44, 73, 202, 0.82);
+  stroke-width: 1.3;
+  animation: bracket-pulse 3.2s ease-in-out infinite;
+}
+
+.circuitScanner {
+  animation: scan-right 5.4s ease-in-out infinite;
+}
+
+.circuitScannerReverse {
+  animation-delay: -2.7s;
+  animation-direction: reverse;
+}
+
+.telemetry {
+  position: absolute;
+  top: 4.2rem;
+  z-index: 2;
+  display: grid;
+  gap: 0.28rem;
+  color: #4d66bb;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 0.35rem;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+}
+
+.telemetry strong {
+  font-size: 0.36rem;
+}
+
+.telemetryLeft {
+  left: 1rem;
+}
+
+.telemetryRight {
+  right: 1rem;
+  justify-items: end;
+}
+
+.edgeCross {
+  position: absolute;
+  top: 3.2rem;
+  color: #3154df;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 0.9rem;
+}
+
+.edgeCrossLeft {
+  left: -0.15rem;
+}
+
+.edgeCrossRight {
+  right: -0.15rem;
+}
+
+.edgeCorner {
+  position: absolute;
+  width: 1.35rem;
+  height: 1.35rem;
+  border-color: #3154df;
+  opacity: 0.86;
+}
+
+.edgeCornerTopLeft {
+  top: 3.15rem;
+  left: 0;
+  border-top: 1px solid;
+  border-left: 1px solid;
+}
+
+.edgeCornerTopRight {
+  top: 3.15rem;
+  right: 0;
+  border-top: 1px solid;
+  border-right: 1px solid;
+}
+
+.edgeCornerBottomLeft {
+  bottom: 3rem;
+  left: 0;
+  border-bottom: 1px solid;
+  border-left: 1px solid;
+}
+
+.edgeCornerBottomRight {
+  right: 0;
+  bottom: 3rem;
+  border-right: 1px solid;
+  border-bottom: 1px solid;
+}
+
+.topRuler,
+.bottomRuler {
+  position: fixed;
+  left: 25%;
+  width: 50%;
+  height: 0.35rem;
+  background:
+    linear-gradient(90deg, transparent 49.8%, #3e5de5 49.8% 50.2%, transparent 50.2%),
+    repeating-linear-gradient(90deg, rgba(57, 87, 202, 0.32) 0 1px, transparent 1px 0.78rem);
+  opacity: 0.66;
+}
+
+.topRuler {
+  top: 1.1rem;
+}
+
+.bottomRuler {
+  bottom: 1rem;
+}
+
+.identityControl,
+.bubbleFrame,
+.bubble {
+  width: 100%;
+  height: 100%;
+}
+
+.identityControl {
+  position: relative;
+  display: grid;
+  pointer-events: none;
+}
+
+.bubbleFrame {
+  position: absolute;
+  inset: 0;
+}
+
+.bubble {
+  position: relative;
+  display: block;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.bubble:disabled {
+  cursor: default;
+}
+
+.bubble:focus-visible::after {
+  position: absolute;
+  top: calc(50% - 4.4rem);
+  left: calc(50% - 8rem);
+  width: 16rem;
+  height: 8.8rem;
+  border: 1px solid rgba(49, 84, 217, 0.75);
+  content: "";
+}
+
+.checkpointMark {
+  position: absolute;
+  z-index: 2;
+  top: calc(50% - 2.35rem);
+  left: 50%;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: url("/brand/livzon-mark.png") center / 132% auto no-repeat;
+  box-shadow: 0 0 1.2rem rgba(67, 99, 232, 0.18);
+  mix-blend-mode: multiply;
+  transform: translateX(-50%);
+}
+
+.checkpointMark::before,
+.checkpointMark::after {
+  position: absolute;
+  border-radius: 50%;
+  content: "";
+  pointer-events: none;
+}
+
+.checkpointMark::before {
+  inset: -0.75rem;
+  border: 1px dashed rgba(54, 87, 214, 0.32);
+  animation: mark-orbit 10s linear infinite;
+}
+
+.checkpointMark::after {
+  inset: -1.35rem;
+  border: 1px dotted rgba(70, 105, 225, 0.22);
+  animation: mark-orbit 16s linear infinite reverse;
+}
+
+.bubbleContent {
+  position: absolute;
+  top: calc(50% + 0.65rem);
+  left: 50%;
+  display: grid;
+  min-width: 15rem;
+  justify-items: center;
+  gap: 0.22rem;
+  transform: translateX(-50%);
+}
+
+.identityText {
+  color: #24418f;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 0.42rem;
+  letter-spacing: 0.08em;
+}
+
+.statusText {
+  color: #273f93;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 0.48rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.detailText {
+  position: absolute;
+  z-index: 3;
+  top: calc(50% + 2.55rem);
+  left: 50%;
+  width: 13.5rem;
+  margin: 0;
+  border-top: 1px solid rgba(54, 83, 195, 0.55);
+  padding-top: 0.58rem;
+  color: #5169ba;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 0.36rem;
+  font-weight: 650;
+  letter-spacing: 0.07em;
+  line-height: 1.45;
+  text-align: center;
+  transform: translateX(-50%);
+}
+
+.identityControl[data-state="launching"] .checkpointMark,
+.identityControl[data-state="checking"] .checkpointMark {
+  animation: checkpoint-signal 1.1s ease-in-out infinite;
+}
+
+.identityControl[data-state="ready"] .checkpointMark {
+  box-shadow: 0 0 1.6rem rgba(35, 177, 115, 0.3);
+  transform: translateX(-50%) scale(1.08);
+}
+
+.identityControl[data-state="entering"] {
+  animation: checkpoint-release 760ms ease forwards;
+}
+
+.identityControl[data-state="error"] .checkpointMark {
+  animation: checkpoint-error 420ms ease both;
+  box-shadow: 0 0 1.3rem rgba(215, 58, 58, 0.25);
+}
+
+.errorNotice {
+  position: absolute;
+  z-index: 8;
+  top: calc(50% + 8.8rem);
+  left: 50%;
+  width: min(24rem, calc(100vw - 2rem));
+  border-left: 2px solid #d94b4b;
+  background: rgba(255, 248, 248, 0.9);
+  padding: 0.65rem 0.8rem;
+  color: #973636;
+  font-size: 0.7rem;
+  line-height: 1.55;
+  pointer-events: auto;
+  transform: translateX(-50%);
+}
+
+.emergencyArea {
+  position: absolute;
+  z-index: 8;
+  top: calc(50% + 6.25rem);
+  left: 50%;
+  display: grid;
+  width: min(21rem, calc(100vw - 2rem));
+  justify-items: center;
+  pointer-events: auto;
+  transform: translateX(-50%);
+}
+
+.emergencyToggle {
+  border: 0;
+  background: transparent;
+  padding: 0.45rem 0.8rem;
+  color: #6075b9;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 0.44rem;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.localForm {
+  display: grid;
+  width: 100%;
+  margin-top: 0.5rem;
+  gap: 0.7rem;
+  border: 1px solid rgba(52, 83, 196, 0.18);
+  background: rgba(250, 252, 255, 0.96);
+  padding: 1rem;
+  box-shadow: 0 1.1rem 3rem rgba(44, 74, 167, 0.12);
+}
+
+.localHint {
+  margin: 0;
+  color: #68789f;
+  font-size: 0.68rem;
+  line-height: 1.55;
+}
+
+.field {
+  display: grid;
+  gap: 0.3rem;
+  color: #45536f;
+  font-size: 0.68rem;
+}
+
+.field input {
+  width: 100%;
+  height: 2.35rem;
+  border: 1px solid rgba(45, 74, 177, 0.2);
+  background: #fff;
+  padding: 0 0.7rem;
+  color: #172754;
+  outline: 0;
+}
+
+.field input:focus {
+  border-color: #3154d9;
+  box-shadow: 0 0 0 2px rgba(49, 84, 217, 0.1);
+}
+
+.localSubmit {
+  min-height: 2.35rem;
+  border: 1px solid #3154d9;
+  background: #3154d9;
+  color: #fff;
+  cursor: pointer;
+}
+
+.authCompletion {
+  position: relative;
+}
+
+.authCompletion .transitionGate {
+  position: fixed;
+  z-index: 90;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.transitionGateCore {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 18vw;
+  height: 72vh;
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse,
+    rgba(255, 255, 255, 0.98) 0 24%,
+    rgba(176, 232, 255, 0.42) 48%,
+    rgba(244, 249, 255, 0.72) 70%,
+    rgba(251, 253, 255, 0.98) 100%
+  );
+  filter: blur(2.4rem);
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.04, 0.42);
+  will-change: filter, opacity, transform;
+}
+
+.transitionGateLabel {
+  position: absolute;
+  top: calc(50% + 5.5rem);
+  left: 50%;
+  color: #4961b3;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 0.38rem;
+  font-weight: 650;
+  letter-spacing: 0.16em;
+  opacity: 0;
+  transform: translateX(-50%);
+}
+
+.authCompletion[data-state="checking"] .circuitWord {
+  animation-duration: 3.6s;
+}
+
+.authCompletion[data-state="checking"] .signalBands path,
+.authCompletion[data-state="checking"] .radialTraces polyline {
+  animation-duration: 3.2s;
+}
+
+.authCompletion[data-state="checking"] .checkpointMark::before {
+  border-style: solid;
+  border-top-color: #5fe6ff;
+  animation-duration: 1.2s;
+}
+
+.authCompletion[data-state="ready"] .circuitWordContour:first-child {
+  stroke: #2c58df;
+  opacity: 0.9;
+}
+
+.authCompletion[data-state="ready"] .circuitSvg {
+  animation: identity-lock 850ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.authCompletion[data-state="ready"] .fieldBrackets {
+  stroke: #43c8f2;
+  opacity: 1;
+}
+
+.authCompletion[data-state="ready"] .transitionGateLabel {
+  animation: gate-label-ready 850ms ease both;
+}
+
+.authCompletion[data-state="ready"] .internalFlag small {
+  color: #2d68c9;
+}
+
+.authCompletion[data-state="entering"] .loginHeader,
+.authCompletion[data-state="entering"] .loginFooter,
+.authCompletion[data-state="entering"] .telemetry,
+.authCompletion[data-state="entering"] .edgeCorner,
+.authCompletion[data-state="entering"] .edgeCross {
+  animation: chrome-release 420ms ease forwards;
+}
+
+.authCompletion[data-state="entering"] .circuitSvg {
+  animation: circuit-converge 760ms cubic-bezier(0.76, 0, 0.24, 1) forwards;
+}
+
+.authCompletion[data-state="entering"] .atmosphere {
+  animation: atmosphere-converge 900ms ease forwards;
+}
+
+.authCompletion[data-state="entering"] .transitionGateCore {
+  animation: secure-gate-open 900ms cubic-bezier(0.68, 0, 0.32, 1) forwards;
+}
+
+.authCompletion[data-state="entering"] .transitionGateLabel {
+  animation: gate-label-enter 650ms ease forwards;
+}
+
+@keyframes word-breathe {
+  0%,
+  100% {
+    opacity: 0.72;
+  }
+  50% {
+    opacity: 0.94;
+  }
+}
+
+@keyframes trace-flow {
+  to {
+    stroke-dashoffset: -150;
+  }
+}
+
+@keyframes signal-band-flow {
+  to {
+    stroke-dashoffset: -92;
+  }
+}
+
+@keyframes node-pulse {
+  0%,
+  100% {
+    opacity: 0.28;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+@keyframes bracket-pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes scan-right {
+  0% {
+    opacity: 0;
+    transform: translateX(0);
+  }
+  18%,
+  82% {
+    opacity: 0.8;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(1980px);
+  }
+}
+
+@keyframes mist-drift {
+  to {
+    transform: translate3d(4rem, -1.5rem, 0) scale(1.05);
+  }
+}
+
+@keyframes mark-orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes checkpoint-signal {
+  0%,
+  100% {
+    opacity: 0.72;
+    transform: translateX(-50%) scale(0.96);
+  }
+  50% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1.08);
+  }
+}
+
+@keyframes checkpoint-error {
+  0%,
+  100% {
+    transform: translateX(-50%);
+  }
+  30% {
+    transform: translateX(calc(-50% - 0.25rem));
+  }
+  70% {
+    transform: translateX(calc(-50% + 0.25rem));
+  }
+}
+
+@keyframes checkpoint-release {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  72% {
+    opacity: 0;
+    transform: scale(0.76);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.62);
+  }
+}
+
+@keyframes identity-lock {
+  0% {
+    filter: none;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  48% {
+    filter: drop-shadow(0 0 0.45rem rgba(72, 205, 247, 0.25));
+    transform: translate(-50%, -50%) scale(0.985);
+  }
+  100% {
+    filter: drop-shadow(0 0 0.75rem rgba(72, 205, 247, 0.2));
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@keyframes circuit-converge {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scaleX(1);
+  }
+  52% {
+    opacity: 0.7;
+    transform: translate(-50%, -50%) scaleX(0.46) scaleY(1.01);
+  }
+  78% {
+    filter: blur(0.15rem);
+    opacity: 0.32;
+    transform: translate(-50%, -50%) scaleX(0.24) scaleY(1.03);
+  }
+  100% {
+    filter: blur(0.45rem);
+    opacity: 0;
+    transform: translate(-50%, -50%) scaleX(0.14) scaleY(1.04);
+  }
+}
+
+@keyframes secure-gate-open {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.04, 0.42);
+  }
+  30% {
+    filter: blur(2.8rem);
+    opacity: 0.3;
+    transform: translate(-50%, -50%) scale(0.16, 0.82);
+  }
+  68% {
+    filter: blur(3.2rem);
+    opacity: 0.78;
+    transform: translate(-50%, -50%) scale(2.2, 1.35);
+  }
+  100% {
+    filter: blur(3.6rem);
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(8.4, 2.25);
+  }
+}
+
+@keyframes atmosphere-converge {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  75% {
+    opacity: 0.42;
+    transform: scale(1.08);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.14);
+  }
+}
+
+@keyframes chrome-release {
+  to {
+    opacity: 0;
+    transform: translateY(-0.75rem);
+  }
+}
+
+@keyframes gate-label-ready {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 0.5rem);
+  }
+  35%,
+  82% {
+    opacity: 0.72;
+    transform: translate(-50%, 0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -0.25rem);
+  }
+}
+
+@keyframes gate-label-enter {
+  0% {
+    opacity: 0.7;
+    transform: translate(-50%, 0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -0.75rem);
+  }
+}
+
+@media (max-width: 40rem) {
+  .loginExperience {
+    grid-template-rows: 4.35rem minmax(0, 1fr) 3rem;
+  }
+
+  .loginHeader,
+  .loginFooter {
+    padding-inline: 1rem;
+  }
+
+  .brand {
+    gap: 0.45rem;
+    padding-left: 0.65rem;
+  }
+
+  .brandMark {
+    width: 1.35rem;
+    height: 1.35rem;
+  }
+
+  .brandName {
+    font-size: 0.62rem;
+  }
+
+  .companyName {
+    font-size: 0.29rem;
+  }
+
+  .internalFlag {
+    min-width: 6.5rem;
+  }
+
+  .internalFlag strong {
+    font-size: 0.34rem;
+  }
+
+  .internalFlag small {
+    font-size: 0.27rem;
+  }
+
+  .circuitField {
+    inset-inline: 0.5rem;
+  }
+
+  .circuitSvg {
+    width: 74rem;
+    max-width: none;
+    height: 100%;
+  }
+
+  .telemetry {
+    display: none;
+  }
+
+  .topRuler,
+  .bottomRuler {
+    left: 26%;
+    width: 48%;
+  }
+
+  .bubbleContent {
+    min-width: 14rem;
+  }
+
+  .statusText {
+    font-size: 0.43rem;
+  }
+
+  .detailText {
+    width: 12.6rem;
+    font-size: 0.32rem;
+  }
+
+  .loginFooter {
+    font-size: 0.34rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .circuitWord,
+  .signalBands path,
+  .radialTraces polyline,
+  .signalBands circle,
+  .radialTraces circle,
+  .fieldBrackets,
+  .circuitScanner,
+  .mist,
+  .checkpointMark,
+  .checkpointMark::before,
+  .checkpointMark::after,
+  .identityControl[data-state="entering"],
+  .transitionGateCore,
+  .transitionGateLabel,
+  .authCompletion[data-state="ready"] .circuitSvg,
+  .authCompletion[data-state="entering"] .circuitSvg,
+  .authCompletion[data-state="entering"] .atmosphere,
+  .authCompletion[data-state="entering"] .loginHeader,
+  .authCompletion[data-state="entering"] .loginFooter {
+    animation: none !important;
+    transition-duration: 1ms !important;
+  }
+}

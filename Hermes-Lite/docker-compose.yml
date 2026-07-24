@@ -14,15 +14,21 @@ services:
       DAZAH_LLM_MODEL: ${DAZAH_LLM_MODEL:-dazah-active-text}
       HERMES_DAZAH_CHAT_TIMEOUT_SECONDS: ${HERMES_DAZAH_CHAT_TIMEOUT_SECONDS:-180}
       HERMES_DAZAH_MAX_TOOL_ITERATIONS: ${HERMES_DAZAH_MAX_TOOL_ITERATIONS:-30}
+      LARK_CLI_PATH: /usr/local/bin/lark-cli
+      HERMES_FEISHU_TMPFS: /run/hermes-feishu
       PYTHONUNBUFFERED: "1"
     ports:
       - "${HERMES_BIND_HOST:-127.0.0.1}:${HERMES_PORT:-8100}:8100"
     volumes:
       - hermes_data:/data/hermes
+    tmpfs:
+      - /run/hermes-feishu:mode=0700,uid=1000,gid=1000,size=32m
+      - /tmp:mode=1777,size=128m
     networks:
       - backend
     restart: unless-stopped
     init: true
+    read_only: true
     stop_grace_period: 30s
     security_opt:
       - no-new-privileges:true

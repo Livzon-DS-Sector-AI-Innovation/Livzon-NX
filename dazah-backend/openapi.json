@@ -1302,6 +1302,129 @@
         }
       }
     },
+    "/api/v1/identity/feishu-config/authorizations": {
+      "get": {
+        "tags": [
+          "Livzon \u52a9\u624b\u98de\u4e66\u8bbe\u7f6e",
+          "Livzon \u52a9\u624b\u98de\u4e66\u8bbe\u7f6e"
+        ],
+        "summary": "\u67e5\u770b Hermes \u98de\u4e66\u8bb0\u5fc6\u6388\u6743",
+        "operationId": "list_livzon_feishu_authorizations_api_v1_identity_feishu_config_authorizations_get",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "User Id"
+            }
+          },
+          {
+            "name": "auth_token",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/identity/feishu-config/authorizations/{grant_id}": {
+      "delete": {
+        "tags": [
+          "Livzon \u52a9\u624b\u98de\u4e66\u8bbe\u7f6e",
+          "Livzon \u52a9\u624b\u98de\u4e66\u8bbe\u7f6e"
+        ],
+        "summary": "\u64a4\u9500 Hermes \u98de\u4e66\u8bb0\u5fc6\u6388\u6743",
+        "operationId": "revoke_livzon_feishu_authorization_api_v1_identity_feishu_config_authorizations__grant_id__delete",
+        "parameters": [
+          {
+            "name": "grant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Grant Id"
+            }
+          },
+          {
+            "name": "user_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "User Id"
+            }
+          },
+          {
+            "name": "auth_token",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/identity/feishu-config/test": {
       "post": {
         "tags": [
@@ -1575,6 +1698,183 @@
             "content": {
               "application/json": {
                 "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/internal/feishu/access-snapshot": {
+      "get": {
+        "tags": [
+          "Hermes \u98de\u4e66\u5185\u90e8\u63a5\u53e3"
+        ],
+        "summary": "Get Access Snapshot",
+        "operationId": "get_access_snapshot_api_v1_internal_feishu_access_snapshot_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Access Snapshot Api V1 Internal Feishu Access Snapshot Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/internal/feishu/audit": {
+      "post": {
+        "tags": [
+          "Hermes \u98de\u4e66\u5185\u90e8\u63a5\u53e3"
+        ],
+        "summary": "Ingest Audit Event",
+        "operationId": "ingest_audit_event_api_v1_internal_feishu_audit_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HermesAuditEvent"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Ingest Audit Event Api V1 Internal Feishu Audit Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/internal/feishu/resource-changes": {
+      "post": {
+        "tags": [
+          "Hermes \u98de\u4e66\u5185\u90e8\u63a5\u53e3"
+        ],
+        "summary": "Ingest Resource Change",
+        "operationId": "ingest_resource_change_api_v1_internal_feishu_resource_changes_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResourceChangeEvent"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Ingest Resource Change Api V1 Internal Feishu Resource Changes Post"
+                }
               }
             }
           },
@@ -35091,6 +35391,73 @@
             }
           }
         }
+      },
+      "put": {
+        "tags": [
+          "\u80fd\u6e90\u7ba1\u7406"
+        ],
+        "summary": "\u4fee\u6539\u80fd\u6e90\u98de\u4e66 Wiki/Base \u5165\u53e3",
+        "operationId": "update_energy_feishu_root_api_v1_energy_feishu_roots__root_id__put",
+        "parameters": [
+          {
+            "name": "root_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Root Id"
+            }
+          },
+          {
+            "name": "auth_token",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnergyFeishuSourceRootUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnergyApiResponse_EnergyFeishuSourceRootResponse_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/energy/feishu-config/test": {
@@ -35402,6 +35769,183 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/EnergyApiResponse_list_EnergySourceSheetResponse__"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/energy/sources/batch-sync": {
+      "post": {
+        "tags": [
+          "\u80fd\u6e90\u7ba1\u7406"
+        ],
+        "summary": "\u6279\u91cf\u540c\u6b65\u80fd\u6e90\u8d44\u6e90",
+        "operationId": "batch_sync_source_sheets_api_v1_energy_sources_batch_sync_post",
+        "parameters": [
+          {
+            "name": "auth_token",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnergySourceBatchRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnergyApiResponse_EnergySyncRunResponse_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/energy/sources/batch": {
+      "delete": {
+        "tags": [
+          "\u80fd\u6e90\u7ba1\u7406"
+        ],
+        "summary": "\u6279\u91cf\u5220\u9664\u80fd\u6e90\u8d44\u6e90\u53ca\u672c\u5730\u6570\u636e",
+        "operationId": "batch_delete_source_sheets_api_v1_energy_sources_batch_delete",
+        "parameters": [
+          {
+            "name": "auth_token",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnergySourceBatchRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnergyApiResponse_EnergySourceDeleteResult_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/energy/sources/{sheet_id}": {
+      "delete": {
+        "tags": [
+          "\u80fd\u6e90\u7ba1\u7406"
+        ],
+        "summary": "\u5220\u9664\u80fd\u6e90\u8d44\u6e90\u53ca\u672c\u5730\u6570\u636e",
+        "operationId": "delete_source_sheet_api_v1_energy_sources__sheet_id__delete",
+        "parameters": [
+          {
+            "name": "sheet_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Sheet Id"
+            }
+          },
+          {
+            "name": "auth_token",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnergyApiResponse_EnergySourceDeleteResult_"
                 }
               }
             }
@@ -36511,22 +37055,6 @@
         "operationId": "list_feishu_tables_api_v1_warehouse_feishu_tables_get",
         "parameters": [
           {
-            "name": "business_domain",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Business Domain"
-            }
-          },
-          {
             "name": "keyword",
             "in": "query",
             "required": false,
@@ -36543,22 +37071,6 @@
             }
           },
           {
-            "name": "enabled",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Enabled"
-            }
-          },
-          {
             "name": "auth_token",
             "in": "cookie",
             "required": false,
@@ -36582,183 +37094,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/WarehouseFeishuTableListApiResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/warehouse/feishu/tables/refresh": {
-      "post": {
-        "tags": [
-          "\u4ed3\u50a8\u7ba1\u7406"
-        ],
-        "summary": "\u5237\u65b0\u4ed3\u50a8\u98de\u4e66\u6570\u636e\u8868\u76ee\u5f55",
-        "operationId": "refresh_feishu_tables_api_v1_warehouse_feishu_tables_refresh_post",
-        "parameters": [
-          {
-            "name": "auth_token",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WarehouseFeishuTableListApiResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/warehouse/feishu/tables/enabled/batch": {
-      "post": {
-        "tags": [
-          "\u4ed3\u50a8\u7ba1\u7406"
-        ],
-        "summary": "\u6279\u91cf\u542f\u7528\u6216\u505c\u7528\u4ed3\u50a8\u98de\u4e66\u6570\u636e\u8868\u540c\u6b65",
-        "operationId": "set_feishu_tables_enabled_api_v1_warehouse_feishu_tables_enabled_batch_post",
-        "parameters": [
-          {
-            "name": "auth_token",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/WarehouseFeishuTableBatchEnablePayload"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WarehouseFeishuTableBatchEnableApiResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/warehouse/feishu/tables/{table_id}/enabled": {
-      "patch": {
-        "tags": [
-          "\u4ed3\u50a8\u7ba1\u7406"
-        ],
-        "summary": "\u542f\u7528\u6216\u505c\u7528\u4ed3\u50a8\u98de\u4e66\u6570\u636e\u8868\u540c\u6b65",
-        "operationId": "set_feishu_table_enabled_api_v1_warehouse_feishu_tables__table_id__enabled_patch",
-        "parameters": [
-          {
-            "name": "table_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Table Id"
-            }
-          },
-          {
-            "name": "auth_token",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/WarehouseFeishuTableEnablePayload"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WarehouseFeishuTableEnableApiResponse"
                 }
               }
             }
@@ -36850,172 +37185,6 @@
             "schema": {
               "type": "string",
               "format": "uuid",
-              "title": "Table Id"
-            }
-          },
-          {
-            "name": "keyword",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Keyword"
-            }
-          },
-          {
-            "name": "field",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Field"
-            }
-          },
-          {
-            "name": "field_operator",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "\u5b57\u6bb5\u7b5b\u9009\u6761\u4ef6\uff1acontains/eq/ne/gt/gte/lt/lte",
-              "title": "Field Operator"
-            },
-            "description": "\u5b57\u6bb5\u7b5b\u9009\u6761\u4ef6\uff1acontains/eq/ne/gt/gte/lt/lte"
-          },
-          {
-            "name": "field_value",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "\u5b57\u6bb5\u7b5b\u9009\u503c",
-              "title": "Field Value"
-            },
-            "description": "\u5b57\u6bb5\u7b5b\u9009\u503c"
-          },
-          {
-            "name": "page",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "default": 1,
-              "title": "Page"
-            }
-          },
-          {
-            "name": "page_size",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 200,
-              "minimum": 1,
-              "default": 50,
-              "title": "Page Size"
-            }
-          },
-          {
-            "name": "auth_token",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WarehouseFeishuRawRecordApiResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/warehouse/feishu/domains/{business_domain}/records": {
-      "get": {
-        "tags": [
-          "\u4ed3\u50a8\u7ba1\u7406"
-        ],
-        "summary": "\u8bfb\u53d6\u4ed3\u50a8\u4e1a\u52a1\u57df\u542f\u7528\u8868\u672c\u5730\u8bb0\u5f55\u5feb\u7167",
-        "operationId": "get_feishu_domain_records_api_v1_warehouse_feishu_domains__business_domain__records_get",
-        "parameters": [
-          {
-            "name": "business_domain",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Business Domain"
-            }
-          },
-          {
-            "name": "table_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "uuid"
-                },
-                {
-                  "type": "null"
-                }
-              ],
               "title": "Table Id"
             }
           },
@@ -91588,6 +91757,40 @@
         ],
         "title": "EnergyApiResponse[EnergySnapshotRowsData]"
       },
+      "EnergyApiResponse_EnergySourceDeleteResult_": {
+        "properties": {
+          "code": {
+            "type": "integer",
+            "title": "Code",
+            "default": 200
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "default": "success"
+          },
+          "data": {
+            "$ref": "#/components/schemas/EnergySourceDeleteResult"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "EnergyApiResponse[EnergySourceDeleteResult]"
+      },
       "EnergyApiResponse_EnergySyncRunResponse_": {
         "properties": {
           "code": {
@@ -92215,6 +92418,64 @@
           "discovery_status"
         ],
         "title": "EnergyFeishuSourceRootResponse"
+      },
+      "EnergyFeishuSourceRootUpdate": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "source_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "wiki",
+                  "base"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Type"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url"
+          },
+          "is_active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Active"
+          }
+        },
+        "type": "object",
+        "title": "EnergyFeishuSourceRootUpdate"
       },
       "EnergyMappingMetricInput": {
         "properties": {
@@ -92930,6 +93191,69 @@
           "rows"
         ],
         "title": "EnergySnapshotRowsData"
+      },
+      "EnergySourceBatchRequest": {
+        "properties": {
+          "sheet_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Sheet Ids",
+            "description": "\u5f85\u64cd\u4f5c\u7684\u80fd\u6e90\u8d44\u6e90 ID"
+          }
+        },
+        "type": "object",
+        "required": [
+          "sheet_ids"
+        ],
+        "title": "EnergySourceBatchRequest"
+      },
+      "EnergySourceDeleteResult": {
+        "properties": {
+          "deleted_count": {
+            "type": "integer",
+            "title": "Deleted Count"
+          },
+          "snapshot_count": {
+            "type": "integer",
+            "title": "Snapshot Count"
+          },
+          "snapshot_row_count": {
+            "type": "integer",
+            "title": "Snapshot Row Count"
+          },
+          "mapping_count": {
+            "type": "integer",
+            "title": "Mapping Count"
+          },
+          "fact_count": {
+            "type": "integer",
+            "title": "Fact Count"
+          },
+          "binding_count": {
+            "type": "integer",
+            "title": "Binding Count"
+          },
+          "document_count": {
+            "type": "integer",
+            "title": "Document Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "deleted_count",
+          "snapshot_count",
+          "snapshot_row_count",
+          "mapping_count",
+          "fact_count",
+          "binding_count",
+          "document_count"
+        ],
+        "title": "EnergySourceDeleteResult"
       },
       "EnergySourceDocumentResponse": {
         "properties": {
@@ -96717,6 +97041,119 @@
         ],
         "title": "HeaderColorEnum",
         "description": "\u5361\u7247\u5934\u90e8\u989c\u8272\u679a\u4e3e"
+      },
+      "HermesAuditEvent": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Id"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          },
+          "resource_fingerprint": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 512
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resource Fingerprint"
+          },
+          "capability": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Capability"
+          },
+          "risk": {
+            "type": "string",
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Risk"
+          },
+          "confirmation": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 32
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmation"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 32
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms"
+          },
+          "feishu_log_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feishu Log Id"
+          },
+          "impact_count": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Impact Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "capability",
+          "risk"
+        ],
+        "title": "HermesAuditEvent"
       },
       "HolidayCreate": {
         "properties": {
@@ -106710,6 +107147,20 @@
             "title": "Remark",
             "description": "\u5907\u6ce8"
           },
+          "timezone": {
+            "type": "string",
+            "maxLength": 64,
+            "title": "Timezone",
+            "description": "\u540c\u6b65\u65f6\u533a",
+            "default": "Asia/Shanghai"
+          },
+          "daily_sync_time": {
+            "type": "string",
+            "pattern": "^(?:[01]\\d|2[0-3]):[0-5]\\d$",
+            "title": "Daily Sync Time",
+            "description": "\u6bcf\u65e5\u540c\u6b65\u65f6\u95f4",
+            "default": "02:00"
+          },
           "id": {
             "anyOf": [
               {
@@ -109848,6 +110299,47 @@
         "type": "object",
         "title": "ResearchProjectUpdate",
         "description": "\u66f4\u65b0\u7814\u53d1\u9879\u76ee\u8bf7\u6c42"
+      },
+      "ResourceChangeEvent": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Id"
+          },
+          "resource_fingerprint": {
+            "type": "string",
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Resource Fingerprint"
+          },
+          "capability": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Capability"
+          },
+          "feishu_log_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feishu Log Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "resource_fingerprint",
+          "capability"
+        ],
+        "title": "ResourceChangeEvent"
       },
       "RespondComplaintRequest": {
         "properties": {
@@ -122257,42 +122749,6 @@
             "maxLength": 128,
             "title": "App Id"
           },
-          "finished_product_app_token": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 128
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Finished Product App Token"
-          },
-          "materials_packaging_app_token": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 128
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Materials Packaging App Token"
-          },
-          "hardware_app_token": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 128
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Hardware App Token"
-          },
           "is_active": {
             "type": "boolean",
             "title": "Is Active",
@@ -122343,17 +122799,6 @@
             "title": "App Secret Masked",
             "default": ""
           },
-          "bitable_app_token": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Bitable App Token"
-          },
           "created_at": {
             "anyOf": [
               {
@@ -122397,42 +122842,6 @@
             "type": "string",
             "maxLength": 128,
             "title": "App Id"
-          },
-          "finished_product_app_token": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 128
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Finished Product App Token"
-          },
-          "materials_packaging_app_token": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 128
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Materials Packaging App Token"
-          },
-          "hardware_app_token": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 128
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Hardware App Token"
           },
           "is_active": {
             "type": "boolean",
@@ -122994,16 +123403,6 @@
             "minLength": 1,
             "title": "Source Url"
           },
-          "business_domain": {
-            "type": "string",
-            "enum": [
-              "finished_product",
-              "materials_packaging",
-              "hardware"
-            ],
-            "title": "Business Domain",
-            "default": "finished_product"
-          },
           "is_active": {
             "type": "boolean",
             "title": "Is Active",
@@ -123066,16 +123465,6 @@
             "minLength": 1,
             "title": "Source Url"
           },
-          "business_domain": {
-            "type": "string",
-            "enum": [
-              "finished_product",
-              "materials_packaging",
-              "hardware"
-            ],
-            "title": "Business Domain",
-            "default": "finished_product"
-          },
           "is_active": {
             "type": "boolean",
             "title": "Is Active",
@@ -123128,117 +123517,6 @@
           "discovery_status"
         ],
         "title": "WarehouseFeishuSourceRootResponse"
-      },
-      "WarehouseFeishuTableBatchEnableApiResponse": {
-        "properties": {
-          "code": {
-            "type": "integer",
-            "title": "Code",
-            "default": 200
-          },
-          "message": {
-            "type": "string",
-            "title": "Message",
-            "default": "success"
-          },
-          "data": {
-            "items": {
-              "$ref": "#/components/schemas/WarehouseFeishuTableResponse"
-            },
-            "type": "array",
-            "title": "Data"
-          },
-          "meta": {
-            "anyOf": [
-              {
-                "additionalProperties": {
-                  "type": "integer"
-                },
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Meta"
-          }
-        },
-        "type": "object",
-        "required": [
-          "data"
-        ],
-        "title": "WarehouseFeishuTableBatchEnableApiResponse"
-      },
-      "WarehouseFeishuTableBatchEnablePayload": {
-        "properties": {
-          "table_ids": {
-            "items": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "type": "array",
-            "title": "Table Ids"
-          },
-          "is_enabled": {
-            "type": "boolean",
-            "title": "Is Enabled"
-          }
-        },
-        "type": "object",
-        "required": [
-          "table_ids",
-          "is_enabled"
-        ],
-        "title": "WarehouseFeishuTableBatchEnablePayload"
-      },
-      "WarehouseFeishuTableEnableApiResponse": {
-        "properties": {
-          "code": {
-            "type": "integer",
-            "title": "Code",
-            "default": 200
-          },
-          "message": {
-            "type": "string",
-            "title": "Message",
-            "default": "success"
-          },
-          "data": {
-            "$ref": "#/components/schemas/WarehouseFeishuTableResponse"
-          },
-          "meta": {
-            "anyOf": [
-              {
-                "additionalProperties": {
-                  "type": "integer"
-                },
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Meta"
-          }
-        },
-        "type": "object",
-        "required": [
-          "data"
-        ],
-        "title": "WarehouseFeishuTableEnableApiResponse"
-      },
-      "WarehouseFeishuTableEnablePayload": {
-        "properties": {
-          "is_enabled": {
-            "type": "boolean",
-            "title": "Is Enabled"
-          }
-        },
-        "type": "object",
-        "required": [
-          "is_enabled"
-        ],
-        "title": "WarehouseFeishuTableEnablePayload"
       },
       "WarehouseFeishuTableListApiResponse": {
         "properties": {
@@ -123294,10 +123572,6 @@
             ],
             "title": "Id"
           },
-          "business_domain": {
-            "type": "string",
-            "title": "Business Domain"
-          },
           "app_token": {
             "type": "string",
             "title": "App Token"
@@ -123344,11 +123618,6 @@
               }
             ],
             "title": "Last Event At"
-          },
-          "is_enabled": {
-            "type": "boolean",
-            "title": "Is Enabled",
-            "default": false
           },
           "field_count": {
             "type": "integer",
@@ -123441,7 +123710,6 @@
         },
         "type": "object",
         "required": [
-          "business_domain",
           "app_token",
           "table_id",
           "name"

@@ -262,6 +262,13 @@ async def test_sheet_values_refuse_to_guess_missing_grid_size():
         )
 
 
+def test_parse_direct_spreadsheet_link():
+    url = "https://example.feishu.cn/sheets/shtcnExample?sheet=sheet-a"
+
+    assert EnergyFeishuClient.is_spreadsheet_url(url)
+    assert EnergyFeishuClient.parse_spreadsheet_token(url) == "shtcnExample"
+
+
 @pytest.mark.asyncio
 async def test_sync_document_continues_after_one_sheet_fails(monkeypatch):
     class NestedTransaction:

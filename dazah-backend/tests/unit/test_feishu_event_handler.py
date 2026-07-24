@@ -27,8 +27,10 @@ async def test_message_callback_does_not_wait_for_agent_processing(monkeypatch) 
     started = asyncio.Event()
     release = asyncio.Event()
     completed = asyncio.Event()
+    received: list[dict] = []
 
     async def fake_handle_message_async(**kwargs) -> None:
+        received.append(kwargs)
         started.set()
         await release.wait()
         completed.set()
@@ -52,8 +54,17 @@ async def test_message_callback_does_not_wait_for_agent_processing(monkeypatch) 
                     "message": {
                         "message_type": "text",
                         "message_id": "om_async",
-                        "chat_type": "p2p",
-                        "content": '{"text":"测试"}',
+                        "chat_type": "group",
+                        "chat_id": "oc_group",
+                        "content": '{"text":"@_user_1 测试"}',
+                        "mentions": [
+                            {
+                                "key": "@_user_1",
+                                "id": {"open_id": "ou_livzon_bot"},
+                                "mentioned_type": "bot",
+                                "name": "Livzon 助手",
+                            }
+                        ],
                     },
                 }
             }
@@ -62,6 +73,8 @@ async def test_message_callback_does_not_wait_for_agent_processing(monkeypatch) 
 
     await asyncio.wait_for(started.wait(), timeout=1)
     assert completed.is_set() is False
+    assert received[0]["chat_id"] == "oc_group"
+    assert received[0]["mentions"][0]["id"]["open_id"] == "ou_livzon_bot"
     release.set()
     await asyncio.wait_for(completed.wait(), timeout=1)
 
@@ -94,6 +107,8 @@ async def test_shared_global_app_forwards_private_message_to_livzon(
         message_id="om_shared",
         content='{"text":"你好"}',
         chat_type="p2p",
+        chat_id="oc_p2p",
+        mentions=[],
         sender_open_id="ou_shared",
         sender_type="user",
     )
@@ -104,6 +119,8 @@ async def test_shared_global_app_forwards_private_message_to_livzon(
             "message_id": "om_shared",
             "content": '{"text":"你好"}',
             "chat_type": "p2p",
+            "chat_id": "oc_p2p",
+            "mentions": [],
             "sender_open_id": "ou_shared",
             "sender_type": "user",
         }
@@ -180,6 +197,8 @@ async def test_shared_global_app_message_is_deduplicated_before_forward(
         "message_id": "om_duplicate",
         "content": '{"text":"你好"}',
         "chat_type": "p2p",
+        "chat_id": "oc_p2p",
+        "mentions": [],
         "sender_open_id": "ou_shared",
         "sender_type": "user",
     }

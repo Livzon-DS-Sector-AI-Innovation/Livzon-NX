@@ -372,6 +372,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/identity/feishu-config/authorizations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查看 Hermes 飞书记忆授权 */
+        get: operations["list_livzon_feishu_authorizations_api_v1_identity_feishu_config_authorizations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/identity/feishu-config/authorizations/{grant_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** 撤销 Hermes 飞书记忆授权 */
+        delete: operations["revoke_livzon_feishu_authorization_api_v1_identity_feishu_config_authorizations__grant_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/identity/feishu-config/test": {
         parameters: {
             query?: never;
@@ -480,6 +514,57 @@ export interface paths {
          * @description 重启 Livzon 助手飞书卡片回调长连接。
          */
         post: operations["restart_livzon_feishu_card_callback_ws_api_v1_identity_feishu_card_callback_ws_restart_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/internal/feishu/access-snapshot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Access Snapshot */
+        get: operations["get_access_snapshot_api_v1_internal_feishu_access_snapshot_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/internal/feishu/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ingest Audit Event */
+        post: operations["ingest_audit_event_api_v1_internal_feishu_audit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/internal/feishu/resource-changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ingest Resource Change */
+        post: operations["ingest_resource_change_api_v1_internal_feishu_resource_changes_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6907,7 +6992,8 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        put?: never;
+        /** 修改能源飞书 Wiki/Base 入口 */
+        put: operations["update_energy_feishu_root_api_v1_energy_feishu_roots__root_id__put"];
         post?: never;
         /** 停用能源飞书入口 */
         delete: operations["delete_energy_feishu_root_api_v1_energy_feishu_roots__root_id__delete"];
@@ -6980,6 +7066,57 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/energy/sources/batch-sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 批量同步能源资源 */
+        post: operations["batch_sync_source_sheets_api_v1_energy_sources_batch_sync_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/energy/sources/batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** 批量删除能源资源及本地数据 */
+        delete: operations["batch_delete_source_sheets_api_v1_energy_sources_batch_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/energy/sources/{sheet_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** 删除能源资源及本地数据 */
+        delete: operations["delete_source_sheet_api_v1_energy_sources__sheet_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -7063,7 +7200,8 @@ export interface paths {
         };
         /** 读取能源统一数据页绑定 */
         get: operations["get_energy_page_data_api_v1_energy_page_data__page_key__get"];
-        put?: never;
+        /** 发布能源菜单页面的数据表绑定 */
+        put: operations["replace_energy_page_data_api_v1_energy_page_data__page_key__put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -7225,57 +7363,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/warehouse/feishu/tables/refresh": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** 刷新仓储飞书数据表目录 */
-        post: operations["refresh_feishu_tables_api_v1_warehouse_feishu_tables_refresh_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/warehouse/feishu/tables/enabled/batch": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** 批量启用或停用仓储飞书数据表同步 */
-        post: operations["set_feishu_tables_enabled_api_v1_warehouse_feishu_tables_enabled_batch_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/warehouse/feishu/tables/{table_id}/enabled": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /** 启用或停用仓储飞书数据表同步 */
-        patch: operations["set_feishu_table_enabled_api_v1_warehouse_feishu_tables__table_id__enabled_patch"];
-        trace?: never;
-    };
     "/api/v1/warehouse/feishu/tables/{table_id}/sync": {
         parameters: {
             query?: never;
@@ -7302,23 +7389,6 @@ export interface paths {
         };
         /** 读取仓储飞书数据表本地记录快照 */
         get: operations["get_feishu_table_records_api_v1_warehouse_feishu_tables__table_id__records_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/warehouse/feishu/domains/{business_domain}/records": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** 读取仓储业务域启用表本地记录快照 */
-        get: operations["get_feishu_domain_records_api_v1_warehouse_feishu_domains__business_domain__records_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -20603,6 +20673,24 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /** EnergyApiResponse[EnergySourceDeleteResult] */
+        EnergyApiResponse_EnergySourceDeleteResult_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            data: components["schemas"]["EnergySourceDeleteResult"];
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
         /** EnergyApiResponse[EnergySyncRunResponse] */
         EnergyApiResponse_EnergySyncRunResponse_: {
             /**
@@ -20863,6 +20951,17 @@ export interface components {
             /** Discovery Error */
             discovery_error?: string | null;
         };
+        /** EnergyFeishuSourceRootUpdate */
+        EnergyFeishuSourceRootUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Source Type */
+            source_type?: ("wiki" | "base") | null;
+            /** Source Url */
+            source_url?: string | null;
+            /** Is Active */
+            is_active?: boolean | null;
+        };
         /** EnergyMappingMetricInput */
         EnergyMappingMetricInput: {
             /** Metric Key */
@@ -20982,6 +21081,38 @@ export interface components {
             /** Value */
             value: number;
         };
+        /** EnergyPageBindingInput */
+        EnergyPageBindingInput: {
+            /**
+             * Resource Id
+             * Format: uuid
+             */
+            resource_id: string;
+            /** Tab Name */
+            tab_name: string;
+            /**
+             * Sort Order
+             * @default 0
+             */
+            sort_order: number;
+            /**
+             * Is Default
+             * @default false
+             */
+            is_default: boolean;
+            /**
+             * Is Enabled
+             * @default true
+             */
+            is_enabled: boolean;
+            /** Visible Field Ids */
+            visible_field_ids?: string[];
+        };
+        /** EnergyPageBindingReplace */
+        EnergyPageBindingReplace: {
+            /** Bindings */
+            bindings: components["schemas"]["EnergyPageBindingInput"][];
+        };
         /** EnergySheetMappingResponse */
         EnergySheetMappingResponse: {
             /** Id */
@@ -21099,6 +21230,31 @@ export interface components {
             snapshot: components["schemas"]["EnergySnapshotResponse"];
             /** Rows */
             rows: components["schemas"]["EnergySnapshotRowResponse"][];
+        };
+        /** EnergySourceBatchRequest */
+        EnergySourceBatchRequest: {
+            /**
+             * Sheet Ids
+             * @description 待操作的能源资源 ID
+             */
+            sheet_ids: string[];
+        };
+        /** EnergySourceDeleteResult */
+        EnergySourceDeleteResult: {
+            /** Deleted Count */
+            deleted_count: number;
+            /** Snapshot Count */
+            snapshot_count: number;
+            /** Snapshot Row Count */
+            snapshot_row_count: number;
+            /** Mapping Count */
+            mapping_count: number;
+            /** Fact Count */
+            fact_count: number;
+            /** Binding Count */
+            binding_count: number;
+            /** Document Count */
+            document_count: number;
         };
         /** EnergySourceDocumentResponse */
         EnergySourceDocumentResponse: {
@@ -22501,6 +22657,29 @@ export interface components {
          * @enum {string}
          */
         HeaderColorEnum: "blue" | "orange" | "green" | "red" | "purple";
+        /** HermesAuditEvent */
+        HermesAuditEvent: {
+            /** Id */
+            id: string;
+            /** User Id */
+            user_id?: string | null;
+            /** Resource Fingerprint */
+            resource_fingerprint?: string | null;
+            /** Capability */
+            capability: string;
+            /** Risk */
+            risk: string;
+            /** Confirmation */
+            confirmation?: string | null;
+            /** Result */
+            result?: string | null;
+            /** Duration Ms */
+            duration_ms?: number | null;
+            /** Feishu Log Id */
+            feishu_log_id?: string | null;
+            /** Impact Count */
+            impact_count?: number | null;
+        };
         /** HolidayCreate */
         HolidayCreate: {
             /** Year */
@@ -26695,6 +26874,18 @@ export interface components {
              */
             remark?: string | null;
             /**
+             * Timezone
+             * @description 同步时区
+             * @default Asia/Shanghai
+             */
+            timezone: string;
+            /**
+             * Daily Sync Time
+             * @description 每日同步时间
+             * @default 02:00
+             */
+            daily_sync_time: string;
+            /**
              * Id
              * @description 配置ID，留空则新增
              */
@@ -28087,6 +28278,17 @@ export interface components {
             end_date?: string | null;
             /** Description */
             description?: string | null;
+        };
+        /** ResourceChangeEvent */
+        ResourceChangeEvent: {
+            /** Id */
+            id: string;
+            /** Resource Fingerprint */
+            resource_fingerprint: string;
+            /** Capability */
+            capability: string;
+            /** Feishu Log Id */
+            feishu_log_id?: string | null;
         };
         /** RespondComplaintRequest */
         RespondComplaintRequest: {
@@ -32349,12 +32551,6 @@ export interface components {
             config_name: string;
             /** App Id */
             app_id: string;
-            /** Finished Product App Token */
-            finished_product_app_token?: string | null;
-            /** Materials Packaging App Token */
-            materials_packaging_app_token?: string | null;
-            /** Hardware App Token */
-            hardware_app_token?: string | null;
             /**
              * Is Active
              * @default true
@@ -32384,8 +32580,6 @@ export interface components {
              * @default
              */
             app_secret_masked: string;
-            /** Bitable App Token */
-            bitable_app_token?: string | null;
             /** Created At */
             created_at?: string | null;
             /** Updated At */
@@ -32400,12 +32594,6 @@ export interface components {
             config_name: string;
             /** App Id */
             app_id: string;
-            /** Finished Product App Token */
-            finished_product_app_token?: string | null;
-            /** Materials Packaging App Token */
-            materials_packaging_app_token?: string | null;
-            /** Hardware App Token */
-            hardware_app_token?: string | null;
             /**
              * Is Active
              * @default true
@@ -32669,11 +32857,6 @@ export interface components {
             /** Source Url */
             source_url: string;
             /**
-             * Business Domain
-             * @enum {string}
-             */
-            business_domain: "finished_product" | "materials_packaging" | "hardware";
-            /**
              * Is Active
              * @default true
              */
@@ -32706,11 +32889,6 @@ export interface components {
             /** Source Url */
             source_url: string;
             /**
-             * Business Domain
-             * @enum {string}
-             */
-            business_domain: "finished_product" | "materials_packaging" | "hardware";
-            /**
              * Is Active
              * @default true
              */
@@ -32728,55 +32906,6 @@ export interface components {
             discovery_error?: string | null;
             /** Last Discovered At */
             last_discovered_at?: string | null;
-        };
-        /** WarehouseFeishuTableBatchEnableApiResponse */
-        WarehouseFeishuTableBatchEnableApiResponse: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            /** Data */
-            data: components["schemas"]["WarehouseFeishuTableResponse"][];
-            /** Meta */
-            meta?: {
-                [key: string]: number;
-            } | null;
-        };
-        /** WarehouseFeishuTableBatchEnablePayload */
-        WarehouseFeishuTableBatchEnablePayload: {
-            /** Table Ids */
-            table_ids: string[];
-            /** Is Enabled */
-            is_enabled: boolean;
-        };
-        /** WarehouseFeishuTableEnableApiResponse */
-        WarehouseFeishuTableEnableApiResponse: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            data: components["schemas"]["WarehouseFeishuTableResponse"];
-            /** Meta */
-            meta?: {
-                [key: string]: number;
-            } | null;
-        };
-        /** WarehouseFeishuTableEnablePayload */
-        WarehouseFeishuTableEnablePayload: {
-            /** Is Enabled */
-            is_enabled: boolean;
         };
         /** WarehouseFeishuTableListApiResponse */
         WarehouseFeishuTableListApiResponse: {
@@ -32801,8 +32930,6 @@ export interface components {
         WarehouseFeishuTableResponse: {
             /** Id */
             id?: string | null;
-            /** Business Domain */
-            business_domain: string;
             /** App Token */
             app_token: string;
             /** Table Id */
@@ -32815,11 +32942,6 @@ export interface components {
             last_discovered_at?: string | null;
             /** Last Event At */
             last_event_at?: string | null;
-            /**
-             * Is Enabled
-             * @default false
-             */
-            is_enabled: boolean;
             /**
              * Field Count
              * @default 0
@@ -34110,6 +34232,74 @@ export interface operations {
             };
         };
     };
+    list_livzon_feishu_authorizations_api_v1_identity_feishu_config_authorizations_get: {
+        parameters: {
+            query: {
+                user_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_livzon_feishu_authorization_api_v1_identity_feishu_config_authorizations__grant_id__delete: {
+        parameters: {
+            query: {
+                user_id: string;
+            };
+            header?: never;
+            path: {
+                grant_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     test_livzon_feishu_config_api_v1_identity_feishu_config_test_post: {
         parameters: {
             query?: never;
@@ -34276,6 +34466,113 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_access_snapshot_api_v1_internal_feishu_access_snapshot_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ingest_audit_event_api_v1_internal_feishu_audit_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HermesAuditEvent"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ingest_resource_change_api_v1_internal_feishu_resource_changes_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResourceChangeEvent"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -51029,6 +51326,43 @@ export interface operations {
             };
         };
     };
+    update_energy_feishu_root_api_v1_energy_feishu_roots__root_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                root_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnergyFeishuSourceRootUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnergyApiResponse_EnergyFeishuSourceRootResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     delete_energy_feishu_root_api_v1_energy_feishu_roots__root_id__delete: {
         parameters: {
             query?: never;
@@ -51216,6 +51550,109 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EnergyApiResponse_list_EnergySourceSheetResponse__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    batch_sync_source_sheets_api_v1_energy_sources_batch_sync_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnergySourceBatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnergyApiResponse_EnergySyncRunResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    batch_delete_source_sheets_api_v1_energy_sources_batch_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnergySourceBatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnergyApiResponse_EnergySourceDeleteResult_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_source_sheet_api_v1_energy_sources__sheet_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sheet_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnergyApiResponse_EnergySourceDeleteResult_"];
                 };
             };
             /** @description Validation Error */
@@ -51417,6 +51854,43 @@ export interface operations {
             };
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    replace_energy_page_data_api_v1_energy_page_data__page_key__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                page_key: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnergyPageBindingReplace"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -51745,9 +52219,7 @@ export interface operations {
     list_feishu_tables_api_v1_warehouse_feishu_tables_get: {
         parameters: {
             query?: {
-                business_domain?: string | null;
                 keyword?: string | null;
-                enabled?: boolean | null;
             };
             header?: never;
             path?: never;
@@ -51764,109 +52236,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WarehouseFeishuTableListApiResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    refresh_feishu_tables_api_v1_warehouse_feishu_tables_refresh_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WarehouseFeishuTableListApiResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    set_feishu_tables_enabled_api_v1_warehouse_feishu_tables_enabled_batch_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["WarehouseFeishuTableBatchEnablePayload"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WarehouseFeishuTableBatchEnableApiResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    set_feishu_table_enabled_api_v1_warehouse_feishu_tables__table_id__enabled_patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                table_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["WarehouseFeishuTableEnablePayload"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WarehouseFeishuTableEnableApiResponse"];
                 };
             };
             /** @description Validation Error */
@@ -51928,49 +52297,6 @@ export interface operations {
             header?: never;
             path: {
                 table_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WarehouseFeishuRawRecordApiResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_feishu_domain_records_api_v1_warehouse_feishu_domains__business_domain__records_get: {
-        parameters: {
-            query?: {
-                table_id?: string | null;
-                keyword?: string | null;
-                field?: string | null;
-                /** @description 字段筛选条件：contains/eq/ne/gt/gte/lt/lte */
-                field_operator?: string | null;
-                /** @description 字段筛选值 */
-                field_value?: string | null;
-                page?: number;
-                page_size?: number;
-            };
-            header?: never;
-            path: {
-                business_domain: string;
             };
             cookie?: {
                 auth_token?: string | null;

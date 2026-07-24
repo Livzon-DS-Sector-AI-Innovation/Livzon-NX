@@ -175,6 +175,7 @@ export async function streamAgentMessage(
   const reader = response.body.getReader()
   const decoder = new TextDecoder()
   let buffer = ""
+  let terminalEventReceived = false
 
   function handleFrame(frame: string) {
     let event = "message"
@@ -210,8 +211,10 @@ export async function streamAgentMessage(
     } else if (event === "delta") {
       handlers.onDelta?.(typeof data.text === "string" ? data.text : "")
     } else if (event === "done") {
+      terminalEventReceived = true
       handlers.onDone?.(data as unknown as AgentChatData)
     } else if (event === "error") {
+      terminalEventReceived = true
       throw new Error(typeof data.message === "string" ? data.message : "中枢助手请求失败")
     }
   }
@@ -229,6 +232,9 @@ export async function streamAgentMessage(
     }
     buffer += decoder.decode()
     if (buffer.trim()) handleFrame(buffer)
+    if (!terminalEventReceived) {
+      throw new Error("Livzon Agent 连接已中断，未收到完整回复，请重试。")
+    }
   } finally {
     reader.releaseLock()
   }

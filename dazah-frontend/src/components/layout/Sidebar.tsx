@@ -1,68 +1,14 @@
 "use client"
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import { Menu } from "antd"
 import type { MenuProps } from "antd"
 import type { ModuleMenu, SubMenuItem } from "@/lib/menu-config"
-import { fetchWarehouseFeishuTablesByParams } from "@/lib/api/warehouse"
-import type { WarehouseFeishuBusinessDomain, WarehouseFeishuTable } from "@/types/warehouse"
 import { SettingOutlined } from "@ant-design/icons"
 import type { User } from "@/types/user"
 
 type MenuItem = Required<MenuProps>['items'][number]
-
-const warehouseDomainMeta: Record<
-  WarehouseFeishuBusinessDomain,
-  { menuKey: string; routeSegment: string }
-> = {
-  finished_product: { menuKey: "raw-material", routeSegment: "raw-material" },
-  materials_packaging: { menuKey: "packaging", routeSegment: "packaging" },
-  hardware: { menuKey: "product", routeSegment: "product" },
-}
-
-function buildWarehouseTablePath(table: WarehouseFeishuTable): string | null {
-  const meta = warehouseDomainMeta[table.business_domain]
-  if (!meta || !table.id) return null
-  const params = new URLSearchParams({ table_id: table.id })
-  return `/warehouse/${meta.routeSegment}?${params.toString()}`
-}
-
-function buildWarehouseTableLabel(table: WarehouseFeishuTable): string {
-  return `${table.name}（${table.record_count || 0} 条）`
-}
-
-function withWarehouseTables(
-  items: SubMenuItem[],
-  tables: WarehouseFeishuTable[],
-): SubMenuItem[] {
-  const tablesByMenuKey = tables.reduce<Record<string, SubMenuItem[]>>((acc, table) => {
-    const meta = warehouseDomainMeta[table.business_domain]
-    const path = buildWarehouseTablePath(table)
-    if (!meta || !path || !table.id) return acc
-
-    acc[meta.menuKey] = [
-      ...(acc[meta.menuKey] || []),
-      {
-        key: `${meta.menuKey}-table-${table.id}`,
-        label: buildWarehouseTableLabel(table),
-        path,
-      },
-    ]
-    return acc
-  }, {})
-
-  return items.map((item) => {
-    const tableItems = tablesByMenuKey[item.key]
-    if (!tableItems?.length) return item
-
-    return {
-      ...item,
-      path: "",
-      children: tableItems,
-    }
-  })
-}
 
 function parseMenuPath(path: string): { pathname: string; query: URLSearchParams } {
   const [pathname, queryString = ""] = path.split("?")
@@ -216,51 +162,16 @@ export function Sidebar({ user, modules }: SidebarProps) {
   const router = useRouter()
   const moduleKey = pathname.split("/")[1] || "production"
   const currentModule = modules.find((module) => module.key === moduleKey)
-  const [warehouseTables, setWarehouseTables] = useState<WarehouseFeishuTable[]>([])
   const queryString = searchParams.toString()
   const query = useMemo(() => new URLSearchParams(queryString), [queryString])
   const [openKeys, setOpenKeys] = useState<string[]>(() =>
     currentModule ? collectAncestorKeys(currentModule.children, pathname, query) : []
   )
 
-  useEffect(() => {
-    if (moduleKey !== "warehouse") {
-      return
-    }
-
-    let cancelled = false
-    fetchWarehouseFeishuTablesByParams({ enabled: true })
-      .then((tables) => {
-        if (cancelled) return
-
-        setWarehouseTables(tables)
-
-        if (currentModule) {
-          const children = withWarehouseTables(currentModule.children, tables)
-          const ancestorKeys = collectAncestorKeys(children, pathname, query)
-          if (ancestorKeys.length > 0) {
-            setOpenKeys((current) =>
-              Array.from(new Set([...current, ...ancestorKeys])),
-            )
-          }
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setWarehouseTables([])
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [currentModule, moduleKey, pathname, query])
-
-  const moduleChildren = useMemo(() => {
-    if (!currentModule) return []
-    if (moduleKey === "warehouse") {
-      return withWarehouseTables(currentModule.children, warehouseTables)
-    }
-    return currentModule.children
-  }, [currentModule, moduleKey, warehouseTables])
+  const moduleChildren = useMemo(
+    () => currentModule?.children || [],
+    [currentModule],
+  )
 
   const { mainItems, bottomItems } = useMemo(
     () => splitMenuItemsByPlacement(moduleChildren),

@@ -17,8 +17,10 @@ from app.platform.integrations.feishu.utils import OPEN_API_BASE_URL
 TOKEN_TTL_SECONDS = 90 * 60
 
 
-def _token_cache_key(app_id: str) -> str:
-    digest = hashlib.sha256(app_id.encode("utf-8")).hexdigest()[:24]
+def _token_cache_key(app_id: str, app_secret: str) -> str:
+    digest = hashlib.sha256(
+        f"{app_id}\0{app_secret}".encode("utf-8")
+    ).hexdigest()[:24]
     return f"warehouse:feishu:tenant_token:{digest}"
 
 
@@ -57,7 +59,7 @@ class WarehouseFeishuClient:
         if not self.app_id or not self.app_secret:
             raise RuntimeError("App ID 或 App Secret 未配置")
 
-        cache_key = _token_cache_key(self.app_id)
+        cache_key = _token_cache_key(self.app_id, self.app_secret)
         if not force_refresh:
             cached = await redis_client.get(cache_key)
             if cached:
@@ -119,17 +121,28 @@ class WarehouseFeishuClient:
                     self._last_request_at[self.app_id] = time.monotonic()
                     body = resp.json()
                     code = body.get("code")
+                    message = str(body.get("msg") or "")
+                    auth_failed = (
+                        resp.status_code == 401
+                        or code in {99991663, 99991664, 99991668}
+                        or (
+                            "access token" in message.lower()
+                            and "invalid" in message.lower()
+                        )
+                    )
+                    if auth_failed and attempt == 0 and not force_token_refresh:
+                        continue
                     retryable = resp.status_code == 429 or resp.status_code >= 500 or code == 1254290
                     if retryable and attempt < 5:
                         retry_after = resp.headers.get("Retry-After")
                         delay = float(retry_after) if retry_after else min(2**attempt, 16)
                         await asyncio.sleep(delay + random.uniform(0, 0.3))
                         continue
-                    resp.raise_for_status()
                     if code != 0:
                         raise RuntimeError(
-                            body.get("msg") or json.dumps(body, ensure_ascii=False)
+                            message or json.dumps(body, ensure_ascii=False)
                         )
+                    resp.raise_for_status()
                     data = body.get("data")
                     return data if isinstance(data, dict) else {}
                 except (httpx.TimeoutException, httpx.NetworkError):

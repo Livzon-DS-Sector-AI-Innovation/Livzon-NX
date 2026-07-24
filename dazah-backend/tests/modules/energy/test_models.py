@@ -4,10 +4,29 @@ from datetime import UTC, datetime
 
 from app.modules.energy.models import (
     EnergyFeishuConfig,
+    EnergyFeishuSourceRoot,
     EnergyMetricFact,
     EnergySheetSnapshot,
     EnergySnapshotRow,
 )
+
+
+def test_feishu_source_root_uses_active_only_unique_index():
+    table = EnergyFeishuSourceRoot.__table__
+    assert not any(
+        constraint.name == "uq_energy_feishu_source_root"
+        for constraint in table.constraints
+    )
+
+    index = next(
+        item
+        for item in table.indexes
+        if item.name == "uq_energy_feishu_source_root_active"
+    )
+    assert index.unique
+    assert str(index.dialect_options["postgresql"]["where"]) == (
+        "is_deleted = false"
+    )
 
 
 def test_energy_wiki_models_do_not_create_cross_schema_foreign_keys():

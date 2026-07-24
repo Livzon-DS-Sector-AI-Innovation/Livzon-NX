@@ -37,15 +37,17 @@ async def handle_feishu_direct_message(
     sender_open_id: str,
     message_id: str,
     text: str,
+    conversation_peer_id: str | None = None,
 ) -> FeishuDirectMessageResult:
-    """Run a private Feishu message through the normal Livzon chat boundary."""
+    """Run a Feishu message through a channel-isolated Livzon chat boundary."""
+    peer_id = conversation_peer_id or sender_open_id
     normalized = text.strip()
     if normalized in {"/new", "/新建会话"}:
         await AgentRepository().archive_active_channel_sessions(
             db,
             user_id=user.id,
             channel="feishu",
-            peer_id=sender_open_id,
+            peer_id=peer_id,
         )
         return FeishuDirectMessageResult(
             text="已开启新对话。请发送你的问题。",
@@ -58,7 +60,7 @@ async def handle_feishu_direct_message(
         db,
         user_id=user.id,
         channel="feishu",
-        peer_id=sender_open_id,
+        peer_id=peer_id,
     )
     response = await AgentService(get_settings()).chat(
         db,
@@ -67,7 +69,8 @@ async def handle_feishu_direct_message(
             message=normalized,
             context={
                 "channel": "feishu",
-                "peer_id": sender_open_id,
+                "peer_id": peer_id,
+                "sender_open_id": sender_open_id,
                 "feishu_message_id": message_id,
             },
         ),

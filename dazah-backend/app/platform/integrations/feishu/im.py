@@ -28,6 +28,23 @@ class FeishuMessageSendResult:
     raw: dict[str, Any] | None = None
 
 
+@dataclass(frozen=True)
+class FeishuMessageReactionResult:
+    ok: bool
+    reaction_id: str | None = None
+    code: int | None = None
+    error_message: str | None = None
+
+
+@dataclass(frozen=True)
+class FeishuBotInfoResult:
+    ok: bool
+    open_id: str | None = None
+    app_name: str | None = None
+    code: int | None = None
+    error_message: str | None = None
+
+
 def build_text_message_content(text: str) -> str:
     return json.dumps({"text": text}, ensure_ascii=False)
 
@@ -243,6 +260,76 @@ async def send_feishu_message(
     )
 
 
+async def reply_feishu_message(
+    *,
+    tenant_access_token: str,
+    message_id: str,
+    msg_type: str,
+    content: str,
+) -> FeishuMessageSendResult:
+    """Reply to one existing Feishu message with an explicit tenant token."""
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        resp = await client.post(
+            f"{OPEN_API_BASE_URL}/im/v1/messages/{message_id}/reply",
+            headers={
+                "Authorization": f"Bearer {tenant_access_token}",
+                "Content-Type": "application/json; charset=utf-8",
+            },
+            json={"msg_type": msg_type, "content": content},
+        )
+        resp.raise_for_status()
+        body = resp.json()
+
+    code = body.get("code")
+    data = body.get("data") or {}
+    if code == 0:
+        return FeishuMessageSendResult(
+            ok=True,
+            message_id=data.get("message_id"),
+            code=0,
+            raw=body,
+        )
+    return FeishuMessageSendResult(
+        ok=False,
+        code=code,
+        error_message=body.get("msg") or str(body),
+        raw=body,
+    )
+
+
+async def get_feishu_bot_info(
+    *,
+    tenant_access_token: str,
+) -> FeishuBotInfoResult:
+    """Return the current application's bot identity."""
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        resp = await client.get(
+            f"{OPEN_API_BASE_URL}/bot/v3/info",
+            headers={
+                "Authorization": f"Bearer {tenant_access_token}",
+                "Content-Type": "application/json; charset=utf-8",
+            },
+        )
+        body = resp.json()
+        if resp.is_error and body.get("code") is None:
+            resp.raise_for_status()
+
+    code = body.get("code")
+    if code == 0:
+        bot = body.get("bot") or (body.get("data") or {}).get("bot") or {}
+        return FeishuBotInfoResult(
+            ok=True,
+            open_id=bot.get("open_id"),
+            app_name=bot.get("app_name") or bot.get("bot_name"),
+            code=0,
+        )
+    return FeishuBotInfoResult(
+        ok=False,
+        code=code,
+        error_message=body.get("msg") or str(body),
+    )
+
+
 async def update_feishu_message(
     *,
     tenant_access_token: str,
@@ -276,6 +363,74 @@ async def update_feishu_message(
         code=code,
         error_message=body.get("msg") or str(body),
         raw=body,
+    )
+
+
+async def create_feishu_message_reaction(
+    *,
+    tenant_access_token: str,
+    message_id: str,
+    emoji_type: str,
+) -> FeishuMessageReactionResult:
+    """Add a bot reaction to an existing Feishu message."""
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        resp = await client.post(
+            f"{OPEN_API_BASE_URL}/im/v1/messages/{message_id}/reactions",
+            headers={
+                "Authorization": f"Bearer {tenant_access_token}",
+                "Content-Type": "application/json; charset=utf-8",
+            },
+            json={"reaction_type": {"emoji_type": emoji_type}},
+        )
+        body = resp.json()
+        if resp.is_error and body.get("code") is None:
+            resp.raise_for_status()
+
+    code = body.get("code")
+    data = body.get("data") or {}
+    if code == 0:
+        reaction = data.get("reaction") or {}
+        return FeishuMessageReactionResult(
+            ok=True,
+            reaction_id=data.get("reaction_id") or reaction.get("reaction_id"),
+            code=0,
+        )
+    return FeishuMessageReactionResult(
+        ok=False,
+        code=code,
+        error_message=body.get("msg") or str(body),
+    )
+
+
+async def delete_feishu_message_reaction(
+    *,
+    tenant_access_token: str,
+    message_id: str,
+    reaction_id: str,
+) -> FeishuMessageReactionResult:
+    """Remove a bot reaction from an existing Feishu message."""
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        resp = await client.delete(
+            (
+                f"{OPEN_API_BASE_URL}/im/v1/messages/{message_id}"
+                f"/reactions/{reaction_id}"
+            ),
+            headers={
+                "Authorization": f"Bearer {tenant_access_token}",
+                "Content-Type": "application/json; charset=utf-8",
+            },
+        )
+        body = resp.json()
+        if resp.is_error and body.get("code") is None:
+            resp.raise_for_status()
+
+    code = body.get("code")
+    if code == 0:
+        return FeishuMessageReactionResult(ok=True, code=0)
+    return FeishuMessageReactionResult(
+        ok=False,
+        code=code,
+        error_message=body.get("msg") or str(body),
     )
 
 

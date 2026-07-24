@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import cast
 from uuid import UUID
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.energy.models import (
@@ -60,12 +60,30 @@ class EnergyWikiRepository:
     async def replace_page_bindings(
         self, page_key: str, bindings: list[EnergyFeishuPageBinding]
     ) -> None:
-        await self.session.execute(
-            delete(EnergyFeishuPageBinding).where(
+        result = await self.session.execute(
+            select(EnergyFeishuPageBinding).where(
                 EnergyFeishuPageBinding.page_key == page_key,
+                EnergyFeishuPageBinding.is_deleted == False,  # noqa: E712
             )
         )
-        self.session.add_all(bindings)
+        existing_by_sheet = {
+            item.sheet_id: item for item in result.scalars().all()
+        }
+        new_bindings: list[EnergyFeishuPageBinding] = []
+        for binding in bindings:
+            existing = existing_by_sheet.pop(binding.sheet_id, None)
+            if existing is None:
+                new_bindings.append(binding)
+                continue
+            existing.tab_name = binding.tab_name
+            existing.sort_order = binding.sort_order
+            existing.is_default = binding.is_default
+            existing.is_enabled = binding.is_enabled
+            existing.visible_field_ids = binding.visible_field_ids
+
+        for stale in existing_by_sheet.values():
+            await self.session.delete(stale)
+        self.session.add_all(new_bindings)
         await self.session.flush()
 
     async def list_source_roots(self, config_id: UUID) -> list[EnergyFeishuSourceRoot]:
@@ -205,6 +223,83 @@ class EnergyWikiRepository:
         self.session.add(sheet)
         await self.session.flush()
         return sheet
+
+    async def get_sheets_by_ids(
+        self, sheet_ids: list[UUID]
+    ) -> list[EnergyWorkbookSheet]:
+        result = await self.session.execute(
+            select(EnergyWorkbookSheet).where(
+                EnergyWorkbookSheet.id.in_(sheet_ids),
+                EnergyWorkbookSheet.is_deleted == False,  # noqa: E712
+            )
+        )
+        return list(result.scalars().all())
+
+    async def delete_sheets_with_local_data(
+        self, sheets: list[EnergyWorkbookSheet]
+    ) -> dict[str, int]:
+        sheet_ids = [sheet.id for sheet in sheets]
+        document_ids = list({sheet.document_id for sheet in sheets})
+        snapshot_ids = select(EnergySheetSnapshot.id).where(
+            EnergySheetSnapshot.sheet_id.in_(sheet_ids)
+        )
+
+        counts: dict[str, int] = {}
+        operations = (
+            (
+                "binding_count",
+                delete(EnergyFeishuPageBinding).where(
+                    EnergyFeishuPageBinding.sheet_id.in_(sheet_ids)
+                ),
+            ),
+            (
+                "fact_count",
+                delete(EnergyMetricFact).where(
+                    EnergyMetricFact.sheet_id.in_(sheet_ids)
+                ),
+            ),
+            (
+                "snapshot_row_count",
+                delete(EnergySnapshotRow).where(
+                    EnergySnapshotRow.snapshot_id.in_(snapshot_ids)
+                ),
+            ),
+            (
+                "snapshot_count",
+                delete(EnergySheetSnapshot).where(
+                    EnergySheetSnapshot.sheet_id.in_(sheet_ids)
+                ),
+            ),
+            (
+                "mapping_count",
+                delete(EnergySheetMapping).where(
+                    EnergySheetMapping.sheet_id.in_(sheet_ids)
+                ),
+            ),
+            (
+                "deleted_count",
+                delete(EnergyWorkbookSheet).where(
+                    EnergyWorkbookSheet.id.in_(sheet_ids)
+                ),
+            ),
+        )
+        for key, statement in operations:
+            result = await self.session.execute(statement)
+            counts[key] = int(result.rowcount or 0)  # type: ignore[attr-defined]
+
+        orphan_documents = delete(EnergyWikiDocument).where(
+            EnergyWikiDocument.id.in_(document_ids),
+            ~exists(
+                select(EnergyWorkbookSheet.id).where(
+                    EnergyWorkbookSheet.document_id == EnergyWikiDocument.id
+                )
+            ),
+        )
+        result = await self.session.execute(orphan_documents)
+        counts["document_count"] = int(
+            result.rowcount or 0  # type: ignore[attr-defined]
+        )
+        return counts
 
     async def list_sheets(
         self,

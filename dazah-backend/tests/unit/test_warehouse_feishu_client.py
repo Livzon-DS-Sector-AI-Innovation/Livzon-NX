@@ -31,6 +31,8 @@ class FakeResponse:
         self.headers: dict[str, str] = {}
 
     def raise_for_status(self) -> None:
+        if self.status_code >= 400:
+            raise AssertionError("飞书业务错误应在 HTTP 状态检查前转换")
         return None
 
     def json(self) -> dict[str, Any]:
@@ -41,6 +43,7 @@ class FakeAsyncClient:
     token_calls = 0
     request_calls: list[tuple[str, str, dict[str, Any] | None]] = []
     request_bodies: list[dict[str, Any] | None] = []
+    response_override: FakeResponse | None = None
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         return None
@@ -66,6 +69,8 @@ class FakeAsyncClient:
     ) -> FakeResponse:
         FakeAsyncClient.request_calls.append((method, path, params or json))
         FakeAsyncClient.request_bodies.append(json)
+        if FakeAsyncClient.response_override is not None:
+            return FakeAsyncClient.response_override
         if path.endswith("/tables") and not params.get("page_token"):
             return FakeResponse(
                 {
@@ -107,6 +112,7 @@ def patch_dependencies(monkeypatch: pytest.MonkeyPatch) -> FakeRedis:
     FakeAsyncClient.token_calls = 0
     FakeAsyncClient.request_calls = []
     FakeAsyncClient.request_bodies = []
+    FakeAsyncClient.response_override = None
     monkeypatch.setattr(module, "redis_client", fake_redis)
     monkeypatch.setattr(module.httpx, "AsyncClient", FakeAsyncClient)
     return fake_redis
@@ -146,6 +152,25 @@ async def test_tenant_token_force_refresh_overwrites_cache() -> None:
 
 
 @pytest.mark.asyncio
+async def test_tenant_token_cache_changes_when_secret_changes() -> None:
+    first_client = WarehouseFeishuClient(
+        app_id="cli_123",
+        app_secret="old-secret",
+        app_token="base_token",
+    )
+    second_client = WarehouseFeishuClient(
+        app_id="cli_123",
+        app_secret="new-secret",
+        app_token="base_token",
+    )
+
+    await first_client.get_tenant_access_token()
+    await second_client.get_tenant_access_token()
+
+    assert FakeAsyncClient.token_calls == 2
+
+
+@pytest.mark.asyncio
 async def test_list_tables_reads_all_pages() -> None:
     client = WarehouseFeishuClient(
         app_id="cli_123",
@@ -156,6 +181,44 @@ async def test_list_tables_reads_all_pages() -> None:
     tables = await client.list_tables()
 
     assert [item["table_id"] for item in tables] == ["tbl1", "tbl2"]
+
+
+@pytest.mark.asyncio
+async def test_feishu_http_error_preserves_business_message() -> None:
+    FakeAsyncClient.response_override = FakeResponse(
+        {"code": 1254040, "msg": "app_token invalid"},
+        status_code=400,
+    )
+    client = WarehouseFeishuClient(
+        app_id="cli_123",
+        app_secret="secret",
+        app_token="invalid_base_token",
+    )
+
+    with pytest.raises(RuntimeError, match="app_token invalid"):
+        await client.list_tables()
+
+    assert FakeAsyncClient.token_calls == 1
+    assert len(FakeAsyncClient.request_calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_invalid_access_token_forces_one_token_refresh() -> None:
+    FakeAsyncClient.response_override = FakeResponse(
+        {"code": 99991663, "msg": "Invalid access token for authorization."},
+        status_code=400,
+    )
+    client = WarehouseFeishuClient(
+        app_id="cli_123",
+        app_secret="secret",
+        app_token="base_token",
+    )
+
+    with pytest.raises(RuntimeError, match="Invalid access token"):
+        await client.list_tables()
+
+    assert FakeAsyncClient.token_calls == 2
+    assert len(FakeAsyncClient.request_calls) == 2
 
 
 @pytest.mark.asyncio

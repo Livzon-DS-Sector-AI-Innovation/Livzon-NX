@@ -9,7 +9,19 @@ import {
   WarningOutlined,
 } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
-import { Button, Card, DatePicker, Empty, Skeleton, Statistic, Table, Tag, Tooltip } from 'antd'
+import {
+  Alert,
+  Button,
+  Card,
+  DatePicker,
+  Empty,
+  Select,
+  Skeleton,
+  Statistic,
+  Table,
+  Tag,
+  Tooltip,
+} from 'antd'
 import dayjs, { type Dayjs } from 'dayjs'
 import type { EChartsOption } from 'echarts'
 import ReactECharts from 'echarts-for-react'
@@ -19,6 +31,7 @@ import {
   fetchEnergyOverview,
   type EnergyOverview as EnergyOverviewData,
 } from '@/lib/api/energy'
+import styles from './EnergyOverview.module.css'
 
 const { RangePicker } = DatePicker
 
@@ -96,6 +109,10 @@ function buildDistributionOption(data: EnergyOverviewData['distribution']): ECha
   }
 }
 
+function metricIdentity(metric: { metric_key?: string | null; energy_type: string; unit: string }) {
+  return `${metricLabel(metric)}::${metric.energy_type}::${metric.unit}`
+}
+
 function formatRange(range: [Dayjs, Dayjs]) {
   return `${range[0].format('YYYY.MM.DD')} – ${range[1].format('YYYY.MM.DD')}`
 }
@@ -141,12 +158,35 @@ export function EnergyOverview() {
   })
 
   const overview = overviewQuery.data
-  const headline = isFactoryOverview ? dailySummaryQuery.data : overview
-  const latestRatio = headline?.latest_metrics.find((metric) => metric.unit === '%' || metric.unit === '％' || metricLabel(metric).includes('占比'))
+  const hasDailySummary = Boolean(dailySummaryQuery.data?.metrics.length)
+  const headline = isFactoryOverview && hasDailySummary ? dailySummaryQuery.data : overview
+  const latestRatio = (isFactoryOverview ? dailySummaryQuery.data : headline)?.latest_metrics.find(
+    (metric) => metric.unit === '%' || metric.unit === '％' || metricLabel(metric).includes('占比'),
+  )
   const headlineMetrics = headline?.metrics ?? []
   const viewLabel = workshop || sourceSheetTitle || '全厂能源总览'
   const loading = overviewQuery.isLoading || (isFactoryOverview && dailySummaryQuery.isLoading)
   const error = overviewQuery.error || (isFactoryOverview ? dailySummaryQuery.error : null)
+  const metricOptions = useMemo(
+    () => (overview?.metrics ?? []).map((metric) => ({
+      label: `${metricLabel(metric)}（${metric.unit}）`,
+      value: metricIdentity(metric),
+    })),
+    [overview?.metrics],
+  )
+  const requestedMetric = searchParams.get('metric')
+  const selectedMetric = requestedMetric && metricOptions.some((option) => option.value === requestedMetric)
+    ? requestedMetric
+    : metricOptions[0]?.value
+  const selectedMetricData = overview?.metrics.find(
+    (metric) => metricIdentity(metric) === selectedMetric,
+  )
+  const selectedTrend = overview?.trend.filter(
+    (point) => metricIdentity(point) === selectedMetric,
+  ) ?? []
+  const selectedDistribution = overview?.distribution.filter(
+    (point) => metricIdentity(point) === selectedMetric,
+  ) ?? []
 
   const updateQuery = (values: Record<string, string | null>) => {
     const next = new URLSearchParams(searchParams.toString())
@@ -158,13 +198,14 @@ export function EnergyOverview() {
   }
 
   return (
-    <main style={{ maxWidth: 1440, margin: '0 auto', padding: '28px 32px 48px' }}>
+    <main className={styles.page}>
       <section style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'end', gap: 20, flexWrap: 'wrap' }}>
         <div>
-          <p style={{ margin: 0, color: '#5645d4', fontSize: 12, fontWeight: 700, letterSpacing: 1 }}>ENERGY OPERATIONS</p>
-          <h1 style={{ margin: '5px 0 0', color: '#1a1a1a', fontSize: 30, letterSpacing: '-0.5px' }}>{viewLabel}</h1>
+          <h1 style={{ margin: 0, color: '#1a1a1a', fontSize: 30, letterSpacing: '-0.5px' }}>能源总览</h1>
           <p style={{ margin: '7px 0 0', color: '#787671' }}>
-            {isFactoryOverview ? '日总量作为全厂口径，车间明细用于拆解和核对。' : `当前范围：${formatRange(range)}`}
+            {isFactoryOverview
+              ? '统计已映射能源数据表中的用量、趋势与车间分布，日总量作为全厂统计口径。'
+              : `${viewLabel} · ${formatRange(range)}`}
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -190,66 +231,98 @@ export function EnergyOverview() {
         </Card>
       ) : !overview?.metrics.length && !headlineMetrics.length ? (
         <Card style={{ marginTop: 24 }}>
-          <Empty description={workshop ? `${workshop} 暂无已映射的能源字段` : '尚无已映射的能源数据。请先完成来源同步并配置字段映射。'} />
+          <Empty description={workshop ? `${workshop} 在当前统计周期暂无有效能源数据` : '当前统计周期暂无有效数据。请确认能源页面已发布数据表映射且最新快照包含正数用量。'} />
         </Card>
       ) : (
         <>
-          <section style={{ marginTop: 24, display: 'grid', gridTemplateColumns: 'minmax(280px, 1.2fr) repeat(auto-fit, minmax(176px, .8fr))', gap: 14 }}>
-            <div style={{ border: '1px solid #e5e3df', borderRadius: 12, background: '#0a1530', color: '#fff', padding: 22, minHeight: 166, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                  <span style={{ color: '#d6b6f6', fontSize: 13, fontWeight: 600 }}>{isFactoryOverview ? '全厂日总量' : '当前分析口径'}</span>
-                  <DashboardOutlined style={{ color: '#d6b6f6', fontSize: 20 }} />
-                </div>
-                <div style={{ marginTop: 18, fontSize: 24, fontWeight: 600 }}>{formatRange(range)}</div>
+          <section style={{ marginTop: 24 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 10, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <h2 style={{ margin: 0, fontSize: 18 }}>能源分类汇总</h2>
+                <Tag color="processing">统计结果</Tag>
               </div>
-              <div style={{ color: '#a4a097', fontSize: 13 }}>
-                最近有效数据：{headline?.last_observed_at ? dayjs(headline.last_observed_at).format('YYYY-MM-DD') : '暂无'}
-              </div>
+              <span style={{ color: '#787671', fontSize: 13 }}>
+                统计周期 {formatRange(range)} · 最近有效数据 {headline?.last_observed_at ? dayjs(headline.last_observed_at).format('YYYY-MM-DD') : '暂无'}
+              </span>
             </div>
-            {headlineMetrics.map((metric) => {
-              const label = metricLabel(metric)
-              const visual = metricVisual(label)
-              return (
-                <div key={`${label}-${metric.unit}`} style={{ border: '1px solid #e5e3df', borderRadius: 12, background: visual.tint, padding: 18, minHeight: 166, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-                    <span style={{ color: visual.color, fontSize: 14, fontWeight: 600 }}>{label}</span>
-                    <span style={{ color: visual.color, fontSize: 19 }}>{visual.icon}</span>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(196px, 1fr))', gap: 14 }}>
+              {headlineMetrics.map((metric) => {
+                const label = metricLabel(metric)
+                const visual = metricVisual(label)
+                return (
+                  <div key={metricIdentity(metric)} style={{ border: '1px solid #e5e3df', borderRadius: 12, background: visual.tint, padding: 18, minHeight: 166, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                      <span style={{ color: visual.color, fontSize: 14, fontWeight: 600 }}>{label}</span>
+                      <span style={{ color: visual.color, fontSize: 19 }}>{visual.icon}</span>
+                    </div>
+                    <Statistic value={metric.total_value} precision={2} suffix={metric.unit} valueStyle={{ color: '#1a1a1a', fontSize: 24, fontWeight: 600 }} />
+                    <span style={{ color: '#787671', fontSize: 12 }}>{metric.record_count} 条有效数据</span>
                   </div>
-                  <Statistic value={metric.total_value} precision={2} suffix={metric.unit} valueStyle={{ color: '#1a1a1a', fontSize: 24, fontWeight: 600 }} />
-                  <span style={{ color: '#787671', fontSize: 12 }}>{metric.record_count} 条有效数据</span>
+                )
+              })}
+              {latestRatio && (
+                <div style={{ border: '1px solid #f3d1ad', borderRadius: 12, background: '#fff7ec', padding: 18, minHeight: 166, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                    <span style={{ color: '#793400', fontSize: 14, fontWeight: 600 }}>{metricLabel(latestRatio)}</span>
+                    <WarningOutlined style={{ color: '#dd5b00', fontSize: 18 }} />
+                  </div>
+                  <Statistic value={latestRatio.value} precision={2} suffix={latestRatio.unit} valueStyle={{ color: '#793400', fontSize: 24, fontWeight: 600 }} />
+                  <span style={{ color: '#a45a1c', fontSize: 12 }}>最新日 {dayjs(latestRatio.observed_at).format('MM-DD')}，不参与累计</span>
                 </div>
-              )
-            })}
-            {latestRatio && (
-              <div style={{ border: '1px solid #f3d1ad', borderRadius: 12, background: '#fff7ec', padding: 18, minHeight: 166, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-                  <span style={{ color: '#793400', fontSize: 14, fontWeight: 600 }}>{metricLabel(latestRatio)}</span>
-                  <WarningOutlined style={{ color: '#dd5b00', fontSize: 18 }} />
-                </div>
-                <Statistic value={latestRatio.value} precision={2} suffix={latestRatio.unit} valueStyle={{ color: '#793400', fontSize: 24, fontWeight: 600 }} />
-                <span style={{ color: '#a45a1c', fontSize: 12 }}>最新日 {dayjs(latestRatio.observed_at).format('MM-DD')}，不参与累计</span>
-              </div>
-            )}
+              )}
+            </div>
           </section>
 
-          {isFactoryOverview && !dailySummaryQuery.data?.metrics.length && (
-            <Card style={{ marginTop: 14, background: '#f8f5e8' }}>
-              <span style={{ color: '#793400' }}>“日总量”尚未完成映射，当前仅展示已映射车间明细。完成映射后将显示全厂 KPI 与蒸汽外供占比。</span>
-            </Card>
+          {isFactoryOverview && !hasDailySummary && (
+            <Alert
+              style={{ marginTop: 14 }}
+              type="warning"
+              showIcon
+              message="“日总量”页面尚未发布有效数据表映射"
+              description="当前卡片与图表改用各能源分类表统计；发布“日总量”页面映射后，将以全厂日总量作为顶部指标口径。"
+            />
           )}
 
-          <section style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.45fr) minmax(300px, .85fr)', gap: 16, marginTop: 16 }}>
-            <Card title="日趋势" extra={<Tag color="purple">{overview?.trend.length ?? 0} 个数据点</Tag>} styles={{ body: { paddingTop: 8 } }}>
-              {overview?.trend.length ? <ReactECharts option={buildTrendOption(overview.trend)} style={{ height: 330 }} opts={{ renderer: 'svg' }} /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前范围暂无趋势数据" />}
-            </Card>
-            <Card title={sourceScope === 'energy_summary' ? '区域用量排行' : '车间用量排行'} styles={{ body: { paddingTop: 8 } }}>
-              {overview?.distribution.length ? <ReactECharts option={buildDistributionOption(overview.distribution)} style={{ height: 330 }} opts={{ renderer: 'svg' }} /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无可排名数据" />}
+          <section style={{ marginTop: 16 }}>
+            <Card
+              title="能源用量分析"
+              styles={{ body: { paddingTop: 8 } }}
+            >
+              {metricOptions.length ? (
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+                  <Select
+                    aria-label="选择能源指标"
+                    value={selectedMetric}
+                    options={metricOptions}
+                    style={{ width: 'min(100%, 260px)' }}
+                    onChange={(value) => updateQuery({ metric: value })}
+                  />
+                </div>
+              ) : null}
+              <div className={styles.analysisGrid}>
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, margin: '4px 0 8px' }}>
+                    <strong>日趋势</strong>
+                    <Tag>{selectedTrend.length} 个数据点</Tag>
+                  </div>
+                  {selectedTrend.length ? <ReactECharts option={buildTrendOption(selectedTrend)} style={{ height: 320 }} opts={{ renderer: 'svg' }} /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前指标暂无趋势数据" />}
+                </div>
+                <div>
+                  <div style={{ margin: '4px 0 8px' }}>
+                    <strong>{sourceScope === 'energy_summary' ? '区域用量排行' : '车间用量排行'}</strong>
+                  </div>
+                  {selectedDistribution.length ? <ReactECharts option={buildDistributionOption(selectedDistribution)} style={{ height: 320 }} opts={{ renderer: 'svg' }} /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前指标暂无可排名数据" />}
+                </div>
+              </div>
             </Card>
           </section>
 
           <section style={{ marginTop: 16 }}>
-            <Card title="指标明细" extra={overview?.invalid_count ? <Tooltip title="累计表底负差值不会纳入汇总"><Tag color="orange">{overview.invalid_count} 条累计异常</Tag></Tooltip> : null} styles={{ body: { paddingTop: 0 } }}>
+            <Card
+              title="指标明细"
+              extra={overview?.invalid_count ? <Tooltip title="负数、公式错误或未形成有效用量的记录不会纳入统计"><Tag color="orange">{overview.invalid_count} 条异常数据</Tag></Tooltip> : selectedMetricData ? <Tag>{metricLabel(selectedMetricData)}</Tag> : null}
+              styles={{ body: { paddingTop: 0 } }}
+            >
               <Table
                 size="small"
                 rowKey={(record) => `${metricLabel(record)}-${record.energy_type}-${record.unit}`}

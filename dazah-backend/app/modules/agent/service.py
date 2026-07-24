@@ -191,30 +191,8 @@ OPERATION_WHITELIST: dict[str, OperationSpec] = {
         "/warehouse/feishu/tables/{table_id}/records",
         summary="查询飞书表本地记录",
     ),
-    "warehouse.get_feishu_domain_records": OperationSpec(
-        "GET",
-        "/warehouse/feishu/domains/{business_domain}/records",
-        summary="查询仓储飞书领域记录",
-    ),
     "warehouse.get_feishu_ws_status": OperationSpec(
         "GET", "/warehouse/feishu/ws/status", summary="查询仓储飞书 WebSocket 状态"
-    ),
-    "warehouse.refresh_feishu_tables": OperationSpec(
-        "POST", "/warehouse/feishu/tables/refresh", True, "low", "刷新仓储飞书表目录"
-    ),
-    "warehouse.set_feishu_tables_enabled": OperationSpec(
-        "POST",
-        "/warehouse/feishu/tables/enabled/batch",
-        True,
-        "medium",
-        "批量启停仓储飞书表",
-    ),
-    "warehouse.set_feishu_table_enabled": OperationSpec(
-        "PATCH",
-        "/warehouse/feishu/tables/{table_id}/enabled",
-        True,
-        "medium",
-        "启停仓储飞书表",
     ),
     "warehouse.sync_feishu_table": OperationSpec(
         "POST",
@@ -865,6 +843,11 @@ class AgentService:
             user_id=user_id,
         )
         history = await self.repo.list_messages(db, session_id=session.id)
+        # Hermes executes tools through a separate HTTP request and database
+        # session. Commit the session and user message before handing control
+        # to Hermes so tool-call audit rows do not wait on an uncommitted
+        # foreign-key target.
+        await db.commit()
         return (
             session,
             [
@@ -1173,7 +1156,13 @@ class AgentService:
                 "session_id": str(session_id),
                 "user_id": str(user.id),
                 "user_name": getattr(user, "name", None),
-                "scope": ["identity", "warehouse", "procurement", "quality"],
+                "scope": [
+                    "identity",
+                    "energy",
+                    "warehouse",
+                    "procurement",
+                    "quality",
+                ],
             },
         }
         try:
@@ -1239,7 +1228,13 @@ class AgentService:
                 "session_id": str(session_id),
                 "user_id": str(user.id) if user else None,
                 "user_name": getattr(user, "name", None),
-                "scope": ["identity", "warehouse", "procurement", "quality"],
+                "scope": [
+                    "identity",
+                    "energy",
+                    "warehouse",
+                    "procurement",
+                    "quality",
+                ],
             },
         }
         stream_url = self._hermes_stream_url()

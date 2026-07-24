@@ -14,6 +14,7 @@ from app.platform.integrations.feishu.client import FeishuClient
 
 T = TypeVar("T")
 _WIKI_TOKEN_RE = re.compile(r"/wiki/([^/?#\s]+)")
+_SPREADSHEET_TOKEN_RE = re.compile(r"/sheets/([^/?#\s]+)")
 
 
 class EnergyFeishuRequestError(RuntimeError):
@@ -68,6 +69,23 @@ class EnergyFeishuClient:
         if text and "/" not in text:
             return text
         raise ValueError("无法从链接解析 Wiki 节点 token")
+
+    @staticmethod
+    def is_spreadsheet_url(value: str) -> bool:
+        return _SPREADSHEET_TOKEN_RE.search(value.strip()) is not None
+
+    @staticmethod
+    def parse_spreadsheet_token(value: str) -> str:
+        text = value.strip()
+        match = _SPREADSHEET_TOKEN_RE.search(text)
+        if match:
+            return match.group(1)
+        parsed = urlparse(text)
+        if parsed.path.startswith("/sheets/"):
+            return parsed.path.removeprefix("/sheets/").split("/")[0]
+        if text and "/" not in text:
+            return text
+        raise ValueError("无法从链接解析电子表格 token")
 
     async def get_wiki_node(self, token: str) -> dict[str, Any]:
         data = await self._retry(

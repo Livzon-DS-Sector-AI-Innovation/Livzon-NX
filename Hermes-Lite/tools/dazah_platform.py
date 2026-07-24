@@ -9,6 +9,7 @@ enforced and write operations become user confirmations.
 import contextvars
 import json
 import os
+import threading
 from typing import Any
 
 import httpx
@@ -20,6 +21,55 @@ dazah_request_context: contextvars.ContextVar[dict[str, Any]] = contextvars.Cont
     "dazah_request_context",
     default={},
 )
+_dazah_thread_request_context = threading.local()
+_MISSING_THREAD_CONTEXT = object()
+_task_request_contexts: dict[str, dict[str, Any]] = {}
+_task_request_contexts_lock = threading.Lock()
+
+
+def register_dazah_task_context(task_id: str, context: dict[str, Any]) -> None:
+    with _task_request_contexts_lock:
+        _task_request_contexts[task_id] = dict(context)
+
+
+def unregister_dazah_task_context(task_id: str) -> None:
+    with _task_request_contexts_lock:
+        _task_request_contexts.pop(task_id, None)
+
+
+def current_dazah_request_context(task_id: str | None = None) -> dict[str, Any]:
+    if task_id:
+        with _task_request_contexts_lock:
+            task_context = _task_request_contexts.get(task_id)
+            if task_context:
+                return dict(task_context)
+    context = dazah_request_context.get({})
+    if context:
+        return context
+    thread_context = getattr(_dazah_thread_request_context, "value", None)
+    if isinstance(thread_context, dict):
+        return thread_context
+    return {}
+
+
+def bind_dazah_thread_request_context(context: dict[str, Any]) -> Any:
+    previous = getattr(
+        _dazah_thread_request_context,
+        "value",
+        _MISSING_THREAD_CONTEXT,
+    )
+    _dazah_thread_request_context.value = dict(context)
+    return previous
+
+
+def reset_dazah_thread_request_context(previous: Any) -> None:
+    if previous is _MISSING_THREAD_CONTEXT:
+        try:
+            del _dazah_thread_request_context.value
+        except AttributeError:
+            pass
+        return
+    _dazah_thread_request_context.value = previous
 
 ALLOWED_OPERATIONS = [
     "analytics.aggregate",
@@ -29,16 +79,27 @@ ALLOWED_OPERATIONS = [
     "identity.send_feishu_message",
     "identity.send_feishu_text_message",
     "identity.send_feishu_card_message",
+    "energy.get_feishu_config",
+    "energy.list_feishu_source_roots",
+    "energy.create_feishu_source_root",
+    "energy.update_feishu_source_root",
+    "energy.delete_feishu_source_root",
+    "energy.delete_source_sheets",
+    "energy.test_feishu_connectivity",
+    "energy.list_sync_runs",
+    "energy.list_source_documents",
+    "energy.list_source_sheets",
+    "energy.list_sheet_snapshots",
+    "energy.get_sheet_mapping",
+    "energy.list_snapshot_rows",
+    "energy.get_overview",
+    "energy.trigger_sync",
     "warehouse.list_raw_materials",
     "warehouse.list_packaging_materials",
     "warehouse.list_products",
     "warehouse.list_feishu_tables",
     "warehouse.get_feishu_table_records",
-    "warehouse.get_feishu_domain_records",
     "warehouse.get_feishu_ws_status",
-    "warehouse.refresh_feishu_tables",
-    "warehouse.set_feishu_tables_enabled",
-    "warehouse.set_feishu_table_enabled",
     "warehouse.sync_feishu_table",
     "warehouse.restart_feishu_ws",
     "procurement.list_invoice_records",
@@ -295,6 +356,8 @@ async def dazah_tool(
     reason: str | None = None,
     **_ignored: Any,
 ) -> str:
+    task_id = str(_ignored.pop("task_id", "") or "")
+    _ignored.pop("user_task", None)
     if isinstance(operation, dict):
         payload = operation
         operation = str(payload.get("operation", ""))
@@ -319,7 +382,10 @@ async def dazah_tool(
         body = {**(body or {}), **_ignored}
     body = _normalize_feishu_message_body(operation, body)
 
-    merged_context = {**dazah_request_context.get({}), **(context or {})}
+    merged_context = {
+        **current_dazah_request_context(task_id),
+        **(context or {}),
+    }
     payload = {
         "operation": operation,
         "params": params or {},

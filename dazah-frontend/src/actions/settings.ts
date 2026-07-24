@@ -12,8 +12,7 @@ export type LLMConfigUpdate = components['schemas']['LLMConfigUpdate']
 export type LLMCapabilityDetection = components['schemas']['LLMCapabilityDetectionResponse']
 export type FeishuConfig = components['schemas']['FeishuConfigResponse']
 export type FeishuConfigUpsert = components['schemas']['FeishuConfigUpsert']
-export type FeishuDiagnosticResult = components['schemas']['FeishuDiagnosticResult']
-export type LivzonFeishuEventWsStatus = components['schemas']['LivzonFeishuEventWsStatus']
+type FeishuDiagnosticResult = components['schemas']['FeishuDiagnosticResult']
 
 interface ApiResponse<T> {
   code: number
@@ -144,28 +143,4 @@ export async function testLivzonFeishuConfig(data?: FeishuConfigUpsert) {
     body: JSON.stringify(data || null),
   })
   return unwrapResponseData<FeishuDiagnosticResult>(response.data)
-}
-
-export async function syncLivzonFeishuContacts() {
-  const response = await fetchApi<unknown>('/identity/sync/all', {
-    method: 'POST',
-  })
-  return unwrapResponseData<{
-    message?: string
-    status?: string
-    departments?: Record<string, unknown>
-    members?: Record<string, unknown>
-  }>(response.data)
-}
-
-export async function getLivzonFeishuEventWsStatus() {
-  const response = await fetchApi<unknown>('/identity/feishu/event-ws/status')
-  return unwrapResponseData<LivzonFeishuEventWsStatus>(response.data)
-}
-
-export async function restartLivzonFeishuEventWs() {
-  const response = await fetchApi<unknown>('/identity/feishu/event-ws/restart', {
-    method: 'POST',
-  })
-  return unwrapResponseData<LivzonFeishuEventWsStatus>(response.data)
 }

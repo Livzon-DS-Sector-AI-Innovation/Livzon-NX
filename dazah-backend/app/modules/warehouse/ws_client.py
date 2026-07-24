@@ -109,10 +109,15 @@ async def start_ws_from_db() -> WarehouseFeishuWsStatus:
                 _last_error = "未启用仓储飞书配置"
                 return await get_ws_status()
 
+            assert config.id is not None
+            tokens = await repo.list_feishu_app_tokens(config.id)
             return await restart_ws_with_config(
                 app_id=config.app_id,
                 app_secret=decrypt_secret(config.encrypted_app_secret),
-                app_tokens=WarehouseService._config_app_tokens(config),
+                app_tokens={
+                    f"source_{index + 1}": token
+                    for index, token in enumerate(tokens)
+                },
             )
     except Exception as exc:
         await stop_ws()
@@ -131,6 +136,8 @@ async def restart_ws_with_config(
     app_secret: str,
     app_tokens: dict[str, str],
 ) -> WarehouseFeishuWsStatus:
+    from app.core.config import get_settings
+
     global _app_id, _app_tokens, _connected, _enabled, _last_error, _last_started_at
     if _main_loop is None:
         set_main_loop(asyncio.get_running_loop())
@@ -143,7 +150,7 @@ async def restart_ws_with_config(
     _last_error = None
 
     if not _enabled:
-        _last_error = "App ID、App Secret 或业务域 app_token 未配置"
+        _last_error = "App ID、App Secret 或已发现的数据入口未配置"
         return await get_ws_status()
 
     try:
@@ -154,6 +161,15 @@ async def restart_ws_with_config(
                 app_token=app_token,
             )
             await client.subscribe_bitable()
+        settings = get_settings()
+        if settings.FEISHU_WS_ENABLED and app_id == settings.FEISHU_APP_ID:
+            _connected = True
+            _last_started_at = datetime.now(UTC)
+            logger.info(
+                "仓储与全局飞书使用同一应用，复用平台长连接，"
+                "不再启动重复事件消费者"
+            )
+            return await get_ws_status()
         start_ws_client(
             app_id=app_id,
             app_secret=app_secret,

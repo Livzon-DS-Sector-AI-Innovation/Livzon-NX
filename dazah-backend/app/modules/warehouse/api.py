@@ -20,24 +20,20 @@ from app.modules.warehouse.schemas import (
     WarehouseAnalyticsQuery,
     WarehouseDatasetApiResponse,
     WarehouseDatasetRecordApiResponse,
-    WarehouseFieldValuesApiResponse,
     WarehouseFeishuConfigApiResponse,
     WarehouseFeishuConfigUpsert,
     WarehouseFeishuConnectivityApiResponse,
-    WarehouseFeishuRawRecordApiResponse,
     WarehouseFeishuPageBindingReplace,
     WarehouseFeishuPageDataApiResponse,
+    WarehouseFeishuRawRecordApiResponse,
     WarehouseFeishuSourceRootApiResponse,
     WarehouseFeishuSourceRootInput,
     WarehouseFeishuSourceRootListApiResponse,
-    WarehouseFeishuTableBatchEnableApiResponse,
-    WarehouseFeishuTableBatchEnablePayload,
-    WarehouseFeishuTableEnableApiResponse,
-    WarehouseFeishuTableEnablePayload,
     WarehouseFeishuTableListApiResponse,
     WarehouseFeishuTableResponse,
     WarehouseFeishuTableSyncApiResponse,
     WarehouseFeishuWsStatusApiResponse,
+    WarehouseFieldValuesApiResponse,
     WarehousePromptVersionApiResponse,
     WarehousePromptVersionInput,
     WarehousePromptVersionListApiResponse,
@@ -147,71 +143,14 @@ async def test_feishu_config(
     response_model=WarehouseFeishuTableListApiResponse,
 )
 async def list_feishu_tables(
-    business_domain: str | None = None,
     keyword: str | None = None,
-    enabled: bool | None = None,
     service: WarehouseService = Depends(get_warehouse_service),
 ):
-    items = await service.list_feishu_tables(
-        business_domain=business_domain,
-        keyword=keyword,
-        enabled=enabled,
-    )
+    items = await service.list_feishu_tables(keyword=keyword)
     data = [
         WarehouseFeishuTableResponse.model_validate(item).model_dump(mode="json")
         for item in items
     ]
-    return success_response(data=data)
-
-
-@router.post(
-    "/feishu/tables/refresh",
-    summary="刷新仓储飞书数据表目录",
-    response_model=WarehouseFeishuTableListApiResponse,
-)
-async def refresh_feishu_tables(
-    service: WarehouseService = Depends(get_warehouse_service),
-):
-    items = await service.refresh_feishu_tables()
-    data = [
-        WarehouseFeishuTableResponse.model_validate(item).model_dump(mode="json")
-        for item in items
-    ]
-    return success_response(data=data)
-
-
-@router.post(
-    "/feishu/tables/enabled/batch",
-    summary="批量启用或停用仓储飞书数据表同步",
-    response_model=WarehouseFeishuTableBatchEnableApiResponse,
-)
-async def set_feishu_tables_enabled(
-    payload: WarehouseFeishuTableBatchEnablePayload,
-    service: WarehouseService = Depends(get_warehouse_service),
-):
-    items = await service.set_feishu_tables_enabled(
-        payload.table_ids,
-        payload.is_enabled,
-    )
-    data = [
-        WarehouseFeishuTableResponse.model_validate(item).model_dump(mode="json")
-        for item in items
-    ]
-    return success_response(data=data)
-
-
-@router.patch(
-    "/feishu/tables/{table_id}/enabled",
-    summary="启用或停用仓储飞书数据表同步",
-    response_model=WarehouseFeishuTableEnableApiResponse,
-)
-async def set_feishu_table_enabled(
-    table_id: UUID,
-    payload: WarehouseFeishuTableEnablePayload,
-    service: WarehouseService = Depends(get_warehouse_service),
-):
-    table = await service.set_feishu_table_enabled(table_id, payload.is_enabled)
-    data = WarehouseFeishuTableResponse.model_validate(table).model_dump(mode="json")
     return success_response(data=data)
 
 
@@ -248,38 +187,6 @@ async def get_feishu_table_records(
 ):
     data = await service.get_feishu_table_records(
         table_id,
-        keyword=keyword,
-        field=field,
-        field_operator=field_operator,
-        field_value=field_value,
-        page=page,
-        page_size=page_size,
-    )
-    return success_response(data=data.model_dump(mode="json"))
-
-
-@router.get(
-    "/feishu/domains/{business_domain}/records",
-    summary="读取仓储业务域启用表本地记录快照",
-    response_model=WarehouseFeishuRawRecordApiResponse,
-)
-async def get_feishu_domain_records(
-    business_domain: str,
-    table_id: UUID | None = None,
-    keyword: str | None = None,
-    field: str | None = None,
-    field_operator: str | None = Query(
-        default=None,
-        description="字段筛选条件：contains/eq/ne/gt/gte/lt/lte",
-    ),
-    field_value: str | None = Query(default=None, description="字段筛选值"),
-    page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=50, ge=1, le=200),
-    service: WarehouseService = Depends(get_warehouse_service),
-):
-    data = await service.get_feishu_domain_records(
-        business_domain,  # type: ignore[arg-type]
-        table_id=table_id,
         keyword=keyword,
         field=field,
         field_operator=field_operator,

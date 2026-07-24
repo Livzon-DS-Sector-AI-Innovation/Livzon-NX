@@ -16,12 +16,6 @@ export type WarehouseFeishuConnectivityResult =
   components['schemas']['WarehouseFeishuConnectivityResult']
 export type WarehouseFeishuTable =
   components['schemas']['WarehouseFeishuTableResponse']
-export type WarehouseFeishuBusinessDomain =
-  WarehouseFeishuTable['business_domain']
-export type WarehouseFeishuTableEnablePayload =
-  components['schemas']['WarehouseFeishuTableEnablePayload']
-export type WarehouseFeishuTableBatchEnablePayload =
-  components['schemas']['WarehouseFeishuTableBatchEnablePayload']
 export type WarehouseFeishuTableSyncResult =
   components['schemas']['WarehouseFeishuTableSyncResult']
 export type WarehouseFeishuRawRecordData =

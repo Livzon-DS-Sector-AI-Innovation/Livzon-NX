@@ -3,20 +3,41 @@
 
 import json
 import asyncio
+import hashlib
+import hmac
 import logging
 import os
 import re
 import time
+import sys
+import uuid
 from collections.abc import Callable
 from typing import Any
 
 import httpx
 from fastapi import FastAPI, Header, HTTPException, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, SecretStr
 
 from run_agent import AIAgent
-from tools.dazah_platform import dazah_request_context, dazah_tool
+from tools.dazah_platform import (
+    bind_dazah_thread_request_context,
+    dazah_request_context,
+    dazah_tool,
+    register_dazah_task_context,
+    reset_dazah_thread_request_context,
+    unregister_dazah_task_context,
+)
+from services.feishu_runtime import (
+    load_credentials,
+    list_grants,
+    platform_sync_loop,
+    restore_credentials,
+    save_access_snapshot,
+    stage_credentials,
+    revoke_grant,
+    runtime_metrics,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +57,172 @@ class DazahChatResponse(BaseModel):
 
 
 app = FastAPI(title="Hermes-Lite Dazah Adapter")
+
+
+class FeishuCredentialConfig(BaseModel):
+    app_id: str = Field(min_length=1, max_length=255)
+    app_secret: SecretStr
+    version: int = Field(ge=1)
+    signature: str = Field(min_length=64, max_length=64)
+
+
+class FeishuAccessSnapshot(BaseModel):
+    version: int = Field(ge=1)
+    generated_at: str
+    users: list[dict[str, Any]] = Field(default_factory=list)
+    allowed_groups: list[str] = Field(default_factory=list)
+
+
+def _require_internal_token(authorization: str | None) -> str:
+    expected = os.getenv("HERMES_INTERNAL_TOKEN", "")
+    if not expected:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Hermes internal API is disabled")
+    supplied = authorization.removeprefix("Bearer ").strip() if authorization else ""
+    if not hmac.compare_digest(supplied, expected):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid internal service token")
+    return expected
+
+
+@app.on_event("startup")
+async def _restore_feishu_runtime() -> None:
+    try:
+        await restore_credentials()
+    except Exception:
+        logger.exception("Feishu CLI credential restore failed; gateway remains inactive")
+    app.state.feishu_platform_sync_task = asyncio.create_task(platform_sync_loop())
+    app.state.feishu_gateway_task = asyncio.create_task(_feishu_gateway_supervisor())
+
+
+@app.on_event("shutdown")
+async def _stop_feishu_runtime() -> None:
+    task = getattr(app.state, "feishu_platform_sync_task", None)
+    if task:
+        task.cancel()
+    gateway_task = getattr(app.state, "feishu_gateway_task", None)
+    if gateway_task:
+        gateway_task.cancel()
+    gateway_process = getattr(app.state, "feishu_gateway_process", None)
+    if gateway_process and gateway_process.returncode is None:
+        gateway_process.terminate()
+        try:
+            await asyncio.wait_for(gateway_process.wait(), timeout=10)
+        except TimeoutError:
+            gateway_process.kill()
+            await gateway_process.wait()
+
+
+async def _feishu_gateway_supervisor() -> None:
+    active_version: int | None = None
+    process: asyncio.subprocess.Process | None = None
+    while True:
+        credentials = load_credentials()
+        version = credentials[2] if credentials else None
+        if process is not None and (process.returncode is not None or version != active_version):
+            if process.returncode is None:
+                process.terminate()
+                try:
+                    await asyncio.wait_for(process.wait(), timeout=10)
+                except TimeoutError:
+                    process.kill()
+                    await process.wait()
+            process = None
+            active_version = None
+        if credentials and process is None and os.getenv("HERMES_FEISHU_GATEWAY_ENABLED", "true").lower() == "true":
+            app_id, app_secret, active_version = credentials
+            process = await asyncio.create_subprocess_exec(
+                sys.executable,
+                "-m",
+                "services.feishu_gateway_worker",
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            app.state.feishu_gateway_reconnects = (
+                getattr(app.state, "feishu_gateway_reconnects", 0) + 1
+            )
+            app.state.feishu_gateway_process = process
+            bootstrap = {
+                "app_id": app_id,
+                "app_secret": app_secret,
+                "agent_url": "http://127.0.0.1:8100/v1/chat",
+                "agent_token": os.getenv("HERMES_AGENT_TOKEN", ""),
+            }
+            assert process.stdin is not None
+            process.stdin.write((json.dumps(bootstrap) + "\n").encode())
+            await process.stdin.drain()
+            process.stdin.close()
+        app.state.feishu_gateway_status = (
+            "connected" if process and process.returncode is None else "inactive"
+        )
+        await asyncio.sleep(3)
+
+
+@app.put("/internal/feishu/config")
+async def put_feishu_config(
+    payload: FeishuCredentialConfig,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    token = _require_internal_token(authorization)
+    secret = payload.app_secret.get_secret_value()
+    signed = f"{payload.app_id}\n{payload.version}\n{secret}".encode()
+    expected_signature = hmac.new(token.encode(), signed, hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(payload.signature, expected_signature):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid credential signature")
+    try:
+        return await stage_credentials(payload.app_id, secret, payload.version)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from exc
+
+
+@app.put("/internal/feishu/access-snapshot")
+async def put_feishu_access_snapshot(
+    payload: FeishuAccessSnapshot,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    _require_internal_token(authorization)
+    try:
+        save_access_snapshot(payload.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    return {"status": "active", "version": payload.version}
+
+
+@app.get("/internal/feishu/status")
+async def get_feishu_internal_status(
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    _require_internal_token(authorization)
+    credentials = load_credentials()
+    return {
+        "configured": credentials is not None,
+        "credential_version": credentials[2] if credentials else None,
+        "gateway": getattr(app.state, "feishu_gateway_status", "inactive"),
+        "gateway_reconnects": getattr(app.state, "feishu_gateway_reconnects", 0),
+        **runtime_metrics(),
+    }
+
+
+@app.get("/internal/feishu/grants")
+async def get_feishu_grants(
+    user_id: str,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    _require_internal_token(authorization)
+    return {"items": list_grants(user_id)}
+
+
+@app.delete("/internal/feishu/grants/{grant_id}")
+async def delete_feishu_grant(
+    grant_id: str,
+    user_id: str,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    _require_internal_token(authorization)
+    if not revoke_grant(grant_id, user_id):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Authorization was not found")
+    return {"status": "revoked", "id": grant_id}
 
 
 class DazahAIAgent(AIAgent):
@@ -73,9 +260,30 @@ def _require_token(authorization: str | None) -> None:
 
 def _system_prompt(progressive_skills: list[dict[str, Any]] | None = None) -> str:
     base_prompt = (
-        "你是工厂管理平台的Agent助手，服务仓储、采购、质量管理和 Livzon 助手通讯录查询。"
+        "你是工厂管理平台的Agent助手，服务能源、仓储、采购、质量管理和 Livzon 助手通讯录查询。"
+        "当会话来自飞书且用户要发现、读取、创建或编辑飞书文档、云盘文件、电子表格、"
+        "多维表格、Wiki、幻灯片、Markdown、画板、妙记或会议纪要时，必须调用 lark_cli，"
+        "直接使用机器人应用身份访问飞书，不得经过 dazah_tool 或平台业务 API。"
+        "先用 lark_cli skills read 或 schema 确认官方参数；优先快捷命令，其次类型化命令，"
+        "最后才使用 api 通用调用。不得构造 shell、管道、重定向、环境变量或执行其他程序。"
+        "普通 PDF、图片、压缩包等不支持结构化编辑的文件只能读取元数据、上传下载、复制移动，"
+        "或在高风险单次确认后替换版本，不得声称能修改其内部内容。"
         "你必须通过 dazah_tool 获取平台数据或创建写操作确认项；"
-        "不要编造库存、供应商、采购申请、订单、合同、质量记录、人员通讯录或飞书同步状态。"
+        "不要编造能源数据、库存、供应商、采购申请、订单、合同、质量记录、人员通讯录或飞书同步状态。"
+        "只有用户明确询问 Dazah 平台中的能源总览、能源飞书配置、已登记数据源、同步快照、"
+        "字段映射或同步记录时，才调用 dazah_tool 的 energy.* operation。"
+        "用户在飞书会话中提供或指向一个飞书原生文件、电子表格或多维表格并要求读取其内容、"
+        "数据表或字段时，无论文件内容是否与能源相关，都必须使用 lark_cli，"
+        "不得把该文件误判成 Dazah 已配置能源数据源。能源飞书配置只允许读取脱敏摘要，"
+        "不得索要、推测或输出 App Secret 明文；手动同步只生成待确认项。"
+        "用户要求在能源“飞书配置”中新增、修改或删除已配置的数据表入口时，"
+        "先调用 energy.list_feishu_source_roots 核对入口及 root_id，再调用对应的 "
+        "energy.create_feishu_source_root、energy.update_feishu_source_root 或 "
+        "energy.delete_feishu_source_root。三类写操作都只能生成待确认项；"
+        "不得声称会修改或删除飞书原表内容。"
+        "用户明确要求删除资源目录中的一张或多张具体数据表时，先调用 "
+        "energy.list_source_sheets 核对 sheet_id，再调用 energy.delete_source_sheets；"
+        "该操作会删除 Dazah 本地映射、指标、快照和数据库记录，但不会删除飞书原表。"
         "用户询问质量模块、偏差、偏差报告记录、CAPA、变更、变更计划、验证、CPV、质量飞书台账或质量同步时，"
         "必须优先调用 dazah_tool 的 quality.* operation，而不是仓储飞书表目录或普通飞书同步表查询。"
         "用户说“质量模块的报告记录数据表”或“质量报告记录”时，默认指偏差报告记录，"
@@ -326,7 +534,7 @@ def _base_url() -> str:
 
 
 def _business_scope(context: dict[str, Any]) -> list[str]:
-    default_scope = ["identity", "warehouse", "procurement", "quality"]
+    default_scope = ["identity", "energy", "warehouse", "procurement", "quality"]
     incoming_scope = context.get("scope")
     if not isinstance(incoming_scope, list):
         return default_scope
@@ -336,6 +544,153 @@ def _business_scope(context: dict[str, Any]) -> list[str]:
         if isinstance(item, str) and item and item not in merged:
             merged.append(item)
     return merged
+
+
+def _is_feishu_conversation(payload: DazahChatRequest) -> bool:
+    return (
+        str(payload.context.get("channel") or "").strip().lower() == "feishu"
+        and payload.session_id.startswith("feishu:")
+    )
+
+
+def _is_direct_feishu_resource_request(payload: DazahChatRequest) -> bool:
+    if not _is_feishu_conversation(payload):
+        return False
+    message = payload.message.strip()
+    normalized = re.sub(r"\s+", "", message).lower()
+    platform_only_markers = (
+        "平台配置",
+        "能源配置",
+        "已配置数据源",
+        "同步状态",
+        "同步记录",
+        "统计快照",
+        "字段映射",
+    )
+    if any(marker in normalized for marker in platform_only_markers) and not re.search(
+        r"https?://", message, flags=re.IGNORECASE
+    ):
+        return False
+    has_feishu_url = bool(
+        re.search(
+            r"https?://[^\s)\]]*(?:feishu\.cn|larksuite\.com)"
+            r"/(?:base|sheets|docx|docs|wiki|drive|file|slides)/",
+            message,
+            flags=re.IGNORECASE,
+        )
+    )
+    resource_words = (
+        "多维表格",
+        "电子表格",
+        "飞书文档",
+        "云文档",
+        "知识库",
+        "wiki",
+        "幻灯片",
+        "云盘文件",
+    )
+    action_words = (
+        "读取",
+        "查看",
+        "列出",
+        "获取",
+        "搜索",
+        "数据表",
+        "字段",
+        "记录",
+        "单元格",
+        "追加",
+        "写入",
+        "修改",
+        "创建",
+        "删除",
+        "下载",
+        "上传",
+    )
+    refers_to_resource = any(
+        marker in normalized for marker in ("这个", "这份", "该文件", "此文件", "链接")
+    )
+    return has_feishu_url or (
+        refers_to_resource
+        and any(word in normalized for word in resource_words)
+        and any(word in normalized for word in action_words)
+    )
+
+
+def _conversation_channel_instruction(payload: DazahChatRequest) -> str:
+    if not _is_feishu_conversation(payload):
+        return (
+            "\n当前请求不是 Hermes Feishu Gateway 标记的飞书会话。"
+            "不得声称它来自飞书，也不得虚构飞书 chat_id、message_id 或会话类型。\n"
+        )
+
+    raw_chat_type = str(payload.context.get("feishu_chat_type") or "").strip().lower()
+    is_private = raw_chat_type in {"dm", "p2p", "private", "direct"}
+    chat_label = "飞书私聊会话" if is_private else "飞书群聊会话"
+    chat_type = "p2p" if is_private else "group"
+    return (
+        "\n【当前会话通道——权威运行时上下文】"
+        f"当前请求来自 Hermes 原生 Feishu Gateway，是{chat_label}（chat_type={chat_type}）。"
+        "回答会话来源或会话类型时，必须据此明确回答“飞书私聊会话”或“飞书群聊会话”，"
+        "不得回答普通文本会话、非飞书会话、非 API 会话或无法判断。"
+        "当前飞书会话中的文档、云盘文件、电子表格、多维表格、Wiki、幻灯片等飞书原生资源操作，"
+        "必须使用 lark_cli 直接调用飞书 Open API，不得使用 dazah_tool 代理。"
+        "只有查询 Dazah 平台业务数据、统计快照、同步状态或调用平台业务能力时才使用 dazah_tool。"
+        "不得向用户泄露 chat_id、message_id、open_id、union_id 等内部标识。\n"
+    )
+
+
+def _feishu_resource_routing_instruction(payload: DazahChatRequest) -> str:
+    if not _is_direct_feishu_resource_request(payload):
+        return ""
+    return (
+        "\n\n# 本轮飞书原生资源强制路由\n"
+        "规则已识别到用户正在操作本轮消息中指向的飞书原生资源。必须实际调用 lark_cli，"
+        "不得调用 energy.*、warehouse.* 或其他 dazah_tool 查询平台已登记数据源，"
+        "不得仅根据文件标题或业务内容推断它属于某个平台模块。"
+        "先从消息中的飞书 URL 识别资源类型和 token；多维表格使用 base，电子表格使用 sheets，"
+        "文档使用 docs/drive，Wiki 使用 wiki。需要命令参数时调用 lark_cli 的 skills read 或 schema，"
+        "然后执行对应只读或写入命令。只有 lark_cli 返回真实错误后，才可说明机器人 Scope、"
+        "资源共享权限、token 或配置存在问题，并应原样说明错误阶段和飞书错误码；"
+        "不得用‘平台当前配置的数据源类型不同’代替实际访问。"
+    )
+
+
+def _try_conversation_context_response(
+    payload: DazahChatRequest,
+) -> DazahChatResponse | None:
+    if not _is_feishu_conversation(payload):
+        return None
+    normalized = re.sub(r"\s+", "", payload.message).lower()
+    context_queries = (
+        "会话类型",
+        "对话类型",
+        "当前会话来源",
+        "当前对话来源",
+        "什么会话",
+        "什么渠道",
+        "哪个渠道",
+    )
+    if not any(query in normalized for query in context_queries):
+        return None
+
+    raw_chat_type = str(payload.context.get("feishu_chat_type") or "").strip().lower()
+    chat_label = (
+        "飞书私聊会话"
+        if raw_chat_type in {"dm", "p2p", "private", "direct"}
+        else "飞书群聊会话"
+    )
+    return DazahChatResponse(
+        message=(
+            f"当前会话类型：{chat_label}\n\n"
+            "消息通过 Hermes 原生 Feishu Gateway 接入 Livzon 助手。"
+            "飞书文档、云盘、电子表格、多维表格、Wiki 和幻灯片等原生资源操作，"
+            "直接使用官方 lark_cli 调用飞书 Open API，不经过 Dazah 工具网关；"
+            "Dazah 工具仅用于平台业务数据、统计快照、同步状态和平台业务能力。"
+        ),
+        pending_confirmations=[],
+        tool_trace=[],
+    )
 
 
 def _structured_feishu_send_request(message: str) -> dict[str, Any] | None:
@@ -558,14 +913,23 @@ async def _check_dazah_llm_proxy() -> str | None:
 
 
 async def _resolve_progressive_skills(payload: DazahChatRequest) -> list[dict[str, Any]]:
+    if _is_direct_feishu_resource_request(payload):
+        return []
     token = os.getenv("DAZAH_AGENT_TOOL_TOKEN", "")
     if not token:
         return []
     request_payload = {
         "message": payload.message,
-        "enabled_toolsets": ["agent", "dazah"],
+        "enabled_toolsets": ["agent", "dazah", "feishu"],
         "business_scope": _business_scope(payload.context),
-        "available_tools": ["dazah_tool", "memory", "session_search", "todo", "clarify"],
+        "available_tools": [
+            "dazah_tool",
+            "lark_cli",
+            "memory",
+            "session_search",
+            "todo",
+            "clarify",
+        ],
         "limit": 3,
     }
     try:
@@ -592,31 +956,50 @@ def _run_agent_conversation(
     progressive_skills: list[dict[str, Any]] | None = None,
     stream_callback: Callable[[str | None], None] | None = None,
 ) -> tuple[AIAgent, dict[str, Any]]:
-    agent = DazahAIAgent(
-        base_url=os.getenv("DAZAH_LLM_BASE_URL", "http://127.0.0.1:8000/api/v1/agent/llm"),
-        api_key=os.getenv("AGENT_LLM_PROXY_TOKEN", ""),
-        provider="dazah",
-        model=os.getenv("DAZAH_LLM_MODEL", "dazah-active-text"),
-        api_mode="chat_completions",
-        enabled_toolsets=["agent", "dazah"],
-        disabled_toolsets=[],
-        quiet_mode=True,
-        max_iterations=_env_int("HERMES_DAZAH_MAX_TOOL_ITERATIONS", 30, minimum=1, maximum=90),
-        user_id=payload.context.get("user_id"),
-        thread_id=payload.session_id,
-    )
-    result = agent.run_conversation(
-        _user_message_with_attachments(payload),
-        system_message=(
-            _system_prompt(progressive_skills)
-            + _task_routing_instruction(payload.message)
-            + _write_confirmation_routing_instruction(payload.message)
-        ),
-        conversation_history=_history(payload.messages),
-        stream_callback=stream_callback,
-        persist_user_message=payload.message,
-    )
-    return agent, result
+    is_feishu = _is_feishu_conversation(payload)
+    raw_chat_type = str(payload.context.get("feishu_chat_type") or "").strip().lower()
+    agent_chat_type = (
+        "dm" if raw_chat_type in {"dm", "p2p", "private", "direct"} else "group"
+    ) if is_feishu else None
+    request_context_token = dazah_request_context.set(payload.context)
+    previous_thread_context = bind_dazah_thread_request_context(payload.context)
+    runtime_task_id = uuid.uuid4().hex
+    register_dazah_task_context(runtime_task_id, payload.context)
+    try:
+        agent = DazahAIAgent(
+            base_url=os.getenv("DAZAH_LLM_BASE_URL", "http://127.0.0.1:8000/api/v1/agent/llm"),
+            api_key=os.getenv("AGENT_LLM_PROXY_TOKEN", ""),
+            provider="dazah",
+            model=os.getenv("DAZAH_LLM_MODEL", "dazah-active-text"),
+            api_mode="chat_completions",
+            enabled_toolsets=["agent", "dazah", "feishu"],
+            disabled_toolsets=[],
+            quiet_mode=True,
+            platform="feishu" if is_feishu else "dazah",
+            chat_type=agent_chat_type,
+            max_iterations=_env_int("HERMES_DAZAH_MAX_TOOL_ITERATIONS", 30, minimum=1, maximum=90),
+            user_id=payload.context.get("user_id"),
+            thread_id=payload.session_id,
+        )
+        result = agent.run_conversation(
+            _user_message_with_attachments(payload),
+            system_message=(
+                _system_prompt(progressive_skills)
+                + _conversation_channel_instruction(payload)
+                + _feishu_resource_routing_instruction(payload)
+                + _task_routing_instruction(payload.message)
+                + _write_confirmation_routing_instruction(payload.message)
+            ),
+            conversation_history=_history(payload.messages),
+            task_id=runtime_task_id,
+            stream_callback=stream_callback,
+            persist_user_message=payload.message,
+        )
+        return agent, result
+    finally:
+        unregister_dazah_task_context(runtime_task_id)
+        reset_dazah_thread_request_context(previous_thread_context)
+        dazah_request_context.reset(request_context_token)
 
 
 def _sse_event(event: str, data: dict[str, Any]) -> str:
@@ -633,7 +1016,9 @@ async def chat(payload: DazahChatRequest, authorization: str | None = Header(def
     _require_token(authorization)
     token = dazah_request_context.set(payload.context)
     try:
-        direct_response = None if payload.attachments else await _try_direct_feishu_send_response(payload)
+        direct_response = _try_conversation_context_response(payload)
+        if direct_response is None and not payload.attachments:
+            direct_response = await _try_direct_feishu_send_response(payload)
         if direct_response is not None:
             return direct_response
 
@@ -695,7 +1080,9 @@ async def chat_stream(payload: DazahChatRequest, authorization: str | None = Hea
                 loop.call_soon_threadsafe(queue.put_nowait, {"event": "delta", "data": {"text": delta}})
 
         try:
-            direct_response = None if payload.attachments else await _try_direct_feishu_send_response(payload)
+            direct_response = _try_conversation_context_response(payload)
+            if direct_response is None and not payload.attachments:
+                direct_response = await _try_direct_feishu_send_response(payload)
             if direct_response is not None:
                 yield _sse_event(
                     "done",

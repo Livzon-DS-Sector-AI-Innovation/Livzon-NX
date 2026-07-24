@@ -271,14 +271,16 @@ async def test_stream_chat_emits_start_delta_ping_and_done() -> None:
     user = SimpleNamespace(id=uuid.uuid4(), name="测试用户")
     db = FakeDb()
 
-    frames = [
-        frame
-        async for frame in service.stream_chat(
-            db,
-            request=AgentChatRequest(message="查一下库存"),
-            current_user=user,
-        )
-    ]
+    stream = service.stream_chat(
+        db,
+        request=AgentChatRequest(message="查一下库存"),
+        current_user=user,
+    )
+    first_frame = await anext(stream)
+
+    assert db.committed is True
+
+    frames = [first_frame, *[frame async for frame in stream]]
     events = parse_sse_events(frames)
 
     assert [event for event, _ in events] == ["start", "delta", "ping", "delta", "done"]
@@ -309,7 +311,7 @@ async def test_stream_chat_error_does_not_store_assistant_message() -> None:
     assert [event for event, _ in events] == ["start", "delta", "error"]
     assert events[-1][1]["message"] == "上游中断"
     assert [message.role for message in repo.messages] == ["user"]
-    assert db.committed is False
+    assert db.committed is True
 
 
 @pytest.mark.anyio

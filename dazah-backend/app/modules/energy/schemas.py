@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from typing import Annotated, Literal
+from uuid import UUID
 
 from pydantic import (
     BaseModel,
@@ -291,6 +292,27 @@ class EnergyFeishuSourceRootInput(BaseModel):
     is_active: bool = True
 
 
+class EnergyFeishuSourceRootUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    source_type: Literal["wiki", "base"] | None = None
+    source_url: str | None = Field(default=None, min_length=1, max_length=2000)
+    is_active: bool | None = None
+
+    @model_validator(mode="after")
+    def validate_changes(self) -> EnergyFeishuSourceRootUpdate:
+        if all(
+            value is None
+            for value in (
+                self.name,
+                self.source_type,
+                self.source_url,
+                self.is_active,
+            )
+        ):
+            raise ValueError("至少需要提供一项要修改的飞书数据入口配置")
+        return self
+
+
 class EnergyFeishuSourceRootResponse(BaseModel):
     id: StrUUID
     config_id: StrUUID
@@ -321,6 +343,29 @@ class EnergySyncTriggerRequest(BaseModel):
     force: bool = Field(
         default=False, description="即使今日已成功同步也创建一次手动同步"
     )
+
+
+class EnergySourceBatchRequest(BaseModel):
+    sheet_ids: list[UUID] = Field(
+        ..., min_length=1, max_length=100, description="待操作的能源资源 ID"
+    )
+
+    @field_validator("sheet_ids")
+    @classmethod
+    def validate_sheet_ids(cls, value: list[UUID]) -> list[UUID]:
+        if len(set(value)) != len(value):
+            raise ValueError("资源 ID 不能重复")
+        return value
+
+
+class EnergySourceDeleteResult(BaseModel):
+    deleted_count: int
+    snapshot_count: int
+    snapshot_row_count: int
+    mapping_count: int
+    fact_count: int
+    binding_count: int
+    document_count: int
 
 
 class EnergySyncRunResponse(BaseModel):

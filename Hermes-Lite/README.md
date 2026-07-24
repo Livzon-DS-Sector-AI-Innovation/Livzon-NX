@@ -195,7 +195,7 @@ enabled_toolsets=["agent", "dazah"]
 | `agent` | `clarify` | 在意图不明确时提出澄清问题 |
 | `agent` | `web_search` | 搜索公开网页 |
 | `agent` | `web_extract` | 提取网页内容 |
-| `dazah` | `dazah_tool` | 调用 Dazah 平台仓储、采购、质量管理和通讯录等业务工具 |
+| `dazah` | `dazah_tool` | 调用 Dazah 平台能源、仓储、采购、质量管理和通讯录等业务工具 |
 
 ## 5. 当前 Dazah 后端注册工具
 
@@ -203,7 +203,29 @@ enabled_toolsets=["agent", "dazah"]
 
 Hermes-Lite 中 `tools/dazah_platform.py` 的 `ALLOWED_OPERATIONS` 仍保留为本地防御层和模型 tool schema 枚举，实际授权以 Dazah 后端 `GET /api/v1/agent/tools` 与 `POST /api/v1/agent/tools/execute` 为准。新增工具后，应同步后端注册表与 Hermes 本地 schema，避免模型选择未暴露的 operation。
 
-### 5.1 仓储模块
+### 5.1 能源模块
+
+| 操作 | 说明 |
+| --- | --- |
+| `energy.get_feishu_config` | 读取能源飞书配置脱敏摘要（管理员） |
+| `energy.list_feishu_source_roots` | 查询能源飞书数据入口（管理员） |
+| `energy.create_feishu_source_root` | 新增能源飞书数据表入口（管理员，生成待确认项） |
+| `energy.update_feishu_source_root` | 修改能源飞书数据表入口（管理员，生成待确认项） |
+| `energy.delete_feishu_source_root` | 停用能源飞书数据表入口（管理员，生成高风险待确认项） |
+| `energy.delete_source_sheets` | 删除资源目录数据表及本地映射、快照和数据库记录（管理员，生成高风险待确认项） |
+| `energy.test_feishu_connectivity` | 检查能源飞书连通性（管理员） |
+| `energy.list_sync_runs` | 查询能源飞书同步记录 |
+| `energy.list_source_documents` | 查询能源飞书来源文档 |
+| `energy.list_source_sheets` | 查询能源飞书数据表、表头和映射状态 |
+| `energy.list_sheet_snapshots` | 查询能源数据表历史快照 |
+| `energy.get_sheet_mapping` | 读取能源数据表字段映射 |
+| `energy.list_snapshot_rows` | 分页读取能源数据表快照行 |
+| `energy.get_overview` | 查询能源汇总、趋势、分布和最新指标 |
+| `energy.trigger_sync` | 手动同步能源飞书数据（生成待确认项） |
+
+能源飞书配置工具只返回 `app_secret_configured` 和掩码等脱敏字段，不向 Hermes-Lite 或模型暴露 App Secret 明文。配置摘要、入口和连通性检查沿用后端管理员权限；新增、修改、删除入口都由后端创建二次确认，且只管理 Dazah 本地入口配置，不直接修改或删除飞书原表。其余查询继续受能源模块访问范围控制。
+
+### 5.2 仓储模块
 
 | 操作 | 说明 |
 | --- | --- |
@@ -218,15 +240,11 @@ Hermes-Lite 中 `tools/dazah_platform.py` 的 `ALLOWED_OPERATIONS` 仍保留为�
 | `warehouse.list_products` | 查询成品库存 |
 | `warehouse.list_feishu_tables` | 查询飞书表配置 |
 | `warehouse.get_feishu_table_records` | 查询指定飞书表记录 |
-| `warehouse.get_feishu_domain_records` | 查询指定业务域飞书数据 |
 | `warehouse.get_feishu_ws_status` | 查询飞书同步状态 |
-| `warehouse.refresh_feishu_tables` | 刷新飞书表配置 |
-| `warehouse.set_feishu_tables_enabled` | 批量启停飞书表同步 |
-| `warehouse.set_feishu_table_enabled` | 启停单个飞书表同步 |
 | `warehouse.sync_feishu_table` | 同步指定飞书表 |
 | `warehouse.restart_feishu_ws` | 重启飞书 WebSocket 同步 |
 
-### 5.2 采购模块
+### 5.3 采购模块
 
 | 操作 | 说明 |
 | --- | --- |
@@ -253,7 +271,7 @@ Hermes-Lite 中 `tools/dazah_platform.py` 的 `ALLOWED_OPERATIONS` 仍保留为�
 2. 用户要求生成合同时，先根据模板字段收集 `category`、`contract_number`、`contract_date`、`seller.*` 和至少一条 `items` 明细；`items` 每条至少需要 `name`、`quantity`、`unit_price`。
 3. 用户明确说“示例/样例/模板演示”时，可以调用 `procurement.generate_contract` 生成示例合同；Dazah 后端会按合同分类匹配对应 Word 模板。
 
-### 5.3 质量模块
+### 5.4 质量模块
 
 质量模块工具覆盖偏差、CAPA、变更、验证、CPV 和质量飞书只读/同步能力。查询类工具直接执行；创建、更新、提交、同步、回拉和提醒类工具由 Dazah 后端生成 pending confirmation，用户确认后才执行。
 
@@ -330,7 +348,7 @@ Hermes-Lite 中 `tools/dazah_platform.py` 的 `ALLOWED_OPERATIONS` 仍保留为�
 | `quality.get_feishu_validation` | 查询飞书验证记录详情 |
 | `quality.pull_feishu_validations` | 从飞书回拉验证记录 |
 
-### 5.4 Livzon Task 工具
+### 5.5 Livzon Task 工具
 
 | 操作 | 说明 |
 | --- | --- |

@@ -2,20 +2,356 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime
 from decimal import Decimal
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 
+from app.core.exceptions import AppException
 from app.modules.energy.models import (
     EnergyFeishuConfig,
+    EnergyFeishuPageBinding,
     EnergyMetricFact,
     EnergySheetMapping,
     EnergySheetSnapshot,
+    EnergySnapshotRow,
     EnergySyncRun,
     EnergyWikiDocument,
     EnergyWorkbookSheet,
 )
+from app.modules.energy.schemas import (
+    EnergyFeishuSourceRootInput,
+    EnergyFeishuSourceRootUpdate,
+)
 from app.modules.energy.wiki_service import CST, EnergyWikiService
+
+
+@pytest.mark.asyncio
+async def test_overview_aggregates_published_page_bindings_without_field_mapping(
+    db_session,
+):
+    run_id = uuid4()
+    daily_sheet = EnergyWorkbookSheet(
+        id=uuid4(),
+        document_id=uuid4(),
+        external_sheet_id="daily-total",
+        title="日总量",
+        header_row=1,
+        headers=["日期", "蒸汽日产气量", "", "", "", "电日用量"],
+    )
+    electricity_sheet = EnergyWorkbookSheet(
+        id=uuid4(),
+        document_id=uuid4(),
+        external_sheet_id="electricity",
+        title="电量",
+        header_row=1,
+        headers=["日期", "总计", "101车间", "102车间", "分表总和"],
+    )
+    daily_snapshot = EnergySheetSnapshot(
+        id=uuid4(),
+        sheet_id=daily_sheet.id,
+        sync_run_id=run_id,
+        snapshot_number=1,
+        content_hash="d" * 64,
+        header_values=daily_sheet.headers,
+        row_count=5,
+    )
+    electricity_snapshot = EnergySheetSnapshot(
+        id=uuid4(),
+        sheet_id=electricity_sheet.id,
+        sync_run_id=run_id,
+        snapshot_number=1,
+        content_hash="e" * 64,
+        header_values=electricity_sheet.headers,
+        row_count=4,
+    )
+    db_session.add_all(
+        [
+            daily_sheet,
+            electricity_sheet,
+            daily_snapshot,
+            electricity_snapshot,
+            EnergyFeishuPageBinding(
+                id=uuid4(),
+                page_key="energy.daily_total",
+                sheet_id=daily_sheet.id,
+                tab_name="日总量",
+                is_default=True,
+                is_enabled=True,
+            ),
+            EnergyFeishuPageBinding(
+                id=uuid4(),
+                page_key="energy.electricity",
+                sheet_id=electricity_sheet.id,
+                tab_name="电量",
+                is_default=True,
+                is_enabled=True,
+            ),
+        ]
+    )
+    db_session.add_all(
+        [
+            EnergySnapshotRow(
+                id=uuid4(),
+                snapshot_id=daily_snapshot.id,
+                row_index=index,
+                values=values,
+                row_hash=str(index) * 64,
+            )
+            for index, values in [
+                (1, ["日期", "蒸汽日产气量", None, None, None, "电日用量"]),
+                (2, [None, "锅炉产气量", "外供用量", "合计", "外供蒸汽占比"]),
+                (3, ["7/1", 100, 20, 120, 0.1667, 1000]),
+                (4, ["7/2", 110, 10, 120, 0.0833, 1200]),
+                (5, ["7/3", -999, -1, -1000, 0.001, 0]),
+            ]
+        ]
+        + [
+            EnergySnapshotRow(
+                id=uuid4(),
+                snapshot_id=electricity_snapshot.id,
+                row_index=index,
+                values=values,
+                row_hash=f"{index + 5}" * 64,
+            )
+            for index, values in [
+                (1, ["日期", "总计", "101车间", "102车间", "分表总和"]),
+                (2, ["7/1", 1000, 300, 700, 1000]),
+                (3, ["7/2", 1200, 400, 800, 1200]),
+                (4, ["7/3", -1000, -300, -700, -1000]),
+            ]
+        ]
+    )
+    await db_session.flush()
+
+    service = EnergyWikiService(db_session)
+    detail = await service.get_overview(
+        start=datetime(2026, 7, 1, tzinfo=CST),
+        end=datetime(2026, 7, 3, 23, 59, tzinfo=CST),
+        energy_type=None,
+        group_by="车间",
+    )
+    assert [(item.metric_key, item.total_value) for item in detail.metrics] == [
+        ("电量", 2200.0)
+    ]
+    assert [(item.key, item.value) for item in detail.distribution] == [
+        ("101车间", 700.0),
+        ("102车间", 1500.0),
+    ]
+    assert detail.invalid_count == 1
+    assert detail.last_observed_at == datetime(2026, 7, 2, tzinfo=CST)
+
+    daily = await service.get_overview(
+        start=datetime(2026, 7, 1, tzinfo=CST),
+        end=datetime(2026, 7, 3, 23, 59, tzinfo=CST),
+        energy_type=None,
+        group_by=None,
+        source_scope="daily_summary",
+    )
+    assert [(item.metric_key, item.total_value) for item in daily.metrics] == [
+        ("蒸汽量", 240.0),
+        ("电量", 2200.0),
+    ]
+    assert ("外供蒸汽占比", 8.33) in [
+        (item.metric_key, item.value) for item in daily.latest_metrics
+    ]
+    assert daily.invalid_count == 1
+
+
+@pytest.mark.asyncio
+async def test_create_source_root_accepts_direct_spreadsheet_link():
+    class FakeSession:
+        async def commit(self):
+            return None
+
+    async def save_root(root):
+        root.id = uuid4()
+        return root
+
+    service = EnergyWikiService(FakeSession())  # type: ignore[arg-type]
+    service.repo.get_config = AsyncMock(return_value=SimpleNamespace(id=uuid4()))
+    service.repo.list_source_roots = AsyncMock(return_value=[])
+    service.repo.save_source_root = AsyncMock(side_effect=save_root)
+
+    root = await service.create_source_root(
+        EnergyFeishuSourceRootInput(
+            name="能源副本",
+            source_type="wiki",
+            source_url="https://example.feishu.cn/sheets/shtcnExample",
+        )
+    )
+
+    assert root.root_token == "shtcnExample"
+    assert root.source_type == "wiki"
+
+
+@pytest.mark.asyncio
+async def test_connectivity_lists_direct_spreadsheet_sheets_without_wiki_lookup():
+    class FakeSheetClient:
+        async def list_workbook_sheets(self, spreadsheet_token):
+            assert spreadsheet_token == "shtcnExample"
+            return [
+                {"sheet_id": "sheet-a", "title": "电力"},
+                {"sheet_id": "sheet-b", "title": "蒸汽"},
+            ]
+
+        async def get_wiki_node(self, _root_token):
+            raise AssertionError("直连电子表格不应调用 Wiki 节点接口")
+
+    root = SimpleNamespace(
+        is_active=True,
+        source_type="wiki",
+        source_url="https://example.feishu.cn/sheets/shtcnExample",
+        root_token="shtcnExample",
+    )
+    service = EnergyWikiService(object())  # type: ignore[arg-type]
+    service.repo.get_config = AsyncMock(
+        return_value=SimpleNamespace(id=uuid4())
+    )
+    service.repo.list_source_roots = AsyncMock(return_value=[root])
+    service._client_for = lambda _config: FakeSheetClient()  # type: ignore[method-assign]
+
+    result = await service.test_connectivity()
+
+    assert result.ok
+    assert result.steps[0].name == "应用凭据与电子表格"
+    assert result.steps[0].message == "可读取 2 个工作表"
+
+
+@pytest.mark.asyncio
+async def test_create_source_root_rejects_duplicate_with_conflict():
+    config_id = uuid4()
+    service = EnergyWikiService(object())  # type: ignore[arg-type]
+    service.repo.get_config = AsyncMock(
+        return_value=SimpleNamespace(id=config_id)
+    )
+    service.repo.list_source_roots = AsyncMock(
+        return_value=[
+            SimpleNamespace(source_type="wiki", root_token="wikcnExample")
+        ]
+    )
+
+    with pytest.raises(AppException) as exc_info:
+        await service.create_source_root(
+            EnergyFeishuSourceRootInput(
+                name="重复入口",
+                source_type="wiki",
+                source_url="wikcnExample",
+            )
+        )
+
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.message == "该飞书数据入口已存在"
+
+
+@pytest.mark.asyncio
+async def test_delete_source_root_rolls_back_integrity_conflict():
+    root = SimpleNamespace(is_deleted=False, is_active=True)
+    integrity_error = IntegrityError(
+        "UPDATE energy.feishu_source_roots",
+        {},
+        Exception("duplicate"),
+    )
+    session = SimpleNamespace(
+        commit=AsyncMock(side_effect=integrity_error),
+        rollback=AsyncMock(),
+    )
+    service = EnergyWikiService(session)  # type: ignore[arg-type]
+    service.repo.get_source_root = AsyncMock(return_value=root)
+
+    with pytest.raises(AppException) as exc_info:
+        await service.delete_source_root(uuid4())
+
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.message == (
+        "停用飞书数据入口时发生数据状态冲突，请刷新后重试"
+    )
+    session.rollback.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_update_source_root_reparses_source_and_resets_discovery():
+    config_id = uuid4()
+    root_id = uuid4()
+    root = SimpleNamespace(
+        id=root_id,
+        config_id=config_id,
+        name="旧入口",
+        source_type="wiki",
+        source_url="https://example.feishu.cn/wiki/wikcnOld",
+        root_token="wikcnOld",
+        is_active=True,
+        discovery_status="success",
+        discovery_error="旧错误",
+        last_discovered_at=datetime.now(UTC),
+    )
+    session = SimpleNamespace(commit=AsyncMock(), rollback=AsyncMock())
+    service = EnergyWikiService(session)  # type: ignore[arg-type]
+    service.repo.get_config = AsyncMock(
+        return_value=SimpleNamespace(id=config_id)
+    )
+    service.repo.get_source_root = AsyncMock(return_value=root)
+    service.repo.list_source_roots = AsyncMock(return_value=[root])
+    service.repo.save_source_root = AsyncMock(side_effect=lambda item: item)
+
+    result = await service.update_source_root(
+        root_id,
+        EnergyFeishuSourceRootUpdate(
+            name="7 月能源 Base",
+            source_type="base",
+            source_url="https://example.feishu.cn/base/bascnNew",
+        ),
+    )
+
+    assert result.name == "7 月能源 Base"
+    assert result.source_type == "base"
+    assert result.root_token == "bascnNew"
+    assert result.discovery_status == "pending"
+    assert result.discovery_error is None
+    assert result.last_discovered_at is None
+    session.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_update_source_root_rejects_duplicate_target():
+    config_id = uuid4()
+    root_id = uuid4()
+    root = SimpleNamespace(
+        id=root_id,
+        config_id=config_id,
+        name="旧入口",
+        source_type="wiki",
+        source_url="wikcnOld",
+        root_token="wikcnOld",
+        is_active=True,
+    )
+    duplicate = SimpleNamespace(
+        id=uuid4(),
+        source_type="base",
+        root_token="bascnDuplicate",
+    )
+    service = EnergyWikiService(object())  # type: ignore[arg-type]
+    service.repo.get_config = AsyncMock(
+        return_value=SimpleNamespace(id=config_id)
+    )
+    service.repo.get_source_root = AsyncMock(return_value=root)
+    service.repo.list_source_roots = AsyncMock(
+        return_value=[root, duplicate]
+    )
+
+    with pytest.raises(AppException) as exc_info:
+        await service.update_source_root(
+            root_id,
+            EnergyFeishuSourceRootUpdate(
+                source_type="base",
+                source_url="bascnDuplicate",
+            ),
+        )
+
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.message == "该飞书数据入口已存在"
 
 
 @pytest.mark.asyncio

@@ -418,12 +418,13 @@ class EnergyFeishuSourceRoot(EnergyWikiBaseModel):
 
     __tablename__ = "feishu_source_roots"
     __table_args__ = (
-        UniqueConstraint(
+        Index(
+            "uq_energy_feishu_source_root_active",
             "config_id",
             "source_type",
             "root_token",
-            "is_deleted",
-            name="uq_energy_feishu_source_root",
+            unique=True,
+            postgresql_where=text("is_deleted = false"),
         ),
         Index("ix_energy_feishu_source_roots_config", "config_id", "is_active"),
         {"schema": "energy"},

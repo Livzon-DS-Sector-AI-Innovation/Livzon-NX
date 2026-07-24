@@ -56,7 +56,8 @@ async def _active_credentials() -> tuple[str | None, str | None]:
     async with async_session_factory() as db:
         config = await FeishuConfigRepository().get_active(db)
         if config is None:
-            return None, None
+            settings = get_settings()
+            return settings.FEISHU_APP_ID, settings.FEISHU_APP_SECRET
         try:
             app_secret = decrypt_secret(config.encrypted_app_secret)
         except RuntimeError:
@@ -68,7 +69,7 @@ async def _active_credentials() -> tuple[str | None, str | None]:
 async def _active_app_id() -> str | None:
     async with async_session_factory() as db:
         config = await FeishuConfigRepository().get_active(db)
-        return config.app_id if config is not None else None
+        return config.app_id if config is not None else get_settings().FEISHU_APP_ID
 
 
 async def _uses_global_app_ws() -> bool:

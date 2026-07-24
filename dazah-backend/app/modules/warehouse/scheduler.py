@@ -2,8 +2,8 @@
 
 from datetime import datetime, time
 from typing import Any
-from zoneinfo import ZoneInfo
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from app.modules.warehouse.service import WarehouseService
 from app.platform.scheduler import ScheduleConfig, ScheduleStrategy, TaskGenerator
@@ -25,6 +25,7 @@ class WarehouseFeishuDailySyncGenerator(TaskGenerator):
         config = await service.repo.get_active_feishu_config()
         if config is None:
             return []
+        assert config.id is not None
         try:
             hour, minute = (int(part) for part in config.daily_sync_time.split(":"))
             timezone = ZoneInfo(config.timezone)
@@ -34,8 +35,12 @@ class WarehouseFeishuDailySyncGenerator(TaskGenerator):
         if now.time() < time(hour, minute):
             return []
         due: list[str] = []
-        for table in await service.repo.list_enabled_feishu_tables():
-            last_local = table.last_synced_at.astimezone(timezone) if table.last_synced_at else None
+        for table in await service.repo.list_feishu_tables(config_id=config.id):
+            last_local = (
+                table.last_synced_at.astimezone(timezone)
+                if table.last_synced_at
+                else None
+            )
             if last_local is None or last_local.date() < now.date():
                 due.append(str(table.id))
         return due

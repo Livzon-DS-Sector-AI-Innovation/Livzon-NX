@@ -61,6 +61,10 @@ function statusTag(status?: string) {
   return <Tag>待执行</Tag>
 }
 
+function sourcePathLabel(path: FeishuResource['source_path']) {
+  return path.map((item) => item.title).filter(Boolean).join(' / ') || '-'
+}
+
 export function ModuleFeishuDataSourcePage({ moduleCode }: Props) {
   const { message } = App.useApp()
   const definition = useMemo(() => getFeishuModuleDefinition(moduleCode), [moduleCode])
@@ -76,6 +80,14 @@ export function ModuleFeishuDataSourcePage({ moduleCode }: Props) {
   const [testing, setTesting] = useState(false)
   const [busyKey, setBusyKey] = useState<string | null>(null)
   const [rootModalOpen, setRootModalOpen] = useState(false)
+  const [selectedResourceIds, setSelectedResourceIds] = useState<string[]>([])
+  const supportsResourceDelete = moduleCode === 'energy'
+  const sourcePathFilters = useMemo(
+    () => Array.from(new Set(resources.map((item) => sourcePathLabel(item.source_path))))
+      .sort((left, right) => left.localeCompare(right, 'zh-CN'))
+      .map((path) => ({ text: path, value: path })),
+    [resources],
+  )
 
   const loadCatalog = useCallback(async (currentConfig?: FeishuConfig | null) => {
     const [nextRoots, nextResources] = await Promise.all([
@@ -207,6 +219,50 @@ export function ModuleFeishuDataSourcePage({ moduleCode }: Props) {
     }
   }
 
+  const syncSelectedResources = async () => {
+    if (!selectedResourceIds.length) return
+    try {
+      setBusyKey('batch-sync')
+      await feishuDataSourceApi.syncResources(moduleCode, selectedResourceIds)
+      await loadCatalog(config)
+      message.success(`已完成 ${selectedResourceIds.length} 个资源的批量同步`)
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '批量同步失败')
+    } finally {
+      setBusyKey(null)
+    }
+  }
+
+  const deleteResources = async (resourceIds: string[]) => {
+    try {
+      setBusyKey('batch-delete')
+      const result = await feishuDataSourceApi.deleteResources(moduleCode, resourceIds)
+      setSelectedResourceIds((current) => current.filter((id) => !resourceIds.includes(id)))
+      setBindings((current) => current.filter((item) => !resourceIds.includes(item.resource_id)))
+      await loadCatalog(config)
+      message.success(
+        `已删除 ${result.deleted_count} 个资源、${result.snapshot_count} 个快照和 ${result.snapshot_row_count} 行快照数据`,
+      )
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '删除资源失败')
+      throw error
+    } finally {
+      setBusyKey(null)
+    }
+  }
+
+  const confirmDeleteResources = (resourceIds: string[]) => {
+    const targets = resources.filter((item) => resourceIds.includes(item.id))
+    Modal.confirm({
+      title: `确认删除 ${targets.length} 个资源？`,
+      content: `将永久删除“${targets.map((item) => item.title).join('、')}”及其页面映射、字段映射、指标事实、全部快照和数据库记录。此操作不会删除飞书原表，但不可撤销。`,
+      okText: '永久删除',
+      okButtonProps: { danger: true },
+      cancelText: '取消',
+      onOk: () => deleteResources(resourceIds),
+    })
+  }
+
   const selectedIds = bindings.map((item) => item.resource_id)
   const saveBindings = async () => {
     if (!pageKey) return
@@ -269,20 +325,69 @@ export function ModuleFeishuDataSourcePage({ moduleCode }: Props) {
           )}
         </Card>
 
-        <Card title="资源目录" extra={<Button icon={<ReloadOutlined />} disabled={!config?.app_secret_configured} onClick={() => void loadCatalog(config)}>刷新本地目录</Button>}>
+        <Card
+          title="资源目录"
+          extra={<Space wrap>
+            <Button
+              icon={<SyncOutlined />}
+              disabled={!selectedResourceIds.length || Boolean(busyKey)}
+              loading={busyKey === 'batch-sync'}
+              onClick={() => void syncSelectedResources()}
+            >
+              批量同步{selectedResourceIds.length ? `（${selectedResourceIds.length}）` : ''}
+            </Button>
+            {supportsResourceDelete && (
+              <Button
+                danger
+                icon={<DeleteOutlined />}
+                disabled={!selectedResourceIds.length || Boolean(busyKey)}
+                loading={busyKey === 'batch-delete'}
+                onClick={() => confirmDeleteResources(selectedResourceIds)}
+              >
+                批量删除{selectedResourceIds.length ? `（${selectedResourceIds.length}）` : ''}
+              </Button>
+            )}
+            <Button icon={<ReloadOutlined />} disabled={!config?.app_secret_configured || Boolean(busyKey)} onClick={() => void loadCatalog(config)}>刷新本地目录</Button>
+          </Space>}
+        >
+          {selectedResourceIds.length > 0 && (
+            <Alert
+              className="mb-3"
+              type="info"
+              showIcon
+              message={`已选择 ${selectedResourceIds.length} 个资源，可执行批量同步${supportsResourceDelete ? '或批量删除' : ''}。`}
+            />
+          )}
           <Table<FeishuResource>
             rowKey="id"
             dataSource={resources}
             pagination={{ pageSize: 10, showSizeChanger: false }}
             scroll={{ x: 900 }}
+            rowSelection={{
+              preserveSelectedRowKeys: true,
+              selectedRowKeys: selectedResourceIds,
+              onChange: (keys) => setSelectedResourceIds(keys.map(String)),
+            }}
             columns={[
               { title: '数据表', dataIndex: 'title' },
-              { title: '来源路径', dataIndex: 'source_path', render: (path) => Array.isArray(path) ? path.map((item) => item.title).filter(Boolean).join(' / ') || '-' : '-' },
+              {
+                title: '来源路径',
+                dataIndex: 'source_path',
+                filters: sourcePathFilters,
+                filterSearch: true,
+                onFilter: (value, item) => sourcePathLabel(item.source_path) === String(value),
+                render: sourcePathLabel,
+              },
               { title: 'Table ID', dataIndex: 'table_id', width: 190 },
               { title: '字段/记录', width: 110, render: (_, item) => `${item.field_count}/${item.record_count}` },
               { title: '同步状态', dataIndex: 'sync_status', width: 110, render: statusTag },
               { title: '最近完整同步', dataIndex: 'last_complete_sync_at', width: 190, render: (value) => value ? new Date(value).toLocaleString('zh-CN') : '-' },
-              { title: '操作', width: 100, render: (_, item) => <Button size="small" icon={<SyncOutlined />} loading={busyKey === `sync:${item.id}`} onClick={() => void syncResource(item)}>同步</Button> },
+              { title: '操作', width: supportsResourceDelete ? 170 : 100, fixed: 'right', render: (_, item) => <Space>
+                <Button size="small" icon={<SyncOutlined />} disabled={Boolean(busyKey)} loading={busyKey === `sync:${item.id}`} onClick={() => void syncResource(item)}>同步</Button>
+                {supportsResourceDelete && (
+                  <Button danger size="small" icon={<DeleteOutlined />} disabled={Boolean(busyKey)} onClick={() => confirmDeleteResources([item.id])}>删除</Button>
+                )}
+              </Space> },
             ]}
           />
         </Card>
@@ -304,6 +409,7 @@ export function ModuleFeishuDataSourcePage({ moduleCode }: Props) {
               dataSource={resources}
               pagination={{ pageSize: 8 }}
               rowSelection={{
+                preserveSelectedRowKeys: true,
                 selectedRowKeys: selectedIds,
                 onChange: (keys) => {
                   const ids = keys.map(String)
@@ -324,7 +430,14 @@ export function ModuleFeishuDataSourcePage({ moduleCode }: Props) {
               columns={[
                 { title: '数据表', dataIndex: 'title' },
                 { title: '页签名称', width: 240, render: (_, item) => <Input size="small" disabled={!selectedIds.includes(item.id)} value={bindings.find((binding) => binding.resource_id === item.id)?.tab_name || item.title} onChange={(event) => setBindings((current) => current.map((binding) => binding.resource_id === item.id ? { ...binding, tab_name: event.target.value } : binding))} /> },
-                { title: '来源路径', dataIndex: 'source_path', render: (path) => Array.isArray(path) ? path.map((item) => item.title).filter(Boolean).join(' / ') || '-' : '-' },
+                {
+                  title: '来源路径',
+                  dataIndex: 'source_path',
+                  filters: sourcePathFilters,
+                  filterSearch: true,
+                  onFilter: (value, item) => sourcePathLabel(item.source_path) === String(value),
+                  render: sourcePathLabel,
+                },
                 { title: '同步状态', dataIndex: 'sync_status', width: 110, render: statusTag },
               ]}
             />
@@ -335,8 +448,8 @@ export function ModuleFeishuDataSourcePage({ moduleCode }: Props) {
       <Modal title="添加飞书数据入口" open={rootModalOpen} confirmLoading={busyKey === 'new-root'} onOk={() => void addRoot()} onCancel={() => setRootModalOpen(false)} destroyOnHidden>
         <Form form={rootForm} layout="vertical" initialValues={{ source_type: 'wiki' }}>
           <Form.Item name="name" label="入口名称" rules={[{ required: true, message: '请输入入口名称' }]}><Input /></Form.Item>
-          <Form.Item name="source_type" label="入口类型" rules={[{ required: true }]}><Select options={[{ label: 'Wiki 根节点', value: 'wiki' }, { label: '多维表格 Base', value: 'base' }]} /></Form.Item>
-          <Form.Item name="source_url" label="完整链接或 Token" rules={[{ required: true, message: '请输入 Wiki/Base 链接或 Token' }]}><Input /></Form.Item>
+          <Form.Item name="source_type" label="入口类型" rules={[{ required: true }]}><Select options={[{ label: moduleCode === 'energy' ? 'Wiki 根节点 / 电子表格' : 'Wiki 根节点', value: 'wiki' }, { label: '多维表格 Base', value: 'base' }]} /></Form.Item>
+          <Form.Item name="source_url" label="完整链接或 Token" rules={[{ required: true, message: moduleCode === 'energy' ? '请输入 Wiki、电子表格或 Base 链接/Token' : '请输入 Wiki/Base 链接或 Token' }]}><Input /></Form.Item>
         </Form>
       </Modal>
     </main>

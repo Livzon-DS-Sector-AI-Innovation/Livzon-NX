@@ -22,6 +22,7 @@ from app.modules.energy.schemas import (
     EnergyFeishuConnectivityResult,
     EnergyFeishuSourceRootInput,
     EnergyFeishuSourceRootResponse,
+    EnergyFeishuSourceRootUpdate,
     EnergyMappingPreviewResponse,
     EnergyOverviewResponse,
     EnergySheetMappingResponse,
@@ -29,6 +30,8 @@ from app.modules.energy.schemas import (
     EnergySnapshotResponse,
     EnergySnapshotRowResponse,
     EnergySnapshotRowsData,
+    EnergySourceBatchRequest,
+    EnergySourceDeleteResult,
     EnergySourceDocumentResponse,
     EnergySourceSheetResponse,
     EnergySyncRunResponse,
@@ -155,6 +158,21 @@ async def delete_energy_feishu_root(
     return success_response({"id": str(root_id)})
 
 
+@router.put(
+    "/feishu/roots/{root_id}",
+    summary="修改能源飞书 Wiki/Base 入口",
+    response_model=EnergyApiResponse[EnergyFeishuSourceRootResponse],
+)
+async def update_energy_feishu_root(
+    root_id: UUID,
+    payload: EnergyFeishuSourceRootUpdate,
+    _admin: AdminUser,
+    db: AsyncSession = Depends(get_db),
+) -> JSONResponse:
+    root = await _service(db).update_source_root(root_id, payload)
+    return success_response(root.model_dump(mode="json"))
+
+
 @router.post(
     "/feishu-config/test",
     summary="测试能源 Wiki 飞书连通性",
@@ -254,6 +272,51 @@ async def list_source_sheets(
             ).model_dump(mode="json")
         )
     return success_response(data)
+
+
+@router.post(
+    "/sources/batch-sync",
+    summary="批量同步能源资源",
+    response_model=EnergyApiResponse[EnergySyncRunResponse],
+)
+async def batch_sync_source_sheets(
+    payload: EnergySourceBatchRequest,
+    _admin: AdminUser,
+    db: AsyncSession = Depends(get_db),
+) -> JSONResponse:
+    run = await _service(db).sync_sources(payload.sheet_ids)
+    return success_response(
+        EnergySyncRunResponse.model_validate(run).model_dump(mode="json"),
+        message="批量同步已完成",
+    )
+
+
+@router.delete(
+    "/sources/batch",
+    summary="批量删除能源资源及本地数据",
+    response_model=EnergyApiResponse[EnergySourceDeleteResult],
+)
+async def batch_delete_source_sheets(
+    payload: EnergySourceBatchRequest,
+    _admin: AdminUser,
+    db: AsyncSession = Depends(get_db),
+) -> JSONResponse:
+    result = await _service(db).delete_sources(payload.sheet_ids)
+    return success_response(result, message="资源及本地数据已删除")
+
+
+@router.delete(
+    "/sources/{sheet_id}",
+    summary="删除能源资源及本地数据",
+    response_model=EnergyApiResponse[EnergySourceDeleteResult],
+)
+async def delete_source_sheet(
+    sheet_id: UUID,
+    _admin: AdminUser,
+    db: AsyncSession = Depends(get_db),
+) -> JSONResponse:
+    result = await _service(db).delete_sources([sheet_id])
+    return success_response(result, message="资源及本地数据已删除")
 
 
 @router.get(

@@ -96,6 +96,11 @@ TOOLSETS = {
         "tools": ["dazah_tool"],
         "includes": []
     },
+    "feishu": {
+        "description": "Direct Feishu file and workspace operations through the pinned official lark-cli",
+        "tools": ["lark_cli"],
+        "includes": []
+    },
 }
 
 def get_toolset(name: str) -> Optional[Dict[str, Any]]:

@@ -1,4 +1,5 @@
 import { moduleMenus, type SubMenuItem } from '@/lib/menu-config'
+import type { components } from '@/types/generated/schema'
 
 export type FeishuModuleCode = 'production' | 'energy' | 'warehouse'
 
@@ -61,6 +62,9 @@ export type FeishuPageOption = { label: string; value: string }
 export type FeishuMappedMenuTarget = FeishuPageOption & {
   path: string
 }
+
+export type FeishuResourceDeleteResult = components['schemas']['EnergySourceDeleteResult']
+type EnergySourceBatchRequest = components['schemas']['EnergySourceBatchRequest']
 
 type ApiEnvelope<T> = {
   code?: number
@@ -227,6 +231,29 @@ export const feishuDataSourceApi = {
       ? `/feishu-read/resources/${resourceId}/sync`
       : `/feishu/tables/${resourceId}/sync`
     await api(moduleCode, path, { method: 'POST' })
+  },
+
+  syncResources: async (moduleCode: FeishuModuleCode, resourceIds: string[]) => {
+    if (moduleCode === 'energy') {
+      const payload: EnergySourceBatchRequest = { sheet_ids: resourceIds }
+      await api(moduleCode, '/sources/batch-sync', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      })
+      return
+    }
+    await Promise.all(resourceIds.map((resourceId) =>
+      feishuDataSourceApi.syncResource(moduleCode, resourceId),
+    ))
+  },
+
+  deleteResources: (moduleCode: FeishuModuleCode, resourceIds: string[]) => {
+    if (moduleCode !== 'energy') throw new Error('当前模块暂不支持删除资源目录')
+    const payload: EnergySourceBatchRequest = { sheet_ids: resourceIds }
+    return api<FeishuResourceDeleteResult>(moduleCode, '/sources/batch', {
+      method: 'DELETE',
+      body: JSON.stringify(payload),
+    })
   },
 
   getBindings: async (moduleCode: FeishuModuleCode, pageKey: string): Promise<FeishuPageBinding[]> => {

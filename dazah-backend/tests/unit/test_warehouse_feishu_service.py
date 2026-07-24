@@ -11,30 +11,11 @@ from app.modules.warehouse.models import (
     WarehouseFeishuConfig,
     WarehouseFeishuField,
     WarehouseFeishuRecord,
+    WarehouseFeishuSourceRoot,
     WarehouseFeishuTable,
 )
+from app.modules.warehouse.schemas import WarehouseFeishuConfigUpsert
 from app.modules.warehouse.service import WarehouseService
-
-
-def test_config_app_tokens_uses_three_business_domains_with_legacy_fallback() -> None:
-    config = WarehouseFeishuConfig(
-        config_name="仓储飞书配置",
-        app_id="cli_123",
-        encrypted_app_secret="encrypted",
-        bitable_app_token="legacy_base",
-        finished_product_app_token="product_base",
-        materials_packaging_app_token=None,
-        hardware_app_token="hardware_base",
-        is_active=True,
-    )
-
-    tokens = WarehouseService._config_app_tokens(config)
-
-    assert tokens == {
-        "finished_product": "product_base",
-        "materials_packaging": "legacy_base",
-        "hardware": "hardware_base",
-    }
 
 
 def test_build_search_text_flattens_nested_feishu_fields() -> None:
@@ -94,12 +75,19 @@ class FakeSession:
     def __init__(self) -> None:
         self.commits = 0
         self.rollbacks = 0
+        self.refreshes = 0
 
     async def commit(self) -> None:
         self.commits += 1
 
+    async def flush(self) -> None:
+        return None
+
     async def rollback(self) -> None:
         self.rollbacks += 1
+
+    async def refresh(self, _instance: object) -> None:
+        self.refreshes += 1
 
 
 class FakeRepo:
@@ -111,32 +99,93 @@ class FakeRepo:
 
 
 @pytest.mark.asyncio
-async def test_set_feishu_tables_enabled_updates_unique_tables_without_sync() -> None:
+async def test_save_feishu_config_uses_unified_credentials_only() -> None:
     service = WarehouseService.__new__(WarehouseService)
-    table_a_id = uuid4()
-    table_b_id = uuid4()
-    tables = {
-        table_a_id: WarehouseFeishuTable(id=table_a_id, name="A", is_enabled=False),
-        table_b_id: WarehouseFeishuTable(id=table_b_id, name="B", is_enabled=False),
-    }
-    service.repo = FakeRepo()
-
-    async def fake_get_table(table_pk):
-        return tables[table_pk]
-
-    service._get_table_by_id_or_raise = fake_get_table  # type: ignore[method-assign]
-
-    updated = await service.set_feishu_tables_enabled(
-        [table_a_id, table_a_id, table_b_id],
-        True,
+    config = WarehouseFeishuConfig(
+        id=uuid4(),
+        config_name="旧名称",
+        app_id="cli_old",
+        encrypted_app_secret="encrypted",
+        is_active=True,
     )
 
-    assert updated == [tables[table_a_id], tables[table_b_id]]
-    assert tables[table_a_id].is_enabled is True
-    assert tables[table_a_id].sync_status == "pending"
-    assert tables[table_b_id].is_enabled is True
-    assert tables[table_b_id].sync_status == "pending"
-    assert service.repo.session.commits == 1
+    class ConfigRepo(FakeRepo):
+        async def get_any_feishu_config(self) -> WarehouseFeishuConfig:
+            return config
+
+    service.repo = ConfigRepo()
+
+    async def skip_ws_restart(_config: WarehouseFeishuConfig) -> None:
+        return None
+
+    service._after_feishu_config_saved = skip_ws_restart  # type: ignore[method-assign]
+
+    response = await service.save_feishu_config(
+        WarehouseFeishuConfigUpsert(
+            config_name="统一配置",
+            app_id="cli_new",
+            is_active=True,
+            timezone="Asia/Shanghai",
+            daily_sync_time="03:15",
+        )
+    )
+
+    assert response.config_name == "统一配置"
+    assert response.app_id == "cli_new"
+    assert response.daily_sync_time == "03:15"
+    assert not hasattr(response, "bitable_app_token")
+    assert service.repo.session.refreshes == 1
+
+
+@pytest.mark.asyncio
+async def test_discover_feishu_source_root_maps_remote_error_to_business_error() -> None:
+    service = WarehouseService.__new__(WarehouseService)
+    config_id = uuid4()
+    root_id = uuid4()
+    config = WarehouseFeishuConfig(
+        id=config_id,
+        config_name="仓储飞书配置",
+        app_id="cli_123",
+        encrypted_app_secret="encrypted",
+        is_active=True,
+    )
+    root = WarehouseFeishuSourceRoot(
+        id=root_id,
+        config_id=config_id,
+        name="无效入口",
+        source_type="base",
+        source_url="https://example.feishu.cn/base/invalid",
+        root_token="invalid",
+        is_active=True,
+        discovery_status="pending",
+    )
+
+    class RootRepo(FakeRepo):
+        async def get_active_feishu_config(self) -> WarehouseFeishuConfig:
+            return config
+
+        async def get_feishu_source_root(
+            self, requested_root_id: object
+        ) -> WarehouseFeishuSourceRoot:
+            assert requested_root_id == root_id
+            return root
+
+    class FailedClient:
+        async def list_tables(self, *, page_size: int) -> list[dict[str, Any]]:
+            assert page_size == 100
+            raise RuntimeError("app_token invalid")
+
+    service.repo = RootRepo()
+    service._build_feishu_client = (  # type: ignore[method-assign]
+        lambda _config, _token: FailedClient()
+    )
+
+    with pytest.raises(AppException, match="飞书数据入口发现失败：app_token invalid"):
+        await service.discover_feishu_source_root(root_id)
+
+    assert root.discovery_status == "failed"
+    assert root.discovery_error == "app_token invalid"
+    assert service.repo.session.rollbacks == 1
 
 
 @pytest.mark.asyncio
@@ -149,13 +198,11 @@ async def test_sync_feishu_table_marks_failed_when_sync_timeout(monkeypatch) -> 
         app_token="base",
         table_id="tbl",
         name="五金",
-        is_enabled=True,
     )
     config = WarehouseFeishuConfig(
         config_name="仓储飞书配置",
         app_id="cli_123",
         encrypted_app_secret="encrypted",
-        hardware_app_token="base",
         is_active=True,
     )
     service.repo = FakeRepo()

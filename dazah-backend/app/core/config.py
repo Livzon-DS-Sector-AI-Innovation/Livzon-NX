@@ -188,6 +188,9 @@ class Settings(BaseSettings):
     # Hermes 中枢 Agent
     HERMES_AGENT_URL: str = ""
     HERMES_AGENT_TOKEN: str = ""
+    HERMES_INTERNAL_URL: str = ""
+    HERMES_INTERNAL_TOKEN: str = ""
+    LIVZON_FEISHU_ALLOWED_GROUPS: str = ""
     AGENT_TOOL_TOKEN: str = ""
     AGENT_LLM_PROXY_TOKEN: str = ""
     AGENT_INTERNAL_API_BASE_URL: str = "http://127.0.0.1:8000/api/v1"

@@ -45,6 +45,7 @@ const suggestions = [
 ]
 
 const ASSISTANT_EXIT_ANIMATION_MS = 180
+const AGENT_STREAM_TIMEOUT_MS = 90_000
 const MAX_ATTACHMENT_COUNT = 5
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
 const MAX_ATTACHMENTS_TOTAL_BYTES = 20 * 1024 * 1024
@@ -671,6 +672,11 @@ export function AgentFloatingAssistant() {
     let hasReceivedContent = false
     let hasDisplayedContent = false
     let doneFlushPromise: Promise<void> | null = null
+    let streamTimedOut = false
+    const streamTimeoutId = window.setTimeout(() => {
+      streamTimedOut = true
+      abortController.abort()
+    }, AGENT_STREAM_TIMEOUT_MS)
     resetStreamBuffer(true)
     addMessage({ id: assistantMessageId, role: "assistant", content: "" })
     setLoading(true)
@@ -679,7 +685,10 @@ export function AgentFloatingAssistant() {
         {
           session_id: sessionId,
           message: content,
-          context: { entry: "floating-assistant", scope: ["identity", "warehouse", "procurement", "quality"] },
+          context: {
+            entry: "floating-assistant",
+            scope: ["identity", "energy", "warehouse", "procurement", "quality"],
+          },
           attachments: submittedAttachments.map((attachment) => ({
             filename: attachment.filename,
             content_type: attachment.content_type,
@@ -727,6 +736,9 @@ export function AgentFloatingAssistant() {
         if (!hasReceivedContent || !hasDisplayedContent) {
           removeMessage(assistantMessageId)
         }
+        if (streamTimedOut) {
+          setError("Livzon Agent 回复超过 90 秒，请重试；系统已结束本次等待。")
+        }
         return
       }
       resetStreamBuffer(true)
@@ -735,6 +747,7 @@ export function AgentFloatingAssistant() {
       }
       setError(err instanceof Error ? err.message : "中枢助手请求失败")
     } finally {
+      window.clearTimeout(streamTimeoutId)
       if (abortControllerRef.current === abortController) {
         abortControllerRef.current = null
       }

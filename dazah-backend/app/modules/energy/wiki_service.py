@@ -12,6 +12,7 @@ from typing import Any
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AppException
@@ -39,10 +40,15 @@ from app.modules.energy.schemas import (
     EnergyFeishuConnectivityStep,
     EnergyFeishuSourceRootInput,
     EnergyFeishuSourceRootResponse,
+    EnergyFeishuSourceRootUpdate,
     EnergyMappingMetricInput,
     EnergyMappingPreviewResponse,
     EnergyMappingPreviewRow,
+    EnergyOverviewDistributionPoint,
+    EnergyOverviewLatestMetric,
+    EnergyOverviewMetric,
     EnergyOverviewResponse,
+    EnergyOverviewTrendPoint,
     EnergySheetMappingUpsert,
 )
 from app.modules.energy.wiki_repository import EnergyWikiRepository
@@ -54,6 +60,85 @@ from app.platform.integrations.feishu.auth import FeishuAuth
 
 logger = logging.getLogger(__name__)
 CST = ZoneInfo("Asia/Shanghai")
+
+OVERVIEW_DATASET_SPECS: dict[str, dict[str, Any]] = {
+    "energy.electricity": {
+        "energy_type": "电量",
+        "unit": "kWh",
+        "total_headers": ("总计",),
+    },
+    "energy.drinking_water": {
+        "energy_type": "饮用水量",
+        "unit": "m³",
+        "total_headers": ("总制水",),
+    },
+    "energy.steam": {
+        "energy_type": "蒸汽量",
+        "unit": "t",
+        "total_headers": ("热动站 总管",),
+    },
+    "energy.chilled_water": {
+        "energy_type": "冰水量",
+        "unit": "m³",
+        "total_headers": ("7℃冰水总量", "-5℃冰水总量"),
+    },
+    "energy.air": {
+        "energy_type": "空气量",
+        "unit": "万m³",
+        "total_headers": ("空气总用量",),
+    },
+    "energy.circulating_water": {
+        "energy_type": "循环水量",
+        "unit": "m³",
+        "total_headers": ("循环水总量",),
+    },
+}
+
+DAILY_TOTAL_METRICS: tuple[dict[str, Any], ...] = (
+    {
+        "matches": ("蒸汽日产气量", "合计"),
+        "metric_key": "蒸汽量",
+        "energy_type": "蒸汽量",
+        "unit": "t",
+    },
+    {
+        "matches": ("电日用量",),
+        "metric_key": "电量",
+        "energy_type": "电量",
+        "unit": "kWh",
+    },
+    {
+        "matches": ("饮用水日总量",),
+        "metric_key": "饮用水量",
+        "energy_type": "饮用水量",
+        "unit": "m³",
+    },
+    {
+        "matches": ("压缩空气日总量",),
+        "metric_key": "空气量",
+        "energy_type": "空气量",
+        "unit": "万m³",
+    },
+    {
+        "matches": ("冰水", "日总量"),
+        "metric_key": "冰水量",
+        "energy_type": "冰水量",
+        "unit": "m³",
+    },
+    {
+        "matches": ("循环水日总量",),
+        "metric_key": "循环水量",
+        "energy_type": "循环水量",
+        "unit": "m³",
+    },
+    {
+        "matches": ("外供蒸汽占比",),
+        "metric_key": "外供蒸汽占比",
+        "energy_type": "蒸汽量",
+        "unit": "%",
+        "ratio": True,
+    },
+)
 
 
 class EnergyWikiService:
@@ -86,7 +171,7 @@ class EnergyWikiService:
     ) -> EnergyFeishuConfigResponse:
         config = await self.repo.get_config()
         root_token = (
-            EnergyFeishuClient.parse_wiki_token(data.root_wiki_url)
+            self._parse_source_root_token(data.root_wiki_url, "wiki")
             if data.root_wiki_url.strip()
             else None
         )
@@ -147,17 +232,45 @@ class EnergyWikiService:
         self, data: EnergyFeishuSourceRootInput
     ) -> EnergyFeishuSourceRootResponse:
         config = await self._config_or_raise()
+        try:
+            root_token = self._parse_source_root_token(
+                data.source_url, data.source_type
+            )
+        except ValueError as exc:
+            source_label = (
+                "Wiki 根节点或电子表格"
+                if data.source_type == "wiki"
+                else "多维表格"
+            )
+            raise AppException(
+                message=(
+                    f"无法解析{source_label}，"
+                    "请填写与入口类型匹配的完整飞书链接或 Token"
+                )
+            ) from exc
+
+        existing_roots = await self.repo.list_source_roots(config.id)
+        if any(
+            item.source_type == data.source_type and item.root_token == root_token
+            for item in existing_roots
+        ):
+            raise AppException(message="该飞书数据入口已存在", status_code=409)
+
         root = EnergyFeishuSourceRoot(
             config_id=config.id,
             name=data.name.strip(),
             source_type=data.source_type,
             source_url=data.source_url.strip(),
-            root_token=parse_feishu_root_token(data.source_url, data.source_type),
+            root_token=root_token,
             is_active=data.is_active,
             discovery_status="pending",
         )
-        await self.repo.save_source_root(root)
-        await self.session.commit()
+        try:
+            await self.repo.save_source_root(root)
+            await self.session.commit()
+        except IntegrityError as exc:
+            await self.session.rollback()
+            raise AppException(message="该飞书数据入口已存在", status_code=409) from exc
         return EnergyFeishuSourceRootResponse.model_validate(root)
 
     async def delete_source_root(self, root_id: UUID) -> None:
@@ -166,7 +279,75 @@ class EnergyWikiService:
             raise AppException(message="能源飞书数据入口不存在", status_code=404)
         root.is_deleted = True
         root.is_active = False
-        await self.session.commit()
+        try:
+            await self.session.commit()
+        except IntegrityError as exc:
+            await self.session.rollback()
+            raise AppException(
+                message="停用飞书数据入口时发生数据状态冲突，请刷新后重试",
+                status_code=409,
+            ) from exc
+
+    async def update_source_root(
+        self,
+        root_id: UUID,
+        data: EnergyFeishuSourceRootUpdate,
+    ) -> EnergyFeishuSourceRootResponse:
+        config = await self._config_or_raise()
+        root = await self.repo.get_source_root(root_id)
+        if root is None or root.config_id != config.id:
+            raise AppException(message="能源飞书数据入口不存在", status_code=404)
+
+        source_type = data.source_type or root.source_type
+        source_url = data.source_url.strip() if data.source_url else root.source_url
+        try:
+            root_token = self._parse_source_root_token(source_url, source_type)
+        except ValueError as exc:
+            source_label = (
+                "Wiki 根节点或电子表格"
+                if source_type == "wiki"
+                else "多维表格"
+            )
+            raise AppException(
+                message=(
+                    f"无法解析{source_label}，"
+                    "请填写与入口类型匹配的完整飞书链接或 Token"
+                )
+            ) from exc
+
+        existing_roots = await self.repo.list_source_roots(config.id)
+        if any(
+            item.id != root.id
+            and item.source_type == source_type
+            and item.root_token == root_token
+            for item in existing_roots
+        ):
+            raise AppException(message="该飞书数据入口已存在", status_code=409)
+
+        source_changed = (
+            source_type != root.source_type or root_token != root.root_token
+        )
+        if data.name is not None:
+            root.name = data.name.strip()
+        root.source_type = source_type
+        root.source_url = source_url
+        root.root_token = root_token
+        if data.is_active is not None:
+            root.is_active = data.is_active
+        if source_changed:
+            root.discovery_status = "pending"
+            root.discovery_error = None
+            root.last_discovered_at = None
+
+        try:
+            await self.repo.save_source_root(root)
+            await self.session.commit()
+        except IntegrityError as exc:
+            await self.session.rollback()
+            raise AppException(
+                message="该飞书数据入口已存在", status_code=409
+            ) from exc
+        return EnergyFeishuSourceRootResponse.model_validate(root)
 
     async def test_connectivity(self) -> EnergyFeishuConnectivityResult:
         config = await self._config_or_raise()
@@ -209,6 +390,16 @@ class EnergyWikiService:
                 )
                 return EnergyFeishuConnectivityResult(ok=True, steps=steps)
             client = self._client_for(config)
+            if self._is_direct_spreadsheet_root(root):
+                sheets = await client.list_workbook_sheets(root.root_token)
+                steps.append(
+                    EnergyFeishuConnectivityStep(
+                        name="应用凭据与电子表格",
+                        status="ok",
+                        message=f"可读取 {len(sheets)} 个工作表",
+                    )
+                )
+                return EnergyFeishuConnectivityResult(ok=True, steps=steps)
             root_token = root.root_token
             node = await client.get_wiki_node(root_token)
             steps.append(
@@ -279,6 +470,108 @@ class EnergyWikiService:
         assert refreshed is not None
         return refreshed
 
+    async def sync_sources(self, sheet_ids: list[UUID]) -> EnergySyncRun:
+        config = await self._config_or_raise()
+        sheets = await self.repo.get_sheets_by_ids(sheet_ids)
+        found_ids = {sheet.id for sheet in sheets}
+        missing = [str(sheet_id) for sheet_id in sheet_ids if sheet_id not in found_ids]
+        if missing:
+            raise AppException(
+                message=f"以下资源不存在或已删除：{', '.join(missing)}",
+                status_code=404,
+            )
+
+        documents: dict[UUID, EnergyWikiDocument] = {}
+        for sheet in sheets:
+            document = documents.get(sheet.document_id)
+            if document is None:
+                document = await self.repo.get_document_by_id(sheet.document_id)
+                if document is None:
+                    raise AppException(message="资源所属文档不存在", status_code=409)
+                documents[sheet.document_id] = document
+
+        run = EnergySyncRun(
+            config_id=config.id,
+            idempotency_key=f"energy:wiki:batch:{uuid4()}",
+            trigger_type="manual_batch",
+        )
+        await self.repo.save_sync_run(run)
+        await self.session.commit()
+        client = self._client_for(config)
+        for sheet in sheets:
+            document = documents[sheet.document_id]
+
+            try:
+                async with self.session.begin_nested():
+                    if document.object_type == "bitable":
+                        counts = await self._sync_existing_bitable_sheet(
+                            config=config,
+                            document=document,
+                            sheet=sheet,
+                            run=run,
+                        )
+                    else:
+                        raw_sheets = await client.list_workbook_sheets(
+                            document.document_token or ""
+                        )
+                        raw_sheet = next(
+                            (
+                                item
+                                for item in raw_sheets
+                                if str(item.get("sheet_id") or item.get("id") or "")
+                                == sheet.external_sheet_id
+                            ),
+                            None,
+                        )
+                        if raw_sheet is None:
+                            raise RuntimeError("飞书中已找不到该工作表")
+                        counts = await self._sync_workbook_sheet(
+                            client=client,
+                            document=document,
+                            run=run,
+                            raw_sheet=raw_sheet,
+                        )
+                    run.sheet_count += counts[0]
+                    run.snapshot_count += counts[1]
+                    run.fact_count += counts[2]
+                    document.last_synced_at = datetime.now(UTC)
+            except Exception as exc:
+                run.error_count += 1
+                run.error_message = self._join_error(
+                    run.error_message, f"{sheet.title}：{self._safe_error(exc)}"
+                )
+                logger.exception("能源资源批量同步失败: %s", sheet.title)
+
+        run.document_count = len(documents)
+        run.completed_at = datetime.now(UTC)
+        run.status = "success" if run.error_count == 0 else "partial"
+        config.sync_status = run.status
+        config.sync_error = run.error_message
+        if run.status == "success":
+            config.last_successful_sync_date = datetime.now(CST).date()
+        await self.session.commit()
+        return run
+
+    async def delete_sources(self, sheet_ids: list[UUID]) -> dict[str, int]:
+        sheets = await self.repo.get_sheets_by_ids(sheet_ids)
+        found_ids = {sheet.id for sheet in sheets}
+        missing = [str(sheet_id) for sheet_id in sheet_ids if sheet_id not in found_ids]
+        if missing:
+            raise AppException(
+                message=f"以下资源不存在或已删除：{', '.join(missing)}",
+                status_code=404,
+            )
+        try:
+            counts = await self.repo.delete_sheets_with_local_data(sheets)
+            await self.session.commit()
+            return counts
+        except IntegrityError as exc:
+            await self.session.rollback()
+            raise AppException(
+                message="删除资源时发生数据状态冲突，请刷新后重试",
+                status_code=409,
+            ) from exc
+
     async def execute_sync(self, run_id: UUID) -> EnergySyncRun:
         run = await self.session.get(EnergySyncRun, run_id)
         if run is None or run.is_deleted:
@@ -316,6 +609,10 @@ class EnergyWikiService:
                 try:
                     if root.source_type == "base":
                         await self._sync_bitable_root(config, root, run)
+                    elif self._is_direct_spreadsheet_root(root):
+                        await self._sync_spreadsheet_root(
+                            config, root, run, client
+                        )
                     else:
                         nodes = await client.discover_tree(root.root_token)
                         for node in nodes:
@@ -515,6 +812,17 @@ class EnergyWikiService:
             start = start.replace(tzinfo=CST)
         if end.tzinfo is None:
             end = end.replace(tzinfo=CST)
+        mapped_page_overview = await self._get_mapped_page_overview(
+            start=start,
+            end=end,
+            energy_type=energy_type,
+            source_scope=source_scope,
+            workshop=workshop,
+            source_sheet_title=source_sheet_title,
+        )
+        if mapped_page_overview is not None:
+            return mapped_page_overview
+
         facts = await self.repo.list_current_facts(
             start=start,
             end=end,
@@ -591,13 +899,6 @@ class EnergyWikiService:
             distribution_key = self._distribution_key(ending, group_by)
             distribution_totals[(distribution_key, *key)] += delta
 
-        from app.modules.energy.schemas import (
-            EnergyOverviewDistributionPoint,
-            EnergyOverviewLatestMetric,
-            EnergyOverviewMetric,
-            EnergyOverviewTrendPoint,
-        )
-
         return EnergyOverviewResponse(
             source_scope=source_scope,
             metrics=[
@@ -665,6 +966,553 @@ class EnergyWikiService:
             last_observed_at=max((fact.observed_at for fact in direct), default=None),
             invalid_count=invalid_count,
         )
+
+    async def _get_mapped_page_overview(
+        self,
+        *,
+        start: datetime,
+        end: datetime,
+        energy_type: str | None,
+        source_scope: str,
+        workshop: str | None,
+        source_sheet_title: str | None,
+    ) -> EnergyOverviewResponse | None:
+        if source_scope == "daily_summary":
+            sources = await self._load_mapped_page_sources("energy.daily_total")
+            if not sources:
+                return None
+            return self._aggregate_daily_total_sources(
+                sources=sources,
+                start=start,
+                end=end,
+                energy_type=energy_type,
+            )
+
+        page_specs = OVERVIEW_DATASET_SPECS
+        if workshop:
+            sources = await self._load_mapped_page_sources(
+                "energy.workshop_detail",
+                sheet_title=workshop,
+            )
+            if not sources:
+                return None
+            return self._aggregate_workshop_sources(
+                sources=sources,
+                start=start,
+                end=end,
+                energy_type=energy_type,
+                source_scope=source_scope,
+            )
+
+        mapped_sources: list[
+            tuple[
+                str,
+                dict[str, Any],
+                EnergyWorkbookSheet,
+                EnergySheetSnapshot,
+                list[EnergySnapshotRow],
+            ]
+        ] = []
+        for page_key, spec in page_specs.items():
+            sources = await self._load_mapped_page_sources(
+                page_key,
+                sheet_title=source_sheet_title,
+            )
+            mapped_sources.extend(
+                (page_key, spec, sheet, snapshot, rows)
+                for sheet, snapshot, rows in sources
+            )
+        if not mapped_sources:
+            return None
+        return self._aggregate_dataset_sources(
+            sources=mapped_sources,
+            start=start,
+            end=end,
+            energy_type=energy_type,
+            source_scope=source_scope,
+        )
+
+    async def _load_mapped_page_sources(
+        self,
+        page_key: str,
+        *,
+        sheet_title: str | None = None,
+    ) -> list[
+        tuple[EnergyWorkbookSheet, EnergySheetSnapshot, list[EnergySnapshotRow]]
+    ]:
+        sources: list[
+            tuple[EnergyWorkbookSheet, EnergySheetSnapshot, list[EnergySnapshotRow]]
+        ] = []
+        bindings = await self.repo.list_page_bindings(page_key)
+        for binding in bindings:
+            sheet = await self.repo.get_sheet_by_id(binding.sheet_id)
+            if sheet is None or (sheet_title and sheet.title != sheet_title):
+                continue
+            snapshot = await self.repo.get_latest_snapshot(sheet.id)
+            if snapshot is None:
+                continue
+            rows = await self.repo.list_all_snapshot_rows(snapshot.id)
+            sources.append((sheet, snapshot, rows))
+        return sources
+
+    def _aggregate_daily_total_sources(
+        self,
+        *,
+        sources: list[
+            tuple[EnergyWorkbookSheet, EnergySheetSnapshot, list[EnergySnapshotRow]]
+        ],
+        start: datetime,
+        end: datetime,
+        energy_type: str | None,
+    ) -> EnergyOverviewResponse:
+        totals: dict[tuple[str, str, str], Decimal] = defaultdict(Decimal)
+        counts: dict[tuple[str, str, str], int] = defaultdict(int)
+        trends: dict[tuple[date, str, str, str], Decimal] = defaultdict(Decimal)
+        latest: dict[tuple[str, str, str], tuple[datetime, Decimal]] = {}
+        last_observed_at: datetime | None = None
+        invalid_count = 0
+
+        for sheet, _snapshot, rows in sources:
+            rows_by_index = {row.row_index: row.values for row in rows}
+            top_headers = self._header_values(
+                rows_by_index.get(sheet.header_row, sheet.headers)
+            )
+            second_values = rows_by_index.get(sheet.header_row + 1, [])
+            has_second_header = bool(
+                second_values
+                and not self._try_parse_overview_date(
+                    self._cell(second_values, 0), start, end
+                )
+                and any(
+                    isinstance(value, str) and value.strip()
+                    for value in second_values[1:]
+                )
+            )
+            headers = self._combine_overview_headers(
+                top_headers,
+                second_values if has_second_header else [],
+            )
+            data_start = sheet.header_row + (2 if has_second_header else 1)
+            metric_columns = [
+                (index, metric)
+                for index, header in enumerate(headers)
+                for metric in DAILY_TOTAL_METRICS
+                if self._header_contains_all(header, metric["matches"])
+                and (
+                    energy_type is None
+                    or energy_type in {metric["energy_type"], metric["metric_key"]}
+                )
+            ]
+            for row_index, values in sorted(rows_by_index.items()):
+                if row_index < data_start:
+                    continue
+                observed_at = self._try_parse_overview_date(
+                    self._cell(values, 0), start, end
+                )
+                if observed_at is None or not start <= observed_at <= end:
+                    continue
+                parsed_metrics: list[tuple[dict[str, Any], Decimal]] = []
+                for column, metric in metric_columns:
+                    value = self._try_parse_overview_decimal(
+                        self._cell(values, column)
+                    )
+                    if value is None:
+                        continue
+                    if metric.get("ratio") and abs(value) <= 1:
+                        value *= 100
+                    parsed_metrics.append((metric, value))
+                positive_totals = [
+                    (metric, value)
+                    for metric, value in parsed_metrics
+                    if not metric.get("ratio") and value > 0
+                ]
+                if not positive_totals:
+                    if any(
+                        not metric.get("ratio") and value < 0
+                        for metric, value in parsed_metrics
+                    ):
+                        invalid_count += 1
+                    continue
+                last_observed_at = max(
+                    (value for value in (last_observed_at, observed_at) if value),
+                    default=None,
+                )
+                for metric, value in parsed_metrics:
+                    if not metric.get("ratio") and value <= 0:
+                        continue
+                    key = (
+                        str(metric["metric_key"]),
+                        str(metric["energy_type"]),
+                        str(metric["unit"]),
+                    )
+                    previous = latest.get(key)
+                    if previous is None or observed_at > previous[0]:
+                        latest[key] = (observed_at, value)
+                    if metric.get("ratio"):
+                        continue
+                    totals[key] += value
+                    counts[key] += 1
+                    trends[(observed_at.astimezone(CST).date(), *key)] += value
+
+        return EnergyOverviewResponse(
+            source_scope="daily_summary",
+            metrics=[
+                EnergyOverviewMetric(
+                    metric_key=metric_key,
+                    energy_type=metric_type,
+                    unit=unit,
+                    total_value=float(value),
+                    record_count=counts[(metric_key, metric_type, unit)],
+                )
+                for (metric_key, metric_type, unit), value in totals.items()
+            ],
+            trend=[
+                EnergyOverviewTrendPoint(
+                    date=day,
+                    metric_key=metric_key,
+                    energy_type=metric_type,
+                    unit=unit,
+                    value=float(value),
+                )
+                for (day, metric_key, metric_type, unit), value in sorted(
+                    trends.items()
+                )
+            ],
+            distribution=[],
+            latest_metrics=[
+                EnergyOverviewLatestMetric(
+                    metric_key=metric_key,
+                    energy_type=metric_type,
+                    unit=unit,
+                    value=float(value),
+                    observed_at=observed_at,
+                )
+                for (
+                    metric_key,
+                    metric_type,
+                    unit,
+                ), (observed_at, value) in latest.items()
+            ],
+            last_observed_at=last_observed_at,
+            invalid_count=invalid_count,
+        )
+
+    def _aggregate_dataset_sources(
+        self,
+        *,
+        sources: list[
+            tuple[
+                str,
+                dict[str, Any],
+                EnergyWorkbookSheet,
+                EnergySheetSnapshot,
+                list[EnergySnapshotRow],
+            ]
+        ],
+        start: datetime,
+        end: datetime,
+        energy_type: str | None,
+        source_scope: str,
+    ) -> EnergyOverviewResponse:
+        totals: dict[tuple[str, str, str], Decimal] = defaultdict(Decimal)
+        counts: dict[tuple[str, str, str], int] = defaultdict(int)
+        trends: dict[tuple[date, str, str, str], Decimal] = defaultdict(Decimal)
+        distributions: dict[tuple[str, str, str, str], Decimal] = defaultdict(
+            Decimal
+        )
+        latest: dict[tuple[str, str, str], tuple[datetime, Decimal]] = {}
+        last_observed_at: datetime | None = None
+        invalid_count = 0
+
+        for _page_key, spec, sheet, snapshot, rows in sources:
+            metric_type = str(spec["energy_type"])
+            if energy_type and energy_type not in {metric_type, sheet.title}:
+                continue
+            headers = self._header_values(
+                snapshot.header_values or sheet.headers
+            )
+            total_columns = [
+                (index, header)
+                for index, header in enumerate(headers)
+                if any(
+                    self._headers_equal(header, expected)
+                    for expected in spec["total_headers"]
+                )
+            ]
+            if not total_columns and len(headers) > 1:
+                total_columns = [(1, headers[1])]
+            rows_by_index = {row.row_index: row.values for row in rows}
+            for row_index, values in sorted(rows_by_index.items()):
+                if row_index <= sheet.header_row:
+                    continue
+                observed_at = self._try_parse_overview_date(
+                    self._cell(values, 0), start, end
+                )
+                if observed_at is None or not start <= observed_at <= end:
+                    continue
+                for total_column, total_header in total_columns:
+                    value = self._try_parse_overview_decimal(
+                        self._cell(values, total_column)
+                    )
+                    if value is None or value <= 0:
+                        if value is not None and value < 0:
+                            invalid_count += 1
+                        continue
+                    last_observed_at = max(
+                        (
+                            item
+                            for item in (last_observed_at, observed_at)
+                            if item is not None
+                        ),
+                        default=None,
+                    )
+                    metric_key = (
+                        metric_type
+                        if len(total_columns) == 1
+                        else total_header.strip()
+                    )
+                    key = (metric_key, metric_type, str(spec["unit"]))
+                    totals[key] += value
+                    counts[key] += 1
+                    trends[(observed_at.astimezone(CST).date(), *key)] += value
+                    previous = latest.get(key)
+                    if previous is None or observed_at > previous[0]:
+                        latest[key] = (observed_at, value)
+                    for column, header in enumerate(headers):
+                        if not self._is_distribution_header(
+                            header=header,
+                            total_header=total_header,
+                            energy_type=metric_type,
+                            total_headers=[item[1] for item in total_columns],
+                        ):
+                            continue
+                        detail_value = self._try_parse_overview_decimal(
+                            self._cell(values, column)
+                        )
+                        if detail_value is not None and detail_value > 0:
+                            distributions[(header.strip(), *key)] += detail_value
+
+        return EnergyOverviewResponse(
+            source_scope=source_scope,
+            metrics=[
+                EnergyOverviewMetric(
+                    metric_key=metric_key,
+                    energy_type=metric_type,
+                    unit=unit,
+                    total_value=float(value),
+                    record_count=counts[(metric_key, metric_type, unit)],
+                )
+                for (metric_key, metric_type, unit), value in totals.items()
+            ],
+            trend=[
+                EnergyOverviewTrendPoint(
+                    date=day,
+                    metric_key=metric_key,
+                    energy_type=metric_type,
+                    unit=unit,
+                    value=float(value),
+                )
+                for (day, metric_key, metric_type, unit), value in sorted(
+                    trends.items()
+                )
+            ],
+            distribution=[
+                EnergyOverviewDistributionPoint(
+                    key=distribution_key,
+                    metric_key=metric_key,
+                    energy_type=metric_type,
+                    unit=unit,
+                    value=float(value),
+                )
+                for (
+                    distribution_key,
+                    metric_key,
+                    metric_type,
+                    unit,
+                ), value in sorted(distributions.items())
+            ],
+            latest_metrics=[
+                EnergyOverviewLatestMetric(
+                    metric_key=metric_key,
+                    energy_type=metric_type,
+                    unit=unit,
+                    value=float(value),
+                    observed_at=observed_at,
+                )
+                for (
+                    metric_key,
+                    metric_type,
+                    unit,
+                ), (observed_at, value) in latest.items()
+            ],
+            last_observed_at=last_observed_at,
+            invalid_count=invalid_count,
+        )
+
+    def _aggregate_workshop_sources(
+        self,
+        *,
+        sources: list[
+            tuple[EnergyWorkbookSheet, EnergySheetSnapshot, list[EnergySnapshotRow]]
+        ],
+        start: datetime,
+        end: datetime,
+        energy_type: str | None,
+        source_scope: str,
+    ) -> EnergyOverviewResponse:
+        adapted_sources = []
+        for sheet, snapshot, rows in sources:
+            headers = self._header_values(snapshot.header_values or sheet.headers)
+            for index, header in enumerate(headers[1:], start=1):
+                if not header or header == "大罐数量":
+                    continue
+                mapped_type, unit = self._workshop_metric_meta(header)
+                if energy_type and energy_type not in {mapped_type, header}:
+                    continue
+                adapted_sources.append(
+                    (
+                        "energy.workshop_detail",
+                        {
+                            "energy_type": mapped_type,
+                            "unit": unit,
+                            "total_headers": (header,),
+                        },
+                        sheet,
+                        snapshot,
+                        rows,
+                    )
+                )
+        return self._aggregate_dataset_sources(
+            sources=adapted_sources,
+            start=start,
+            end=end,
+            energy_type=energy_type,
+            source_scope=source_scope,
+        )
+
+    @staticmethod
+    def _normalize_overview_header(value: str) -> str:
+        return "".join(str(value or "").split()).replace("（", "(").replace("）", ")")
+
+    @classmethod
+    def _headers_equal(cls, left: str, right: str) -> bool:
+        return cls._normalize_overview_header(left) == cls._normalize_overview_header(
+            right
+        )
+
+    @classmethod
+    def _header_contains_all(cls, header: str, matches: tuple[str, ...]) -> bool:
+        normalized = cls._normalize_overview_header(header)
+        return all(
+            cls._normalize_overview_header(item) in normalized for item in matches
+        )
+
+    @classmethod
+    def _combine_overview_headers(
+        cls, top_headers: list[str], second_values: list[Any]
+    ) -> list[str]:
+        combined: list[str] = []
+        current_group = ""
+        width = max(len(top_headers), len(second_values))
+        for index in range(width):
+            top = top_headers[index].strip() if index < len(top_headers) else ""
+            sub = (
+                str(second_values[index]).strip()
+                if index < len(second_values) and second_values[index] is not None
+                else ""
+            )
+            if top:
+                current_group = top
+            combined.append(
+                " ".join(
+                    part for part in (current_group if not top else top, sub) if part
+                )
+            )
+        return combined
+
+    @classmethod
+    def _try_parse_overview_date(
+        cls, value: Any, start: datetime, end: datetime
+    ) -> datetime | None:
+        text = str(value or "").strip()
+        if not text:
+            return None
+        for pattern in ("%m/%d", "%m-%d", "%m月%d日"):
+            try:
+                parsed = datetime.strptime(text, pattern)
+            except ValueError:
+                continue
+            candidates = {
+                parsed.replace(year=year, tzinfo=CST)
+                for year in (start.year - 1, start.year, end.year, end.year + 1)
+            }
+            return min(
+                candidates,
+                key=lambda item: (
+                    0 if start <= item <= end else 1,
+                    min(
+                        abs((item - start).total_seconds()),
+                        abs((item - end).total_seconds()),
+                    ),
+                ),
+            )
+        try:
+            return cls._parse_datetime(value, None)
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _try_parse_overview_decimal(value: Any) -> Decimal | None:
+        try:
+            return EnergyWikiService._parse_decimal(value)
+        except ValueError:
+            return None
+
+    @classmethod
+    def _is_distribution_header(
+        cls,
+        *,
+        header: str,
+        total_header: str,
+        energy_type: str,
+        total_headers: list[str],
+    ) -> bool:
+        normalized = cls._normalize_overview_header(header)
+        if not normalized or normalized == "日期":
+            return False
+        if any(cls._headers_equal(header, item) for item in total_headers):
+            return False
+        excluded = ("总", "合计", "小计", "差值", "其他", "占比", "热值", "排空")
+        if any(item in normalized for item in excluded):
+            return False
+        if energy_type == "蒸汽量" and any(
+            item in normalized for item in ("主管", "总管", "外用表", "内用表", "回收")
+        ):
+            return False
+        if energy_type == "冰水量":
+            total_normalized = cls._normalize_overview_header(total_header)
+            if "-5" in total_normalized:
+                return "-5" in normalized or "5度" in normalized
+            return (
+                "7" in normalized or "冷水" in normalized
+            ) and "-5" not in normalized
+        return True
+
+    @staticmethod
+    def _workshop_metric_meta(header: str) -> tuple[str, str]:
+        if "电" in header:
+            return "电量", "kWh"
+        if "蒸汽" in header:
+            return "蒸汽量", "t"
+        if "饮用水" in header:
+            return "饮用水量", "m³"
+        if "空气" in header:
+            return "空气量", "万m³"
+        if "循环水" in header:
+            return "循环水量", "m³"
+        if "冷水" in header or "冰水" in header:
+            return "冰水量", "m³"
+        return header, ""
 
     async def run_scheduled_sync_if_due(self) -> None:
         config = await self.repo.lock_active_config()
@@ -771,6 +1619,35 @@ class EnergyWikiService:
         await self.session.flush()
         return sheet_count, snapshot_count, fact_count
 
+    async def _sync_spreadsheet_root(
+        self,
+        config: EnergyFeishuConfig,
+        root: EnergyFeishuSourceRoot,
+        run: EnergySyncRun,
+        client: EnergyFeishuClient,
+    ) -> None:
+        document = await self._upsert_document(
+            config,
+            {
+                "node_token": f"sheet:{root.root_token}",
+                "obj_type": "sheet",
+                "obj_token": root.root_token,
+                "title": root.name,
+                "node_path": [{"token": root.root_token, "title": root.name}],
+            },
+            root.root_token,
+        )
+        run.document_count += 1
+        sheet_count, snapshot_count, fact_count = await self._sync_document(
+            client=client,
+            document=document,
+            run=run,
+        )
+        run.sheet_count += sheet_count
+        run.snapshot_count += snapshot_count
+        run.fact_count += fact_count
+        document.last_synced_at = datetime.now(UTC)
+
     async def _sync_bitable_root(
         self,
         config: EnergyFeishuConfig,
@@ -797,58 +1674,107 @@ class EnergyWikiService:
             table_id = str(raw_table.get("table_id") or "")
             if not table_id:
                 continue
-            raw_fields = await client.list_fields(table_id)
-            headers = [
-                str(item.get("field_name") or item.get("name") or item.get("field_id"))
-                for item in raw_fields
-            ]
-            records: list[dict[str, Any]] = []
-            page_token: str | None = None
-            expected_total: int | None = None
-            while True:
-                page_data = await client.search_records(
-                    table_id, page_size=500, page_token=page_token
-                )
-                records.extend(page_data.get("items") or [])
-                if page_data.get("total") is not None:
-                    expected_total = int(page_data["total"])
-                if not page_data.get("has_more"):
-                    break
-                page_token = str(page_data.get("page_token") or "")
-                if not page_token:
-                    raise RuntimeError("能源 Base 分页链缺少 page_token")
-            unique_records = {
-                str(item.get("record_id")): item
-                for item in records
-                if item.get("record_id")
-            }
-            if expected_total is not None and len(unique_records) != expected_total:
-                raise RuntimeError(
-                    f"能源 Base 完整性校验失败：应有 {expected_total} 条，"
-                    f"实际 {len(unique_records)} 条"
-                )
-            values = [headers] + [
-                [dict(item.get("fields") or {}).get(header) for header in headers]
-                for item in unique_records.values()
-            ]
-            counts = await self._store_tabular_values(
+            counts = await self._sync_bitable_table(
+                client=client,
                 document=document,
                 run=run,
-                external_id=table_id,
-                title=str(raw_table.get("name") or table_id),
+                raw_table=raw_table,
                 sheet_index=index,
-                grid_properties={
-                    "row_count": len(values),
-                    "column_count": len(headers),
-                },
-                values=values,
-                display_values=values,
-                revision=str(raw_table.get("revision") or "") or None,
             )
             run.sheet_count += counts[0]
             run.snapshot_count += counts[1]
             run.fact_count += counts[2]
         document.last_synced_at = datetime.now(UTC)
+
+    async def _sync_existing_bitable_sheet(
+        self,
+        *,
+        config: EnergyFeishuConfig,
+        document: EnergyWikiDocument,
+        sheet: EnergyWorkbookSheet,
+        run: EnergySyncRun,
+    ) -> tuple[int, int, int]:
+        client = WarehouseFeishuClient(
+            app_id=config.app_id,
+            app_secret=decrypt_secret(config.encrypted_app_secret),
+            app_token=document.document_token or "",
+        )
+        raw_table = next(
+            (
+                item
+                for item in await client.list_tables()
+                if str(item.get("table_id") or "") == sheet.external_sheet_id
+            ),
+            None,
+        )
+        if raw_table is None:
+            raise RuntimeError("飞书中已找不到该数据表")
+        return await self._sync_bitable_table(
+            client=client,
+            document=document,
+            run=run,
+            raw_table=raw_table,
+            sheet_index=sheet.sheet_index,
+        )
+
+    async def _sync_bitable_table(
+        self,
+        *,
+        client: WarehouseFeishuClient,
+        document: EnergyWikiDocument,
+        run: EnergySyncRun,
+        raw_table: dict[str, Any],
+        sheet_index: int,
+    ) -> tuple[int, int, int]:
+        table_id = str(raw_table.get("table_id") or "")
+        raw_fields = await client.list_fields(table_id)
+        headers = [
+            str(item.get("field_name") or item.get("name") or item.get("field_id"))
+            for item in raw_fields
+        ]
+        records: list[dict[str, Any]] = []
+        page_token: str | None = None
+        expected_total: int | None = None
+        while True:
+            page_data = await client.search_records(
+                table_id, page_size=500, page_token=page_token
+            )
+            records.extend(page_data.get("items") or [])
+            if page_data.get("total") is not None:
+                expected_total = int(page_data["total"])
+            if not page_data.get("has_more"):
+                break
+            page_token = str(page_data.get("page_token") or "")
+            if not page_token:
+                raise RuntimeError("能源 Base 分页链缺少 page_token")
+        unique_records = {
+            str(item.get("record_id")): item
+            for item in records
+            if item.get("record_id")
+        }
+        if expected_total is not None and len(unique_records) != expected_total:
+            raise RuntimeError(
+                f"能源 Base 完整性校验失败：应有 {expected_total} 条，"
+                f"实际 {len(unique_records)} 条"
+            )
+        values = [headers] + [
+            [dict(item.get("fields") or {}).get(header) for header in headers]
+            for item in unique_records.values()
+        ]
+        return await self._store_tabular_values(
+            document=document,
+            run=run,
+            external_id=table_id,
+            title=str(raw_table.get("name") or table_id),
+            sheet_index=sheet_index,
+            grid_properties={
+                "row_count": len(values),
+                "column_count": len(headers),
+            },
+            values=values,
+            display_values=values,
+            revision=str(raw_table.get("revision") or "") or None,
+        )
 
     async def _sync_workbook_sheet(
         self,
@@ -1281,6 +2207,19 @@ class EnergyWikiService:
     def _is_ratio_metric(fact: EnergyMetricFact) -> bool:
         label = f"{fact.metric_key} {fact.energy_type}"
         return fact.unit.strip() in {"%", "％"} or "占比" in label
+
+    @staticmethod
+    def _parse_source_root_token(value: str, source_type: str) -> str:
+        if source_type == "wiki" and EnergyFeishuClient.is_spreadsheet_url(value):
+            return EnergyFeishuClient.parse_spreadsheet_token(value)
+        return parse_feishu_root_token(value, source_type)
+
+    @staticmethod
+    def _is_direct_spreadsheet_root(root: EnergyFeishuSourceRoot) -> bool:
+        return (
+            root.source_type == "wiki"
+            and EnergyFeishuClient.is_spreadsheet_url(root.source_url)
+        )
 
     @staticmethod
     def _safe_error(exc: Exception) -> str:

@@ -118,8 +118,11 @@ function MappedDatasetPageContent({
   const [sortFieldId, setSortFieldId] = useState<string>()
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
 
+  const initialBindingVersion = (initialPageData?.bindings || [])
+    .map((item) => item.id)
+    .join(',')
   const pageQuery = useQuery({
-    queryKey: ['mapped-page-data', moduleCode, pageKey],
+    queryKey: ['mapped-page-data', moduleCode, pageKey, initialBindingVersion],
     queryFn: () => fetchMappedPageData(moduleCode, pageKey),
     initialData: initialPageData,
   })
@@ -234,7 +237,7 @@ function MappedDatasetPageContent({
             {description || '展示已映射飞书数据表的最后一次完整本地镜像'}
           </Typography.Text>
         </div>
-        <Space wrap>
+        {bindings.length ? <Space wrap>
           <Input.Search
             allowClear
             placeholder="搜索全部字段"
@@ -315,11 +318,11 @@ function MappedDatasetPageContent({
           <Button onClick={() => datasetQuery.refetch()} loading={datasetQuery.isFetching}>
             刷新本地数据
           </Button>
-        </Space>
+        </Space> : null}
       </div>
 
       {!pageQuery.isLoading && !bindings.length ? (
-        <Card><Empty description="此页面尚未映射飞书数据表，请在飞书配置中添加映射" /></Card>
+        <Card><Empty description="暂无数据：此页面尚未发布数据表映射，请在飞书配置中添加映射" /></Card>
       ) : (
         <Card>
           <div className="flex items-center gap-3">

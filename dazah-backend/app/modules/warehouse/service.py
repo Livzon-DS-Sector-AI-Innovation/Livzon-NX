@@ -7,7 +7,7 @@ import logging
 import re
 import statistics
 from datetime import UTC, datetime
-from typing import Any, cast
+from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy.exc import SQLAlchemyError
@@ -25,10 +25,10 @@ from app.modules.warehouse.models import (
     PackagingMaterialInventory,
     ProductInventory,
     RawMaterialInventory,
-    WarehouseFeishuConfig,
     WarehouseFeishuAnalysisProfile,
     WarehouseFeishuAnalysisResult,
     WarehouseFeishuAnalysisRun,
+    WarehouseFeishuConfig,
     WarehouseFeishuField,
     WarehouseFeishuPageBinding,
     WarehouseFeishuPromptVersion,
@@ -40,17 +40,6 @@ from app.modules.warehouse.models import (
 )
 from app.modules.warehouse.repository import WarehouseRepository
 from app.modules.warehouse.schemas import (
-    WAREHOUSE_FEISHU_DOMAIN_LABELS,
-    WarehouseFeishuBusinessDomain,
-    WarehouseFeishuConfigResponse,
-    WarehouseFeishuConfigUpsert,
-    WarehouseFeishuConnectivityResult,
-    WarehouseFeishuConnectivityStep,
-    WarehouseFeishuFieldResponse,
-    WarehouseFeishuRawRecordData,
-    WarehouseFeishuRawRecordResponse,
-    WarehouseFeishuTableResponse,
-    WarehouseFeishuTableSyncResult,
     WarehouseAnalysisProfileInput,
     WarehouseAnalysisProfileResponse,
     WarehouseAnalysisRunResponse,
@@ -59,13 +48,22 @@ from app.modules.warehouse.schemas import (
     WarehouseDatasetPagination,
     WarehouseDatasetRecordResponse,
     WarehouseDatasetResponse,
-    WarehouseFieldValueItem,
-    WarehouseFieldValuesResponse,
+    WarehouseFeishuConfigResponse,
+    WarehouseFeishuConfigUpsert,
+    WarehouseFeishuConnectivityResult,
+    WarehouseFeishuConnectivityStep,
+    WarehouseFeishuFieldResponse,
     WarehouseFeishuPageBindingInput,
     WarehouseFeishuPageBindingResponse,
     WarehouseFeishuPageDataResponse,
+    WarehouseFeishuRawRecordData,
+    WarehouseFeishuRawRecordResponse,
     WarehouseFeishuSourceRootInput,
     WarehouseFeishuSourceRootResponse,
+    WarehouseFeishuTableResponse,
+    WarehouseFeishuTableSyncResult,
+    WarehouseFieldValueItem,
+    WarehouseFieldValuesResponse,
     WarehousePromptVersionInput,
     WarehousePromptVersionResponse,
 )
@@ -74,11 +72,6 @@ from app.platform.integrations.feishu.page_keys import validate_module_page_key
 WAREHOUSE_FEISHU_TABLE_SYNC_TIMEOUT_SECONDS = 300
 FIELD_FILTER_OPERATORS = {"contains", "eq", "ne", "gt", "gte", "lt", "lte"}
 NUMERIC_FIELD_FILTER_OPERATORS = {"gt", "gte", "lt", "lte"}
-WAREHOUSE_PAGE_DOMAINS = {
-    "warehouse.raw_material": "finished_product",
-    "warehouse.packaging": "materials_packaging",
-    "warehouse.product": "hardware",
-}
 CREDENTIAL_FIELD_PATTERN = re.compile(
     r"password|secret|token|cookie|api.?key|密码|密钥|令牌", re.I
 )
@@ -272,10 +265,6 @@ class WarehouseService:
                 id=None,
                 config_name="仓储飞书配置",
                 app_id="",
-                finished_product_app_token=None,
-                materials_packaging_app_token=None,
-                hardware_app_token=None,
-                bitable_app_token=None,
                 is_active=True,
                 timezone="Asia/Shanghai",
                 daily_sync_time="02:00",
@@ -289,24 +278,19 @@ class WarehouseService:
         self, data: WarehouseFeishuConfigUpsert
     ) -> WarehouseFeishuConfigResponse:
         existing = await self.repo.get_any_feishu_config()
-        legacy_token = self._legacy_app_token(data)
         if existing:
             existing.config_name = data.config_name
             existing.app_id = data.app_id
             if data.app_secret:
                 existing.encrypted_app_secret = encrypt_secret(data.app_secret)
-            existing.bitable_app_token = legacy_token
-            existing.finished_product_app_token = data.finished_product_app_token
-            existing.materials_packaging_app_token = data.materials_packaging_app_token
-            existing.hardware_app_token = data.hardware_app_token
             existing.is_active = data.is_active
             existing.timezone = data.timezone
             existing.daily_sync_time = data.daily_sync_time
             existing.remark = data.remark
             await self.repo.session.flush()
+            await self.repo.session.refresh(existing)
             await self.repo.session.commit()
-            if existing.is_active:
-                await self._after_feishu_config_saved(existing)
+            await self._after_feishu_config_saved(existing)
             return self._to_feishu_config_response(existing)
 
         if not data.app_secret:
@@ -316,22 +300,15 @@ class WarehouseService:
             config_name=data.config_name,
             app_id=data.app_id,
             encrypted_app_secret=encrypt_secret(data.app_secret),
-            bitable_app_token=legacy_token,
-            finished_product_app_token=data.finished_product_app_token,
-            materials_packaging_app_token=data.materials_packaging_app_token,
-            hardware_app_token=data.hardware_app_token,
-            raw_material_table_id=None,
-            packaging_table_id=None,
-            product_table_id=None,
             is_active=data.is_active,
             timezone=data.timezone,
             daily_sync_time=data.daily_sync_time,
             remark=data.remark,
         )
         await self.repo.save_feishu_config(config)
+        await self.repo.session.refresh(config)
         await self.repo.session.commit()
-        if config.is_active:
-            await self._after_feishu_config_saved(config)
+        await self._after_feishu_config_saved(config)
         return self._to_feishu_config_response(config)
 
     async def test_feishu_connectivity(
@@ -344,109 +321,26 @@ class WarehouseService:
         if not token:
             return WarehouseFeishuConnectivityResult(ok=False, steps=steps)
 
-        app_tokens = self._config_app_tokens(config)
-        if not app_tokens:
-            steps.append(
-                WarehouseFeishuConnectivityStep(
-                    name="多维表格",
-                    status="warning",
-                    message="未配置任何业务域 app_token，仅完成应用凭证测试",
-                )
-            )
-            return WarehouseFeishuConnectivityResult(ok=True, steps=steps)
-
-        for domain, app_token in app_tokens.items():
-            label = WAREHOUSE_FEISHU_DOMAIN_LABELS[domain]
-            try:
-                client = self._build_feishu_client(config, app_token)
-                tables = await client.list_tables()
-                await self._save_discovered_feishu_tables(domain, app_token, tables)
-                steps.append(
-                    WarehouseFeishuConnectivityStep(
-                        name=f"{label}表目录",
-                        status="ok",
-                        message=f"已发现 {len(tables)} 张数据表",
-                    )
-                )
-            except Exception as exc:
-                steps.append(
-                    WarehouseFeishuConnectivityStep(
-                        name=f"{label}表目录",
-                        status="error",
-                        message=f"读取数据表失败：{exc}",
-                    )
-                )
-
         ok = all(step.status in {"ok", "warning"} for step in steps)
         return WarehouseFeishuConnectivityResult(ok=ok, steps=steps)
 
     async def list_feishu_tables(
         self,
         *,
-        business_domain: str | None = None,
         keyword: str | None = None,
-        enabled: bool | None = None,
     ) -> list[WarehouseFeishuTable]:
-        await self._get_active_feishu_config_or_raise()
-        self._validate_optional_domain(business_domain)
-        return await self.repo.list_feishu_tables(
-            business_domain=business_domain,
-            keyword=keyword,
-            enabled=enabled,
-        )
-
-    async def refresh_feishu_tables(self) -> list[WarehouseFeishuTable]:
         config = await self._get_active_feishu_config_or_raise()
-        discovered: list[WarehouseFeishuTable] = []
-        for domain, app_token in self._config_app_tokens(config).items():
-            client = self._build_feishu_client(config, app_token)
-            raw_tables = await client.list_tables()
-            discovered.extend(
-                await self._save_discovered_feishu_tables(domain, app_token, raw_tables)
-            )
-        return discovered
-
-    async def set_feishu_table_enabled(
-        self, table_pk: UUID, is_enabled: bool
-    ) -> WarehouseFeishuTable:
-        table = await self._get_table_by_id_or_raise(table_pk)
-        table.is_enabled = is_enabled
-        table.sync_error = None
-        table.sync_status = "enabled" if is_enabled else "disabled"
-        await self.repo.session.commit()
-        if is_enabled:
-            await self.sync_feishu_table(table_pk)
-            return await self._get_table_by_id_or_raise(table_pk)
-        return table
-
-    async def set_feishu_tables_enabled(
-        self, table_pks: list[UUID], is_enabled: bool
-    ) -> list[WarehouseFeishuTable]:
-        if not table_pks:
-            return []
-
-        updated: list[WarehouseFeishuTable] = []
-        seen: set[UUID] = set()
-        for table_pk in table_pks:
-            if table_pk in seen:
-                continue
-            seen.add(table_pk)
-            table = await self._get_table_by_id_or_raise(table_pk)
-            table.is_enabled = is_enabled
-            table.sync_error = None
-            table.sync_status = "pending" if is_enabled else "disabled"
-            updated.append(table)
-
-        await self.repo.session.commit()
-        return updated
+        assert config.id is not None
+        return await self.repo.list_feishu_tables(
+            config_id=config.id,
+            keyword=keyword,
+        )
 
     async def sync_feishu_table(
         self, table_pk: UUID, *, trigger_type: str = "manual"
     ) -> WarehouseFeishuTableSyncResult:
         config = await self._get_active_feishu_config_or_raise()
-        table = await self._get_table_by_id_or_raise(table_pk)
-        if table.app_token not in set(self._config_app_tokens(config).values()):
-            raise AppException(message="该数据表不属于当前启用的仓储飞书配置")
+        table = await self._get_table_by_id_or_raise(table_pk, config_id=config.id)
         lock_key = "warehouse:feishu:base-sync:" + hashlib.sha256(
             table.app_token.encode()
         ).hexdigest()
@@ -547,46 +441,6 @@ class WarehouseService:
             page_size=page_size,
         )
 
-    async def get_feishu_domain_records(
-        self,
-        business_domain: WarehouseFeishuBusinessDomain,
-        *,
-        table_id: UUID | None = None,
-        keyword: str | None = None,
-        field: str | None = None,
-        field_operator: str | None = None,
-        field_value: str | None = None,
-        page: int = 1,
-        page_size: int = 50,
-    ) -> WarehouseFeishuRawRecordData:
-        field_operator, field_value = self._normalize_field_filter(
-            field=field,
-            field_operator=field_operator,
-            field_value=field_value,
-        )
-        table: WarehouseFeishuTable | None
-        if table_id:
-            table = await self._get_table_by_id_or_raise(table_id)
-            if table.business_domain != business_domain:
-                raise AppException(message="选择的数据表不属于当前仓储菜单")
-        else:
-            tables = await self.repo.list_feishu_tables(
-                business_domain=business_domain,
-                enabled=True,
-            )
-            table = tables[0] if tables else None
-        if not table:
-            return WarehouseFeishuRawRecordData(fields=[], records=[], total=0)
-        return await self._get_records_for_table(
-            table=table,
-            keyword=keyword,
-            field=field,
-            field_operator=field_operator,
-            field_value=field_value,
-            page=page,
-            page_size=page_size,
-        )
-
     async def handle_feishu_bitable_record_changed(
         self,
         *,
@@ -600,7 +454,9 @@ class WarehouseService:
         if not config:
             return {"matched": False, "status": "no_active_config"}
 
-        table = await self.repo.get_enabled_feishu_table(file_token, table_id)
+        table = await self.repo.get_feishu_table_for_event(
+            config.id, file_token, table_id
+        )
         if not table:
             return {"matched": False, "status": "ignored"}
 
@@ -644,11 +500,10 @@ class WarehouseService:
 
     async def _save_discovered_feishu_tables(
         self,
-        business_domain: str,
         app_token: str,
         raw_tables: list[dict[str, Any]],
         *,
-        source_root_id: UUID | None = None,
+        source_root_id: UUID,
         source_path: list[dict[str, str]] | None = None,
     ) -> list[WarehouseFeishuTable]:
         discovered: list[WarehouseFeishuTable] = []
@@ -659,13 +514,13 @@ class WarehouseService:
             if not table_id:
                 continue
             table = await self.repo.get_feishu_table(
-                business_domain,
+                source_root_id,
                 app_token,
                 table_id,
             )
             if not table:
                 table = WarehouseFeishuTable(
-                    business_domain=business_domain,
+                    business_domain=f"root:{source_root_id}",
                     app_token=app_token,
                     table_id=table_id,
                     name=str(item.get("name") or table_id),
@@ -1027,6 +882,7 @@ class WarehouseService:
         self, data: WarehouseFeishuSourceRootInput
     ) -> WarehouseFeishuSourceRootResponse:
         config = await self._get_active_feishu_config_or_raise()
+        assert config.id is not None
         root_token = parse_feishu_root_token(data.source_url, data.source_type)
         root = WarehouseFeishuSourceRoot(
             config_id=config.id,
@@ -1034,31 +890,29 @@ class WarehouseService:
             source_type=data.source_type,
             source_url=data.source_url.strip(),
             root_token=root_token,
-            business_domain=data.business_domain,
             is_active=data.is_active,
             discovery_status="pending",
         )
         await self.repo.save_feishu_source_root(root)
         await self.repo.session.commit()
-        return cast(
-            WarehouseFeishuSourceRootResponse,
-            WarehouseFeishuSourceRootResponse.model_validate(root),
-        )
+        return WarehouseFeishuSourceRootResponse.model_validate(root)
 
     async def delete_feishu_source_root(self, root_id: UUID) -> None:
+        config = await self._get_active_feishu_config_or_raise()
         root = await self.repo.get_feishu_source_root(root_id)
-        if root is None:
+        if root is None or root.config_id != config.id:
             raise AppException(message="飞书数据入口不存在", status_code=404)
         root.is_deleted = True
         root.is_active = False
         await self.repo.session.commit()
+        await self._restart_warehouse_ws(config)
 
     async def discover_feishu_source_root(
         self, root_id: UUID
     ) -> list[WarehouseFeishuTable]:
         config = await self._get_active_feishu_config_or_raise()
         root = await self.repo.get_feishu_source_root(root_id)
-        if root is None:
+        if root is None or root.config_id != config.id or not root.is_active:
             raise AppException(message="飞书数据入口不存在", status_code=404)
         root.discovery_status = "discovering"
         root.discovery_error = None
@@ -1077,12 +931,24 @@ class WarehouseService:
                 bases = await wiki_client.discover_wiki_bases(root.root_token)
             for base in bases:
                 app_token = str(base["app_token"])
-                path = list(base.get("path") or [])
+                raw_path = base.get("path")
+                path = (
+                    [
+                        {
+                            str(key): str(value)
+                            for key, value in item.items()
+                            if value is not None
+                        }
+                        for item in raw_path
+                        if isinstance(item, dict)
+                    ]
+                    if isinstance(raw_path, list)
+                    else []
+                )
                 client = self._build_feishu_client(config, app_token)
                 raw_tables = await client.list_tables(page_size=100)
                 discovered.extend(
                     await self._save_discovered_feishu_tables(
-                        root.business_domain,
                         app_token,
                         raw_tables,
                         source_root_id=root.id,
@@ -1095,47 +961,32 @@ class WarehouseService:
             root.discovery_error = None
             root.last_discovered_at = datetime.now(UTC)
             await self.repo.session.commit()
+            await self._restart_warehouse_ws(config)
             return discovered
         except Exception as exc:
             await self.repo.session.rollback()
             root = await self.repo.get_feishu_source_root(root_id)
+            error_message = self._exception_message(exc)
             if root:
                 root.discovery_status = "failed"
-                root.discovery_error = self._exception_message(exc)
+                root.discovery_error = error_message
                 await self.repo.session.commit()
-            raise
+            if isinstance(exc, AppException):
+                raise
+            raise AppException(
+                message=f"飞书数据入口发现失败：{error_message}"
+            ) from exc
 
     async def get_page_data(self, page_key: str) -> WarehouseFeishuPageDataResponse:
         self._validate_page_key(page_key)
-        bindings = await self.repo.list_page_bindings(page_key)
-        if not bindings and page_key in WAREHOUSE_PAGE_DOMAINS:
-            legacy_tables = await self.repo.list_feishu_tables(
-                business_domain=WAREHOUSE_PAGE_DOMAINS[page_key], enabled=True
-            )
-            if legacy_tables:
-                await self.repo.replace_page_bindings(
-                    page_key,
-                    [
-                        WarehouseFeishuPageBinding(
-                            page_key=page_key,
-                            table_pk=table.id,
-                            tab_label=table.name,
-                            display_order=index,
-                            is_default=index == 0,
-                            visible_field_ids=[],
-                            default_sort=[],
-                            history_mode="current_mirror",
-                            status="published",
-                            is_enabled=True,
-                        )
-                        for index, table in enumerate(legacy_tables)
-                    ],
-                )
-                await self.repo.session.commit()
-                bindings = await self.repo.list_page_bindings(page_key)
+        config = await self._get_active_feishu_config_or_raise()
+        assert config.id is not None
+        bindings = await self.repo.list_page_bindings(config.id, page_key)
         responses: list[WarehouseFeishuPageBindingResponse] = []
         for binding in bindings:
-            table = await self._get_table_by_id_or_raise(binding.table_pk)
+            table = await self._get_table_by_id_or_raise(
+                binding.table_pk, config_id=config.id
+            )
             responses.append(self._to_binding_response(binding, table))
         return WarehouseFeishuPageDataResponse(page_key=page_key, bindings=responses)
 
@@ -1143,6 +994,8 @@ class WarehouseService:
         self, page_key: str, items: list[WarehouseFeishuPageBindingInput]
     ) -> WarehouseFeishuPageDataResponse:
         self._validate_page_key(page_key)
+        config = await self._get_active_feishu_config_or_raise()
+        assert config.id is not None
         seen: set[UUID] = set()
         bindings: list[WarehouseFeishuPageBinding] = []
         default_seen = False
@@ -1150,7 +1003,7 @@ class WarehouseService:
             if item.table_pk in seen:
                 raise AppException(message="同一页面不能重复绑定同一数据表")
             seen.add(item.table_pk)
-            await self._get_table_by_id_or_raise(item.table_pk)
+            await self._get_table_by_id_or_raise(item.table_pk, config_id=config.id)
             is_default = item.is_default and not default_seen
             default_seen = default_seen or is_default
             bindings.append(
@@ -1189,10 +1042,7 @@ class WarehouseService:
         sort_direction: str = "desc",
     ) -> WarehouseDatasetResponse:
         self._validate_page_key(page_key)
-        binding = await self.repo.get_page_binding(page_key, binding_id)
-        if binding is None:
-            raise AppException(message="页面数据表绑定不存在", status_code=404)
-        table = await self._get_table_by_id_or_raise(binding.table_pk)
+        binding, table = await self._get_bound_table(page_key, binding_id)
         registered_fields = await self.repo.list_feishu_fields(
             table.business_domain, table.app_token, table.table_id
         )
@@ -1327,10 +1177,14 @@ class WarehouseService:
         self, page_key: str, binding_id: UUID
     ) -> tuple[WarehouseFeishuPageBinding, WarehouseFeishuTable]:
         self._validate_page_key(page_key)
-        binding = await self.repo.get_page_binding(page_key, binding_id)
+        config = await self._get_active_feishu_config_or_raise()
+        assert config.id is not None
+        binding = await self.repo.get_page_binding(config.id, page_key, binding_id)
         if binding is None:
             raise AppException(message="页面数据表绑定不存在", status_code=404)
-        return binding, await self._get_table_by_id_or_raise(binding.table_pk)
+        return binding, await self._get_table_by_id_or_raise(
+            binding.table_pk, config_id=config.id
+        )
 
     @classmethod
     def _contains_attachment_token(cls, value: Any, file_token: str) -> bool:
@@ -1348,14 +1202,14 @@ class WarehouseService:
     async def aggregate_page_dataset(
         self, data: WarehouseAnalyticsQuery
     ) -> WarehouseAnalyticsResponse:
-        binding: WarehouseFeishuPageBinding | None = None
-        for page_key in WAREHOUSE_PAGE_KEYS:
-            binding = await self.repo.get_page_binding(page_key, data.binding_id)
-            if binding:
-                break
+        config = await self._get_active_feishu_config_or_raise()
+        assert config.id is not None
+        binding = await self.repo.get_page_binding_by_id(config.id, data.binding_id)
         if binding is None:
             raise AppException(message="分析数据集不存在", status_code=404)
-        table = await self._get_table_by_id_or_raise(binding.table_pk)
+        table = await self._get_table_by_id_or_raise(
+            binding.table_pk, config_id=config.id
+        )
         fields = await self.repo.list_feishu_fields(
             table.business_domain, table.app_token, table.table_id
         )
@@ -1796,14 +1650,8 @@ class WarehouseService:
             id=config.id,
             config_name=config.config_name,
             app_id=config.app_id,
-            finished_product_app_token=config.finished_product_app_token,
-            materials_packaging_app_token=(
-                config.materials_packaging_app_token or config.bitable_app_token
-            ),
-            hardware_app_token=config.hardware_app_token,
             timezone=config.timezone,
             daily_sync_time=config.daily_sync_time,
-            bitable_app_token=config.bitable_app_token,
             is_active=config.is_active,
             remark=config.remark,
             app_secret_configured=bool(config.encrypted_app_secret),
@@ -1855,14 +1703,9 @@ class WarehouseService:
                 config_name=data.config_name,
                 app_id=data.app_id,
                 encrypted_app_secret=encrypted_secret,
-                bitable_app_token=self._legacy_app_token(data),
-                finished_product_app_token=data.finished_product_app_token,
-                materials_packaging_app_token=data.materials_packaging_app_token,
-                hardware_app_token=data.hardware_app_token,
-                raw_material_table_id=None,
-                packaging_table_id=None,
-                product_table_id=None,
                 is_active=data.is_active,
+                timezone=data.timezone,
+                daily_sync_time=data.daily_sync_time,
                 remark=data.remark,
             )
         stored = await self._get_any_feishu_config_or_raise()
@@ -1899,9 +1742,15 @@ class WarehouseService:
             raise AppException(message="请先启用仓储飞书配置")
         return config
 
-    async def _get_table_by_id_or_raise(self, table_pk: UUID) -> WarehouseFeishuTable:
+    async def _get_table_by_id_or_raise(
+        self, table_pk: UUID, *, config_id: UUID | None = None
+    ) -> WarehouseFeishuTable:
+        if config_id is None:
+            config = await self._get_active_feishu_config_or_raise()
+            config_id = config.id
+        assert config_id is not None
         try:
-            table = await self.repo.get_feishu_table_by_id(table_pk)
+            table = await self.repo.get_feishu_table_by_id(table_pk, config_id)
         except SQLAlchemyError as exc:
             raise AppException(
                 status_code=500,
@@ -1931,9 +1780,8 @@ class WarehouseService:
             return None
 
         try:
-            app_token = next(iter(self._config_app_tokens(config).values()), "")
             token = await self._build_feishu_client(
-                config, app_token
+                config, ""
             ).get_tenant_access_token()
         except Exception as exc:
             steps.append(
@@ -1969,47 +1817,24 @@ class WarehouseService:
         try:
             from app.modules.warehouse.ws_client import restart_ws_with_config
 
+            if config.id is None:
+                return
+            app_tokens = await self.repo.list_feishu_app_tokens(config.id)
             await restart_ws_with_config(
                 app_id=config.app_id,
                 app_secret=decrypt_secret(config.encrypted_app_secret),
-                app_tokens=self._config_app_tokens(config),
+                app_tokens={f"source_{index + 1}": token for index, token in enumerate(app_tokens)},
             )
         except Exception:
             pass
 
     async def _after_feishu_config_saved(self, config: WarehouseFeishuConfig) -> None:
-        try:
-            await self.refresh_feishu_tables()
-        except Exception:
-            pass
-        await self._restart_warehouse_ws(config)
-
-    @staticmethod
-    def _config_app_tokens(config: WarehouseFeishuConfig) -> dict[str, str]:
-        tokens = {
-            "finished_product": config.finished_product_app_token,
-            "materials_packaging": (
-                config.materials_packaging_app_token or config.bitable_app_token
-            ),
-            "hardware": config.hardware_app_token,
-        }
-        return {key: value for key, value in tokens.items() if value}
-
-    @staticmethod
-    def _legacy_app_token(data: WarehouseFeishuConfigUpsert) -> str:
-        return (
-            data.materials_packaging_app_token
-            or data.finished_product_app_token
-            or data.hardware_app_token
-            or ""
-        )
-
-    @staticmethod
-    def _validate_optional_domain(domain: str | None) -> None:
-        if domain is None:
+        if config.is_active:
+            await self._restart_warehouse_ws(config)
             return
-        if domain not in WAREHOUSE_FEISHU_DOMAIN_LABELS:
-            raise AppException(message="仓储飞书业务域无效")
+        from app.modules.warehouse.ws_client import stop_ws
+
+        await stop_ws()
 
     @staticmethod
     def _mask_encrypted_secret(encrypted_secret: str) -> str:
@@ -2029,10 +1854,7 @@ class WarehouseService:
 
     @staticmethod
     def _to_table_response(table: WarehouseFeishuTable) -> WarehouseFeishuTableResponse:
-        return cast(
-            WarehouseFeishuTableResponse,
-            WarehouseFeishuTableResponse.model_validate(table),
-        )
+        return WarehouseFeishuTableResponse.model_validate(table)
 
     @staticmethod
     def _to_field_response(item: WarehouseFeishuField) -> WarehouseFeishuFieldResponse:

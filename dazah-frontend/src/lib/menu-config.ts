@@ -102,8 +102,6 @@ export const moduleMenus: ModuleMenu[] = [
         path: `/energy/${page.slug}`,
         feishuPageKey: page.pageKey,
       })),
-      { key: "data", label: "原始数据", path: "/energy/data", feishuPageKey: "energy.data" },
-      { key: "sync-runs", label: "同步记录", path: "/energy/sync-runs" },
       { key: "feishu-config", label: "飞书配置", path: "/energy/feishu-config", placement: "bottom" },
     ],
   },

@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
 
 from app.modules.energy.models import (
     EnergyFeishuConfig,
+    EnergyFeishuPageBinding,
     EnergySheetSnapshot,
     EnergySnapshotRow,
     EnergySyncRun,
@@ -14,6 +16,57 @@ from app.modules.energy.models import (
     EnergyWorkbookSheet,
 )
 from app.modules.energy.wiki_repository import EnergyWikiRepository
+
+
+@pytest.mark.asyncio
+async def test_replace_page_bindings_preserves_existing_binding_id():
+    sheet_id = uuid4()
+    existing_id = uuid4()
+    stale = EnergyFeishuPageBinding(
+        id=uuid4(),
+        page_key="energy.electricity",
+        sheet_id=uuid4(),
+        tab_name="旧页签",
+        sort_order=1,
+    )
+    existing = EnergyFeishuPageBinding(
+        id=existing_id,
+        page_key="energy.electricity",
+        sheet_id=sheet_id,
+        tab_name="电量旧名称",
+        sort_order=0,
+    )
+    scalar_result = MagicMock()
+    scalar_result.all.return_value = [existing, stale]
+    result = MagicMock()
+    result.scalars.return_value = scalar_result
+    session = MagicMock()
+    session.execute = AsyncMock(return_value=result)
+    session.delete = AsyncMock()
+    session.flush = AsyncMock()
+
+    await EnergyWikiRepository(session).replace_page_bindings(
+        "energy.electricity",
+        [
+            EnergyFeishuPageBinding(
+                page_key="energy.electricity",
+                sheet_id=sheet_id,
+                tab_name="电量",
+                sort_order=2,
+                is_default=True,
+                visible_field_ids=["field-a"],
+            )
+        ],
+    )
+
+    assert existing.id == existing_id
+    assert existing.tab_name == "电量"
+    assert existing.sort_order == 2
+    assert existing.is_default
+    assert existing.visible_field_ids == ["field-a"]
+    session.delete.assert_awaited_once_with(stale)
+    session.add_all.assert_called_once_with([])
+    session.flush.assert_awaited_once()
 
 
 @pytest.mark.asyncio

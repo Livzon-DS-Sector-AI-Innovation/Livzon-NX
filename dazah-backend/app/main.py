@@ -10,6 +10,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy.exc import IntegrityError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 import app.modules.agent.models  # noqa: F401
@@ -282,6 +283,21 @@ async def validation_exception_handler(
         message="请求参数校验失败",
         detail=detail,
         status_code=422,
+    )
+
+
+@app.exception_handler(IntegrityError)
+async def database_integrity_exception_handler(
+    request: Request, _exc: IntegrityError
+) -> JSONResponse:
+    logger.warning(
+        "database integrity conflict: %s %s",
+        request.method,
+        request.url.path,
+    )
+    return error_response(
+        message="数据状态冲突，请刷新后重试",
+        status_code=409,
     )
 
 

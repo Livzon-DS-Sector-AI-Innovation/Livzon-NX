@@ -7,6 +7,7 @@ import hmac
 import json
 import logging
 import secrets
+import time
 from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 from hashlib import pbkdf2_hmac
@@ -15,6 +16,7 @@ from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
 from uuid import UUID
 
+import httpx
 import jwt
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -77,6 +79,46 @@ def _secret_runtime_error(exc: RuntimeError) -> HTTPException:
             f"{exc}。请检查后端 ENCRYPTION_KEY 配置是否与保存配置时一致。"
         ),
     )
+
+
+async def _push_livzon_credentials_to_hermes(
+    *, app_id: str, app_secret: str, version: int
+) -> bool:
+    """Best-effort credential rotation; Hermes keeps its last healthy version."""
+    settings = get_settings()
+    base_url = settings.HERMES_INTERNAL_URL.rstrip("/")
+    token = settings.HERMES_INTERNAL_TOKEN
+    if not base_url or not token:
+        logger.warning("Hermes internal Feishu credential delivery is not configured")
+        return False
+    signed = f"{app_id}\n{version}\n{app_secret}".encode()
+    signature = hmac.new(token.encode(), signed, hashlib.sha256).hexdigest()
+    try:
+        async with httpx.AsyncClient(timeout=45) as client:
+            response = await client.put(
+                f"{base_url}/internal/feishu/config",
+                headers={"Authorization": f"Bearer {token}"},
+                json={
+                    "app_id": app_id,
+                    "app_secret": app_secret,
+                    "version": version,
+                    "signature": signature,
+                },
+            )
+        if response.is_success:
+            return True
+        logger.error(
+            "Hermes rejected Feishu credential version %s with status %s",
+            version,
+            response.status_code,
+        )
+    except httpx.HTTPError as exc:
+        logger.error(
+            "Hermes Feishu credential delivery failed for version %s: %s",
+            version,
+            type(exc).__name__,
+        )
+    return False
 
 
 def hash_password(password: str) -> str:
@@ -314,6 +356,23 @@ async def save_livzon_feishu_config(
         existing.is_active = payload.is_active
         existing.is_deleted = False
         await db.flush()
+        if existing.is_active:
+            effective_secret = payload.app_secret
+            if not effective_secret:
+                try:
+                    effective_secret = decrypt_secret(existing.encrypted_app_secret)
+                except RuntimeError as exc:
+                    raise _secret_runtime_error(exc) from exc
+            await _push_livzon_credentials_to_hermes(
+                app_id=existing.app_id,
+                app_secret=effective_secret,
+                version=time.time_ns(),
+            )
+            from app.platform.identity.hermes_api import (
+                push_access_snapshot_to_hermes,
+            )
+
+            await push_access_snapshot_to_hermes(db)
         return _feishu_config_to_response(existing)
 
     config = FeishuConfig(
@@ -327,6 +386,15 @@ async def save_livzon_feishu_config(
         is_active=payload.is_active,
     )
     await _feishu_config_repo.save(db, config)
+    if config.is_active:
+        await _push_livzon_credentials_to_hermes(
+            app_id=config.app_id,
+            app_secret=payload.app_secret or "",
+            version=time.time_ns(),
+        )
+        from app.platform.identity.hermes_api import push_access_snapshot_to_hermes
+
+        await push_access_snapshot_to_hermes(db)
     return _feishu_config_to_response(config)
 
 
@@ -819,7 +887,22 @@ async def run_livzon_feishu_sync_all(db: AsyncSession) -> JsonObject:
 
 async def _active_livzon_feishu_credentials(db: AsyncSession) -> tuple[str, str]:
     config = await _feishu_config_repo.get_active(db)
-    if config is None or not config.app_id or not config.encrypted_app_secret:
+    if config is None:
+        settings = get_settings()
+        if (
+            (
+                settings.LIVZON_FEISHU_EVENT_WS_ENABLED
+                or settings.LIVZON_FEISHU_CARD_CALLBACK_WS_ENABLED
+            )
+            and settings.FEISHU_APP_ID
+            and settings.FEISHU_APP_SECRET
+        ):
+            return settings.FEISHU_APP_ID, settings.FEISHU_APP_SECRET
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Livzon 助手飞书 App ID 或 App Secret 未配置",
+        )
+    if not config.app_id or not config.encrypted_app_secret:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
             "Livzon 助手飞书 App ID 或 App Secret 未配置",
@@ -1057,6 +1140,7 @@ async def _send_livzon_feishu_text_to_open_id(
     open_id: str,
     text: str,
     markdown: bool = False,
+    reply_to_message_id: str | None = None,
 ) -> bool:
     """Reply to a private Livzon Feishu conversation without a local user id.
 
@@ -1067,6 +1151,7 @@ async def _send_livzon_feishu_text_to_open_id(
     from app.platform.integrations.feishu.im import (
         build_markdown_card_content,
         build_text_message_content,
+        reply_feishu_message,
         send_feishu_message,
     )
     from app.platform.integrations.feishu.utils import get_tenant_access_token
@@ -1078,21 +1163,31 @@ async def _send_livzon_feishu_text_to_open_id(
             app_secret,
             cache_key=f"livzon-assistant:{app_id}",
         )
-        sent = await send_feishu_message(
-            tenant_access_token=token,
-            receive_id=open_id,
-            receive_id_type="open_id",
-            msg_type="interactive" if markdown else "text",
-            content=(
-                build_markdown_card_content(
-                    title="Livzon 助手",
-                    markdown=text,
-                    header_template="blue",
-                )
-                if markdown
-                else build_text_message_content(text)
-            ),
+        msg_type = "interactive" if markdown else "text"
+        content = (
+            build_markdown_card_content(
+                title="Livzon 助手",
+                markdown=text,
+                header_template="blue",
+            )
+            if markdown
+            else build_text_message_content(text)
         )
+        if reply_to_message_id:
+            sent = await reply_feishu_message(
+                tenant_access_token=token,
+                message_id=reply_to_message_id,
+                msg_type=msg_type,
+                content=content,
+            )
+        else:
+            sent = await send_feishu_message(
+                tenant_access_token=token,
+                receive_id=open_id,
+                receive_id_type="open_id",
+                msg_type=msg_type,
+                content=content,
+            )
     except Exception:
         logger.exception("Livzon 飞书私聊回复请求失败: open_id=%s", open_id)
         return False
@@ -1105,6 +1200,156 @@ async def _send_livzon_feishu_text_to_open_id(
         )
         return False
     return True
+
+
+_livzon_bot_open_id_cache: dict[str, str] = {}
+
+
+async def _active_livzon_feishu_bot_open_id(db: AsyncSession) -> str | None:
+    """Resolve and cache the bot Open ID used in Feishu mention payloads."""
+    from app.platform.integrations.feishu.im import get_feishu_bot_info
+    from app.platform.integrations.feishu.utils import get_tenant_access_token
+
+    try:
+        app_id, app_secret = await _active_livzon_feishu_credentials(db)
+        cached = _livzon_bot_open_id_cache.get(app_id)
+        if cached:
+            return cached
+        token = await get_tenant_access_token(
+            app_id,
+            app_secret,
+            cache_key=f"livzon-assistant:{app_id}",
+        )
+        result = await get_feishu_bot_info(tenant_access_token=token)
+        if not result.ok or not result.open_id:
+            logger.warning(
+                "Livzon 飞书机器人身份获取失败: app_id=%s code=%s",
+                app_id,
+                result.code,
+            )
+            return None
+        _livzon_bot_open_id_cache[app_id] = result.open_id
+        return result.open_id
+    except Exception:
+        logger.exception("Livzon 飞书机器人身份获取异常")
+        return None
+
+
+async def _livzon_group_bot_mention(
+    db: AsyncSession,
+    *,
+    mentions: object,
+) -> JsonObject | None:
+    if not isinstance(mentions, list) or not mentions:
+        return None
+    bot_open_id = await _active_livzon_feishu_bot_open_id(db)
+    if not bot_open_id:
+        return None
+    for mention in mentions:
+        if not isinstance(mention, dict):
+            continue
+        mention_id = mention.get("id")
+        if (
+            isinstance(mention_id, dict)
+            and mention_id.get("open_id") == bot_open_id
+        ):
+            return mention
+    return None
+
+
+async def _start_livzon_feishu_message_reply(
+    db: AsyncSession,
+    *,
+    message_id: str,
+) -> str | None:
+    """Show that Livzon accepted an incoming message and is preparing a reply."""
+    from app.platform.integrations.feishu.im import create_feishu_message_reaction
+    from app.platform.integrations.feishu.utils import get_tenant_access_token
+
+    try:
+        app_id, app_secret = await _active_livzon_feishu_credentials(db)
+        token = await get_tenant_access_token(
+            app_id,
+            app_secret,
+            cache_key=f"livzon-assistant:{app_id}",
+        )
+        result = await create_feishu_message_reaction(
+            tenant_access_token=token,
+            message_id=message_id,
+            emoji_type="Typing",
+        )
+        if not result.ok:
+            logger.warning(
+                "Livzon 飞书消息回复中状态添加失败: message_id=%s code=%s",
+                message_id,
+                result.code,
+            )
+            return None
+        return result.reaction_id
+    except Exception:
+        # This status is only an operational hint. It must not prevent the
+        # actual Agent request or its error response from reaching the user.
+        logger.exception(
+            "Livzon 飞书消息回复中状态添加异常: message_id=%s",
+            message_id,
+        )
+        return None
+
+
+async def _finish_livzon_feishu_message_reply(
+    db: AsyncSession,
+    *,
+    message_id: str,
+    processing_reaction_id: str | None,
+    completed: bool,
+) -> bool:
+    """Clear ``Typing`` and add ``OK`` only after a reply was delivered."""
+    from app.platform.integrations.feishu.im import (
+        create_feishu_message_reaction,
+        delete_feishu_message_reaction,
+    )
+    from app.platform.integrations.feishu.utils import get_tenant_access_token
+
+    try:
+        app_id, app_secret = await _active_livzon_feishu_credentials(db)
+        token = await get_tenant_access_token(
+            app_id,
+            app_secret,
+            cache_key=f"livzon-assistant:{app_id}",
+        )
+        if processing_reaction_id:
+            removed = await delete_feishu_message_reaction(
+                tenant_access_token=token,
+                message_id=message_id,
+                reaction_id=processing_reaction_id,
+            )
+            if not removed.ok:
+                logger.warning(
+                    "Livzon 飞书消息回复中状态删除失败: message_id=%s code=%s",
+                    message_id,
+                    removed.code,
+                )
+                return False
+        if not completed:
+            return True
+        result = await create_feishu_message_reaction(
+            tenant_access_token=token,
+            message_id=message_id,
+            emoji_type="OK",
+        )
+        if not result.ok:
+            logger.warning(
+                "Livzon 飞书消息已完成状态添加失败: message_id=%s code=%s",
+                message_id,
+                result.code,
+            )
+        return result.ok
+    except Exception:
+        logger.exception(
+            "Livzon 飞书消息回复状态更新异常: message_id=%s",
+            message_id,
+        )
+        return False
 
 
 async def _send_livzon_agent_confirmation_cards(
@@ -1159,17 +1404,31 @@ def _parse_livzon_feishu_message_event(
     sender = event.get("sender") if isinstance(event, dict) else None
     if not isinstance(message, dict) or not isinstance(sender, dict):
         return None
-    if sender.get("sender_type") != "user" or message.get("chat_type") != "p2p":
+    chat_type = message.get("chat_type")
+    if sender.get("sender_type") != "user" or chat_type not in {
+        "p2p",
+        "group",
+        "topic_group",
+    }:
         return None
     sender_id = sender.get("sender_id") or {}
     open_id = sender_id.get("open_id") if isinstance(sender_id, dict) else None
     message_id = message.get("message_id")
     if not isinstance(open_id, str) or not isinstance(message_id, str):
         return None
+    chat_id = message.get("chat_id")
+    if chat_type != "p2p" and not isinstance(chat_id, str):
+        return None
+    base = {
+        "open_id": open_id,
+        "message_id": message_id,
+        "chat_type": chat_type,
+        "chat_id": chat_id if isinstance(chat_id, str) else None,
+        "mentions": message.get("mentions"),
+    }
     if message.get("message_type") != "text":
         return {
-            "open_id": open_id,
-            "message_id": message_id,
+            **base,
             "unsupported": True,
         }
     try:
@@ -1181,7 +1440,7 @@ def _parse_livzon_feishu_message_event(
         not isinstance(text, str)
     ):
         return None
-    return {"open_id": open_id, "message_id": message_id, "text": text.strip()}
+    return {**base, "text": text.strip()}
 
 
 async def handle_livzon_feishu_message_receive_event(
@@ -1199,6 +1458,19 @@ async def handle_livzon_feishu_message_receive_event(
     message_id = parsed.get("message_id")
     if not isinstance(message_id, str):
         return {"status": "ignored"}
+    chat_type = parsed.get("chat_type")
+    group_message = chat_type in {"group", "topic_group"}
+    reply_to_message_id = message_id if group_message else None
+    if group_message:
+        bot_mention = await _livzon_group_bot_mention(
+            db,
+            mentions=parsed.get("mentions"),
+        )
+        if bot_mention is None:
+            return {"status": "ignored"}
+        mention_key = bot_mention.get("key")
+        if isinstance(parsed.get("text"), str) and isinstance(mention_key, str):
+            parsed["text"] = str(parsed["text"]).replace(mention_key, "").strip()
 
     from app.core.redis import acquire_lock, redis_client, release_lock
 
@@ -1218,22 +1490,30 @@ async def handle_livzon_feishu_message_receive_event(
             db,
             open_id=open_id,
             text="当前仅支持发送文本消息，请改用文字与 Livzon 助手对话。",
+            reply_to_message_id=reply_to_message_id,
         )
         return {"status": "unsupported"}
 
     text = str(parsed["text"])
     if not text:
         await _send_livzon_feishu_text_to_open_id(
-            db, open_id=open_id, text="请输入需要咨询的内容。"
+            db,
+            open_id=open_id,
+            text="请输入需要咨询的内容。",
+            reply_to_message_id=reply_to_message_id,
         )
         return {"status": "empty"}
     if len(text) > 8000:
         await _send_livzon_feishu_text_to_open_id(
-            db, open_id=open_id, text="单条消息不能超过 8000 个字符，请拆分后重试。"
+            db,
+            open_id=open_id,
+            text="单条消息不能超过 8000 个字符，请拆分后重试。",
+            reply_to_message_id=reply_to_message_id,
         )
         return {"status": "too_long"}
 
-    lock_key = f"livzon:feishu:conversation:{open_id}"
+    conversation_id = parsed.get("chat_id") if group_message else open_id
+    lock_key = f"livzon:feishu:conversation:{conversation_id}"
     try:
         acquired = await acquire_lock(lock_key, timeout=150)
     except Exception:
@@ -1241,20 +1521,29 @@ async def handle_livzon_feishu_message_receive_event(
         acquired = True
     if not acquired:
         await _send_livzon_feishu_text_to_open_id(
-            db, open_id=open_id, text="上一条消息正在处理中，请稍后再发送。"
+            db,
+            open_id=open_id,
+            text="上一条消息正在处理中，请稍后再发送。",
+            reply_to_message_id=reply_to_message_id,
         )
         return {"status": "busy"}
 
+    processing_reaction_id = await _start_livzon_feishu_message_reply(
+        db,
+        message_id=message_id,
+    )
+    reply_completed = False
     try:
         user = await _repo.get_by_feishu_open_id(db, open_id)
         if user is None or user.is_deleted or user.status != "active":
-            await _send_livzon_feishu_text_to_open_id(
+            reply_completed = await _send_livzon_feishu_text_to_open_id(
                 db,
                 open_id=open_id,
                 text=(
                     "尚未绑定可用的 Livzon 账户，请联系管理员同步通讯录并授予"
                     "助手权限。"
                 ),
+                reply_to_message_id=reply_to_message_id,
             )
             return {"status": "unmapped"}
 
@@ -1267,6 +1556,9 @@ async def handle_livzon_feishu_message_receive_event(
                 sender_open_id=open_id,
                 message_id=message_id,
                 text=text,
+                conversation_peer_id=(
+                    str(parsed["chat_id"]) if group_message else None
+                ),
             )
         except HTTPException as exc:
             if exc.status_code == status.HTTP_403_FORBIDDEN:
@@ -1274,7 +1566,12 @@ async def handle_livzon_feishu_message_receive_event(
             else:
                 logger.warning("Livzon 飞书消息处理被拒绝: %s", exc.detail)
                 reply = "暂时无法处理该消息，请稍后重试。"
-            await _send_livzon_feishu_text_to_open_id(db, open_id=open_id, text=reply)
+            reply_completed = await _send_livzon_feishu_text_to_open_id(
+                db,
+                open_id=open_id,
+                text=reply,
+                reply_to_message_id=reply_to_message_id,
+            )
             _write_livzon_message_audit(
                 db,
                 user=user,
@@ -1284,8 +1581,11 @@ async def handle_livzon_feishu_message_receive_event(
             return {"status": "rejected"}
         except Exception:
             logger.exception("Livzon 飞书消息处理失败: message_id=%s", message_id)
-            await _send_livzon_feishu_text_to_open_id(
-                db, open_id=open_id, text="Livzon 助手暂时不可用，请稍后重试。"
+            reply_completed = await _send_livzon_feishu_text_to_open_id(
+                db,
+                open_id=open_id,
+                text="Livzon 助手暂时不可用，请稍后重试。",
+                reply_to_message_id=reply_to_message_id,
             )
             _write_livzon_message_audit(
                 db,
@@ -1297,18 +1597,38 @@ async def handle_livzon_feishu_message_receive_event(
 
         reply = result.text
         if result.pending_confirmations:
-            reply = f"{reply}\n\n需要确认的操作已发送为下方卡片。"
-        await _send_livzon_feishu_text_to_open_id(
+            reply = (
+                f"{reply}\n\n需要确认的操作已通过私聊卡片发送给你。"
+                if group_message
+                else f"{reply}\n\n需要确认的操作已发送为下方卡片。"
+            )
+        reply_sent = await _send_livzon_feishu_text_to_open_id(
             db,
             open_id=open_id,
             text=reply,
             markdown=True,
+            reply_to_message_id=reply_to_message_id,
         )
+        if not reply_sent:
+            _write_livzon_message_audit(
+                db,
+                user=user,
+                message_id=message_id,
+                outcome="reply_failed",
+                session_id=result.session_id,
+            )
+            return {
+                "status": "reply_failed",
+                "session_id": (
+                    str(result.session_id) if result.session_id else None
+                ),
+            }
         await _send_livzon_agent_confirmation_cards(
             db,
             user=user,
             confirmations=result.pending_confirmations,
         )
+        reply_completed = True
         _write_livzon_message_audit(
             db,
             user=user,
@@ -1321,6 +1641,12 @@ async def handle_livzon_feishu_message_receive_event(
             "session_id": str(result.session_id) if result.session_id else None,
         }
     finally:
+        await _finish_livzon_feishu_message_reply(
+            db,
+            message_id=message_id,
+            processing_reaction_id=processing_reaction_id,
+            completed=reply_completed,
+        )
         try:
             await release_lock(lock_key)
         except Exception:

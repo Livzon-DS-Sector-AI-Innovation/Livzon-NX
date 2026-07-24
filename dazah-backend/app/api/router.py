@@ -31,6 +31,7 @@ from app.platform.identity.api import (
     user_router,
 )
 from app.platform.identity.deps import require_module_view
+from app.platform.identity.hermes_api import router as hermes_feishu_router
 from app.platform.system import router as system_router
 
 api_router = APIRouter()
@@ -46,6 +47,7 @@ api_router.include_router(
     tags=["Livzon 助手飞书设置"],
 )
 api_router.include_router(feishu_router, prefix="/identity", tags=["Livzon 助手飞书"])
+api_router.include_router(hermes_feishu_router)
 api_router.include_router(system_router, prefix="/system", tags=["系统"])
 api_router.include_router(audit_router, prefix="/audit", tags=["审计日志"])
 

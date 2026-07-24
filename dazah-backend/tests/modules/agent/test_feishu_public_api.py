@@ -72,7 +72,49 @@ async def test_handle_feishu_direct_message_reuses_channel_session(monkeypatch) 
     assert request.session_id == existing_session.id
     assert request.context["channel"] == "feishu"
     assert request.context["peer_id"] == "ou_test"
+    assert request.context["sender_open_id"] == "ou_test"
     assert result.text == "已完成查询。"
+
+
+@pytest.mark.anyio
+async def test_group_message_uses_group_specific_channel_session(monkeypatch) -> None:
+    user = _user()
+    repository = FakeAgentRepository()
+    chat_requests = []
+
+    class FakeScopeService:
+        async def get_current_scope(self, db, *, user: User) -> None:
+            return None
+
+    class FakeAgentService:
+        def __init__(self, settings) -> None:
+            return None
+
+        async def chat(self, db, *, request, current_user):
+            chat_requests.append(request)
+            return SimpleNamespace(
+                session_id=uuid.uuid4(),
+                message=SimpleNamespace(content="群聊回复"),
+                pending_confirmations=[],
+            )
+
+    monkeypatch.setattr(public_api, "AgentRepository", lambda: repository)
+    monkeypatch.setattr(public_api, "AgentAccessScopeService", FakeScopeService)
+    monkeypatch.setattr(public_api, "AgentService", FakeAgentService)
+    monkeypatch.setattr(public_api, "get_settings", lambda: SimpleNamespace())
+
+    await public_api.handle_feishu_direct_message(
+        object(),
+        user=user,
+        sender_open_id="ou_test",
+        message_id="om_group",
+        text="查询库存",
+        conversation_peer_id="oc_group",
+    )
+
+    request = chat_requests[0]
+    assert request.context["peer_id"] == "oc_group"
+    assert request.context["sender_open_id"] == "ou_test"
 
 
 @pytest.mark.anyio

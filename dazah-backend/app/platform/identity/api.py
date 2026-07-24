@@ -4,6 +4,7 @@ from typing import Any
 from urllib.parse import urlencode
 from uuid import UUID
 
+import httpx
 from fastapi import (
     APIRouter,
     Cookie,
@@ -322,6 +323,9 @@ async def create_local_user(
     user.created_by = current_user.id
     user.updated_by = current_user.id
     await db.flush()
+    from app.platform.identity.hermes_api import push_access_snapshot_to_hermes
+
+    await push_access_snapshot_to_hermes(db)
     return success_response(
         data=UserManagementItem.model_validate(user).model_dump(mode="json")
     )
@@ -349,6 +353,9 @@ async def update_user(
         user.grant_version += 1
     user.updated_by = current_user.id
     await db.flush()
+    from app.platform.identity.hermes_api import push_access_snapshot_to_hermes
+
+    await push_access_snapshot_to_hermes(db)
     return success_response(
         data=UserManagementItem.model_validate(user).model_dump(mode="json")
     )
@@ -478,6 +485,9 @@ async def replace_user_module_permissions(
     else:
         result.livzon_sync_status = "failed"
         result.livzon_last_error = event.last_error
+    from app.platform.identity.hermes_api import push_access_snapshot_to_hermes
+
+    await push_access_snapshot_to_hermes(db)
     return success_response(data=result.model_dump(mode="json"))
 
 
@@ -707,6 +717,61 @@ async def save_livzon_feishu_config(
 
     data = await save_config(db, payload)
     return success_response(data=data.model_dump(mode="json"))
+
+
+@feishu_config_router.get(
+    "/authorizations",
+    summary="查看 Hermes 飞书记忆授权",
+)
+async def list_livzon_feishu_authorizations(
+    user_id: str,
+    settings: Settings = Depends(get_settings),
+    current_user: AdminUser = None,
+) -> JSONResponse:
+    if not settings.HERMES_INTERNAL_URL or not settings.HERMES_INTERNAL_TOKEN:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE, "Hermes 内部接口未配置"
+        )
+    async with httpx.AsyncClient(timeout=15) as client:
+        response = await client.get(
+            f"{settings.HERMES_INTERNAL_URL.rstrip('/')}/internal/feishu/grants",
+            params={"user_id": user_id},
+            headers={
+                "Authorization": f"Bearer {settings.HERMES_INTERNAL_TOKEN}"
+            },
+        )
+    if not response.is_success:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Hermes 授权查询失败")
+    return success_response(data=response.json())
+
+
+@feishu_config_router.delete(
+    "/authorizations/{grant_id}",
+    summary="撤销 Hermes 飞书记忆授权",
+)
+async def revoke_livzon_feishu_authorization(
+    grant_id: str,
+    user_id: str,
+    settings: Settings = Depends(get_settings),
+    current_user: AdminUser = None,
+) -> JSONResponse:
+    if not settings.HERMES_INTERNAL_URL or not settings.HERMES_INTERNAL_TOKEN:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE, "Hermes 内部接口未配置"
+        )
+    async with httpx.AsyncClient(timeout=15) as client:
+        response = await client.delete(
+            f"{settings.HERMES_INTERNAL_URL.rstrip('/')}/internal/feishu/grants/{grant_id}",
+            params={"user_id": user_id},
+            headers={
+                "Authorization": f"Bearer {settings.HERMES_INTERNAL_TOKEN}"
+            },
+        )
+    if response.status_code == 404:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "授权不存在或已撤销")
+    if not response.is_success:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Hermes 授权撤销失败")
+    return success_response(data=response.json())
 
 
 @feishu_config_router.post(

@@ -183,15 +183,15 @@ class WarehouseRepository:
     async def list_feishu_tables(
         self,
         *,
-        business_domain: str | None = None,
+        config_id: UUID,
         keyword: str | None = None,
-        enabled: bool | None = None,
     ) -> list[WarehouseFeishuTable]:
-        conditions = [WarehouseFeishuTable.is_deleted.is_(False)]
-        if business_domain:
-            conditions.append(WarehouseFeishuTable.business_domain == business_domain)
-        if enabled is not None:
-            conditions.append(WarehouseFeishuTable.is_enabled.is_(enabled))
+        conditions = [
+            WarehouseFeishuTable.is_deleted.is_(False),
+            WarehouseFeishuSourceRoot.config_id == config_id,
+            WarehouseFeishuSourceRoot.is_deleted.is_(False),
+            WarehouseFeishuSourceRoot.is_active.is_(True),
+        ]
         if keyword:
             pattern = f"%{keyword.strip()}%"
             conditions.append(
@@ -203,9 +203,12 @@ class WarehouseRepository:
             )
         result = await self.session.execute(
             select(WarehouseFeishuTable)
+            .join(
+                WarehouseFeishuSourceRoot,
+                WarehouseFeishuSourceRoot.id == WarehouseFeishuTable.source_root_id,
+            )
             .where(*conditions)
             .order_by(
-                asc(WarehouseFeishuTable.business_domain),
                 asc(WarehouseFeishuTable.name),
                 asc(WarehouseFeishuTable.table_id),
             )
@@ -213,12 +216,12 @@ class WarehouseRepository:
         return list(result.scalars().all())
 
     async def get_feishu_table(
-        self, business_domain: str, app_token: str, table_id: str
+        self, source_root_id: UUID, app_token: str, table_id: str
     ) -> WarehouseFeishuTable | None:
         result = await self.session.execute(
             select(WarehouseFeishuTable).where(
                 WarehouseFeishuTable.is_deleted.is_(False),
-                WarehouseFeishuTable.business_domain == business_domain,
+                WarehouseFeishuTable.source_root_id == source_root_id,
                 WarehouseFeishuTable.app_token == app_token,
                 WarehouseFeishuTable.table_id == table_id,
             )
@@ -226,40 +229,60 @@ class WarehouseRepository:
         return result.scalar_one_or_none()
 
     async def get_feishu_table_by_id(
-        self, table_pk: UUID
+        self, table_pk: UUID, config_id: UUID
     ) -> WarehouseFeishuTable | None:
-        result = await self.session.execute(
-            select(WarehouseFeishuTable).where(
-                WarehouseFeishuTable.is_deleted.is_(False),
-                WarehouseFeishuTable.id == table_pk,
-            )
-        )
-        return result.scalar_one_or_none()
-
-    async def get_enabled_feishu_table(
-        self, app_token: str, table_id: str
-    ) -> WarehouseFeishuTable | None:
-        result = await self.session.execute(
-            select(WarehouseFeishuTable).where(
-                WarehouseFeishuTable.is_deleted.is_(False),
-                WarehouseFeishuTable.is_enabled.is_(True),
-                WarehouseFeishuTable.app_token == app_token,
-                WarehouseFeishuTable.table_id == table_id,
-            )
-        )
-        return result.scalar_one_or_none()
-
-    async def list_enabled_feishu_tables(self) -> list[WarehouseFeishuTable]:
         result = await self.session.execute(
             select(WarehouseFeishuTable)
+            .join(
+                WarehouseFeishuSourceRoot,
+                WarehouseFeishuSourceRoot.id == WarehouseFeishuTable.source_root_id,
+            )
             .where(
                 WarehouseFeishuTable.is_deleted.is_(False),
-                WarehouseFeishuTable.is_enabled.is_(True),
+                WarehouseFeishuTable.id == table_pk,
+                WarehouseFeishuSourceRoot.config_id == config_id,
+                WarehouseFeishuSourceRoot.is_deleted.is_(False),
+                WarehouseFeishuSourceRoot.is_active.is_(True),
             )
-            .order_by(
-                asc(WarehouseFeishuTable.business_domain),
-                asc(WarehouseFeishuTable.name),
+        )
+        return result.scalar_one_or_none()
+
+    async def get_feishu_table_for_event(
+        self, config_id: UUID, app_token: str, table_id: str
+    ) -> WarehouseFeishuTable | None:
+        result = await self.session.execute(
+            select(WarehouseFeishuTable)
+            .join(
+                WarehouseFeishuSourceRoot,
+                WarehouseFeishuSourceRoot.id == WarehouseFeishuTable.source_root_id,
             )
+            .where(
+                WarehouseFeishuTable.is_deleted.is_(False),
+                WarehouseFeishuTable.app_token == app_token,
+                WarehouseFeishuTable.table_id == table_id,
+                WarehouseFeishuSourceRoot.config_id == config_id,
+                WarehouseFeishuSourceRoot.is_deleted.is_(False),
+                WarehouseFeishuSourceRoot.is_active.is_(True),
+            )
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    async def list_feishu_app_tokens(self, config_id: UUID) -> list[str]:
+        result = await self.session.execute(
+            select(WarehouseFeishuTable.app_token)
+            .join(
+                WarehouseFeishuSourceRoot,
+                WarehouseFeishuSourceRoot.id == WarehouseFeishuTable.source_root_id,
+            )
+            .where(
+                WarehouseFeishuTable.is_deleted.is_(False),
+                WarehouseFeishuSourceRoot.config_id == config_id,
+                WarehouseFeishuSourceRoot.is_deleted.is_(False),
+                WarehouseFeishuSourceRoot.is_active.is_(True),
+            )
+            .distinct()
+            .order_by(WarehouseFeishuTable.app_token)
         )
         return list(result.scalars().all())
 
@@ -514,15 +537,27 @@ class WarehouseRepository:
         return root
 
     async def list_page_bindings(
-        self, page_key: str
+        self, config_id: UUID, page_key: str
     ) -> list[WarehouseFeishuPageBinding]:
         result = await self.session.execute(
             select(WarehouseFeishuPageBinding)
+            .join(
+                WarehouseFeishuTable,
+                WarehouseFeishuTable.id == WarehouseFeishuPageBinding.table_pk,
+            )
+            .join(
+                WarehouseFeishuSourceRoot,
+                WarehouseFeishuSourceRoot.id == WarehouseFeishuTable.source_root_id,
+            )
             .where(
                 WarehouseFeishuPageBinding.page_key == page_key,
                 WarehouseFeishuPageBinding.is_deleted.is_(False),
                 WarehouseFeishuPageBinding.is_enabled.is_(True),
                 WarehouseFeishuPageBinding.status == "published",
+                WarehouseFeishuTable.is_deleted.is_(False),
+                WarehouseFeishuSourceRoot.config_id == config_id,
+                WarehouseFeishuSourceRoot.is_deleted.is_(False),
+                WarehouseFeishuSourceRoot.is_active.is_(True),
             )
             .order_by(
                 WarehouseFeishuPageBinding.is_default.desc(),
@@ -533,15 +568,54 @@ class WarehouseRepository:
         return list(result.scalars().all())
 
     async def get_page_binding(
-        self, page_key: str, binding_id: UUID
+        self, config_id: UUID, page_key: str, binding_id: UUID
     ) -> WarehouseFeishuPageBinding | None:
         result = await self.session.execute(
-            select(WarehouseFeishuPageBinding).where(
+            select(WarehouseFeishuPageBinding)
+            .join(
+                WarehouseFeishuTable,
+                WarehouseFeishuTable.id == WarehouseFeishuPageBinding.table_pk,
+            )
+            .join(
+                WarehouseFeishuSourceRoot,
+                WarehouseFeishuSourceRoot.id == WarehouseFeishuTable.source_root_id,
+            )
+            .where(
                 WarehouseFeishuPageBinding.id == binding_id,
                 WarehouseFeishuPageBinding.page_key == page_key,
                 WarehouseFeishuPageBinding.is_deleted.is_(False),
                 WarehouseFeishuPageBinding.is_enabled.is_(True),
                 WarehouseFeishuPageBinding.status == "published",
+                WarehouseFeishuTable.is_deleted.is_(False),
+                WarehouseFeishuSourceRoot.config_id == config_id,
+                WarehouseFeishuSourceRoot.is_deleted.is_(False),
+                WarehouseFeishuSourceRoot.is_active.is_(True),
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def get_page_binding_by_id(
+        self, config_id: UUID, binding_id: UUID
+    ) -> WarehouseFeishuPageBinding | None:
+        result = await self.session.execute(
+            select(WarehouseFeishuPageBinding)
+            .join(
+                WarehouseFeishuTable,
+                WarehouseFeishuTable.id == WarehouseFeishuPageBinding.table_pk,
+            )
+            .join(
+                WarehouseFeishuSourceRoot,
+                WarehouseFeishuSourceRoot.id == WarehouseFeishuTable.source_root_id,
+            )
+            .where(
+                WarehouseFeishuPageBinding.id == binding_id,
+                WarehouseFeishuPageBinding.is_deleted.is_(False),
+                WarehouseFeishuPageBinding.is_enabled.is_(True),
+                WarehouseFeishuPageBinding.status == "published",
+                WarehouseFeishuTable.is_deleted.is_(False),
+                WarehouseFeishuSourceRoot.config_id == config_id,
+                WarehouseFeishuSourceRoot.is_deleted.is_(False),
+                WarehouseFeishuSourceRoot.is_active.is_(True),
             )
         )
         return result.scalar_one_or_none()

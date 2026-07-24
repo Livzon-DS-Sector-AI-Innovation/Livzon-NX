@@ -58,6 +58,21 @@ def _on_message_receive(data: P2ImMessageReceiveV1) -> None:
     msg_type = message.message_type
     message_id = message.message_id
     chat_type = message.chat_type or ""
+    chat_id = message.chat_id or ""
+    mentions = [
+        {
+            "key": mention.key,
+            "id": {
+                "open_id": mention.id.open_id if mention.id else None,
+                "union_id": mention.id.union_id if mention.id else None,
+                "user_id": mention.id.user_id if mention.id else None,
+            },
+            "mentioned_type": mention.mentioned_type,
+            "name": mention.name,
+            "tenant_key": mention.tenant_key,
+        }
+        for mention in (message.mentions or [])
+    ]
     sender_id = ""
     sender_type = ""
 
@@ -81,6 +96,8 @@ def _on_message_receive(data: P2ImMessageReceiveV1) -> None:
             message_id=message_id,
             content=message.content or "{}",
             chat_type=chat_type,
+            chat_id=chat_id,
+            mentions=mentions,
             sender_open_id=sender_id,
             sender_type=sender_type,
         ),
@@ -169,6 +186,8 @@ async def _handle_message_async(
     message_id: str,
     content: str,
     chat_type: str,
+    chat_id: str,
+    mentions: list[dict],
     sender_open_id: str,
     sender_type: str,
 ) -> None:
@@ -191,6 +210,8 @@ async def _handle_message_async(
             message_id=message_id,
             content=content,
             chat_type=chat_type,
+            chat_id=chat_id,
+            mentions=mentions,
             sender_open_id=sender_open_id,
             sender_type=sender_type,
         )
@@ -294,12 +315,18 @@ async def _uses_shared_livzon_app() -> bool:
     from app.core.database import async_session_factory
     from app.platform.identity.repository import FeishuConfigRepository
 
-    global_app_id = get_settings().FEISHU_APP_ID
+    settings = get_settings()
+    global_app_id = settings.FEISHU_APP_ID
     if not global_app_id:
         return False
     async with async_session_factory() as db:
         config = await FeishuConfigRepository().get_active(db)
-    return bool(config and config.app_id == global_app_id)
+    if config is not None:
+        return config.app_id == global_app_id
+    return bool(
+        settings.LIVZON_FEISHU_EVENT_WS_ENABLED
+        or settings.LIVZON_FEISHU_CARD_CALLBACK_WS_ENABLED
+    )
 
 
 async def _forward_shared_app_message_to_livzon(
@@ -308,6 +335,8 @@ async def _forward_shared_app_message_to_livzon(
     message_id: str,
     content: str,
     chat_type: str,
+    chat_id: str,
+    mentions: list[dict],
     sender_open_id: str,
     sender_type: str,
 ) -> None:
@@ -326,7 +355,9 @@ async def _forward_shared_app_message_to_livzon(
                 "message_type": msg_type,
                 "message_id": message_id,
                 "chat_type": chat_type,
+                "chat_id": chat_id,
                 "content": content,
+                "mentions": mentions,
             },
         },
     }

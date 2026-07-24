@@ -223,27 +223,6 @@ class WarehouseFeishuConfig(BaseModel):
     encrypted_app_secret: Mapped[str] = mapped_column(
         String(1024), nullable=False, comment="加密后的飞书应用 App Secret"
     )
-    bitable_app_token: Mapped[str] = mapped_column(
-        String(128), nullable=False, comment="飞书多维表格 app_token"
-    )
-    finished_product_app_token: Mapped[str | None] = mapped_column(
-        String(128), nullable=True, comment="成品多维表格 app_token"
-    )
-    materials_packaging_app_token: Mapped[str | None] = mapped_column(
-        String(128), nullable=True, comment="原辅料及包材多维表格 app_token"
-    )
-    hardware_app_token: Mapped[str | None] = mapped_column(
-        String(128), nullable=True, comment="五金多维表格 app_token"
-    )
-    raw_material_table_id: Mapped[str | None] = mapped_column(
-        String(128), nullable=True, comment="原辅料库存表 table_id"
-    )
-    packaging_table_id: Mapped[str | None] = mapped_column(
-        String(128), nullable=True, comment="包材库存表 table_id"
-    )
-    product_table_id: Mapped[str | None] = mapped_column(
-        String(128), nullable=True, comment="成品库存表 table_id"
-    )
     is_active: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
@@ -279,7 +258,6 @@ class WarehouseFeishuSourceRoot(BaseModel):
     )
     source_url: Mapped[str] = mapped_column(Text, nullable=False)
     root_token: Mapped[str] = mapped_column(String(256), nullable=False)
-    business_domain: Mapped[str] = mapped_column(String(64), nullable=False)
     is_active: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default="true"
     )
@@ -296,23 +274,19 @@ class WarehouseFeishuTable(BaseModel):
     __tablename__ = "feishu_tables"
     __table_args__ = (
         Index(
-            "uq_warehouse_feishu_tables_domain_app_token_table_id",
-            "business_domain",
+            "uq_warehouse_feishu_tables_root_app_token_table_id",
+            "source_root_id",
             "app_token",
             "table_id",
             unique=True,
         ),
-        Index(
-            "ix_warehouse_feishu_tables_domain_enabled",
-            "business_domain",
-            "is_enabled",
-        ),
+        Index("ix_warehouse_feishu_tables_root", "source_root_id"),
         Index("ix_warehouse_feishu_tables_app_token", "app_token"),
         {"schema": "warehouse"},
     )
 
     business_domain: Mapped[str] = mapped_column(
-        String(64), nullable=False, comment="仓储业务域"
+        String(64), nullable=False, comment="飞书资源命名空间"
     )
     app_token: Mapped[str] = mapped_column(
         String(128), nullable=False, comment="飞书多维表格 app_token"
@@ -333,13 +307,6 @@ class WarehouseFeishuTable(BaseModel):
     )
     last_event_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True, comment="最近事件时间"
-    )
-    is_enabled: Mapped[bool] = mapped_column(
-        Boolean,
-        nullable=False,
-        default=False,
-        server_default="false",
-        comment="是否启用同步与监测",
     )
     field_count: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0", comment="字段数量"
@@ -385,7 +352,7 @@ class WarehouseFeishuField(BaseModel):
     )
 
     business_domain: Mapped[str] = mapped_column(
-        String(64), nullable=False, comment="仓储业务域"
+        String(64), nullable=False, comment="飞书资源命名空间"
     )
     app_token: Mapped[str] = mapped_column(
         String(128), nullable=False, comment="飞书多维表格 app_token"
@@ -439,7 +406,7 @@ class WarehouseFeishuRecord(BaseModel):
     )
 
     business_domain: Mapped[str] = mapped_column(
-        String(64), nullable=False, comment="仓储业务域"
+        String(64), nullable=False, comment="飞书资源命名空间"
     )
     app_token: Mapped[str] = mapped_column(
         String(128), nullable=False, comment="飞书多维表格 app_token"
