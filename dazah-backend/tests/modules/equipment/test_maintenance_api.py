@@ -114,8 +114,9 @@ async def _create_test_equipment(client: AsyncClient) -> str:
     eq_resp = await client.post(
         "/api/v1/equipment/equipments",
         json={
+            "equipment_no": f"EQ-API-{uid}",
             "name": f"测试设备-{uid}",
-            "category_id": cat_id,
+            "category_ids": [cat_id],
             "location_id": loc_id,
         },
     )

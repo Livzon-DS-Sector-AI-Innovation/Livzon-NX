@@ -1037,7 +1037,7 @@ export default function SopContentEditor({
         message.success('已撤回所有修改')
       }
     })
-  }, [isDirty, initialContent, regulationName])
+  }, [initialContent, isDirty, message, modal, regulationName])
 
   /* ── save / export ── */
 
@@ -1050,7 +1050,7 @@ export default function SopContentEditor({
     } catch (err: unknown) {
       message.error(err instanceof Error ? err.message : '保存失败')
     } finally { setSaving(false) }
-  }, [regulationId, fullContent, onSaved])
+  }, [fullContent, message, onSaved, regulationId])
 
   const handleExport = useCallback(async () => {
     setExporting(true)
@@ -1068,7 +1068,7 @@ export default function SopContentEditor({
     } catch (err: unknown) {
       message.error(err instanceof Error ? err.message : '导出失败')
     } finally { setExporting(false) }
-  }, [regulationId, regulationName])
+  }, [message, regulationId, regulationName])
 
   const handleSaveAndExport = useCallback(async () => {
     setSaving(true)
@@ -1082,7 +1082,7 @@ export default function SopContentEditor({
       message.error(err instanceof Error ? err.message : '保存失败')
       setSaving(false)
     }
-  }, [regulationId, fullContent, onSaved, handleExport])
+  }, [fullContent, handleExport, message, onSaved, regulationId])
 
   const handleBack = useCallback(() => {
     if (isDirty) {
@@ -1096,7 +1096,7 @@ export default function SopContentEditor({
     } else {
       onBack()
     }
-  }, [isDirty, onBack])
+  }, [isDirty, modal, onBack])
 
   /* ── Ctrl+S ── */
 
@@ -1649,8 +1649,7 @@ export default function SopContentEditor({
   }
 
   /** Dispatch to the correct chapter renderer. */
-  const renderChapterContent = useCallback(
-    (chapterId: number, content: string) => {
+  function renderChapterContent(chapterId: number, content: string) {
       // Table chapters: 3, 4, 5, 8
       if ([3, 4, 5, 8].includes(chapterId)) {
         return renderTableChapter(chapterId, content)
@@ -1678,9 +1677,7 @@ export default function SopContentEditor({
             </div>
           )
       }
-    },
-    [handleChapterChange, chapters, collapsedKeys],
-  )
+  }
 
   /* ── key styles ── */
 

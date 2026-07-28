@@ -52,7 +52,12 @@ async def _equipment_session() -> AsyncIterator[AsyncSession]:
 @pytest.fixture
 async def test_reporter(_equipment_session: AsyncSession) -> User:
     """Create a test reporter user in the shared session."""
-    user = User(name="测试报修人", employee_no=f"EMP-R-{uuid.uuid4().hex[:8]}")
+    user = User(
+        name="测试报修人",
+        employee_no=f"EMP-R-{uuid.uuid4().hex[:8]}",
+        role="admin",
+        status="active",
+    )
     _equipment_session.add(user)
     await _equipment_session.flush()
     await _equipment_session.refresh(user)

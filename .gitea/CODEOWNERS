@@ -1,0 +1,18 @@
+# Gitea CODEOWNERS uses Go regular expressions, not GitHub-style globs.
+^\.gitea/workflows/.*$ @Livzon-DS-Sector-AI-Innovation/Owners
+^\.gitea/CODEOWNERS$ @Livzon-DS-Sector-AI-Innovation/Owners
+^\.gitattributes$ @Livzon-DS-Sector-AI-Innovation/Owners
+^\.gitignore$ @Livzon-DS-Sector-AI-Innovation/Owners
+^\.pre-commit-config\.yaml$ @Livzon-DS-Sector-AI-Innovation/Owners
+^scripts/(ci|check-branch-policy|prepare-integration|wait-for-database)\.sh$ @Livzon-DS-Sector-AI-Innovation/Owners
+^dazah-frontend/scripts/ci\.sh$ @Livzon-DS-Sector-AI-Innovation/Owners
+^dazah-backend/scripts/ci\.sh$ @Livzon-DS-Sector-AI-Innovation/Owners
+^dazah-backend/scripts/ruff-changed\.sh$ @Livzon-DS-Sector-AI-Innovation/Owners
+^(.*/)?Dockerfile(\..*)?$ @Livzon-DS-Sector-AI-Innovation/Owners
+^(.*/)?(compose|docker-compose)(\.[^/]*)?\.ya?ml$ @Livzon-DS-Sector-AI-Innovation/Owners
+^dazah-frontend/(package\.json|package-lock\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|yarn\.lock)$ @Livzon-DS-Sector-AI-Innovation/Owners
+^dazah-backend/(pyproject\.toml|uv\.lock)$ @Livzon-DS-Sector-AI-Innovation/Owners
+^(.*/)?requirements(-[^/]*)?\.txt$ @Livzon-DS-Sector-AI-Innovation/Owners
+^dazah-backend/alembic/.*$ @Livzon-DS-Sector-AI-Innovation/Owners
+^(.*/)?openapi\.json$ @Livzon-DS-Sector-AI-Innovation/Owners
+^dazah-frontend/src/types/generated/.*$ @Livzon-DS-Sector-AI-Innovation/Owners

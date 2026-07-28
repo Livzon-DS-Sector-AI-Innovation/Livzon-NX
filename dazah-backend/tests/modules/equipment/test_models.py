@@ -2,9 +2,14 @@
 
 from datetime import date
 
-from sqlalchemy import CheckConstraint, UniqueConstraint
+from sqlalchemy import CheckConstraint, Index, UniqueConstraint
 
-from app.modules.equipment.models import Equipment, EquipmentCategory, Location
+from app.modules.equipment.models import (
+    Equipment,
+    EquipmentCategory,
+    EquipmentCategoryLink,
+    Location,
+)
 
 
 class TestEquipmentCategoryModel:
@@ -39,17 +44,16 @@ class TestEquipmentCategoryModel:
         assert child.parent is parent
         assert child in parent.children
 
-    def test_unique_constraint_includes_is_deleted(self) -> None:
-        """Unique constraint on code includes is_deleted column."""
-        constraint = next(
+    def test_code_uses_partial_unique_index(self) -> None:
+        """Only active category codes are unique."""
+        index = next(
             c
             for c in EquipmentCategory.__table_args__
-            if isinstance(c, UniqueConstraint)
-            and c.name == "uq_equipment_categories_code"
+            if isinstance(c, Index) and c.name == "uq_equipment_categories_code"
         )
-        col_names = {col.name for col in constraint.columns}
-        assert "code" in col_names
-        assert "is_deleted" in col_names
+        assert index.unique is True
+        assert {col.name for col in index.columns} == {"code"}
+        assert "is_deleted = false" in str(index.dialect_options["postgresql"]["where"])
 
     def test_schema_is_equipment(self) -> None:
         """Table belongs to the equipment schema."""
@@ -75,16 +79,16 @@ class TestLocationModel:
         assert child.parent is parent
         assert child in parent.children
 
-    def test_unique_constraint_includes_is_deleted(self) -> None:
-        """Unique constraint on code includes is_deleted column."""
-        constraint = next(
+    def test_code_uses_partial_unique_index(self) -> None:
+        """Only active location codes are unique."""
+        index = next(
             c
             for c in Location.__table_args__
-            if isinstance(c, UniqueConstraint) and c.name == "uq_locations_code"
+            if isinstance(c, Index) and c.name == "uq_locations_code"
         )
-        col_names = {col.name for col in constraint.columns}
-        assert "code" in col_names
-        assert "is_deleted" in col_names
+        assert index.unique is True
+        assert {col.name for col in index.columns} == {"code"}
+        assert "is_deleted = false" in str(index.dialect_options["postgresql"]["where"])
 
 
 class TestEquipmentModel:
@@ -98,12 +102,10 @@ class TestEquipmentModel:
 
     def test_instantiation(self) -> None:
         """Model can be instantiated with required fields."""
-        cat = self._make_category()
         loc = self._make_location()
         equip = Equipment(
             equipment_no="EQ-001",
             name="500L反应釜",
-            category_id=cat.id,
             location_id=loc.id,
             status="在用",
         )
@@ -113,12 +115,10 @@ class TestEquipmentModel:
 
     def test_date_fields_accept_date_objects(self) -> None:
         """production_date and commissioning_date accept datetime.date values."""
-        cat = self._make_category()
         loc = self._make_location()
         equip = Equipment(
             equipment_no="EQ-002",
             name="干燥机",
-            category_id=cat.id,
             location_id=loc.id,
             production_date=date(2024, 1, 15),
             commissioning_date=date(2024, 3, 1),
@@ -128,12 +128,10 @@ class TestEquipmentModel:
 
     def test_date_fields_accept_none(self) -> None:
         """production_date and commissioning_date default to None."""
-        cat = self._make_category()
         loc = self._make_location()
         equip = Equipment(
             equipment_no="EQ-003",
             name="离心机",
-            category_id=cat.id,
             location_id=loc.id,
         )
         assert equip.production_date is None
@@ -165,28 +163,25 @@ class TestEquipmentModel:
         assert "报废" in constraint.sqltext.text
 
     def test_relationships(self) -> None:
-        """Equipment has category and location relationships."""
+        """Equipment has category-link and location relationships."""
         cat = self._make_category()
         loc = self._make_location()
         equip = Equipment(
             equipment_no="EQ-004",
             name="离心机",
-            category_id=cat.id,
             location_id=loc.id,
         )
-        equip.category = cat
+        equip.category_links = [EquipmentCategoryLink(category=cat)]
         equip.location = loc
-        assert equip.category is cat
+        assert equip.category_links[0].category is cat
         assert equip.location is loc
 
     def test_optional_fields_default_to_none(self) -> None:
         """Optional fields default to None when not provided."""
-        cat = self._make_category()
         loc = self._make_location()
         equip = Equipment(
             equipment_no="EQ-005",
             name="测试设备",
-            category_id=cat.id,
             location_id=loc.id,
         )
         assert equip.model is None
@@ -201,12 +196,10 @@ class TestEquipmentModel:
 
     def test_new_fields_default_to_none(self) -> None:
         """新字段默认为 None"""
-        cat = self._make_category()
         loc = self._make_location()
         equip = Equipment(
             equipment_no="EQ-NEW-001",
             name="测试设备",
-            category_id=cat.id,
             location_id=loc.id,
         )
         assert equip.warranty_expire_date is None
@@ -216,12 +209,10 @@ class TestEquipmentModel:
 
     def test_new_fields_accept_values(self) -> None:
         """新字段可以赋值"""
-        cat = self._make_category()
         loc = self._make_location()
         equip = Equipment(
             equipment_no="EQ-NEW-002",
             name="测试设备",
-            category_id=cat.id,
             location_id=loc.id,
             warranty_expire_date=date(2027, 12, 31),
             asset_value=150000.00,

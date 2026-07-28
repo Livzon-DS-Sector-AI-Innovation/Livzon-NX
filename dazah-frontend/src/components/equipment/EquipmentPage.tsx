@@ -70,12 +70,23 @@ export function EquipmentPage({
     setEquipments(initialEquipments)
     setTotal(initialTotal)
     setStatistics(initialStatistics)
-  }, [])
+  }, [
+    initialCategories,
+    initialEquipments,
+    initialLocations,
+    initialStatistics,
+    initialTotal,
+    setCategories,
+    setEquipments,
+    setLocations,
+    setStatistics,
+    setTotal,
+  ])
 
   // 初始化部门列表（服务端数据）
   useEffect(() => {
     setDepartments(initialDepartments)
-  }, [])
+  }, [initialDepartments, setDepartments])
 
   // 客户端补偿加载：如果服务端初始数据为空（某个 API 失败导致），从客户端重新获取
   useEffect(() => {
@@ -101,7 +112,14 @@ export function EquipmentPage({
       }
     }
     loadMissing()
-  }, [])
+  }, [
+    categories.length,
+    departments.length,
+    locations.length,
+    setCategories,
+    setDepartments,
+    setLocations,
+  ])
 
   // 获取列表数据
   const fetchData = useCallback(async (p: number, ps: number) => {
@@ -148,7 +166,7 @@ export function EquipmentPage({
   useEffect(() => {
     fetchData(1, 20)
     setResetKey(k => k + 1)
-  }, [selectedCategory, selectedLocation, departmentFilter, statusFilter, keyword])
+  }, [fetchData])
 
   const tabItems = [
     {

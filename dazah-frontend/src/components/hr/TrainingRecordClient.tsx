@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { App, Button, Card, Select, Space, Spin, } from 'antd'
+import { App, Button, Card, Select, Space } from 'antd'
 import { FileTextOutlined, PrinterOutlined, DownloadOutlined } from '@ant-design/icons'
 import { Employee } from '@/types/hr'
 import { fetchEmployees, fetchOnboardingTrainingRecord } from '@/lib/api/hr'
@@ -10,27 +10,19 @@ export default function TrainingRecordClient() {
   const { message } = App.useApp()
 
   const [employees, setEmployees] = useState<Employee[]>([])
-  const [loading, setLoading] = useState(false)
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null)
   const [downloading, setDownloading] = useState(false)
 
   useEffect(() => {
-    setLoading(true)
     fetchEmployees({ page_size: 200 })
       .then((res) => {
-        // eslint-disable-next-line no-console
-        console.log('fetchEmployees success:', res)
         setEmployees(res.data || [])
       })
       .catch((err) => {
-        // eslint-disable-next-line no-console
         console.error('fetchEmployees error:', err)
         message.error('加载员工列表失败: ' + (err.message || JSON.stringify(err) || '未知错误'))
       })
-      .finally(() => {
-        setLoading(false)
-      })
-  }, [])
+  }, [message])
 
   const selectedEmployee = employees.find((e) => e.id === selectedEmployeeId)
 
@@ -43,8 +35,8 @@ export default function TrainingRecordClient() {
     try {
       await fetchOnboardingTrainingRecord(selectedEmployee.id, selectedEmployee.name)
       message.success('培训记录已导出')
-    } catch (err: any) {
-      message.error(err.message || '导出失败')
+    } catch (err: unknown) {
+      message.error(err instanceof Error ? err.message : '导出失败')
     } finally {
       setDownloading(false)
     }
