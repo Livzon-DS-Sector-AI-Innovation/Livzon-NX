@@ -76,6 +76,8 @@ jobs:
         run: bash scripts/prepare-integration.sh
       - name: Build frontend production bundle
         run: bash dazah-frontend/scripts/ci.sh build
+        env:
+          NODE_OPTIONS: "--max-old-space-size=1024"
 
   frontend-container:
     name: frontend-container
