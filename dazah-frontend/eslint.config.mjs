@@ -1,4 +1,3 @@
-import nextConfig from "eslint-config-next";
 import nextCoreWebVitals from "eslint-config-next/core-web-vitals";
 import nextTypescript from "eslint-config-next/typescript";
 
@@ -7,6 +6,8 @@ export default [
   ...nextTypescript,
   {
     rules: {
+      "no-console": ["error", { allow: ["warn", "error"] }],
+      "no-debugger": "error",
       "@typescript-eslint/no-explicit-any": "warn",
       "react/no-unescaped-entities": "warn",
       "react/jsx-key": "warn",

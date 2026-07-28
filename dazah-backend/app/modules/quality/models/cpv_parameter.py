@@ -1,6 +1,8 @@
 """CPV Parameter ORM model."""
 
-from sqlalchemy import Boolean, Float, Integer, String
+import uuid
+
+from sqlalchemy import Boolean, Float, Integer, String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.shared.base_model import BaseModel
@@ -12,21 +14,17 @@ class CpvParameter(BaseModel):
     __tablename__ = "cpv_parameters"
     __table_args__ = {"schema": "quality", "comment": "CPV参数定义表"}
 
-    product_id: Mapped[str] = mapped_column(
-        nullable=False, comment="产品ID"
+    product_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), nullable=False, comment="产品ID"
     )
     parameter_type: Mapped[str] = mapped_column(
         String(10), nullable=False, comment="参数类型: CPP/CQA"
     )
-    name: Mapped[str] = mapped_column(
-        String(200), nullable=False, comment="参数名称"
-    )
+    name: Mapped[str] = mapped_column(String(200), nullable=False, comment="参数名称")
     code: Mapped[str | None] = mapped_column(
         String(100), nullable=True, comment="参数代码(Excel表头匹配键)"
     )
-    unit: Mapped[str | None] = mapped_column(
-        String(50), nullable=True, comment="单位"
-    )
+    unit: Mapped[str | None] = mapped_column(String(50), nullable=True, comment="单位")
     lower_limit: Mapped[float | None] = mapped_column(
         Float, nullable=True, comment="标准下限"
     )

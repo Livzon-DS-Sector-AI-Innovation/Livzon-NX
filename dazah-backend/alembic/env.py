@@ -1,7 +1,7 @@
 from collections.abc import MutableMapping
 from importlib import import_module
 from logging.config import fileConfig
-from typing import Literal
+from typing import Any, Literal
 
 from alembic import context
 from app.core.config import get_settings
@@ -26,6 +26,27 @@ settings = get_settings()
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL.replace("%", "%%"))
 
 PROJECT_SCHEMAS = frozenset(("identity", "audit", "core", *BUSINESS_SCHEMAS))
+AUDIT_USER_COLUMNS = frozenset(("created_by", "updated_by"))
+LEGACY_SERVER_DEFAULT_COLUMNS = frozenset(
+    {
+        ("core", "agent_domain_events", "occurred_at"),
+        ("production", "feishu_read_records", "synced_at"),
+        ("production", "feishu_read_sync_runs", "started_at"),
+        ("production", "feishu_sync_bindings", "field_mapping"),
+        ("production", "feishu_sync_runs", "started_at"),
+        ("production", "migration_runs", "input_counts"),
+        ("production", "migration_runs", "inserted_count"),
+        ("production", "migration_runs", "updated_count"),
+        ("production", "migration_runs", "skipped_count"),
+        ("production", "migration_runs", "failed_count"),
+        ("production", "migration_runs", "report"),
+        ("production", "process_execution_records", "recorded_at"),
+        ("production", "process_execution_records", "data"),
+        ("quality", "feishu_read_records", "synced_at"),
+        ("quality", "feishu_read_sync_runs", "started_at"),
+        ("warehouse", "feishu_tables", "business_domain"),
+    }
+)
 
 
 def include_name(
@@ -51,6 +72,72 @@ def include_name(
     return True
 
 
+def include_object(
+    object_: Any,
+    name: str | None,
+    type_: Literal[
+        "table",
+        "column",
+        "index",
+        "unique_constraint",
+        "foreign_key_constraint",
+    ],
+    reflected: bool,
+    compare_to: Any,
+) -> bool:
+    """Keep autogenerate additive and respect module ownership boundaries.
+
+    Existing database-only indexes and constraints may encode production data
+    guarantees that are not represented by SQLAlchemy models. Their removal must
+    therefore be written as an explicit reviewed migration, never inferred by
+    autogenerate.
+
+    Audit user IDs are cross-module references. The ORM uses ForeignKey metadata
+    for relationship resolution, but new database constraints are intentionally
+    omitted so business schemas do not become coupled to ``identity.users``.
+    """
+    if (
+        reflected
+        and compare_to is None
+        and type_
+        in {
+            "foreign_key_constraint",
+            "index",
+            "unique_constraint",
+        }
+    ):
+        return False
+
+    if (
+        not reflected
+        and compare_to is None
+        and type_ == "foreign_key_constraint"
+        and {column.name for column in object_.columns} <= AUDIT_USER_COLUMNS
+    ):
+        return False
+
+    return True
+
+
+def compare_server_default(
+    _context: Any,
+    inspected_column: Any,
+    _metadata_column: Any,
+    _rendered_inspected_default: str | None,
+    _metadata_default: Any,
+    _rendered_metadata_default: str | None,
+) -> bool | None:
+    """Ignore known historical defaults while detecting new default drift."""
+    column_key = (
+        inspected_column.table.schema,
+        inspected_column.table.name,
+        inspected_column.name,
+    )
+    if column_key in LEGACY_SERVER_DEFAULT_COLUMNS:
+        return False
+    return None
+
+
 def run_migrations_offline() -> None:
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
@@ -58,8 +145,9 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         include_schemas=True,
         include_name=include_name,
+        include_object=include_object,
         compare_type=True,
-        compare_server_default=True,
+        compare_server_default=compare_server_default,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
     )
@@ -89,8 +177,9 @@ def run_migrations_online() -> None:
             target_metadata=target_metadata,
             include_schemas=True,
             include_name=include_name,
+            include_object=include_object,
             compare_type=True,
-            compare_server_default=True,
+            compare_server_default=compare_server_default,
         )
         with context.begin_transaction():
             context.run_migrations()

@@ -29,7 +29,9 @@ from app.modules.safety.service.safety import (
 logger = logging.getLogger(__name__)
 
 # ── 调试文件日志：追踪通知流程的完整调用链 ──
-_debug_log_path = os.path.join(os.path.dirname(__file__), "..", "..", "..", "debug_notify.log")
+_debug_log_path = os.path.join(
+    os.path.dirname(__file__), "..", "..", "..", "debug_notify.log"
+)
 
 
 def _debug_log(msg: str) -> None:
@@ -41,39 +43,50 @@ def _debug_log(msg: str) -> None:
     except Exception:
         pass
 
+
 # ═══════════════════════════════════════════════════════════════
 # 字段映射：Bitable 中文字段名 → HazardReport 英文字段名
 # ═══════════════════════════════════════════════════════════════
 
 BITABLE_TO_MODEL: dict[str, str] = {
     # ── 基本信息 ──
-    "检查日期":            "discovered_at",
-    "检查人员":            "discovered_by_name",       # person 类型 → 取 name
-    "检查人员.部门":       "inspector_department",      # multi_select → 逗号拼接（60 部门选项）
-    "检查类别":            "inspection_category",       # multi_select → 逗号拼接
-    "隐患描述":            "description",
-    "责任部门":            "department",
-    "整改责任人":              "rectification_responsible_person_name",
+    "检查日期": "discovered_at",
+    "检查人员": "discovered_by_name",  # person 类型 → 取 name
+    "检查人员.部门": "inspector_department",  # multi_select → 逗号拼接（60 部门选项）
+    "检查类别": "inspection_category",  # multi_select → 逗号拼接
+    "隐患描述": "description",
+    "责任部门": "department",
+    "整改责任人": "rectification_responsible_person_name",
     # ── 隐患分类/分级（AI 识别，由平台回写）──
-    "隐患分类（AI）":       "hazard_type",               # single_select: 人的不安全行为/物的不安全状态/环境的不安全因素/管理的缺陷
-    "隐患类别（AI）":       "hazard_category",            # single_select: 设备设施/危化储存/仪表+电气/...（13种）
-    "隐患级别（AI）":       "hazard_level",               # single_select: 一般隐患/较大隐患/重大隐患
-    "隐患描述（AI）":       "key_defect",                 # text: AI 生成的隐患描述
-    "隐患判定依据（AI）":   "major_hazard_basis",         # text: AI 生成的判定依据
+    "隐患分类（AI）": (
+        "hazard_type"
+    ),  # single_select: 人的不安全行为/物的不安全状态/环境的不安全因素/管理的缺陷
+    "隐患类别（AI）": (
+        "hazard_category"
+    ),  # single_select: 设备设施/危化储存/仪表+电气/...（13种）
+    "隐患级别（AI）": "hazard_level",  # single_select: 一般隐患/较大隐患/重大隐患
+    "隐患描述（AI）": "key_defect",  # text: AI 生成的隐患描述
+    "隐患判定依据（AI）": "major_hazard_basis",  # text: AI 生成的判定依据
     # ── 附件 ──
-    "缺陷图片":            "defect_photos",              # attachment → JSON 路径数组
-    "整改后图片":          "rectification_photos",
+    "缺陷图片": "defect_photos",  # attachment → JSON 路径数组
+    "整改后图片": "rectification_photos",
     # ── 整改相关（整改状态为平台→Bitable 单向，不在此映射）──
-    "纠正预防措施":         "rectification_reply",
-    "整改期限":            "deadline",
-    "整改完成时间":         "actual_completion_date",
+    "纠正预防措施": "rectification_reply",
+    "整改期限": "deadline",
+    "整改完成时间": "actual_completion_date",
     # ── 三级复核（Bitable 审批字段）──
-    "部门负责人复核":       "verify_level_1_status",      # single_select: 已同意→approved / 未同意→rejected
-    "分管领导复核":         "verify_level_2_status",      # single_select: 已同意→approved / 未同意→rejected
-    "检查人员复核":         "verify_level_3_status",      # single_select: 已同意→approved / 未同意→rejected
+    "部门负责人复核": (
+        "verify_level_1_status"
+    ),  # single_select: 已同意→approved / 未同意→rejected
+    "分管领导复核": (
+        "verify_level_2_status"
+    ),  # single_select: 已同意→approved / 未同意→rejected
+    "检查人员复核": (
+        "verify_level_3_status"
+    ),  # single_select: 已同意→approved / 未同意→rejected
     # ── 系统回写字段 ──
-    "隐患编号":            "hazard_no",
-    "整改建议（AI）":       "corrective_preventive_measures",  # AI 生成的整改建议
+    "隐患编号": "hazard_no",
+    "整改建议（AI）": "corrective_preventive_measures",  # AI 生成的整改建议
 }
 
 # 反向映射：英文字段名 → 中文 Bitable 字段名
@@ -85,26 +98,26 @@ META_FIELDS: set[str] = {"隐患编号"}
 # ── Bitable 值 → 模型值 的类型转换映射 ──
 # 隐患分类
 HAZARD_TYPE_MAP: dict[str, str] = {
-    "人的不安全行为":   "unsafe_action",
-    "物的不安全状态":   "unsafe_condition",
-    "环境的不安全因素":  "environmental",
-    "管理的缺陷":       "management_defect",
+    "人的不安全行为": "unsafe_action",
+    "物的不安全状态": "unsafe_condition",
+    "环境的不安全因素": "environmental",
+    "管理的缺陷": "management_defect",
 }
 # 隐患类别（13种）
 HAZARD_CATEGORY_MAP: dict[str, str] = {
-    "设备设施":           "equipment",
-    "危化储存":           "hazardous_storage",
-    "应急管理":           "emergency_mgmt",
-    "仪表+电气":          "instrument_electrical",
-    "防雷防静电":         "lightning_antistatic",
-    "职业健康+劳保防护":   "occupational_health",
-    "三违作业":           "violation_operation",
-    "6S":                "six_s",
-    "标签标识":           "label_signage",
-    "工艺管理":           "process_mgmt",
-    "承包商缺陷":         "contractor_defect",
-    "内页资料":           "documentation",
-    "特殊作业":           "special_operation",
+    "设备设施": "equipment",
+    "危化储存": "hazardous_storage",
+    "应急管理": "emergency_mgmt",
+    "仪表+电气": "instrument_electrical",
+    "防雷防静电": "lightning_antistatic",
+    "职业健康+劳保防护": "occupational_health",
+    "三违作业": "violation_operation",
+    "6S": "six_s",
+    "标签标识": "label_signage",
+    "工艺管理": "process_mgmt",
+    "承包商缺陷": "contractor_defect",
+    "内页资料": "documentation",
+    "特殊作业": "special_operation",
 }
 # 隐患级别
 HAZARD_LEVEL_MAP: dict[str, str] = {
@@ -140,6 +153,7 @@ APPROVAL_STATUS_REVERSE = {v: k for k, v in APPROVAL_STATUS_MAP.items()}
 # ═══════════════════════════════════════════════════════════════
 # 工具函数
 # ═══════════════════════════════════════════════════════════════
+
 
 def _extract_person_info(value: Any) -> dict[str, str]:
     """从 Bitable person 字段一次性提取全部可用信息。
@@ -192,6 +206,7 @@ def _is_open_id_like(s: str) -> bool:
 
 # ── 统一身份解析 ──
 
+
 async def _resolve_person(
     session,
     bt_value: Any,
@@ -221,10 +236,15 @@ async def _resolve_person(
 
     logger.debug(
         "_resolve_person[%s]: id=%r name=%r email=%r existing=%r",
-        bt_field_label, person_id, person_name, person_email, existing_name,
+        bt_field_label,
+        person_id,
+        person_name,
+        person_email,
+        existing_name,
     )
 
     from app.modules.safety.feishu.identity_resolver import IdentityResolver
+
     resolver = IdentityResolver(session)
     user = None
 
@@ -239,22 +259,32 @@ async def _resolve_person(
             logger.exception("_resolve_person[%s] 按 id 查询异常", bt_field_label)
 
     # ── 策略 2.5：安全应用 open_id → user_id 反向映射 → identity.users ──
-    # Bitable person 字段的 open_id 是安全应用命名空间，identity.users 存的是全局应用 open_id，
+    # Bitable person 字段的 open_id 属于安全应用命名空间，
+    # identity.users 存储的是全局应用 open_id。
     # 两个命名空间不同导致策略 2 的 feishu_open_id 匹配失败。通过 bitable_open_ids.json
     # 反向查找 user_id，再按 feishu_user_id 查 identity.users。
     if not user and person_id and _is_open_id_like(person_id):
         try:
-            from app.modules.safety.feishu.bitable_id_mapper import get_user_id_by_bitable_open_id
+            from app.modules.safety.feishu.bitable_id_mapper import (
+                get_user_id_by_bitable_open_id,
+            )
+
             mapped_user_id = get_user_id_by_bitable_open_id(person_id)
             if mapped_user_id:
                 user = await resolver._find_user_by_user_id(mapped_user_id)
                 if user:
                     logger.info(
-                        "_resolve_person[%s] bitable open_id 反向映射成功: bitable_oid=%s → user_id=%s → %s",
-                        bt_field_label, person_id, mapped_user_id, user.name,
+                        "_resolve_person[%s] bitable open_id 反向映射成功:"
+                        " bitable_oid=%s → user_id=%s → %s",
+                        bt_field_label,
+                        person_id,
+                        mapped_user_id,
+                        user.name,
                     )
         except Exception:
-            logger.exception("_resolve_person[%s] bitable open_id 反向映射异常", bt_field_label)
+            logger.exception(
+                "_resolve_person[%s] bitable open_id 反向映射异常", bt_field_label
+            )
 
     # ── 策略 3：按 email 查（Bitable open_id 与 identity 表可能不同）──
     if not user and person_email:
@@ -263,7 +293,9 @@ async def _resolve_person(
             if user:
                 logger.info(
                     "_resolve_person[%s] email 回退成功: email=%s → %s",
-                    bt_field_label, person_email, user.name,
+                    bt_field_label,
+                    person_email,
+                    user.name,
                 )
         except Exception:
             logger.exception("_resolve_person[%s] 按 email 查询异常", bt_field_label)
@@ -275,7 +307,9 @@ async def _resolve_person(
             if user:
                 logger.info(
                     "_resolve_person[%s] name 回退成功: name=%s → %s",
-                    bt_field_label, person_name, user.name,
+                    bt_field_label,
+                    person_name,
+                    user.name,
                 )
         except Exception:
             logger.exception("_resolve_person[%s] 按 name 查询异常", bt_field_label)
@@ -313,7 +347,8 @@ def _extract_attachments(value: Any) -> list[dict]:
     if isinstance(value, list):
         return [
             {"file_token": a.get("file_token", ""), "name": a.get("name", "")}
-            for a in value if isinstance(a, dict)
+            for a in value
+            if isinstance(a, dict)
         ]
     return []
 
@@ -394,10 +429,16 @@ def _map_bitable_fields(bitable_fields: dict[str, Any]) -> dict[str, Any]:
                 result[en_name] = info["name"]
             elif info["id"]:
                 result[en_name] = info["id"]
-        elif en_name in ("inspection_category", "hazard_category", "hazard_type",
-                         "hazard_level",
-                         "inspector_department",
-                         "verify_level_1_status", "verify_level_2_status", "verify_level_3_status"):
+        elif en_name in (
+            "inspection_category",
+            "hazard_category",
+            "hazard_type",
+            "hazard_level",
+            "inspector_department",
+            "verify_level_1_status",
+            "verify_level_2_status",
+            "verify_level_3_status",
+        ):
             val = _extract_select_values(raw)
             # 跳过空值，避免 Pydantic enum 校验失败
             if not val:
@@ -414,13 +455,19 @@ def _map_bitable_fields(bitable_fields: dict[str, Any]) -> dict[str, Any]:
                 mapped = HAZARD_LEVEL_MAP.get(val, "general")
                 if mapped in HazardLevel.__members__:
                     result[en_name] = mapped
-            elif en_name in ("verify_level_1_status", "verify_level_2_status", "verify_level_3_status"):
+            elif en_name in (
+                "verify_level_1_status",
+                "verify_level_2_status",
+                "verify_level_3_status",
+            ):
                 result[en_name] = APPROVAL_STATUS_MAP.get(val, "pending")
             else:
                 result[en_name] = val
         elif en_name in ("defect_photos", "rectification_photos"):
             attachments = _extract_attachments(raw)
-            result[en_name] = json.dumps(attachments, ensure_ascii=False) if attachments else None
+            result[en_name] = (
+                json.dumps(attachments, ensure_ascii=False) if attachments else None
+            )
         elif en_name in ("discovered_at", "deadline", "actual_completion_date"):
             dt = _ms_to_datetime(raw)
             if dt:
@@ -429,7 +476,8 @@ def _map_bitable_fields(bitable_fields: dict[str, Any]) -> dict[str, Any]:
             # 元数据字段，不写入 DB
             pass
         else:
-            # 纯文本/富文本字段（兼容 Bitable 富文本 [{"type":"text","text":"..."}] 格式）
+            # 纯文本/富文本字段，兼容 Bitable 富文本
+            # [{"type":"text","text":"..."}] 格式。
             result[en_name] = _extract_rich_text(raw) or None
 
     return result
@@ -460,13 +508,25 @@ def _map_model_to_bitable(hazard: Any) -> dict[str, Any]:
             continue
 
         if en_name == "hazard_type":
-            result[cn_name] = _format_bitable_select_value(cn_name, HAZARD_TYPE_REVERSE.get(val, val))
+            result[cn_name] = _format_bitable_select_value(
+                cn_name, HAZARD_TYPE_REVERSE.get(val, val)
+            )
         elif en_name == "hazard_category":
-            result[cn_name] = _format_bitable_select_value(cn_name, HAZARD_CATEGORY_REVERSE.get(val, val))
+            result[cn_name] = _format_bitable_select_value(
+                cn_name, HAZARD_CATEGORY_REVERSE.get(val, val)
+            )
         elif en_name == "hazard_level":
-            result[cn_name] = _format_bitable_select_value(cn_name, HAZARD_LEVEL_REVERSE.get(val, val))
-        elif en_name in ("verify_level_1_status", "verify_level_2_status", "verify_level_3_status"):
-            result[cn_name] = _format_bitable_select_value(cn_name, APPROVAL_STATUS_REVERSE.get(val, val))
+            result[cn_name] = _format_bitable_select_value(
+                cn_name, HAZARD_LEVEL_REVERSE.get(val, val)
+            )
+        elif en_name in (
+            "verify_level_1_status",
+            "verify_level_2_status",
+            "verify_level_3_status",
+        ):
+            result[cn_name] = _format_bitable_select_value(
+                cn_name, APPROVAL_STATUS_REVERSE.get(val, val)
+            )
         elif en_name in ("discovered_at", "deadline", "actual_completion_date"):
             ms = _datetime_to_ms(val)
             if ms:
@@ -509,6 +569,7 @@ async def _is_sync_ignored(record_id: str) -> bool:
 # 核心同步逻辑
 # ═══════════════════════════════════════════════════════════════
 
+
 async def _get_hazard_by_feishu_id(feishu_record_id: str) -> Any | None:
     """根据 feishu_record_id 查找 HazardReport。"""
     from sqlalchemy import select
@@ -517,7 +578,9 @@ async def _get_hazard_by_feishu_id(feishu_record_id: str) -> Any | None:
     from app.modules.safety.models import HazardReport
 
     async with async_session_factory() as session:
-        stmt = select(HazardReport).where(HazardReport.feishu_record_id == feishu_record_id)
+        stmt = select(HazardReport).where(
+            HazardReport.feishu_record_id == feishu_record_id
+        )
         result = await session.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -531,7 +594,12 @@ def _build_attachment_extra(
     """构建高级权限多维表格的 extra 鉴权参数（URL-encoded JSON）。
 
     飞书要求格式：
-    {"bitablePerm": {"tableId": "...", "attachments": {"fldXXX": {"recXXX": ["file_token"]}}}}
+    {
+        "bitablePerm": {
+            "tableId": "...",
+            "attachments": {"fldXXX": {"recXXX": ["file_token"]}},
+        }
+    }
     """
     import urllib.parse
 
@@ -597,25 +665,34 @@ async def _download_and_save_attachments(
                     has_url = any(a.get("url") or a.get("tmp_url") for a in valid)
                     logger.info(
                         "发现附件字段 %s: %d 个文件 (has_url=%s)",
-                        field_cn, len(valid), has_url,
+                        field_cn,
+                        len(valid),
+                        has_url,
                     )
                     if not has_url:
                         logger.warning(
-                            "API 返回的附件缺少 url/tmp_url，将回退到 Drive API: field=%s record_id=%s",
-                            field_cn, record_id,
+                            "API 返回的附件缺少 url/tmp_url，将回退到 Drive API:"
+                            " field=%s record_id=%s",
+                            field_cn,
+                            record_id,
                         )
                     all_attachments.extend((field_cn, a) for a in valid)
 
-    # 回退：API 未返回附件时，尝试从事件字段提取 file_token（仅含 file_token/name，需 Drive API）
+    # 回退：API 未返回附件时，从事件字段提取 file_token。
+    # 事件仅含 file_token/name，仍需调用 Drive API。
     if not all_attachments and bitable_fields:
         logger.info("API 未返回附件，回退到事件数据: record_id=%s", record_id)
         for field_cn in _att_fields:
             raw = bitable_fields.get(field_cn)
             if isinstance(raw, (list, str)):
-                attachments = _extract_attachments(raw if not isinstance(raw, str) else json.loads(raw))
+                attachments = _extract_attachments(
+                    raw if not isinstance(raw, str) else json.loads(raw)
+                )
                 if attachments:
                     logger.info(
-                        "从事件数据发现附件: field=%s count=%d", field_cn, len(attachments),
+                        "从事件数据发现附件: field=%s count=%d",
+                        field_cn,
+                        len(attachments),
                     )
                     all_attachments.extend((field_cn, a) for a in attachments)
 
@@ -625,7 +702,9 @@ async def _download_and_save_attachments(
 
     logger.info(
         "开始下载 Bitable 附件: record_id=%s count=%d api_fetched=%s",
-        record_id, len(all_attachments), bool(api_fields),
+        record_id,
+        len(all_attachments),
+        bool(api_fields),
     )
 
     # ── Step 4: 下载每个附件 ──
@@ -638,19 +717,24 @@ async def _download_and_save_attachments(
 
         logger.info(
             "下载附件: field=%s file_token=%s name=%s has_presigned_url=%s",
-            field_cn, file_token, file_name, bool(download_url),
+            field_cn,
+            file_token,
+            file_name,
+            bool(download_url),
         )
 
         data: bytes | None = None
 
-        # 策略1: 优先用 Bitable API 返回的预签名 url（内部处理 auth/no-auth 重试 + 内容校验）
+        # 策略1: 优先使用 Bitable API 返回的预签名 URL。
+        # 下载方法内部处理 auth/no-auth 重试和内容校验。
         if download_url:
             try:
                 data = await bitable.download_attachment_from_url(download_url)
             except Exception:
                 logger.exception(
                     "预签名 URL 下载异常: file_token=%s url=%s...",
-                    file_token, download_url[:120],
+                    file_token,
+                    download_url[:120],
                 )
 
         # 策略2: 回退 — file_token + 手工构建 extra → Drive API
@@ -660,23 +744,30 @@ async def _download_and_save_attachments(
                 field_id = field_name_to_id.get(field_cn, "")
                 if field_id:
                     extra = _build_attachment_extra(
-                        bitable.table_id, record_id, field_id, file_token,
+                        bitable.table_id,
+                        record_id,
+                        field_id,
+                        file_token,
                     )
                 else:
                     logger.warning(
-                        "无法找到字段 ID: field_cn=%s, 将不带 extra 尝试下载", field_cn,
+                        "无法找到字段 ID: field_cn=%s, 将不带 extra 尝试下载",
+                        field_cn,
                     )
                 data = await bitable.download_attachment(file_token, extra=extra)
             except Exception:
                 logger.exception(
                     "Drive API 下载异常: file_token=%s extra=%s",
-                    file_token, bool(extra),
+                    file_token,
+                    bool(extra),
                 )
 
         if not data:
             logger.error(
                 "附件下载失败(所有策略耗尽): file_token=%s name=%s field=%s",
-                file_token, file_name, field_cn,
+                file_token,
+                file_name,
+                field_cn,
             )
             continue
 
@@ -697,7 +788,9 @@ async def _download_and_save_attachments(
 
     logger.info(
         "Bitable 附件下载完成: record_id=%s defect=%d rectification=%d",
-        record_id, len(saved["defect"]), len(saved["rectification"]),
+        record_id,
+        len(saved["defect"]),
+        len(saved["rectification"]),
     )
     return saved
 
@@ -729,8 +822,9 @@ async def _create_hazard_from_bitable(
         # 2.1 检查人员身份解析 — 统一使用 _resolve_person
         inspector_raw = bitable_fields.get("检查人员")
         _debug_log(
-            f"CREATE_INSPECTOR_RAW: record_id={record_id} "
-            f"raw={str(inspector_raw)[:200]} mapped_name={mapped.get('discovered_by_name')}"
+            f"CREATE_INSPECTOR_RAW: record_id={record_id}"
+            f" raw={str(inspector_raw)[:200]}"
+            f" mapped_name={mapped.get('discovered_by_name')}"
         )
         inspector_uuid, inspector_open_id, inspector_name = await _resolve_person(
             session,
@@ -748,8 +842,9 @@ async def _create_hazard_from_bitable(
         if inspector_name and inspector_name != "飞书用户":
             mapped["discovered_by_name"] = inspector_name
         _debug_log(
-            f"CREATE_INSPECTOR_FINAL: record_id={record_id} "
-            f"discovered_by_name={mapped.get('discovered_by_name')} discovered_by={mapped.get('discovered_by')}"
+            f"CREATE_INSPECTOR_FINAL: record_id={record_id}"
+            f" discovered_by_name={mapped.get('discovered_by_name')}"
+            f" discovered_by={mapped.get('discovered_by')}"
         )
 
         # 2.2 责任人身份解析 — 统一使用 _resolve_person
@@ -768,12 +863,15 @@ async def _create_hazard_from_bitable(
         service = SafetyService(session)
         photo_fields = {"defect_photos", "rectification_photos"}
         create_data = {
-            k: v for k, v in mapped.items()
+            k: v
+            for k, v in mapped.items()
             if k in HazardReportCreate.model_fields and k not in photo_fields
         }
         logger.info(
-            "🔍 CREATE 即将入库: record_id=%s create_data keys=%s inspector_name=%r resp_name=%r",
-            record_id, list(create_data.keys()),
+            "🔍 CREATE 即将入库: record_id=%s create_data keys=%s inspector_name=%r"
+            " resp_name=%r",
+            record_id,
+            list(create_data.keys()),
             create_data.get("discovered_by_name"),
             create_data.get("rectification_responsible_person_name"),
         )
@@ -785,12 +883,19 @@ async def _create_hazard_from_bitable(
         await session.commit()
         logger.info(
             "Bitable 隐患已创建: record_id=%s hazard_id=%s hazard_no=%s ai_progress=%s",
-            record_id, item.id, item.hazard_no, item.ai_node_progress,
+            record_id,
+            item.id,
+            item.hazard_no,
+            item.ai_node_progress,
         )
 
         # 2.5 责任部门 → 责任人自动判定（有部门但无有效责任人时自动查询部门负责人）
-        _resolved_leader_open_id: str | None = None  # identity 侧 open_id（仅作 fallback）
-        _resolved_leader_user_id: str | None = None  # employee user_id，用于查 Bitable open_id
+        _resolved_leader_open_id: str | None = (
+            None  # identity 侧 open_id（仅作 fallback）
+        )
+        _resolved_leader_user_id: str | None = (
+            None  # employee user_id，用于查 Bitable open_id
+        )
         _resp_name = (item.rectification_responsible_person_name or "").strip()
         if item.department and (
             not _resp_name
@@ -799,6 +904,7 @@ async def _create_hazard_from_bitable(
         ):
             try:
                 from app.modules.safety.feishu.identity_resolver import IdentityResolver
+
                 resolver = IdentityResolver(session)
                 person = await resolver.resolve_department_leader(item.department)
                 if person and person.name:
@@ -806,7 +912,9 @@ async def _create_hazard_from_bitable(
                         update(HazardReport)
                         .where(HazardReport.id == item.id)
                         .values(
-                            rectification_responsible_person=_uuid.UUID(person.id) if person.id else None,
+                            rectification_responsible_person=(
+                                _uuid.UUID(person.id) if person.id else None
+                            ),
                             rectification_responsible_person_name=person.name,
                         )
                     )
@@ -816,15 +924,24 @@ async def _create_hazard_from_bitable(
                     _resolved_leader_open_id = person.open_id
                     _resolved_leader_user_id = person.user_id
                     logger.info(
-                        "责任人自动判定: dept=%s leader=%s uuid=%s open_id=%s user_id=%s",
-                        item.department, person.name, person.id, person.open_id, person.user_id,
+                        "责任人自动判定: dept=%s leader=%s uuid=%s open_id=%s"
+                        " user_id=%s",
+                        item.department,
+                        person.name,
+                        person.id,
+                        person.open_id,
+                        person.user_id,
                     )
             except Exception:
                 logger.exception("责任人自动判定失败: dept=%s", item.department)
 
-        # 3. 下载附件到本地 → 直接 SET clean file paths（不 append，避免 Bitable attachment 对象残留）
+        # 3. 下载附件到本地后直接 SET clean file paths。
+        # 不使用 append，避免残留 Bitable attachment 对象。
         saved = await _download_and_save_attachments(
-            SafetyBitableClient(), bitable_fields, str(item.id), record_id=record_id,
+            SafetyBitableClient(),
+            bitable_fields,
+            str(item.id),
+            record_id=record_id,
         )
         if saved.get("defect") or saved.get("rectification"):
             import json as _json
@@ -833,11 +950,13 @@ async def _create_hazard_from_bitable(
             photo_updates: dict[str, Any] = {}
             if saved.get("defect"):
                 photo_updates["defect_photos"] = _json.dumps(
-                    [p.replace("\\", "/") for p in saved["defect"]], ensure_ascii=False,
+                    [p.replace("\\", "/") for p in saved["defect"]],
+                    ensure_ascii=False,
                 )
             if saved.get("rectification"):
                 photo_updates["rectification_photos"] = _json.dumps(
-                    [p.replace("\\", "/") for p in saved["rectification"]], ensure_ascii=False,
+                    [p.replace("\\", "/") for p in saved["rectification"]],
+                    ensure_ascii=False,
                 )
             if photo_updates:
                 await session.execute(stmt_photos.values(**photo_updates))
@@ -847,7 +966,9 @@ async def _create_hazard_from_bitable(
                     setattr(item, k, v)
             logger.info(
                 "附件已入库(SET模式): hazard_id=%s defect=%d rectification=%d",
-                item.id, len(saved.get("defect", [])), len(saved.get("rectification", [])),
+                item.id,
+                len(saved.get("defect", [])),
+                len(saved.get("rectification", [])),
             )
 
         # 4. 重新获取最新状态（含附件路径），执行 AI 脚本
@@ -865,14 +986,20 @@ async def _create_hazard_from_bitable(
                 # AI 隐患识别（插件：含 few-shot prompt + 规则引擎 + 整改建议）
                 item = await service.run_hazard_ai_script(item.id, 1)
                 if item and not item.ai_error_message:
-                    ai_summary_parts.append(
-                        f"分类:{HAZARD_TYPE_REVERSE.get(item.hazard_type, item.hazard_type)}"
+                    hazard_type_label = HAZARD_TYPE_REVERSE.get(
+                        item.hazard_type, item.hazard_type
                     )
-                    ai_summary_parts.append(
-                        f"等级:{HAZARD_LEVEL_REVERSE.get(item.hazard_level, item.hazard_level)}"
+                    hazard_level_label = HAZARD_LEVEL_REVERSE.get(
+                        item.hazard_level, item.hazard_level
                     )
+                    ai_summary_parts.append(f"分类:{hazard_type_label}")
+                    ai_summary_parts.append(f"等级:{hazard_level_label}")
                     if item.hazard_category:
-                        ai_summary_parts.append(f"类别:{HAZARD_CATEGORY_REVERSE.get(item.hazard_category, item.hazard_category)}")
+                        hazard_category_label = HAZARD_CATEGORY_REVERSE.get(
+                            item.hazard_category,
+                            item.hazard_category,
+                        )
+                        ai_summary_parts.append(f"类别:{hazard_category_label}")
                     if item.key_defect:
                         ai_summary_parts.append(f"重点缺陷:{item.key_defect}")
                     if item.corrective_preventive_measures:
@@ -880,15 +1007,20 @@ async def _create_hazard_from_bitable(
                 else:
                     logger.warning(
                         "AI 隐患识别失败: hazard_id=%s error=%s",
-                        item.id, getattr(item, 'ai_error_message', 'unknown'),
+                        item.id,
+                        getattr(item, "ai_error_message", "unknown"),
                     )
             except Exception:
                 logger.exception("AI 脚本执行异常: hazard_id=%s", item.id)
 
             await session.commit()
             logger.info(
-                "AI 脚本执行完成: hazard_id=%s overall_status=%s ai_error=%s ai_progress=%s",
-                item.id, item.overall_status, bool(item.ai_error_message), item.ai_node_progress,
+                "AI 脚本执行完成: hazard_id=%s overall_status=%s ai_error=%s"
+                " ai_progress=%s",
+                item.id,
+                item.overall_status,
+                bool(item.ai_error_message),
+                item.ai_node_progress,
             )
 
         # 5. 整改期限：自动计算（discovered_at + 2 个月）并写入 DB
@@ -905,7 +1037,9 @@ async def _create_hazard_from_bitable(
             await session.execute(stmt_deadline)
             await session.commit()
             item.deadline = computed_deadline
-            logger.info("整改期限自动计算: hazard_id=%s deadline=%s", item.id, computed_deadline)
+            logger.info(
+                "整改期限自动计算: hazard_id=%s deadline=%s", item.id, computed_deadline
+            )
 
         # 6. 回写 Bitable（隐患编号 + AI 结果 + 整改期限 + 责任人）
         bitable = SafetyBitableClient()
@@ -926,14 +1060,17 @@ async def _create_hazard_from_bitable(
             )
             if responsible_person_value:
                 logger.info(
-                    "责任人已加入 Bitable 回写(自动判定): name=%s user_id=%s bitable_id=%s",
-                    getattr(item, 'rectification_responsible_person_name', '?'),
-                    _resolved_leader_user_id, responsible_person_value[0]["id"],
+                    "责任人已加入 Bitable 回写(自动判定): name=%s user_id=%s"
+                    " bitable_id=%s",
+                    getattr(item, "rectification_responsible_person_name", "?"),
+                    _resolved_leader_user_id,
+                    responsible_person_value[0]["id"],
                 )
         elif item.rectification_responsible_person_name:
             # 从 Bitable 直接填写 → 解析 identity 再查 Bitable open_id
             try:
                 from app.modules.safety.feishu.identity_resolver import IdentityResolver
+
                 resolver2 = IdentityResolver(session)
                 person2 = await resolver2.resolve_by_name(
                     item.rectification_responsible_person_name,
@@ -947,20 +1084,26 @@ async def _create_hazard_from_bitable(
                     )
                     if responsible_person_value:
                         logger.info(
-                            "责任人 Bitable open_id 解析成功: name=%s user_id=%s bitable_id=%s",
+                            "责任人 Bitable open_id 解析成功: name=%s user_id=%s"
+                            " bitable_id=%s",
                             item.rectification_responsible_person_name,
-                            person2.user_id, responsible_person_value[0]["id"],
+                            person2.user_id,
+                            responsible_person_value[0]["id"],
                         )
                     else:
                         logger.warning(
-                            "责任人 Bitable open_id 未找到: name=%s user_id=%s (identity open_id=%s)",
+                            "责任人 Bitable open_id 未找到: name=%s user_id=%s"
+                            " (identity open_id=%s)",
                             item.rectification_responsible_person_name,
-                            person2.user_id, person2.open_id,
+                            person2.user_id,
+                            person2.open_id,
                         )
                 else:
                     logger.warning(
-                        "责任人 identity 解析失败(未在 identity.users 中找到): name=%s dept=%s",
-                        item.rectification_responsible_person_name, item.department,
+                        "责任人 identity 解析失败(未在 identity.users 中找到): name=%s"
+                        " dept=%s",
+                        item.rectification_responsible_person_name,
+                        item.department,
                     )
             except Exception:
                 logger.exception(
@@ -971,9 +1114,10 @@ async def _create_hazard_from_bitable(
             writeback["整改责任人"] = responsible_person_value
         else:
             logger.warning(
-                "责任人未回写(无 Bitable open_id): hazard_no=%s name=%s user_id=%s identity_open_id=%s",
+                "责任人未回写(无 Bitable open_id): hazard_no=%s name=%s user_id=%s"
+                " identity_open_id=%s",
                 item.hazard_no,
-                getattr(item, 'rectification_responsible_person_name', None),
+                getattr(item, "rectification_responsible_person_name", None),
                 _resolved_leader_user_id,
                 _resolved_leader_open_id,
             )
@@ -981,18 +1125,22 @@ async def _create_hazard_from_bitable(
         if item.deadline:
             writeback["整改期限"] = _datetime_to_ms(item.deadline)
         # AI 识别结果 → 回写到 Bitable 对应的独立 AI 字段
-        # 注意: select/multi_select 字段需要匹配 Bitable 字段类型（multi_select 须为数组）
+        # select/multi_select 字段必须匹配 Bitable 字段类型。
+        # multi_select 的值必须为数组。
         if item.hazard_type:
             writeback["隐患分类（AI）"] = _format_bitable_select_value(
-                "隐患分类（AI）", HAZARD_TYPE_REVERSE.get(item.hazard_type, item.hazard_type),
+                "隐患分类（AI）",
+                HAZARD_TYPE_REVERSE.get(item.hazard_type, item.hazard_type),
             )
         if item.hazard_level:
             writeback["隐患级别（AI）"] = _format_bitable_select_value(
-                "隐患级别（AI）", HAZARD_LEVEL_REVERSE.get(item.hazard_level, item.hazard_level),
+                "隐患级别（AI）",
+                HAZARD_LEVEL_REVERSE.get(item.hazard_level, item.hazard_level),
             )
         if item.hazard_category:
             writeback["隐患类别（AI）"] = _format_bitable_select_value(
-                "隐患类别（AI）", HAZARD_CATEGORY_REVERSE.get(item.hazard_category, item.hazard_category),
+                "隐患类别（AI）",
+                HAZARD_CATEGORY_REVERSE.get(item.hazard_category, item.hazard_category),
             )
         if item.key_defect:
             writeback["隐患描述（AI）"] = item.key_defect
@@ -1009,8 +1157,9 @@ async def _create_hazard_from_bitable(
         import asyncio as _asyncio
 
         _debug_log(
-            f"CREATE_DISPATCH_RECTIFY: record_id={record_id} hazard_no={item.hazard_no} "
-            f"resp_name={item.rectification_responsible_person_name} dept={item.department}"
+            f"CREATE_DISPATCH_RECTIFY: record_id={record_id} hazard_no={item.hazard_no}"
+            f" resp_name={item.rectification_responsible_person_name}"
+            f" dept={item.department}"
         )
         _asyncio.create_task(_send_rectification_notification(item))
 
@@ -1028,7 +1177,9 @@ async def _create_hazard_from_bitable(
         try:
             bitable = SafetyBitableClient()
             await _set_sync_ignore(record_id, ttl=30)
-            await bitable.update_record(record_id, {"隐患编号": f"ERROR:{record_id[:12]}"})
+            await bitable.update_record(
+                record_id, {"隐患编号": f"ERROR:{record_id[:12]}"}
+            )
         except Exception:
             logger.exception("回写失败状态异常: record_id=%s", record_id)
         return None
@@ -1080,10 +1231,15 @@ async def _update_hazard_from_bitable(
     from app.modules.safety.service import SafetyService
 
     mapped = _map_bitable_fields(bitable_fields)
-    # 过滤掉不应更新的系统字段。附件字段需特殊处理（下载 → 本地路径），不能直接写入 Bitable 对象
+    # 过滤掉不应更新的系统字段。
+    # 附件字段需下载为本地路径，不能直接写入 Bitable 对象。
     skip_fields = {"hazard_no", "feishu_record_id"}
     # 空字符串视为未提供（Bitable API 可能返回 [] → ""），防御性拦截
-    update_data = {k: v for k, v in mapped.items() if k not in skip_fields and v is not None and v != ""}
+    update_data = {
+        k: v
+        for k, v in mapped.items()
+        if k not in skip_fields and v is not None and v != ""
+    }
     logger.info(
         "📝 UPDATE mapped: record_id=%s bitable_keys=%s mapped_keys=%s update_keys=%s",
         record_id,
@@ -1101,19 +1257,22 @@ async def _update_hazard_from_bitable(
     if "rectification_photos" in mapped:
         logger.info(
             "📝 rectification_photos in mapped: record_id=%s preview=%s",
-            record_id, str(mapped.get("rectification_photos"))[:200],
+            record_id,
+            str(mapped.get("rectification_photos"))[:200],
         )
 
     # ── 附件字段单独处理：下载 → 本地路径（与 CREATE 流程一致）──
     photo_updates: dict[str, str] = {}  # field_name → JSON string of local paths
     _bt_photo_fields = {
-        k: v for k, v in bitable_fields.items()
-        if k in ("缺陷图片", "整改后图片") and v
+        k: v for k, v in bitable_fields.items() if k in ("缺陷图片", "整改后图片") and v
     }
     if _bt_photo_fields:
         try:
             saved = await _download_and_save_attachments(
-                SafetyBitableClient(), _bt_photo_fields, str(hazard.id), record_id=record_id,
+                SafetyBitableClient(),
+                _bt_photo_fields,
+                str(hazard.id),
+                record_id=record_id,
             )
             import json as _json
 
@@ -1133,20 +1292,29 @@ async def _update_hazard_from_bitable(
                 }
                 new_paths = [p.replace("\\", "/") for p in saved["defect"]]
                 unique_new = [
-                    p for p in new_paths
+                    p
+                    for p in new_paths
                     if os.path.basename(p) not in existing_basenames
                 ]
                 if unique_new:
                     merged_defect = existing_defect + unique_new
-                    photo_updates["defect_photos"] = _json.dumps(merged_defect, ensure_ascii=False)
+                    photo_updates["defect_photos"] = _json.dumps(
+                        merged_defect, ensure_ascii=False
+                    )
                     logger.info(
-                        "📸 defect 照片去重: record_id=%s existing=%d downloaded=%d new=%d merged=%d",
-                        record_id, len(existing_defect), len(new_paths), len(unique_new), len(merged_defect),
+                        "📸 defect 照片去重: record_id=%s existing=%d downloaded=%d"
+                        " new=%d merged=%d",
+                        record_id,
+                        len(existing_defect),
+                        len(new_paths),
+                        len(unique_new),
+                        len(merged_defect),
                     )
                 else:
                     logger.info(
                         "📸 defect 照片全部已存在，跳过: record_id=%s count=%d",
-                        record_id, len(existing_defect),
+                        record_id,
+                        len(existing_defect),
                     )
                 update_data.pop("defect_photos", None)  # 移除 mapped 中的原始对象
 
@@ -1165,38 +1333,54 @@ async def _update_hazard_from_bitable(
                 }
                 new_paths = [p.replace("\\", "/") for p in saved["rectification"]]
                 unique_new = [
-                    p for p in new_paths
+                    p
+                    for p in new_paths
                     if os.path.basename(p) not in existing_basenames
                 ]
                 if unique_new:
                     merged_rect = existing_rect + unique_new
-                    photo_updates["rectification_photos"] = _json.dumps(merged_rect, ensure_ascii=False)
+                    photo_updates["rectification_photos"] = _json.dumps(
+                        merged_rect, ensure_ascii=False
+                    )
                     logger.info(
-                        "📸 rectification 照片去重: record_id=%s existing=%d downloaded=%d new=%d merged=%d",
-                        record_id, len(existing_rect), len(new_paths), len(unique_new), len(merged_rect),
+                        "📸 rectification 照片去重: record_id=%s existing=%d"
+                        " downloaded=%d new=%d merged=%d",
+                        record_id,
+                        len(existing_rect),
+                        len(new_paths),
+                        len(unique_new),
+                        len(merged_rect),
                     )
                 else:
                     logger.info(
                         "📸 rectification 照片全部已存在，跳过: record_id=%s count=%d",
-                        record_id, len(existing_rect),
+                        record_id,
+                        len(existing_rect),
                     )
-                update_data.pop("rectification_photos", None)  # 移除 mapped 中的原始对象
+                update_data.pop(
+                    "rectification_photos", None
+                )  # 移除 mapped 中的原始对象
 
             if photo_updates:
                 logger.info(
                     "📸 UPDATE 附件已下载: hazard_id=%s defect=%d rectification=%d",
-                    hazard.id, len(saved.get("defect", [])), len(saved.get("rectification", [])),
+                    hazard.id,
+                    len(saved.get("defect", [])),
+                    len(saved.get("rectification", [])),
                 )
         except Exception:
-            logger.exception("UPDATE 附件下载失败: record_id=%s hazard_id=%s", record_id, hazard.id)
+            logger.exception(
+                "UPDATE 附件下载失败: record_id=%s hazard_id=%s", record_id, hazard.id
+            )
     else:
         # 无新附件上传：移除 mapped 中可能残留的空/原始附件对象
         update_data.pop("defect_photos", None)
         update_data.pop("rectification_photos", None)
 
     logger.info(
-        "📝 UPDATE mapped: record_id=%s current_names=(inspector=%r, resp=%r) "
-        "mapped_names=(inspector=%r, resp=%r) bitable_has_inspector=%s bitable_has_resp=%s",
+        "📝 UPDATE mapped: record_id=%s current_names=(inspector=%r, resp=%r)"
+        " mapped_names=(inspector=%r, resp=%r) bitable_has_inspector=%s"
+        " bitable_has_resp=%s",
         record_id,
         getattr(hazard, "discovered_by_name", None),
         getattr(hazard, "rectification_responsible_person_name", None),
@@ -1218,8 +1402,13 @@ async def _update_hazard_from_bitable(
         )
         if inspector_uuid:
             update_data["discovered_by"] = inspector_uuid
-        if inspector_name and inspector_name != "飞书用户" and (
-            "discovered_by_name" not in update_data or not update_data.get("discovered_by_name")
+        if (
+            inspector_name
+            and inspector_name != "飞书用户"
+            and (
+                "discovered_by_name" not in update_data
+                or not update_data.get("discovered_by_name")
+            )
         ):
             update_data["discovered_by_name"] = inspector_name
 
@@ -1228,13 +1417,19 @@ async def _update_hazard_from_bitable(
             session,
             bitable_fields.get("整改责任人"),
             bt_field_label="整改责任人",
-            existing_name=getattr(hazard, "rectification_responsible_person_name", None),
+            existing_name=getattr(
+                hazard, "rectification_responsible_person_name", None
+            ),
         )
         if resp_uuid:
             update_data["rectification_responsible_person"] = resp_uuid
-        if resp_name and resp_name != "飞书用户" and (
-            "rectification_responsible_person_name" not in update_data
-            or not update_data.get("rectification_responsible_person_name")
+        if (
+            resp_name
+            and resp_name != "飞书用户"
+            and (
+                "rectification_responsible_person_name" not in update_data
+                or not update_data.get("rectification_responsible_person_name")
+            )
         ):
             update_data["rectification_responsible_person_name"] = resp_name
     finally:
@@ -1243,14 +1438,15 @@ async def _update_hazard_from_bitable(
     # 根据三级复核状态自动计算整体整改状态（与 SafetyService.verify_level 状态机一致）
     old_rectification_status = getattr(hazard, "rectification_status", None)
 
-    # 检测整改回复提交：有整改完成时间 + 当前状态为 pending/in_progress/rejected → 转为 replied
+    # 检测整改回复提交：有整改完成时间，且当前状态允许回复时转为 replied。
     _debug_log(
-        f"UPDATE_STATUS_CHECK: record_id={record_id} hazard_no={getattr(hazard, 'hazard_no', '?')} "
-        f"old_status={old_rectification_status} "
-        f"has_completion_date={'actual_completion_date' in update_data} "
-        f"has_reply={'rectification_reply' in update_data} "
-        f"status_in_update={'rectification_status' in update_data} "
-        f"update_keys={list(update_data.keys())}"
+        f"UPDATE_STATUS_CHECK: record_id={record_id}"
+        f" hazard_no={getattr(hazard, 'hazard_no', '?')}"
+        f" old_status={old_rectification_status}"
+        f" has_completion_date={'actual_completion_date' in update_data}"
+        f" has_reply={'rectification_reply' in update_data}"
+        f" status_in_update={'rectification_status' in update_data}"
+        f" update_keys={list(update_data.keys())}"
     )
     if (
         "actual_completion_date" in update_data
@@ -1260,59 +1456,88 @@ async def _update_hazard_from_bitable(
     ):
         update_data["rectification_status"] = "replied"
         _debug_log(
-            f"UPDATE_STATUS_SET: record_id={record_id} hazard_no={getattr(hazard, 'hazard_no', '?')} "
-            f"old_status={old_rectification_status} → replied"
+            f"UPDATE_STATUS_SET: record_id={record_id}"
+            f" hazard_no={getattr(hazard, 'hazard_no', '?')}"
+            f" old_status={old_rectification_status} → replied"
         )
         logger.info(
             "整改回复已提交，状态自动转换: record_id=%s %s → replied",
-            record_id, old_rectification_status,
+            record_id,
+            old_rectification_status,
             record_id,
         )
     else:
+        reply_allowed_statuses = ("pending", "in_progress", "rejected")
         _debug_log(
-            f"UPDATE_STATUS_SKIP: record_id={record_id} — 不满足 replied 转换条件 "
-            f"(completion_date_in_data={'actual_completion_date' in update_data}, "
-            f"old_in_allowed={old_rectification_status in ('pending', 'in_progress', 'rejected')}, "
-            f"status_explicit={'rectification_status' in update_data})"
+            f"UPDATE_STATUS_SKIP: record_id={record_id} — 不满足 replied 转换条件"
+            f" (completion_date_in_data={'actual_completion_date' in update_data},"
+            f" old_in_allowed={old_rectification_status in reply_allowed_statuses},"
+            f" status_explicit={'rectification_status' in update_data})"
         )
 
-    if any(k in mapped for k in ("verify_level_1_status", "verify_level_2_status", "verify_level_3_status")):
-        v1 = mapped.get("verify_level_1_status", getattr(hazard, "verify_level_1_status", None))
-        v2 = mapped.get("verify_level_2_status", getattr(hazard, "verify_level_2_status", None))
-        v3 = mapped.get("verify_level_3_status", getattr(hazard, "verify_level_3_status", None))
+    if any(
+        k in mapped
+        for k in (
+            "verify_level_1_status",
+            "verify_level_2_status",
+            "verify_level_3_status",
+        )
+    ):
+        v1 = mapped.get(
+            "verify_level_1_status", getattr(hazard, "verify_level_1_status", None)
+        )
+        v2 = mapped.get(
+            "verify_level_2_status", getattr(hazard, "verify_level_2_status", None)
+        )
+        v3 = mapped.get(
+            "verify_level_3_status", getattr(hazard, "verify_level_3_status", None)
+        )
         hl = mapped.get("hazard_level", getattr(hazard, "hazard_level", None))
         computed_status = _compute_rectification_status(v1, v2, v3, hl)
         _debug_log(
-            f"UPDATE_COMPUTE_STATUS: record_id={record_id} hazard_no={getattr(hazard, 'hazard_no', '?')} "
-            f"v1={v1} v2={v2} v3={v3} level={hl} old={old_rectification_status} computed={computed_status} "
-            f"mapped_verify_keys={[k for k in mapped if 'verify' in k]}"
+            f"UPDATE_COMPUTE_STATUS: record_id={record_id}"
+            f" hazard_no={getattr(hazard, 'hazard_no', '?')} v1={v1} v2={v2} v3={v3}"
+            f" level={hl} old={old_rectification_status} computed={computed_status}"
+            f" mapped_verify_keys={[k for k in mapped if 'verify' in k]}"
         )
         if computed_status and computed_status != old_rectification_status:
             update_data["rectification_status"] = computed_status
             _debug_log(
-                f"UPDATE_COMPUTE_APPLY: record_id={record_id} hazard_no={getattr(hazard, 'hazard_no', '?')} "
-                f"{old_rectification_status} → {computed_status}"
+                f"UPDATE_COMPUTE_APPLY: record_id={record_id}"
+                f" hazard_no={getattr(hazard, 'hazard_no', '?')}"
+                f" {old_rectification_status} → {computed_status}"
             )
             if computed_status == "closed":
                 update_data["status"] = "closed"
             logger.info(
-                "复核状态自动计算: record_id=%s v1=%s v2=%s v3=%s level=%s current=%s → %s",
-                record_id, v1, v2, v3, hl, old_rectification_status, computed_status,
+                "复核状态自动计算: record_id=%s v1=%s v2=%s v3=%s level=%s current=%s"
+                " → %s",
+                record_id,
+                v1,
+                v2,
+                v3,
+                hl,
+                old_rectification_status,
+                computed_status,
             )
         else:
             _debug_log(
-                f"UPDATE_COMPUTE_SKIP: record_id={record_id} hazard_no={getattr(hazard, 'hazard_no', '?')} "
-                f"computed={computed_status} old={old_rectification_status} "
-                f"equal={computed_status == old_rectification_status}"
+                f"UPDATE_COMPUTE_SKIP: record_id={record_id}"
+                f" hazard_no={getattr(hazard, 'hazard_no', '?')}"
+                f" computed={computed_status} old={old_rectification_status}"
+                f" equal={computed_status == old_rectification_status}"
             )
     if not update_data and not photo_updates:
         logger.info("📝 UPDATE 跳过 (无变更): record_id=%s", record_id)
         return hazard
 
     logger.info(
-        "📝 UPDATE 即将执行: record_id=%s update_data keys=%s photo_updates=%s "
-        "inspector_name=%r resp_name=%r has_rectification_reply=%s rectification_reply_len=%d",
-        record_id, list(update_data.keys()), list(photo_updates.keys()),
+        "📝 UPDATE 即将执行: record_id=%s update_data keys=%s photo_updates=%s"
+        " inspector_name=%r resp_name=%r has_rectification_reply=%s"
+        " rectification_reply_len=%d",
+        record_id,
+        list(update_data.keys()),
+        list(photo_updates.keys()),
         update_data.get("discovered_by_name"),
         update_data.get("rectification_responsible_person_name"),
         "rectification_reply" in update_data,
@@ -1325,9 +1550,14 @@ async def _update_hazard_from_bitable(
         # 合并 photo_updates 到 update_data 用于 DB 写入
         if photo_updates:
             update_data.update(photo_updates)
-        updated = await service.update_hazard(hazard.id, type(
-            "Update", (), {"model_dump": lambda self=None, **kw: update_data},
-        )())
+        await service.update_hazard(
+            hazard.id,
+            type(
+                "Update",
+                (),
+                {"model_dump": lambda self=None, **kw: update_data},
+            )(),
+        )
         # 手动更新内存对象
 
         for field, value in update_data.items():
@@ -1339,29 +1569,40 @@ async def _update_hazard_from_bitable(
         await _set_sync_ignore(record_id, ttl=30)
 
         await session.commit()
-        logger.info("Bitable→平台更新完成: record_id=%s hazard_id=%s", record_id, hazard.id)
+        logger.info(
+            "Bitable→平台更新完成: record_id=%s hazard_id=%s", record_id, hazard.id
+        )
 
         # ── 状态变更后异步发送飞书复核通知 ──
         new_status = update_data.get("rectification_status")
         _debug_log(
-            f"UPDATE_NOTIFY_CHECK: record_id={record_id} hazard_no={getattr(hazard, 'hazard_no', '?')} "
-            f"new_status={new_status} old_status={old_rectification_status} "
-            f"changed={new_status and new_status != old_rectification_status}"
+            f"UPDATE_NOTIFY_CHECK: record_id={record_id}"
+            f" hazard_no={getattr(hazard, 'hazard_no', '?')} new_status={new_status}"
+            f" old_status={old_rectification_status}"
+            f" changed={new_status and new_status != old_rectification_status}"
         )
         if new_status and new_status != old_rectification_status:
-            hl = update_data.get("hazard_level") or getattr(hazard, "hazard_level", None)
+            hl = update_data.get("hazard_level") or getattr(
+                hazard, "hazard_level", None
+            )
             _debug_log(
-                f"UPDATE_NOTIFY_TRIGGER: record_id={record_id} hazard_no={getattr(hazard, 'hazard_no', '?')} "
-                f"{old_rectification_status}→{new_status} level={hl}"
+                f"UPDATE_NOTIFY_TRIGGER: record_id={record_id}"
+                f" hazard_no={getattr(hazard, 'hazard_no', '?')}"
+                f" {old_rectification_status}→{new_status} level={hl}"
             )
             logger.info(
                 "📬 状态变更触发通知: record_id=%s %s→%s level=%s hazard_no=%s",
-                record_id, old_rectification_status, new_status, hl, hazard.hazard_no,
+                record_id,
+                old_rectification_status,
+                new_status,
+                hl,
+                hazard.hazard_no,
             )
             if new_status == "replied":
                 _debug_log(
-                    f"UPDATE_NOTIFY_DISPATCH: record_id={record_id} hazard_no={getattr(hazard, 'hazard_no', '?')} "
-                    f"→ _send_verify_notification(hazard, 1)"
+                    f"UPDATE_NOTIFY_DISPATCH: record_id={record_id}"
+                    f" hazard_no={getattr(hazard, 'hazard_no', '?')} →"
+                    " _send_verify_notification(hazard, 1)"
                 )
                 asyncio.create_task(_send_verify_notification(hazard, 1))
             elif new_status == "level1_approved":
@@ -1380,7 +1621,9 @@ async def _update_hazard_from_bitable(
                 await _bt.update_record(record_id, {"整改状态": status_label})
                 logger.info(
                     "整改状态已回写 Bitable: record_id=%s status=%s label=%s",
-                    record_id, new_status, status_label,
+                    record_id,
+                    new_status,
+                    status_label,
                 )
             except Exception:
                 logger.exception("整改状态回写 Bitable 失败: record_id=%s", record_id)
@@ -1399,6 +1642,7 @@ async def _update_hazard_from_bitable(
 # 公开 API：平台 → Bitable 方向
 # ═══════════════════════════════════════════════════════════════
 
+
 async def push_hazard_to_bitable(hazard: Any) -> bool:
     """平台 HazardReport 更新后，将变更推送到 Bitable。
 
@@ -1416,7 +1660,11 @@ async def push_hazard_to_bitable(hazard: Any) -> bool:
     await _set_sync_ignore(hazard.feishu_record_id, ttl=30)
     ok = await bitable.update_record(hazard.feishu_record_id, fields)
     if ok:
-        logger.info("平台→Bitable 同步完成: hazard_id=%s record_id=%s", hazard.id, hazard.feishu_record_id)
+        logger.info(
+            "平台→Bitable 同步完成: hazard_id=%s record_id=%s",
+            hazard.id,
+            hazard.feishu_record_id,
+        )
     return ok
 
 
@@ -1425,7 +1673,8 @@ async def push_hazard_to_bitable(hazard: Any) -> bool:
 # ═══════════════════════════════════════════════════════════════
 #
 # 事件类型说明：
-#   drive.file.bitable_record_changed_v1  记录级变更，payload 含 action (insert/update/delete)
+#   drive.file.bitable_record_changed_v1
+#       记录级变更，payload 含 action (insert/update/delete)
 #   drive.file.bitable_field_changed_v1   字段级变更，更细粒度
 # 我们使用 record_changed_v1 为主，field_changed_v1 作为补充。
 
@@ -1435,7 +1684,8 @@ _TARGET_TABLE_ID = os.getenv("SAFETY_FEISHU_BITABLE_HAZARD_TABLE_ID", "")
 
 # field_id → field_name 缓存（用于解析 action_list 中的 after_value）
 _field_name_cache: dict[str, str] | None = None
-# field_name → {option_id: option_name} 缓存（用于将 after_value 中的选项ID转为显示名称）
+# field_name → {option_id: option_name} 缓存
+# 用于将 after_value 中的选项 ID 转为显示名称。
 _option_map_cache: dict[str, dict[str, str]] | None = None
 # field_name → field_type 缓存
 _field_type_cache: dict[str, int] | None = None
@@ -1457,7 +1707,7 @@ async def _get_field_definitions(bitable: SafetyBitableClient) -> None:
     _field_name_cache = {}
     _option_map_cache = {}
     _field_type_cache = {}
-    for f in (fields or []):
+    for f in fields or []:
         fid = f.get("field_id", "")
         fname = f.get("field_name", "")
         ftype = f.get("type", 0)
@@ -1477,7 +1727,8 @@ async def _get_field_definitions(bitable: SafetyBitableClient) -> None:
                 _option_map_cache[fname] = opts
     logger.info(
         "Bitable 字段定义已缓存: %d 个字段, %d 个有选项映射",
-        len(_field_name_cache), len(_option_map_cache),
+        len(_field_name_cache),
+        len(_option_map_cache),
     )
 
 
@@ -1514,18 +1765,19 @@ def _convert_after_value_to_fields(
     after_value: list[dict],
     field_map: dict[str, str],
 ) -> dict[str, Any]:
-    """将飞书 action_list 的 after_value [{field_id, field_value}] 转为 {field_name: value}。
+    """将飞书 action_list 的 after_value 转为字段名和值的映射。
 
     处理特殊字段类型：
     - attachment: field_value 是 JSON 字符串，解析为 list[dict]
-    - select/multi_select: 选项 ID → 选项名称（依赖 _option_map_cache / _field_type_cache）
+    - select/multi_select: 选项 ID → 选项名称
+      （依赖 _option_map_cache / _field_type_cache）
     - 其他类型: field_value 已是正确的 Python 值
     """
     opt_map_cache = _option_map_cache or {}
     type_cache = _field_type_cache or {}
 
     result: dict[str, Any] = {}
-    for item in (after_value or []):
+    for item in after_value or []:
         fid = item.get("field_id", "")
         fname = field_map.get(fid)
         if not fname:
@@ -1540,7 +1792,9 @@ def _convert_after_value_to_fields(
             except (json.JSONDecodeError, TypeError):
                 pass
         # 将选项 ID 解析为显示名称
-        raw = _resolve_option_ids(raw, opt_map_cache.get(fname, {}), type_cache.get(fname, 0))
+        raw = _resolve_option_ids(
+            raw, opt_map_cache.get(fname, {}), type_cache.get(fname, 0)
+        )
         result[fname] = raw
     return result
 
@@ -1548,6 +1802,7 @@ def _convert_after_value_to_fields(
 # ═══════════════════════════════════════════════════════════════
 # 文档事件订阅（飞书要求必须先调用此 API，Bitable 事件才会推送）
 # ═══════════════════════════════════════════════════════════════
+
 
 async def ensure_bitable_subscribed() -> bool:
     """订阅多维表格云文档事件。
@@ -1573,11 +1828,14 @@ async def ensure_bitable_subscribed() -> bool:
             )
             data = resp.json()
             if data.get("code") == 0:
-                logger.info("Bitable 文档事件订阅成功: file_token=%s", _TARGET_FILE_TOKEN)
+                logger.info(
+                    "Bitable 文档事件订阅成功: file_token=%s", _TARGET_FILE_TOKEN
+                )
                 return True
             logger.error(
                 "Bitable 文档事件订阅失败: code=%s msg=%s",
-                data.get("code"), data.get("msg"),
+                data.get("code"),
+                data.get("msg"),
             )
             return False
     except Exception:
@@ -1594,7 +1852,9 @@ def _match_target(file_token: str, table_id: str) -> bool:
     return True
 
 
-async def _get_fields_fallback(bitable: SafetyBitableClient, record_id: str, event_fields: dict) -> dict[str, Any]:
+async def _get_fields_fallback(
+    bitable: SafetyBitableClient, record_id: str, event_fields: dict
+) -> dict[str, Any]:
     """获取记录字段：优先用事件自带的 fields，缺失时调 API 拉取。"""
     if event_fields:
         logger.debug("使用事件自带 fields: keys=%s", list(event_fields.keys())[:20])
@@ -1606,7 +1866,11 @@ async def _get_fields_fallback(bitable: SafetyBitableClient, record_id: str, eve
         record_id,
         list(api_fields.keys())[:20] if api_fields else [],
         str(api_fields.get("检查人员"))[:150] if api_fields.get("检查人员") else "N/A",
-        str(api_fields.get("整改责任人"))[:150] if api_fields.get("整改责任人") else "N/A",
+        (
+            str(api_fields.get("整改责任人"))[:150]
+            if api_fields.get("整改责任人")
+            else "N/A"
+        ),
     )
     return api_fields
 
@@ -1640,7 +1904,9 @@ async def _handle_single_record_action(
         # 检查是否已有 feishu_record_id（极少数重复场景）
         existing = await _get_hazard_by_feishu_id(record_id)
         if existing:
-            logger.info("record_id=%s 已关联 hazard_id=%s，跳过创建", record_id, existing.id)
+            logger.info(
+                "record_id=%s 已关联 hazard_id=%s，跳过创建", record_id, existing.id
+            )
             return
 
         # ── CREATE 特殊处理：始终通过 API 拉取全量字段 ──
@@ -1653,14 +1919,17 @@ async def _handle_single_record_action(
             fields = api_fields
             logger.info(
                 "API 返回全量字段: record_id=%s keys=%s",
-                record_id, list(api_fields.keys())[:30],
+                record_id,
+                list(api_fields.keys())[:30],
             )
         # 合并 event_fields（事件数据优先级更高，覆盖 API 返回的同名字段）
         if event_fields:
             fields.update(event_fields)
             logger.info(
                 "合并事件字段: record_id=%s event_keys=%s final_keys=%s",
-                record_id, list(event_fields.keys()), list(fields.keys())[:30],
+                record_id,
+                list(event_fields.keys()),
+                list(fields.keys())[:30],
             )
         if not fields:
             logger.warning("CREATE 无可用字段: record_id=%s", record_id)
@@ -1701,14 +1970,17 @@ async def _handle_single_record_action(
             fields = api_fields
             logger.info(
                 "API 返回全量字段: record_id=%s keys=%s",
-                record_id, list(api_fields.keys())[:30],
+                record_id,
+                list(api_fields.keys())[:30],
             )
         # 合并 event_fields（事件数据优先级更高，覆盖 API 返回的同名字段）
         if event_fields:
             fields.update(event_fields)
             logger.info(
                 "合并事件字段: record_id=%s event_keys=%s final_keys=%s",
-                record_id, list(event_fields.keys()), list(fields.keys())[:30],
+                record_id,
+                list(event_fields.keys()),
+                list(fields.keys())[:30],
             )
         if not fields:
             logger.warning("UPDATE 无可用字段: record_id=%s", record_id)
@@ -1727,7 +1999,8 @@ async def handle_bitable_record_changed(event: dict) -> None:
         "table_id": "tblejHMrXJQVd3Qc",
         "action_list": [
             {
-                "action": "record_added",          // record_added | record_edited | record_deleted
+                "action": "record_added",
+                // 支持 record_added | record_edited | record_deleted
                 "record_id": "recxxxxx",
                 "after_value": [{"field_id": "fld...", "field_value": "..."}],
                 "before_value": [...]
@@ -1740,7 +2013,9 @@ async def handle_bitable_record_changed(event: dict) -> None:
 
     # ── 校验目标表格 ──
     if not _match_target(file_token, table_id):
-        logger.debug("忽略非目标表格事件: file_token=%s table_id=%s", file_token, table_id)
+        logger.debug(
+            "忽略非目标表格事件: file_token=%s table_id=%s", file_token, table_id
+        )
         return
 
     bitable = SafetyBitableClient()
@@ -1752,10 +2027,13 @@ async def handle_bitable_record_changed(event: dict) -> None:
         # v2 格式：action_list 数组
         logger.info(
             "📨 Bitable 事件(action_list): file_token=%s table_id=%s items=%d",
-            file_token, table_id, len(action_list),
+            file_token,
+            table_id,
+            len(action_list),
         )
 
-        # 获取字段定义（含选项ID→名称映射，用于 after_value 中 field_id → field_name 转换）
+        # 获取字段定义和选项 ID→名称映射，
+        # 用于将 after_value 中的 field_id 转为 field_name。
         await _get_field_definitions(bitable)
         field_map = _field_name_cache or {}
 
@@ -1765,7 +2043,9 @@ async def handle_bitable_record_changed(event: dict) -> None:
             action = _ACTION_MAP.get(action_raw, action_raw)
 
             if not record_id:
-                logger.warning("Bitable action_list 项缺少 record_id，跳过: action=%s", action_raw)
+                logger.warning(
+                    "Bitable action_list 项缺少 record_id，跳过: action=%s", action_raw
+                )
                 continue
 
             # 从 after_value 解析字段值（field_id → field_name 转换）
@@ -1775,11 +2055,19 @@ async def handle_bitable_record_changed(event: dict) -> None:
                 event_fields = _convert_after_value_to_fields(after_value, field_map)
                 logger.info(
                     "action_list 项: action=%s→%s record_id=%s fields=%d",
-                    action_raw, action, record_id, len(event_fields),
+                    action_raw,
+                    action,
+                    record_id,
+                    len(event_fields),
                 )
 
             await _handle_single_record_action(
-                bitable, file_token, table_id, record_id, action, event_fields,
+                bitable,
+                file_token,
+                table_id,
+                record_id,
+                action,
+                event_fields,
             )
         return
 
@@ -1789,8 +2077,13 @@ async def handle_bitable_record_changed(event: dict) -> None:
     event_fields = event.get("fields", {}) or {}
 
     logger.info(
-        "📨 Bitable 事件(flat): action=%s file_token=%s table_id=%s record_id=%s fields=%d",
-        action, file_token, table_id, record_id, len(event_fields),
+        "📨 Bitable 事件(flat): action=%s file_token=%s table_id=%s record_id=%s"
+        " fields=%d",
+        action,
+        file_token,
+        table_id,
+        record_id,
+        len(event_fields),
     )
 
     if not record_id:
@@ -1798,7 +2091,12 @@ async def handle_bitable_record_changed(event: dict) -> None:
         return
 
     await _handle_single_record_action(
-        bitable, file_token, table_id, record_id, action, event_fields,
+        bitable,
+        file_token,
+        table_id,
+        record_id,
+        action,
+        event_fields,
     )
 
 
@@ -1825,13 +2123,17 @@ async def handle_bitable_field_changed(event: dict) -> None:
             field_id = item.get("field_id", "")
             if not record_id:
                 continue
-            logger.info("📝 Bitable 字段变更: record_id=%s field_id=%s", record_id, field_id)
-            await handle_bitable_record_changed({
-                "file_token": file_token,
-                "table_id": table_id,
-                "record_id": record_id,
-                "action": "update",
-            })
+            logger.info(
+                "📝 Bitable 字段变更: record_id=%s field_id=%s", record_id, field_id
+            )
+            await handle_bitable_record_changed(
+                {
+                    "file_token": file_token,
+                    "table_id": table_id,
+                    "record_id": record_id,
+                    "action": "update",
+                }
+            )
         return
 
     # 旧格式兼容
@@ -1840,12 +2142,14 @@ async def handle_bitable_field_changed(event: dict) -> None:
     if not record_id:
         return
     logger.info("📝 Bitable 字段变更: record_id=%s field_id=%s", record_id, field_id)
-    await handle_bitable_record_changed({
-        "file_token": file_token,
-        "table_id": table_id,
-        "record_id": record_id,
-        "action": "update",
-    })
+    await handle_bitable_record_changed(
+        {
+            "file_token": file_token,
+            "table_id": table_id,
+            "record_id": record_id,
+            "action": "update",
+        }
+    )
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1902,7 +2206,11 @@ async def handle_card_action(event: dict) -> dict | None:
 
     logger.info(
         "卡片操作: record_id=%s level=%s action=%s field=%r value=%r",
-        record_id, level, action_type, bt_field, bt_value,
+        record_id,
+        level,
+        action_type,
+        bt_field,
+        bt_value,
     )
 
     try:
@@ -1911,7 +2219,10 @@ async def handle_card_action(event: dict) -> dict | None:
         if not success:
             logger.error("Bitable 更新失败: record_id=%s field=%s", record_id, bt_field)
             return {
-                "toast": {"type": "error", "content": "更新失败，请稍后重试或到多维表格中手动操作"}
+                "toast": {
+                    "type": "error",
+                    "content": "更新失败，请稍后重试或到多维表格中手动操作",
+                }
             }
 
         # ── 获取隐患记录，构建更新后的卡片 ──
@@ -1922,7 +2233,10 @@ async def handle_card_action(event: dict) -> dict | None:
 
         button_state = "approved" if action_type == "approve" else "rejected"
         title, content, elements = await _build_verify_card_content(
-            hazard, level, button_state=button_state, skip_photos=True,
+            hazard,
+            level,
+            button_state=button_state,
+            skip_photos=True,
         )
 
         action_label = "已同意" if action_type == "approve" else "已驳回"
@@ -1944,7 +2258,9 @@ async def handle_card_action(event: dict) -> dict | None:
         open_message_id = event.get("context", {}).get("open_message_id", "")
         if open_message_id:
             asyncio.create_task(
-                _patch_card_async(open_message_id, updated_card, hazard.hazard_no, level, button_state)
+                _patch_card_async(
+                    open_message_id, updated_card, hazard.hazard_no, level, button_state
+                )
             )
         else:
             logger.warning("卡片操作缺少 open_message_id，无法就地更新")
@@ -1953,7 +2269,10 @@ async def handle_card_action(event: dict) -> dict | None:
         # 飞书机制：ACK 中无 card → 卡片恢复点击前样式
         # PATCH API 虽然能更新服务端，但异步执行，ACK 必须带 card 防回流
         return {
-            "toast": {"type": "success", "content": f"{level_label} 审核{action_label}"},
+            "toast": {
+                "type": "success",
+                "content": f"{level_label} 审核{action_label}",
+            },
             "card": {"type": "raw", "data": updated_card},
         }
 
@@ -1972,6 +2291,7 @@ async def _patch_card_async(
     """后台通过 Message PATCH API 更新卡片（兜底保障）。"""
     try:
         import httpx
+
         from app.modules.safety.feishu.client import get_safety_tenant_token
 
         token = await get_safety_tenant_token()
@@ -1987,12 +2307,16 @@ async def _patch_card_async(
             if resp.status_code == 200 and resp.json().get("code") == 0:
                 logger.info(
                     "卡片 PATCH 成功: msg=%s hazard=%s level=%s state=%s",
-                    open_message_id, hazard_no, level, button_state,
+                    open_message_id,
+                    hazard_no,
+                    level,
+                    button_state,
                 )
             else:
                 logger.error(
                     "卡片 PATCH 失败: status=%s body=%s",
-                    resp.status_code, resp.text[:500],
+                    resp.status_code,
+                    resp.text[:500],
                 )
     except Exception:
         logger.exception("卡片 PATCH 异常: msg=%s", open_message_id)

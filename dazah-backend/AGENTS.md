@@ -42,6 +42,14 @@
 
 函数保持聚焦，不引入与当前需求无关的通用框架。中文业务名可用于 API 文档和说明，代码标识符使用英文。
 
+## 编码与静态检查
+
+- 新增和修改 Python 代码必须通过 Ruff，不得新增 lint error；历史问题按触达范围渐进修复，禁止通过扩大 ignore、`noqa` 或降低规则来绕过。
+- `# noqa` 只允许最小行级范围，必须对应明确且不可消除的框架或兼容性原因；禁止文件级批量忽略。
+- 新增公共函数、Service、Repository 和复杂数据结构必须有明确类型；禁止用无理由的 `Any`、宽泛 dict 或类型忽略掩盖契约问题。
+- 保持异步调用链一致，不在 async 路径中加入阻塞 I/O；协程必须 await，后台任务必须有生命周期、失败记录和关闭策略。
+- 不保留调试输出、临时日志、死代码、硬编码业务数据或测试凭证。
+
 ## API 规范
 
 - 路由统一挂载在 `/api/v1` 下，并按业务模块和资源组织。
@@ -126,14 +134,47 @@ HTTP 500 只用于未预期的服务端故障，不得把可预期的业务分�
 - 日志、审计记录、异常和 API 响应必须对敏感字段脱敏。
 - 不在代码、测试、migration 或示例中硬编码真实业务凭证。
 
-## 验证
+## 测试策略
 
-根据影响范围运行相关检查：
+后端测试包括静态检查、单元测试、接口集成测试、数据库迁移测试和构建测试：
+
+- Service、Repository、权限、状态流转、事务、序列化和纯函数使用单元测试覆盖成功、失败及边界。
+- API 必须使用项目 `AsyncClient` 真实调用路由，覆盖认证授权、请求校验、成功响应、业务 4xx 和外部依赖失败；不能只直接调用 endpoint。
+- Repository 和 migration 测试使用独立 PostgreSQL 测试库，不得连接开发、共享或生产数据库；测试数据必须隔离且可清理。
+- 修复缺陷时先添加能复现问题的回归测试，再修复根因。
+- 测试必须断言业务结果、状态码、响应 Schema、事务提交/回滚或外部调用参数。禁止为了覆盖率无断言调用、吞掉任意异常、遍历执行接口或过度 mock 关键业务链路。
+- 外部 HTTP、飞书、Redis、MinIO、LLM 等默认使用可控 fake/mock，接口集成边界再验证超时、错误映射和降级；测试不得访问真实外部服务。
+- 新代码必须覆盖本次引入的关键分支。全应用覆盖率不得低于 CI 门禁 60%，不得用排除生产代码、空洞测试或降低阈值换取通过。
+
+## 本地验证与 CI 门禁
+
+开发中先执行受影响文件和定向测试：
 
 ```powershell
-uv run pytest <相关测试>
 uv run ruff check <相关路径>
+uv run pytest <相关测试>
 uv run mypy <相关路径>
 ```
 
-API 变化还要验证 OpenAPI 同步；模型变化还要验证 migration、Alembic head、升级/降级和 schema 创建。跨模块修改分别验证所有受影响模块，无法运行的检查必须说明原因。
+提交前根据风险扩大验证范围。CI 对应关系如下：
+
+- `Lint`：对变更 Python 文件执行 Ruff；所有触达文件必须零 error。
+- `Backend Test`：启动 PostgreSQL 测试容器，安装锁定依赖，确认 Alembic 只有一个 head，执行 `upgrade head`，然后运行全量 Pytest 和 coverage。
+- `Backend Docker Build`：构建后端生产镜像。
+
+需要复现完整后端门禁时，在独立 PostgreSQL 测试库配置好 `TEST_DATABASE_URL` 后执行：
+
+```powershell
+uv sync --frozen --group dev
+uv run ruff check <本次变更的 Python 路径>
+uv run alembic heads
+uv run alembic upgrade head
+uv run pytest --cov=app --cov-report=term-missing --cov-report=xml --cov-fail-under=60
+docker build --tag dazah-backend:ci .
+```
+
+- `alembic heads` 必须且只能有一个 head；结构变更还要验证空库升级、`upgrade()`、`downgrade()` 和模块 schema 创建。
+- API、共享基础设施、数据库、依赖、测试配置或跨模块变更必须运行全量测试；局部纯实现可先定向验证，但交付时必须说明未执行的完整门禁。
+- Dockerfile、依赖锁、系统依赖、启动命令或运行时配置变化必须执行 Docker Build。
+- API 变化还要执行根目录契约生成脚本并验证前端生成类型。
+- 无法执行检查时必须说明原因、未验证范围和风险，不得声称 CI 可通过。

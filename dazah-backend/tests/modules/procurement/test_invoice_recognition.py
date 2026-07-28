@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from httpx import AsyncClient
 
+from app.main import app
 from app.modules.procurement.service import (
     DuplicateInvoiceError,
     InvoiceRecognitionResult,
@@ -14,6 +15,19 @@ from app.modules.procurement.service import (
     delete_invoice_recognition_record,
     recognize_and_store_invoice_pdf,
 )
+from app.platform.identity.deps import get_current_user
+
+
+@pytest.fixture
+async def authenticated_client(client: AsyncClient):
+    async def _override_current_user():
+        return SimpleNamespace(role="admin", status="active")
+
+    app.dependency_overrides[get_current_user] = _override_current_user
+    try:
+        yield client
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
 
 
 def test_parse_invoice_text_from_layout_pdf_text() -> None:
@@ -224,10 +238,10 @@ async def test_recognize_and_store_invoice_pdf_rejects_duplicate_invoice() -> No
 
 @pytest.mark.asyncio
 async def test_recognize_invoice_api_rejects_oversized_pdf(
-    client: AsyncClient,
+    authenticated_client: AsyncClient,
 ) -> None:
     with patch("app.modules.procurement.api.MAX_INVOICE_PDF_UPLOAD_BYTES", 8):
-        response = await client.post(
+        response = await authenticated_client.post(
             "/api/v1/procurement/invoices/recognize",
             files={"file": ("invoice.pdf", b"0123456789", "application/pdf")},
     )
@@ -238,7 +252,7 @@ async def test_recognize_invoice_api_rejects_oversized_pdf(
 
 @pytest.mark.asyncio
 async def test_recognize_invoice_api_maps_duplicate_to_409(
-    client: AsyncClient,
+    authenticated_client: AsyncClient,
 ) -> None:
     existing_record = SimpleNamespace(
         id=uuid.uuid4(),
@@ -252,7 +266,7 @@ async def test_recognize_invoice_api_maps_duplicate_to_409(
         "app.modules.procurement.api.recognize_and_store_invoice_pdf",
         side_effect=_raise_duplicate,
     ):
-        response = await client.post(
+        response = await authenticated_client.post(
             "/api/v1/procurement/invoices/recognize",
             files={"file": ("invoice.pdf", b"%PDF-1.4", "application/pdf")},
         )
