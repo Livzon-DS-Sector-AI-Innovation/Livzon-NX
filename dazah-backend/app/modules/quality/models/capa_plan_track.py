@@ -3,7 +3,7 @@
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, String, Text
+from sqlalchemy import Boolean, Date, DateTime, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -12,11 +12,15 @@ from app.shared.base_model import BaseModel
 
 class CapaPlanTrack(BaseModel):
     __tablename__ = "capa_plan_tracks"
-    __table_args__ = {"schema": "quality"}
-
-    capa_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), nullable=False
+    __table_args__ = (
+        UniqueConstraint(
+            "feishu_base_record_id",
+            name="uq_quality_capa_plan_tracks_feishu_base_record_id",
+        ),
+        {"schema": "quality"},
     )
+
+    capa_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     capa_code: Mapped[str] = mapped_column(String(255), nullable=False)
     plan_content: Mapped[str] = mapped_column(Text, nullable=False)
     due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
@@ -34,7 +38,7 @@ class CapaPlanTrack(BaseModel):
     )
     feishu_base_table_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     feishu_base_record_id: Mapped[str | None] = mapped_column(
-        String(100), nullable=True, unique=True
+        String(100), nullable=True
     )
     feishu_sync_status: Mapped[str] = mapped_column(
         String(20), nullable=False, default="pending", server_default="pending"

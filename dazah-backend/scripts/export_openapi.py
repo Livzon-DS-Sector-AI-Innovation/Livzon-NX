@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Export FastAPI OpenAPI spec to openapi.json"""
+"""Export the FastAPI OpenAPI specification deterministically."""
+
 import json
 import os
 import sys
@@ -17,11 +18,16 @@ os.environ.setdefault("FRONTEND_URL", "http://localhost:3000")
 
 from app.main import app
 
-def main():
+
+def main() -> None:
     spec = app.openapi()
     output_path = Path(__file__).parent.parent / "openapi.json"
-    output_path.write_text(json.dumps(spec, indent=2))
+    output_path.write_text(
+        f"{json.dumps(spec, ensure_ascii=False, indent=2, sort_keys=True)}\n",
+        encoding="utf-8",
+    )
     print(f"OpenAPI spec exported to {output_path}")
+
 
 if __name__ == "__main__":
     main()

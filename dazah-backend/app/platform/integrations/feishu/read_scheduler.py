@@ -3,11 +3,12 @@
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 
-from app.core.secrets import decrypt_secret
 from app.core.llm.encryption import decrypt_api_key
+from app.core.secrets import decrypt_secret
 from app.modules.production.models import (
     ProductionFeishuReadField,
     ProductionFeishuReadPageBinding,
@@ -26,9 +27,11 @@ from app.modules.quality.models import (
     QualityFeishuReadSourceRoot,
     QualityFeishuReadSyncRun,
 )
-from app.platform.integrations.feishu.read_mirror import ModuleFeishuReadMirrorService, ReadMirrorModels
+from app.platform.integrations.feishu.read_mirror import (
+    ModuleFeishuReadMirrorService,
+    ReadMirrorModels,
+)
 from app.platform.scheduler import ScheduleConfig, ScheduleStrategy, TaskGenerator
-
 
 PRODUCTION_MODELS = ReadMirrorModels(
     root=ProductionFeishuReadSourceRoot,
@@ -60,7 +63,7 @@ class _DailyReadMirrorGenerator(TaskGenerator):
     resource_model: type[Any]
 
     async def find_due(self, session: Any) -> list[str]:
-        if datetime.now().astimezone().hour < 2:
+        if datetime.now(ZoneInfo(self.schedule.timezone)).hour < 2:
             return []
         result = await session.execute(
             select(self.resource_model).where(self.resource_model.is_deleted.is_(False))
@@ -69,7 +72,8 @@ class _DailyReadMirrorGenerator(TaskGenerator):
         return [
             str(item.id)
             for item in result.scalars().all()
-            if item.last_complete_sync_at is None or item.last_complete_sync_at.date() < today
+            if item.last_complete_sync_at is None
+            or item.last_complete_sync_at.date() < today
         ]
 
 

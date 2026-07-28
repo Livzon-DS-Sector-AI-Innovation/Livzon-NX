@@ -1,0 +1,317 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+  pull_request:
+    branches:
+      - main
+      - dev
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "20"
+  PNPM_VERSION: "10.33.0"
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: dazah-frontend/pnpm-lock.yaml
+
+      - name: Install frontend dependencies
+        working-directory: dazah-frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Run ESLint
+        working-directory: dazah-frontend
+        run: pnpm lint
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: dazah-backend/uv.lock
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install backend dependencies
+        working-directory: dazah-backend
+        run: uv sync --frozen --extra dev --group dev
+
+      - name: Run Ruff on changed Python files
+        working-directory: dazah-backend
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BASE_SHA: ${{ github.event.before }}
+        run: |
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            base_sha="$PR_BASE_SHA"
+          else
+            base_sha="$PUSH_BASE_SHA"
+          fi
+
+          if [[ -z "$base_sha" || "$base_sha" =~ ^0+$ ]] ||
+             ! git cat-file -e "${base_sha}^{commit}" 2>/dev/null; then
+            base_sha="$(
+              git rev-parse HEAD^ 2>/dev/null ||
+                git rev-list --max-parents=0 HEAD
+            )"
+          fi
+
+          files=()
+          while IFS= read -r -d '' file; do
+            files+=("${file#dazah-backend/}")
+          done < <(
+            git diff --name-only --diff-filter=ACMR -z \
+              "$base_sha" "$GITHUB_SHA" -- 'dazah-backend/**/*.py'
+          )
+
+          if (( ${#files[@]} == 0 )); then
+            echo "No changed backend Python files."
+            exit 0
+          fi
+
+          printf 'Ruff checking %s\n' "${files[@]}"
+          uv run --no-sync ruff check "${files[@]}"
+
+  type-check:
+    name: Type Check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dazah-frontend
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: dazah-frontend/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run TypeScript type checking
+        run: pnpm typecheck
+
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dazah-frontend
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: dazah-frontend/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run frontend unit tests
+        run: pnpm test:unit
+
+  frontend-build:
+    name: Frontend Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dazah-frontend
+    env:
+      API_BASE_URL: http://localhost:8000
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: dazah-frontend/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Next.js application
+        run: pnpm build
+
+  docker-build:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build frontend image
+        run: docker build --tag dazah-frontend:ci ./dazah-frontend
+
+  frontend-test:
+    name: Frontend Test
+    if: ${{ always() }}
+    needs:
+      - lint
+      - type-check
+      - unit-tests
+      - frontend-build
+      - docker-build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify frontend checks
+        env:
+          LINT_RESULT: ${{ needs.lint.result }}
+          TYPE_CHECK_RESULT: ${{ needs.type-check.result }}
+          UNIT_TESTS_RESULT: ${{ needs.unit-tests.result }}
+          FRONTEND_BUILD_RESULT: ${{ needs.frontend-build.result }}
+          DOCKER_BUILD_RESULT: ${{ needs.docker-build.result }}
+        run: |
+          for result in \
+            "$LINT_RESULT" \
+            "$TYPE_CHECK_RESULT" \
+            "$UNIT_TESTS_RESULT" \
+            "$FRONTEND_BUILD_RESULT" \
+            "$DOCKER_BUILD_RESULT"; do
+            test "$result" = "success"
+          done
+
+  backend-test:
+    name: Backend Test
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: dazah_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d dazah_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      APP_ENV: test
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/dazah_test
+      TEST_DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/dazah_test
+      REDIS_URL: redis://localhost:6379/0
+      SECRET_KEY: ci-only-secret-key
+      ENCRYPTION_KEY: MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=
+      FEISHU_APP_ID: ci_dummy_app_id
+      FEISHU_APP_SECRET: ci_dummy_app_secret
+      FEISHU_REDIRECT_URI: http://localhost:3000/callback
+      FRONTEND_URL: http://localhost:3000
+      FEISHU_WS_ENABLED: "false"
+      EQUIPMENT_FEISHU_WS_ENABLED: "false"
+      LIVZON_FEISHU_CARD_CALLBACK_WS_ENABLED: "false"
+      LIVZON_FEISHU_EVENT_WS_ENABLED: "false"
+      MINIO_ENABLED: "false"
+    defaults:
+      run:
+        working-directory: dazah-backend
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: dazah-backend/uv.lock
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: uv sync --frozen --group dev
+
+      - name: Verify a single Alembic head
+        run: test "$(uv run alembic heads | wc -l)" -eq 1
+
+      - name: Apply Alembic migrations
+        run: uv run alembic upgrade head
+
+      - name: Run unit and API integration tests with coverage
+        run: >-
+          uv run pytest
+          --cov=app
+          --cov-report=term-missing
+          --cov-report=xml
+          --cov-fail-under=60
+
+      - name: Upload coverage report
+        if: ${{ always() && hashFiles('dazah-backend/coverage.xml') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: dazah-backend/coverage.xml
+          if-no-files-found: ignore
+          retention-days: 14
+
+  backend-docker-build:
+    name: Backend Docker Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build backend image
+        run: docker build --tag dazah-backend:ci ./dazah-backend

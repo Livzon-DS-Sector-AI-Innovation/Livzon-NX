@@ -1,6 +1,8 @@
 """CPV Import Task ORM model."""
 
-from sqlalchemy import Integer, JSON, String, Text
+import uuid
+
+from sqlalchemy import JSON, Integer, String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.shared.base_model import BaseModel
@@ -15,8 +17,8 @@ class CpvImportTask(BaseModel):
     file_name: Mapped[str] = mapped_column(
         String(255), nullable=False, comment="文件名"
     )
-    product_id: Mapped[str] = mapped_column(
-        nullable=False, comment="产品ID"
+    product_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), nullable=False, comment="产品ID"
     )
     data_type: Mapped[str] = mapped_column(
         String(10), nullable=False, comment="数据类型: CPP/CQA"
@@ -25,8 +27,10 @@ class CpvImportTask(BaseModel):
         String(20), nullable=False, comment="导入模式: create/update/overwrite"
     )
     status: Mapped[str] = mapped_column(
-        String(20), nullable=False, default="pending",
-        comment="状态: pending/processing/completed/failed"
+        String(20),
+        nullable=False,
+        default="pending",
+        comment="状态: pending/processing/completed/failed",
     )
     total_rows: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, comment="总行数"

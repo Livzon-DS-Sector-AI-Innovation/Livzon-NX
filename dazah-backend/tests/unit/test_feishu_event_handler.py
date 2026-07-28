@@ -1,8 +1,11 @@
 import asyncio
 import json
+from concurrent.futures import Future
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
+from fastapi import HTTPException
 from lark_oapi.api.im.v1 import P2ImMessageReceiveV1
 from lark_oapi.event.callback.model.p2_card_action_trigger import (
     P2CardActionTrigger,
@@ -285,3 +288,204 @@ async def test_shared_global_app_forwards_card_action_to_livzon(
             },
         }
     ]
+
+
+def test_event_callbacks_handle_missing_loop_and_background_errors() -> None:
+    event_handler._main_loop = None
+    response = event_handler._on_card_action_trigger(
+        P2CardActionTrigger({"event": {}})
+    )
+    assert response.toast.type == "error"
+
+    event_handler._on_message_receive(P2ImMessageReceiveV1({}))
+    failed = Future()
+    failed.set_exception(RuntimeError("background failed"))
+    event_handler._log_message_completion(failed)
+    event_handler._log_card_action_completion(failed)
+    assert event_handler._event_id({"header": {"event_id": "event"}}) == "event"
+    assert event_handler._event_id({"header": {}}) is None
+
+
+@pytest.mark.anyio
+async def test_card_action_dispatch_handles_non_livzon_and_failures(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        event_handler,
+        "_uses_shared_livzon_app",
+        AsyncMock(return_value=False),
+    )
+    result = await event_handler._handle_card_action_async({})
+    assert result["toast"]["type"] == "warning"
+
+    session = SimpleNamespace(commit=AsyncMock(), rollback=AsyncMock())
+
+    class SessionContext:
+        async def __aenter__(self):
+            return session
+
+        async def __aexit__(self, *_args):
+            return False
+
+    monkeypatch.setattr(
+        "app.core.database.async_session_factory",
+        SessionContext,
+    )
+    monkeypatch.setattr(
+        event_handler,
+        "_uses_shared_livzon_app",
+        AsyncMock(return_value=True),
+    )
+    handler = AsyncMock(
+        side_effect=[
+            HTTPException(status_code=409, detail="already handled"),
+            RuntimeError("database failed"),
+        ]
+    )
+    monkeypatch.setattr(
+        "app.platform.identity.service.handle_livzon_feishu_card_action_event",
+        handler,
+    )
+
+    warning = await event_handler._handle_card_action_async({})
+    assert warning["toast"]["content"] == "already handled"
+    failure = await event_handler._handle_card_action_async({})
+    assert failure["toast"]["type"] == "error"
+    assert session.rollback.await_count == 2
+
+
+@pytest.mark.anyio
+async def test_callback_message_update_skips_invalid_and_contains_failures(
+    monkeypatch,
+) -> None:
+    await event_handler._update_callback_message({})
+    monkeypatch.setattr(
+        "app.core.config.get_settings",
+        lambda: SimpleNamespace(
+            FEISHU_APP_ID="app",
+            FEISHU_APP_SECRET="secret",
+        ),
+    )
+    token = AsyncMock(return_value="token")
+    monkeypatch.setattr(
+        "app.platform.integrations.feishu.utils.get_tenant_access_token",
+        token,
+    )
+    update = AsyncMock(return_value=SimpleNamespace(ok=False, code=500))
+    monkeypatch.setattr(
+        "app.platform.integrations.feishu.im.update_feishu_message",
+        update,
+    )
+    payload = {
+        "_callback_message_id": "message",
+        "card": {"elements": []},
+    }
+    await event_handler._update_callback_message(payload)
+    token.side_effect = RuntimeError("token failed")
+    await event_handler._update_callback_message(payload)
+    assert update.await_count == 1
+
+
+@pytest.mark.anyio
+async def test_shared_app_detection_uses_config_and_fallback(monkeypatch) -> None:
+    session = object()
+
+    class SessionContext:
+        async def __aenter__(self):
+            return session
+
+        async def __aexit__(self, *_args):
+            return False
+
+    monkeypatch.setattr(
+        "app.core.database.async_session_factory",
+        SessionContext,
+    )
+    get_active = AsyncMock(
+        side_effect=[
+            SimpleNamespace(app_id="global"),
+            SimpleNamespace(app_id="other"),
+            None,
+        ]
+    )
+    monkeypatch.setattr(
+        "app.platform.identity.repository.FeishuConfigRepository.get_active",
+        get_active,
+    )
+
+    monkeypatch.setattr(
+        "app.core.config.get_settings",
+        lambda: SimpleNamespace(
+            FEISHU_APP_ID="",
+            LIVZON_FEISHU_EVENT_WS_ENABLED=False,
+            LIVZON_FEISHU_CARD_CALLBACK_WS_ENABLED=False,
+        ),
+    )
+    assert not await event_handler._uses_shared_livzon_app()
+
+    monkeypatch.setattr(
+        "app.core.config.get_settings",
+        lambda: SimpleNamespace(
+            FEISHU_APP_ID="global",
+            LIVZON_FEISHU_EVENT_WS_ENABLED=True,
+            LIVZON_FEISHU_CARD_CALLBACK_WS_ENABLED=False,
+        ),
+    )
+    assert await event_handler._uses_shared_livzon_app()
+    assert not await event_handler._uses_shared_livzon_app()
+    assert await event_handler._uses_shared_livzon_app()
+
+
+@pytest.mark.anyio
+async def test_forward_shared_message_commits_or_rolls_back(monkeypatch) -> None:
+    session = SimpleNamespace(commit=AsyncMock(), rollback=AsyncMock())
+
+    class SessionContext:
+        async def __aenter__(self):
+            return session
+
+        async def __aexit__(self, *_args):
+            return False
+
+    monkeypatch.setattr(
+        "app.core.database.async_session_factory",
+        SessionContext,
+    )
+    handler = AsyncMock(
+        side_effect=[
+            {"status": "accepted"},
+            RuntimeError("handler failed"),
+        ]
+    )
+    monkeypatch.setattr(
+        "app.platform.identity.service.handle_livzon_feishu_message_receive_event",
+        handler,
+    )
+    kwargs = {
+        "msg_type": "text",
+        "message_id": "message",
+        "content": "{}",
+        "chat_type": "p2p",
+        "chat_id": "chat",
+        "mentions": [],
+        "sender_open_id": "open",
+        "sender_type": "user",
+    }
+    await event_handler._forward_shared_app_message_to_livzon(**kwargs)
+    await event_handler._forward_shared_app_message_to_livzon(**kwargs)
+    session.commit.assert_awaited_once()
+    session.rollback.assert_awaited_once()
+
+
+@pytest.mark.anyio
+async def test_bitable_change_handler_publishes_event(monkeypatch) -> None:
+    publish = AsyncMock()
+    monkeypatch.setattr(event_handler.event_bus, "publish", publish)
+    await event_handler._handle_bitable_record_changed_async(
+        file_token="app",
+        table_id="table",
+        revision=2,
+        update_time=123,
+        actions=[{"record_id": "record", "action": "edit"}],
+    )
+    publish.assert_awaited_once()

@@ -12,8 +12,8 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.core.llm import LLMOutputError, llm_client
 from app.modules.safety.feishu.notification import send_user_card
-from app.platform.audit.service import record_audit_log
 from app.modules.safety.models import (
     Accident,
     Contractor,
@@ -40,7 +40,7 @@ from app.modules.safety.schemas import (
     TrainingRecordCreate,
     TrainingRecordUpdate,
 )
-from app.core.llm import llm_client, LLMOutputError, LLMProviderError
+from app.platform.audit.service import record_audit_log
 from app.platform.integrations.ai.document_parser import DocumentParser
 from app.platform.integrations.ai.prompts import (
     SCRIPT_CONFIG,
@@ -162,17 +162,13 @@ class _SafetyCoreService:
             await self._audit("close", "safety_check", resource_id=check_id)
         return item
 
-    async def confirm_check(
-        self, check_id: uuid.UUID, role: str
-    ) -> SafetyCheck | None:
+    async def confirm_check(self, check_id: uuid.UUID, role: str) -> SafetyCheck | None:
         """确认安全检查（检查人员 / 安全办）"""
         check = await self.repo.get_check_by_id(check_id)
         if not check:
             return None
         if role == "inspector":
-            return await self.repo.update_check(
-                check_id, {"inspector_confirmed": True}
-            )
+            return await self.repo.update_check(check_id, {"inspector_confirmed": True})
         elif role == "safety_officer":
             return await self.repo.update_check(
                 check_id, {"safety_officer_confirmed": True}
@@ -203,8 +199,16 @@ class _SafetyCoreService:
     ) -> tuple[list[HazardReport], int]:
         """获取隐患列表"""
         return await self.repo.get_hazards(
-            skip, limit, status, rectification_status, hazard_type, hazard_level,
-            hazard_category, inspection_category, department, keyword,
+            skip,
+            limit,
+            status,
+            rectification_status,
+            hazard_type,
+            hazard_level,
+            hazard_category,
+            inspection_category,
+            department,
+            keyword,
         )
 
     async def get_hazard_stats(self) -> dict[str, int]:
@@ -242,13 +246,19 @@ class _SafetyCoreService:
 
         # ── 自动执行 AI 隐患识别（插件：有照片走视觉模型，无照片走文本模型）──
         if auto_run_ai:
-            logger.info("触发 AI 隐患识别: hazard_id=%s hazard_no=%s", item.id, item.hazard_no)
+            logger.info(
+                "触发 AI 隐患识别: hazard_id=%s hazard_no=%s", item.id, item.hazard_no
+            )
             try:
                 item = await self.run_hazard_ai_script(item.id, 1)
                 logger.info(
-                    "AI 隐患识别完成: hazard_id=%s type=%s level=%s category=%s error=%s",
-                    item.id, item.hazard_type, item.hazard_level,
-                    item.hazard_category, item.ai_error_message,
+                    "AI 隐患识别完成: hazard_id=%s type=%s level=%s category=%s"
+                    " error=%s",
+                    item.id,
+                    item.hazard_type,
+                    item.hazard_level,
+                    item.hazard_category,
+                    item.ai_error_message,
                 )
             except Exception as e:
                 logger.error(f"AI 隐患识别失败(hazard {item.id}): {e}")
@@ -303,7 +313,11 @@ class _SafetyCoreService:
             return None
         safe_path = file_path.replace("\\", "/")
         try:
-            photos = json.loads(hazard.rectification_photos) if hazard.rectification_photos else []
+            photos = (
+                json.loads(hazard.rectification_photos)
+                if hazard.rectification_photos
+                else []
+            )
         except (json.JSONDecodeError, TypeError):
             try:
                 photos = json.loads(hazard.rectification_photos.replace("\\", "/"))
@@ -347,7 +361,9 @@ class _SafetyCoreService:
         elif not hazard.actual_completion_date:
             update_data["actual_completion_date"] = datetime.now()
         # 优先级：rectification_reply > corrective_preventive_measures > reply_content
-        reply_value = rectification_reply or corrective_preventive_measures or reply_content
+        reply_value = (
+            rectification_reply or corrective_preventive_measures or reply_content
+        )
         if reply_value:
             update_data["rectification_reply"] = reply_value
         if rectification_photos is not None:
@@ -356,7 +372,9 @@ class _SafetyCoreService:
 
         # 记录审计日志
         if updated:
-            await self._audit("reply_rectification", "hazard_report", resource_id=hazard_id)
+            await self._audit(
+                "reply_rectification", "hazard_report", resource_id=hazard_id
+            )
 
         # 整改回复后，异步通知一级复核人（部门负责人）
         if updated:
@@ -399,7 +417,7 @@ class _SafetyCoreService:
                 if hazard.verify_level_2_status != "approved":
                     return None
 
-        now = datetime.now()
+        datetime.now()
         if action == "rejected":
             update_data: dict[str, Any] = {
                 "rectification_status": "rejected",
@@ -432,8 +450,10 @@ class _SafetyCoreService:
         # 记录审计日志
         if updated:
             await self._audit(
-                "verify", "hazard_report",
-                resource_id=hazard_id, user_id=user_id,
+                "verify",
+                "hazard_report",
+                resource_id=hazard_id,
+                user_id=user_id,
                 extra={"level": level, "action": action},
             )
 
@@ -503,7 +523,8 @@ class _SafetyCoreService:
     async def _generate_hazard_identification(self, item: HazardReport) -> dict:
         """使用 AIHazardIdentifier 插件执行 AI 隐患识别（script 1）。
 
-        插件负责：prompt 构建（含 few-shot）、视觉/文本路由、输出解析、规则验证、自动修正。
+        插件负责：prompt 构建（含 few-shot）、视觉/文本路由、输出解析、
+        规则验证和自动修正。
         返回 dict 供 _map_hazard_ai_output() 映射到 HazardReport 字段。
         """
         from app.modules.safety.ai_hazard_identification import (
@@ -515,11 +536,14 @@ class _SafetyCoreService:
         # 解析缺陷图片（本地路径 → data URI）
         image_urls = (
             self._parse_defect_photo_urls(item.defect_photos)
-            if item.defect_photos else []
+            if item.defect_photos
+            else []
         )
         logger.info(
             "AI 隐患识别插件启动: hazard_id=%s desc=%s photos=%d",
-            item.id, (item.description or "")[:80], len(image_urls),
+            item.id,
+            (item.description or "")[:80],
+            len(image_urls),
         )
 
         # 构建插件输入（注意：HazardReport 模型没有 location 字段，传 None 即可）
@@ -527,17 +551,17 @@ class _SafetyCoreService:
             hazard_no=item.hazard_no or str(item.id)[:8],
             description=item.description or "无描述",
             department=item.department or "",
-            location=item.department or "",  # 隐患模型无独立 location，用 department 代替
+            location=item.department
+            or "",  # 隐患模型无独立 location，用 department 代替
             discovered_by_name=item.discovered_by_name or "",
             discovered_at=item.discovered_at,
             defect_photos=image_urls,
         )
 
-
         try:
             config = PluginConfig(
                 temperature=0.05,
-                strict_mode=False,   # 非严格模式：验证警告不阻塞流程
+                strict_mode=False,  # 非严格模式：验证警告不阻塞流程
                 enable_vision=bool(image_urls),
             )
             plugin = AIHazardIdentifier(config)
@@ -584,7 +608,11 @@ class _SafetyCoreService:
         for p in photos:
             p_str = str(p)
             # 已经是 http/data URL，直接使用
-            if p_str.startswith("http://") or p_str.startswith("https://") or p_str.startswith("data:"):
+            if (
+                p_str.startswith("http://")
+                or p_str.startswith("https://")
+                or p_str.startswith("data:")
+            ):
                 urls.append(p_str)
                 continue
             # 本地路径 → base64 data URI
@@ -603,8 +631,12 @@ class _SafetyCoreService:
                 try:
                     ext = os.path.splitext(found_path)[1].lower()
                     mime = {
-                        ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
-                        ".gif": "image/gif", ".webp": "image/webp", ".bmp": "image/bmp",
+                        ".png": "image/png",
+                        ".jpg": "image/jpeg",
+                        ".jpeg": "image/jpeg",
+                        ".gif": "image/gif",
+                        ".webp": "image/webp",
+                        ".bmp": "image/bmp",
                     }.get(ext, "image/png")
                     with open(found_path, "rb") as f:
                         b64 = base64.b64encode(f.read()).decode()
@@ -646,12 +678,27 @@ class _SafetyCoreService:
         return await self.repo.update_hazard(hazard_id, update_data)
 
     # ── AI 输出字段约束（DB Enum 限制）──
-    _VALID_HAZARD_TYPES = {"unsafe_condition", "unsafe_action", "management_defect", "environmental"}
+    _VALID_HAZARD_TYPES = {
+        "unsafe_condition",
+        "unsafe_action",
+        "management_defect",
+        "environmental",
+    }
     _VALID_HAZARD_LEVELS = {"general", "serious", "major"}
     _VALID_HAZARD_CATEGORIES = {
-        "equipment", "hazardous_storage", "emergency_mgmt", "instrument_electrical",
-        "lightning_antistatic", "occupational_health", "violation_operation", "six_s",
-        "label_signage", "process_mgmt", "contractor_defect", "documentation", "special_operation",
+        "equipment",
+        "hazardous_storage",
+        "emergency_mgmt",
+        "instrument_electrical",
+        "lightning_antistatic",
+        "occupational_health",
+        "violation_operation",
+        "six_s",
+        "label_signage",
+        "process_mgmt",
+        "contractor_defect",
+        "documentation",
+        "special_operation",
     }
 
     def _map_hazard_ai_output(
@@ -668,13 +715,22 @@ class _SafetyCoreService:
             ]:
                 if json_key in output and output[json_key]:
                     val = output[json_key]
-                    if db_field == "hazard_type" and val not in self._VALID_HAZARD_TYPES:
+                    if (
+                        db_field == "hazard_type"
+                        and val not in self._VALID_HAZARD_TYPES
+                    ):
                         logger.debug("AI 输出非法 hazard_type=%s，跳过", val)
                         continue
-                    if db_field == "hazard_level" and val not in self._VALID_HAZARD_LEVELS:
+                    if (
+                        db_field == "hazard_level"
+                        and val not in self._VALID_HAZARD_LEVELS
+                    ):
                         logger.debug("AI 输出非法 hazard_level=%s，跳过", val)
                         continue
-                    if db_field == "hazard_category" and val not in self._VALID_HAZARD_CATEGORIES:
+                    if (
+                        db_field == "hazard_category"
+                        and val not in self._VALID_HAZARD_CATEGORIES
+                    ):
                         logger.debug("AI 输出非法 hazard_category=%s，跳过", val)
                         continue
                     update_data[db_field] = val
@@ -692,13 +748,18 @@ class _SafetyCoreService:
                 if parts:
                     update_data["corrective_preventive_measures"] = "\n\n".join(parts)
         # script 2 已废弃：整改建议由插件在 script 1 中生成
+
+
 # ═══════════════════════════════════════════════════════════════
 # 测试阶段：通知硬编码目标
 # ═══════════════════════════════════════════════════════════════
 
+
 def _bitable_field_for_level(level: int) -> str:
     """Level → 对应的多维表格审批字段名。"""
-    return {1: "部门负责人复核", 2: "分管领导复核", 3: "检查人员复核"}.get(level, f"{level}级复核")
+    return {1: "部门负责人复核", 2: "分管领导复核", 3: "检查人员复核"}.get(
+        level, f"{level}级复核"
+    )
 
 
 async def _build_verify_card_content(
@@ -712,7 +773,7 @@ async def _build_verify_card_content(
     Args:
         hazard: 隐患记录
         level: 复核级别 (1/2/3)
-        button_state: None=活跃审批按钮, "approved"=已同意(禁用), "rejected"=已驳回(禁用)
+        button_state: None=活跃按钮，approved=已同意，rejected=已驳回
         skip_photos: True=跳过照片上传（卡片按钮就地更新时使用，避免超时）
 
     Returns:
@@ -727,28 +788,37 @@ async def _build_verify_card_content(
     bitable_url = (
         f"https://www.feishu.cn/base/{bitable_file_token}"
         f"?table={bitable_table_id}&record={hazard.feishu_record_id}"
-    ) if hazard.feishu_record_id else ""
-
-    reply_text = hazard.rectification_reply or "-"
-    level_emoji = {"general": "🟢", "serious": "🟠", "major": "🔴"}.get(hazard.hazard_level, "⚪")
-    level_label = {"general": "一般隐患", "serious": "较大隐患", "major": "重大隐患"}.get(
-        hazard.hazard_level, hazard.hazard_level or "-"
+        if hazard.feishu_record_id
+        else ""
     )
 
+    reply_text = hazard.rectification_reply or "-"
+    level_emoji = {"general": "🟢", "serious": "🟠", "major": "🔴"}.get(
+        hazard.hazard_level, "⚪"
+    )
+    level_label = {
+        "general": "一般隐患",
+        "serious": "较大隐患",
+        "major": "重大隐患",
+    }.get(hazard.hazard_level, hazard.hazard_level or "-")
+
+    discovered_date = (
+        hazard.discovered_at.strftime("%Y-%m-%d") if hazard.discovered_at else "-"
+    )
     content = (
-        f"**检查日期：** {hazard.discovered_at.strftime('%Y-%m-%d') if hazard.discovered_at else '-'}\n"
-        f"**隐患描述：** {hazard.description or '-'}\n"
-        f"**判定依据：** {hazard.major_hazard_basis or '-'}\n"
-        f"**隐患级别：** {level_emoji} {level_label}\n"
-        f"**责任部门：** {hazard.department or '-'}\n"
-        f"**整改回复：** {reply_text}\n"
-        + (f"\n⬇ 请到在下方点击「同意」或「驳回」操作" if button_state is None else "")
+        f"**检查日期：** {discovered_date}\n**隐患描述：**"
+        f" {hazard.description or '-'}\n**判定依据：**"
+        f" {hazard.major_hazard_basis or '-'}\n**隐患级别：** {level_emoji}"
+        f" {level_label}\n**责任部门：** {hazard.department or '-'}\n**整改回复：**"
+        f" {reply_text}\n"
+        + ("\n⬇ 请到在下方点击「同意」或「驳回」操作" if button_state is None else "")
     )
 
     elements: list[dict] = []
 
     # ── 照片（卡片就地更新时跳过上传，避免超时）──
     if not skip_photos:
+
         async def _upload_photos(photo_field: str | None, label: str) -> list[str]:
             if not photo_field:
                 return []
@@ -760,14 +830,26 @@ async def _build_verify_card_content(
                 if not clean:
                     return []
                 from app.modules.safety.feishu.notification import upload_images_batch
-                logger.info("复核通知照片上传: hazard_no=%s label=%s count=%d", hazard.hazard_no, label, len(clean))
+
+                logger.info(
+                    "复核通知照片上传: hazard_no=%s label=%s count=%d",
+                    hazard.hazard_no,
+                    label,
+                    len(clean),
+                )
                 return await upload_images_batch(clean)
             except Exception:
-                logger.exception("复核通知照片处理异常: hazard_no=%s label=%s", hazard.hazard_no, label)
+                logger.exception(
+                    "复核通知照片处理异常: hazard_no=%s label=%s",
+                    hazard.hazard_no,
+                    label,
+                )
                 return []
 
         defect_keys = await _upload_photos(hazard.defect_photos, "缺陷照片")
-        rectification_keys = await _upload_photos(hazard.rectification_photos, "整改后照片")
+        rectification_keys = await _upload_photos(
+            hazard.rectification_photos, "整改后照片"
+        )
     else:
         defect_keys = []
         rectification_keys = []
@@ -776,26 +858,36 @@ async def _build_verify_card_content(
         columns: list[dict] = []
         if defect_keys:
             defect_col: dict = {
-                "tag": "column", "width": "weighted", "weight": 1,
+                "tag": "column",
+                "width": "weighted",
+                "weight": 1,
                 "elements": [{"tag": "markdown", "content": "📷 **缺陷照片**"}],
             }
             for key in defect_keys:
-                defect_col["elements"].append({
-                    "tag": "img", "img_key": key,
-                    "alt": {"tag": "plain_text", "content": "缺陷照片"},
-                })
+                defect_col["elements"].append(
+                    {
+                        "tag": "img",
+                        "img_key": key,
+                        "alt": {"tag": "plain_text", "content": "缺陷照片"},
+                    }
+                )
             columns.append(defect_col)
 
         if rectification_keys:
             rect_col: dict = {
-                "tag": "column", "width": "weighted", "weight": 1,
+                "tag": "column",
+                "width": "weighted",
+                "weight": 1,
                 "elements": [{"tag": "markdown", "content": "✅ **整改后照片**"}],
             }
             for key in rectification_keys:
-                rect_col["elements"].append({
-                    "tag": "img", "img_key": key,
-                    "alt": {"tag": "plain_text", "content": "整改后照片"},
-                })
+                rect_col["elements"].append(
+                    {
+                        "tag": "img",
+                        "img_key": key,
+                        "alt": {"tag": "plain_text", "content": "整改后照片"},
+                    }
+                )
             columns.append(rect_col)
 
         if columns:
@@ -803,79 +895,107 @@ async def _build_verify_card_content(
             if len(columns) == 1:
                 elements.extend(columns[0]["elements"])
             else:
-                elements.append({
-                    "tag": "column_set", "flex_mode": "bisect",
-                    "background_style": "default", "columns": columns,
-                })
+                elements.append(
+                    {
+                        "tag": "column_set",
+                        "flex_mode": "bisect",
+                        "background_style": "default",
+                        "columns": columns,
+                    }
+                )
             logger.info(
                 "复核通知照片已添加: hazard_no=%s defect=%d rect=%d",
-                hazard.hazard_no, len(defect_keys), len(rectification_keys),
+                hazard.hazard_no,
+                len(defect_keys),
+                len(rectification_keys),
             )
 
     # ── 操作按钮 ──
     if button_state is None:
         # 活跃状态：同意 + 驳回 + 查看表格
-        elements.append({
-            "tag": "action",
-            "actions": [
-                {
-                    "tag": "button",
-                    "text": {"tag": "plain_text", "content": "✅ 同意"},
-                    "type": "primary",
-                    "value": {
-                        "action": "approve_rectification",
-                        "record_id": hazard.feishu_record_id,
-                        "level": level,
+        elements.append(
+            {
+                "tag": "action",
+                "actions": [
+                    {
+                        "tag": "button",
+                        "text": {"tag": "plain_text", "content": "✅ 同意"},
+                        "type": "primary",
+                        "value": {
+                            "action": "approve_rectification",
+                            "record_id": hazard.feishu_record_id,
+                            "level": level,
+                        },
+                        "confirm": {
+                            "title": {
+                                "tag": "plain_text",
+                                "content": f"确认{level_text}审核通过",
+                            },
+                            "text": {
+                                "tag": "plain_text",
+                                "content": (
+                                    f"将在多维表格中将「{_bitable_field_for_level(level)}」设为「已同意」"
+                                ),
+                            },
+                        },
                     },
-                    "confirm": {
-                        "title": {"tag": "plain_text", "content": f"确认{level_text}审核通过"},
-                        "text": {"tag": "plain_text", "content": f"将在多维表格中将「{_bitable_field_for_level(level)}」设为「已同意」"},
+                    {
+                        "tag": "button",
+                        "text": {"tag": "plain_text", "content": "❌ 驳回"},
+                        "type": "danger",
+                        "value": {
+                            "action": "reject_rectification",
+                            "record_id": hazard.feishu_record_id,
+                            "level": level,
+                        },
+                        "confirm": {
+                            "title": {"tag": "plain_text", "content": "确认驳回整改"},
+                            "text": {
+                                "tag": "plain_text",
+                                "content": (
+                                    f"将在多维表格中将「{_bitable_field_for_level(level)}」设为「未同意」，"
+                                    "隐患退回整改阶段"
+                                ),
+                            },
+                        },
                     },
-                },
-                {
-                    "tag": "button",
-                    "text": {"tag": "plain_text", "content": "❌ 驳回"},
-                    "type": "danger",
-                    "value": {
-                        "action": "reject_rectification",
-                        "record_id": hazard.feishu_record_id,
-                        "level": level,
+                    {
+                        "tag": "button",
+                        "text": {"tag": "plain_text", "content": "📋 查看飞书表格记录"},
+                        "type": "default",
+                        "url": bitable_url,
                     },
-                    "confirm": {
-                        "title": {"tag": "plain_text", "content": "确认驳回整改"},
-                        "text": {"tag": "plain_text", "content": f"将在多维表格中将「{_bitable_field_for_level(level)}」设为「未同意」，隐患退回整改阶段"},
-                    },
-                },
-                {
-                    "tag": "button",
-                    "text": {"tag": "plain_text", "content": "📋 查看飞书表格记录"},
-                    "type": "default",
-                    "url": bitable_url,
-                },
-            ],
-        })
+                ],
+            }
+        )
     else:
         # 已处理状态：显示结果 + 查看表格
         result_text = "✅ 已同意" if button_state == "approved" else "❌ 已驳回"
-        elements.append({
-            "tag": "action",
-            "actions": [
-                {
-                    "tag": "button",
-                    "text": {"tag": "plain_text", "content": result_text},
-                    "type": "default",
-                    "disabled": True,
-                },
-                {
-                    "tag": "button",
-                    "text": {"tag": "plain_text", "content": "📋 查看飞书表格记录"},
-                    "type": "default",
-                    "url": bitable_url,
-                },
-            ],
-        })
+        elements.append(
+            {
+                "tag": "action",
+                "actions": [
+                    {
+                        "tag": "button",
+                        "text": {"tag": "plain_text", "content": result_text},
+                        "type": "default",
+                        "disabled": True,
+                    },
+                    {
+                        "tag": "button",
+                        "text": {"tag": "plain_text", "content": "📋 查看飞书表格记录"},
+                        "type": "default",
+                        "url": bitable_url,
+                    },
+                ],
+            }
+        )
 
-    title = f"🔔 隐患复核通知{level_text}" if button_state is None else f"🔔 隐患复核通知{level_text} — 已处理"
+    title = (
+        f"🔔 隐患复核通知{level_text}"
+        if button_state is None
+        else f"🔔 隐患复核通知{level_text} — 已处理"
+    )
     return title, content, elements
 
 
@@ -893,7 +1013,10 @@ async def _send_verify_notification(hazard: HazardReport, level: int) -> None:
     from app.modules.safety.feishu.identity_resolver import IdentityResolver
 
     try:
-        _debug_log(f"VERIFY_START: hazard_no={hazard.hazard_no} level={level} dept={hazard.department}")
+        _debug_log(
+            f"VERIFY_START: hazard_no={hazard.hazard_no} level={level}"
+            f" dept={hazard.department}"
+        )
         async with async_session_factory() as session:
             resolver = IdentityResolver(session)
 
@@ -904,30 +1027,46 @@ async def _send_verify_notification(hazard: HazardReport, level: int) -> None:
             elif level == 3:
                 person = await resolver.resolve_discoverer(hazard)
             else:
-                _debug_log(f"VERIFY_FAIL: hazard_no={hazard.hazard_no} 未知复核级别 level={level}")
-                logger.warning("未知复核级别: level=%s hazard_no=%s", level, hazard.hazard_no)
+                _debug_log(
+                    f"VERIFY_FAIL: hazard_no={hazard.hazard_no}"
+                    f" 未知复核级别 level={level}"
+                )
+                logger.warning(
+                    "未知复核级别: level=%s hazard_no=%s", level, hazard.hazard_no
+                )
                 return
 
             if not person:
-                _debug_log(f"VERIFY_FAIL: hazard_no={hazard.hazard_no} level={level} 身份解析失败 dept={hazard.department}")
+                _debug_log(
+                    f"VERIFY_FAIL: hazard_no={hazard.hazard_no} level={level}"
+                    f" 身份解析失败 dept={hazard.department}"
+                )
                 logger.warning(
                     "复核通知: 身份解析失败 hazard_no=%s level=%s",
-                    hazard.hazard_no, level,
+                    hazard.hazard_no,
+                    level,
                 )
                 return
 
             _debug_log(
-                f"VERIFY_RESOLVED: hazard_no={hazard.hazard_no} level={level} "
-                f"target={person.name} user_id={person.user_id} open_id={person.open_id}"
+                f"VERIFY_RESOLVED: hazard_no={hazard.hazard_no} level={level}"
+                f" target={person.name} user_id={person.user_id}"
+                f" open_id={person.open_id}"
             )
 
             logger.info(
                 "复核通知: hazard_no=%s level=%s target=%s user_id=%s open_id=%s",
-                hazard.hazard_no, level, person.name, person.user_id, person.open_id,
+                hazard.hazard_no,
+                level,
+                person.name,
+                person.user_id,
+                person.open_id,
             )
 
             title, content, elements = await _build_verify_card_content(
-                hazard, level, button_state=None,
+                hazard,
+                level,
+                button_state=None,
             )
 
             # 使用 user_id 而非 open_id（open_id 是应用专属的，跨应用不通用）
@@ -947,21 +1086,36 @@ async def _send_verify_notification(hazard: HazardReport, level: int) -> None:
                     f"to={person.name} receive_id={receive_id} id_type={id_type}"
                 )
                 logger.info(
-                    "复核通知已发送: hazard_no=%s level=%s to=%s receive_id=%s id_type=%s",
-                    hazard.hazard_no, level, person.name, receive_id, id_type,
+                    "复核通知已发送: hazard_no=%s level=%s to=%s receive_id=%s"
+                    " id_type=%s",
+                    hazard.hazard_no,
+                    level,
+                    person.name,
+                    receive_id,
+                    id_type,
                 )
             else:
                 _debug_log(
-                    f"VERIFY_SEND_FAIL: hazard_no={hazard.hazard_no} level={level} "
-                    f"to={person.name} receive_id={receive_id} id_type={id_type} — send_user_card returned False"
+                    f"VERIFY_SEND_FAIL: hazard_no={hazard.hazard_no} level={level}"
+                    f" to={person.name} receive_id={receive_id} id_type={id_type} —"
+                    " send_user_card returned False"
                 )
                 logger.warning(
-                    "复核通知发送失败: hazard_no=%s level=%s to=%s receive_id=%s id_type=%s",
-                    hazard.hazard_no, level, person.name, receive_id, id_type,
+                    "复核通知发送失败: hazard_no=%s level=%s to=%s receive_id=%s"
+                    " id_type=%s",
+                    hazard.hazard_no,
+                    level,
+                    person.name,
+                    receive_id,
+                    id_type,
                 )
     except Exception as e:
-        _debug_log(f"VERIFY_EXCEPTION: hazard_no={hazard.hazard_no} level={level} error={e}")
-        logger.warning("复核通知异常: hazard_no=%s level=%s error=%s", hazard.hazard_no, level, e)
+        _debug_log(
+            f"VERIFY_EXCEPTION: hazard_no={hazard.hazard_no} level={level} error={e}"
+        )
+        logger.warning(
+            "复核通知异常: hazard_no=%s level=%s error=%s", hazard.hazard_no, level, e
+        )
 
 
 async def _send_rectification_notification(hazard: HazardReport) -> None:
@@ -977,8 +1131,9 @@ async def _send_rectification_notification(hazard: HazardReport) -> None:
 
     try:
         _debug_log(
-            f"RECTIFY_START: hazard_no={hazard.hazard_no} "
-            f"resp_name={hazard.rectification_responsible_person_name} dept={hazard.department}"
+            f"RECTIFY_START: hazard_no={hazard.hazard_no}"
+            f" resp_name={hazard.rectification_responsible_person_name}"
+            f" dept={hazard.department}"
         )
         async with async_session_factory() as session:
             resolver = IdentityResolver(session)
@@ -987,22 +1142,27 @@ async def _send_rectification_notification(hazard: HazardReport) -> None:
             if not person:
                 _debug_log(
                     f"RECTIFY_FAIL: hazard_no={hazard.hazard_no} "
-                    f"无法解析责任人 name={hazard.rectification_responsible_person_name}"
+                    "无法解析责任人"
+                    f" name={hazard.rectification_responsible_person_name}"
                 )
                 logger.warning(
                     "整改通知: 无法解析责任人 hazard_no=%s name=%s",
-                    hazard.hazard_no, hazard.rectification_responsible_person_name,
+                    hazard.hazard_no,
+                    hazard.rectification_responsible_person_name,
                 )
                 return
 
             _debug_log(
-                f"RECTIFY_RESOLVED: hazard_no={hazard.hazard_no} "
-                f"target={person.name} user_id={person.user_id} open_id={person.open_id}"
+                f"RECTIFY_RESOLVED: hazard_no={hazard.hazard_no} target={person.name}"
+                f" user_id={person.user_id} open_id={person.open_id}"
             )
 
             logger.info(
                 "整改通知: hazard_no=%s target=%s user_id=%s open_id=%s",
-                hazard.hazard_no, person.name, person.user_id, person.open_id,
+                hazard.hazard_no,
+                person.name,
+                person.user_id,
+                person.open_id,
             )
 
         settings = get_settings()
@@ -1011,24 +1171,33 @@ async def _send_rectification_notification(hazard: HazardReport) -> None:
         bitable_url = (
             f"https://www.feishu.cn/base/{bitable_file_token}"
             f"?table={bitable_table_id}&record={hazard.feishu_record_id}"
-        ) if hazard.feishu_record_id else ""
-
-        level_emoji = {"general": "\U0001f7e2", "serious": "\U0001f7e0", "major": "\U0001f534"}.get(hazard.hazard_level, "⚪")
-        level_label = {"general": "一般隐患", "serious": "较大隐患", "major": "重大隐患"}.get(
-            hazard.hazard_level, hazard.hazard_level or "-"
+            if hazard.feishu_record_id
+            else ""
         )
+
+        level_emoji = {
+            "general": "\U0001f7e2",
+            "serious": "\U0001f7e0",
+            "major": "\U0001f534",
+        }.get(hazard.hazard_level, "⚪")
+        level_label = {
+            "general": "一般隐患",
+            "serious": "较大隐患",
+            "major": "重大隐患",
+        }.get(hazard.hazard_level, hazard.hazard_level or "-")
         responsible = hazard.rectification_responsible_person_name or "-"
         deadline = hazard.deadline.strftime("%Y-%m-%d") if hazard.deadline else "待指定"
 
+        discovered_date = (
+            hazard.discovered_at.strftime("%Y-%m-%d") if hazard.discovered_at else "-"
+        )
         content = (
-            f"**检查日期：** {hazard.discovered_at.strftime('%Y-%m-%d') if hazard.discovered_at else '-'}\n"
-            f"**隐患描述：** {hazard.description or '-'}\n"
-            f"**判定依据：** {hazard.major_hazard_basis or '-'}\n"
-            f"**隐患级别：** {level_emoji} {level_label}\n"
-            f"**责任部门：** {hazard.department or '-'}\n"
-            f"**责任人员：** {responsible}\n"
-            f"**整改期限：** {deadline}\n"
-            f"\n⬇ 请在多维表格中填写「纠正预防措施」并上传整改照片，该记录可转发"
+            f"**检查日期：** {discovered_date}\n**隐患描述：**"
+            f" {hazard.description or '-'}\n**判定依据：**"
+            f" {hazard.major_hazard_basis or '-'}\n**隐患级别：** {level_emoji}"
+            f" {level_label}\n**责任部门：** {hazard.department or '-'}\n**责任人员：**"
+            f" {responsible}\n**整改期限：** {deadline}\n\n⬇"
+            " 请在多维表格中填写「纠正预防措施」并上传整改照片，该记录可转发"
         )
 
         elements: list[dict] = []
@@ -1040,33 +1209,50 @@ async def _send_rectification_notification(hazard: HazardReport) -> None:
                 if photos and isinstance(photos, list):
                     clean = [p for p in photos if isinstance(p, str)]
                     if clean:
-                        from app.modules.safety.feishu.notification import upload_images_batch
+                        from app.modules.safety.feishu.notification import (
+                            upload_images_batch,
+                        )
+
                         image_keys = await upload_images_batch(clean)
                         if image_keys:
                             elements.append({"tag": "hr"})
-                            elements.append({"tag": "markdown", "content": "\U0001f4f7 **缺陷照片**"})
+                            elements.append(
+                                {
+                                    "tag": "markdown",
+                                    "content": "\U0001f4f7 **缺陷照片**",
+                                }
+                            )
                             for key in image_keys:
-                                elements.append({
-                                    "tag": "img",
-                                    "img_key": key,
-                                    "alt": {"tag": "plain_text", "content": "缺陷照片"},
-                                })
+                                elements.append(
+                                    {
+                                        "tag": "img",
+                                        "img_key": key,
+                                        "alt": {
+                                            "tag": "plain_text",
+                                            "content": "缺陷照片",
+                                        },
+                                    }
+                                )
             except Exception:
                 logger.exception("整改通知照片处理异常: hazard_no=%s", hazard.hazard_no)
 
         # ── 操作按钮 ──
         button_actions: list[dict] = []
         if bitable_url:
-            button_actions.append({
-                "tag": "button",
-                "text": {"tag": "plain_text", "content": "\U0001f4cb 填写整改回复"},
-                "type": "primary",
-                "url": bitable_url,
-            })
-        elements.append({
-            "tag": "action",
-            "actions": button_actions,
-        })
+            button_actions.append(
+                {
+                    "tag": "button",
+                    "text": {"tag": "plain_text", "content": "\U0001f4cb 填写整改回复"},
+                    "type": "primary",
+                    "url": bitable_url,
+                }
+            )
+        elements.append(
+            {
+                "tag": "action",
+                "actions": button_actions,
+            }
+        )
 
         # 使用 user_id 而非 open_id，因为 open_id 是应用专属的 —
         # identity.users 的 open_id 来自主应用，而 send_user_card 使用安全应用 token，
@@ -1088,7 +1274,10 @@ async def _send_rectification_notification(hazard: HazardReport) -> None:
             )
             logger.info(
                 "整改通知已发送: hazard_no=%s to=%s receive_id=%s id_type=%s",
-                hazard.hazard_no, person.name, receive_id, id_type,
+                hazard.hazard_no,
+                person.name,
+                receive_id,
+                id_type,
             )
         else:
             _debug_log(
@@ -1097,7 +1286,10 @@ async def _send_rectification_notification(hazard: HazardReport) -> None:
             )
             logger.warning(
                 "整改通知发送失败: hazard_no=%s to=%s receive_id=%s id_type=%s",
-                hazard.hazard_no, person.name, receive_id, id_type,
+                hazard.hazard_no,
+                person.name,
+                receive_id,
+                id_type,
             )
     except Exception as e:
         _debug_log(f"RECTIFY_EXCEPTION: hazard_no={hazard.hazard_no} error={e}")
@@ -1123,8 +1315,15 @@ class SafetyService(_SafetyCoreService):
     ) -> tuple[list[Accident], int]:
         """获取事故列表"""
         return await self.repo.get_accidents(
-            skip, limit, status, accident_type, accident_level,
-            department, date_from, date_to, keyword,
+            skip,
+            limit,
+            status,
+            accident_type,
+            accident_level,
+            department,
+            date_from,
+            date_to,
+            keyword,
         )
 
     async def get_accident(self, accident_id: uuid.UUID) -> Accident | None:
@@ -1263,7 +1462,12 @@ class SafetyService(_SafetyCoreService):
     ) -> tuple[list[Contractor], int]:
         """获取承包商列表"""
         return await self.repo.get_contractors(
-            skip, limit, status, qualification_type, training_status, keyword,
+            skip,
+            limit,
+            status,
+            qualification_type,
+            training_status,
+            keyword,
         )
 
     async def get_contractor(self, contractor_id: uuid.UUID) -> Contractor | None:
@@ -1351,7 +1555,10 @@ class SafetyService(_SafetyCoreService):
         return await self.repo.update_work_record(record_id, update_data)
 
     async def evaluate_work_record(
-        self, record_id: uuid.UUID, score: int, comments: str | None = None,
+        self,
+        record_id: uuid.UUID,
+        score: int,
+        comments: str | None = None,
         evaluator: str | None = None,
     ) -> ContractorWorkRecord | None:
         """评价施工记录"""
@@ -1386,7 +1593,9 @@ class SafetyService(_SafetyCoreService):
         department: str | None = None,
     ) -> tuple[list[SafetyTraining], int]:
         """获取安全培训列表"""
-        return await self.repo.get_trainings(skip, limit, status, training_type, department)
+        return await self.repo.get_trainings(
+            skip, limit, status, training_type, department
+        )
 
     async def get_training(self, training_id: uuid.UUID) -> SafetyTraining | None:
         """获取安全培训详情"""
@@ -1439,11 +1648,15 @@ class SafetyService(_SafetyCoreService):
 
     # ==================== TrainingRecord Operations ====================
 
-    async def get_training_records(self, training_id: uuid.UUID) -> list[TrainingRecord]:
+    async def get_training_records(
+        self, training_id: uuid.UUID
+    ) -> list[TrainingRecord]:
         """获取培训记录列表"""
         return await self.repo.get_records_by_training(training_id)
 
-    async def create_training_record(self, data: TrainingRecordCreate) -> TrainingRecord:
+    async def create_training_record(
+        self, data: TrainingRecordCreate
+    ) -> TrainingRecord:
         """创建培训记录"""
         record_data = data.model_dump()
         return await self.repo.create_training_record(record_data)
@@ -1482,7 +1695,10 @@ class SafetyService(_SafetyCoreService):
     ) -> tuple[list[TrainingRecord], int]:
         """获取培训证书列表"""
         return await self.repo.get_training_certificates(
-            skip, limit, certificate_status, keyword,
+            skip,
+            limit,
+            certificate_status,
+            keyword,
         )
 
     async def get_expiring_certificates(self) -> list[TrainingRecord]:
@@ -1506,8 +1722,16 @@ class SafetyService(_SafetyCoreService):
     ) -> tuple[list, int]:
         """获取危险源辨识列表"""
         return await self.repo.get_hazard_identifications(
-            skip, limit, department, overall_status, ai_node_progress, keyword,
-            position, risk_level, date_from, date_to,
+            skip,
+            limit,
+            department,
+            overall_status,
+            ai_node_progress,
+            keyword,
+            position,
+            risk_level,
+            date_from,
+            date_to,
         )
 
     async def get_hazard_identification_stats(self) -> dict[str, int]:
@@ -1524,7 +1748,11 @@ class SafetyService(_SafetyCoreService):
     ) -> dict[str, int]:
         """获取危险源辨识台账统计"""
         return await self.repo.get_hazard_identification_ledger_stats(
-            department, position, risk_level, date_from, date_to,
+            department,
+            position,
+            risk_level,
+            date_from,
+            date_to,
         )
 
     async def get_hazard_identification(self, hid: uuid.UUID):
@@ -1562,7 +1790,8 @@ class SafetyService(_SafetyCoreService):
         if not item or item.overall_status not in ("draft",):
             return None
         return await self.repo.update_hazard_identification(
-            hid, {"ai_node_progress": "pending_script1", "overall_status": "in_progress"}
+            hid,
+            {"ai_node_progress": "pending_script1", "overall_status": "in_progress"},
         )
 
     # ── 工作流状态机 ──
@@ -1657,16 +1886,16 @@ class SafetyService(_SafetyCoreService):
 
         return "\n".join(parts)
 
-    async def _generate_ai_output(
-        self, script_number: int, item: Any
-    ) -> dict:
+    async def _generate_ai_output(self, script_number: int, item: Any) -> dict:
         """调用 AI 服务生成工作流输出。失败时抛出 AIOutputError。
 
         优先从数据库 ai_workflow_configs 表读取对应模块的工作流配置，
         fallback 到 prompts.py 的硬编码 WORKFLOW_STEP_CONFIG。
         """
         # 优先从数据库读取工作流配置
-        workflow_config = await self.repo.get_ai_workflow_config_by_module("hazard-identification")
+        workflow_config = await self.repo.get_ai_workflow_config_by_module(
+            "hazard-identification"
+        )
         if (
             workflow_config
             and workflow_config.is_enabled
@@ -1685,7 +1914,11 @@ class SafetyService(_SafetyCoreService):
             if db_script and db_script.get("is_enabled", True):
                 prompt_template = build_prompt(db_script)
                 expected_keys = db_script.get("expected_keys", [])
-                logger.debug("使用数据库工作流配置: 步骤%d - %s", script_number, db_script.get("name"))
+                logger.debug(
+                    "使用数据库工作流配置: 步骤%d - %s",
+                    script_number,
+                    db_script.get("name"),
+                )
             else:
                 # DB 中有 workflow 但没有对应步骤 → fallback
                 config = SCRIPT_CONFIG[script_number]
@@ -1719,12 +1952,17 @@ class SafetyService(_SafetyCoreService):
                 context_text += "\n\n### 附件文档内容\n（未上传附件或附件无法解析）"
 
         # 使用 replace 而非 format()，避免 AI 输出示例中的花括号被误解析
-        if '{context}' in prompt_template:
-            prompt = prompt_template.replace('{context}', context_text)
+        if "{context}" in prompt_template:
+            prompt = prompt_template.replace("{context}", context_text)
         else:
             prompt = f"## 上下文信息\n{context_text}\n\n{prompt_template}"
         messages = [
-            {"role": "system", "content": "你是一个专业的危险源辨识与风险评价专家助手，服务于原料药生产企业。"},
+            {
+                "role": "system",
+                "content": (
+                    "你是一个专业的危险源辨识与风险评价专家助手，服务于原料药生产企业。"
+                ),
+            },
             {"role": "user", "content": prompt},
         ]
         try:
@@ -1804,7 +2042,6 @@ class SafetyService(_SafetyCoreService):
         current_node, next_node, review_field = self.SCRIPT_NODE_MAP[script_number]
 
         # Current node must match
-        expected_current = current_node if action == "approved" else current_node
 
         update_data: dict[str, Any] = {
             f"script{script_number}_review_status": action,
@@ -1850,7 +2087,11 @@ class SafetyService(_SafetyCoreService):
         - 脚本6：needs_recommendation 为字符串三态（是/否/待人工确认）
         """
         if script_number == 1:
-            for f in ("specific_activity", "equipment_facilities", "raw_auxiliary_materials"):
+            for f in (
+                "specific_activity",
+                "equipment_facilities",
+                "raw_auxiliary_materials",
+            ):
                 if f in ai_output:
                     update_data[f] = ai_output[f]
 
@@ -1870,8 +2111,12 @@ class SafetyService(_SafetyCoreService):
                 update_data["inherent_risk_level"] = ai_output["inherent_risk_level"]
 
         elif script_number == 4:
-            for f in ("existing_engineering_controls", "existing_management_controls",
-                      "existing_ppe", "existing_emergency_measures"):
+            for f in (
+                "existing_engineering_controls",
+                "existing_management_controls",
+                "existing_ppe",
+                "existing_emergency_measures",
+            ):
                 if f in ai_output:
                     update_data[f] = ai_output[f]
 
@@ -1885,8 +2130,12 @@ class SafetyService(_SafetyCoreService):
                 update_data["residual_risk_level"] = ai_output["residual_risk_level"]
 
         elif script_number == 6:
-            for f in ("needs_recommendation", "recommendation_type",
-                      "recommendation_content", "recommendation_priority"):
+            for f in (
+                "needs_recommendation",
+                "recommendation_type",
+                "recommendation_content",
+                "recommendation_priority",
+            ):
                 if f in ai_output:
                     update_data[f] = ai_output[f]
 
@@ -1910,13 +2159,13 @@ class SafetyService(_SafetyCoreService):
         from app.modules.safety.schemas import RISK_LEVELS, get_risk_level
 
         if script_number == 3:
-            l = update_data.get("l_inherent")
+            likelihood = update_data.get("l_inherent")
             e = update_data.get("e_inherent")
             c = update_data.get("c_inherent")
-            if all(v is not None for v in (l, e, c)):
+            if all(v is not None for v in (likelihood, e, c)):
                 # D 值：优先用 AI 输出，否则后端计算
                 if update_data.get("d_inherent") is None:
-                    update_data["d_inherent"] = l * e * c
+                    update_data["d_inherent"] = likelihood * e * c
                 # 风险等级 key：优先用 AI 输出
                 if update_data.get("inherent_risk_level") is None:
                     level = get_risk_level(update_data["d_inherent"])
@@ -1930,12 +2179,12 @@ class SafetyService(_SafetyCoreService):
                         break
 
         elif script_number == 5:
-            l = update_data.get("l_residual")
+            likelihood = update_data.get("l_residual")
             e = update_data.get("e_residual")
             c = update_data.get("c_residual")
-            if all(v is not None for v in (l, e, c)):
+            if all(v is not None for v in (likelihood, e, c)):
                 if update_data.get("d_residual") is None:
-                    update_data["d_residual"] = l * e * c
+                    update_data["d_residual"] = likelihood * e * c
                 if update_data.get("residual_risk_level") is None:
                     level = get_risk_level(update_data["d_residual"])
                     update_data["residual_risk_level"] = level["key"]
@@ -1945,12 +2194,12 @@ class SafetyService(_SafetyCoreService):
                         break
 
         elif script_number == 7:
-            l = update_data.get("l_post")
+            likelihood = update_data.get("l_post")
             e = update_data.get("e_post")
             c = update_data.get("c_post")
-            if all(v is not None for v in (l, e, c)):
+            if all(v is not None for v in (likelihood, e, c)):
                 if update_data.get("d_post") is None:
-                    update_data["d_post"] = l * e * c
+                    update_data["d_post"] = likelihood * e * c
                 if update_data.get("post_risk_level") is None:
                     level = get_risk_level(update_data["post_risk_level"])
                     update_data["post_risk_level"] = level["key"]
@@ -2000,7 +2249,9 @@ class SafetyService(_SafetyCoreService):
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": natural_query},
             ]
-            response_text = await llm_client.chat(messages, response_format="json_object")
+            response_text = await llm_client.chat(
+                messages, response_format="json_object"
+            )
             import json
 
             result = json.loads(response_text)
@@ -2054,19 +2305,27 @@ class SafetyService(_SafetyCoreService):
         )
 
         filters = {
-            k: v for k, v in {
-                "department": department, "position": position,
-                "risk_level": risk_level, "date_from": date_from,
-                "date_to": date_to, "keyword": keyword,
-            }.items() if v is not None
+            k: v
+            for k, v in {
+                "department": department,
+                "position": position,
+                "risk_level": risk_level,
+                "date_from": date_from,
+                "date_to": date_to,
+                "keyword": keyword,
+            }.items()
+            if v is not None
         }
 
         # ── 策略 1：Excel 标准化输出（最高优先级）──
         try:
             pdf_bytes = self._export_via_template_plugin(items, filters)
             if pdf_bytes and len(pdf_bytes) > 5000:
-                logger.info("Excel标准化输出导出成功: %d records, %d bytes",
-                            len(items), len(pdf_bytes))
+                logger.info(
+                    "Excel标准化输出导出成功: %d records, %d bytes",
+                    len(items),
+                    len(pdf_bytes),
+                )
                 return pdf_bytes
         except Exception as exc:
             logger.warning("Excel标准化输出导出失败: %s，回退到固定模板", exc)
@@ -2149,9 +2408,7 @@ class SafetyService(_SafetyCoreService):
 
     # ── 固定模板 PDF 回退（reportlab）──
 
-    async def _export_hazard_ledger_pdf_fallback(
-        self, items, filters: dict
-    ) -> bytes:
+    async def _export_hazard_ledger_pdf_fallback(self, items, filters: dict) -> bytes:
         """固定模板 PDF 生成（reportlab）—— AI 格式化失败时的回退方案"""
         import io
         from datetime import datetime as dt_module
@@ -2208,18 +2465,29 @@ class SafetyService(_SafetyCoreService):
 
         styles = getSampleStyleSheet()
         body_style = ParagraphStyle(
-            "BodyCN", parent=styles["Normal"],
-            fontName=_font_name, fontSize=8, leading=12,
+            "BodyCN",
+            parent=styles["Normal"],
+            fontName=_font_name,
+            fontSize=8,
+            leading=12,
         )
         title_style = ParagraphStyle(
-            "TitleCN", parent=styles["Title"],
-            fontName=_font_name_bold, fontSize=16, leading=22,
-            alignment=TA_CENTER, spaceAfter=4,
+            "TitleCN",
+            parent=styles["Title"],
+            fontName=_font_name_bold,
+            fontSize=16,
+            leading=22,
+            alignment=TA_CENTER,
+            spaceAfter=4,
         )
         subtitle_style = ParagraphStyle(
-            "SubtitleCN", parent=styles["Normal"],
-            fontName=_font_name, fontSize=9, leading=14,
-            alignment=TA_CENTER, textColor=colors.grey,
+            "SubtitleCN",
+            parent=styles["Normal"],
+            fontName=_font_name,
+            fontSize=9,
+            leading=14,
+            alignment=TA_CENTER,
+            textColor=colors.grey,
         )
 
         elements: list = []
@@ -2232,8 +2500,10 @@ class SafetyService(_SafetyCoreService):
         for k, v in filters.items():
             if k == "risk_level":
                 level_map = {
-                    "level_1": "一级/重大风险", "level_2": "二级/较大风险",
-                    "level_3": "三级/一般风险", "level_4": "四级/低风险",
+                    "level_1": "一级/重大风险",
+                    "level_2": "二级/较大风险",
+                    "level_3": "三级/一般风险",
+                    "level_4": "四级/低风险",
                 }
                 filter_parts.append(f"风险等级：{level_map.get(v, v)}")
             elif k in ("date_from", "date_to"):
@@ -2245,21 +2515,34 @@ class SafetyService(_SafetyCoreService):
                 filter_parts.append(f"{k}：{v}")
         filter_text = "；".join(filter_parts) if filter_parts else "全部记录"
         export_time = dt_module.now().strftime("%Y-%m-%d %H:%M")
-        elements.append(Paragraph(
-            f"筛选条件：{filter_text}　|　导出时间：{export_time}　|　共 {len(items)} 条",
-            subtitle_style,
-        ))
+        elements.append(
+            Paragraph(
+                f"筛选条件：{filter_text}　|　导出时间：{export_time}　|　共"
+                f" {len(items)} 条",
+                subtitle_style,
+            )
+        )
         elements.append(Spacer(1, 6 * mm))
 
         # ── 数据表 ──
         level_label_map = {
-            "level_1": "重大", "level_2": "较大",
-            "level_3": "一般", "level_4": "低",
+            "level_1": "重大",
+            "level_2": "较大",
+            "level_3": "一般",
+            "level_4": "低",
         }
         headers = [
-            "序号", "编号", "部门", "岗位", "作业活动",
-            "危险类型", "固有风险", "残余风险",
-            "管控层级", "责任人", "控制措施摘要",
+            "序号",
+            "编号",
+            "部门",
+            "岗位",
+            "作业活动",
+            "危险类型",
+            "固有风险",
+            "残余风险",
+            "管控层级",
+            "责任人",
+            "控制措施摘要",
         ]
         col_widths = [25, 70, 50, 50, 80, 55, 55, 55, 45, 50, 160]
 
@@ -2284,83 +2567,108 @@ class SafetyService(_SafetyCoreService):
 
             controls_parts = []
             if item.existing_engineering_controls:
-                controls_parts.append(f"工程：{item.existing_engineering_controls[:60]}")
+                controls_parts.append(
+                    f"工程：{item.existing_engineering_controls[:60]}"
+                )
             if item.existing_management_controls:
                 controls_parts.append(f"管理：{item.existing_management_controls[:60]}")
             if item.existing_ppe:
                 controls_parts.append(f"PPE：{item.existing_ppe[:40]}")
             controls_summary = "；".join(controls_parts) if controls_parts else "-"
 
-            table_data.append([
-                str(idx),
-                item.hazard_id_no or "",
-                item.department or "",
-                item.position or "",
-                item.specific_activity or item.production_step or "",
-                item.hazard_type or "",
-                inherent_d,
-                residual_d,
-                item.control_level or "",
-                item.responsible_person or "",
-                controls_summary,
-            ])
+            table_data.append(
+                [
+                    str(idx),
+                    item.hazard_id_no or "",
+                    item.department or "",
+                    item.position or "",
+                    item.specific_activity or item.production_step or "",
+                    item.hazard_type or "",
+                    inherent_d,
+                    residual_d,
+                    item.control_level or "",
+                    item.responsible_person or "",
+                    controls_summary,
+                ]
+            )
 
-        table = Table(table_data, colWidths=[w * mm / 4 for w in col_widths], repeatRows=1)
-        table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#5645D4")),
-            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-            ("FONTNAME", (0, 0), (-1, 0), _font_name_bold),
-            ("FONTSIZE", (0, 0), (-1, 0), 8),
-            ("ALIGN", (0, 0), (-1, 0), "CENTER"),
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("FONTNAME", (0, 1), (-1, -1), _font_name),
-            ("FONTSIZE", (0, 1), (-1, -1), 7.5),
-            ("ALIGN", (0, 0), (0, -1), "CENTER"),
-            ("ALIGN", (1, 1), (1, -1), "CENTER"),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#D9D9D9")),
-            ("LINEBELOW", (0, 0), (-1, 0), 1.5, colors.HexColor("#3D2DA6")),
-            *[
-                ("BACKGROUND", (0, i), (-1, i), colors.HexColor("#F7F6FB"))
-                for i in range(2, len(table_data) + 1, 2)
-            ],
-        ]))
+        table = Table(
+            table_data, colWidths=[w * mm / 4 for w in col_widths], repeatRows=1
+        )
+        table.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#5645D4")),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                    ("FONTNAME", (0, 0), (-1, 0), _font_name_bold),
+                    ("FONTSIZE", (0, 0), (-1, 0), 8),
+                    ("ALIGN", (0, 0), (-1, 0), "CENTER"),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("FONTNAME", (0, 1), (-1, -1), _font_name),
+                    ("FONTSIZE", (0, 1), (-1, -1), 7.5),
+                    ("ALIGN", (0, 0), (0, -1), "CENTER"),
+                    ("ALIGN", (1, 1), (1, -1), "CENTER"),
+                    ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#D9D9D9")),
+                    ("LINEBELOW", (0, 0), (-1, 0), 1.5, colors.HexColor("#3D2DA6")),
+                    *[
+                        ("BACKGROUND", (0, i), (-1, i), colors.HexColor("#F7F6FB"))
+                        for i in range(2, len(table_data) + 1, 2)
+                    ],
+                ]
+            )
+        )
         elements.append(table)
         elements.append(Spacer(1, 10 * mm))
 
         # ── 签发栏 ──
         sign_style = ParagraphStyle(
-            "SignCN", parent=body_style, fontSize=10, leading=16,
+            "SignCN",
+            parent=body_style,
+            fontSize=10,
+            leading=16,
         )
         sign_table = Table(
-            [[
-                Paragraph("编制人：______________", sign_style),
-                Paragraph("审核人：______________", sign_style),
-                Paragraph("批准人：______________", sign_style),
-            ]],
+            [
+                [
+                    Paragraph("编制人：______________", sign_style),
+                    Paragraph("审核人：______________", sign_style),
+                    Paragraph("批准人：______________", sign_style),
+                ]
+            ],
             colWidths=[page_w / 3 - 20, page_w / 3 - 20, page_w / 3 - 20],
         )
-        sign_table.setStyle(TableStyle([
-            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("FONTNAME", (0, 0), (-1, -1), _font_name),
-            ("LEFTPADDING", (0, 0), (-1, -1), 30),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 30),
-        ]))
+        sign_table.setStyle(
+            TableStyle(
+                [
+                    ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("FONTNAME", (0, 0), (-1, -1), _font_name),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 30),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 30),
+                ]
+            )
+        )
         sign_table2 = Table(
-            [[
-                Paragraph("日期：______________", sign_style),
-                Paragraph("日期：______________", sign_style),
-                Paragraph("日期：______________", sign_style),
-            ]],
+            [
+                [
+                    Paragraph("日期：______________", sign_style),
+                    Paragraph("日期：______________", sign_style),
+                    Paragraph("日期：______________", sign_style),
+                ]
+            ],
             colWidths=[page_w / 3 - 20, page_w / 3 - 20, page_w / 3 - 20],
         )
-        sign_table2.setStyle(TableStyle([
-            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("FONTNAME", (0, 0), (-1, -1), _font_name),
-            ("LEFTPADDING", (0, 0), (-1, -1), 30),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 30),
-        ]))
+        sign_table2.setStyle(
+            TableStyle(
+                [
+                    ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("FONTNAME", (0, 0), (-1, -1), _font_name),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 30),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 30),
+                ]
+            )
+        )
         elements.append(sign_table)
         elements.append(Spacer(1, 4 * mm))
         elements.append(sign_table2)
@@ -2369,7 +2677,9 @@ class SafetyService(_SafetyCoreService):
             canvas.saveState()
             canvas.setFont(_font_name, 8)
             canvas.drawCentredString(
-                page_w / 2, 10 * mm, f"第 {canvas.getPageNumber()} 页",
+                page_w / 2,
+                10 * mm,
+                f"第 {canvas.getPageNumber()} 页",
             )
             canvas.restoreState()
 
@@ -2377,6 +2687,5 @@ class SafetyService(_SafetyCoreService):
         buf.seek(0)
         return buf.getvalue()
 
+
 # ==================== 操规修订 Service ====================
-
-

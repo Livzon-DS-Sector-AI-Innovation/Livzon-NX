@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.equipment.models import (
     Equipment,
     EquipmentCategory,
+    EquipmentCategoryLink,
     FailureAction,
     FailureCause,
     FailureSymptom,
@@ -180,11 +181,14 @@ async def test_create_work_order(db_session: AsyncSession) -> None:
     equipment = Equipment(
         equipment_no="EQ-T-CAT-0001",
         name="测试设备",
-        category_id=category.id,
         location_id=location.id,
         status="在用",
     )
     db_session.add(equipment)
+    await db_session.flush()
+    db_session.add(
+        EquipmentCategoryLink(equipment_id=equipment.id, category_id=category.id)
+    )
     await db_session.flush()
 
     wo = await repo_create_work_order(db_session, {

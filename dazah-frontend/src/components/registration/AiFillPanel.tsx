@@ -55,6 +55,19 @@ export function AiFillPanel({ chapterId, chapterCode, assets, onAssetsChange, on
   const [fillDone, setFillDone] = useState(false)
   const [fillResults, setFillResults] = useState<Array<{field_name: string; status: string; message: string}>>([])
 
+  const loadCategories = useCallback(async () => {
+    if (!chapterCode) return
+    setCategoriesLoading(true)
+    try {
+      const data = await fetchAssetCategories(chapterCode)
+      setCategories(data)
+    } catch {
+      // Category labels are optional; assets remain usable without them.
+    } finally {
+      setCategoriesLoading(false)
+    }
+  }, [chapterCode])
+
   // Reset fill state when chapter changes
   useEffect(() => {
     setFillDone(false)
@@ -68,20 +81,7 @@ export function AiFillPanel({ chapterId, chapterCode, assets, onAssetsChange, on
     if (chapterCode) {
       loadCategories()
     }
-  }, [chapterCode])
-
-  const loadCategories = async () => {
-    if (!chapterCode) return
-    setCategoriesLoading(true)
-    try {
-      const data = await fetchAssetCategories(chapterCode)
-      setCategories(data)
-    } catch {
-      // silently fail
-    } finally {
-      setCategoriesLoading(false)
-    }
-  }
+  }, [chapterCode, loadCategories])
 
   // Build category name map from assets
   const getCategoryName = (asset: ChapterAsset): string | undefined => {
@@ -110,15 +110,15 @@ export function AiFillPanel({ chapterId, chapterCode, assets, onAssetsChange, on
       } else {
         message.warning(result.message)
       }
-    } catch (err: any) {
-      message.error(err.message || 'AI 提取失败')
+    } catch (err: unknown) {
+      message.error(err instanceof Error ? err.message : 'AI 提取失败')
     } finally {
       setPreviewLoading(false)
     }
   }
 
   // Handle field edit
-  const handleFieldEdit = (index: number, value: any) => {
+  const handleFieldEdit = (index: number, value: AIFieldResult['value']) => {
     setEditedFields(prev => {
       const next = [...prev]
       next[index] = { ...next[index], value }
@@ -135,14 +135,16 @@ export function AiFillPanel({ chapterId, chapterCode, assets, onAssetsChange, on
         setFillResults(result.results || [])
         setFillDone(true)
         onFillComplete?.()
-        const filled = (result.results || []).filter((r: any) => r.status === 'filled').length
+        const filled = (result.results || []).filter((resultItem) => (
+          resultItem.status === 'filled'
+        )).length
         const total = (result.results || []).length
         message.success(`填充完成: ${filled}/${total} 个字段`)
       } else {
         message.warning(result.message || '填充失败')
       }
-    } catch (err: any) {
-      message.error(err.message || '填充失败')
+    } catch (err: unknown) {
+      message.error(err instanceof Error ? err.message : '填充失败')
     } finally {
       setFilling(false)
     }
@@ -150,9 +152,6 @@ export function AiFillPanel({ chapterId, chapterCode, assets, onAssetsChange, on
 
   // Asset selection from category
   const handleChooseAssetForField = (field: AIFieldResult) => {
-    console.log('[ChooseAsset] Field:', field.field_name, 'source_category:', field.source_category)
-    console.log('[ChooseAsset] Categories loaded:', categories.length, categories.map(c => c.category_name))
-    console.log('[ChooseAsset] Assets available:', assets.length, assets.map(a => ({ name: a.original_filename, cat_id: a.category_id })))
 
     if (!field.source_category) {
       message.warning('该字段未配置素材分类，请联系管理员')
@@ -166,10 +165,8 @@ export function AiFillPanel({ chapterId, chapterCode, assets, onAssetsChange, on
       return
     }
 
-    console.log('[ChooseAsset] Target category found:', targetCategory.id, targetCategory.category_name)
 
     const matchingAssets = assets.filter(a => a.category_id === targetCategory.id)
-    console.log('[ChooseAsset] Matching assets:', matchingAssets.length, matchingAssets.map(a => a.original_filename))
 
     if (matchingAssets.length === 0) {
       message.warning(`分类"${field.source_category}"下没有素材文件，请先在素材 Tab 中上传文件并选择此分类`)
@@ -178,13 +175,11 @@ export function AiFillPanel({ chapterId, chapterCode, assets, onAssetsChange, on
 
     // If only one asset, proceed directly
     if (matchingAssets.length === 1) {
-      console.log('[ChooseAsset] Only one asset, proceeding directly:', matchingAssets[0].original_filename)
       handlePageSplit(matchingAssets[0])
       return
     }
 
     // Multiple assets: show selection modal
-    console.log('[ChooseAsset] Multiple assets, showing selection modal')
     setAssetSelectCandidates(matchingAssets)
     setAssetSelectTargetField(field)
     setAssetSelectModalOpen(true)
@@ -199,8 +194,8 @@ export function AiFillPanel({ chapterId, chapterCode, assets, onAssetsChange, on
       const slots = imageFields.map(f => f.field_name)
       const result = await splitPreview(asset.id, slots)
       setSplitPages(result.pages || [])
-    } catch (err: any) {
-      message.error(err.message || '页面拆分失败')
+    } catch (err: unknown) {
+      message.error(err instanceof Error ? err.message : '页面拆分失败')
     } finally {
       setSplitLoading(false)
     }
@@ -237,8 +232,8 @@ export function AiFillPanel({ chapterId, chapterCode, assets, onAssetsChange, on
       
       // Trigger refresh
       onAssetsChange()
-    } catch (err: any) {
-      message.error(err.message || '插入失败')
+    } catch (err: unknown) {
+      message.error(err instanceof Error ? err.message : '插入失败')
     } finally {
       setSplitInserting(false)
     }
@@ -345,7 +340,7 @@ export function AiFillPanel({ chapterId, chapterCode, assets, onAssetsChange, on
 
                 {field.field_type === 'table' && Array.isArray(field.value) ? (
                   <div className="text-xs text-gray-500">
-                    表格数据: {field.value.length} 行 × {(field.value[0] as any[])?.length || 0} 列
+                    表格数据: {field.value.length} 行 × {field.value[0]?.length ?? 0} 列
                   </div>
                 ) : field.field_type === 'image_appendix' ? (
                   <div className="flex items-center justify-between gap-2">

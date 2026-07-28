@@ -68,16 +68,39 @@ Server Action 示例见 `examples/server-actions.md`。
 - Server Action 和业务操作函数以动词开头；查询函数使用明确的 `fetch/list/get` 语义。
 - 优先复用项目现有组件、query key、错误处理和权限入口。
 - 不新增与现有技术栈重复的状态、表单或请求库。
+- TypeScript 必须保持可推导且边界类型明确；禁止用无理由的 `any`、类型断言、`@ts-ignore` 或关闭 strict 检查掩盖契约问题。
+- React hooks 的依赖、组件 key、受控状态和异步副作用必须正确；不得通过禁用 ESLint 规则绕过真实问题。
+- 确需局部禁用规则时，只允许最小行级范围，并用注释说明框架限制或业务原因；禁止文件级关闭规则。
 - 不提交本地运行日志、临时截图、调试输出或硬编码测试数据。
 
-## 验证
+## 测试策略
 
-按修改范围至少运行相关检查：
+- 修改纯函数、格式转换、金额/精度、权限判断、query key 或 API 路径时，补充 Vitest 单元测试。
+- 修改页面数据流、表单、筛选、分页、缓存刷新或错误处理时，至少覆盖成功、失败和关键边界；修复缺陷必须先保留可复现的回归测试。
+- 测试应断言用户可见结果、请求参数或状态变化，不以无断言 smoke test、过度 mock 或快照替代业务行为验证。
+- 测试文件与被测代码就近放置并使用 `*.test.ts` 或 `*.test.tsx`；复用现有测试工具，不新增重复测试框架。
+
+## 静态检查与 CI 门禁
+
+前端代码必须通过以下检查：
 
 ```powershell
-pnpm typecheck
+pnpm install --frozen-lockfile
 pnpm lint
+pnpm typecheck
+pnpm test:unit
 pnpm build
+docker build --tag dazah-frontend:ci .
 ```
 
-涉及页面和交互时，还要验证主要操作以及加载、空数据、失败、无权限、危险确认和窄屏表现。无法运行完整构建时，说明原因并至少完成与改动直接相关的检查。
+- `pnpm lint` 对应 CI `Lint` 中的 ESLint。新增和修改代码必须零 error，且不得增加 warning；历史 warning 渐进清理，不得通过放宽规则或批量忽略消除。
+- `eslint-warning-baseline.json` 按规则记录历史 warning 上限；任一规则计数或总数增加都会使 `pnpm lint` 失败。完成清理后只允许同步下调对应计数和总数，禁止提高基线。
+- 禁止 `console.log` 和 `debugger`；确有运行故障需要记录时只使用受规则允许的 `console.warn`/`console.error`，不得输出敏感信息。
+- warning 按 `react-hooks/exhaustive-deps`、`@typescript-eslint/no-explicit-any` 和其他规则分批清理；修复 hooks 必须验证依赖稳定性，清理 `any` 必须替换为真实契约类型或经过收窄的 `unknown`。
+- `pnpm typecheck` 对应 `Type Check`，不得依赖 Next.js Build 间接发现类型错误。
+- `pnpm test:unit` 对应 `Unit Tests`；新增业务逻辑或缺陷修复必须有相关测试。
+- `pnpm build` 对应 `Frontend Build`，用于验证 Next.js 生产构建、Server/Client 边界和静态生成。
+- Docker 命令对应 `Docker Build`，涉及依赖、构建配置、运行时配置、standalone 输出或 Dockerfile 时必须本地执行。
+- 聚合任务 `Frontend Test` 只有在 `Lint`、`Type Check`、`Unit Tests`、`Frontend Build` 和 `Docker Build` 全部成功时才通过。
+
+开发中先运行受影响测试和静态检查；交付前按风险扩大范围。涉及共享组件、基础设施、依赖、构建配置或跨模块改动时执行完整前端门禁。页面和交互还要验证主要操作以及加载、空数据、失败、无权限、危险确认和窄屏表现。无法执行任何检查时必须说明原因、未验证范围和风险。

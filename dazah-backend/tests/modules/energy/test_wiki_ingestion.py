@@ -541,6 +541,9 @@ async def test_overview_uses_latest_facts_and_excludes_negative_cumulative_delta
     ]
 
     class FactRepository:
+        async def list_page_bindings(self, _page_key):
+            return []
+
         async def list_current_facts(self, **_kwargs):
             return facts
 
