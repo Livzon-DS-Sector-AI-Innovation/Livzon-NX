@@ -1,0 +1,10 @@
+repos:
+  - repo: local
+    hooks:
+      - id: backend-ruff-changed
+        name: Ruff lint changed backend Python files
+        entry: bash dazah-backend/scripts/ruff-changed.sh
+        language: system
+        files: ^dazah-backend/.*\.py$
+        types: [python]
+        pass_filenames: true

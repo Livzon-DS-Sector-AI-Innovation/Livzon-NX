@@ -25,9 +25,10 @@ const DEFAULT_BACKEND_SPEC = join(FRONTEND_ROOT, '..', 'dazah-backend', 'openapi
 const BACKEND_SPEC = process.env.BACKEND_SPEC_PATH || DEFAULT_BACKEND_SPEC;
 const BACKEND_URL = process.env.API_BASE_URL || 'http://localhost:8000';
 const OUTPUT_DIR = join(FRONTEND_ROOT, 'src/types/generated');
+const writeStdout = (message) => process.stdout.write(`${message}\n`);
 
 async function fetchSpec() {
-  console.log(`🔄 Fetching OpenAPI spec from ${BACKEND_URL}...`);
+  writeStdout(`🔄 Fetching OpenAPI spec from ${BACKEND_URL}...`);
   const response = await fetch(`${BACKEND_URL}/openapi.json`);
   if (!response.ok) {
     throw new Error(`Backend returned ${response.status}`);
@@ -36,7 +37,7 @@ async function fetchSpec() {
 }
 
 async function readLocalSpec() {
-  console.log(`🔄 Reading OpenAPI spec from ${BACKEND_SPEC}...`);
+  writeStdout(`🔄 Reading OpenAPI spec from ${BACKEND_SPEC}...`);
   const content = readFileSync(BACKEND_SPEC, 'utf-8');
   return JSON.parse(content);
 }
@@ -61,20 +62,20 @@ async function main() {
     
     // Save spec for reference
     writeFileSync(specPath, JSON.stringify(spec, null, 2));
-    console.log(`✓ Saved OpenAPI spec to src/types/generated/openapi.json`);
+    writeStdout('✓ Saved OpenAPI spec to src/types/generated/openapi.json');
     
     // Generate TypeScript types
-    console.log('🔄 Generating TypeScript types...');
+    writeStdout('🔄 Generating TypeScript types...');
     execSync(`npx openapi-typescript ${specPath} -o ${join(OUTPUT_DIR, 'schema.ts')}`, {
       stdio: 'inherit'
     });
-    console.log(`✓ Generated types at src/types/generated/schema.ts`);
+    writeStdout('✓ Generated types at src/types/generated/schema.ts');
     
-    console.log('\n✅ Code generation complete!');
-    console.log('\nNext steps:');
-    console.log('  1. Import types from @/types/generated/schema');
-    console.log('  2. Update src/lib/api/*.ts to use generated types');
-    console.log('  3. Run: pnpm typecheck');
+    writeStdout('\n✅ Code generation complete!');
+    writeStdout('\nNext steps:');
+    writeStdout('  1. Import types from @/types/generated/schema');
+    writeStdout('  2. Update src/lib/api/*.ts to use generated types');
+    writeStdout('  3. Run: pnpm typecheck');
     
   } catch (error) {
     console.error('❌ Code generation failed:', error.message);

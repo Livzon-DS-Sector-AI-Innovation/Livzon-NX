@@ -1,0 +1,172 @@
+name: Gitea PR Merge Gate
+
+on:
+  pull_request:
+    branches:
+      - dev
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+
+permissions:
+  contents: read
+
+env:
+  API_BASE_URL: http://127.0.0.1:8000
+  APP_ENV: test
+  DATABASE_URL: postgresql+asyncpg://dazah_ci:dazah_ci_test@postgres:5432/dazah_ci_test
+  TEST_DATABASE_URL: postgresql+asyncpg://dazah_ci:dazah_ci_test@postgres:5432/dazah_ci_test
+  REDIS_URL: redis://127.0.0.1:6379/15
+  SECRET_KEY: ci-only-not-a-production-secret
+  ENCRYPTION_KEY: MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=
+  FEISHU_APP_ID: ci_dummy_app_id
+  FEISHU_APP_SECRET: ci_dummy_app_secret
+  FEISHU_REDIRECT_URI: http://127.0.0.1:3000/callback
+  FRONTEND_URL: http://127.0.0.1:3000
+  FEISHU_WS_ENABLED: "false"
+  EQUIPMENT_FEISHU_WS_ENABLED: "false"
+  LIVZON_FEISHU_CARD_CALLBACK_WS_ENABLED: "false"
+  LIVZON_FEISHU_EVENT_WS_ENABLED: "false"
+  MINIO_ENABLED: "false"
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  branch-policy:
+    name: branch-policy
+    runs-on: linux-amd64
+    steps:
+      - name: Check out PR head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Enforce source and target branch policy
+        run: bash scripts/check-branch-policy.sh
+
+  frontend-quality:
+    name: frontend-quality
+    runs-on: linux-amd64
+    steps:
+      - name: Check out PR head with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Prepare merged integration worktree
+        run: bash scripts/prepare-integration.sh
+      - name: Run frontend lint, typecheck, and unit tests
+        run: bash dazah-frontend/scripts/ci.sh quality
+
+  frontend-build:
+    name: frontend-build
+    runs-on: linux-amd64
+    steps:
+      - name: Check out PR head with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Prepare merged integration worktree
+        run: bash scripts/prepare-integration.sh
+      - name: Build frontend production bundle
+        run: bash dazah-frontend/scripts/ci.sh build
+
+  frontend-container:
+    name: frontend-container
+    runs-on: linux-amd64
+    steps:
+      - name: Check out PR head with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Prepare merged integration worktree
+        run: bash scripts/prepare-integration.sh
+      - name: Validate Compose and build frontend image
+        run: bash dazah-frontend/scripts/ci.sh container
+
+  backend-quality:
+    name: backend-quality
+    runs-on: linux-amd64
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: dazah_ci
+          POSTGRES_PASSWORD: dazah_ci_test
+          POSTGRES_DB: dazah_ci_test
+        options: >-
+          --health-cmd "pg_isready -U dazah_ci -d dazah_ci_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGUSER: dazah_ci
+      PGPASSWORD: dazah_ci_test
+      PGDATABASE: dazah_ci_test
+      CI_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      CI_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - name: Check out PR head with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Prepare merged integration worktree
+        run: bash scripts/prepare-integration.sh
+      - name: Run backend static checks and unit tests
+        run: bash dazah-backend/scripts/ci.sh quality
+
+  backend-integration:
+    name: backend-integration
+    runs-on: linux-amd64
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: dazah_ci
+          POSTGRES_PASSWORD: dazah_ci_test
+          POSTGRES_DB: dazah_ci_test
+        options: >-
+          --health-cmd "pg_isready -U dazah_ci -d dazah_ci_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGUSER: dazah_ci
+      PGPASSWORD: dazah_ci_test
+      PGDATABASE: dazah_ci_test
+    steps:
+      - name: Check out PR head with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Prepare merged integration worktree
+        run: bash scripts/prepare-integration.sh
+      - name: Run migrations, contract checks, and integration tests
+        run: bash dazah-backend/scripts/ci.sh integration
+
+  backend-container:
+    name: backend-container
+    runs-on: linux-amd64
+    steps:
+      - name: Check out PR head with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Prepare merged integration worktree
+        run: bash scripts/prepare-integration.sh
+      - name: Validate Compose and build backend image
+        run: bash dazah-backend/scripts/ci.sh container

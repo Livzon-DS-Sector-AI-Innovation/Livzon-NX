@@ -7,7 +7,8 @@
     "dev:webpack": "next dev --webpack",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",
+    "lint": "node scripts/lint-with-baseline.mjs",
+    "test:unit": "vitest run src",
     "generate:api": "node scripts/generate-api.mjs",
     "typecheck": "tsc --noEmit"
   },
@@ -44,6 +45,7 @@
     "openapi-typescript": "^7.13.0",
     "openapi-typescript-codegen": "^0.31.0",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.10"
   }
 }

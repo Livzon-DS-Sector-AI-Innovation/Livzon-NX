@@ -132,8 +132,9 @@ async def test_create_equipment(client: AsyncClient):
     response = await client.post(
         "/api/v1/equipment/equipments",
         json={
+            "equipment_no": f"EQ-{cat_code}-0001",
             "name": "R-101反应釜",
-            "category_id": category_id,
+            "category_ids": [category_id],
             "location_id": location_id,
             "status": "在用",
             "model": "RF-1000",
@@ -169,16 +170,18 @@ async def test_get_equipments(client: AsyncClient):
     await client.post(
         "/api/v1/equipment/equipments",
         json={
+            "equipment_no": f"EQ-{cat_code}-0001",
             "name": "R-101反应釜",
-            "category_id": category_id,
+            "category_ids": [category_id],
             "location_id": location_id,
         },
     )
     await client.post(
         "/api/v1/equipment/equipments",
         json={
+            "equipment_no": f"EQ-{cat_code}-0002",
             "name": "R-102反应釜",
-            "category_id": category_id,
+            "category_ids": [category_id],
             "location_id": location_id,
         },
     )

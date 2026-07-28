@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from sqlalchemy import Date, String, Text
+from sqlalchemy import Date, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.shared.base_model import BaseModel
@@ -12,10 +12,16 @@ from app.shared.base_model import BaseModel
 
 class ChangeControl(BaseModel):
     __tablename__ = "quality_change_controls"
-    __table_args__ = {"schema": "quality"}
+    __table_args__ = (
+        UniqueConstraint(
+            "change_code",
+            name="uq_quality_change_controls_change_code",
+        ),
+        {"schema": "quality"},
+    )
 
     serial_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    change_code: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
+    change_code: Mapped[str] = mapped_column(String(100), nullable=False)
     applicant_department: Mapped[str | None] = mapped_column(String(100), nullable=True)
     change_object: Mapped[str | None] = mapped_column(String(255), nullable=True)
     change_content: Mapped[str | None] = mapped_column(Text, nullable=True)

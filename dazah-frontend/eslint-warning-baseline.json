@@ -1,0 +1,18 @@
+{
+  "total": 1090,
+  "rules": {
+    "<unclassified>": 1,
+    "@next/next/no-img-element": 1,
+    "@typescript-eslint/no-explicit-any": 393,
+    "@typescript-eslint/no-unused-vars": 430,
+    "import/no-anonymous-default-export": 1,
+    "prefer-const": 2,
+    "react-hooks/exhaustive-deps": 99,
+    "react-hooks/immutability": 6,
+    "react-hooks/purity": 2,
+    "react-hooks/set-state-in-effect": 130,
+    "react-hooks/static-components": 10,
+    "react/jsx-key": 1,
+    "react/no-unescaped-entities": 14
+  }
+}

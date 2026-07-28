@@ -1,6 +1,8 @@
 """CPV Value ORM model."""
 
-from sqlalchemy import Boolean, String, UniqueConstraint
+import uuid
+
+from sqlalchemy import Boolean, String, UniqueConstraint, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.shared.base_model import BaseModel
@@ -12,17 +14,18 @@ class CpvValue(BaseModel):
     __tablename__ = "cpv_values"
     __table_args__ = (
         UniqueConstraint(
-            "batch_id", "parameter_id",
+            "batch_id",
+            "parameter_id",
             name="uq_cpv_values_batch_parameter",
         ),
         {"schema": "quality", "comment": "CPV参数值表"},
     )
 
-    batch_id: Mapped[str] = mapped_column(
-        nullable=False, comment="批次ID"
+    batch_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), nullable=False, comment="批次ID"
     )
-    parameter_id: Mapped[str] = mapped_column(
-        nullable=False, comment="参数ID"
+    parameter_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), nullable=False, comment="参数ID"
     )
     actual_value: Mapped[str | None] = mapped_column(
         String(100), nullable=True, comment="实测值"

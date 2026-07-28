@@ -10,6 +10,7 @@ from app.core.exceptions import AppException, DuplicateException, NotFoundExcept
 from app.modules.equipment.models import (
     Equipment,
     EquipmentCategory,
+    EquipmentCategoryLink,
     FailureSymptom,
     Location,
 )
@@ -174,11 +175,14 @@ async def sample_equipment(db_session: AsyncSession) -> Equipment:
     equipment = Equipment(
         equipment_no="EQ-RF-TEST-0001",
         name="R-101反应釜",
-        category_id=category.id,
         location_id=location.id,
         status="在用",
     )
     db_session.add(equipment)
+    await db_session.flush()
+    db_session.add(
+        EquipmentCategoryLink(equipment_id=equipment.id, category_id=category.id)
+    )
     await db_session.flush()
     return equipment
 
@@ -306,13 +310,16 @@ async def test_work_order_invalid_transition(
     sample_equipment: Equipment,
     sample_user: User,
 ) -> None:
-    """测试非法状态转换"""
+    """待处理工单不能跳过执行和验收直接完成。"""
     data = WorkOrderCreate(equipment_id=sample_equipment.id)
     wo = await create_work_order(db_session, data, sample_user.id)
 
-    # 待处理不能直接开始维修
     with pytest.raises(AppException):
-        await start_work_order(db_session, wo.id)
+        await complete_work_order(
+            db_session,
+            wo.id,
+            WorkOrderComplete(repair_detail="非法直接完成"),
+        )
 
 
 # ==================== Calibration Service Tests ====================

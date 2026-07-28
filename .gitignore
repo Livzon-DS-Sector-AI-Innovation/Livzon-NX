@@ -20,6 +20,15 @@ desktop.ini
 # Local documentation and helper scripts
 /docs/
 /scripts/
+!/docs/
+/docs/*
+!/docs/gitea-ci.md
+!/scripts/
+/scripts/*
+!/scripts/ci.sh
+!/scripts/check-branch-policy.sh
+!/scripts/prepare-integration.sh
+!/scripts/wait-for-database.sh
 
 # Python
 **/__pycache__/

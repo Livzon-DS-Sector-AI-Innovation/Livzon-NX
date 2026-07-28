@@ -36,8 +36,9 @@ async def test_equipment_lifecycle(client: AsyncClient):
     equipment_response = await client.post(
         "/api/v1/equipment/equipments",
         json={
+            "equipment_no": f"EQ-{cat_code}-0001",
             "name": "R-101反应釜",
-            "category_id": category_id,
+            "category_ids": [category_id],
             "location_id": location_id,
             "status": "在用",
             "model": "RF-1000",
@@ -73,8 +74,8 @@ async def test_equipment_lifecycle(client: AsyncClient):
     assert detail_response.status_code == 404
 
 
-async def test_equipment_number_generation(client: AsyncClient):
-    """测试设备编号自动生成"""
+async def test_equipment_number_is_preserved(client: AsyncClient):
+    """测试显式设备编号在批量创建时保持不变"""
     uid = _uid()
     cat_code = f"LXJ-{uid}"
     loc_code = f"WS-{uid}"
@@ -100,8 +101,9 @@ async def test_equipment_number_generation(client: AsyncClient):
         response = await client.post(
             "/api/v1/equipment/equipments",
             json={
+                "equipment_no": f"EQ-{cat_code}-{i:04d}",
                 "name": f"C-{i:03d}离心机",
-                "category_id": category_id,
+                "category_ids": [category_id],
                 "location_id": location_id,
             },
         )
@@ -134,8 +136,9 @@ async def test_equipment_filter(client: AsyncClient):
     await client.post(
         "/api/v1/equipment/equipments",
         json={
+            "equipment_no": f"EQ-{cat_code}-0001",
             "name": "R-101反应釜",
-            "category_id": category_id,
+            "category_ids": [category_id],
             "location_id": location_id,
             "status": "在用",
         },
@@ -143,8 +146,9 @@ async def test_equipment_filter(client: AsyncClient):
     await client.post(
         "/api/v1/equipment/equipments",
         json={
+            "equipment_no": f"EQ-{cat_code}-0002",
             "name": "R-102反应釜",
-            "category_id": category_id,
+            "category_ids": [category_id],
             "location_id": location_id,
             "status": "备用",
         },
@@ -190,8 +194,9 @@ async def test_create_equipment_with_nonexistent_category(client: AsyncClient):
     response = await client.post(
         "/api/v1/equipment/equipments",
         json={
+            "equipment_no": f"EQ-UNKNOWN-{uid}",
             "name": "测试设备",
-            "category_id": fake_category_id,
+            "category_ids": [fake_category_id],
             "location_id": location_id,
         },
     )
