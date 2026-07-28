@@ -30,7 +30,7 @@ run_quality() {
   echo "== Backend mypy (core infrastructure baseline) =="
   uv run --no-sync mypy app/core
   echo "== Prepare isolated unit-test database =="
-  "${repository_dir}/scripts/wait-for-database.sh"
+  bash "${repository_dir}/scripts/wait-for-database.sh"
   uv run --no-sync alembic upgrade head
   echo "== Backend unit tests =="
   uv run --no-sync pytest tests/unit tests/core -m "not integration" -ra
@@ -38,7 +38,7 @@ run_quality() {
 
 run_integration() {
   install_dependencies
-  "${repository_dir}/scripts/wait-for-database.sh"
+  bash "${repository_dir}/scripts/wait-for-database.sh"
 
   echo "== Verify one Alembic head =="
   mapfile -t alembic_heads < <(uv run --no-sync alembic heads)
