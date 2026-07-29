@@ -169,11 +169,15 @@ uv sync --frozen --group dev
 uv run ruff check <本次变更的 Python 路径>
 uv run alembic heads
 uv run alembic upgrade head
-uv run pytest --cov=app --cov-report=term-missing --cov-report=xml --cov-fail-under=60
+uv run pytest --cov=app --cov-branch --cov-report=term-missing --cov-report=xml
+uv run python ../scripts/check-coverage-floor.py --coverage-file coverage.xml --min-lines 60 --min-branches 33.5
+uv run python ../scripts/check-diff-coverage.py --coverage-file coverage.xml --path-prefix dazah-backend/app --minimum 80
 docker build --tag dazah-backend:ci .
 ```
 
 - `alembic heads` 必须且只能有一个 head；结构变更还要验证空库升级、`upgrade()`、`downgrade()` 和模块 schema 创建。
+- 全应用行覆盖率不得低于 60%，分支覆盖率不得低于 33.5%，PR 变更可执行行
+  覆盖率不得低于 80%；低覆盖模块通过触达即补测逐步治理。
 - API、共享基础设施、数据库、依赖、测试配置或跨模块变更必须运行全量测试；局部纯实现可先定向验证，但交付时必须说明未执行的完整门禁。
 - Dockerfile、依赖锁、系统依赖、启动命令或运行时配置变化必须执行 Docker Build。
 - API 变化还要执行根目录契约生成脚本并验证前端生成类型。

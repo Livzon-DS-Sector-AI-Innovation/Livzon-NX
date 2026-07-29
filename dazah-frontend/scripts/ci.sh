@@ -2,6 +2,7 @@
 set -euo pipefail
 
 project_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+repository_dir="$(cd "${project_dir}/.." && pwd)"
 cd "$project_dir"
 
 require_command() {
@@ -22,6 +23,7 @@ install_dependencies() {
 
 run_quality() {
   install_dependencies
+  require_command python
   echo "== Frontend generated API contract =="
   pnpm generate:api
   git diff --exit-code -- src/types/generated/schema.ts
@@ -29,8 +31,13 @@ run_quality() {
   pnpm lint
   echo "== Frontend TypeScript =="
   pnpm typecheck
-  echo "== Frontend unit tests (Vitest run mode) =="
-  pnpm test:unit
+  echo "== Frontend unit tests and full-source coverage baseline =="
+  pnpm test:coverage
+  echo "== Frontend changed-line coverage =="
+  python "${repository_dir}/scripts/check-diff-coverage.py" \
+    --coverage-file coverage/cobertura-coverage.xml \
+    --path-prefix dazah-frontend \
+    --minimum 80
 }
 
 run_build() {
@@ -66,6 +73,14 @@ run_container() {
     .
 }
 
+run_e2e() {
+  install_dependencies
+  echo "== Install Playwright Chromium =="
+  pnpm exec playwright install --with-deps chromium
+  echo "== Critical frontend Playwright tests =="
+  pnpm test:e2e:critical
+}
+
 run_security() {
   install_dependencies
   echo "== Frontend dependency audit =="
@@ -73,18 +88,20 @@ run_security() {
 }
 
 usage() {
-  echo "Usage: $0 {quality|build|container|security|all}" >&2
+  echo "Usage: $0 {quality|build|e2e|container|security|all}" >&2
   exit 2
 }
 
 case "${1:-}" in
   quality) run_quality ;;
   build) run_build ;;
+  e2e) run_e2e ;;
   container) run_container ;;
   security) run_security ;;
   all)
     run_quality
     run_build
+    run_e2e
     run_container
     run_security
     ;;

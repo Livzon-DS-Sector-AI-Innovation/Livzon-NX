@@ -24,6 +24,26 @@ env:
   PYTHON_VERSION: "3.12"
 
 jobs:
+  test-impact:
+    name: Test Impact
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Verify production changes include corresponding tests
+        env:
+          CI_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          CI_HEAD_SHA: ${{ github.sha }}
+        run: python scripts/check-test-impact.py
+
   lint:
     name: Lint
     runs-on: ubuntu-latest
@@ -142,6 +162,58 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: dazah-frontend/pnpm-lock.yaml
+
+      - name: Set up Python for coverage policy
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run frontend unit tests
+        env:
+          COVERAGE_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          COVERAGE_HEAD_SHA: ${{ github.sha }}
+        run: |
+          pnpm test:coverage
+          python ../scripts/check-diff-coverage.py \
+            --coverage-file coverage/cobertura-coverage.xml \
+            --path-prefix dazah-frontend \
+            --minimum 80
+
+      - name: Upload frontend coverage report
+        if: ${{ always() && hashFiles('dazah-frontend/coverage/cobertura-coverage.xml') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: dazah-frontend/coverage
+          if-no-files-found: ignore
+          retention-days: 14
+
+  frontend-e2e:
+    name: Frontend E2E
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dazah-frontend
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
@@ -158,8 +230,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run frontend unit tests
-        run: pnpm test:unit
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run critical Playwright tests
+        env:
+          API_BASE_URL: http://localhost:8000
+        run: pnpm test:e2e:critical
 
   frontend-build:
     name: Frontend Build
@@ -208,6 +285,7 @@ jobs:
       - lint
       - type-check
       - unit-tests
+      - frontend-e2e
       - frontend-build
       - docker-build
     runs-on: ubuntu-latest
@@ -217,6 +295,7 @@ jobs:
           LINT_RESULT: ${{ needs.lint.result }}
           TYPE_CHECK_RESULT: ${{ needs.type-check.result }}
           UNIT_TESTS_RESULT: ${{ needs.unit-tests.result }}
+          E2E_RESULT: ${{ needs.frontend-e2e.result }}
           FRONTEND_BUILD_RESULT: ${{ needs.frontend-build.result }}
           DOCKER_BUILD_RESULT: ${{ needs.docker-build.result }}
         run: |
@@ -224,6 +303,7 @@ jobs:
             "$LINT_RESULT" \
             "$TYPE_CHECK_RESULT" \
             "$UNIT_TESTS_RESULT" \
+            "$E2E_RESULT" \
             "$FRONTEND_BUILD_RESULT" \
             "$DOCKER_BUILD_RESULT"; do
             test "$result" = "success"
@@ -268,6 +348,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up uv
         uses: astral-sh/setup-uv@v6
@@ -290,12 +372,23 @@ jobs:
         run: uv run alembic upgrade head
 
       - name: Run unit and API integration tests with coverage
-        run: >-
-          uv run pytest
-          --cov=app
-          --cov-report=term-missing
-          --cov-report=xml
-          --cov-fail-under=60
+        env:
+          COVERAGE_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          COVERAGE_HEAD_SHA: ${{ github.sha }}
+        run: |
+          uv run pytest \
+            --cov=app \
+            --cov-branch \
+            --cov-report=term-missing \
+            --cov-report=xml
+          uv run python ../scripts/check-coverage-floor.py \
+            --coverage-file coverage.xml \
+            --min-lines 60 \
+            --min-branches 33.5
+          uv run python ../scripts/check-diff-coverage.py \
+            --coverage-file coverage.xml \
+            --path-prefix dazah-backend/app \
+            --minimum 80
 
       - name: Upload coverage report
         if: ${{ always() && hashFiles('dazah-backend/coverage.xml') != '' }}
@@ -315,3 +408,55 @@ jobs:
 
       - name: Build backend image
         run: docker build --tag dazah-backend:ci ./dazah-backend
+
+  hermes-test:
+    name: Hermes Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Hermes-Lite
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: Hermes-Lite/uv.lock
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Run Hermes-Lite compile checks and tests
+        run: bash scripts/ci.sh
+
+  ci-gate:
+    name: CI Gate
+    if: ${{ always() }}
+    needs:
+      - test-impact
+      - frontend-test
+      - backend-test
+      - backend-docker-build
+      - hermes-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify all merge checks
+        env:
+          TEST_IMPACT_RESULT: ${{ needs.test-impact.result }}
+          FRONTEND_RESULT: ${{ needs.frontend-test.result }}
+          BACKEND_RESULT: ${{ needs.backend-test.result }}
+          BACKEND_CONTAINER_RESULT: ${{ needs.backend-docker-build.result }}
+          HERMES_RESULT: ${{ needs.hermes-test.result }}
+        run: |
+          for result in \
+            "$TEST_IMPACT_RESULT" \
+            "$FRONTEND_RESULT" \
+            "$BACKEND_RESULT" \
+            "$BACKEND_CONTAINER_RESULT" \
+            "$HERMES_RESULT"; do
+            test "$result" = "success"
+          done

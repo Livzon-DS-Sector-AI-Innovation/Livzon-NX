@@ -9,6 +9,8 @@
     "start": "next start",
     "lint": "node scripts/lint-with-baseline.mjs",
     "test:unit": "vitest run src",
+    "test:coverage": "vitest run src --coverage",
+    "test:e2e:critical": "playwright test e2e/purchasing",
     "generate:api": "node scripts/generate-api.mjs",
     "typecheck": "tsc --noEmit"
   },
@@ -39,6 +41,7 @@
     "@types/node": "^20",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
+    "@vitest/coverage-v8": "4.1.10",
     "babel-plugin-react-compiler": "^1.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.2.9",

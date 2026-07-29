@@ -1,0 +1,150 @@
+version = 1
+production_roots = [
+  "dazah-backend/app/",
+  "dazah-backend/alembic/",
+  "dazah-frontend/src/",
+  "Hermes-Lite/agent/",
+  "Hermes-Lite/gateway/",
+  "Hermes-Lite/hermes_cli/",
+  "Hermes-Lite/plugins/",
+  "Hermes-Lite/providers/",
+  "Hermes-Lite/scripts/",
+  "Hermes-Lite/services/",
+  "Hermes-Lite/tools/",
+  "Hermes-Lite/hermes_bootstrap.py",
+  "Hermes-Lite/hermes_constants.py",
+  "Hermes-Lite/hermes_logging.py",
+  "Hermes-Lite/hermes_time.py",
+  "Hermes-Lite/model_tools.py",
+  "Hermes-Lite/run_agent.py",
+  "Hermes-Lite/toolsets.py",
+  "Hermes-Lite/utils.py",
+]
+production_include = [
+  "^dazah-backend/app/.*\\.py$",
+  "^dazah-backend/alembic/.*\\.py$",
+  "^dazah-frontend/src/.*\\.(ts|tsx)$",
+  "^Hermes-Lite/(agent|gateway|hermes_cli|plugins|providers|scripts|services|tools)/.*\\.py$",
+  "^Hermes-Lite/(hermes_bootstrap|hermes_constants|hermes_logging|hermes_time|model_tools|run_agent|toolsets|utils)\\.py$",
+]
+ignore = [
+  "^dazah-frontend/src/types/generated/",
+  "\\.(test|spec)\\.(ts|tsx)$",
+  "(^|/)tests?/",
+  "/__pycache__/",
+  "\\.pyc$",
+  "^Hermes-Lite/scripts/ci\\.sh$",
+]
+
+[[rules]]
+id = "backend-module"
+description = "后端业务模块变更必须同步该模块测试"
+source = "^dazah-backend/app/modules/(?P<module>[^/]+)/.*\\.py$"
+tests = [
+  "^dazah-backend/tests/modules/{module}/test_.*\\.py$",
+  "^dazah-backend/tests/(unit|integration)/test_.*{module}.*\\.py$",
+]
+
+[[rules]]
+id = "backend-core"
+description = "后端核心基础设施变更必须同步 core 或 unit 测试"
+source = "^dazah-backend/app/core/.*\\.py$"
+tests = [
+  "^dazah-backend/tests/core/test_.*\\.py$",
+  "^dazah-backend/tests/unit/test_.*\\.py$",
+]
+
+[[rules]]
+id = "backend-platform-integration"
+description = "后端外部集成变更必须同步对应集成测试"
+source = "^dazah-backend/app/platform/integrations/(?P<area>[^/]+)/.*\\.py$"
+tests = [
+  "^dazah-backend/tests/platform/integrations/{area}/test_.*\\.py$",
+  "^dazah-backend/tests/(unit|integration)/test_.*{area}.*\\.py$",
+]
+
+[[rules]]
+id = "backend-platform"
+description = "后端平台能力变更必须同步对应平台测试"
+source = "^dazah-backend/app/platform/(?P<area>(?!integrations(?:/|$))[^/]+)/.*\\.py$"
+tests = [
+  "^dazah-backend/tests/platform/{area}/test_.*\\.py$",
+  "^dazah-backend/tests/(unit|integration)/test_.*{area}.*\\.py$",
+]
+
+[[rules]]
+id = "backend-shared"
+description = "后端公共入口和共享代码变更必须同步测试"
+source = "^dazah-backend/app/(api|shared)/.*\\.py$|^dazah-backend/app/(main|__init__)\\.py$|^dazah-backend/app/(modules|platform)/__init__\\.py$|^dazah-backend/app/platform/integrations/(?:__init__|base)\\.py$"
+tests = [
+  "^dazah-backend/tests/(unit|integration)/test_.*\\.py$",
+]
+
+[[rules]]
+id = "backend-migration"
+description = "数据库迁移变更必须同步 migration 或 schema 测试"
+source = "^dazah-backend/alembic/.*\\.py$"
+tests = [
+  "^dazah-backend/tests/.*test_.*(migration|schema|alembic).*\\.py$",
+]
+
+[[rules]]
+id = "agent-backend-contract"
+description = "Agent/LLM 契约变更必须同步后端 Agent 测试"
+source = "^dazah-backend/app/(modules/[^/]+/agent_tools\\.py|modules/agent/|core/llm/)"
+tests = [
+  "^dazah-backend/tests/modules/agent/test_.*\\.py$",
+  "^dazah-backend/tests/(core/llm|unit)/test_.*(agent|llm|tool).*\\.py$",
+]
+
+[[rules]]
+id = "agent-hermes-contract"
+description = "Agent/LLM 契约变更必须同步 Hermes 适配测试"
+source = "^dazah-backend/app/(modules/[^/]+/agent_tools\\.py|modules/agent/|core/llm/)"
+tests = [
+  "^Hermes-Lite/tests/test_.*\\.py$",
+]
+
+[[rules]]
+id = "frontend-component-module"
+description = "前端业务组件变更必须同步同模块单测或 E2E"
+source = "^dazah-frontend/src/components/(?P<module>[^/]+)/.*\\.(ts|tsx)$"
+tests = [
+  "^dazah-frontend/src/.*{module}.*\\.test\\.(ts|tsx)$",
+  "^dazah-frontend/e2e/{module}/.*\\.spec\\.ts$",
+]
+
+[[rules]]
+id = "frontend-page-module"
+description = "前端业务页面变更必须同步同模块单测或 E2E"
+source = "^dazah-frontend/src/app/\\(dashboard\\)/(?P<module>[^/]+)/.*\\.(ts|tsx)$"
+tests = [
+  "^dazah-frontend/src/.*{module}.*\\.test\\.(ts|tsx)$",
+  "^dazah-frontend/e2e/{module}/.*\\.spec\\.ts$",
+]
+
+[[rules]]
+id = "frontend-domain-file"
+description = "前端 Action、API 或 Store 变更必须同步领域测试"
+source = "^dazah-frontend/src/(actions|stores|lib/api)/(?P<module>[^/.]+).*\\.(ts|tsx)$"
+tests = [
+  "^dazah-frontend/src/.*{module}.*\\.test\\.(ts|tsx)$",
+  "^dazah-frontend/e2e/{module}/.*\\.spec\\.ts$",
+]
+
+[[rules]]
+id = "frontend-general"
+description = "其他前端生产代码变更必须同步单测或 E2E"
+source = "^dazah-frontend/src/.*\\.(ts|tsx)$"
+tests = [
+  "^dazah-frontend/src/.*\\.test\\.(ts|tsx)$",
+  "^dazah-frontend/e2e/.*\\.spec\\.ts$",
+]
+
+[[rules]]
+id = "hermes-runtime"
+description = "Hermes 编排层变更必须同步 Hermes 测试"
+source = "^Hermes-Lite/(agent|gateway|hermes_cli|plugins|providers|scripts|services|tools)/.*\\.py$|^Hermes-Lite/(hermes_bootstrap|hermes_constants|hermes_logging|hermes_time|model_tools|run_agent|toolsets|utils)\\.py$"
+tests = [
+  "^Hermes-Lite/tests/test_.*\\.py$",
+]

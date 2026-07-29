@@ -31,12 +31,32 @@ env:
   LIVZON_FEISHU_CARD_CALLBACK_WS_ENABLED: "false"
   LIVZON_FEISHU_EVENT_WS_ENABLED: "false"
   MINIO_ENABLED: "false"
+  CI_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+  CI_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
 
 defaults:
   run:
     shell: bash
 
 jobs:
+  test-impact:
+    name: test-impact
+    runs-on: linux-amd64
+    steps:
+      - name: Check out PR head with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Prepare merged integration worktree
+        run: bash scripts/prepare-integration.sh
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify production changes include corresponding tests
+        run: python scripts/check-test-impact.py
+
   branch-policy:
     name: branch-policy
     runs-on: linux-amd64
@@ -60,6 +80,10 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Prepare merged integration worktree
         run: bash scripts/prepare-integration.sh
+      - name: Set up Python for coverage policy
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
       - name: Run frontend lint, typecheck, and unit tests
         run: bash dazah-frontend/scripts/ci.sh quality
 
@@ -76,6 +100,22 @@ jobs:
         run: bash scripts/prepare-integration.sh
       - name: Build frontend production bundle
         run: bash dazah-frontend/scripts/ci.sh build
+        env:
+          NODE_OPTIONS: "--max-old-space-size=1024"
+
+  frontend-e2e:
+    name: frontend-e2e
+    runs-on: linux-amd64
+    steps:
+      - name: Check out PR head with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Prepare merged integration worktree
+        run: bash scripts/prepare-integration.sh
+      - name: Run critical Playwright tests
+        run: bash dazah-frontend/scripts/ci.sh e2e
 
   frontend-container:
     name: frontend-container
@@ -112,8 +152,6 @@ jobs:
       PGUSER: dazah_ci
       PGPASSWORD: dazah_ci_test
       PGDATABASE: dazah_ci_test
-      CI_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-      CI_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
     steps:
       - name: Check out PR head with full history
         uses: actions/checkout@v4
@@ -170,3 +208,60 @@ jobs:
         run: bash scripts/prepare-integration.sh
       - name: Validate Compose and build backend image
         run: bash dazah-backend/scripts/ci.sh container
+
+  hermes-quality:
+    name: hermes-quality
+    runs-on: linux-amd64
+    steps:
+      - name: Check out PR head with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Prepare merged integration worktree
+        run: bash scripts/prepare-integration.sh
+      - name: Run Hermes-Lite compile checks and tests
+        run: bash Hermes-Lite/scripts/ci.sh
+
+  merge-gate:
+    name: merge-gate
+    if: ${{ always() }}
+    needs:
+      - branch-policy
+      - test-impact
+      - frontend-quality
+      - frontend-build
+      - frontend-e2e
+      - frontend-container
+      - backend-quality
+      - backend-integration
+      - backend-container
+      - hermes-quality
+    runs-on: linux-amd64
+    steps:
+      - name: Verify every required check
+        env:
+          BRANCH_POLICY_RESULT: ${{ needs.branch-policy.result }}
+          TEST_IMPACT_RESULT: ${{ needs.test-impact.result }}
+          FRONTEND_QUALITY_RESULT: ${{ needs.frontend-quality.result }}
+          FRONTEND_BUILD_RESULT: ${{ needs.frontend-build.result }}
+          FRONTEND_E2E_RESULT: ${{ needs.frontend-e2e.result }}
+          FRONTEND_CONTAINER_RESULT: ${{ needs.frontend-container.result }}
+          BACKEND_QUALITY_RESULT: ${{ needs.backend-quality.result }}
+          BACKEND_INTEGRATION_RESULT: ${{ needs.backend-integration.result }}
+          BACKEND_CONTAINER_RESULT: ${{ needs.backend-container.result }}
+          HERMES_QUALITY_RESULT: ${{ needs.hermes-quality.result }}
+        run: |
+          for result in \
+            "$BRANCH_POLICY_RESULT" \
+            "$TEST_IMPACT_RESULT" \
+            "$FRONTEND_QUALITY_RESULT" \
+            "$FRONTEND_BUILD_RESULT" \
+            "$FRONTEND_E2E_RESULT" \
+            "$FRONTEND_CONTAINER_RESULT" \
+            "$BACKEND_QUALITY_RESULT" \
+            "$BACKEND_INTEGRATION_RESULT" \
+            "$BACKEND_CONTAINER_RESULT" \
+            "$HERMES_QUALITY_RESULT"; do
+            test "$result" = "success"
+          done

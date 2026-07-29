@@ -89,6 +89,8 @@ pnpm install --frozen-lockfile
 pnpm lint
 pnpm typecheck
 pnpm test:unit
+pnpm test:coverage
+pnpm test:e2e:critical
 pnpm build
 docker build --tag dazah-frontend:ci .
 ```
@@ -99,6 +101,10 @@ docker build --tag dazah-frontend:ci .
 - warning 按 `react-hooks/exhaustive-deps`、`@typescript-eslint/no-explicit-any` 和其他规则分批清理；修复 hooks 必须验证依赖稳定性，清理 `any` 必须替换为真实契约类型或经过收窄的 `unknown`。
 - `pnpm typecheck` 对应 `Type Check`，不得依赖 Next.js Build 间接发现类型错误。
 - `pnpm test:unit` 对应 `Unit Tests`；新增业务逻辑或缺陷修复必须有相关测试。
+- `pnpm test:coverage` 对整个 `src` 建立不可回退基线，PR 变更可执行行覆盖率
+  不得低于 80%。
+- `pnpm test:e2e:critical` 对应 `Frontend E2E`，覆盖不依赖真实外部系统的关键
+  用户流程。
 - `pnpm build` 对应 `Frontend Build`，用于验证 Next.js 生产构建、Server/Client 边界和静态生成。
 - Docker 命令对应 `Docker Build`，涉及依赖、构建配置、运行时配置、standalone 输出或 Dockerfile 时必须本地执行。
 - 聚合任务 `Frontend Test` 只有在 `Lint`、`Type Check`、`Unit Tests`、`Frontend Build` 和 `Docker Build` 全部成功时才通过。

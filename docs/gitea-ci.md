@@ -2,27 +2,25 @@
 
 ## 仓库与门禁范围
 
-当前仓库是 monorepo。合并门禁覆盖两个主要交付物：
+当前仓库是 monorepo。合并门禁覆盖三个主要交付物：
 
 - `dazah-frontend/`：Next.js 16、React 19、TypeScript 5、pnpm 10、ESLint、Vitest。
 - `dazah-backend/`：FastAPI、Python 3.12、uv、Ruff、mypy、pytest、Alembic、PostgreSQL。
-
-`Hermes-Lite/` 是独立的 Agent 编排层，目前没有纳入本次固定 Required Status
-Checks。若它需要独立阻断，应另建稳定的 `hermes-quality` 和
-`hermes-container` Job，不能复用或动态改名现有 Job。
+- `Hermes-Lite/`：Agent 编排层，执行锁定依赖安装、关键入口编译和全量 Pytest。
 
 ## 仓库检测记录
 
 - 前端 `package.json` 声明 `packageManager: pnpm@10.33.0`，Dockerfile 使用
   Node 20；虽然同时存在历史 `package-lock.json`，项目规范、锁文件和脚本均以
   `pnpm-lock.yaml`/pnpm 为权威。脚本包含 `lint`、`typecheck`、`test:unit`、
-  `build`、`generate:api`；Vitest 使用 run mode，另有 Playwright E2E 配置。
+  `test:coverage`、`test:e2e:critical`、`build`、`generate:api`。
 - 前端 ESLint 为 flat config，TypeScript 开启 strict。现有 lint 使用
   `eslint-warning-baseline.json`：本次实测 0 error、1090/1090 个历史 warning，
   新增 warning 会失败，但尚未达到绝对零 warning。
 - 后端没有主项目 `requirements.txt`，以 `pyproject.toml`、`uv.lock` 和
-  Python `>=3.12` 为权威；配置了 Ruff、strict mypy、pytest/pytest-asyncio 和
-  60% coverage 门槛。`edbo_service/` 与 `Hermes-Lite/` 另有 requirements。
+  Python `>=3.12` 为权威；配置了 Ruff、strict mypy、pytest/pytest-asyncio、
+  60% 行覆盖率和 33.5% 分支覆盖率门槛。`edbo_service/` 与 `Hermes-Lite/`
+  另有 requirements。
 - 后端使用 Alembic，迁移目录为 `dazah-backend/alembic/versions/`；实测只有
   `d6e8f4a1b2c3` 一个 head。仓库已提交 `dazah-backend/openapi.json`，导出脚本
   已改为递归键排序、UTF-8 和固定末尾换行。
@@ -39,11 +37,16 @@ Checks。若它需要独立阻断，应另建稳定的 `hermes-quality` 和
 ```text
 .gitea/
   CODEOWNERS
+  PULL_REQUEST_TEMPLATE.md
   workflows/ci.yml
+.ci/test-impact-policy.toml
 .pre-commit-config.yaml
 scripts/
   ci.sh
   check-branch-policy.sh
+  check-test-impact.py
+  check-diff-coverage.py
+  check-coverage-floor.py
   prepare-integration.sh
   wait-for-database.sh
 dazah-frontend/scripts/ci.sh
@@ -66,13 +69,17 @@ Pull Request，不执行 push、镜像推送、部署或生产 migration。
 
 | Required Status Check | 作用 |
 | --- | --- |
+| `test-impact` | 按模块验证生产变更是否同步对应测试，未分类生产路径失败关闭。 |
 | `branch-policy` | `main` 仅接受 `dev`；`dev` 仅接受允许前缀的开发分支并拒绝 `main`。 |
-| `frontend-quality` | 合并目标分支后检查前端生成 API 类型漂移，并执行冻结依赖安装、ESLint、独立 TypeScript 检查和 Vitest。 |
+| `frontend-quality` | 检查 API 类型漂移、ESLint、TypeScript、Vitest、覆盖率基线和 80% 变更行覆盖率。 |
 | `frontend-build` | 对合并结果执行 Next.js production build，使用本机安全占位 API 地址。 |
+| `frontend-e2e` | 用隔离 mock API 执行权限、审批确认、失败反馈等关键 Playwright 流程。 |
 | `frontend-container` | 校验 Compose，使用 PR SHA 和 `--pull=false` 构建本地镜像，不推送。 |
 | `backend-quality` | 冻结安装后对 PR 新增/修改的 Python 文件执行 Ruff lint，再运行 compileall、核心基础设施严格 mypy，并在隔离 PostgreSQL 上运行后端单元测试。 |
-| `backend-integration` | 使用独立 PostgreSQL，验证唯一 Alembic head、升级、drift、OpenAPI、应用导入、全量 pytest 与 60% coverage。 |
+| `backend-integration` | 验证 migration、OpenAPI、全量 pytest、60% 行覆盖率、33.5% 分支覆盖率和 80% 变更行覆盖率。 |
 | `backend-container` | 校验 Compose，使用 PR SHA 和 `--pull=false` 构建本地镜像，不推送。 |
+| `hermes-quality` | 执行 Hermes-Lite 编译检查和全量 Pytest。 |
+| `merge-gate` | 汇总以上全部检查；任何失败、取消或跳过都会失败。 |
 
 除 `branch-policy` 外，每个 Job 都从 PR head SHA checkout 完整历史，然后运行
 `prepare-integration.sh` 拉取并以 `--no-commit --no-ff` 合入最新目标分支。
@@ -83,12 +90,14 @@ Pull Request，不执行 push、镜像推送、部署或生产 migration。
 以下命令应在 Linux 或 WSL 的仓库根目录执行。数据库检查必须使用专用测试库，
 绝不能使用开发共享库或生产库。
 
-根聚合入口支持 `bash scripts/ci.sh quality|build|integration|container|security|all`
+根聚合入口支持 `bash scripts/ci.sh test-impact|quality|build|integration|container|security|all`
 以及 `frontend-*`/`backend-*` 精确阶段；下列子项目入口更适合定向调试。
 
 ```bash
 bash dazah-frontend/scripts/ci.sh quality
+python scripts/check-test-impact.py --base origin/dev --head HEAD
 API_BASE_URL=http://127.0.0.1:8000 bash dazah-frontend/scripts/ci.sh build
+bash dazah-frontend/scripts/ci.sh e2e
 bash dazah-frontend/scripts/ci.sh container
 bash dazah-frontend/scripts/ci.sh security
 
@@ -100,6 +109,7 @@ bash dazah-backend/scripts/ci.sh quality
 bash dazah-backend/scripts/ci.sh integration
 bash dazah-backend/scripts/ci.sh container
 bash dazah-backend/scripts/ci.sh security
+bash Hermes-Lite/scripts/ci.sh
 ```
 
 后端 Ruff 采用增量门禁：CI 根据 PR base/head SHA 只检查新增或修改的 Python
@@ -137,13 +147,13 @@ Runner 必须注册 `linux-amd64` 标签，并在 Job 环境中提供：
 - PostgreSQL client（`pg_isready`）；
 - 出站或内部镜像源访问，用于冻结依赖安装及缺失的基础镜像/service image。
 
-工作流唯一使用的外部 Action 是 `actions/checkout@v4`，没有依赖
-`setup-node`、`setup-python`、缓存或 artifact Action。根据
+工作流使用 `actions/checkout@v4`，`test-impact` 和前端质量检查还使用
+`actions/setup-python@v5`。根据
 [Gitea Actions 官方说明](https://docs.gitea.com/usage/actions/comparison)，
-`DEFAULT_ACTIONS_URL=github` 时 Runner 从 GitHub 获取它；若实例设置为 `self`，
-管理员必须先在本 Gitea 镜像 `actions/checkout` 并保留 `v4` tag。首次启用前应
-用一个诊断 Job 确认上述命令版本和 Docker daemon 权限。仓库本身无法读取实例
-级 `DEFAULT_ACTIONS_URL` 或 Runner 镜像内容，因此这一步必须由管理员核对。
+`DEFAULT_ACTIONS_URL=github` 时 Runner 从 GitHub 获取；若实例设置为 `self`，
+管理员必须先在本 Gitea 镜像 `actions/checkout@v4` 和
+`actions/setup-python@v5`。首次启用前应用一个诊断 Job 确认上述命令版本和
+Docker daemon 权限。仓库本身无法读取实例级配置，因此这一步必须由管理员核对。
 
 PostgreSQL Job service 使用 `postgres:17`。内网 Runner 应预先缓存或在 Docker
 daemon 配置允许的内部 registry mirror；应用 Docker build 使用
@@ -169,7 +179,7 @@ Actions 的策略。
 4. 要求 Pull Request；至少一人批准。
 5. 启用“新提交撤销旧批准”。
 6. 启用 PR 落后目标分支时禁止合并/必须为最新。
-7. 选择本文列出的全部七个 Required Status Checks。
+7. 从一次真实工作流运行中选择 `merge-gate` 作为 Required Status Check。
 8. 启用 Code Owner 审批，并要求管理员同样遵守规则、不得绕过。
 
 ### `main`
@@ -177,7 +187,7 @@ Actions 的策略。
 1. 新建精确规则 `main`，禁止直接 Push 和 Force Push。
 2. 只允许 `Owners` 合并，并要求 Pull Request 和至少一人批准。
 3. 启用“新提交撤销旧批准”和“PR 必须为最新”。
-4. 选择本文列出的全部七个 Required Status Checks。
+4. 从一次真实工作流运行中选择 `merge-gate` 作为 Required Status Check。
 5. 启用 Code Owner 审批，并要求管理员同样遵守规则、不得绕过。
 6. `branch-policy` 强制来源严格为 `dev`；任何 feature/fix/hotfix 直达
    `main` 都会失败。
@@ -215,8 +225,8 @@ slug 改为 Gitea 的真实组织 slug。语法依据：
 这些历史问题没有通过 `continue-on-error` 或 `|| true` 掩盖。前端 lint、
 typecheck、Vitest、production build、Compose 校验和 Docker build 已实跑通过；
 后端 Docker build、唯一 Alembic head、迁移往返、核心 mypy 和 OpenAPI 稳定性
-检查已通过；完整 pytest 实测 880 项通过，覆盖率 62.35%（门槛 60%）。Gitea
-仍会在 PR 合并结果上重新执行同一套 `backend-integration`。
+检查已通过；完整 pytest 实测 880 项通过，行覆盖率 62.52%、分支覆盖率
+33.79%。Gitea 仍会在 PR 合并结果上重新执行同一套 `backend-integration`。
 
 ## 常见失败
 
@@ -224,6 +234,8 @@ typecheck、Vitest、production build、Compose 校验和 Docker build 已实跑
   `main` PR 的 source 必须精确为 `dev`。
 - merge 或 `git diff --check`：先把目标分支更新合入开发分支，在本地解决冲突
   或空白错误，再 push 新提交。
+- `test-impact`：按错误中给出的模块和正则路径新增对应测试。不要添加无关测试；
+  规则确实不适用时由 Owners 审查 `.ci/test-impact-policy.toml` 的最小调整。
 - checkout Action 无法下载：检查 `DEFAULT_ACTIONS_URL`，内网 `self` 实例需
   镜像 `actions/checkout@v4`。
 - `pnpm`/`uv`/`pg_isready`/Docker 缺失：修复 `linux-amd64` Runner 镜像，
