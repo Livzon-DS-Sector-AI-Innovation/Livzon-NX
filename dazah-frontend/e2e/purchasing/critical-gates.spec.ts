@@ -20,7 +20,9 @@ test.describe('采购高风险操作门禁', () => {
     await page.goto('/purchasing/approval/hardware/department-head')
 
     await expect(page.getByText('工程设备部')).toBeVisible()
-    await page.getByRole('button', { name: '驳回' }).click()
+    const rejectButton = page.getByRole('button', { name: '驳回' })
+    await expect(rejectButton).toBeEnabled()
+    await rejectButton.click()
 
     const dialog = page.getByRole('dialog', { name: '驳回采购申请' })
     await expect(dialog).toBeVisible()
