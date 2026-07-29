@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useSyncExternalStore } from 'react'
 import dayjs from 'dayjs'
 import {
   App,
@@ -54,6 +54,13 @@ type ApprovalFormValues = {
 }
 
 const DEFAULT_PAGE_SIZE = 20
+const subscribeToHydration = () => () => {}
+const getClientHydrationSnapshot = () => true
+const getServerHydrationSnapshot = () => false
+
+export function shouldDisableApprovalActions(isHydrated: boolean) {
+  return !isHydrated
+}
 
 export function PurchaseApprovalClient({
   category,
@@ -73,6 +80,11 @@ export function PurchaseApprovalClient({
   const [detailRecord, setDetailRecord] = useState<PurchaseRequestResponse | null>(null)
   const [reviewRecord, setReviewRecord] = useState<PurchaseRequestResponse | null>(null)
   const [reviewResult, setReviewResult] = useState<'approved' | 'rejected'>('approved')
+  const isHydrated = useSyncExternalStore(
+    subscribeToHydration,
+    getClientHydrationSnapshot,
+    getServerHydrationSnapshot
+  )
 
   const roleLabel = approvalRoleLabels[approvalRole]
   const isPendingView = approvalView === 'pending'
@@ -200,6 +212,7 @@ export function PurchaseApprovalClient({
               <Button
                 type="link"
                 size="small"
+                disabled={shouldDisableApprovalActions(isHydrated)}
                 icon={<CheckCircleOutlined />}
                 onClick={() => openReview(record, 'approved')}
               >
@@ -209,6 +222,7 @@ export function PurchaseApprovalClient({
                 danger
                 type="link"
                 size="small"
+                disabled={shouldDisableApprovalActions(isHydrated)}
                 icon={<CloseCircleOutlined />}
                 onClick={() => openReview(record, 'rejected')}
               >
