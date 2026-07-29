@@ -30,7 +30,7 @@ run_quality() {
   echo "== Backend mypy (core infrastructure baseline) =="
   uv run --no-sync mypy app/core
   echo "== Prepare isolated unit-test database =="
-  "${repository_dir}/scripts/wait-for-database.sh"
+  bash "${repository_dir}/scripts/wait-for-database.sh"
   uv run --no-sync alembic upgrade head
   echo "== Backend unit tests =="
   uv run --no-sync pytest tests/unit tests/core -m "not integration" -ra
@@ -38,7 +38,7 @@ run_quality() {
 
 run_integration() {
   install_dependencies
-  "${repository_dir}/scripts/wait-for-database.sh"
+  bash "${repository_dir}/scripts/wait-for-database.sh"
 
   echo "== Verify one Alembic head =="
   mapfile -t alembic_heads < <(uv run --no-sync alembic heads)
@@ -60,10 +60,20 @@ run_integration() {
   echo "== Backend database and API integration tests =="
   uv run --no-sync pytest \
     --cov=app \
+    --cov-branch \
     --cov-report=term-missing \
     --cov-report=xml \
-    --cov-fail-under=60 \
     -ra
+  echo "== Backend line and branch coverage floors =="
+  uv run --no-sync python "${repository_dir}/scripts/check-coverage-floor.py" \
+    --coverage-file coverage.xml \
+    --min-lines 60 \
+    --min-branches 33.5
+  echo "== Backend changed-line coverage =="
+  uv run --no-sync python "${repository_dir}/scripts/check-diff-coverage.py" \
+    --coverage-file coverage.xml \
+    --path-prefix dazah-backend/app \
+    --minimum 80
 }
 
 compose_file() {

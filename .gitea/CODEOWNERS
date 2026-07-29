@@ -1,10 +1,16 @@
 # Gitea CODEOWNERS uses Go regular expressions, not GitHub-style globs.
 ^\.gitea/workflows/.*$ @Livzon-NX/Owners
 ^\.gitea/CODEOWNERS$ @Livzon-NX/Owners
+^\.gitea/PULL_REQUEST_TEMPLATE\.md$ @Livzon-NX/Owners
+^\.github/workflows/.*$ @Livzon-NX/Owners
+^\.github/CI\.md$ @Livzon-NX/Owners
+^\.ci/.*$ @Livzon-NX/Owners
 ^\.gitattributes$ @Livzon-NX/Owners
 ^\.gitignore$ @Livzon-NX/Owners
 ^\.pre-commit-config\.yaml$ @Livzon-NX/Owners
 ^scripts/(ci|check-branch-policy|prepare-integration|wait-for-database)\.sh$ @Livzon-NX/Owners
+^scripts/check-(coverage-floor|diff-coverage|test-impact)\.py$ @Livzon-NX/Owners
+^scripts/tests/test_check_test_impact\.py$ @Livzon-NX/Owners
 ^dazah-frontend/scripts/ci\.sh$ @Livzon-NX/Owners
 ^dazah-backend/scripts/ci\.sh$ @Livzon-NX/Owners
 ^dazah-backend/scripts/ruff-changed\.sh$ @Livzon-NX/Owners
