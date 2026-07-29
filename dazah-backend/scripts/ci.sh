@@ -60,10 +60,20 @@ run_integration() {
   echo "== Backend database and API integration tests =="
   uv run --no-sync pytest \
     --cov=app \
+    --cov-branch \
     --cov-report=term-missing \
     --cov-report=xml \
-    --cov-fail-under=60 \
     -ra
+  echo "== Backend line and branch coverage floors =="
+  uv run --no-sync python "${repository_dir}/scripts/check-coverage-floor.py" \
+    --coverage-file coverage.xml \
+    --min-lines 60 \
+    --min-branches 33.5
+  echo "== Backend changed-line coverage =="
+  uv run --no-sync python "${repository_dir}/scripts/check-diff-coverage.py" \
+    --coverage-file coverage.xml \
+    --path-prefix dazah-backend/app \
+    --minimum 80
 }
 
 compose_file() {

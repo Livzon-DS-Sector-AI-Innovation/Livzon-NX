@@ -159,7 +159,11 @@ HERMES_DAZAH_CHAT_TIMEOUT_SECONDS=90
 
 ```bash
 python -m py_compile run_agent.py model_tools.py toolsets.py services/dazah_agent_service.py tools/dazah_platform.py
+pytest -ra
 ```
+
+GitHub `Hermes Test` 和 Gitea `hermes-quality` 均通过 `scripts/ci.sh` 执行锁定依赖
+安装、关键入口编译检查和全量 Pytest。
 
 服务健康检查：
 

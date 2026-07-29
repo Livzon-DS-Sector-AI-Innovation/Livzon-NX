@@ -22,6 +22,6 @@ test.describe('采购发票识别', () => {
     await expect(page.getByRole('heading', { name: '发票识别' })).toBeVisible()
     await expect(page.getByText('单个文件不超过 50MB')).toBeVisible()
     await expect(page.getByRole('columnheader', { name: '发票号码' })).toBeVisible()
-    await expect(page.getByRole('columnheader', { name: '数量总和' })).toHaveCount(2)
+    await expect(page.getByRole('columnheader', { name: '数量总和' })).toBeVisible()
   })
 })

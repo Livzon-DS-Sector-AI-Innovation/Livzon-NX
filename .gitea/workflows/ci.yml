@@ -31,6 +31,8 @@ env:
   LIVZON_FEISHU_CARD_CALLBACK_WS_ENABLED: "false"
   LIVZON_FEISHU_EVENT_WS_ENABLED: "false"
   MINIO_ENABLED: "false"
+  CI_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+  CI_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
 
 defaults:
   run:
@@ -60,6 +62,10 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Prepare merged integration worktree
         run: bash scripts/prepare-integration.sh
+      - name: Set up Python for coverage policy
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
       - name: Run frontend lint, typecheck, and unit tests
         run: bash dazah-frontend/scripts/ci.sh quality
 
@@ -78,6 +84,20 @@ jobs:
         run: bash dazah-frontend/scripts/ci.sh build
         env:
           NODE_OPTIONS: "--max-old-space-size=1024"
+
+  frontend-e2e:
+    name: frontend-e2e
+    runs-on: linux-amd64
+    steps:
+      - name: Check out PR head with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Prepare merged integration worktree
+        run: bash scripts/prepare-integration.sh
+      - name: Run critical Playwright tests
+        run: bash dazah-frontend/scripts/ci.sh e2e
 
   frontend-container:
     name: frontend-container
@@ -114,8 +134,6 @@ jobs:
       PGUSER: dazah_ci
       PGPASSWORD: dazah_ci_test
       PGDATABASE: dazah_ci_test
-      CI_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-      CI_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
     steps:
       - name: Check out PR head with full history
         uses: actions/checkout@v4
@@ -172,3 +190,17 @@ jobs:
         run: bash scripts/prepare-integration.sh
       - name: Validate Compose and build backend image
         run: bash dazah-backend/scripts/ci.sh container
+
+  hermes-quality:
+    name: hermes-quality
+    runs-on: linux-amd64
+    steps:
+      - name: Check out PR head with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Prepare merged integration worktree
+        run: bash scripts/prepare-integration.sh
+      - name: Run Hermes-Lite compile checks and tests
+        run: bash Hermes-Lite/scripts/ci.sh

@@ -64,7 +64,7 @@ test.describe('采购合同汇总', () => {
       })
     })
 
-    await page.goto('http://localhost:3000/purchasing/contract-summary', {
+    await page.goto('/purchasing/contract-summary', {
       waitUntil: 'domcontentloaded',
     })
 
