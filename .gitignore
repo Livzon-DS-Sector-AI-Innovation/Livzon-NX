@@ -23,13 +23,18 @@ desktop.ini
 !/docs/
 /docs/*
 !/docs/gitea-ci.md
+!/docs/module-development-ci.md
 !/scripts/
 /scripts/*
 !/scripts/ci.sh
 !/scripts/check-branch-policy.sh
 !/scripts/check-coverage-floor.py
 !/scripts/check-diff-coverage.py
+!/scripts/check-test-impact.py
 !/scripts/prepare-integration.sh
+!/scripts/tests/
+/scripts/tests/*
+!/scripts/tests/test_check_test_impact.py
 !/scripts/wait-for-database.sh
 
 # Python

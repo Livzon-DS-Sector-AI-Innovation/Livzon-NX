@@ -24,6 +24,26 @@ env:
   PYTHON_VERSION: "3.12"
 
 jobs:
+  test-impact:
+    name: Test Impact
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Verify production changes include corresponding tests
+        env:
+          CI_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          CI_HEAD_SHA: ${{ github.sha }}
+        run: python scripts/check-test-impact.py
+
   lint:
     name: Lint
     runs-on: ubuntu-latest
@@ -412,3 +432,31 @@ jobs:
 
       - name: Run Hermes-Lite compile checks and tests
         run: bash scripts/ci.sh
+
+  ci-gate:
+    name: CI Gate
+    if: ${{ always() }}
+    needs:
+      - test-impact
+      - frontend-test
+      - backend-test
+      - backend-docker-build
+      - hermes-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify all merge checks
+        env:
+          TEST_IMPACT_RESULT: ${{ needs.test-impact.result }}
+          FRONTEND_RESULT: ${{ needs.frontend-test.result }}
+          BACKEND_RESULT: ${{ needs.backend-test.result }}
+          BACKEND_CONTAINER_RESULT: ${{ needs.backend-docker-build.result }}
+          HERMES_RESULT: ${{ needs.hermes-test.result }}
+        run: |
+          for result in \
+            "$TEST_IMPACT_RESULT" \
+            "$FRONTEND_RESULT" \
+            "$BACKEND_RESULT" \
+            "$BACKEND_CONTAINER_RESULT" \
+            "$HERMES_RESULT"; do
+            test "$result" = "success"
+          done

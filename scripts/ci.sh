@@ -18,10 +18,14 @@ run_hermes() {
   bash "$hermes_ci"
 }
 
+run_test_impact() {
+  python "${repository_dir}/scripts/check-test-impact.py"
+}
+
 usage() {
   cat >&2 <<'EOF'
 Usage: ./scripts/ci.sh {
-  quality|build|integration|container|security|all|
+  test-impact|quality|build|integration|container|security|all|
   frontend-quality|frontend-build|frontend-e2e|frontend-container|frontend-security|
   backend-quality|backend-integration|backend-container|backend-security|
   hermes-quality
@@ -31,6 +35,7 @@ EOF
 }
 
 case "${1:-}" in
+  test-impact) run_test_impact ;;
   quality)
     run_frontend quality
     run_backend quality
@@ -56,6 +61,7 @@ case "${1:-}" in
   backend-security) run_backend security ;;
   hermes-quality) run_hermes ;;
   all)
+    run_test_impact
     run_frontend quality
     run_frontend build
     run_frontend e2e

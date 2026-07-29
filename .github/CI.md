@@ -5,20 +5,18 @@
 
 ## Required checks
 
-分支保护规则使用以下稳定的 job 名称：
+GitHub 分支保护如可用，应只绑定稳定汇总 job：
 
-- `Backend Test`
-- `Frontend Test`
-- `Frontend E2E`
-- `Lint`
-- `Type Check`
-- `Unit Tests`
-- `Docker Build`
-- `Frontend Build`
-- `Backend Docker Build`
-- `Hermes Test`
+- `CI Gate`
 
-`Frontend Test` 是前端聚合门禁；即使某个依赖检查失败，它也会运行并明确失败。
+`CI Gate` 汇总 `Test Impact`、`Frontend Test`、`Backend Test`、
+`Backend Docker Build` 和 `Hermes Test`。`Frontend Test` 继续汇总所有前端
+检查；任一依赖失败、取消或跳过，最终门禁都会失败。
+
+`Test Impact` 根据 `.ci/test-impact-policy.toml` 验证生产变更是否同步了对应
+模块测试。未分类的生产路径失败关闭，详细开发契约见
+`docs/module-development-ci.md`。
+
 `Backend Test` 使用独立的 PostgreSQL `dazah_test` 服务容器，检查唯一 Alembic
 head、在空库执行全量 migration，再运行包含接口集成测试的全量 Pytest。
 
@@ -54,8 +52,9 @@ FastAPI 路由。
 ## Gitea 合并门禁
 
 `.gitea/workflows/ci.yml` 在 PR 的合并结果工作树上执行同一套前后端覆盖率策略，
-并额外运行 `frontend-e2e` 和 `hermes-quality`。Gitea 分支保护应将这些 job 与
-现有 quality、integration、build、container job 一并设为必需状态。
+并运行 `test-impact`、`frontend-e2e` 和 `hermes-quality`。稳定的
+`merge-gate` 汇总全部子检查；Gitea 分支保护只需要长期绑定一次
+`merge-gate`，以后可以在不修改保护规则的情况下扩展其依赖。
 
 ESLint 当前同样保持零 error 门禁；历史 warning 不会被本次基线阻断，但新增代码
 不得扩大 warning 数量，并应按模块逐步清理。
