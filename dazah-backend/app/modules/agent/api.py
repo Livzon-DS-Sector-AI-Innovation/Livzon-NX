@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
@@ -11,10 +11,12 @@ from app.core.database import get_db
 from app.core.response import success_response
 from app.platform.audit.models import AuditLog
 from app.platform.identity.deps import RequiredUser
+from app.platform.identity.models import User
 
 from .access_scope import AgentAccessScopeService
 from .audit_service import AgentAuditService
 from .automation_service import AgentAutomationService
+from .catalog import ToolCatalogService
 from .event_service import AgentDomainEventService
 from .llm_proxy import forward_chat_completion, list_active_text_models
 from .operations_service import AgentOperationsService
@@ -26,17 +28,20 @@ from .schemas import (
     AgentAutomationAuditItem,
     AgentChatRequest,
     AgentConfirmationExecuteResponse,
+    AgentConfirmationResolveRequest,
     AgentSessionDetail,
     AgentSessionItem,
     AgentSessionPage,
     AgentSkillCreate,
     AgentSkillResolveRequest,
     AgentSkillUpdate,
+    AgentToolControlRequest,
+    AgentToolEnabledUpdate,
     AgentToolExecuteRequest,
+    AgentToolSearchRequest,
+    AgentTrustedSubject,
 )
 from .service import AgentService
-from .tool_registration import ensure_agent_tools_registered
-from .tools import tool_registry
 
 router = APIRouter()
 
@@ -372,9 +377,7 @@ async def list_automation_audit(
                 version=version.version,
                 actor_id=version.created_by,
                 change_summary=version.change_summary,
-                changed_fields=_changed_definition_fields(
-                    version.definition, previous
-                ),
+                changed_fields=_changed_definition_fields(version.definition, previous),
                 created_at=version.created_at,
             )
         )
@@ -614,27 +617,97 @@ async def execute_tool(
     return success_response(data=result.model_dump(mode="json"))
 
 
-@router.post("/tools/execute/user")
-async def execute_tool_as_current_user(
-    payload: AgentToolExecuteRequest,
-    current_user: RequiredUser,
+@router.post("/control/tools/execute")
+async def execute_control_plane_tool(
+    payload: AgentToolControlRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
     settings: Settings = Depends(get_settings),
-) -> JSONResponse:
-    context = {**payload.context, "user_id": str(current_user.id)}
-    trusted_payload = payload.model_copy(update={"context": context})
-    result = await AgentService(settings).execute_tool(db, request=trusted_payload)
+):
+    request = AgentToolExecuteRequest(
+        operation=payload.operation,
+        params=payload.params,
+        body=payload.body,
+        reason=payload.reason,
+        session_id=payload.session_id,
+        trace_id=payload.trace_id,
+        subject=AgentTrustedSubject(
+            tenant_id=current_user.tenant_key or "default",
+            user_id=current_user.id,
+            source="web",
+        ),
+        execution_context={"source": "admin_control_plane"},
+    )
+    result = await AgentService(settings).execute_tool(db, request=request)
     return success_response(data=result.model_dump(mode="json"))
 
 
-@router.get("/tools")
-async def list_tools(
+@router.get("/control/tools")
+async def list_control_plane_tools(
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+):
+    if current_user.role != "admin":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Admin required")
+    result = await ToolCatalogService().list_all(db)
+    return success_response(data=[item.model_dump(mode="json") for item in result])
+
+
+@router.post("/tools/search")
+async def search_tools(
+    payload: AgentToolSearchRequest,
+    db: AsyncSession = Depends(get_db),
     authorization: str | None = Header(default=None),
     settings: Settings = Depends(get_settings),
 ):
     require_service_token(settings.AGENT_TOOL_TOKEN, authorization)
-    ensure_agent_tools_registered()
-    return success_response(data=[tool.public_dict() for tool in tool_registry.list()])
+    result = await ToolCatalogService().search(db, payload)
+    return success_response(data=[item.model_dump(mode="json") for item in result])
+
+
+@router.get("/tools/{operation}")
+async def describe_tool(
+    operation: str,
+    subject_user_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    authorization: str | None = Header(default=None),
+    settings: Settings = Depends(get_settings),
+):
+    require_service_token(settings.AGENT_TOOL_TOKEN, authorization)
+    result = await ToolCatalogService().describe(
+        db,
+        operation=operation,
+        user_id=subject_user_id,
+    )
+    return success_response(data=result.model_dump(mode="json"))
+
+
+@router.post("/tools/{operation}/enabled")
+async def set_tool_enabled(
+    operation: str,
+    payload: AgentToolEnabledUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+):
+    if current_user.role != "admin":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Admin required")
+    result = await ToolCatalogService().set_enabled(
+        db,
+        operation=operation,
+        enabled=payload.enabled,
+    )
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            method="POST",
+            path=f"/api/v1/agent/tools/{operation}/enabled",
+            status_code=200,
+            resource_type="agent_tool_catalog",
+            action="set_agent_tool_enabled",
+            extra={"operation": operation, "enabled": payload.enabled},
+        )
+    )
+    return success_response(data=result.model_dump(mode="json"))
 
 
 @router.post("/skills/resolve")
@@ -785,6 +858,47 @@ async def cancel_confirmation(
         data=AgentService(settings)
         ._confirmation_out(confirmation)
         .model_dump(mode="json")
+    )
+
+
+@router.post("/confirmations/{confirmation_id}/resolve")
+async def resolve_confirmation_from_gateway(
+    confirmation_id: uuid.UUID,
+    payload: AgentConfirmationResolveRequest,
+    db: AsyncSession = Depends(get_db),
+    authorization: str | None = Header(default=None),
+    settings: Settings = Depends(get_settings),
+):
+    require_service_token(settings.AGENT_TOOL_TOKEN, authorization)
+    user = await db.get(User, payload.subject.user_id)
+    if user is None or user.is_deleted or user.status != "active":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Trusted subject is not active")
+    service = AgentService(settings)
+    if payload.choice == "reject":
+        confirmation = await service.cancel_confirmation(
+            db,
+            confirmation_id=confirmation_id,
+            current_user=user,
+        )
+        return success_response(
+            data={
+                "confirmation": service._confirmation_out(confirmation).model_dump(
+                    mode="json"
+                )
+            }
+        )
+    confirmation, result = await service.execute_confirmation(
+        db,
+        confirmation_id=confirmation_id,
+        current_user=user,
+    )
+    return success_response(
+        data={
+            "confirmation": service._confirmation_out(confirmation).model_dump(
+                mode="json"
+            ),
+            "result": result.model_dump(mode="json"),
+        }
     )
 
 

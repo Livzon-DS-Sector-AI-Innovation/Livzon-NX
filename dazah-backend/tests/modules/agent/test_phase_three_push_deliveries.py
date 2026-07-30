@@ -16,7 +16,7 @@ from app.modules.agent.models import (
     AgentRunEvent,
 )
 from app.modules.agent.push_delivery_service import PushDeliveryService
-from app.platform.identity.models import FeishuCardAction, User
+from app.platform.identity.models import User
 
 
 def _user() -> User:
@@ -148,23 +148,6 @@ async def test_notify_creates_one_idempotent_delivery_per_local_recipient(
     await service.retry_delivery(db_session, delivery_id=delivery.id)
     assert delivery.status == "sent"
     assert delivery.attempt_count == 2
-
-    action = FeishuCardAction(
-        message_id=delivery.external_message_id,
-        card_id="phase-three-card",
-        local_user_id=owner.id,
-        recipient_open_id=owner.feishu_open_id,
-        action_key="mark_done",
-        action_label="标记完成",
-        status="processed",
-        clicked_open_id=owner.feishu_open_id,
-        executed_at=datetime.now(UTC),
-    )
-    db_session.add(action)
-    await db_session.flush()
-    assert await service.reconcile_card_actions(db_session) == 1
-    assert delivery.status == "interacted"
-    assert delivery.card_action_status == "processed"
 
     other_user = _user()
     db_session.add(other_user)

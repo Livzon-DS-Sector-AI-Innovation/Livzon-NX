@@ -1,21 +1,15 @@
 #!/usr/bin/env python3
-"""Dazah platform tool gateway for Hermes-Lite.
-
-The tool never calls arbitrary URLs. It only posts operation requests to the
-Dazah Agent tool gateway, where the actual Dazah whitelist is
-enforced and write operations become user confirmations.
-"""
+"""Single progressively-disclosed Dazah business tool gateway."""
 
 import contextvars
 import json
 import os
 import threading
-from typing import Any
+from typing import Any, Literal
 
 import httpx
 
 from tools.registry import registry
-
 
 dazah_request_context: contextvars.ContextVar[dict[str, Any]] = contextvars.ContextVar(
     "dazah_request_context",
@@ -71,336 +65,113 @@ def reset_dazah_thread_request_context(previous: Any) -> None:
         return
     _dazah_thread_request_context.value = previous
 
-ALLOWED_OPERATIONS = [
-    "analytics.aggregate",
-    "identity.get_department_tree",
-    "identity.search_personnel",
-    "identity.check_feishu_permissions",
-    "identity.send_feishu_message",
-    "identity.send_feishu_text_message",
-    "identity.send_feishu_card_message",
-    "energy.get_feishu_config",
-    "energy.list_feishu_source_roots",
-    "energy.create_feishu_source_root",
-    "energy.update_feishu_source_root",
-    "energy.delete_feishu_source_root",
-    "energy.delete_source_sheets",
-    "energy.test_feishu_connectivity",
-    "energy.list_sync_runs",
-    "energy.list_source_documents",
-    "energy.list_source_sheets",
-    "energy.list_sheet_snapshots",
-    "energy.get_sheet_mapping",
-    "energy.list_snapshot_rows",
-    "energy.get_overview",
-    "energy.trigger_sync",
-    "warehouse.list_raw_materials",
-    "warehouse.list_packaging_materials",
-    "warehouse.list_products",
-    "warehouse.list_feishu_tables",
-    "warehouse.get_feishu_table_records",
-    "warehouse.get_feishu_ws_status",
-    "warehouse.sync_feishu_table",
-    "warehouse.restart_feishu_ws",
-    "procurement.list_invoice_records",
-    "procurement.list_suppliers",
-    "procurement.list_purchase_requests",
-    "procurement.get_purchase_request",
-    "procurement.create_purchase_request",
-    "procurement.update_purchase_request",
-    "procurement.submit_purchase_request",
-    "procurement.approve_purchase_request",
-    "procurement.reject_purchase_request",
-    "procurement.list_purchase_orders",
-    "procurement.export_purchase_orders",
-    "procurement.list_contract_templates",
-    "procurement.get_contract_template",
-    "procurement.generate_contract",
-    "quality.add_capa_execution_track",
-    "quality.auto_fill_capa_from_deviation",
-    "quality.complete_capa_part",
-    "quality.create_capa",
-    "quality.create_change",
-    "quality.create_change_action_plan",
-    "quality.create_cpv_parameter",
-    "quality.create_cpv_product",
-    "quality.create_deviation",
-    "quality.create_validation",
-    "quality.get_capa",
-    "quality.get_capa_statistics",
-    "quality.get_change",
-    "quality.get_change_statistics",
-    "quality.get_cpv_product",
-    "quality.get_cpv_statistics",
-    "quality.get_cpv_trend",
-    "quality.get_deviation",
-    "quality.get_deviation_statistics",
-    "quality.get_feishu_capa_ledger",
-    "quality.get_feishu_capa_plan_track",
-    "quality.get_feishu_validation",
-    "quality.get_inspection_record",
-    "quality.get_next_change_code",
-    "quality.get_oos_oot_record",
-    "quality.get_related_capas",
-    "quality.get_validation",
-    "quality.get_validation_statistics",
-    "quality.link_capa_deviation",
-    "quality.list_capa_departments",
-    "quality.list_capas",
-    "quality.list_change_action_plans",
-    "quality.list_change_action_plans_by_change",
-    "quality.list_changes",
-    "quality.list_complaints",
-    "quality.list_cpv_batches",
-    "quality.list_cpv_cpp_batches",
-    "quality.list_cpv_cqa_batches",
-    "quality.list_cpv_parameters",
-    "quality.list_cpv_products",
-    "quality.list_deviation_report_records",
-    "quality.list_deviations",
-    "quality.list_feishu_capa_ledger",
-    "quality.list_feishu_capa_plan_tracks",
-    "quality.list_feishu_validations",
-    "quality.list_inspection_records",
-    "quality.list_oos_oot_records",
-    "quality.list_product_quality_records",
-    "quality.list_quality_sync_conflicts",
-    "quality.list_return_recalls",
-    "quality.list_suppliers",
-    "quality.list_validation_executions",
-    "quality.list_validations",
-    "quality.pull_feishu_validations",
-    "quality.pull_quality_records_from_feishu",
-    "quality.resubmit_capa",
-    "quality.resubmit_deviation",
-    "quality.run_change_action_plan_reminders",
-    "quality.send_change_action_plan_reminder",
-    "quality.submit_capa",
-    "quality.submit_deviation",
-    "quality.submit_deviation_investigation",
-    "quality.sync_capa_plan_track_to_feishu",
-    "quality.sync_capa_to_feishu",
-    "quality.sync_change_action_plan",
-    "quality.sync_change_action_plans_from_feishu",
-    "quality.sync_deviation_report_record_to_feishu",
-    "quality.sync_deviation_to_feishu",
-    "quality.update_capa",
-    "quality.update_change",
-    "quality.update_change_action_plan",
-    "quality.update_cpv_parameter",
-    "quality.update_cpv_product",
-    "quality.update_deviation",
-    "quality.update_validation",
-    "quality.update_validation_execution",
-    "agent.get_current_time",
-    "agent.get_my_access_scope",
-    "agent.create_automation",
-    "agent.create_scheduled_task",
-    "agent.list_automations",
-    "agent.get_automation",
-    "agent.run_automation",
-    "agent.update_automation",
-    "agent.set_automation_enabled",
-    "agent.archive_automation",
-    "agent.simulate_automation",
-    "agent.list_scheduled_triggers",
-    "agent.list_automation_runs",
-    "agent.get_automation_run",
-      "agent.list_push_deliveries",
-      "agent.get_push_delivery",
-      "agent.list_domain_events",
-    "agent.list_automation_capability_impacts",
-    "agent.list_automation_audit",
-      "agent.complete_manual_task",
-      "agent.get_automation_health",
-      "agent.get_automation_trends",
-      "agent.list_automation_templates",
-      "agent.list_automation_suggestions",
-      "agent.get_operations_report",
-]
-
-
-def _build_operation_aliases() -> dict[str, str]:
-    aliases: dict[str, str] = {}
-    ambiguous: set[str] = set()
-    for operation in ALLOWED_OPERATIONS:
-        suffix = operation.rsplit(".", 1)[-1]
-        if suffix in aliases:
-            aliases.pop(suffix, None)
-            ambiguous.add(suffix)
-        elif suffix not in ambiguous:
-            aliases[suffix] = operation
-    return aliases
-
-
-OPERATION_ALIASES = _build_operation_aliases()
-
-FEISHU_MESSAGE_OPERATIONS = {
-    "identity.send_feishu_message",
-    "identity.send_feishu_text_message",
-    "identity.send_feishu_card_message",
-}
-
-FEISHU_RECIPIENT_ALIASES = (
-    "recipient",
-    "recipients",
-    "recipient_id",
-    "recipient_ids",
-    "recipient_user_id",
-    "recipient_user_ids",
-    "to",
-    "to_user",
-    "to_users",
-    "to_user_id",
-    "to_user_ids",
-    "user_id",
-    "feishu_id",
-    "feishu_user_id",
-    "feishu_user_ids",
-    "feishu_open_id",
-    "feishu_open_ids",
-    "open_id",
-    "open_ids",
-    "employee_no",
-    "employee_nos",
-)
-
-FEISHU_RECIPIENT_OBJECT_KEYS = (
-    "id",
-    "user_id",
-    "feishu_id",
-    "feishu_user_id",
-    "feishu_open_id",
-    "open_id",
-    "employee_no",
-    "name",
-)
-
-FEISHU_TEXT_ALIASES = (
-    "content",
-    "message",
-    "message_content",
-    "body_text",
-)
-
-
-def _normalize_operation(operation: str) -> str:
-    return operation if operation in ALLOWED_OPERATIONS else OPERATION_ALIASES.get(operation, operation)
-
-
-def _append_identifier(result: list[str], value: Any) -> None:
-    if value is None:
-        return
-    if isinstance(value, list):
-        for item in value:
-            _append_identifier(result, item)
-        return
-    if isinstance(value, dict):
-        for key in FEISHU_RECIPIENT_OBJECT_KEYS:
-            nested = value.get(key)
-            if nested:
-                _append_identifier(result, nested)
-                return
-        return
-    text = str(value).strip()
-    if text:
-        result.append(text)
-
-
-def _normalize_feishu_message_body(
-    operation: str,
-    body: dict[str, Any] | None,
-) -> dict[str, Any] | None:
-    if operation not in FEISHU_MESSAGE_OPERATIONS or body is None:
-        return body
-
-    normalized = dict(body)
-    if not normalized.get("user_ids"):
-        recipient_ids: list[str] = []
-        for key in FEISHU_RECIPIENT_ALIASES:
-            if key in normalized:
-                _append_identifier(recipient_ids, normalized.get(key))
-        if recipient_ids:
-            normalized["user_ids"] = recipient_ids
-
-    if not normalized.get("text"):
-        for key in FEISHU_TEXT_ALIASES:
-            value = normalized.get(key)
-            if isinstance(value, str) and value.strip():
-                normalized["text"] = value.strip()
-                break
-
-    if operation == "identity.send_feishu_card_message" and not normalized.get("markdown"):
-        for key in ("text", *FEISHU_TEXT_ALIASES):
-            value = normalized.get(key)
-            if isinstance(value, str) and value.strip():
-                normalized["markdown"] = value.strip()
-                break
-
-    return normalized
-
 
 def _base_url() -> str:
-    return os.getenv("DAZAH_API_BASE_URL", "http://127.0.0.1:8000/api/v1").rstrip("/")
+    return os.getenv(
+        "DAZAH_API_BASE_URL",
+        "http://127.0.0.1:8000/api/v1",
+    ).rstrip("/")
 
 
 def check_dazah_requirements() -> bool:
     return bool(os.getenv("DAZAH_AGENT_TOOL_TOKEN"))
 
 
+def _trusted_subject(task_id: str | None) -> dict[str, Any]:
+    context = current_dazah_request_context(task_id)
+    user_id = str(context.get("user_id") or "").strip()
+    tenant_id = str(context.get("tenant_id") or "").strip()
+    if not user_id or not tenant_id:
+        raise PermissionError("trusted Dazah subject is unavailable")
+    source = str(context.get("channel") or "internal")
+    if source not in {"web", "feishu", "automation", "internal"}:
+        source = "internal"
+    return {
+        "tenant_id": tenant_id,
+        "user_id": user_id,
+        "display_name": context.get("user_name"),
+        "source": source,
+        "external_binding_id": context.get("external_binding_id"),
+    }
+
+
 async def dazah_tool(
-    operation: str | dict[str, Any],
+    action: Literal["search", "describe", "execute"],
+    *,
+    query: str = "",
+    module: str | None = None,
+    limit: int = 12,
+    operation: str | None = None,
     params: dict[str, Any] | None = None,
     body: dict[str, Any] | None = None,
-    context: dict[str, Any] | None = None,
     reason: str | None = None,
-    **_ignored: Any,
+    task_id: str | None = None,
+    user_task: str | None = None,
 ) -> str:
-    task_id = str(_ignored.pop("task_id", "") or "")
-    _ignored.pop("user_task", None)
-    if isinstance(operation, dict):
-        payload = operation
-        operation = str(payload.get("operation", ""))
-        params = payload.get("params") if params is None else params
-        body = payload.get("body") if body is None else body
-        context = payload.get("context") if context is None else context
-        reason = payload.get("reason") if reason is None else reason
-    operation = _normalize_operation(operation)
-    if operation not in ALLOWED_OPERATIONS:
-        return json.dumps(
-            {"ok": False, "error": "operation is not allowed", "operation": operation},
-            ensure_ascii=False,
-        )
+    del user_task
     token = os.getenv("DAZAH_AGENT_TOOL_TOKEN")
     if not token:
         return json.dumps(
             {"ok": False, "error": "DAZAH_AGENT_TOOL_TOKEN is not configured"},
             ensure_ascii=False,
         )
+    try:
+        subject = _trusted_subject(task_id)
+    except PermissionError as exc:
+        return json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False)
 
-    if _ignored:
-        body = {**(body or {}), **_ignored}
-    body = _normalize_feishu_message_body(operation, body)
-
-    merged_context = {
-        **current_dazah_request_context(task_id),
-        **(context or {}),
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
     }
-    payload = {
-        "operation": operation,
-        "params": params or {},
-        "body": body,
-        "context": merged_context,
-        "reason": reason,
-    }
-    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
     try:
         async with httpx.AsyncClient(timeout=120) as client:
-            response = await client.post(f"{_base_url()}/agent/tools/execute", json=payload, headers=headers)
+            if action == "search":
+                response = await client.post(
+                    f"{_base_url()}/agent/tools/search",
+                    json={
+                        "query": query,
+                        "module": module,
+                        "limit": limit,
+                        "subject": subject,
+                    },
+                    headers=headers,
+                )
+            elif action == "describe":
+                if not operation:
+                    return json.dumps(
+                        {"ok": False, "error": "operation is required for describe"},
+                        ensure_ascii=False,
+                    )
+                response = await client.get(
+                    f"{_base_url()}/agent/tools/{operation}",
+                    params={"subject_user_id": subject["user_id"]},
+                    headers=headers,
+                )
+            else:
+                if not operation:
+                    return json.dumps(
+                        {"ok": False, "error": "operation is required for execute"},
+                        ensure_ascii=False,
+                    )
+                context = current_dazah_request_context(task_id)
+                response = await client.post(
+                    f"{_base_url()}/agent/tools/execute",
+                    json={
+                        "operation": operation,
+                        "params": params or {},
+                        "body": body,
+                        "subject": subject,
+                        "trace_id": context.get("trace_id"),
+                        "reason": reason,
+                    },
+                    headers=headers,
+                )
         if response.status_code >= 400:
             return json.dumps(
                 {
                     "ok": False,
+                    "action": action,
                     "operation": operation,
                     "status_code": response.status_code,
                     "error": response.text[:1000],
@@ -408,9 +179,14 @@ async def dazah_tool(
                 ensure_ascii=False,
             )
         return json.dumps(response.json(), ensure_ascii=False)
-    except Exception as exc:
+    except httpx.HTTPError as exc:
         return json.dumps(
-            {"ok": False, "operation": operation, "error": str(exc)},
+            {
+                "ok": False,
+                "action": action,
+                "operation": operation,
+                "error": type(exc).__name__,
+            },
             ensure_ascii=False,
         )
 
@@ -418,70 +194,40 @@ async def dazah_tool(
 DAZAH_TOOL_SCHEMA = {
     "name": "dazah_tool",
     "description": (
-        "Call Dazah platform identity, warehouse, procurement, and quality operations through the Agent "
-        "tool gateway. For full-dataset counts, TopN, distributions, distinct "
-        "counts, or grouped statistics, prefer analytics.aggregate instead of "
-        "paging through list operations. Read operations execute immediately. "
-        "Write operations return a pending confirmation for the frontend to "
-        "display; never claim a write operation has executed until the gateway "
-        "result says it has. Before creating or adjusting daily scheduled tasks, "
-        "call agent.get_current_time to get the current Asia/Shanghai time and "
-        "cron timezone; do not guess today's date or current time. "
-        "For Livzon task creation, call agent.create_automation when no time "
-        "condition exists, or agent.create_scheduled_task when any date, weekday, "
-        "clock time, interval, or recurrence exists. The backend builds and validates "
-        "the automation definition; never invent low-level nodes or templates. Use agent.* "
-        "For agent.create_scheduled_task, copy the user's complete unabridged request into "
-        "body.requirement. When a scheduled Feishu delivery asks for queried data, a summary, "
-        "statistics, a list, report, or records, body.actions must contain the relevant read "
-        "operation before identity.send_feishu_message. Never replace requested data with a "
-        "fixed greeting or 'please check'; the backend injects each runtime query result into "
-        "the outgoing message. "
-        "automation operations to create, inspect, update, pause, archive, or "
-        "trace automations. The legacy workflow category is removed: when a user "
-        "says 工作流, treat it as an automation, or as a scheduled task if time is present. "
-        "IDs returned by agent.list_automations must use agent.run_automation. "
-        "For Feishu outbound messages, prefer identity.send_feishu_message. "
-        "Use low value short unstructured notifications as text; use medium/high "
-        "value or structured summaries as cards; use requires_business_action=true "
-        "for business messages that need handling, which sends callback interactive "
-        "cards. First identify recipients via identity.search_personnel and "
-        "put recipient identifiers in body.user_ids and message content in body.text; "
-        "body.user_ids accepts local UUID, Feishu user_id, Feishu open_id, employee_no, "
-        "mobile, email, or name. "
-        "summarize recipients, message shape, title/body summary, and whether "
-        "handling buttons are included before user confirmation. Quality module "
-        "tools cover deviations, CAPA, change controls, validations, CPV, and "
-        "quality Feishu read/sync operations; deletion, approval/rejection, "
-        "Feishu configuration, and file import operations are intentionally not "
-        "exposed. Old text/card operations are compatibility-only."
+        "Discover and execute Dazah business capabilities. Start with action=search, "
+        "then action=describe for the selected operation, then action=execute with "
+        "schema-valid input. Dazah permissions and confirmations are enforced by the "
+        "backend. This tool is not used for native Feishu documents, Drive, Base or "
+        "messages; use lark_cli for those resources."
     ),
     "parameters": {
         "type": "object",
         "properties": {
+            "action": {
+                "type": "string",
+                "enum": ["search", "describe", "execute"],
+            },
+            "query": {
+                "type": "string",
+                "description": "Capability intent for search.",
+            },
+            "module": {
+                "type": "string",
+                "description": "Optional Dazah business module filter.",
+            },
+            "limit": {"type": "integer", "minimum": 1, "maximum": 50},
             "operation": {
                 "type": "string",
-                "enum": ALLOWED_OPERATIONS,
-                "description": "Whitelisted Dazah operation name.",
+                "description": "Exact operation returned by search.",
             },
-            "params": {
-                "type": "object",
-                "description": "Query and path parameters, for example table_id, request_id, category, page, page_size.",
-            },
-            "body": {
-                "type": "object",
-                "description": "JSON request body for create/update/submit/approve/generate operations.",
-            },
-            "context": {
-                "type": "object",
-                "description": "Optional extra context. Session and user context is added automatically by Hermes service.",
-            },
+            "params": {"type": "object"},
+            "body": {"type": "object"},
             "reason": {
                 "type": "string",
-                "description": "Short user-facing reason/summary for write confirmations.",
+                "description": "User-facing summary for a write confirmation.",
             },
         },
-        "required": ["operation"],
+        "required": ["action"],
     },
 }
 
@@ -494,6 +240,6 @@ registry.register(
     check_fn=check_dazah_requirements,
     requires_env=["DAZAH_AGENT_TOOL_TOKEN"],
     is_async=True,
-    description="Dazah platform tool gateway",
+    description="Dazah progressive tool gateway",
     emoji="",
 )

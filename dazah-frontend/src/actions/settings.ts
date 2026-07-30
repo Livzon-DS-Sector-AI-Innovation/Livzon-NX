@@ -13,6 +13,44 @@ export type LLMCapabilityDetection = components['schemas']['LLMCapabilityDetecti
 export type FeishuConfig = components['schemas']['FeishuConfigResponse']
 export type FeishuConfigUpsert = components['schemas']['FeishuConfigUpsert']
 type FeishuDiagnosticResult = components['schemas']['FeishuDiagnosticResult']
+export type ExternalIdentityBindingCreate =
+  components['schemas']['ExternalIdentityBindingCreate']
+export interface ExternalIdentityBinding extends ExternalIdentityBindingCreate {
+  id: string
+  status: 'active' | 'disabled'
+  last_seen_at?: string | null
+  created_at: string
+  updated_at: string
+}
+export interface AgentToolCatalogEntry {
+  operation: string
+  module?: string | null
+  version: string
+  summary: string
+  status: 'active' | 'disabled'
+  risk_level: 'low' | 'medium' | 'high'
+  write: boolean
+  confirmation_required: boolean
+  permission_key?: string | null
+  input_schema: Record<string, unknown>
+  output_schema: Record<string, unknown>
+  timeout_seconds: number
+  idempotent: boolean
+}
+export interface FeishuGatewayStatus {
+  configured: boolean
+  credential_version: number | null
+  config_version: number
+  tenant_id: string
+  gateway_enabled: boolean
+  gateway: string
+  gateway_reconnects: number
+  gateway_upstream?: {
+    release_tag?: string
+    release_version?: string
+    commit_sha?: string
+  } | null
+}
 
 interface ApiResponse<T> {
   code: number
@@ -135,6 +173,54 @@ export async function saveLivzonFeishuConfig(data: FeishuConfigUpsert) {
     body: JSON.stringify(data),
   })
   return unwrapResponseData<FeishuConfig>(response.data)
+}
+
+export async function getLivzonFeishuGatewayStatus() {
+  const response = await fetchApi<unknown>(
+    '/identity/feishu-config/gateway-status',
+  )
+  return unwrapResponseData<FeishuGatewayStatus>(response.data)
+}
+
+export async function getExternalIdentityBindings() {
+  const response = await fetchApi<unknown>(
+    '/identity/external-identity-bindings',
+  )
+  return unwrapResponseData<ExternalIdentityBinding[]>(response.data)
+}
+
+export async function createExternalIdentityBinding(
+  data: ExternalIdentityBindingCreate,
+) {
+  const response = await fetchApi<unknown>(
+    '/identity/external-identity-bindings',
+    { method: 'POST', body: JSON.stringify(data) },
+  )
+  return unwrapResponseData<ExternalIdentityBinding>(response.data)
+}
+
+export async function disableExternalIdentityBinding(bindingId: string) {
+  const response = await fetchApi<unknown>(
+    `/identity/external-identity-bindings/${bindingId}/disable`,
+    { method: 'POST' },
+  )
+  return unwrapResponseData<ExternalIdentityBinding>(response.data)
+}
+
+export async function getAgentToolCatalog() {
+  const response = await fetchApi<unknown>('/agent/control/tools')
+  return unwrapResponseData<AgentToolCatalogEntry[]>(response.data)
+}
+
+export async function setAgentToolEnabled(
+  operation: string,
+  enabled: boolean,
+) {
+  const response = await fetchApi<unknown>(
+    `/agent/tools/${encodeURIComponent(operation)}/enabled`,
+    { method: 'POST', body: JSON.stringify({ enabled }) },
+  )
+  return unwrapResponseData<AgentToolCatalogEntry>(response.data)
 }
 
 export async function testLivzonFeishuConfig(data?: FeishuConfigUpsert) {

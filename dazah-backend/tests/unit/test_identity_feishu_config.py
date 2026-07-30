@@ -36,23 +36,13 @@ class FakeFeishuConfigRepo:
 
 @pytest.mark.anyio
 async def test_save_livzon_feishu_config_preserves_existing_secret(monkeypatch) -> None:
-    from app.platform.identity import hermes_api
-
     async def ignore_hermes_credential_push(**kwargs) -> None:
-        return None
-
-    async def ignore_hermes_access_snapshot(db) -> None:
         return None
 
     monkeypatch.setattr(
         service,
         "_push_livzon_credentials_to_hermes",
         ignore_hermes_credential_push,
-    )
-    monkeypatch.setattr(
-        hermes_api,
-        "push_access_snapshot_to_hermes",
-        ignore_hermes_access_snapshot,
     )
     config = FeishuConfig(
         config_name="Livzon 助手飞书设置",
@@ -74,7 +64,7 @@ async def test_save_livzon_feishu_config_preserves_existing_secret(monkeypatch) 
             sync_root_department_id="0",
             sync_member_department_id="od-test",
             is_active=True,
-        )
+        ),
     )
 
     assert response.app_id == "new-app"

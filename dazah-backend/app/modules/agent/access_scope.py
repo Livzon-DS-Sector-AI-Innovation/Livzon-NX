@@ -165,9 +165,7 @@ class AgentAccessScopeService:
         )
         if is_stale and rebuild_if_stale:
             try:
-                snapshot = await self.synchronize(
-                    db, user_id=user.id, actor_id=user.id
-                )
+                snapshot = await self.synchronize(db, user_id=user.id, actor_id=user.id)
             except Exception as exc:
                 if snapshot is not None:
                     snapshot.sync_status = "failed"
@@ -206,9 +204,7 @@ class AgentAccessScopeService:
                 "业务能力必须使用已登录责任主体执行",
             )
         snapshot = await self.get_current_scope(db, user=user)
-        allowed = (
-            snapshot.workflow_tool_names if for_workflow else snapshot.tool_names
-        )
+        allowed = snapshot.workflow_tool_names if for_workflow else snapshot.tool_names
         if tool_name not in set(allowed or []):
             raise HTTPException(
                 status.HTTP_403_FORBIDDEN,
@@ -251,8 +247,7 @@ class AgentAccessScopeService:
             synced_at=snapshot.synced_at,
             last_error=snapshot.last_error,
             modules=[
-                AgentModuleScopeOut.model_validate(item)
-                for item in snapshot.modules
+                AgentModuleScopeOut.model_validate(item) for item in snapshot.modules
             ],
             tool_names=list(snapshot.tool_names or []),
             workflow_tool_names=list(snapshot.workflow_tool_names or []),

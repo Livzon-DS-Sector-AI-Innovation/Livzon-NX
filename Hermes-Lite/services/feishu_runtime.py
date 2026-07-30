@@ -25,8 +25,6 @@ import httpx
 from cryptography.fernet import Fernet, InvalidToken
 
 
-READ_MAX_AGE_SECONDS = 24 * 60 * 60
-WRITE_MAX_AGE_SECONDS = 15 * 60
 ALLOWED_ROOT_COMMANDS = frozenset(
     {
         "api",
@@ -59,6 +57,8 @@ RUNTIME_METRICS: dict[str, int] = {
     "cli_failures": 0,
     "cli_last_latency_ms": 0,
 }
+INBOUND_RECEIPT_RETENTION_SECONDS = 7 * 24 * 60 * 60
+INBOUND_PROCESSING_LEASE_SECONDS = 60 * 60
 
 
 def _home() -> Path:
@@ -70,9 +70,7 @@ def _db_path() -> Path:
 
 
 def _cli_home() -> Path:
-    return Path(
-        os.getenv("HERMES_FEISHU_TMPFS", "/run/hermes-feishu")
-    ).resolve() / "active"
+    return Path(os.getenv("HERMES_FEISHU_TMPFS", "/run/hermes-feishu")).resolve() / "active"
 
 
 def _connect() -> sqlite3.Connection:
@@ -125,9 +123,89 @@ def initialize_store() -> None:
                 next_attempt_at REAL NOT NULL,
                 created_at REAL NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS delivery_outbox (
+                id TEXT PRIMARY KEY,
+                idempotency_key TEXT NOT NULL UNIQUE,
+                chat_id TEXT NOT NULL,
+                delivery_type TEXT NOT NULL,
+                content TEXT NOT NULL,
+                card_json TEXT NOT NULL,
+                reply_to TEXT,
+                metadata_json TEXT NOT NULL,
+                status TEXT NOT NULL,
+                attempts INTEGER NOT NULL DEFAULT 0,
+                next_attempt_at REAL NOT NULL,
+                message_id TEXT,
+                last_error TEXT,
+                created_at REAL NOT NULL,
+                updated_at REAL NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS inbound_message_receipts (
+                message_id TEXT PRIMARY KEY,
+                status TEXT NOT NULL,
+                claimed_at REAL NOT NULL,
+                completed_at REAL
+            );
             CREATE UNIQUE INDEX IF NOT EXISTS uq_confirmation_request
                 ON confirmations(user_id, request_hash, status);
             """
+        )
+
+
+def claim_inbound_message(
+    message_id: str,
+    *,
+    now: float | None = None,
+    retention_seconds: float = INBOUND_RECEIPT_RETENTION_SECONDS,
+    processing_lease_seconds: float = INBOUND_PROCESSING_LEASE_SECONDS,
+) -> bool:
+    """Atomically claim one Feishu message across workers and restarts."""
+    normalized = message_id.strip()
+    if not normalized:
+        return True
+    claimed_at = time.time() if now is None else now
+    retention_cutoff = claimed_at - retention_seconds
+    lease_cutoff = claimed_at - processing_lease_seconds
+    with _connect() as conn:
+        conn.execute(
+            """
+            DELETE FROM inbound_message_receipts
+            WHERE status='completed' AND completed_at<?
+            """,
+            (retention_cutoff,),
+        )
+        cursor = conn.execute(
+            """
+            INSERT INTO inbound_message_receipts(
+                message_id, status, claimed_at, completed_at
+            )
+            VALUES (?, 'processing', ?, NULL)
+            ON CONFLICT(message_id) DO UPDATE SET
+                status='processing',
+                claimed_at=excluded.claimed_at,
+                completed_at=NULL
+            WHERE inbound_message_receipts.status='processing'
+              AND inbound_message_receipts.claimed_at<?
+            """,
+            (normalized, claimed_at, lease_cutoff),
+        )
+    return cursor.rowcount == 1
+
+
+def complete_inbound_message(message_id: str, *, now: float | None = None) -> None:
+    """Keep a durable receipt after the message handler has produced its outcome."""
+    normalized = message_id.strip()
+    if not normalized:
+        return
+    completed_at = time.time() if now is None else now
+    with _connect() as conn:
+        conn.execute(
+            """
+            UPDATE inbound_message_receipts
+            SET status='completed', completed_at=?
+            WHERE message_id=?
+            """,
+            (completed_at, normalized),
         )
 
 
@@ -182,51 +260,31 @@ def load_credentials() -> tuple[str, str, int] | None:
     return str(value["app_id"]), secret, int(value["version"])
 
 
-def save_access_snapshot(snapshot: dict[str, Any]) -> None:
-    current = _state_get("access_snapshot")
-    version = int(snapshot.get("version", 0))
-    if current is not None and version <= int(current[0].get("version", 0)):
-        raise ValueError("access snapshot version must increase")
-    _state_put("access_snapshot", snapshot)
-
-
-def authorize(
-    user_id: str,
-    *,
-    write: bool,
-    module: str | None = None,
-    enforce_scope: bool = True,
-) -> dict[str, Any]:
-    stored = _state_get("access_snapshot")
-    if stored is None:
-        raise PermissionError("Feishu access snapshot is unavailable")
-    snapshot, updated_at = stored
-    max_age = WRITE_MAX_AGE_SECONDS if write else READ_MAX_AGE_SECONDS
-    if time.time() - updated_at > max_age:
-        raise PermissionError("Feishu access snapshot is stale")
-    user = next(
-        (
-            item
-            for item in snapshot.get("users", [])
-            if user_id in {item.get("open_id"), item.get("union_id"), item.get("user_id")}
-        ),
-        None,
+def save_gateway_settings(*, tenant_id: str, gateway_enabled: bool, version: int) -> None:
+    _state_put(
+        "gateway_settings",
+        {
+            "tenant_id": tenant_id,
+            "gateway_enabled": gateway_enabled,
+            "version": version,
+        },
     )
-    if not user or not user.get("active", False):
-        raise PermissionError("Feishu user is not active in Livzon")
-    scopes = set(user.get("scopes", []))
-    modules = set(user.get("modules", []))
-    needed = "feishu.workspace.write_any" if write else "feishu.workspace.read_any"
-    if enforce_scope and needed not in scopes and (not module or module not in modules):
-        raise PermissionError("Feishu resource is outside the user's module scope")
-    return user
 
 
-def is_group_allowed(chat_id: str) -> bool:
-    stored = _state_get("access_snapshot")
-    if stored is None or time.time() - stored[1] > READ_MAX_AGE_SECONDS:
-        return False
-    return chat_id in set(stored[0].get("allowed_groups", []))
+def load_gateway_settings() -> dict[str, Any]:
+    stored = _state_get("gateway_settings")
+    if stored is None:
+        return {
+            "tenant_id": "default",
+            "gateway_enabled": True,
+            "version": 0,
+        }
+    value, _ = stored
+    return {
+        "tenant_id": str(value.get("tenant_id") or "default"),
+        "gateway_enabled": bool(value.get("gateway_enabled", True)),
+        "version": int(value.get("version") or 0),
+    }
 
 
 def classify_risk(args: list[str], llm_risk: str | None = None) -> tuple[str, str]:
@@ -250,11 +308,15 @@ def validate_args(args: list[str], attachment_refs: list[str] | None = None) -> 
     cleaned: list[str] = []
     allowed_files = (Path(os.getenv("HERMES_FEISHU_FILES_DIR", str(_home() / "feishu-files"))).resolve(),)
     attachment_set = {str(Path(item).resolve()) for item in (attachment_refs or [])}
-    for raw in args:
+    for index, raw in enumerate(args):
         if not isinstance(raw, str) or not raw or len(raw) > 4096:
             raise ValueError("invalid lark-cli argument")
         if any(token in raw for token in SHELL_TOKENS):
             raise ValueError("shell syntax is not allowed")
+        if (
+            raw == "--as" and index + 1 < len(args) and str(args[index + 1]).lower() == "user"
+        ) or raw.lower() == "--as=user":
+            raise ValueError("bot-only policy forbids --as user; retry with --as bot")
         if raw.startswith(("/", "\\")) or (len(raw) > 2 and raw[1:3] in {":\\", ":/"}):
             resolved = str(Path(raw).resolve())
             if resolved not in attachment_set or not any(Path(resolved).is_relative_to(root) for root in allowed_files):
@@ -280,6 +342,7 @@ async def run_cli(
     timeout_seconds: float | None = None,
     allow_control: bool = False,
     home_dir: str | None = None,
+    hermes_home_dir: str | None = None,
 ) -> CliResult:
     executable = os.getenv("LARK_CLI_PATH") or shutil.which("lark-cli")
     if not executable:
@@ -294,6 +357,8 @@ async def run_cli(
         "NO_COLOR": "1",
         "LANG": "C.UTF-8",
     }
+    if hermes_home_dir:
+        env["HERMES_HOME"] = hermes_home_dir
     started = time.monotonic()
     process = await asyncio.create_subprocess_exec(
         executable,
@@ -336,13 +401,21 @@ async def stage_credentials(app_id: str, app_secret: str, version: int) -> dict[
     runtime_root = tmpfs.parent
     runtime_root.mkdir(parents=True, exist_ok=True, mode=0o700)
     candidate = Path(tempfile.mkdtemp(prefix="hermes-feishu-candidate-", dir=runtime_root))
+    binding_source = Path(tempfile.mkdtemp(prefix="hermes-bind-source-", dir=runtime_root))
     active = tmpfs
     backup = runtime_root / f".{tmpfs.name}-previous"
 
-    def safe_error(text: str) -> str:
-        return text.replace(app_secret, "[REDACTED]")[-500:]
+    def safe_error(result: CliResult) -> str:
+        combined = "\n".join(part for part in (result.stderr, result.stdout) if part)
+        return combined.replace(app_secret, "[REDACTED]")[-500:]
 
     try:
+        binding_env = binding_source / ".env"
+        binding_env.write_text(
+            f"FEISHU_APP_ID={app_id}\nFEISHU_APP_SECRET={app_secret}\n",
+            encoding="utf-8",
+        )
+        binding_env.chmod(0o600)
         init = await run_cli(
             [
                 "config",
@@ -360,20 +433,39 @@ async def stage_credentials(app_id: str, app_secret: str, version: int) -> dict[
             home_dir=str(candidate),
         )
         if init.returncode != 0:
-            raise RuntimeError(f"lark-cli config probe failed: {safe_error(init.stderr)}")
+            raise RuntimeError(f"lark-cli config probe failed: {safe_error(init)}")
         bound = await run_cli(
+            [
+                "config",
+                "bind",
+                "--source",
+                "hermes",
+                "--identity",
+                "bot-only",
+            ],
+            allow_control=True,
+            timeout_seconds=30,
+            home_dir=str(candidate),
+            hermes_home_dir=str(binding_source),
+        )
+        if bound.returncode != 0:
+            raise RuntimeError(f"lark-cli Hermes bot-only binding failed: {safe_error(bound)}")
+        strict = await run_cli(
             ["config", "strict-mode", "bot", "--global"],
             allow_control=True,
             timeout_seconds=30,
             home_dir=str(candidate),
         )
-        if bound.returncode != 0:
-            raise RuntimeError(
-                f"lark-cli bot-only policy failed: {safe_error(bound.stderr)}"
-            )
-        doctor = await run_cli(["doctor"], allow_control=True, timeout_seconds=30, home_dir=str(candidate))
+        if strict.returncode != 0:
+            raise RuntimeError(f"lark-cli bot-only policy failed: {safe_error(strict)}")
+        doctor = await run_cli(
+            ["doctor"],
+            allow_control=True,
+            timeout_seconds=30,
+            home_dir=str(candidate),
+        )
         if doctor.returncode != 0:
-            raise RuntimeError(f"lark-cli doctor failed: {safe_error(doctor.stderr)}")
+            raise RuntimeError(f"lark-cli doctor failed: {safe_error(doctor)}")
         if backup.exists():
             shutil.rmtree(backup)
         if active.exists():
@@ -390,6 +482,8 @@ async def stage_credentials(app_id: str, app_secret: str, version: int) -> dict[
     finally:
         if candidate.exists():
             shutil.rmtree(candidate)
+        if binding_source.exists():
+            shutil.rmtree(binding_source)
     return {"app_id": app_id, "version": version, "status": "active"}
 
 
@@ -412,9 +506,7 @@ async def restore_credentials() -> dict[str, Any] | None:
 def enqueue_audit(payload: dict[str, Any], event_type: str = "audit") -> str:
     event_id = str(uuid.uuid4())
     safe_payload = {
-        key: value
-        for key, value in payload.items()
-        if key not in {"content", "body", "stdin", "app_secret", "token"}
+        key: value for key, value in payload.items() if key not in {"content", "body", "stdin", "app_secret", "token"}
     }
     now = time.time()
     with _connect() as conn:
@@ -428,6 +520,163 @@ def enqueue_audit(payload: dict[str, Any], event_type: str = "audit") -> str:
     return event_id
 
 
+def _delivery_row(row: sqlite3.Row) -> dict[str, Any]:
+    return {
+        "id": row["id"],
+        "idempotency_key": row["idempotency_key"],
+        "chat_id": row["chat_id"],
+        "delivery_type": row["delivery_type"],
+        "content": row["content"],
+        "card": json.loads(row["card_json"]) if row["card_json"] else None,
+        "reply_to": row["reply_to"],
+        "metadata": json.loads(row["metadata_json"]),
+        "status": row["status"],
+        "attempts": int(row["attempts"]),
+        "message_id": row["message_id"],
+        "last_error": row["last_error"],
+    }
+
+
+def enqueue_delivery(
+    *,
+    idempotency_key: str,
+    chat_id: str,
+    content: str = "",
+    card: dict[str, Any] | None = None,
+    reply_to: str | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    key = idempotency_key.strip()
+    if not key or len(key) > 128:
+        raise ValueError("idempotency_key must contain 1-128 characters")
+    if not chat_id.strip() or len(chat_id) > 255:
+        raise ValueError("chat_id must contain 1-255 characters")
+    if bool(content) == bool(card):
+        raise ValueError("exactly one of content or card is required")
+    if len(content) > 20_000:
+        raise ValueError("delivery content is too large")
+    card_json = json.dumps(card or {}, ensure_ascii=False, separators=(",", ":"))
+    if len(card_json.encode("utf-8")) > 100_000:
+        raise ValueError("delivery card is too large")
+    metadata_json = json.dumps(
+        metadata or {},
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    now = time.time()
+    with _connect() as conn:
+        existing = conn.execute(
+            "SELECT * FROM delivery_outbox WHERE idempotency_key=?",
+            (key,),
+        ).fetchone()
+        if existing is not None:
+            return _delivery_row(existing)
+        delivery_id = str(uuid.uuid4())
+        conn.execute(
+            """
+            INSERT INTO delivery_outbox(
+                id,idempotency_key,chat_id,delivery_type,content,card_json,
+                reply_to,metadata_json,status,next_attempt_at,created_at,updated_at
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+            """,
+            (
+                delivery_id,
+                key,
+                chat_id,
+                "card" if card else "text",
+                content,
+                card_json if card else "",
+                reply_to,
+                metadata_json,
+                "pending",
+                now,
+                now,
+                now,
+            ),
+        )
+        row = conn.execute(
+            "SELECT * FROM delivery_outbox WHERE id=?",
+            (delivery_id,),
+        ).fetchone()
+    assert row is not None
+    return _delivery_row(row)
+
+
+def claim_due_deliveries(limit: int = 20) -> list[dict[str, Any]]:
+    now = time.time()
+    with _connect() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        rows = conn.execute(
+            """
+            SELECT * FROM delivery_outbox
+            WHERE status IN ('pending','retry') AND next_attempt_at<=?
+            ORDER BY created_at ASC LIMIT ?
+            """,
+            (now, max(1, min(limit, 100))),
+        ).fetchall()
+        ids = [row["id"] for row in rows]
+        if ids:
+            placeholders = ",".join("?" for _ in ids)
+            conn.execute(
+                f"""
+                UPDATE delivery_outbox
+                SET status='sending', attempts=attempts+1, updated_at=?
+                WHERE id IN ({placeholders})
+                """,
+                (now, *ids),
+            )
+            rows = conn.execute(
+                f"SELECT * FROM delivery_outbox WHERE id IN ({placeholders})",
+                ids,
+            ).fetchall()
+    return [_delivery_row(row) for row in rows]
+
+
+def complete_delivery(delivery_id: str, message_id: str | None = None) -> None:
+    with _connect() as conn:
+        updated = conn.execute(
+            """
+            UPDATE delivery_outbox
+            SET status='delivered', message_id=?, last_error=NULL, updated_at=?
+            WHERE id=? AND status='sending'
+            """,
+            (message_id, time.time(), delivery_id),
+        )
+    if updated.rowcount != 1:
+        raise ValueError("delivery is not being sent")
+
+
+def fail_delivery(delivery_id: str, error: str, max_attempts: int = 3) -> None:
+    now = time.time()
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT attempts FROM delivery_outbox WHERE id=? AND status='sending'",
+            (delivery_id,),
+        ).fetchone()
+        if row is None:
+            raise ValueError("delivery is not being sent")
+        attempts = int(row["attempts"])
+        status_value = "failed" if attempts >= max_attempts else "retry"
+        delay = min(300, 2 ** min(attempts, 8))
+        conn.execute(
+            """
+            UPDATE delivery_outbox
+            SET status=?, next_attempt_at=?, last_error=?, updated_at=?
+            WHERE id=? AND status='sending'
+            """,
+            (status_value, now + delay, error[-500:], now, delivery_id),
+        )
+
+
+def get_delivery(delivery_id: str) -> dict[str, Any] | None:
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM delivery_outbox WHERE id=?",
+            (delivery_id,),
+        ).fetchone()
+    return _delivery_row(row) if row is not None else None
+
+
 async def synchronize_platform_state() -> None:
     base_url = os.getenv("DAZAH_API_BASE_URL", "").rstrip("/")
     token = os.getenv("HERMES_INTERNAL_TOKEN", "")
@@ -435,12 +684,6 @@ async def synchronize_platform_state() -> None:
         return
     headers = {"Authorization": f"Bearer {token}"}
     async with httpx.AsyncClient(timeout=20) as client:
-        response = await client.get(f"{base_url}/internal/feishu/access-snapshot", headers=headers)
-        response.raise_for_status()
-        snapshot = response.json()
-        current = _state_get("access_snapshot")
-        if current is None or int(snapshot["version"]) > int(current[0].get("version", 0)):
-            save_access_snapshot(snapshot)
         with _connect() as conn:
             rows = conn.execute(
                 """
@@ -533,6 +776,7 @@ def create_confirmation(
         "summary": f"{action} · {resource}",
         "risk_level": risk,
         "status": "pending",
+        "resource_domain": "feishu_native",
         "expires_at": datetime.fromtimestamp(expires_at, UTC).isoformat(),
         "resource": resource,
         "reason": reason,
@@ -554,9 +798,7 @@ def has_active_grant(*, user_id: str, app_id: str, resource: str, action: str) -
     return row is not None
 
 
-async def resolve_confirmation(
-    confirmation_id: str, *, user_id: str, choice: str
-) -> dict[str, Any]:
+async def resolve_confirmation(confirmation_id: str, *, user_id: str, choice: str) -> dict[str, Any]:
     if choice not in {"allow", "always", "reject"}:
         raise ValueError("choice must be allow, always, or reject")
     with _connect() as conn:
@@ -579,7 +821,6 @@ async def resolve_confirmation(
         return {"ok": True, "status": "rejected", "id": confirmation_id}
 
     request = json.loads(row["request_json"])
-    authorize(user_id, write=True, module=request.get("module"))
     with _connect() as conn:
         claimed = conn.execute(
             "UPDATE confirmations SET status='executing' WHERE id=? AND status='pending'",
@@ -683,9 +924,7 @@ def revoke_grant(grant_id: str, user_id: str) -> bool:
 def runtime_metrics() -> dict[str, int]:
     with _connect() as conn:
         outbox_depth = int(
-            conn.execute(
-                "SELECT count(*) FROM audit_outbox WHERE status IN ('pending','failed')"
-            ).fetchone()[0]
+            conn.execute("SELECT count(*) FROM audit_outbox WHERE status IN ('pending','failed')").fetchone()[0]
         )
         pending_confirmations = int(
             conn.execute(
@@ -693,10 +932,19 @@ def runtime_metrics() -> dict[str, int]:
                 (time.time(),),
             ).fetchone()[0]
         )
+        pending_deliveries = int(
+            conn.execute(
+                """
+                SELECT count(*) FROM delivery_outbox
+                WHERE status IN ('pending','retry','sending')
+                """
+            ).fetchone()[0]
+        )
     return {
         **RUNTIME_METRICS,
         "outbox_depth": outbox_depth,
         "pending_confirmations": pending_confirmations,
+        "pending_deliveries": pending_deliveries,
     }
 
 

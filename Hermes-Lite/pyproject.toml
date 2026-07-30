@@ -82,3 +82,6 @@ exclude = ["tests*", "website*", "docs*"]
 [tool.ruff]
 line-length = 120
 target-version = "py311"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

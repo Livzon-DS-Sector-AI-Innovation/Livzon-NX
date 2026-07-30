@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import uuid
 from typing import Any
 
 from services import dazah_agent_service as service
@@ -12,17 +13,25 @@ from tools.dazah_platform import (
 )
 
 
-def _payload(*, chat_type: str = "dm") -> service.DazahChatRequest:
-    return service.DazahChatRequest(
+def _payload(*, chat_type: str = "dm") -> service.AgentBackendV2Request:
+    return service.AgentBackendV2Request(
+        run_id=uuid.uuid4(),
+        trace_id=uuid.uuid4(),
         session_id="feishu:oc_test:ou_test",
         message="你好，请回复当前会话类型",
-        context={
-            "channel": "feishu",
-            "feishu_chat_type": chat_type,
-            "feishu_chat_id": "oc_test",
-            "feishu_sender_id": "ou_test",
-            "user_id": "ou_test",
-        },
+        subject=service.AgentTrustedSubject(
+            tenant_id="test-tenant",
+            user_id=str(uuid.uuid4()),
+            display_name="测试用户",
+            source="feishu",
+            external_binding_id=str(uuid.uuid4()),
+        ),
+        source=service.AgentBackendSource(
+            platform="feishu",
+            chat_type=chat_type,
+            chat_id="oc_test",
+            sender_open_id="ou_test",
+        ),
     )
 
 
@@ -32,6 +41,8 @@ def test_feishu_private_conversation_has_authoritative_channel_instruction() -> 
     assert "飞书私聊会话" in instruction
     assert "必须使用 lark_cli" in instruction
     assert "不得使用 dazah_tool 代理" in instruction
+    assert "--as bot" in instruction
+    assert "--as user" in instruction
     assert "不得回答普通文本会话、非飞书会话" in instruction
     assert "oc_test" not in instruction
     assert "ou_test" not in instruction
@@ -49,9 +60,7 @@ def test_untrusted_channel_without_feishu_session_prefix_is_not_feishu() -> None
     payload.session_id = "web:test"
 
     assert service._is_feishu_conversation(payload) is False
-    assert "不是 Hermes Feishu Gateway 标记的飞书会话" in (
-        service._conversation_channel_instruction(payload)
-    )
+    assert "不是 Hermes Feishu Gateway 标记的飞书会话" in (service._conversation_channel_instruction(payload))
 
 
 def test_channel_type_query_returns_deterministic_feishu_response() -> None:
@@ -74,16 +83,48 @@ def test_regular_feishu_request_still_uses_agent() -> None:
 
 def test_feishu_resource_link_forces_lark_cli_routing() -> None:
     payload = _payload()
-    payload.message = (
-        "读取这个多维表格的数据表和字段 "
-        "[203提炼](https://example.feishu.cn/base/bascnExample)"
-    )
+    payload.message = "读取这个多维表格的数据表和字段 [203提炼](https://example.feishu.cn/base/bascnExample)"
 
     assert service._is_direct_feishu_resource_request(payload) is True
     instruction = service._feishu_resource_routing_instruction(payload)
     assert "必须实际调用 lark_cli" in instruction
     assert "不得调用 energy.*" in instruction
     assert "平台当前配置的数据源类型不同" in instruction
+    assert "显式传 --as bot" in instruction
+    assert "bot-only" in instruction
+    assert "base +record-list" in instruction
+    assert "base +record-search" in instruction
+    assert "lark_cli 参数中不存在 subject" in instruction
+
+
+def test_base_table_name_follow_up_preserves_lark_cli_route() -> None:
+    payload = _payload()
+    payload.message = "进料数据记录表"
+    payload.messages = [
+        {
+            "role": "user",
+            "content": (
+                "读取这个多维表格的数据表和字段 "
+                "[203提炼](https://example.feishu.cn/base/bascnExample)"
+            ),
+        },
+        {
+            "role": "assistant",
+            "content": "可用数据表：进料数据记录表（tblExample123）",
+        },
+    ]
+
+    assert service._is_direct_feishu_resource_request(payload) is True
+    instruction = service._feishu_resource_routing_instruction(payload)
+    assert "复用列表结果中的 table_id" in instruction
+    assert "不得要求 Dazah subject" in instruction
+
+
+def test_plain_table_name_without_recent_base_context_is_not_forced() -> None:
+    payload = _payload()
+    payload.message = "进料数据记录表"
+
+    assert service._is_direct_feishu_resource_request(payload) is False
 
 
 def test_explicit_platform_sync_query_keeps_dazah_route() -> None:
@@ -105,6 +146,10 @@ def test_lark_cli_schema_uses_provider_compatible_optional_fields() -> None:
     entry = lark_cli_tool.registry._tools["lark_cli"]
     properties = entry.schema["parameters"]["properties"]
 
+    assert "base +record-list" in entry.schema["description"]
+    assert "base +record-search" in entry.schema["description"]
+    assert "subject" in entry.schema["description"]
+    assert "+record-list" in properties["args"]["description"]
     assert properties["stdin_json"]["type"] == "object"
     assert properties["module"]["type"] == "string"
     assert properties["risk_hint"]["type"] == "string"
@@ -196,15 +241,10 @@ def test_agent_prompt_places_feishu_resource_route_after_progressive_skill(
 
     monkeypatch.setattr(service, "DazahAIAgent", FakeAgent)
     payload = _payload()
-    payload.message = (
-        "读取这个电子表格 "
-        "[测试表格](https://example.feishu.cn/sheets/shtcnExample)"
-    )
+    payload.message = "读取这个电子表格 [测试表格](https://example.feishu.cn/sheets/shtcnExample)"
     service._run_agent_conversation(
         payload,
-        progressive_skills=[
-            {"name": "legacy-energy", "title": "旧能源规则", "content": "使用 energy.*"}
-        ],
+        progressive_skills=[{"name": "legacy-energy", "title": "旧能源规则", "content": "使用 energy.*"}],
     )
 
     prompt = captured["system_message"]

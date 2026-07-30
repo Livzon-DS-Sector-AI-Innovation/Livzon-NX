@@ -53,10 +53,12 @@ Dazah frontend floating assistant
 Dazah backend /api/v1/agent/chat
         |
         v
-Hermes-Lite services.dazah_agent_service:/v1/chat
+Hermes-Lite services.dazah_agent_service:/v2/agent/runs
         |
         +-- LLM: Dazah /api/v1/agent/llm/chat/completions
-        +-- Tools: Dazah /api/v1/agent/tools/execute
+        +-- Tool discovery: Dazah /api/v1/agent/tools/search
+        +-- Tool describe: Dazah /api/v1/agent/tools/{operation}
+        +-- Tool execute: Dazah /api/v1/agent/tools/execute
 ```
 
 Required Hermes-Lite `.env` values:

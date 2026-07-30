@@ -15,9 +15,7 @@ from app.platform.identity.models import (
 
 
 class PermissionGrantRepository:
-    async def get_user_for_update(
-        self, db: AsyncSession, user_id: UUID
-    ) -> User | None:
+    async def get_user_for_update(self, db: AsyncSession, user_id: UUID) -> User | None:
         result = await db.execute(
             select(User)
             .where(User.id == user_id, User.is_deleted.is_(False))

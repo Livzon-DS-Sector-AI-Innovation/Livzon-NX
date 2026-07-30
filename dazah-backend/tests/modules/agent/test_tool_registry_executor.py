@@ -5,12 +5,20 @@ import pytest
 from fastapi import HTTPException
 from pydantic import BaseModel
 
-from app.modules.agent.schemas import AgentToolExecuteRequest
+from app.modules.agent.schemas import AgentToolExecuteRequest, AgentTrustedSubject
 from app.modules.agent.tools import ToolExecutor, ToolRegistry, agent_tool
 
 
 class EchoInput(BaseModel):
     value: str
+
+
+def _subject(user_id: uuid.UUID | None = None) -> AgentTrustedSubject:
+    return AgentTrustedSubject(
+        tenant_id="test",
+        user_id=user_id or uuid.uuid4(),
+        source="internal",
+    )
 
 
 class FakeDb:
@@ -157,7 +165,10 @@ async def test_unregistered_tool_returns_400() -> None:
     with pytest.raises(HTTPException) as exc_info:
         await executor.execute(
             FakeDb(),
-            request=AgentToolExecuteRequest(operation="missing.tool"),
+            request=AgentToolExecuteRequest(
+                operation="missing.tool",
+                subject=_subject(),
+            ),
         )
 
     assert exc_info.value.status_code == 400
@@ -167,10 +178,16 @@ async def test_unregistered_tool_returns_400() -> None:
 async def test_input_validation_failure_returns_invalid_request_response() -> None:
     repo = FakeRepo()
     executor = ToolExecutor(registry=build_registry(), repo=repo)
+    user = SimpleNamespace(
+        id=uuid.uuid4(), role="user", status="active", is_deleted=False
+    )
 
     response = await executor.execute(
-        FakeDb(),
-        request=AgentToolExecuteRequest(operation="test.echo"),
+        FakeDb(user=user),
+        request=AgentToolExecuteRequest(
+            operation="test.echo",
+            subject=_subject(user.id),
+        ),
     )
 
     assert response.ok is False
@@ -180,7 +197,9 @@ async def test_input_validation_failure_returns_invalid_request_response() -> No
 
 @pytest.mark.anyio
 async def test_permission_denied_returns_403() -> None:
-    user = SimpleNamespace(id=uuid.uuid4(), role="user", is_deleted=False)
+    user = SimpleNamespace(
+        id=uuid.uuid4(), role="user", status="active", is_deleted=False
+    )
     executor = ToolExecutor(registry=build_registry(), repo=FakeRepo())
 
     with pytest.raises(HTTPException) as exc_info:
@@ -189,7 +208,7 @@ async def test_permission_denied_returns_403() -> None:
             request=AgentToolExecuteRequest(
                 operation="test.admin_echo",
                 params={"value": "x"},
-                context={"user_id": str(user.id)},
+                subject=_subject(user.id),
             ),
         )
 
@@ -198,7 +217,9 @@ async def test_permission_denied_returns_403() -> None:
 
 @pytest.mark.anyio
 async def test_read_tool_executes_and_writes_audit() -> None:
-    user = SimpleNamespace(id=uuid.uuid4(), role="user", is_deleted=False)
+    user = SimpleNamespace(
+        id=uuid.uuid4(), role="user", status="active", is_deleted=False
+    )
     db = FakeDb(user=user)
     repo = FakeRepo()
     executor = ToolExecutor(registry=build_registry(), repo=repo)
@@ -208,7 +229,7 @@ async def test_read_tool_executes_and_writes_audit() -> None:
         request=AgentToolExecuteRequest(
             operation="test.echo",
             params={"value": "ok"},
-            context={"user_id": str(user.id)},
+            subject=_subject(user.id),
         ),
     )
 
@@ -220,14 +241,16 @@ async def test_read_tool_executes_and_writes_audit() -> None:
 
 @pytest.mark.anyio
 async def test_write_tool_requires_confirmation_then_executes() -> None:
-    user = SimpleNamespace(id=uuid.uuid4(), role="user", is_deleted=False)
+    user = SimpleNamespace(
+        id=uuid.uuid4(), role="user", status="active", is_deleted=False
+    )
     db = FakeDb(user=user)
     repo = FakeRepo()
     executor = ToolExecutor(registry=build_registry(), repo=repo)
     request = AgentToolExecuteRequest(
         operation="test.write_echo",
         params={"value": "draft"},
-        context={"user_id": str(user.id)},
+        subject=_subject(user.id),
     )
 
     response = await executor.execute(db, request=request)
@@ -247,12 +270,16 @@ async def test_write_tool_requires_confirmation_then_executes() -> None:
 @pytest.mark.anyio
 async def test_human_decision_tool_returns_policy_refusal() -> None:
     executor = ToolExecutor(registry=build_registry(), repo=FakeRepo())
+    user = SimpleNamespace(
+        id=uuid.uuid4(), role="user", status="active", is_deleted=False
+    )
 
     response = await executor.execute(
-        FakeDb(),
+        FakeDb(user=user),
         request=AgentToolExecuteRequest(
             operation="test.human_decision",
             params={"value": "approve"},
+            subject=_subject(user.id),
         ),
     )
 

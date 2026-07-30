@@ -24,14 +24,11 @@ Hermes 镜像构建时按 SHA-256 校验并解包上游
 - `HERMES_FEISHU_CREDENTIAL_KEY`：Fernet 密钥，用于加密持久化 App Secret。
 - `LARK_CLI_PATH=/usr/local/bin/lark-cli`
 - `HERMES_FEISHU_TMPFS=/run/hermes-feishu`
-- `HERMES_FEISHU_GATEWAY_ENABLED=true`
 
 平台需要：
 
 - `HERMES_INTERNAL_URL=http://hermes-lite:8100`
-- `LIVZON_FEISHU_ALLOWED_GROUPS`：逗号分隔的 `chat_id` 白名单。
-- `LIVZON_FEISHU_EVENT_WS_ENABLED=false`
-- `LIVZON_FEISHU_CARD_CALLBACK_WS_ENABLED=false`
+- Gateway 启用状态、租户和凭证由 Dazah 管理后台版本化下发。
 
 管理员保存 Livzon 飞书设置后，平台以 HMAC 签名把新版本凭证推送到
 Hermes。Hermes 使用 stdin 初始化 CLI、执行 `doctor`，成功后原子切换
@@ -43,17 +40,17 @@ tmpfs 配置并热重启 Gateway；失败时保留旧版本。
 uv run python scripts/configure_local_feishu_cutover.py
 ```
 
-该脚本生成但不输出 Hermes 凭证加密密钥和内部服务 Token，并同步关闭
-Dazah 旧事件/卡片 WebSocket。重建后端与 Hermes 容器后，需要在平台
+该脚本生成但不输出 Hermes 凭证加密密钥和内部服务 Token。重建后端与
+Hermes 容器后，需要在平台
 “系统设置 → 飞书设置”重新保存一次现有凭证，使平台将凭证安全推送到
 Hermes。确认 Hermes `/internal/feishu/status` 返回
 `configured=true`、`gateway=connected` 后再进行飞书对话测试。
 
 ## 权限和确认
 
-Hermes 每五分钟拉取一次权限快照，平台在模块授权变化时也主动推送。
-读取允许使用 24 小时内缓存；写入要求快照不超过 15 分钟。群聊必须在
-白名单中且必须 @Livzon。
+每条消息由 Gateway 向 Dazah 解析可信身份和助手准入。Dazah RBAC 只用于
+Dazah 业务工具；飞书原生资源只服从飞书授权。群聊必须满足 Dazah 准入且
+必须 @Livzon。
 
 中风险和高风险操作先执行官方 `--dry-run`。中风险可点击
 “允许 / 始终允许 / 拒绝”；高风险只显示“允许 / 拒绝”且不允许记忆授权。

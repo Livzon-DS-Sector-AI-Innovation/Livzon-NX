@@ -53,7 +53,7 @@ class AutomationRunIdInput(BaseModel):
 class DirectAutomationActionInput(BaseModel):
     operation: str = Field(
         pattern=r"^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$",
-        description="要执行的已注册业务工具，例如 identity.send_feishu_message",
+        description="要执行的已注册业务工具，例如 identity.deliver_feishu_message",
     )
     body: dict[str, Any] = Field(
         default_factory=dict,
@@ -104,9 +104,7 @@ class DirectScheduledTaskCreateInput(DirectAutomationCreateInput):
 
 
 _FEISHU_MESSAGE_OPERATIONS = {
-    "identity.send_feishu_message",
-    "identity.send_feishu_text_message",
-    "identity.send_feishu_card_message",
+    "identity.deliver_feishu_message",
 }
 
 
@@ -122,14 +120,9 @@ def _scheduled_action_body(
     result_block = "\n\n数据结果：\n" + "\n\n".join(
         f"${{steps.{key}}}" for key in previous_result_keys
     )
-    text = str(body.get("text") or "").strip()
-    if "${steps." not in text:
-        body["text"] = f"{text}{result_block}".strip()
-
-    if action.operation != "identity.send_feishu_text_message":
-        markdown = str(body.get("markdown") or text).strip()
-        if "${steps." not in markdown:
-            body["markdown"] = f"{markdown}{result_block}".strip()
+    markdown = str(body.get("markdown") or "").strip()
+    if "${steps." not in markdown:
+        body["markdown"] = f"{markdown}{result_block}".strip()
     return body
 
 

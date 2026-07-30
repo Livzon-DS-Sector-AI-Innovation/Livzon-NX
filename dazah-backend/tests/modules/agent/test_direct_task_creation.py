@@ -14,8 +14,13 @@ from app.modules.agent.tools import tool_registry
 
 def _action() -> DirectAutomationActionInput:
     return DirectAutomationActionInput(
-        operation="identity.send_feishu_message",
-        body={"user_ids": ["张三"], "text": "请查收"},
+        operation="identity.deliver_feishu_message",
+        body={
+            "recipient_user_ids": ["00000000-0000-0000-0000-000000000001"],
+            "title": "通知",
+            "markdown": "请查收",
+            "idempotency_key": "test-delivery",
+        },
     )
 
 
@@ -27,7 +32,7 @@ def test_direct_automation_is_manual_and_has_no_schedule() -> None:
 
     assert request.triggers[0].trigger_type.value == "manual"
     assert request.triggers[0].schedule == {}
-    assert request.definition.steps[0].operation == "identity.send_feishu_message"
+    assert request.definition.steps[0].operation == "identity.deliver_feishu_message"
 
 
 def test_direct_scheduled_task_forces_schedule_trigger() -> None:
@@ -57,12 +62,12 @@ def test_scheduled_data_delivery_keeps_requirement_and_runtime_query_result() ->
                     body={"page": 1, "page_size": 100},
                 ),
                 DirectAutomationActionInput(
-                    operation="identity.send_feishu_message",
+                    operation="identity.deliver_feishu_message",
                     body={
-                        "user_ids": ["张三"],
+                        "recipient_user_ids": ["00000000-0000-0000-0000-000000000001"],
                         "title": "上月采购汇总",
-                        "text": "您好，以下是上月采购汇总。",
-                        "message_form": "card",
+                        "markdown": "您好，以下是上月采购汇总。",
+                        "idempotency_key": "monthly-procurement",
                     },
                 ),
             ],
@@ -75,7 +80,6 @@ def test_scheduled_data_delivery_keeps_requirement_and_runtime_query_result() ->
         "每月一日查询上月全部采购订单并将完整汇总发送给张三"
     )
     delivery_input = request.definition.steps[1].input
-    assert "${steps.action_1}" in delivery_input["text"]
     assert "${steps.action_1}" in delivery_input["markdown"]
 
 

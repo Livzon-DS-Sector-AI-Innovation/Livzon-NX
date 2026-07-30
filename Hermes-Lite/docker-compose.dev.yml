@@ -14,6 +14,7 @@ services:
       DAZAH_LLM_MODEL: ${DAZAH_LLM_MODEL:-dazah-active-text}
       HERMES_DAZAH_CHAT_TIMEOUT_SECONDS: ${HERMES_DAZAH_CHAT_TIMEOUT_SECONDS:-180}
       HERMES_DAZAH_MAX_TOOL_ITERATIONS: ${HERMES_DAZAH_MAX_TOOL_ITERATIONS:-30}
+      HERMES_GATEWAY_LOCK_DIR: /run/hermes-feishu/gateway-locks
       # Prefer low-overhead native events; polling can be enabled per environment when needed.
       WATCHFILES_FORCE_POLLING: "${WATCHFILES_FORCE_POLLING:-false}"
     ports:

@@ -7,8 +7,6 @@ import hmac
 import json
 import logging
 import secrets
-import time
-from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 from hashlib import pbkdf2_hmac
 from hmac import compare_digest
@@ -24,15 +22,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.database import async_session_factory
 from app.core.secrets import decrypt_secret, encrypt_secret, mask_secret
-from app.platform.audit.models import AuditLog
 from app.platform.identity.models import (
-    FeishuCardAction,
     FeishuConfig,
     FeishuUserToken,
     User,
 )
 from app.platform.identity.repository import (
-    FeishuCardActionRepository,
     FeishuConfigRepository,
     FeishuUserTokenRepository,
     UserRepository,
@@ -43,32 +38,22 @@ from app.platform.identity.schemas import (
     FeishuDiagnosticResult,
     FeishuDiagnosticStep,
 )
-from app.platform.integrations.feishu.im import build_callback_status_card_content
 from app.platform.integrations.feishu.oauth import FeishuOAuthClient
 
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from app.modules.agent.models import AgentConfirmation
+    pass
 
 JsonObject = dict[str, Any]
 
 _repo = UserRepository()
 _feishu_config_repo = FeishuConfigRepository()
-_feishu_card_action_repo = FeishuCardActionRepository()
 _feishu_user_token_repo = FeishuUserTokenRepository()
 _PASSWORD_ITERATIONS = 260_000
 SYSTEM_ADMIN_USERNAME = "system_admin"
 SYSTEM_ADMIN_NAME = "系统管理员"
 DEFAULT_FEISHU_CONFIG_NAME = "Livzon 助手飞书设置"
-ALLOWED_CARD_ACTIONS = {
-    "start_processing": "开始处理",
-    "mark_done": "标记完成",
-    "reject": "驳回",
-    "acknowledge": "已知悉",
-    "agent_confirmation_execute": "确认执行",
-    "agent_confirmation_cancel": "取消",
-}
 
 
 def _secret_runtime_error(exc: RuntimeError) -> HTTPException:
@@ -82,7 +67,12 @@ def _secret_runtime_error(exc: RuntimeError) -> HTTPException:
 
 
 async def _push_livzon_credentials_to_hermes(
-    *, app_id: str, app_secret: str, version: int
+    *,
+    app_id: str,
+    app_secret: str,
+    tenant_id: str,
+    gateway_enabled: bool,
+    version: int,
 ) -> bool:
     """Best-effort credential rotation; Hermes keeps its last healthy version."""
     settings = get_settings()
@@ -91,7 +81,10 @@ async def _push_livzon_credentials_to_hermes(
     if not base_url or not token:
         logger.warning("Hermes internal Feishu credential delivery is not configured")
         return False
-    signed = f"{app_id}\n{version}\n{app_secret}".encode()
+    signed = (
+        f"{app_id}\n{tenant_id}\n{str(gateway_enabled).lower()}\n"
+        f"{version}\n{app_secret}"
+    ).encode()
     signature = hmac.new(token.encode(), signed, hashlib.sha256).hexdigest()
     try:
         async with httpx.AsyncClient(timeout=45) as client:
@@ -101,6 +94,8 @@ async def _push_livzon_credentials_to_hermes(
                 json={
                     "app_id": app_id,
                     "app_secret": app_secret,
+                    "tenant_id": tenant_id,
+                    "gateway_enabled": gateway_enabled,
                     "version": version,
                     "signature": signature,
                 },
@@ -124,13 +119,8 @@ async def _push_livzon_credentials_to_hermes(
 def hash_password(password: str) -> str:
     """Hash a local-account password using PBKDF2-SHA256."""
     salt = secrets.token_bytes(16)
-    digest = pbkdf2_hmac(
-        "sha256", password.encode("utf-8"), salt, _PASSWORD_ITERATIONS
-    )
-    return (
-        f"pbkdf2_sha256${_PASSWORD_ITERATIONS}$"
-        f"{salt.hex()}${digest.hex()}"
-    )
+    digest = pbkdf2_hmac("sha256", password.encode("utf-8"), salt, _PASSWORD_ITERATIONS)
+    return f"pbkdf2_sha256${_PASSWORD_ITERATIONS}${salt.hex()}${digest.hex()}"
 
 
 def verify_password(password: str, stored_hash: str | None) -> bool:
@@ -217,12 +207,15 @@ async def _get_oauth_directory_profile(
     lookup_id = user_id or open_id
     lookup_type = "user_id" if user_id else "open_id"
     try:
-        profile = await get_user_detail(
-            lookup_id,
-            user_id_type=lookup_type,
-            app_id=oauth.app_id,
-            app_secret=oauth.app_secret,
-        ) or {}
+        profile = (
+            await get_user_detail(
+                lookup_id,
+                user_id_type=lookup_type,
+                app_id=oauth.app_id,
+                app_secret=oauth.app_secret,
+            )
+            or {}
+        )
         if not profile.get("department_path"):
             department_path = []
             for department_id in profile.get("department_ids") or []:
@@ -249,12 +242,11 @@ def _empty_feishu_config_response() -> FeishuConfigResponse:
     return FeishuConfigResponse(
         config_name=DEFAULT_FEISHU_CONFIG_NAME,
         app_id="",
+        tenant_id="default",
+        gateway_enabled=True,
+        config_version=0,
         app_secret_configured=False,
         app_secret_masked="",
-        card_callback_verification_token_configured=False,
-        card_callback_verification_token_masked="",
-        card_callback_encrypt_key_configured=False,
-        card_callback_encrypt_key_masked="",
         is_active=True,
     )
 
@@ -268,28 +260,15 @@ def _feishu_config_to_response(config: FeishuConfig | None) -> FeishuConfigRespo
             secret = decrypt_secret(config.encrypted_app_secret)
         except RuntimeError:
             secret = ""
-    encrypt_key = ""
-    if config.encrypted_card_callback_encrypt_key:
-        try:
-            encrypt_key = decrypt_secret(config.encrypted_card_callback_encrypt_key)
-        except RuntimeError:
-            encrypt_key = ""
     return FeishuConfigResponse(
         id=config.id,
         config_name=config.config_name,
         app_id=config.app_id,
+        tenant_id=config.tenant_id,
+        gateway_enabled=config.gateway_enabled,
+        config_version=config.config_version,
         app_secret_configured=bool(config.encrypted_app_secret),
         app_secret_masked=mask_secret(secret),
-        card_callback_verification_token_configured=bool(
-            config.card_callback_verification_token
-        ),
-        card_callback_verification_token_masked=mask_secret(
-            config.card_callback_verification_token or ""
-        ),
-        card_callback_encrypt_key_configured=bool(
-            config.encrypted_card_callback_encrypt_key
-        ),
-        card_callback_encrypt_key_masked=mask_secret(encrypt_key),
         sync_root_department_id=config.sync_root_department_id,
         sync_member_department_id=config.sync_member_department_id,
         is_active=config.is_active,
@@ -326,75 +305,57 @@ async def save_livzon_feishu_config(
             if existing
             else ""
         )
-        encrypted_callback_key = (
-            encrypt_secret(payload.card_callback_encrypt_key)
-            if payload.card_callback_encrypt_key
-            else existing.encrypted_card_callback_encrypt_key
-            if existing
-            else None
-        )
     except RuntimeError as exc:
         raise _secret_runtime_error(exc) from exc
-    callback_token = (
-        payload.card_callback_verification_token
-        if payload.card_callback_verification_token is not None
-        else existing.card_callback_verification_token
-        if existing
-        else None
-    )
     if not encrypted_secret:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "请输入 App Secret")
 
     if existing:
         existing.config_name = target_name
         existing.app_id = payload.app_id
+        existing.tenant_id = payload.tenant_id
+        existing.gateway_enabled = payload.gateway_enabled
+        existing.config_version = (existing.config_version or 0) + 1
         existing.encrypted_app_secret = encrypted_secret
-        existing.card_callback_verification_token = callback_token
-        existing.encrypted_card_callback_encrypt_key = encrypted_callback_key
         existing.sync_root_department_id = payload.sync_root_department_id
         existing.sync_member_department_id = payload.sync_member_department_id
         existing.is_active = payload.is_active
         existing.is_deleted = False
         await db.flush()
-        if existing.is_active:
-            effective_secret = payload.app_secret
-            if not effective_secret:
-                try:
-                    effective_secret = decrypt_secret(existing.encrypted_app_secret)
-                except RuntimeError as exc:
-                    raise _secret_runtime_error(exc) from exc
-            await _push_livzon_credentials_to_hermes(
-                app_id=existing.app_id,
-                app_secret=effective_secret,
-                version=time.time_ns(),
-            )
-            from app.platform.identity.hermes_api import (
-                push_access_snapshot_to_hermes,
-            )
-
-            await push_access_snapshot_to_hermes(db)
+        effective_secret = payload.app_secret
+        if not effective_secret:
+            try:
+                effective_secret = decrypt_secret(existing.encrypted_app_secret)
+            except RuntimeError as exc:
+                raise _secret_runtime_error(exc) from exc
+        await _push_livzon_credentials_to_hermes(
+            app_id=existing.app_id,
+            app_secret=effective_secret,
+            tenant_id=existing.tenant_id,
+            gateway_enabled=existing.gateway_enabled and existing.is_active,
+            version=existing.config_version,
+        )
         return _feishu_config_to_response(existing)
 
     config = FeishuConfig(
         config_name=target_name,
         app_id=payload.app_id,
+        tenant_id=payload.tenant_id,
+        gateway_enabled=payload.gateway_enabled,
+        config_version=1,
         encrypted_app_secret=encrypted_secret,
-        card_callback_verification_token=callback_token,
-        encrypted_card_callback_encrypt_key=encrypted_callback_key,
         sync_root_department_id=payload.sync_root_department_id,
         sync_member_department_id=payload.sync_member_department_id,
         is_active=payload.is_active,
     )
     await _feishu_config_repo.save(db, config)
-    if config.is_active:
-        await _push_livzon_credentials_to_hermes(
-            app_id=config.app_id,
-            app_secret=payload.app_secret or "",
-            version=time.time_ns(),
-        )
-        from app.platform.identity.hermes_api import push_access_snapshot_to_hermes
-
-        await push_access_snapshot_to_hermes(db)
+    await _push_livzon_credentials_to_hermes(
+        app_id=config.app_id,
+        app_secret=payload.app_secret or "",
+        tenant_id=config.tenant_id,
+        gateway_enabled=config.gateway_enabled and config.is_active,
+        version=config.config_version,
+    )
     return _feishu_config_to_response(config)
 
 
@@ -405,9 +366,11 @@ async def _effective_feishu_credentials(
     settings = get_settings()
     stored = await _feishu_config_repo.get_active(db)
 
-    app_id = (payload.app_id if payload else None) or (
-        stored.app_id if stored else None
-    ) or settings.FEISHU_APP_ID
+    app_id = (
+        (payload.app_id if payload else None)
+        or (stored.app_id if stored else None)
+        or settings.FEISHU_APP_ID
+    )
     encrypted_secret = stored.encrypted_app_secret if stored else ""
     try:
         app_secret = (
@@ -824,9 +787,7 @@ async def run_livzon_feishu_sync_all(db: AsyncSession) -> JsonObject:
     direct_user_count = direct_user_result.get("user_count", 0)
     total_user_count = member_count + direct_user_count
     nested_member_errors = [
-        str(error)
-        for result in member_results
-        for error in result.get("errors", [])
+        str(error) for result in member_results for error in result.get("errors", [])
     ]
     all_errors = dept_errors + member_errors + nested_member_errors
 
@@ -850,10 +811,7 @@ async def run_livzon_feishu_sync_all(db: AsyncSession) -> JsonObject:
         f"部门用户 {member_count} 名，直接授权用户 {direct_user_count} 名。"
     )
     if sync_status == "warning":
-        sync_message = (
-            f"{sync_message} 部分部门同步失败："
-            f"{'; '.join(all_errors)}"
-        )
+        sync_message = f"{sync_message} 部分部门同步失败：{'; '.join(all_errors)}"
     if config is not None:
         config.last_sync_status = sync_status
         config.last_sync_message = sync_message
@@ -888,16 +846,6 @@ async def run_livzon_feishu_sync_all(db: AsyncSession) -> JsonObject:
 async def _active_livzon_feishu_credentials(db: AsyncSession) -> tuple[str, str]:
     config = await _feishu_config_repo.get_active(db)
     if config is None:
-        settings = get_settings()
-        if (
-            (
-                settings.LIVZON_FEISHU_EVENT_WS_ENABLED
-                or settings.LIVZON_FEISHU_CARD_CALLBACK_WS_ENABLED
-            )
-            and settings.FEISHU_APP_ID
-            and settings.FEISHU_APP_SECRET
-        ):
-            return settings.FEISHU_APP_ID, settings.FEISHU_APP_SECRET
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
             "Livzon 助手飞书 App ID 或 App Secret 未配置",
@@ -919,1244 +867,7 @@ async def _active_livzon_feishu_credentials(db: AsyncSession) -> tuple[str, str]
     return config.app_id, app_secret
 
 
-def _dedupe_user_ids(user_ids: list[UUID]) -> list[UUID]:
-    return list(dict.fromkeys(user_ids))
-
-
-def _empty_message_result(user_id: UUID, message: str) -> JsonObject:
-    return {
-        "user_id": str(user_id),
-        "name": None,
-        "feishu_open_id": None,
-        "status": "failed",
-        "message_id": None,
-        "error_code": None,
-        "error_message": message,
-    }
-
-
-def _message_shape(
-    *,
-    value_level: str,
-    structured: bool,
-    requires_business_action: bool,
-    message_form: str = "auto",
-) -> str:
-    if message_form != "auto":
-        if requires_business_action and message_form != "interactive_card":
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                "包含业务处理按钮的消息必须使用 interactive_card",
-            )
-        return message_form
-    if requires_business_action:
-        return "interactive_card"
-    if value_level == "low" and not structured:
-        return "text"
-    return "card"
-
-
-def _normalize_card_actions(
-    actions: list[JsonObject] | None,
-) -> list[dict[str, str]]:
-    raw_actions = actions or [
-        {"action_key": "start_processing", "label": "开始处理"},
-        {"action_key": "mark_done", "label": "标记完成"},
-    ]
-    normalized: list[dict[str, str]] = []
-    for item in raw_actions:
-        action_key = str(item.get("action_key") or "").strip()
-        if action_key not in ALLOWED_CARD_ACTIONS:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                f"不支持的交互卡片动作：{action_key}",
-            )
-        label = str(item.get("label") or ALLOWED_CARD_ACTIONS[action_key]).strip()
-        normalized.append(
-            {
-                "action_key": action_key,
-                "label": label[:100],
-                "button_type": str(item.get("button_type") or "primary"),
-            }
-        )
-    return normalized
-
-
-def _callback_action_status(action_key: str) -> str:
-    if action_key == "reject":
-        return "rejected"
-    return "processed"
-
-
-def _write_card_action_audit(
-    db: AsyncSession,
-    *,
-    action: FeishuCardAction,
-) -> None:
-    if not hasattr(db, "add"):
-        return
-    db.add(
-        AuditLog(
-            request_id=str(action.card_id) if action.card_id else None,
-            user_id=action.local_user_id,
-            method="FEISHU",
-            path="/api/v1/identity/feishu/card-callback",
-            status_code=200,
-            resource_type="feishu_card_action",
-            resource_id=action.id,
-            action="feishu_card_action_callback",
-            new_value={
-                "action_key": action.action_key,
-                "status": action.status,
-                "clicked_open_id": action.clicked_open_id,
-            },
-            extra={
-                "message_id": action.message_id,
-                "card_id": action.card_id,
-                "recipient_open_id": action.recipient_open_id,
-            },
-        )
-    )
-
-
-def _write_livzon_message_audit(
-    db: AsyncSession,
-    *,
-    user: User,
-    message_id: str,
-    outcome: str,
-    session_id: UUID | None = None,
-) -> None:
-    """Record the Feishu entrypoint without persisting message content."""
-    if not hasattr(db, "add"):
-        return
-    db.add(
-        AuditLog(
-            request_id=message_id[:64],
-            user_id=user.id,
-            method="FEISHU",
-            path="/api/v1/identity/feishu/event-ws",
-            status_code=200 if outcome == "processed" else 400,
-            resource_type="agent_session",
-            resource_id=session_id or user.id,
-            action="feishu_agent_message",
-            new_value={"outcome": outcome},
-            extra={
-                "message_id": message_id,
-                "source_event": "im.message.receive_v1",
-            },
-        )
-    )
-
-
-async def _send_livzon_feishu_message(
-    db: AsyncSession,
-    *,
-    user_ids: list[UUID],
-    msg_type: str,
-    content: str,
-) -> JsonObject:
-    from app.platform.integrations.feishu.im import send_feishu_message
-    from app.platform.integrations.feishu.utils import get_tenant_access_token
-
-    app_id, app_secret = await _active_livzon_feishu_credentials(db)
-    token = await get_tenant_access_token(
-        app_id,
-        app_secret,
-        cache_key=f"livzon-assistant:{app_id}",
-    )
-
-    results: list[JsonObject] = []
-    for user_id in _dedupe_user_ids(user_ids):
-        user = await _repo.get_by_id(db, user_id)
-        if user is None:
-            results.append(_empty_message_result(user_id, "本地用户不存在"))
-            continue
-        if not user.feishu_open_id:
-            results.append(
-                {
-                    "user_id": str(user.id),
-                    "name": user.name,
-                    "feishu_open_id": None,
-                    "status": "failed",
-                    "message_id": None,
-                    "error_code": None,
-                    "error_message": "用户缺少 feishu_open_id，请先同步通讯录",
-                }
-            )
-            continue
-
-        try:
-            sent = await send_feishu_message(
-                tenant_access_token=token,
-                receive_id=user.feishu_open_id,
-                receive_id_type="open_id",
-                msg_type=msg_type,
-                content=content,
-            )
-        except Exception as exc:
-            logger.exception(
-                "Livzon Feishu message send failed: user_id=%s",
-                user.id,
-            )
-            results.append(
-                {
-                    "user_id": str(user.id),
-                    "name": user.name,
-                    "feishu_open_id": user.feishu_open_id,
-                    "status": "failed",
-                    "message_id": None,
-                    "error_code": None,
-                    "error_message": str(exc),
-                }
-            )
-            continue
-
-        results.append(
-            {
-                "user_id": str(user.id),
-                "name": user.name,
-                "feishu_open_id": user.feishu_open_id,
-                "status": "sent" if sent.ok else "failed",
-                "message_id": sent.message_id,
-                "error_code": sent.code if not sent.ok else None,
-                "error_message": sent.error_message if not sent.ok else None,
-            }
-        )
-
-    success_count = sum(1 for item in results if item["status"] == "sent")
-    failed_count = len(results) - success_count
-    return {
-        "total": len(results),
-        "success_count": success_count,
-        "failed_count": failed_count,
-        "results": results,
-    }
-
-
-async def _send_livzon_feishu_text_to_open_id(
-    db: AsyncSession,
-    *,
-    open_id: str,
-    text: str,
-    markdown: bool = False,
-    reply_to_message_id: str | None = None,
-) -> bool:
-    """Reply to a private Livzon Feishu conversation without a local user id.
-
-    Agent answers can contain Markdown.  Feishu text messages do not render it,
-    so those replies are sent as an interactive card while short service hints
-    remain plain text for a compact chat experience.
-    """
-    from app.platform.integrations.feishu.im import (
-        build_markdown_card_content,
-        build_text_message_content,
-        reply_feishu_message,
-        send_feishu_message,
-    )
-    from app.platform.integrations.feishu.utils import get_tenant_access_token
-
-    try:
-        app_id, app_secret = await _active_livzon_feishu_credentials(db)
-        token = await get_tenant_access_token(
-            app_id,
-            app_secret,
-            cache_key=f"livzon-assistant:{app_id}",
-        )
-        msg_type = "interactive" if markdown else "text"
-        content = (
-            build_markdown_card_content(
-                title="Livzon 助手",
-                markdown=text,
-                header_template="blue",
-            )
-            if markdown
-            else build_text_message_content(text)
-        )
-        if reply_to_message_id:
-            sent = await reply_feishu_message(
-                tenant_access_token=token,
-                message_id=reply_to_message_id,
-                msg_type=msg_type,
-                content=content,
-            )
-        else:
-            sent = await send_feishu_message(
-                tenant_access_token=token,
-                receive_id=open_id,
-                receive_id_type="open_id",
-                msg_type=msg_type,
-                content=content,
-            )
-    except Exception:
-        logger.exception("Livzon 飞书私聊回复请求失败: open_id=%s", open_id)
-        return False
-    if not sent.ok:
-        logger.warning(
-            "Livzon 飞书私聊回复失败: open_id=%s code=%s message=%s",
-            open_id,
-            sent.code,
-            sent.error_message,
-        )
-        return False
-    return True
-
-
 _livzon_bot_open_id_cache: dict[str, str] = {}
-
-
-async def _active_livzon_feishu_bot_open_id(db: AsyncSession) -> str | None:
-    """Resolve and cache the bot Open ID used in Feishu mention payloads."""
-    from app.platform.integrations.feishu.im import get_feishu_bot_info
-    from app.platform.integrations.feishu.utils import get_tenant_access_token
-
-    try:
-        app_id, app_secret = await _active_livzon_feishu_credentials(db)
-        cached = _livzon_bot_open_id_cache.get(app_id)
-        if cached:
-            return cached
-        token = await get_tenant_access_token(
-            app_id,
-            app_secret,
-            cache_key=f"livzon-assistant:{app_id}",
-        )
-        result = await get_feishu_bot_info(tenant_access_token=token)
-        if not result.ok or not result.open_id:
-            logger.warning(
-                "Livzon 飞书机器人身份获取失败: app_id=%s code=%s",
-                app_id,
-                result.code,
-            )
-            return None
-        _livzon_bot_open_id_cache[app_id] = result.open_id
-        return result.open_id
-    except Exception:
-        logger.exception("Livzon 飞书机器人身份获取异常")
-        return None
-
-
-async def _livzon_group_bot_mention(
-    db: AsyncSession,
-    *,
-    mentions: object,
-) -> JsonObject | None:
-    if not isinstance(mentions, list) or not mentions:
-        return None
-    bot_open_id = await _active_livzon_feishu_bot_open_id(db)
-    if not bot_open_id:
-        return None
-    for mention in mentions:
-        if not isinstance(mention, dict):
-            continue
-        mention_id = mention.get("id")
-        if (
-            isinstance(mention_id, dict)
-            and mention_id.get("open_id") == bot_open_id
-        ):
-            return mention
-    return None
-
-
-async def _start_livzon_feishu_message_reply(
-    db: AsyncSession,
-    *,
-    message_id: str,
-) -> str | None:
-    """Show that Livzon accepted an incoming message and is preparing a reply."""
-    from app.platform.integrations.feishu.im import create_feishu_message_reaction
-    from app.platform.integrations.feishu.utils import get_tenant_access_token
-
-    try:
-        app_id, app_secret = await _active_livzon_feishu_credentials(db)
-        token = await get_tenant_access_token(
-            app_id,
-            app_secret,
-            cache_key=f"livzon-assistant:{app_id}",
-        )
-        result = await create_feishu_message_reaction(
-            tenant_access_token=token,
-            message_id=message_id,
-            emoji_type="Typing",
-        )
-        if not result.ok:
-            logger.warning(
-                "Livzon 飞书消息回复中状态添加失败: message_id=%s code=%s",
-                message_id,
-                result.code,
-            )
-            return None
-        return result.reaction_id
-    except Exception:
-        # This status is only an operational hint. It must not prevent the
-        # actual Agent request or its error response from reaching the user.
-        logger.exception(
-            "Livzon 飞书消息回复中状态添加异常: message_id=%s",
-            message_id,
-        )
-        return None
-
-
-async def _finish_livzon_feishu_message_reply(
-    db: AsyncSession,
-    *,
-    message_id: str,
-    processing_reaction_id: str | None,
-    completed: bool,
-) -> bool:
-    """Clear ``Typing`` and add ``OK`` only after a reply was delivered."""
-    from app.platform.integrations.feishu.im import (
-        create_feishu_message_reaction,
-        delete_feishu_message_reaction,
-    )
-    from app.platform.integrations.feishu.utils import get_tenant_access_token
-
-    try:
-        app_id, app_secret = await _active_livzon_feishu_credentials(db)
-        token = await get_tenant_access_token(
-            app_id,
-            app_secret,
-            cache_key=f"livzon-assistant:{app_id}",
-        )
-        if processing_reaction_id:
-            removed = await delete_feishu_message_reaction(
-                tenant_access_token=token,
-                message_id=message_id,
-                reaction_id=processing_reaction_id,
-            )
-            if not removed.ok:
-                logger.warning(
-                    "Livzon 飞书消息回复中状态删除失败: message_id=%s code=%s",
-                    message_id,
-                    removed.code,
-                )
-                return False
-        if not completed:
-            return True
-        result = await create_feishu_message_reaction(
-            tenant_access_token=token,
-            message_id=message_id,
-            emoji_type="OK",
-        )
-        if not result.ok:
-            logger.warning(
-                "Livzon 飞书消息已完成状态添加失败: message_id=%s code=%s",
-                message_id,
-                result.code,
-            )
-        return result.ok
-    except Exception:
-        logger.exception(
-            "Livzon 飞书消息回复状态更新异常: message_id=%s",
-            message_id,
-        )
-        return False
-
-
-async def _send_livzon_agent_confirmation_cards(
-    db: AsyncSession,
-    *,
-    user: User,
-    confirmations: Sequence[AgentConfirmation],
-) -> None:
-    for confirmation in confirmations:
-        try:
-            await _send_livzon_feishu_callback_card(
-                db,
-                user_ids=[user.id],
-                title="Livzon 助手操作确认",
-                markdown=(
-                    f"**{confirmation.summary}**\n\n"
-                    f"风险等级：{confirmation.risk_level}\n\n"
-                    "请确认是否执行此操作。"
-                ),
-                header_template="orange",
-                actions=[
-                    {
-                        "action_key": "agent_confirmation_execute",
-                        "label": "确认执行",
-                        "button_type": "primary",
-                    },
-                    {
-                        "action_key": "agent_confirmation_cancel",
-                        "label": "取消",
-                        "button_type": "default",
-                    },
-                ],
-                business_ref={
-                    "kind": "agent_confirmation",
-                    "confirmation_id": str(confirmation.id),
-                    "summary": confirmation.summary,
-                },
-                expires_at=confirmation.expires_at,
-            )
-        except Exception:
-            logger.exception(
-                "Livzon 飞书确认卡片发送失败: confirmation_id=%s",
-                confirmation.id,
-            )
-
-
-def _parse_livzon_feishu_message_event(
-    payload: JsonObject,
-) -> JsonObject | None:
-    event = payload.get("event") if isinstance(payload.get("event"), dict) else payload
-    message = event.get("message") if isinstance(event, dict) else None
-    sender = event.get("sender") if isinstance(event, dict) else None
-    if not isinstance(message, dict) or not isinstance(sender, dict):
-        return None
-    chat_type = message.get("chat_type")
-    if sender.get("sender_type") != "user" or chat_type not in {
-        "p2p",
-        "group",
-        "topic_group",
-    }:
-        return None
-    sender_id = sender.get("sender_id") or {}
-    open_id = sender_id.get("open_id") if isinstance(sender_id, dict) else None
-    message_id = message.get("message_id")
-    if not isinstance(open_id, str) or not isinstance(message_id, str):
-        return None
-    chat_id = message.get("chat_id")
-    if chat_type != "p2p" and not isinstance(chat_id, str):
-        return None
-    base = {
-        "open_id": open_id,
-        "message_id": message_id,
-        "chat_type": chat_type,
-        "chat_id": chat_id if isinstance(chat_id, str) else None,
-        "mentions": message.get("mentions"),
-    }
-    if message.get("message_type") != "text":
-        return {
-            **base,
-            "unsupported": True,
-        }
-    try:
-        content = json.loads(message.get("content") or "{}")
-    except json.JSONDecodeError:
-        content = {}
-    text = content.get("text") if isinstance(content, dict) else None
-    if (
-        not isinstance(text, str)
-    ):
-        return None
-    return {**base, "text": text.strip()}
-
-
-async def handle_livzon_feishu_message_receive_event(
-    db: AsyncSession,
-    *,
-    payload: JsonObject,
-) -> JsonObject:
-    """Process one authenticated ``im.message.receive_v1`` event."""
-    parsed = _parse_livzon_feishu_message_event(payload)
-    if parsed is None:
-        return {"status": "ignored"}
-    open_id = parsed.get("open_id")
-    if not isinstance(open_id, str):
-        return {"status": "ignored"}
-    message_id = parsed.get("message_id")
-    if not isinstance(message_id, str):
-        return {"status": "ignored"}
-    chat_type = parsed.get("chat_type")
-    group_message = chat_type in {"group", "topic_group"}
-    reply_to_message_id = message_id if group_message else None
-    if group_message:
-        bot_mention = await _livzon_group_bot_mention(
-            db,
-            mentions=parsed.get("mentions"),
-        )
-        if bot_mention is None:
-            return {"status": "ignored"}
-        mention_key = bot_mention.get("key")
-        if isinstance(parsed.get("text"), str) and isinstance(mention_key, str):
-            parsed["text"] = str(parsed["text"]).replace(mention_key, "").strip()
-
-    from app.core.redis import acquire_lock, redis_client, release_lock
-
-    try:
-        is_new = await redis_client.set(
-            f"livzon:feishu:message:{message_id}", "1", ex=86400, nx=True
-        )
-    except Exception:
-        logger.exception(
-            "Livzon 飞书消息去重不可用，继续处理: message_id=%s", message_id
-        )
-        is_new = True
-    if not is_new:
-        return {"status": "duplicate"}
-    if parsed.get("unsupported"):
-        await _send_livzon_feishu_text_to_open_id(
-            db,
-            open_id=open_id,
-            text="当前仅支持发送文本消息，请改用文字与 Livzon 助手对话。",
-            reply_to_message_id=reply_to_message_id,
-        )
-        return {"status": "unsupported"}
-
-    text = str(parsed["text"])
-    if not text:
-        await _send_livzon_feishu_text_to_open_id(
-            db,
-            open_id=open_id,
-            text="请输入需要咨询的内容。",
-            reply_to_message_id=reply_to_message_id,
-        )
-        return {"status": "empty"}
-    if len(text) > 8000:
-        await _send_livzon_feishu_text_to_open_id(
-            db,
-            open_id=open_id,
-            text="单条消息不能超过 8000 个字符，请拆分后重试。",
-            reply_to_message_id=reply_to_message_id,
-        )
-        return {"status": "too_long"}
-
-    conversation_id = parsed.get("chat_id") if group_message else open_id
-    lock_key = f"livzon:feishu:conversation:{conversation_id}"
-    try:
-        acquired = await acquire_lock(lock_key, timeout=150)
-    except Exception:
-        logger.exception("Livzon 飞书会话锁不可用，继续处理: open_id=%s", open_id)
-        acquired = True
-    if not acquired:
-        await _send_livzon_feishu_text_to_open_id(
-            db,
-            open_id=open_id,
-            text="上一条消息正在处理中，请稍后再发送。",
-            reply_to_message_id=reply_to_message_id,
-        )
-        return {"status": "busy"}
-
-    processing_reaction_id = await _start_livzon_feishu_message_reply(
-        db,
-        message_id=message_id,
-    )
-    reply_completed = False
-    try:
-        user = await _repo.get_by_feishu_open_id(db, open_id)
-        if user is None or user.is_deleted or user.status != "active":
-            reply_completed = await _send_livzon_feishu_text_to_open_id(
-                db,
-                open_id=open_id,
-                text=(
-                    "尚未绑定可用的 Livzon 账户，请联系管理员同步通讯录并授予"
-                    "助手权限。"
-                ),
-                reply_to_message_id=reply_to_message_id,
-            )
-            return {"status": "unmapped"}
-
-        from app.modules.agent.public_api import handle_feishu_direct_message
-
-        try:
-            result = await handle_feishu_direct_message(
-                db,
-                user=user,
-                sender_open_id=open_id,
-                message_id=message_id,
-                text=text,
-                conversation_peer_id=(
-                    str(parsed["chat_id"]) if group_message else None
-                ),
-            )
-        except HTTPException as exc:
-            if exc.status_code == status.HTTP_403_FORBIDDEN:
-                reply = "你当前没有 Livzon 助手访问权限，请联系管理员授权后重试。"
-            else:
-                logger.warning("Livzon 飞书消息处理被拒绝: %s", exc.detail)
-                reply = "暂时无法处理该消息，请稍后重试。"
-            reply_completed = await _send_livzon_feishu_text_to_open_id(
-                db,
-                open_id=open_id,
-                text=reply,
-                reply_to_message_id=reply_to_message_id,
-            )
-            _write_livzon_message_audit(
-                db,
-                user=user,
-                message_id=message_id,
-                outcome="rejected",
-            )
-            return {"status": "rejected"}
-        except Exception:
-            logger.exception("Livzon 飞书消息处理失败: message_id=%s", message_id)
-            reply_completed = await _send_livzon_feishu_text_to_open_id(
-                db,
-                open_id=open_id,
-                text="Livzon 助手暂时不可用，请稍后重试。",
-                reply_to_message_id=reply_to_message_id,
-            )
-            _write_livzon_message_audit(
-                db,
-                user=user,
-                message_id=message_id,
-                outcome="failed",
-            )
-            return {"status": "failed"}
-
-        reply = result.text
-        if result.pending_confirmations:
-            reply = (
-                f"{reply}\n\n需要确认的操作已通过私聊卡片发送给你。"
-                if group_message
-                else f"{reply}\n\n需要确认的操作已发送为下方卡片。"
-            )
-        reply_sent = await _send_livzon_feishu_text_to_open_id(
-            db,
-            open_id=open_id,
-            text=reply,
-            markdown=True,
-            reply_to_message_id=reply_to_message_id,
-        )
-        if not reply_sent:
-            _write_livzon_message_audit(
-                db,
-                user=user,
-                message_id=message_id,
-                outcome="reply_failed",
-                session_id=result.session_id,
-            )
-            return {
-                "status": "reply_failed",
-                "session_id": (
-                    str(result.session_id) if result.session_id else None
-                ),
-            }
-        await _send_livzon_agent_confirmation_cards(
-            db,
-            user=user,
-            confirmations=result.pending_confirmations,
-        )
-        reply_completed = True
-        _write_livzon_message_audit(
-            db,
-            user=user,
-            message_id=message_id,
-            outcome="processed",
-            session_id=result.session_id,
-        )
-        return {
-            "status": "processed",
-            "session_id": str(result.session_id) if result.session_id else None,
-        }
-    finally:
-        await _finish_livzon_feishu_message_reply(
-            db,
-            message_id=message_id,
-            processing_reaction_id=processing_reaction_id,
-            completed=reply_completed,
-        )
-        try:
-            await release_lock(lock_key)
-        except Exception:
-            logger.exception("释放 Livzon 飞书会话锁失败: open_id=%s", open_id)
-
-
-async def _send_livzon_feishu_callback_card(
-    db: AsyncSession,
-    *,
-    user_ids: list[UUID],
-    title: str,
-    markdown: str,
-    header_template: str,
-    actions: list[JsonObject] | None,
-    business_ref: JsonObject | None,
-    expires_at: datetime | None = None,
-) -> JsonObject:
-    from app.platform.integrations.feishu.im import (
-        build_callback_card_content,
-        send_feishu_message,
-    )
-    from app.platform.integrations.feishu.utils import get_tenant_access_token
-
-    settings = get_settings()
-    config = await _feishu_config_repo.get_active(db)
-    if config is None or (
-        not config.card_callback_verification_token
-        and not getattr(settings, "LIVZON_FEISHU_CARD_CALLBACK_WS_ENABLED", False)
-        and not getattr(settings, "LIVZON_FEISHU_EVENT_WS_ENABLED", False)
-    ):
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            (
-                "Livzon 助手飞书交互卡片回调未配置。HTTP 回调需要 "
-                "Verification Token；开发环境可开启长连接 "
-                "LIVZON_FEISHU_EVENT_WS_ENABLED=true。"
-            ),
-        )
-    app_id, app_secret = await _active_livzon_feishu_credentials(db)
-    token = await get_tenant_access_token(
-        app_id,
-        app_secret,
-        cache_key=f"livzon-assistant:{app_id}",
-    )
-    normalized_actions = _normalize_card_actions(actions)
-    results: list[JsonObject] = []
-    action_expires_at = expires_at or (datetime.now(UTC) + timedelta(days=14))
-
-    for user_id in _dedupe_user_ids(user_ids):
-        user = await _repo.get_by_id(db, user_id)
-        if user is None:
-            results.append(_empty_message_result(user_id, "本地用户不存在"))
-            continue
-        if not user.feishu_open_id:
-            results.append(
-                {
-                    "user_id": str(user.id),
-                    "name": user.name,
-                    "feishu_open_id": None,
-                    "status": "failed",
-                    "message_id": None,
-                    "error_code": None,
-                    "error_message": "用户缺少 feishu_open_id，请先同步通讯录",
-                }
-            )
-            continue
-
-        card_id = f"livzon-{secrets.token_hex(12)}"
-        card_actions: list[dict[str, str]] = []
-        created_actions: list[FeishuCardAction] = []
-        for item in normalized_actions:
-            action = await _feishu_card_action_repo.create(
-                db,
-                message_id=None,
-                card_id=card_id,
-                local_user_id=user.id,
-                recipient_open_id=user.feishu_open_id,
-                business_ref=business_ref,
-                action_key=item["action_key"],
-                action_label=item["label"],
-                expires_at=action_expires_at,
-            )
-            created_actions.append(action)
-            card_actions.append(
-                {
-                    "action_id": str(action.id),
-                    "action_key": item["action_key"],
-                    "label": item["label"],
-                    "button_type": item["button_type"],
-                }
-            )
-        content = build_callback_card_content(
-            title=title,
-            markdown=markdown,
-            actions=card_actions,
-            header_template=header_template,
-        )
-        try:
-            sent = await send_feishu_message(
-                tenant_access_token=token,
-                receive_id=user.feishu_open_id,
-                receive_id_type="open_id",
-                msg_type="interactive",
-                content=content,
-            )
-        except Exception as exc:
-            logger.exception(
-                "Livzon Feishu callback card send failed: user_id=%s",
-                user.id,
-            )
-            for action in created_actions:
-                action.status = "failed"
-                action.callback_summary = {"result": "delivery_failed"}
-            await db.flush()
-            results.append(
-                {
-                    "user_id": str(user.id),
-                    "name": user.name,
-                    "feishu_open_id": user.feishu_open_id,
-                    "status": "failed",
-                    "message_id": None,
-                    "error_code": None,
-                    "error_message": str(exc),
-                    "message_form": "interactive_card",
-                }
-            )
-            continue
-        if not sent.ok:
-            for action in created_actions:
-                action.status = "failed"
-                action.callback_summary = {
-                    "result": "delivery_failed",
-                    "error_code": sent.code,
-                }
-            await db.flush()
-            results.append(
-                {
-                    "user_id": str(user.id),
-                    "name": user.name,
-                    "feishu_open_id": user.feishu_open_id,
-                    "status": "failed",
-                    "message_id": None,
-                    "error_code": sent.code,
-                    "error_message": sent.error_message,
-                    "message_form": "interactive_card",
-                }
-            )
-            continue
-        await _feishu_card_action_repo.set_message_id_for_card(
-            db,
-            card_id=card_id,
-            message_id=sent.message_id,
-        )
-        results.append(
-            {
-                "user_id": str(user.id),
-                "name": user.name,
-                "feishu_open_id": user.feishu_open_id,
-                "status": "sent" if sent.ok else "failed",
-                "message_id": sent.message_id,
-                "error_code": sent.code if not sent.ok else None,
-                "error_message": sent.error_message if not sent.ok else None,
-                "message_form": "interactive_card",
-                "callback_action_count": len(card_actions),
-            }
-        )
-
-    success_count = sum(1 for item in results if item["status"] == "sent")
-    failed_count = len(results) - success_count
-    return {
-        "message_form": "interactive_card",
-        "total": len(results),
-        "success_count": success_count,
-        "failed_count": failed_count,
-        "results": results,
-    }
-
-
-async def send_livzon_feishu_text_message(
-    db: AsyncSession,
-    *,
-    user_ids: list[UUID],
-    text: str,
-) -> JsonObject:
-    from app.platform.integrations.feishu.im import build_text_message_content
-
-    return await _send_livzon_feishu_message(
-        db,
-        user_ids=user_ids,
-        msg_type="text",
-        content=build_text_message_content(text),
-    )
-
-
-async def send_livzon_feishu_card_message(
-    db: AsyncSession,
-    *,
-    user_ids: list[UUID],
-    title: str,
-    markdown: str,
-    header_template: str = "blue",
-    button_text: str | None = None,
-    button_url: str | None = None,
-) -> JsonObject:
-    from app.platform.integrations.feishu.im import build_simple_card_content
-
-    return await _send_livzon_feishu_message(
-        db,
-        user_ids=user_ids,
-        msg_type="interactive",
-        content=build_simple_card_content(
-            title=title,
-            markdown=markdown,
-            header_template=header_template,
-            button_text=button_text,
-            button_url=button_url,
-        ),
-    )
-
-
-async def send_livzon_feishu_message(
-    db: AsyncSession,
-    *,
-    user_ids: list[UUID],
-    text: str,
-    title: str | None = None,
-    markdown: str | None = None,
-    value_level: str = "low",
-    structured: bool = False,
-    requires_business_action: bool = False,
-    actions: list[JsonObject] | None = None,
-    business_ref: JsonObject | None = None,
-    header_template: str = "blue",
-    message_form: str = "auto",
-) -> JsonObject:
-    shape = _message_shape(
-        value_level=value_level,
-        structured=structured,
-        requires_business_action=requires_business_action,
-        message_form=message_form,
-    )
-    if shape == "text":
-        result = await send_livzon_feishu_text_message(
-            db,
-            user_ids=user_ids,
-            text=text,
-        )
-        result["message_form"] = "text"
-        return result
-    card_title = title or "Livzon 助手通知"
-    card_markdown = markdown or text
-    if shape == "card":
-        result = await send_livzon_feishu_card_message(
-            db,
-            user_ids=user_ids,
-            title=card_title,
-            markdown=card_markdown,
-            header_template=header_template,
-        )
-        result["message_form"] = "card"
-        return result
-    return await _send_livzon_feishu_callback_card(
-        db,
-        user_ids=user_ids,
-        title=card_title,
-        markdown=card_markdown,
-        header_template=header_template,
-        actions=actions,
-        business_ref=business_ref,
-    )
-
-
-def _verify_feishu_callback_signature(
-    *,
-    encrypt_key: str | None,
-    raw_body: bytes,
-    timestamp: str | None,
-    nonce: str | None,
-    signature: str | None,
-) -> bool:
-    if not encrypt_key or not timestamp or not nonce or not signature:
-        return True
-    raw = f"{timestamp}{nonce}{encrypt_key}".encode() + raw_body
-    expected = hashlib.sha256(raw).hexdigest()
-    return hmac.compare_digest(expected, signature)
-
-
-def _callback_payload_token(payload: JsonObject) -> str | None:
-    token = payload.get("token")
-    if isinstance(token, str):
-        return token
-    header = payload.get("header")
-    if isinstance(header, dict):
-        header_token = header.get("token")
-        if isinstance(header_token, str):
-            return header_token
-    return None
-
-
-def _extract_callback_action(
-    payload: JsonObject,
-) -> tuple[str | None, str | None, str | None]:
-    event = payload.get("event") if isinstance(payload.get("event"), dict) else payload
-    action = event.get("action") if isinstance(event, dict) else None
-    value = action.get("value") if isinstance(action, dict) else None
-    action_id = value.get("action_id") if isinstance(value, dict) else None
-    action_key = value.get("action_key") if isinstance(value, dict) else None
-    operator = event.get("operator") if isinstance(event, dict) else None
-    open_id = None
-    if isinstance(operator, dict):
-        open_id = operator.get("open_id") or operator.get("user_id")
-    user = event.get("user") if isinstance(event, dict) else None
-    if not open_id and isinstance(user, dict):
-        open_id = user.get("open_id") or user.get("user_id")
-    return (
-        action_id if isinstance(action_id, str) else None,
-        action_key if isinstance(action_key, str) else None,
-        open_id if isinstance(open_id, str) else None,
-    )
-
-
-async def handle_livzon_feishu_card_callback(
-    db: AsyncSession,
-    *,
-    payload: JsonObject,
-    raw_body: bytes,
-    timestamp: str | None = None,
-    nonce: str | None = None,
-    signature: str | None = None,
-) -> JsonObject:
-    config = await _feishu_config_repo.get_active(db)
-    if config is None or not config.card_callback_verification_token:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            "Livzon 助手飞书卡片回调未配置",
-        )
-    encrypt_key = None
-    if config.encrypted_card_callback_encrypt_key:
-        try:
-            encrypt_key = decrypt_secret(config.encrypted_card_callback_encrypt_key)
-        except RuntimeError as exc:
-            raise _secret_runtime_error(exc) from exc
-    if not _verify_feishu_callback_signature(
-        encrypt_key=encrypt_key,
-        raw_body=raw_body,
-        timestamp=timestamp,
-        nonce=nonce,
-        signature=signature,
-    ):
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "飞书回调签名校验失败")
-    if "encrypt" in payload:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            "暂不支持加密后的飞书卡片回调 payload，请关闭加密或使用签名校验",
-        )
-    token = _callback_payload_token(payload)
-    if not token or not hmac.compare_digest(
-        token,
-        config.card_callback_verification_token,
-    ):
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "飞书回调 token 校验失败")
-    challenge = payload.get("challenge")
-    if isinstance(challenge, str):
-        return {"challenge": challenge}
-
-    return await handle_livzon_feishu_card_action_event(db, payload=payload)
-
-
-async def handle_livzon_feishu_card_action_event(
-    db: AsyncSession,
-    *,
-    payload: JsonObject,
-) -> JsonObject:
-    """Handle authenticated Livzon Feishu card action payloads.
-
-    HTTP callbacks validate verification token/signature before calling this.
-    WebSocket callbacks are authenticated by the Feishu long-connection channel.
-    """
-    action_id, action_key, clicked_open_id = _extract_callback_action(payload)
-    if not action_id or not action_key:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "飞书回调缺少 action_id")
-    action = await _feishu_card_action_repo.get_by_id_for_update(db, action_id)
-    if action is None:
-        return {"toast": {"type": "warning", "content": "操作不存在或已删除"}}
-    if action.action_key != action_key:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "飞书回调动作不匹配")
-    if not clicked_open_id or (
-        action.recipient_open_id
-        and not hmac.compare_digest(clicked_open_id, action.recipient_open_id)
-    ):
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "卡片动作仅限原收件人执行")
-    if action.local_user_id:
-        recipient = await _repo.get_by_id(db, action.local_user_id)
-        if recipient is None or recipient.status != "active" or recipient.is_deleted:
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "卡片收件人当前不可用")
-    now = datetime.now(UTC)
-    if action.expires_at and action.expires_at < now:
-        action.status = "expired"
-        action.clicked_open_id = clicked_open_id
-        action.executed_at = now
-        action.callback_summary = {
-            "action_id": action_id,
-            "action_key": action_key,
-            "clicked_open_id": clicked_open_id,
-            "result": "expired",
-        }
-        _write_card_action_audit(db, action=action)
-        await db.flush()
-        return {"toast": {"type": "warning", "content": "该操作已过期"}}
-    if action.status != "pending":
-        return {"toast": {"type": "info", "content": "该操作已处理"}}
-
-    raw_business_ref = getattr(action, "business_ref", None)
-    business_ref = raw_business_ref if isinstance(raw_business_ref, dict) else {}
-    if business_ref.get("kind") == "agent_confirmation":
-        if action.local_user_id is None:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                "确认卡片缺少本地收件人",
-            )
-        confirmation_id = business_ref.get("confirmation_id")
-        try:
-            parsed_confirmation_id = UUID(str(confirmation_id))
-        except (TypeError, ValueError):
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "确认卡片缺少有效确认项")
-        recipient = await _repo.get_by_id(db, action.local_user_id)
-        if recipient is None:
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "卡片收件人当前不可用")
-
-        from app.modules.agent.public_api import (
-            cancel_feishu_confirmation,
-            execute_feishu_confirmation,
-        )
-
-        try:
-            if action_key == "agent_confirmation_execute":
-                confirmation, _ = await execute_feishu_confirmation(
-                    db,
-                    confirmation_id=parsed_confirmation_id,
-                    user=recipient,
-                )
-                status_text = f"已执行确认操作：{confirmation.summary}"
-            elif action_key == "agent_confirmation_cancel":
-                confirmation = await cancel_feishu_confirmation(
-                    db,
-                    confirmation_id=parsed_confirmation_id,
-                    user=recipient,
-                )
-                status_text = f"已取消确认操作：{confirmation.summary}"
-            else:
-                raise HTTPException(status.HTTP_400_BAD_REQUEST, "不支持的确认卡片动作")
-        except HTTPException as exc:
-            action.callback_summary = {
-                "action_id": action_id,
-                "action_key": action_key,
-                "result": "rejected",
-                "error": str(exc.detail),
-            }
-            await db.flush()
-            return {"toast": {"type": "warning", "content": str(exc.detail)}}
-
-        action.status = "processed"
-        action.clicked_open_id = clicked_open_id
-        action.executed_at = now
-        action.callback_summary = {
-            "action_id": action_id,
-            "action_key": action_key,
-            "confirmation_id": str(confirmation.id),
-            "confirmation_status": confirmation.status,
-        }
-        _write_card_action_audit(db, action=action)
-        await db.flush()
-        return {
-            "toast": {"type": "success", "content": status_text},
-            "_callback_message_id": action.message_id,
-            "card": json.loads(
-                build_callback_status_card_content(
-                    title="Livzon 助手操作确认",
-                    markdown=str(business_ref.get("summary") or confirmation.summary),
-                    status_text=status_text,
-                )
-            ),
-        }
-
-    action.status = _callback_action_status(action_key)
-    action.clicked_open_id = clicked_open_id
-    action.executed_at = now
-    action.callback_summary = {
-        "action_id": action_id,
-        "action_key": action_key,
-        "clicked_open_id": clicked_open_id,
-        "status": action.status,
-    }
-    _write_card_action_audit(db, action=action)
-    await db.flush()
-    status_text = f"已记录：{action.action_label}"
-    return {
-        "toast": {
-            "type": "success",
-            "content": status_text,
-        },
-        "_callback_message_id": action.message_id,
-        "card": json.loads(
-            build_callback_status_card_content(
-                title="Livzon 卡片操作",
-                markdown=f"操作：{action.action_label}",
-                status_text=status_text,
-            )
-        ),
-    }
 
 
 def _token_value(token_data: JsonObject, *keys: str) -> str | None:
@@ -2379,9 +1090,7 @@ async def handle_oauth_callback(
         user.employee_no = employee_no or user.employee_no
         user.department = department or user.department
         user.position = position or user.position
-        user.feishu_department_ids = (
-            feishu_department_ids or user.feishu_department_ids
-        )
+        user.feishu_department_ids = feishu_department_ids or user.feishu_department_ids
         user.avatar_url = avatar_url or user.avatar_url
         user.avatar_thumb = avatar_thumb or user.avatar_thumb
         user.avatar_middle = avatar_middle or user.avatar_middle

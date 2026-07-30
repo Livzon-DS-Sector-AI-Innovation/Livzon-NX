@@ -11,7 +11,7 @@ from app.modules.agent.analytics import (
     AnalyticsOrderInput,
     aggregate_analytics,
 )
-from app.modules.agent.schemas import AgentToolExecuteRequest
+from app.modules.agent.schemas import AgentToolExecuteRequest, AgentTrustedSubject
 from app.modules.agent.tool_registration import ensure_agent_tools_registered
 from app.modules.agent.tools import ToolContext, tool_registry
 from app.modules.procurement.models import Supplier
@@ -24,7 +24,14 @@ def _context(db: AsyncSession) -> ToolContext:
         user_id=None,
         user=None,
         reason=None,
-        raw_request=AgentToolExecuteRequest(operation="analytics.aggregate"),
+        raw_request=AgentToolExecuteRequest(
+            operation="analytics.aggregate",
+            subject=AgentTrustedSubject(
+                tenant_id="test",
+                user_id=uuid.uuid4(),
+                source="internal",
+            ),
+        ),
         agent_service=None,
     )
 
