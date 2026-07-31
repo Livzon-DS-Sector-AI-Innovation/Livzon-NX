@@ -5,13 +5,8 @@ import { useRouter } from 'next/navigation'
 
 import type { User } from '@/types/user'
 
-import {
-  IdentityBubble,
-  type IdentityBubbleState,
-} from './IdentityBubble'
-import styles from './IdentityBubble.module.css'
-import { LivzonCircuitField } from './LivzonCircuitField'
-import { LoginAtmosphere } from './LoginAtmosphere'
+import { AuthLayout } from './AuthLayout'
+import styles from './AuthLayout.module.css'
 
 interface AuthCompletionProps {
   nextPath: string
@@ -24,12 +19,58 @@ interface CurrentUserResponse {
 const READY_DURATION_MS = 850
 const ENTER_DURATION_MS = 900
 
+export type AuthCompletionState =
+  | 'checking'
+  | 'ready'
+  | 'entering'
+  | 'error'
+
+interface AuthCompletionPresentation {
+  title: string
+  description: string
+  tone: 'primary' | 'success' | 'error'
+  symbol?: string
+}
+
+export function getAuthCompletionPresentation(
+  state: AuthCompletionState,
+): AuthCompletionPresentation {
+  switch (state) {
+    case 'ready':
+      return {
+        title: '身份验证成功',
+        description: '企业身份和访问权限已确认。',
+        tone: 'success',
+        symbol: '✓',
+      }
+    case 'entering':
+      return {
+        title: '正在进入系统',
+        description: '工作台准备完成，即将为你打开。',
+        tone: 'primary',
+      }
+    case 'error':
+      return {
+        title: '身份验证未完成',
+        description: '请检查认证状态后重新登录。',
+        tone: 'error',
+        symbol: '!',
+      }
+    default:
+      return {
+        title: '正在验证身份',
+        description: '正在读取企业身份和访问权限，请稍候。',
+        tone: 'primary',
+      }
+  }
+}
+
 export function AuthCompletion({ nextPath }: AuthCompletionProps) {
   const router = useRouter()
   const abortController = useRef<AbortController | null>(null)
   const readyTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const enterTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [state, setState] = useState<IdentityBubbleState>('checking')
+  const [state, setState] = useState<AuthCompletionState>('checking')
   const [user, setUser] = useState<User | null>(null)
   const [failureMessage, setFailureMessage] = useState<string | null>(null)
 
@@ -107,89 +148,67 @@ export function AuthCompletion({ nextPath }: AuthCompletionProps) {
     window.location.assign(loginUrl)
   }
 
-  const statusText =
-    state === 'checking'
-      ? 'VERIFYING FEISHU IDENTITY'
-      : state === 'ready'
-        ? 'IDENTITY VERIFIED'
-        : state === 'entering'
-          ? 'OPENING CONTROLLED WORKSPACE'
-          : 'RESTART IDENTITY CHECKPOINT'
-  const channelStatus =
-    state === 'checking'
-      ? 'AUTHORIZING'
-      : state === 'ready'
-        ? 'VERIFIED'
-        : state === 'entering'
-          ? 'OPENING'
-          : 'INTERRUPTED'
+  const presentation = getAuthCompletionPresentation(state)
 
   return (
-    <main
-      className={`${styles.loginExperience} ${styles.authCompletion}`}
-      data-state={state}
-    >
-      <LoginAtmosphere />
-      <header className={styles.loginHeader}>
-        <div className={styles.brand}>
-          <span aria-hidden="true" className={styles.brandMark} />
-          <div>
-            <p className={styles.brandName}>LIVZON</p>
-            <p className={styles.companyName}>
-              ACTIVE PHARMACEUTICAL INGREDIENT
-              <br />
-              FACTORY MANAGEMENT PLATFORM
-            </p>
-          </div>
-        </div>
-        <span className={styles.internalFlag}>
-          <strong>SECURE IDENTITY CHANNEL</strong>
-          <small>STATUS — {channelStatus}</small>
-        </span>
-      </header>
-
-      <section className={styles.loginStage} aria-label="完成身份认证">
-        <LivzonCircuitField />
-        <div className={styles.stageContent}>
-          <IdentityBubble
-            state={state}
-            statusText={statusText}
-            detailText={
-              state === 'checking'
-                ? 'READING ENTERPRISE IDENTITY AND ACCESS POLICY'
-                : state === 'ready'
-                  ? 'ENTERPRISE IDENTITY AND ACCESS POLICY CONFIRMED'
-                  : state === 'entering'
-                    ? 'ESTABLISHING LIVZON SECURE WORKSPACE'
-                    : 'CLICK TO RETURN AND RESTART AUTHENTICATION'
-            }
-            identityText={
-              state === 'ready' || state === 'entering'
-                ? user?.name || user?.username || undefined
-                : undefined
-            }
-            onActivate={state === 'error' ? restartLogin : undefined}
-          />
-
-          {failureMessage && (
-            <div role="alert" className={styles.errorNotice}>
-              {failureMessage}
-            </div>
+    <AuthLayout footerText="企业身份认证 · 安全访问">
+      <div
+        className={styles.completionCard}
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        <div
+          className={styles.completionVisual}
+          data-tone={presentation.tone}
+          aria-hidden="true"
+        >
+          {presentation.symbol ? (
+            <span className={styles.statusSymbol}>{presentation.symbol}</span>
+          ) : (
+            <span className={styles.statusSpinner} />
           )}
         </div>
-      </section>
 
-      <footer className={styles.loginFooter}>
-        <span>IDENTITY STREAM　——　ENCRYPTED</span>
-        <span>SESSION GATE　——　CONTROLLED</span>
-      </footer>
+        <h2>{presentation.title}</h2>
+        <p className={styles.completionDescription}>
+          {presentation.description}
+        </p>
 
-      <div className={styles.transitionGate} aria-hidden="true">
-        <span className={styles.transitionGateCore} />
-        <span className={styles.transitionGateLabel}>
-          LIVZON SECURE CHANNEL
-        </span>
+        {(state === 'ready' || state === 'entering') &&
+          (user?.name || user?.username) && (
+            <span className={styles.identityName}>
+              {user.name || user.username}
+            </span>
+          )}
+
+        {failureMessage && (
+          <div
+            role="alert"
+            className={`${styles.errorNotice} ${styles.completionError}`}
+          >
+            {failureMessage}
+          </div>
+        )}
+
+        {state === 'error' && (
+          <div className={styles.completionActions}>
+            <button
+              type="button"
+              className={styles.primaryButton}
+              onClick={restartLogin}
+            >
+              返回登录
+            </button>
+            <button
+              type="button"
+              className={styles.secondaryButton}
+              onClick={() => void verifyIdentity()}
+            >
+              重新验证
+            </button>
+          </div>
+        )}
       </div>
-    </main>
+    </AuthLayout>
   )
 }
