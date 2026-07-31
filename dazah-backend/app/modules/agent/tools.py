@@ -231,10 +231,6 @@ class ToolExecutor:
         agent_service: Any = None,
     ) -> AgentToolExecuteResponse:
         spec = self.registry.require(request.operation)
-        correlation_id = normalize_correlation_id(
-            request.context.get("correlation_id")
-        )
-        request.context["correlation_id"] = str(correlation_id)
         session_id, user_id, user = await self._resolve_identity(db, request)
         call = await self.repo.create_tool_call(
             db,
@@ -294,7 +290,7 @@ class ToolExecutor:
                 db,
                 spec=spec,
                 user=user,
-                for_workflow=bool(request.context.get("workflow_id")),
+                for_workflow=request.subject.source == "automation",
             )
 
             if spec.write:
@@ -409,10 +405,6 @@ class ToolExecutor:
         agent_service: Any = None,
     ) -> AgentToolExecuteResponse:
         spec = self.registry.require(request.operation)
-        correlation_id = normalize_correlation_id(
-            request.context.get("correlation_id")
-        )
-        request.context["correlation_id"] = str(correlation_id)
         if not spec.write:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
@@ -429,7 +421,7 @@ class ToolExecutor:
             db,
             spec=spec,
             user=current_user,
-            for_workflow=bool(request.context.get("workflow_id")),
+            for_workflow=request.subject.source == "automation",
         )
         result = await self._invoke_tool(
             db,
@@ -521,9 +513,7 @@ class ToolExecutor:
             raw_request=request,
             agent_service=agent_service,
             confirmation_id=confirmation_id,
-            correlation_id=normalize_correlation_id(
-                request.context.get("correlation_id")
-            ),
+            correlation_id=normalize_correlation_id(request.trace_id),
         )
         data = spec.handler(context, validated)
         if inspect.isawaitable(data):
@@ -532,7 +522,14 @@ class ToolExecutor:
             ok=True,
             operation=request.operation,
             data=data,
-            meta={"correlation_id": request.context["correlation_id"]},
+            meta={
+                "trace_id": str(request.trace_id),
+                "policy": {
+                    "decision": "allow",
+                    "resource_domain": "dazah_business",
+                    "risk_level": spec.risk_level,
+                },
+            },
         )
 
     async def _create_confirmation(
@@ -561,8 +558,8 @@ class ToolExecutor:
         db: AsyncSession,
         request: AgentToolExecuteRequest,
     ) -> tuple[uuid.UUID | None, uuid.UUID | None, User | None]:
-        session_id = self._uuid_or_none(request.context.get("session_id"))
-        user_id = self._uuid_or_none(request.context.get("user_id"))
+        session_id = request.session_id
+        user_id = request.subject.user_id
         if session_id is not None:
             session = await self.repo.get_session(db, session_id)
             if session and user_id is not None and session.user_id != user_id:
@@ -570,13 +567,19 @@ class ToolExecutor:
                     status.HTTP_403_FORBIDDEN,
                     "Agent session identity does not match acting user",
                 )
-            if session and user_id is None:
-                user_id = session.user_id
         user = None
         if user_id is not None and hasattr(db, "get"):
             user = await db.get(User, user_id)
-            if user and getattr(user, "is_deleted", False):
+            if user and (
+                getattr(user, "is_deleted", False)
+                or getattr(user, "status", None) != "active"
+            ):
                 user = None
+        if user is None:
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                "Trusted Agent subject is not an active local user",
+            )
         return session_id, user_id, user
 
     async def _write_audit(
@@ -596,9 +599,7 @@ class ToolExecutor:
         if not hasattr(db, "add"):
             return
         audit = AuditLog(
-            request_id=str(
-                normalize_correlation_id(request.context.get("correlation_id"))
-            ),
+            request_id=str(normalize_correlation_id(request.trace_id)),
             user_id=user_id,
             method="AGENT",
             path=f"agent://tools/{spec.name}",
@@ -637,8 +638,7 @@ class ToolExecutor:
         for key, item in value.items():
             key_lower = str(key).lower()
             if any(
-                token in key_lower
-                for token in ("secret", "token", "password", "key")
+                token in key_lower for token in ("secret", "token", "password", "key")
             ):
                 masked[key] = "***"
             elif isinstance(item, dict):

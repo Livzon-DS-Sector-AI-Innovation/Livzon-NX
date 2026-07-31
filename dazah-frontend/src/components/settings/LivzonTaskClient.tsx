@@ -249,7 +249,6 @@ export default function LivzonTaskClient() {
       operation,
       body,
       params: {},
-      context: { source: 'settings_livzon_task' },
       reason: '用户在系统设置的 Livzon Task 页签发起操作',
     })
     if (!response.requires_confirmation || !response.confirmation) {

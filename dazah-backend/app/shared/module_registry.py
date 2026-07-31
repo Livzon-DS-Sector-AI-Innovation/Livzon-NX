@@ -9,6 +9,7 @@ class ModuleDefinition:
     db_schema: str
     owner_hint: str
     description: str
+    agent_tools_module: str | None = None
 
     def as_dict(self) -> dict[str, str]:
         return {
@@ -18,6 +19,7 @@ class ModuleDefinition:
             "db_schema": self.db_schema,
             "owner_hint": self.owner_hint,
             "description": self.description,
+            "agent_tools_module": self.agent_tools_module or "",
         }
 
 
@@ -61,6 +63,7 @@ BUSINESS_MODULES: tuple[ModuleDefinition, ...] = (
         db_schema="energy",
         owner_hint="能源/动力负责人",
         description="水、电、汽、冷量、能耗统计和能源指标数据入口。",
+        agent_tools_module="app.modules.energy.agent_tools",
     ),
     ModuleDefinition(
         code="warehouse",
@@ -69,6 +72,7 @@ BUSINESS_MODULES: tuple[ModuleDefinition, ...] = (
         db_schema="warehouse",
         owner_hint="仓储/物流负责人",
         description="原辅料、包材、中间体、成品库存和出入库数据入口。",
+        agent_tools_module="app.modules.warehouse.agent_tools",
     ),
     ModuleDefinition(
         code="product",
@@ -85,6 +89,7 @@ BUSINESS_MODULES: tuple[ModuleDefinition, ...] = (
         db_schema="procurement",
         owner_hint="采购负责人",
         description="采购需求、供应商、询价、订单和到货协同数据入口。",
+        agent_tools_module="app.modules.procurement.agent_tools",
     ),
     ModuleDefinition(
         code="administration",
@@ -133,6 +138,7 @@ BUSINESS_MODULES: tuple[ModuleDefinition, ...] = (
         db_schema="quality",
         owner_hint="QA/QC 负责人",
         description="偏差、CAPA、检验、放行、变更和质量体系数据入口。",
+        agent_tools_module="app.modules.quality.agent_tools",
     ),
     ModuleDefinition(
         code="dossier_writer",
@@ -146,3 +152,22 @@ BUSINESS_MODULES: tuple[ModuleDefinition, ...] = (
 
 MODULES_BY_CODE = {module.code: module for module in BUSINESS_MODULES}
 BUSINESS_SCHEMAS = tuple(module.db_schema for module in BUSINESS_MODULES)
+
+# Platform-level providers are explicit because they do not belong to a business
+# module. Business providers are discovered from BUSINESS_MODULES, so adding a
+# module capability requires one registry declaration rather than another Agent
+# bootstrap edit.
+PLATFORM_AGENT_TOOL_MODULES: tuple[str, ...] = (
+    "app.modules.agent.agent_tools",
+    "app.modules.agent.analytics",
+    "app.platform.identity.agent_tools",
+)
+
+AGENT_TOOL_PROVIDER_MODULES: tuple[str, ...] = (
+    *PLATFORM_AGENT_TOOL_MODULES,
+    *(
+        module.agent_tools_module
+        for module in BUSINESS_MODULES
+        if module.agent_tools_module is not None
+    ),
+)

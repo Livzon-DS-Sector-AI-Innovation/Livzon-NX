@@ -23,6 +23,8 @@ install_dependencies() {
 
 run_quality() {
   install_dependencies
+  echo "== AgentBackend V2 residual scan =="
+  uv run --no-sync python "${repository_dir}/scripts/check-agent-v2-residuals.py"
   echo "== Backend Ruff lint (PR additions and modifications only) =="
   bash "${project_dir}/scripts/ruff-changed.sh"
   echo "== Backend Python compilation =="

@@ -37,9 +37,7 @@ async def get_current_user(
         return None
 
     try:
-        payload = jwt.decode(
-            token, settings.SECRET_KEY, algorithms=["HS256"]
-        )
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
     except jwt.InvalidTokenError:
         return None
 

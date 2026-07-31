@@ -298,9 +298,7 @@ class AgentRepository:
                     AgentConfirmation.is_deleted.is_(False),
                 )
             )
-            rows.append(
-                (session, message_count or 0, last_message, pending_count or 0)
-            )
+            rows.append((session, message_count or 0, last_message, pending_count or 0))
         return rows, total or 0
 
     async def archive_session(

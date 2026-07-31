@@ -196,7 +196,7 @@ async def test_executed_confirmation_is_refetched_before_serialization(
     await db_session.flush()
     confirmation = AgentConfirmation(
         user_id=user.id,
-        operation="identity.send_feishu_card_message",
+        operation="identity.deliver_feishu_message",
         summary="发送测试卡片",
         risk_level="medium",
         status="pending",

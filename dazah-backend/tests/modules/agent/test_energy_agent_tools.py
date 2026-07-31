@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import ast
 from datetime import UTC, date, datetime
-from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -27,25 +25,6 @@ def _context() -> ToolContext:
         reason=None,
         raw_request=SimpleNamespace(),  # type: ignore[arg-type]
     )
-
-
-def _hermes_allowed_operations() -> list[str]:
-    source = (
-        Path(__file__).resolve().parents[4]
-        / "Hermes-Lite"
-        / "tools"
-        / "dazah_platform.py"
-    ).read_text(encoding="utf-8")
-    tree = ast.parse(source)
-    for node in tree.body:
-        if isinstance(node, ast.Assign):
-            if any(
-                isinstance(target, ast.Name)
-                and target.id == "ALLOWED_OPERATIONS"
-                for target in node.targets
-            ):
-                return ast.literal_eval(node.value)
-    raise AssertionError("ALLOWED_OPERATIONS not found")
 
 
 def test_energy_tools_are_registered_with_expected_policy() -> None:
@@ -80,15 +59,13 @@ def test_energy_tools_are_registered_with_expected_policy() -> None:
     assert delete_sheets.workflow_allowed is False
 
 
-def test_all_energy_tools_are_allowed_by_hermes() -> None:
+def test_all_energy_tools_are_discovered_by_backend_registry() -> None:
     ensure_agent_tools_registered()
-    hermes_operations = set(_hermes_allowed_operations())
     backend_operations = {
         spec.name for spec in tool_registry.list() if spec.name.startswith("energy.")
     }
 
     assert backend_operations
-    assert backend_operations <= hermes_operations
 
 
 def test_energy_overview_input_validates_mixed_timezone_range() -> None:
@@ -126,9 +103,7 @@ async def test_get_feishu_config_returns_only_masked_secret_state(
 
     monkeypatch.setattr(agent_tools, "_service", lambda _context: FakeService())
 
-    result = await agent_tools.get_feishu_config(
-        _context(), EmptyToolInput()
-    )
+    result = await agent_tools.get_feishu_config(_context(), EmptyToolInput())
 
     assert result["app_secret_configured"] is True
     assert result["app_secret_masked"] == "sec***ret"

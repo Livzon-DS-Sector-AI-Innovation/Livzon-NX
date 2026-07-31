@@ -43,8 +43,7 @@ def redact_audit_value(value: Any) -> Any:
             key: (
                 _REDACTED
                 if any(
-                    fragment in str(key).lower()
-                    for fragment in _SENSITIVE_FRAGMENTS
+                    fragment in str(key).lower() for fragment in _SENSITIVE_FRAGMENTS
                 )
                 else redact_audit_value(item)
             )

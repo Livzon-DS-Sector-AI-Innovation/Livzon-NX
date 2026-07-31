@@ -1,6 +1,5 @@
 import asyncio
 import logging
-from typing import Any
 from urllib.parse import urlencode
 from uuid import UUID
 
@@ -12,10 +11,10 @@ from fastapi import (
     Header,
     HTTPException,
     Query,
-    Request,
     status,
 )
 from fastapi.responses import JSONResponse, RedirectResponse
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
@@ -23,16 +22,20 @@ from app.core.database import get_db
 from app.core.response import success_response
 from app.platform.identity.deps import AdminUser, CurrentUser
 from app.platform.identity.models import Department
-from app.platform.identity.repository import DepartmentRepository, UserRepository
+from app.platform.identity.repository import (
+    DepartmentRepository,
+    ExternalIdentityBindingRepository,
+    UserRepository,
+)
 from app.platform.identity.schemas import (
     DepartmentResponse,
     DepartmentTreeNode,
-    FeishuCardCallbackResponse,
+    ExternalIdentityBindingCreate,
+    ExternalIdentityBindingOut,
     FeishuConfigApiResponse,
     FeishuConfigUpsert,
     FeishuDiagnosticApiResponse,
     LivzonAccessScopeOut,
-    LivzonFeishuEventWsStatusApiResponse,
     LocalLoginRequest,
     LocalUserCreate,
     PasswordResetRequest,
@@ -107,9 +110,7 @@ async def login(
     return response
 
 
-@auth_router.post(
-    "/local/login", summary="本地账号登录", response_model=TokenResponse
-)
+@auth_router.post("/local/login", summary="本地账号登录", response_model=TokenResponse)
 async def local_login(
     payload: LocalLoginRequest,
     db: AsyncSession = Depends(get_db),
@@ -323,9 +324,6 @@ async def create_local_user(
     user.created_by = current_user.id
     user.updated_by = current_user.id
     await db.flush()
-    from app.platform.identity.hermes_api import push_access_snapshot_to_hermes
-
-    await push_access_snapshot_to_hermes(db)
     return success_response(
         data=UserManagementItem.model_validate(user).model_dump(mode="json")
     )
@@ -353,9 +351,6 @@ async def update_user(
         user.grant_version += 1
     user.updated_by = current_user.id
     await db.flush()
-    from app.platform.identity.hermes_api import push_access_snapshot_to_hermes
-
-    await push_access_snapshot_to_hermes(db)
     return success_response(
         data=UserManagementItem.model_validate(user).model_dump(mode="json")
     )
@@ -379,6 +374,72 @@ async def reset_user_password(
     user.updated_by = current_user.id
     await db.flush()
     return success_response(data={"message": "密码已重置"})
+
+
+@user_router.get(
+    "/external-identity-bindings",
+    summary="管理员查询外部身份绑定",
+)
+async def list_external_identity_bindings(
+    db: AsyncSession = Depends(get_db),
+    current_user: AdminUser = None,
+) -> JSONResponse:
+    items = await ExternalIdentityBindingRepository().list(db)
+    return success_response(
+        data=[
+            ExternalIdentityBindingOut.model_validate(item).model_dump(mode="json")
+            for item in items
+        ]
+    )
+
+
+@user_router.post(
+    "/external-identity-bindings",
+    summary="管理员创建外部身份绑定",
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_external_identity_binding(
+    payload: ExternalIdentityBindingCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: AdminUser = None,
+) -> JSONResponse:
+    local_user = await UserRepository().get_by_id(db, payload.local_user_id)
+    if local_user is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "本地用户不存在")
+    try:
+        binding = await ExternalIdentityBindingRepository().create(
+            db,
+            **payload.model_dump(),
+            actor_id=current_user.id,
+        )
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "该飞书身份已经绑定",
+        ) from exc
+    return success_response(
+        data=ExternalIdentityBindingOut.model_validate(binding).model_dump(mode="json")
+    )
+
+
+@user_router.post(
+    "/external-identity-bindings/{binding_id}/disable",
+    summary="管理员停用外部身份绑定",
+)
+async def disable_external_identity_binding(
+    binding_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: AdminUser = None,
+) -> JSONResponse:
+    repo = ExternalIdentityBindingRepository()
+    binding = await repo.get(db, binding_id)
+    if binding is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "外部身份绑定不存在")
+    binding = await repo.disable(db, binding, actor_id=current_user.id)
+    return success_response(
+        data=ExternalIdentityBindingOut.model_validate(binding).model_dump(mode="json")
+    )
 
 
 def _parse_if_match(value: str | None) -> int | None:
@@ -485,9 +546,6 @@ async def replace_user_module_permissions(
     else:
         result.livzon_sync_status = "failed"
         result.livzon_last_error = event.last_error
-    from app.platform.identity.hermes_api import push_access_snapshot_to_hermes
-
-    await push_access_snapshot_to_hermes(db)
     return success_response(data=result.model_dump(mode="json"))
 
 
@@ -595,7 +653,8 @@ async def get_user_permission_audit(
 
 
 def _build_department_tree(
-    depts: list[Department], parent_id: str | None = None,
+    depts: list[Department],
+    parent_id: str | None = None,
 ) -> list[DepartmentTreeNode]:
     """递归构建部门树。"""
     result: list[DepartmentTreeNode] = []
@@ -611,7 +670,8 @@ def _build_department_tree(
                 leader_user_id=d.leader_user_id,
                 order=d.order,
                 children=_build_department_tree(
-                    depts, d.feishu_department_id,
+                    depts,
+                    d.feishu_department_id,
                 ),
             )
             result.append(node)
@@ -646,6 +706,7 @@ async def get_department(
     dept = await repo.get_by_feishu_id(db, dept_id)
     if dept is None:
         from fastapi import HTTPException
+
         raise HTTPException(status_code=404, detail="部门不存在")
     return success_response(data=DepartmentResponse.model_validate(dept).model_dump())
 
@@ -700,6 +761,33 @@ async def get_livzon_feishu_config(
     return success_response(data=data.model_dump(mode="json"))
 
 
+@feishu_config_router.get(
+    "/gateway-status",
+    summary="查询 Hermes Feishu Gateway 状态",
+)
+async def get_livzon_feishu_gateway_status(
+    settings: Settings = Depends(get_settings),
+    current_user: AdminUser = None,
+) -> JSONResponse:
+    if not settings.HERMES_INTERNAL_URL or not settings.HERMES_INTERNAL_TOKEN:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE, "Hermes 内部接口未配置"
+        )
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            response = await client.get(
+                f"{settings.HERMES_INTERNAL_URL.rstrip('/')}/internal/feishu/status",
+                headers={"Authorization": f"Bearer {settings.HERMES_INTERNAL_TOKEN}"},
+            )
+        response.raise_for_status()
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            "Hermes Gateway 状态查询失败",
+        ) from exc
+    return success_response(data=response.json())
+
+
 @feishu_config_router.put(
     "",
     summary="保存 Livzon 助手飞书设置",
@@ -736,9 +824,7 @@ async def list_livzon_feishu_authorizations(
         response = await client.get(
             f"{settings.HERMES_INTERNAL_URL.rstrip('/')}/internal/feishu/grants",
             params={"user_id": user_id},
-            headers={
-                "Authorization": f"Bearer {settings.HERMES_INTERNAL_TOKEN}"
-            },
+            headers={"Authorization": f"Bearer {settings.HERMES_INTERNAL_TOKEN}"},
         )
     if not response.is_success:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Hermes 授权查询失败")
@@ -763,9 +849,7 @@ async def revoke_livzon_feishu_authorization(
         response = await client.delete(
             f"{settings.HERMES_INTERNAL_URL.rstrip('/')}/internal/feishu/grants/{grant_id}",
             params={"user_id": user_id},
-            headers={
-                "Authorization": f"Bearer {settings.HERMES_INTERNAL_TOKEN}"
-            },
+            headers={"Authorization": f"Bearer {settings.HERMES_INTERNAL_TOKEN}"},
         )
     if response.status_code == 404:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "授权不存在或已撤销")
@@ -789,91 +873,6 @@ async def test_livzon_feishu_config(
 
     data = await diagnose_livzon_feishu_config(db, payload)
     return success_response(data=data.model_dump(mode="json"))
-
-
-@feishu_router.post(
-    "/card-callback",
-    summary="Livzon 助手飞书交互卡片回调",
-    response_model=FeishuCardCallbackResponse,
-)
-async def livzon_feishu_card_callback(
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-) -> dict[str, Any]:
-    """处理 Livzon 助手飞书交互卡片回传事件。"""
-    from app.platform.identity.service import handle_livzon_feishu_card_callback
-
-    raw_body = await request.body()
-    try:
-        payload = await request.json()
-    except Exception as exc:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "无效的飞书回调 JSON") from exc
-    if not isinstance(payload, dict):
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "无效的飞书回调 JSON")
-    return await handle_livzon_feishu_card_callback(
-        db,
-        payload=payload,
-        raw_body=raw_body,
-        timestamp=request.headers.get("X-Lark-Request-Timestamp"),
-        nonce=request.headers.get("X-Lark-Request-Nonce"),
-        signature=request.headers.get("X-Lark-Signature"),
-    )
-
-
-@feishu_router.get(
-    "/event-ws/status",
-    summary="查询 Livzon 助手飞书事件长连接状态",
-    response_model=LivzonFeishuEventWsStatusApiResponse,
-)
-async def livzon_feishu_event_ws_status(
-    current_user: AdminUser = None,
-) -> JSONResponse:
-    from app.platform.identity.feishu_card_ws import get_livzon_card_ws_status
-
-    data = await get_livzon_card_ws_status()
-    return success_response(data=data)
-
-
-@feishu_router.post(
-    "/event-ws/restart",
-    summary="重启 Livzon 助手飞书事件长连接",
-    response_model=LivzonFeishuEventWsStatusApiResponse,
-)
-async def restart_livzon_feishu_event_ws(
-    current_user: AdminUser = None,
-) -> JSONResponse:
-    from app.platform.identity.feishu_card_ws import restart_livzon_card_ws
-
-    data = await restart_livzon_card_ws()
-    return success_response(data=data)
-
-
-@feishu_router.get(
-    "/card-callback-ws/status",
-    summary="查询 Livzon 助手飞书卡片长连接状态",
-)
-async def livzon_feishu_card_callback_ws_status(
-    current_user: AdminUser = None,
-) -> JSONResponse:
-    """查询 Livzon 助手飞书卡片回调长连接状态。"""
-    from app.platform.identity.feishu_card_ws import get_livzon_card_ws_status
-
-    data = await get_livzon_card_ws_status()
-    return success_response(data=data)
-
-
-@feishu_router.post(
-    "/card-callback-ws/restart",
-    summary="重启 Livzon 助手飞书卡片长连接",
-)
-async def restart_livzon_feishu_card_callback_ws(
-    current_user: AdminUser = None,
-) -> JSONResponse:
-    """重启 Livzon 助手飞书卡片回调长连接。"""
-    from app.platform.identity.feishu_card_ws import restart_livzon_card_ws
-
-    data = await restart_livzon_card_ws()
-    return success_response(data=data)
 
 
 @sync_router.post("/departments", summary="触发飞书组织架构同步（异步）")

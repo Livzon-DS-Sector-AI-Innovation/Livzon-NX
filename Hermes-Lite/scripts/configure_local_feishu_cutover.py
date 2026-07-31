@@ -60,8 +60,6 @@ def configure(project_root: Path) -> None:
         {
             "HERMES_INTERNAL_URL": "http://hermes-lite:8100",
             "HERMES_INTERNAL_TOKEN": internal_token,
-            "LIVZON_FEISHU_EVENT_WS_ENABLED": "false",
-            "LIVZON_FEISHU_CARD_CALLBACK_WS_ENABLED": "false",
         },
     )
 

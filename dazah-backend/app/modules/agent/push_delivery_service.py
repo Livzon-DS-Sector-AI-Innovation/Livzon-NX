@@ -5,9 +5,11 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
+import httpx
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.redaction import redact_sensitive
 from app.modules.agent.automation_schema import NotifyStep, RecipientRule
 from app.modules.agent.models import (
@@ -17,14 +19,113 @@ from app.modules.agent.models import (
     AgentPushTemplateVersion,
     AgentRunEvent,
 )
-from app.platform.identity.models import Department, FeishuCardAction, User
-from app.platform.identity.service import send_livzon_feishu_message
+from app.platform.identity.models import (
+    Department,
+    ExternalIdentityBinding,
+    FeishuConfig,
+    User,
+)
 
 
 class PushDeliveryService:
     """Creates per-recipient delivery facts and sends through the platform gateway."""
 
     max_attempts = 3
+
+    async def _enqueue_gateway_delivery(
+        self,
+        db: AsyncSession,
+        *,
+        delivery: AgentPushDelivery,
+        title: str,
+        markdown: str,
+        actions: list[dict[str, Any]] | None,
+    ) -> dict[str, Any]:
+        settings = get_settings()
+        base_url = settings.HERMES_INTERNAL_URL.rstrip("/")
+        token = settings.HERMES_INTERNAL_TOKEN
+        if not base_url or not token:
+            raise RuntimeError("Hermes Delivery API is not configured")
+        chat_id = await db.scalar(
+            select(ExternalIdentityBinding.external_open_id)
+            .join(
+                FeishuConfig,
+                and_(
+                    FeishuConfig.tenant_id
+                    == ExternalIdentityBinding.tenant_id,
+                    FeishuConfig.app_id
+                    == ExternalIdentityBinding.app_fingerprint,
+                ),
+            )
+            .where(
+                ExternalIdentityBinding.local_user_id
+                == delivery.recipient_user_id,
+                ExternalIdentityBinding.platform == "feishu",
+                ExternalIdentityBinding.status == "active",
+                ExternalIdentityBinding.is_deleted.is_(False),
+                ExternalIdentityBinding.external_open_id.is_not(None),
+                FeishuConfig.is_active.is_(True),
+                FeishuConfig.gateway_enabled.is_(True),
+                FeishuConfig.is_deleted.is_(False),
+            )
+            .order_by(ExternalIdentityBinding.updated_at.desc())
+            .limit(1)
+        )
+        if not chat_id:
+            raise RuntimeError("Recipient has no active Feishu identity binding")
+        card: dict[str, Any] = {
+            "schema": "2.0",
+            "header": {"title": {"tag": "plain_text", "content": title}},
+            "body": {
+                "elements": [
+                    {"tag": "markdown", "content": markdown},
+                ]
+            },
+        }
+        if actions:
+            card["body"]["elements"].append(
+                {
+                    "tag": "action",
+                    "actions": [
+                        {
+                            "tag": "button",
+                            "text": {
+                                "tag": "plain_text",
+                                "content": str(action.get("label") or "查看"),
+                            },
+                            "type": "primary",
+                            "value": {
+                                **action,
+                                "resource_domain": "dazah_business",
+                                "trace_id": str(delivery.run_id),
+                            },
+                        }
+                        for action in actions
+                    ],
+                }
+            )
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.post(
+                f"{base_url}/internal/feishu/deliveries",
+                headers={"Authorization": f"Bearer {token}"},
+                json={
+                    "idempotency_key": delivery.idempotency_key,
+                    "chat_id": chat_id,
+                    "card": card,
+                    "metadata": {
+                        "trace_id": str(delivery.run_id),
+                        "agent_push_delivery_id": str(delivery.id),
+                        "receive_id_type": "open_id",
+                    },
+                },
+            )
+        response.raise_for_status()
+        payload = response.json()
+        return {
+            "status": "sent",
+            "message_id": payload.get("id"),
+            "gateway_status": payload.get("status"),
+        }
 
     async def list_for_user(
         self,
@@ -121,10 +222,10 @@ class PushDeliveryService:
             return
         await self._send_snapshot_delivery(db, delivery=delivery, template=template)
 
-    async def reconcile_card_actions(
+    async def reconcile_gateway_receipts(
         self, db: AsyncSession, *, limit: int = 100
     ) -> int:
-        """Project authenticated Feishu action facts back into run timelines."""
+        """Project Hermes Delivery receipts back into run timelines."""
         result = await db.execute(
             select(AgentPushDelivery)
             .where(
@@ -139,34 +240,44 @@ class PushDeliveryService:
         )
         updated = 0
         for delivery in result.scalars():
-            action_result = await db.execute(
-                select(FeishuCardAction)
-                .where(
-                    FeishuCardAction.message_id == delivery.external_message_id,
-                    FeishuCardAction.is_deleted.is_(False),
-                    FeishuCardAction.status.in_(["processed", "rejected", "expired"]),
-                )
-                .order_by(FeishuCardAction.executed_at.desc())
-                .limit(1)
-            )
-            action = action_result.scalar_one_or_none()
-            if action is None:
+            settings = get_settings()
+            if not settings.HERMES_INTERNAL_URL or not settings.HERMES_INTERNAL_TOKEN:
                 continue
-            delivery.card_action_status = action.status
-            delivery.status = (
-                "interacted" if action.status == "processed" else "expired"
+            try:
+                async with httpx.AsyncClient(timeout=15) as client:
+                    response = await client.get(
+                        f"{settings.HERMES_INTERNAL_URL.rstrip('/')}"
+                        f"/internal/feishu/deliveries/{delivery.external_message_id}",
+                        headers={
+                            "Authorization": (
+                                f"Bearer {settings.HERMES_INTERNAL_TOKEN}"
+                            )
+                        },
+                    )
+                response.raise_for_status()
+            except httpx.HTTPError:
+                continue
+            receipt = response.json()
+            receipt_status = str(receipt.get("status") or "")
+            if receipt_status not in {"delivered", "failed"}:
+                continue
+            delivery.status = receipt_status
+            delivery.external_message_id = (
+                str(receipt.get("message_id"))
+                if receipt.get("message_id")
+                else delivery.external_message_id
             )
-            delivery.delivered_at = action.executed_at or datetime.now(UTC)
+            delivery.delivered_at = datetime.now(UTC)
+            delivery.last_error_message = receipt.get("last_error")
             run = await db.get(AgentAutomationRun, delivery.run_id)
             if run is not None:
                 await self._event(
                     db,
                     run=run,
-                    event_type="push_card_action_reconciled",
+                    event_type="push_delivery_receipt_reconciled",
                     payload={
                         "delivery_id": str(delivery.id),
-                        "action_key": action.action_key,
-                        "action_status": action.status,
+                        "delivery_status": receipt_status,
                     },
                 )
             updated += 1
@@ -301,13 +412,22 @@ class PushDeliveryService:
             if department is None or not department.leader_user_id:
                 return []
             result = await db.execute(
-                select(User.id).where(
+                select(ExternalIdentityBinding.local_user_id)
+                .join(User, User.id == ExternalIdentityBinding.local_user_id)
+                .where(
+                    ExternalIdentityBinding.platform == "feishu",
+                    ExternalIdentityBinding.status == "active",
+                    ExternalIdentityBinding.is_deleted.is_(False),
+                    or_(
+                        ExternalIdentityBinding.external_user_id
+                        == department.leader_user_id,
+                        ExternalIdentityBinding.external_open_id
+                        == department.leader_user_id,
+                        ExternalIdentityBinding.external_union_id
+                        == department.leader_user_id,
+                    ),
                     User.is_deleted.is_(False),
                     User.status == "active",
-                    or_(
-                        User.feishu_user_id == department.leader_user_id,
-                        User.feishu_open_id == department.leader_user_id,
-                    ),
                 )
             )
             return list(result.scalars())
@@ -340,9 +460,7 @@ class PushDeliveryService:
         aggregation_key: str | None,
         incident_key: str | None,
     ) -> AgentPushDelivery:
-        idempotency_key = (
-            f"push:{run.id}:{step_run_id}:{template.id}:{recipient.id}"
-        )
+        idempotency_key = f"push:{run.id}:{step_run_id}:{template.id}:{recipient.id}"
         result = await db.execute(
             select(AgentPushDelivery).where(
                 AgentPushDelivery.idempotency_key == idempotency_key,
@@ -397,7 +515,8 @@ class PushDeliveryService:
         if not delivery.aggregation_key:
             return
         result = await db.execute(
-            select(AgentPushDelivery.id).where(
+            select(AgentPushDelivery.id)
+            .where(
                 AgentPushDelivery.is_deleted.is_(False),
                 AgentPushDelivery.id != delivery.id,
                 AgentPushDelivery.recipient_user_id == delivery.recipient_user_id,
@@ -432,22 +551,13 @@ class PushDeliveryService:
             title = f"恢复：{title}"[:500]
             markdown = f"此前失败的同类通知现已恢复。\n\n{markdown}"[:8000]
         try:
-            result = await send_livzon_feishu_message(
+            item = await self._enqueue_gateway_delivery(
                 db,
-                user_ids=[delivery.recipient_user_id],
-                text=markdown,
+                delivery=delivery,
                 title=title,
                 markdown=markdown,
-                structured=True,
-                requires_business_action=bool(template.actions),
                 actions=template.actions,
-                business_ref={
-                    "agent_push_delivery_id": str(delivery.id),
-                    "automation_id": str(delivery.automation_id),
-                    "run_id": str(delivery.run_id),
-                },
             )
-            item = (result.get("results") or [{}])[0]
         except Exception as exc:  # noqa: BLE001
             item = {"status": "failed", "error_message": str(exc)}
         await self._apply_send_result(
@@ -466,18 +576,13 @@ class PushDeliveryService:
         delivery.next_attempt_at = None
         summary = dict(delivery.content_summary or {})
         try:
-            result = await send_livzon_feishu_message(
+            item = await self._enqueue_gateway_delivery(
                 db,
-                user_ids=[delivery.recipient_user_id],
-                text=str(summary.get("markdown") or ""),
+                delivery=delivery,
                 title=str(summary.get("title") or "Livzon 自动化通知"),
                 markdown=str(summary.get("markdown") or ""),
-                structured=True,
-                requires_business_action=bool(template.actions),
                 actions=template.actions,
-                business_ref={"agent_push_delivery_id": str(delivery.id)},
             )
-            item = (result.get("results") or [{}])[0]
         except Exception as exc:  # noqa: BLE001
             item = {"status": "failed", "error_message": str(exc)}
         await self._apply_send_result(db, delivery=delivery, item=item, recovery=False)
@@ -520,9 +625,9 @@ class PushDeliveryService:
                 )
             return
         delivery.last_error_code = str(item.get("error_code") or "push.send_failed")
-        delivery.last_error_message = str(
-            item.get("error_message") or "发送失败"
-        )[:2000]
+        delivery.last_error_message = str(item.get("error_message") or "发送失败")[
+            :2000
+        ]
         if delivery.attempt_count < self.max_attempts:
             delivery.status = "pending"
             delivery.next_attempt_at = datetime.now(UTC) + timedelta(
@@ -549,7 +654,8 @@ class PushDeliveryService:
         if not delivery.incident_key:
             return False
         result = await db.execute(
-            select(AgentPushDelivery.id).where(
+            select(AgentPushDelivery.id)
+            .where(
                 and_(
                     AgentPushDelivery.is_deleted.is_(False),
                     AgentPushDelivery.id != delivery.id,
@@ -557,7 +663,8 @@ class PushDeliveryService:
                     AgentPushDelivery.incident_key == delivery.incident_key,
                     AgentPushDelivery.status == "failed",
                 )
-            ).limit(1)
+            )
+            .limit(1)
         )
         return result.scalar_one_or_none() is not None
 

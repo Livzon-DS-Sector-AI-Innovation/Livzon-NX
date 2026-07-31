@@ -19,6 +19,7 @@ logs/
 sessions/
 cache/
 memory/
+temp/
 .hermes/
 *.log
 Dockerfile

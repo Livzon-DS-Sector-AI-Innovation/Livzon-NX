@@ -7,7 +7,12 @@ from types import SimpleNamespace
 import pytest
 from docx import Document
 
-from app.modules.agent.schemas import AgentChatRequest, AgentToolExecuteRequest
+from app.modules.agent.schemas import (
+    AgentBackendV2Event,
+    AgentChatRequest,
+    AgentToolExecuteRequest,
+    AgentTrustedSubject,
+)
 from app.modules.agent.service import (
     HUMAN_DECISION_REQUIRED_MESSAGE,
     AgentService,
@@ -24,8 +29,31 @@ class AllowAllAccessScopeService:
 class FakeDb:
     committed = False
 
+    def __init__(self) -> None:
+        self.added = []
+
     async def commit(self) -> None:
         self.committed = True
+
+    async def get(self, model, item_id):
+        return SimpleNamespace(
+            id=item_id,
+            role="admin",
+            status="active",
+            is_deleted=False,
+            tenant_key="test",
+        )
+
+    def add(self, item) -> None:
+        self.added.append(item)
+
+
+def _subject() -> AgentTrustedSubject:
+    return AgentTrustedSubject(
+        tenant_id="test",
+        user_id=uuid.uuid4(),
+        source="internal",
+    )
 
 
 class FakeAgentRepository:
@@ -161,20 +189,74 @@ class PolicyOnlyAgentService(AgentService):
 
 class StreamingAgentService(AgentService):
     async def _call_hermes_stream(self, **kwargs):
-        yield "delta", {"text": "你好，"}
-        yield "ping", {"ts": 1}
-        yield "delta", {"text": "我正在查询。"}
-        yield "done", {
-            "message": "你好，我正在查询。",
-            "pending_confirmations": [],
-            "tool_trace": [{"tool": "search"}],
-        }
+        trace_id = uuid.uuid4()
+        run_id = uuid.uuid4()
+        yield AgentBackendV2Event(
+            trace_id=trace_id,
+            run_id=run_id,
+            sequence=1,
+            type="accepted",
+            data={},
+        )
+        yield AgentBackendV2Event(
+            trace_id=trace_id,
+            run_id=run_id,
+            sequence=2,
+            type="text_delta",
+            data={"text": "你好，"},
+        )
+        yield AgentBackendV2Event(
+            trace_id=trace_id,
+            run_id=run_id,
+            sequence=3,
+            type="ping",
+            data={"ts": 1},
+        )
+        yield AgentBackendV2Event(
+            trace_id=trace_id,
+            run_id=run_id,
+            sequence=4,
+            type="text_delta",
+            data={"text": "我正在查询。"},
+        )
+        yield AgentBackendV2Event(
+            trace_id=trace_id,
+            run_id=run_id,
+            sequence=5,
+            type="finished",
+            data={
+                "message": "你好，我正在查询。",
+                "pending_confirmations": [],
+                "tool_trace": [{"tool": "search"}],
+            },
+        )
 
 
 class ErrorStreamingAgentService(AgentService):
     async def _call_hermes_stream(self, **kwargs):
-        yield "delta", {"text": "处理中"}
-        yield "error", {"message": "上游中断"}
+        trace_id = uuid.uuid4()
+        run_id = uuid.uuid4()
+        yield AgentBackendV2Event(
+            trace_id=trace_id,
+            run_id=run_id,
+            sequence=1,
+            type="accepted",
+            data={},
+        )
+        yield AgentBackendV2Event(
+            trace_id=trace_id,
+            run_id=run_id,
+            sequence=2,
+            type="text_delta",
+            data={"text": "处理中"},
+        )
+        yield AgentBackendV2Event(
+            trace_id=trace_id,
+            run_id=run_id,
+            sequence=3,
+            type="error",
+            data={"message": "上游中断"},
+        )
 
 
 def parse_sse_events(frames: list[str]) -> list[tuple[str, dict]]:
@@ -265,7 +347,7 @@ async def test_chat_returns_policy_refusal_for_delegated_approval() -> None:
 
 
 @pytest.mark.anyio
-async def test_stream_chat_emits_start_delta_ping_and_done() -> None:
+async def test_stream_chat_emits_agent_backend_v2_events() -> None:
     repo = FakeAgentRepository()
     service = StreamingAgentService(settings=SimpleNamespace(), repo=repo)
     user = SimpleNamespace(id=uuid.uuid4(), name="测试用户")
@@ -283,11 +365,19 @@ async def test_stream_chat_emits_start_delta_ping_and_done() -> None:
     frames = [first_frame, *[frame async for frame in stream]]
     events = parse_sse_events(frames)
 
-    assert [event for event, _ in events] == ["start", "delta", "ping", "delta", "done"]
-    assert events[1][1]["text"] == "你好，"
-    assert events[3][1]["text"] == "我正在查询。"
-    assert events[-1][1]["message"]["content"] == "你好，我正在查询。"
-    assert events[-1][1]["tool_trace"] == [{"tool": "search"}]
+    assert [event for event, _ in events] == [
+        "accepted",
+        "text_delta",
+        "ping",
+        "text_delta",
+        "finished",
+    ]
+    assert events[0][1]["sequence"] == 1
+    assert events[0][1]["data"]["session_id"] == str(repo.session.id)
+    assert events[1][1]["data"]["text"] == "你好，"
+    assert events[3][1]["data"]["text"] == "我正在查询。"
+    assert events[-1][1]["data"]["message"]["content"] == "你好，我正在查询。"
+    assert events[-1][1]["data"]["tool_trace"] == [{"tool": "search"}]
     assert db.committed is True
 
 
@@ -308,14 +398,18 @@ async def test_stream_chat_error_does_not_store_assistant_message() -> None:
     ]
     events = parse_sse_events(frames)
 
-    assert [event for event, _ in events] == ["start", "delta", "error"]
-    assert events[-1][1]["message"] == "上游中断"
+    assert [event for event, _ in events] == [
+        "accepted",
+        "text_delta",
+        "error",
+    ]
+    assert events[-1][1]["data"]["message"] == "上游中断"
     assert [message.role for message in repo.messages] == ["user"]
     assert db.committed is True
 
 
 @pytest.mark.anyio
-async def test_stream_chat_policy_refusal_returns_done_without_hermes() -> None:
+async def test_stream_chat_policy_refusal_returns_v2_finished_without_hermes() -> None:
     repo = FakeAgentRepository()
     service = PolicyOnlyAgentService(settings=SimpleNamespace(), repo=repo)
     user = SimpleNamespace(id=uuid.uuid4(), name="测试用户")
@@ -331,9 +425,11 @@ async def test_stream_chat_policy_refusal_returns_done_without_hermes() -> None:
     ]
     events = parse_sse_events(frames)
 
-    assert [event for event, _ in events] == ["start", "done"]
-    assert events[-1][1]["message"]["content"] == HUMAN_DECISION_REQUIRED_MESSAGE
-    assert events[-1][1]["pending_confirmations"] == []
+    assert [event for event, _ in events] == ["accepted", "finished"]
+    assert events[-1][1]["data"]["message"]["content"] == (
+        HUMAN_DECISION_REQUIRED_MESSAGE
+    )
+    assert events[-1][1]["data"]["pending_confirmations"] == []
     assert db.committed is True
 
 
@@ -347,10 +443,11 @@ async def test_high_risk_tool_execution_returns_policy_refusal() -> None:
     )
 
     response = await service.execute_tool(
-        object(),
+        FakeDb(),
         request=AgentToolExecuteRequest(
             operation="procurement.approve_purchase_request",
             params={"request_id": str(uuid.uuid4())},
+            subject=_subject(),
         ),
     )
 
@@ -374,7 +471,7 @@ async def test_resolve_pending_confirmation_from_assistant_text_id() -> None:
         FakeDb(),
         session_id=repo.session.id,
         user_id=uuid.uuid4(),
-        operation="identity.send_feishu_card_message",
+        operation="identity.deliver_feishu_message",
         summary="向但昊发送飞书卡片消息",
         risk_level="medium",
         request_payload={"user_ids": [str(uuid.uuid4())]},
@@ -404,7 +501,7 @@ async def test_resolve_multiple_pending_confirmations_from_same_result() -> None
         FakeDb(),
         session_id=repo.session.id,
         user_id=uuid.uuid4(),
-        operation="identity.send_feishu_text_message",
+        operation="identity.deliver_feishu_message",
         summary="向张三发送飞书文本消息",
         risk_level="medium",
         request_payload={"user_ids": [str(uuid.uuid4())]},
@@ -414,7 +511,7 @@ async def test_resolve_multiple_pending_confirmations_from_same_result() -> None
         FakeDb(),
         session_id=repo.session.id,
         user_id=uuid.uuid4(),
-        operation="identity.send_feishu_card_message",
+        operation="identity.deliver_feishu_message",
         summary="向李四发送飞书卡片消息",
         risk_level="medium",
         request_payload={"user_ids": [str(uuid.uuid4())]},
@@ -448,7 +545,7 @@ async def test_resolve_pending_confirmations_includes_session_pending() -> None:
         FakeDb(),
         session_id=repo.session.id,
         user_id=uuid.uuid4(),
-        operation="identity.send_feishu_text_message",
+        operation="identity.deliver_feishu_message",
         summary="向张三发送飞书文本消息",
         risk_level="medium",
         request_payload={"user_ids": [str(uuid.uuid4())]},
@@ -458,7 +555,7 @@ async def test_resolve_pending_confirmations_includes_session_pending() -> None:
         FakeDb(),
         session_id=repo.session.id,
         user_id=uuid.uuid4(),
-        operation="identity.send_feishu_card_message",
+        operation="identity.deliver_feishu_message",
         summary="向李四发送飞书卡片消息",
         risk_level="medium",
         request_payload={"user_ids": [str(uuid.uuid4())]},
@@ -486,6 +583,7 @@ def test_contract_generation_sample_request_is_normalized() -> None:
             operation="procurement.generate_contract",
             params={"department": "行政部", "month": "2026年7月"},
             reason="生成办公用品耗材采购合同示例（行政部 2026年7月）",
+            subject=_subject(),
         )
     )
 
@@ -507,9 +605,10 @@ async def test_agent_lists_all_contract_templates_with_fields() -> None:
     )
 
     response = await service.execute_tool(
-        object(),
+        FakeDb(),
         request=AgentToolExecuteRequest(
             operation="procurement.list_contract_templates",
+            subject=_subject(),
         ),
     )
 
@@ -546,10 +645,11 @@ async def test_agent_get_contract_template_normalizes_chinese_category() -> None
     )
 
     response = await service.execute_tool(
-        object(),
+        FakeDb(),
         request=AgentToolExecuteRequest(
             operation="procurement.get_contract_template",
             params={"category": "办公用品耗材"},
+            subject=_subject(),
         ),
     )
 
@@ -568,6 +668,7 @@ def test_contract_generation_sample_matches_template_and_exports_docx() -> None:
             operation="procurement.generate_contract",
             params={"department": "行政部", "month": "2026年7月"},
             reason="生成办公用品耗材采购合同示例（行政部 2026年7月）",
+            subject=_subject(),
         )
     )
     payload = ContractGenerateRequest.model_validate(request.body)
@@ -605,11 +706,12 @@ async def test_contract_generation_without_items_returns_validation_error() -> N
     )
 
     response = await service.execute_tool(
-        object(),
+        FakeDb(),
         request=AgentToolExecuteRequest(
             operation="procurement.generate_contract",
             params={"category": "耗材"},
             reason="生成耗材采购合同",
+            subject=_subject(),
         ),
     )
 

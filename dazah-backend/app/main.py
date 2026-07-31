@@ -83,14 +83,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     timeout_task = asyncio.ensure_future(timeout_scan_loop())
     member_task = asyncio.ensure_future(member_sync_loop())
 
-    # ── 平台级飞书 WebSocket 长连接 ──
-    if settings.FEISHU_WS_ENABLED:
-        from app.platform.integrations.feishu.event_handler import set_main_loop
-        from app.platform.integrations.feishu.ws_client import start_ws_client
-
-        set_main_loop(asyncio.get_running_loop())
-        start_ws_client()
-
     # ── 仓储模块飞书 WebSocket 长连接（模块独立应用凭据） ──
     from app.modules.warehouse.ws_client import (
         set_main_loop as set_warehouse_ws_main_loop,
@@ -113,16 +105,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     from app.modules.safety.feishu.event_client import start_ws, stop_ws
 
     safety_ws_task = asyncio.create_task(start_ws())
-
-    # ── Livzon 助手飞书事件（私聊消息与交互卡片）──
-    livzon_card_ws_task: asyncio.Task | None = None
-    if (
-        settings.LIVZON_FEISHU_EVENT_WS_ENABLED
-        or settings.LIVZON_FEISHU_CARD_CALLBACK_WS_ENABLED
-    ):
-        from app.platform.identity.feishu_card_ws import start_livzon_card_ws
-
-        livzon_card_ws_task = asyncio.create_task(start_livzon_card_ws())
 
     # ── 安全模块定时任务调度引擎 ──
     from app.modules.safety.scheduler import (
@@ -181,12 +163,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await stop_ws()
     safety_ws_task.cancel()
 
-    if livzon_card_ws_task:
-        from app.platform.identity.feishu_card_ws import stop_livzon_card_ws
-
-        await stop_livzon_card_ws()
-        livzon_card_ws_task.cancel()
-
     # 停止定时任务调度引擎
     stop_scheduled_task_flag.set()
     scheduler_task.cancel()
@@ -212,11 +188,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     maintenance_plan_task.cancel()
     timeout_task.cancel()
     member_task.cancel()
-
-    # 停止平台级飞书 WebSocket
-    from app.platform.integrations.feishu.ws_client import stop_ws_client
-
-    stop_ws_client()
 
     logger.info("Shutting down %s", settings.APP_NAME)
 

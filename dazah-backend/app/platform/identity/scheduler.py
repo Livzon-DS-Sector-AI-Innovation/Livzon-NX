@@ -16,9 +16,7 @@ async def member_sync_loop() -> None:
     settings = get_settings()
     target = settings.FEISHU_SYNC_MEMBER_DEPT_ID
     if not target:
-        logger.info(
-            "飞书成员同步未配置（FEISHU_SYNC_MEMBER_DEPT_ID 为空），跳过启动"
-        )
+        logger.info("飞书成员同步未配置（FEISHU_SYNC_MEMBER_DEPT_ID 为空），跳过启动")
         return
 
     logger.info("飞书成员同步任务已启动（每天 00:00，target=%s）", target)
@@ -26,7 +24,10 @@ async def member_sync_loop() -> None:
     while not stop_member_sync_flag.is_set():
         now = datetime.now()
         next_midnight = (now + timedelta(days=1)).replace(
-            hour=0, minute=0, second=0, microsecond=0,
+            hour=0,
+            minute=0,
+            second=0,
+            microsecond=0,
         )
         wait_seconds = (next_midnight - now).total_seconds()
         logger.info(
@@ -35,7 +36,8 @@ async def member_sync_loop() -> None:
         )
         try:
             await asyncio.wait_for(
-                stop_member_sync_flag.wait(), timeout=wait_seconds,
+                stop_member_sync_flag.wait(),
+                timeout=wait_seconds,
             )
             break
         except TimeoutError:
@@ -44,6 +46,7 @@ async def member_sync_loop() -> None:
         if not stop_member_sync_flag.is_set() and target:
             try:
                 from app.platform.integrations.feishu.sync import sync_members
+
                 await sync_members(target)
             except Exception:
                 logger.exception("Member sync failed")

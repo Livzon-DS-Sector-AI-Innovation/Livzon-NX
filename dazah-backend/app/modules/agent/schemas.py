@@ -1,8 +1,8 @@
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from .automation_schema import (
     AutomationDefinitionV1,
@@ -11,6 +11,65 @@ from .automation_schema import (
 )
 
 AgentRole = Literal["system", "user", "assistant", "tool"]
+AgentBackendEventType = Literal[
+    "accepted",
+    "thinking",
+    "capability_search",
+    "tool_call",
+    "tool_result",
+    "text_delta",
+    "confirmation",
+    "delivery",
+    "error",
+    "finished",
+    "ping",
+]
+
+
+class AgentTrustedSubject(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    tenant_id: str = Field(min_length=1, max_length=128)
+    user_id: uuid.UUID
+    display_name: str | None = Field(default=None, max_length=200)
+    source: Literal["web", "feishu", "automation", "internal"]
+    external_binding_id: uuid.UUID | None = None
+
+
+class AgentBackendSource(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    platform: Literal["web", "feishu"]
+    sender_user_id: str | None = Field(default=None, max_length=128)
+    sender_open_id: str | None = Field(default=None, max_length=128)
+    sender_union_id: str | None = Field(default=None, max_length=128)
+    chat_id: str | None = Field(default=None, max_length=255)
+    chat_type: str | None = Field(default=None, max_length=32)
+    thread_id: str | None = Field(default=None, max_length=255)
+    reply_to: str | None = Field(default=None, max_length=255)
+    message_id: str | None = Field(default=None, max_length=255)
+
+
+class AgentBackendV2Request(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    run_id: uuid.UUID = Field(default_factory=uuid.uuid4)
+    trace_id: uuid.UUID = Field(default_factory=uuid.uuid4)
+    session_id: str = Field(min_length=1, max_length=512)
+    subject: AgentTrustedSubject
+    source: AgentBackendSource
+    message: str = Field(min_length=1, max_length=8000)
+    messages: list[dict[str, Any]] = Field(default_factory=list)
+    attachments: list["AgentAttachmentIn"] = Field(default_factory=list, max_length=5)
+    client_capabilities: list[str] = Field(default_factory=list)
+
+
+class AgentBackendV2Event(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    event_id: uuid.UUID = Field(default_factory=uuid.uuid4)
+    trace_id: uuid.UUID
+    run_id: uuid.UUID
+    sequence: int = Field(ge=1)
+    occurred_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    type: AgentBackendEventType
+    data: dict[str, Any] = Field(default_factory=dict)
 
 
 class AgentAttachmentIn(BaseModel):
@@ -155,11 +214,65 @@ class AgentChatResponse(BaseModel):
 
 
 class AgentToolExecuteRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     operation: str = Field(min_length=1, max_length=120)
     params: dict[str, Any] = Field(default_factory=dict)
     body: dict[str, Any] | None = None
-    context: dict[str, Any] = Field(default_factory=dict)
+    subject: AgentTrustedSubject
+    session_id: uuid.UUID | None = None
+    trace_id: uuid.UUID = Field(default_factory=uuid.uuid4)
+    execution_context: dict[str, Any] = Field(default_factory=dict)
     reason: str | None = Field(default=None, max_length=500)
+
+
+class AgentToolControlRequest(BaseModel):
+    """Authenticated web control-plane request without caller-owned identity."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    operation: str = Field(min_length=1, max_length=120)
+    params: dict[str, Any] = Field(default_factory=dict)
+    body: dict[str, Any] | None = None
+    reason: str | None = Field(default=None, max_length=500)
+    session_id: uuid.UUID | None = None
+    trace_id: uuid.UUID = Field(default_factory=uuid.uuid4)
+
+
+class AgentToolSearchRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    query: str = Field(default="", max_length=500)
+    module: str | None = Field(default=None, max_length=64)
+    limit: int = Field(default=12, ge=1, le=50)
+    subject: AgentTrustedSubject
+
+
+class AgentToolCatalogEntry(BaseModel):
+    operation: str
+    module: str | None = None
+    version: str
+    summary: str
+    status: Literal["active", "disabled"]
+    risk_level: Literal["low", "medium", "high"]
+    write: bool
+    confirmation_required: bool
+    permission_key: str | None = None
+    input_schema: dict[str, Any] = Field(default_factory=dict)
+    output_schema: dict[str, Any] = Field(default_factory=dict)
+    timeout_seconds: int
+    idempotent: bool
+
+
+class AgentToolEnabledUpdate(BaseModel):
+    enabled: bool
+
+
+class PolicyDecisionV1(BaseModel):
+    decision: Literal["allow", "deny", "confirm"]
+    reason_code: str
+    resource_domain: Literal["dazah_business", "feishu_native"]
+    risk_level: Literal["low", "medium", "high"]
+    confirmation_required: bool = False
+    audit_tags: list[str] = Field(default_factory=list)
 
 
 class AgentToolExecuteResponse(BaseModel):
@@ -174,6 +287,11 @@ class AgentToolExecuteResponse(BaseModel):
 class AgentConfirmationExecuteResponse(BaseModel):
     confirmation: AgentConfirmationOut
     result: AgentToolExecuteResponse
+
+
+class AgentConfirmationResolveRequest(BaseModel):
+    subject: AgentTrustedSubject
+    choice: Literal["allow", "reject"]
 
 
 class AgentModuleScopeOut(BaseModel):

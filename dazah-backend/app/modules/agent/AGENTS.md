@@ -4,11 +4,13 @@
 
 ## 工具边界
 
-- 所有业务能力使用 `@agent_tool` 注册，并由 `ToolRegistry` 和 `ToolExecutor` 统一执行。
+- 所有业务能力由模块 Agent Tool Provider 声明，经 `module_registry` 自动发现，
+  并由 `ToolRegistry` 和 `ToolExecutor` 统一执行。
 - handler 只能调用所属模块 Service 或明确公开的 `public_api.py`，不得直接操作 ORM、私有 repository 或拼业务 SQL。
 - 工具输入使用 Pydantic v2 模型，不在 handler 内解析松散 dict。
 - 工具名使用 `<module>.<verb>_<resource>`；查询优先 `list_*`、`get_*`，写入使用明确业务动词。
-- `summary` 使用清晰中文；`method` 和 `path` 仅是兼容或展示元数据，不构成旁路调用授权。
+- `summary` 使用清晰中文；Provider/Executor 引用只用于统一执行链路，
+  不构成旁路调用授权。
 
 ## 风险与确认
 
@@ -24,11 +26,11 @@
 必须同时检查：
 
 - 业务逻辑位于所属模块 Service
-- InputSchema、工具元数据和 handler 薄封装
-- `tool_registration.py` 启动注册
+- InputSchema、工具元数据和 Provider 薄封装
+- `module_registry` 能自动发现 Provider 并投影到工具目录
 - 注册、参数、权限、确认、风险拒绝和核心调用测试
 - 工具调用记录和 `audit.logs` 审计
-- OpenAPI、前端生成类型，以及 Hermes-Lite 的 operation 白名单或静态 schema
+- OpenAPI、前端生成类型，以及 Hermes-Lite 单一 `dazah_tool` 契约
 
 工具返回分页结果或业务摘要，避免把大对象写入审计。审计不得记录 secret、token、password、key 等敏感字段。
 

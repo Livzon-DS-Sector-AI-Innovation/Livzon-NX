@@ -128,12 +128,16 @@ class AgentAutomationService:
     ) -> list[dict[str, Any]]:
         """Locate immutable versions affected by removed or incompatible tools."""
         ensure_agent_tools_registered()
-        statement = select(AgentAutomationVersion, AgentAutomation).join(
-            AgentAutomation,
-            AgentAutomation.id == AgentAutomationVersion.automation_id,
-        ).where(
-            AgentAutomationVersion.is_deleted.is_(False),
-            AgentAutomation.is_deleted.is_(False),
+        statement = (
+            select(AgentAutomationVersion, AgentAutomation)
+            .join(
+                AgentAutomation,
+                AgentAutomation.id == AgentAutomationVersion.automation_id,
+            )
+            .where(
+                AgentAutomationVersion.is_deleted.is_(False),
+                AgentAutomation.is_deleted.is_(False),
+            )
         )
         if user.role != "admin":
             statement = statement.where(AgentAutomation.owner_user_id == user.id)
@@ -357,9 +361,9 @@ class AgentAutomationService:
                 or self._legacy_status(item.status) == status_value
             )
         result_items.sort(
-            key=lambda item: item.updated_at
-            or item.created_at
-            or datetime.min.replace(tzinfo=UTC),
+            key=lambda item: (
+                item.updated_at or item.created_at or datetime.min.replace(tzinfo=UTC)
+            ),
             reverse=True,
         )
         total = len(result_items)

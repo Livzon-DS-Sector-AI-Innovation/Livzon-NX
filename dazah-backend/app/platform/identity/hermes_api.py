@@ -7,24 +7,24 @@ only: no Feishu document bodies, tokens, or credentials are accepted.
 from __future__ import annotations
 
 import hmac
-import logging
-import time
 from datetime import UTC, datetime
 from typing import Any
 
-import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
 from app.core.database import get_db
 from app.platform.audit.models import AuditLog
-from app.platform.identity.models import User, UserModuleGrant
+from app.platform.identity.models import User
+from app.platform.identity.repository import (
+    ExternalIdentityBindingRepository,
+    FeishuConfigRepository,
+)
 
 router = APIRouter(prefix="/internal/feishu", tags=["Hermes 飞书内部接口"])
-logger = logging.getLogger(__name__)
 
 
 def _require_internal(
@@ -39,100 +39,73 @@ def _require_internal(
         )
 
 
-async def build_access_snapshot(
-    db: AsyncSession, settings: Settings
-) -> dict[str, Any]:
-    users = list(
-        (
-            await db.execute(
-                select(User).where(User.is_deleted.is_(False)).order_by(User.id.asc())
-            )
-        )
-        .scalars()
-        .all()
-    )
-    grants = list(
-        (
-            await db.execute(
-                select(UserModuleGrant).where(
-                    UserModuleGrant.is_deleted.is_(False),
-                    UserModuleGrant.status == "active",
-                )
-            )
-        )
-        .scalars()
-        .all()
-    )
-    grants_by_user: dict[str, list[UserModuleGrant]] = {}
-    for grant in grants:
-        grants_by_user.setdefault(str(grant.user_id), []).append(grant)
-    items: list[dict[str, Any]] = []
-    for user in users:
-        user_grants = grants_by_user.get(str(user.id), [])
-        permissions = {
-            permission
-            for grant in user_grants
-            for permission in (grant.permissions or [])
-            if permission.startswith("feishu.")
-        }
-        if user.role in {"admin", "system_admin"}:
-            permissions.update(
-                {"feishu.workspace.read_any", "feishu.workspace.write_any"}
-            )
-        items.append(
-            {
-                "local_user_id": str(user.id),
-                "display_name": user.name,
-                "user_id": user.feishu_user_id,
-                "open_id": user.feishu_open_id,
-                "union_id": user.feishu_union_id,
-                "active": user.status == "active",
-                "modules": sorted({grant.module_code for grant in user_grants}),
-                "scopes": sorted(permissions),
-                "grant_version": user.grant_version,
-            }
-        )
-    return {
-        "version": time.time_ns(),
-        "generated_at": datetime.now(UTC).isoformat(),
-        "users": items,
-        "allowed_groups": [
-            item.strip()
-            for item in settings.LIVZON_FEISHU_ALLOWED_GROUPS.split(",")
-            if item.strip()
-        ],
-    }
+class ExternalIdentityResolveRequest(BaseModel):
+    tenant_id: str = Field(min_length=1, max_length=128)
+    app_fingerprint: str = Field(min_length=1, max_length=255)
+    external_user_id: str | None = Field(default=None, max_length=128)
+    external_open_id: str | None = Field(default=None, max_length=128)
+    external_union_id: str | None = Field(default=None, max_length=128)
+    chat_id: str | None = Field(default=None, max_length=255)
+
+    @model_validator(mode="after")
+    def require_identifier(self) -> ExternalIdentityResolveRequest:
+        if not any(
+            (self.external_user_id, self.external_open_id, self.external_union_id)
+        ):
+            raise ValueError("Feishu identity identifier is required")
+        return self
 
 
-async def push_access_snapshot_to_hermes(db: AsyncSession) -> bool:
-    settings = get_settings()
-    if not settings.HERMES_INTERNAL_URL or not settings.HERMES_INTERNAL_TOKEN:
-        return False
-    snapshot = await build_access_snapshot(db, settings)
-    try:
-        async with httpx.AsyncClient(timeout=20) as client:
-            response = await client.put(
-                f"{settings.HERMES_INTERNAL_URL.rstrip('/')}/internal/feishu/access-snapshot",
-                headers={
-                    "Authorization": f"Bearer {settings.HERMES_INTERNAL_TOKEN}"
-                },
-                json=snapshot,
-            )
-        response.raise_for_status()
-        return True
-    except httpx.HTTPError as exc:
-        logger.warning(
-            "Hermes access snapshot push failed: %s", type(exc).__name__
-        )
-        return False
-
-
-@router.get("/access-snapshot", dependencies=[Depends(_require_internal)])
-async def get_access_snapshot(
+@router.post("/identity/resolve", dependencies=[Depends(_require_internal)])
+async def resolve_external_identity(
+    payload: ExternalIdentityResolveRequest,
     db: AsyncSession = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
-    return await build_access_snapshot(db, settings)
+    config = await FeishuConfigRepository().get_active(db)
+    if config is None or config.app_id != payload.app_fingerprint:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Feishu application is not the active Hermes Gateway application",
+        )
+    binding = await ExternalIdentityBindingRepository().resolve(
+        db,
+        tenant_id=payload.tenant_id,
+        platform="feishu",
+        app_fingerprint=payload.app_fingerprint,
+        external_user_id=payload.external_user_id,
+        external_open_id=payload.external_open_id,
+        external_union_id=payload.external_union_id,
+    )
+    if binding is None:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Feishu identity is not bound")
+    user = await db.get(User, binding.local_user_id)
+    if user is None or user.is_deleted or user.status != "active":
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Bound local user is not active",
+        )
+    allowed_groups = {
+        item.strip()
+        for item in settings.LIVZON_FEISHU_ALLOWED_GROUPS.split(",")
+        if item.strip()
+    }
+    if payload.chat_id and payload.chat_id not in allowed_groups:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Feishu group is not admitted for Livzon Agent",
+        )
+    binding.last_seen_at = datetime.now(UTC)
+    await db.flush()
+    return {
+        "subject": {
+            "tenant_id": binding.tenant_id,
+            "user_id": str(user.id),
+            "display_name": user.name,
+            "source": "feishu",
+            "external_binding_id": str(binding.id),
+        }
+    }
 
 
 class HermesAuditEvent(BaseModel):

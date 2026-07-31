@@ -110,7 +110,7 @@ class AgentPushDeliveryGenerator(TaskGenerator):
         self.service = PushDeliveryService()
 
     async def find_due(self, session: Any) -> list[Any]:
-        await self.service.reconcile_card_actions(session, limit=self.batch_size)
+        await self.service.reconcile_gateway_receipts(session, limit=self.batch_size)
         return await self.service.claim_due_retries(session, limit=self.batch_size)
 
     async def execute_one(self, session: Any, item: Any) -> None:

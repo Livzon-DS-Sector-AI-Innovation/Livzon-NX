@@ -1,0 +1,12 @@
+{
+  "package": "@larksuite/cli",
+  "version": "1.0.76",
+  "npm_tarball": "https://registry.npmjs.org/@larksuite/cli/-/cli-1.0.76.tgz",
+  "npm_integrity": "sha512-hyFQBF3bXLFvklAqqTE/TApC7ylLgaySvEEMXbZw2IghjkUp0zsVtknClQLkn43UKIW/gS/ho5TEO4Xe3dBWMw==",
+  "archive_name": "lark-cli-1.0.76-linux-amd64.tar.gz",
+  "archive_sha256": "759a676dde001bdc015384cfd741bcaca873329bbcaad8c4ea4a06acb49b3f42",
+  "download_urls": [
+    "https://github.com/larksuite/cli/releases/download/v1.0.76/lark-cli-1.0.76-linux-amd64.tar.gz",
+    "https://registry.npmmirror.com/-/binary/lark-cli/v1.0.76/lark-cli-1.0.76-linux-amd64.tar.gz"
+  ]
+}

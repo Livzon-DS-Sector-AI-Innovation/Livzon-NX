@@ -110,6 +110,7 @@ def _context() -> SimpleNamespace:
         user_id=uuid.uuid4(),
         user=SimpleNamespace(id=uuid.uuid4(), name="测试用户"),
         reason="coverage adapter contract",
+        raw_request=SimpleNamespace(trace_id=uuid.uuid4()),
     )
 
 
@@ -276,44 +277,24 @@ async def test_procurement_read_agent_tool_adapters_cover_all_list_shapes(
     assert any(mock.await_count for mock in mocks.values())
 
 
-def test_identity_message_inputs_normalize_aliases_and_validate_cards() -> None:
-    text = identity_tools.FeishuTextMessageInput.model_validate(
+def test_identity_delivery_input_requires_local_users_and_idempotency() -> None:
+    user_id = uuid.uuid4()
+    delivery = identity_tools.FeishuDeliveryInput.model_validate(
         {
-            "recipient": {
-                "open_id": "ou_001",
-                "employee_no": "E002",
-            },
-            "message_content": "设备点检提醒",
-        }
-    )
-    assert text.user_ids == ["ou_001"]
-    assert text.text == "设备点检提醒"
-
-    card = identity_tools.FeishuCardMessageInput.model_validate(
-        {
-            "recipients": ["ou_001", {"employee_no": "E002"}],
+            "recipient_user_ids": [str(user_id)],
             "title": "CAPA 提醒",
-            "content": "请完成整改",
-            "button_text": "查看详情",
-            "button_url": "https://example.com/capa/1",
+            "markdown": "请完成整改",
+            "actions": [{"label": "查看详情", "url": "/quality/capa/1"}],
+            "idempotency_key": "capa-reminder-1",
         }
     )
-    assert card.user_ids == ["ou_001", "E002"]
-    assert card.markdown == "请完成整改"
 
-    with pytest.raises(ValueError, match="必须同时提供"):
-        identity_tools.FeishuCardMessageInput.model_validate(
-            {
-                "user_ids": ["ou_001"],
-                "title": "不完整按钮",
-                "markdown": "正文",
-                "button_text": "查看",
-            }
-        )
+    assert delivery.recipient_user_ids == [user_id]
+    assert delivery.actions[0]["label"] == "查看详情"
 
 
 @pytest.mark.anyio
-async def test_identity_agent_tool_adapters_cover_tree_search_and_messages(
+async def test_identity_agent_tool_adapters_cover_tree_search_and_delivery(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     user_id = uuid.uuid4()
@@ -348,12 +329,30 @@ async def test_identity_agent_tool_adapters_cover_tree_search_and_messages(
         async def list_all(self, *args: Any, **kwargs: Any) -> tuple[list[Any], int]:
             return [], 0
 
-        async def find_by_livzon_recipient_identifier(
-            self,
-            _db: Any,
-            _identifier: str,
-        ) -> list[Any]:
-            return [SimpleNamespace(id=user_id, name="接收人")]
+        async def get_by_id(self, _db: Any, requested_user_id: uuid.UUID) -> Any:
+            assert requested_user_id == user_id
+            return SimpleNamespace(
+                id=user_id,
+                is_deleted=False,
+                status="active",
+                feishu_open_id="ou_001",
+            )
+
+    response = SimpleNamespace(
+        raise_for_status=lambda: None,
+        json=lambda: {"id": "delivery-1", "status": "queued"},
+    )
+    post = AsyncMock(return_value=response)
+
+    class _HttpClient:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            pass
+
+        async def __aenter__(self) -> Any:
+            return SimpleNamespace(post=post)
+
+        async def __aexit__(self, *args: Any) -> None:
+            return None
 
     monkeypatch.setattr(identity_tools, "DepartmentRepository", _DepartmentRepo)
     monkeypatch.setattr(identity_tools, "UserRepository", _UserRepo)
@@ -362,20 +361,15 @@ async def test_identity_agent_tool_adapters_cover_tree_search_and_messages(
         "diagnose_livzon_feishu_config",
         AsyncMock(return_value=_EmptyResult()),
     )
-    send_unified = AsyncMock(return_value={"sent": 1})
-    send_text = AsyncMock(return_value={"sent": 1})
-    send_card = AsyncMock(return_value={"sent": 1})
-    monkeypatch.setattr(identity_tools, "send_livzon_feishu_message", send_unified)
     monkeypatch.setattr(
         identity_tools,
-        "send_livzon_feishu_text_message",
-        send_text,
+        "get_settings",
+        lambda: SimpleNamespace(
+            HERMES_INTERNAL_URL="http://hermes:8100",
+            HERMES_INTERNAL_TOKEN="test-token",
+        ),
     )
-    monkeypatch.setattr(
-        identity_tools,
-        "send_livzon_feishu_card_message",
-        send_card,
-    )
+    monkeypatch.setattr(identity_tools.httpx, "AsyncClient", _HttpClient)
 
     context = _context()
     tree = await identity_tools.get_department_tree(context, _EmptyInput())
@@ -393,62 +387,21 @@ async def test_identity_agent_tool_adapters_cover_tree_search_and_messages(
     )
     assert diagnosis == {}
 
-    unified = identity_tools.FeishuUnifiedMessageInput(
-        user_ids=["ou_001", "ou_001"],
-        text="统一消息",
-        value_level="low",
-    )
-    assert await identity_tools.send_feishu_message(context, unified) == {
-        "sent": 1
-    }
-    send_text_input = identity_tools.FeishuTextMessageInput(
-        user_ids=["ou_001"],
-        text="文本消息",
-    )
-    assert await identity_tools.send_feishu_text_message(
-        context,
-        send_text_input,
-    ) == {"sent": 1}
-    send_card_input = identity_tools.FeishuCardMessageInput(
-        user_ids=["ou_001"],
+    delivery = identity_tools.FeishuDeliveryInput(
+        recipient_user_ids=[user_id],
         title="卡片标题",
         markdown="卡片正文",
+        idempotency_key="adapter-delivery",
     )
-    assert await identity_tools.send_feishu_card_message(
-        context,
-        send_card_input,
-    ) == {"sent": 1}
-
-    assert send_unified.await_args.kwargs["user_ids"] == [user_id]
-    assert send_text.await_args.kwargs["user_ids"] == [user_id]
-    assert send_card.await_args.kwargs["user_ids"] == [user_id]
-
-
-@pytest.mark.anyio
-async def test_identity_recipient_resolution_reports_missing_and_ambiguous(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    class _UserRepo:
-        async def find_by_livzon_recipient_identifier(
-            self,
-            _db: Any,
-            identifier: str,
-        ) -> list[Any]:
-            if identifier == "missing":
-                return []
-            return [
-                SimpleNamespace(id=uuid.uuid4(), name="用户甲"),
-                SimpleNamespace(id=uuid.uuid4(), name="用户乙"),
-            ]
-
-    monkeypatch.setattr(identity_tools, "UserRepository", _UserRepo)
-
-    with pytest.raises(Exception) as exc_info:
-        await identity_tools._resolve_livzon_message_user_ids(
-            _context(),
-            ["missing", "duplicate"],
-        )
-
-    detail = exc_info.value.detail
-    assert "未匹配到已同步用户" in detail
-    assert "匹配到多个用户" in detail
+    assert await identity_tools.deliver_feishu_message(context, delivery) == {
+        "results": [
+            {
+                "recipient_user_id": str(user_id),
+                "status": "queued",
+                "delivery_id": "delivery-1",
+            }
+        ]
+    }
+    request = post.await_args.kwargs["json"]
+    assert request["chat_id"] == "ou_001"
+    assert request["metadata"]["recipient_user_id"] == str(user_id)

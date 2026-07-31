@@ -39,7 +39,7 @@ from app.modules.agent.models import (
     AgentStepRun,
 )
 from app.modules.agent.push_delivery_service import PushDeliveryService
-from app.modules.agent.schemas import AgentToolExecuteRequest
+from app.modules.agent.schemas import AgentToolExecuteRequest, AgentTrustedSubject
 from app.modules.agent.tool_registration import ensure_agent_tools_registered
 from app.modules.agent.tools import ToolExecutor, tool_registry
 from app.platform.identity.models import User
@@ -524,10 +524,15 @@ class AgentAutomationRunner:
         request = AgentToolExecuteRequest(
             operation=step.operation,
             params=input_payload,
-            context={
-                "user_id": str(owner.id),
+            subject=AgentTrustedSubject(
+                tenant_id=owner.tenant_key or "default",
+                user_id=owner.id,
+                display_name=owner.name,
+                source="automation",
+            ),
+            trace_id=run.correlation_id,
+            execution_context={
                 "workflow_id": str(run.automation_id),
-                "correlation_id": str(run.correlation_id),
             },
             reason=f"自动化运行 {run.id} 步骤 {step.key}",
         )

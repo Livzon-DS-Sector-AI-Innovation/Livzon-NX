@@ -54,6 +54,42 @@ class AgentToolCall(BaseModel):
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
+class AgentToolCatalog(BaseModel):
+    __tablename__ = "agent_tool_catalog"
+    __table_args__ = (
+        UniqueConstraint(
+            "operation",
+            name="uq_core_agent_tool_catalog_operation",
+        ),
+        Index("ix_core_agent_tool_catalog_module_status", "module", "status"),
+        {"schema": "core", "comment": "Agent 工具目录运行时事实源"},
+    )
+
+    operation: Mapped[str] = mapped_column(String(120), nullable=False)
+    module: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    capability_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    summary: Mapped[str] = mapped_column(String(500), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="active", server_default="active"
+    )
+    admin_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
+    risk_level: Mapped[str] = mapped_column(String(32), nullable=False)
+    write: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    confirmation_required: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    permission_key: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    input_schema: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default="{}"
+    )
+    output_schema: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default="{}"
+    )
+    timeout_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
+    idempotent: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    metadata_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+
+
 class AgentConfirmation(BaseModel):
     __tablename__ = "agent_confirmations"
     __table_args__ = {
@@ -390,9 +426,7 @@ class AgentDomainEvent(BaseModel):
             "idempotency_key",
             name="uq_core_agent_domain_events_source_idempotency",
         ),
-        Index(
-            "ix_core_agent_domain_events_type_occurred", "event_type", "occurred_at"
-        ),
+        Index("ix_core_agent_domain_events_type_occurred", "event_type", "occurred_at"),
         Index(
             "ix_core_agent_domain_events_correlation", "correlation_id", "occurred_at"
         ),
@@ -457,9 +491,7 @@ class AgentPushDelivery(BaseModel):
             "idempotency_key", name="uq_core_agent_push_deliveries_idempotency"
         ),
         Index("ix_core_agent_push_deliveries_run_status", "run_id", "status"),
-        Index(
-            "ix_core_agent_push_deliveries_retry_due", "status", "next_attempt_at"
-        ),
+        Index("ix_core_agent_push_deliveries_retry_due", "status", "next_attempt_at"),
         Index(
             "ix_core_agent_push_deliveries_recipient_created",
             "recipient_user_id",

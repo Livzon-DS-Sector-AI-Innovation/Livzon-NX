@@ -293,6 +293,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/agent/confirmations/{confirmation_id}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resolve Confirmation From Gateway */
+        post: operations["resolve_confirmation_from_gateway_api_v1_agent_confirmations__confirmation_id__resolve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agent/control/tools": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Control Plane Tools */
+        get: operations["list_control_plane_tools_api_v1_agent_control_tools_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agent/control/tools/execute": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Execute Control Plane Tool */
+        post: operations["execute_control_plane_tool_api_v1_agent_control_tools_execute_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/agent/domain-events/{correlation_id}": {
         parameters: {
             query?: never;
@@ -619,23 +670,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/agent/tools": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Tools */
-        get: operations["list_tools_api_v1_agent_tools_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/agent/tools/execute": {
         parameters: {
             query?: never;
@@ -653,7 +687,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/agent/tools/execute/user": {
+    "/api/v1/agent/tools/search": {
         parameters: {
             query?: never;
             header?: never;
@@ -662,8 +696,42 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Execute Tool As Current User */
-        post: operations["execute_tool_as_current_user_api_v1_agent_tools_execute_user_post"];
+        /** Search Tools */
+        post: operations["search_tools_api_v1_agent_tools_search_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agent/tools/{operation}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Describe Tool */
+        get: operations["describe_tool_api_v1_agent_tools__operation__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agent/tools/{operation}/enabled": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Set Tool Enabled */
+        post: operations["set_tool_enabled_api_v1_agent_tools__operation__enabled_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3906,6 +3974,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/identity/external-identity-bindings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 管理员查询外部身份绑定 */
+        get: operations["list_external_identity_bindings_api_v1_identity_external_identity_bindings_get"];
+        put?: never;
+        /** 管理员创建外部身份绑定 */
+        post: operations["create_external_identity_binding_api_v1_identity_external_identity_bindings_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/identity/external-identity-bindings/{binding_id}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 管理员停用外部身份绑定 */
+        post: operations["disable_external_identity_binding_api_v1_identity_external_identity_bindings__binding_id__disable_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/identity/feishu-config": {
         parameters: {
             query?: never;
@@ -3964,6 +4067,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/identity/feishu-config/gateway-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查询 Hermes Feishu Gateway 状态 */
+        get: operations["get_livzon_feishu_gateway_status_api_v1_identity_feishu_config_gateway_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/identity/feishu-config/test": {
         parameters: {
             query?: never;
@@ -3978,100 +4098,6 @@ export interface paths {
          * @description 通过实际飞书 API 调用诊断 Livzon 助手通讯录权限。
          */
         post: operations["test_livzon_feishu_config_api_v1_identity_feishu_config_test_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/identity/feishu/card-callback": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Livzon 助手飞书交互卡片回调
-         * @description 处理 Livzon 助手飞书交互卡片回传事件。
-         */
-        post: operations["livzon_feishu_card_callback_api_v1_identity_feishu_card_callback_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/identity/feishu/card-callback-ws/restart": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * 重启 Livzon 助手飞书卡片长连接
-         * @description 重启 Livzon 助手飞书卡片回调长连接。
-         */
-        post: operations["restart_livzon_feishu_card_callback_ws_api_v1_identity_feishu_card_callback_ws_restart_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/identity/feishu/card-callback-ws/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * 查询 Livzon 助手飞书卡片长连接状态
-         * @description 查询 Livzon 助手飞书卡片回调长连接状态。
-         */
-        get: operations["livzon_feishu_card_callback_ws_status_api_v1_identity_feishu_card_callback_ws_status_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/identity/feishu/event-ws/restart": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** 重启 Livzon 助手飞书事件长连接 */
-        post: operations["restart_livzon_feishu_event_ws_api_v1_identity_feishu_event_ws_restart_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/identity/feishu/event-ws/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** 查询 Livzon 助手飞书事件长连接状态 */
-        get: operations["livzon_feishu_event_ws_status_api_v1_identity_feishu_event_ws_status_get"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4299,23 +4325,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/internal/feishu/access-snapshot": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Access Snapshot */
-        get: operations["get_access_snapshot_api_v1_internal_feishu_access_snapshot_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/internal/feishu/audit": {
         parameters: {
             query?: never;
@@ -4327,6 +4336,23 @@ export interface paths {
         put?: never;
         /** Ingest Audit Event */
         post: operations["ingest_audit_event_api_v1_internal_feishu_audit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/internal/feishu/identity/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resolve External Identity */
+        post: operations["resolve_external_identity_api_v1_internal_feishu_identity_resolve_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -15450,6 +15476,15 @@ export interface components {
             /** Updated At */
             updated_at?: string | null;
         };
+        /** AgentConfirmationResolveRequest */
+        AgentConfirmationResolveRequest: {
+            /**
+             * Choice
+             * @enum {string}
+             */
+            choice: "allow" | "reject";
+            subject: components["schemas"]["AgentTrustedSubject"];
+        };
         /** AgentMessageOut */
         AgentMessageOut: {
             /** Content */
@@ -15592,14 +15627,44 @@ export interface components {
             /** Trigger Keywords */
             trigger_keywords?: string[] | null;
         };
+        /**
+         * AgentToolControlRequest
+         * @description Authenticated web control-plane request without caller-owned identity.
+         */
+        AgentToolControlRequest: {
+            /** Body */
+            body?: {
+                [key: string]: unknown;
+            } | null;
+            /** Operation */
+            operation: string;
+            /** Params */
+            params?: {
+                [key: string]: unknown;
+            };
+            /** Reason */
+            reason?: string | null;
+            /** Session Id */
+            session_id?: string | null;
+            /**
+             * Trace Id
+             * Format: uuid
+             */
+            trace_id?: string;
+        };
+        /** AgentToolEnabledUpdate */
+        AgentToolEnabledUpdate: {
+            /** Enabled */
+            enabled: boolean;
+        };
         /** AgentToolExecuteRequest */
         AgentToolExecuteRequest: {
             /** Body */
             body?: {
                 [key: string]: unknown;
             } | null;
-            /** Context */
-            context?: {
+            /** Execution Context */
+            execution_context?: {
                 [key: string]: unknown;
             };
             /** Operation */
@@ -15610,6 +15675,49 @@ export interface components {
             };
             /** Reason */
             reason?: string | null;
+            /** Session Id */
+            session_id?: string | null;
+            subject: components["schemas"]["AgentTrustedSubject"];
+            /**
+             * Trace Id
+             * Format: uuid
+             */
+            trace_id?: string;
+        };
+        /** AgentToolSearchRequest */
+        AgentToolSearchRequest: {
+            /**
+             * Limit
+             * @default 12
+             */
+            limit: number;
+            /** Module */
+            module?: string | null;
+            /**
+             * Query
+             * @default
+             */
+            query: string;
+            subject: components["schemas"]["AgentTrustedSubject"];
+        };
+        /** AgentTrustedSubject */
+        AgentTrustedSubject: {
+            /** Display Name */
+            display_name?: string | null;
+            /** External Binding Id */
+            external_binding_id?: string | null;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "web" | "feishu" | "automation" | "internal";
+            /** Tenant Id */
+            tenant_id: string;
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
         };
         /** AnnualTrainingPlanCreate */
         AnnualTrainingPlanCreate: {
@@ -21671,6 +21779,45 @@ export interface components {
              */
             format: string;
         };
+        /** ExternalIdentityBindingCreate */
+        ExternalIdentityBindingCreate: {
+            /** App Fingerprint */
+            app_fingerprint: string;
+            /** External Open Id */
+            external_open_id?: string | null;
+            /** External Union Id */
+            external_union_id?: string | null;
+            /** External User Id */
+            external_user_id?: string | null;
+            /**
+             * Local User Id
+             * Format: uuid
+             */
+            local_user_id: string;
+            /**
+             * Platform
+             * @default feishu
+             * @constant
+             */
+            platform: "feishu";
+            /** Tenant Id */
+            tenant_id: string;
+        };
+        /** ExternalIdentityResolveRequest */
+        ExternalIdentityResolveRequest: {
+            /** App Fingerprint */
+            app_fingerprint: string;
+            /** Chat Id */
+            chat_id?: string | null;
+            /** External Open Id */
+            external_open_id?: string | null;
+            /** External Union Id */
+            external_union_id?: string | null;
+            /** External User Id */
+            external_user_id?: string | null;
+            /** Tenant Id */
+            tenant_id: string;
+        };
         /** ExternalQualityFeishuSyncOut */
         ExternalQualityFeishuSyncOut: {
             /** Entity Code */
@@ -21768,19 +21915,6 @@ export interface components {
              */
             sort_order?: number | null;
         };
-        /** FeishuCardCallbackResponse */
-        FeishuCardCallbackResponse: {
-            /** Card */
-            card?: {
-                [key: string]: unknown;
-            } | null;
-            /** Challenge */
-            challenge?: string | null;
-            /** Toast */
-            toast?: {
-                [key: string]: unknown;
-            } | null;
-        };
         /** FeishuConfigApiResponse */
         FeishuConfigApiResponse: {
             /**
@@ -21813,35 +21947,20 @@ export interface components {
              */
             app_secret_masked: string;
             /**
-             * Card Callback Encrypt Key Configured
-             * @default false
-             */
-            card_callback_encrypt_key_configured: boolean;
-            /**
-             * Card Callback Encrypt Key Masked
-             * @default
-             */
-            card_callback_encrypt_key_masked: string;
-            /**
-             * Card Callback Url
-             * @default /api/v1/identity/feishu/card-callback
-             */
-            card_callback_url: string;
-            /**
-             * Card Callback Verification Token Configured
-             * @default false
-             */
-            card_callback_verification_token_configured: boolean;
-            /**
-             * Card Callback Verification Token Masked
-             * @default
-             */
-            card_callback_verification_token_masked: string;
-            /**
              * Config Name
              * @default Livzon 助手飞书设置
              */
             config_name: string;
+            /**
+             * Config Version
+             * @default 0
+             */
+            config_version: number;
+            /**
+             * Gateway Enabled
+             * @default true
+             */
+            gateway_enabled: boolean;
             /** Id */
             id?: string | null;
             /**
@@ -21867,6 +21986,11 @@ export interface components {
             sync_member_department_id?: string | null;
             /** Sync Root Department Id */
             sync_root_department_id?: string | null;
+            /**
+             * Tenant Id
+             * @default default
+             */
+            tenant_id: string;
         };
         /** FeishuConfigUpsert */
         FeishuConfigUpsert: {
@@ -21874,16 +21998,17 @@ export interface components {
             app_id: string;
             /** App Secret */
             app_secret?: string | null;
-            /** Card Callback Encrypt Key */
-            card_callback_encrypt_key?: string | null;
-            /** Card Callback Verification Token */
-            card_callback_verification_token?: string | null;
             /**
              * Config Name
              * @description 配置名称，仅用于 Livzon 助手
              * @default Livzon 助手飞书设置
              */
             config_name: string;
+            /**
+             * Gateway Enabled
+             * @default true
+             */
+            gateway_enabled: boolean;
             /**
              * Is Active
              * @default true
@@ -21893,6 +22018,11 @@ export interface components {
             sync_member_department_id?: string | null;
             /** Sync Root Department Id */
             sync_root_department_id?: string | null;
+            /**
+             * Tenant Id
+             * @default default
+             */
+            tenant_id: string;
         };
         /** FeishuDiagnosticApiResponse */
         FeishuDiagnosticApiResponse: {
@@ -23684,43 +23814,6 @@ export interface components {
             user_id: string;
             /** Workflow Tool Names */
             workflow_tool_names?: string[];
-        };
-        /** LivzonFeishuEventWsStatus */
-        LivzonFeishuEventWsStatus: {
-            /** Enabled */
-            enabled: boolean;
-            /** Event Types */
-            event_types?: string[];
-            /** Event Ws Enabled */
-            event_ws_enabled: boolean;
-            /** Frames */
-            frames?: {
-                [key: string]: number;
-            };
-            /** Last Connected At */
-            last_connected_at?: number | null;
-            /** Last Error */
-            last_error?: string | null;
-            /** Legacy Card Callback Ws Enabled */
-            legacy_card_callback_ws_enabled: boolean;
-            /** Ping Interval */
-            ping_interval: number;
-            /** Running */
-            running: boolean;
-        };
-        /** LivzonFeishuEventWsStatusApiResponse */
-        LivzonFeishuEventWsStatusApiResponse: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            data: components["schemas"]["LivzonFeishuEventWsStatus"];
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
         };
         /** LivzonModuleScopeOut */
         LivzonModuleScopeOut: {
@@ -34100,6 +34193,109 @@ export interface operations {
             };
         };
     };
+    resolve_confirmation_from_gateway_api_v1_agent_confirmations__confirmation_id__resolve_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                confirmation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentConfirmationResolveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_control_plane_tools_api_v1_agent_control_tools_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    execute_control_plane_tool_api_v1_agent_control_tools_execute_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentToolControlRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_domain_events_api_v1_agent_domain_events__correlation_id__get: {
         parameters: {
             query?: never;
@@ -34823,37 +35019,6 @@ export interface operations {
             };
         };
     };
-    list_tools_api_v1_agent_tools_get: {
-        parameters: {
-            query?: never;
-            header?: {
-                authorization?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     execute_tool_api_v1_agent_tools_execute_post: {
         parameters: {
             query?: never;
@@ -34889,18 +35054,90 @@ export interface operations {
             };
         };
     };
-    execute_tool_as_current_user_api_v1_agent_tools_execute_user_post: {
+    search_tools_api_v1_agent_tools_search_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentToolSearchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    describe_tool_api_v1_agent_tools__operation__get: {
+        parameters: {
+            query: {
+                subject_user_id: string;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                operation: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_tool_enabled_api_v1_agent_tools__operation__enabled_post: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                operation: string;
+            };
             cookie?: {
                 auth_token?: string | null;
             };
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["AgentToolExecuteRequest"];
+                "application/json": components["schemas"]["AgentToolEnabledUpdate"];
             };
         };
         responses: {
@@ -43943,6 +44180,105 @@ export interface operations {
             };
         };
     };
+    list_external_identity_bindings_api_v1_identity_external_identity_bindings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_external_identity_binding_api_v1_identity_external_identity_bindings_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExternalIdentityBindingCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    disable_external_identity_binding_api_v1_identity_external_identity_bindings__binding_id__disable_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                binding_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_livzon_feishu_config_api_v1_identity_feishu_config_get: {
         parameters: {
             query?: never;
@@ -44077,6 +44413,37 @@ export interface operations {
             };
         };
     };
+    get_livzon_feishu_gateway_status_api_v1_identity_feishu_config_gateway_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     test_livzon_feishu_config_api_v1_identity_feishu_config_test_post: {
         parameters: {
             query?: never;
@@ -44099,150 +44466,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FeishuDiagnosticApiResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    livzon_feishu_card_callback_api_v1_identity_feishu_card_callback_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["FeishuCardCallbackResponse"];
-                };
-            };
-        };
-    };
-    restart_livzon_feishu_card_callback_ws_api_v1_identity_feishu_card_callback_ws_restart_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    livzon_feishu_card_callback_ws_status_api_v1_identity_feishu_card_callback_ws_status_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    restart_livzon_feishu_event_ws_api_v1_identity_feishu_event_ws_restart_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LivzonFeishuEventWsStatusApiResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    livzon_feishu_event_ws_status_api_v1_identity_feishu_event_ws_status_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LivzonFeishuEventWsStatusApiResponse"];
                 };
             };
             /** @description Validation Error */
@@ -44714,39 +44937,6 @@ export interface operations {
             };
         };
     };
-    get_access_snapshot_api_v1_internal_feishu_access_snapshot_get: {
-        parameters: {
-            query?: never;
-            header?: {
-                authorization?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     ingest_audit_event_api_v1_internal_feishu_audit_post: {
         parameters: {
             query?: never;
@@ -44770,6 +44960,43 @@ export interface operations {
                 content: {
                     "application/json": {
                         [key: string]: string;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resolve_external_identity_api_v1_internal_feishu_identity_resolve_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExternalIdentityResolveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
                     };
                 };
             };

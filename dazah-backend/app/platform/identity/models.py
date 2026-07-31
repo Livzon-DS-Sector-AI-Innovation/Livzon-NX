@@ -2,7 +2,16 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Boolean, DateTime, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -96,6 +105,71 @@ class UserModuleGrant(BaseModel):
     granted_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     status: Mapped[str] = mapped_column(
         String(32), nullable=False, default="active", server_default="active"
+    )
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
+
+
+class ExternalIdentityBinding(BaseModel):
+    """Trusted mapping from an external application identity to a local user."""
+
+    __tablename__ = "external_identity_bindings"
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id",
+            "platform",
+            "app_fingerprint",
+            "external_user_id",
+            name="uq_identity_external_bindings_user_id",
+        ),
+        UniqueConstraint(
+            "tenant_id",
+            "platform",
+            "app_fingerprint",
+            "external_open_id",
+            name="uq_identity_external_bindings_open_id",
+        ),
+        UniqueConstraint(
+            "tenant_id",
+            "platform",
+            "app_fingerprint",
+            "external_union_id",
+            name="uq_identity_external_bindings_union_id",
+        ),
+        Index(
+            "ix_identity_external_bindings_local_status",
+            "local_user_id",
+            "status",
+        ),
+        CheckConstraint(
+            "external_user_id IS NOT NULL OR external_open_id IS NOT NULL "
+            "OR external_union_id IS NOT NULL",
+            name="ck_identity_external_bindings_identifier",
+        ),
+        {"schema": "identity", "comment": "外部应用身份到本地可信主体的绑定事实"},
+    )
+
+    tenant_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    platform: Mapped[str] = mapped_column(String(32), nullable=False)
+    app_fingerprint: Mapped[str] = mapped_column(String(255), nullable=False)
+    external_user_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    external_open_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    external_union_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    local_user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False, index=True
+    )
+    status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="active", server_default="active"
+    )
+    last_seen_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    binding_metadata: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default="{}"
     )
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
@@ -200,6 +274,27 @@ class FeishuConfig(BaseModel):
     app_id: Mapped[str] = mapped_column(
         String(128), nullable=False, comment="飞书自建应用 App ID"
     )
+    tenant_id: Mapped[str] = mapped_column(
+        String(128),
+        nullable=False,
+        default="default",
+        server_default="default",
+        comment="Gateway 可信租户标识",
+    )
+    gateway_enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default="true",
+        comment="是否启用 Hermes Feishu Gateway",
+    )
+    config_version: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=1,
+        server_default="1",
+        comment="Gateway 配置单调递增版本",
+    )
     encrypted_app_secret: Mapped[str] = mapped_column(
         String(1024), nullable=False, comment="加密后的飞书自建应用 App Secret"
     )
@@ -236,61 +331,6 @@ class FeishuConfig(BaseModel):
     )
     last_diagnosed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True, comment="最近诊断时间"
-    )
-    card_callback_verification_token: Mapped[str | None] = mapped_column(
-        String(512), nullable=True, comment="飞书卡片回调 Verification Token"
-    )
-    encrypted_card_callback_encrypt_key: Mapped[str | None] = mapped_column(
-        String(1024), nullable=True, comment="加密后的飞书卡片回调 Encrypt Key"
-    )
-
-
-class FeishuCardAction(BaseModel):
-    """Livzon 助手飞书交互卡片动作记录。"""
-
-    __tablename__ = "feishu_card_actions"
-    __table_args__ = {"schema": "identity"}
-
-    message_id: Mapped[str | None] = mapped_column(
-        String(128), nullable=True, index=True, comment="飞书消息 ID"
-    )
-    card_id: Mapped[str | None] = mapped_column(
-        String(128), nullable=True, index=True, comment="飞书卡片 ID"
-    )
-    local_user_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), nullable=True, index=True, comment="本地收件人用户 ID"
-    )
-    recipient_open_id: Mapped[str | None] = mapped_column(
-        String(128), nullable=True, index=True, comment="收件人 open_id"
-    )
-    business_ref: Mapped[dict[str, Any] | None] = mapped_column(
-        JSONB, nullable=True, comment="业务引用摘要"
-    )
-    action_key: Mapped[str] = mapped_column(
-        String(64), nullable=False, index=True, comment="动作 key"
-    )
-    action_label: Mapped[str] = mapped_column(
-        String(100), nullable=False, comment="动作展示名称"
-    )
-    status: Mapped[str] = mapped_column(
-        String(32),
-        nullable=False,
-        default="pending",
-        server_default="pending",
-        index=True,
-        comment="pending/processed/expired/rejected",
-    )
-    clicked_open_id: Mapped[str | None] = mapped_column(
-        String(128), nullable=True, comment="点击人 open_id"
-    )
-    callback_summary: Mapped[dict[str, Any] | None] = mapped_column(
-        JSONB, nullable=True, comment="回调摘要，不保存完整敏感 payload"
-    )
-    expires_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True, comment="动作过期时间"
-    )
-    executed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True, comment="处理时间"
     )
 
 
@@ -334,9 +374,7 @@ class FeishuUserToken(BaseModel):
     token_type: Mapped[str | None] = mapped_column(
         String(32), nullable=True, comment="Token 类型"
     )
-    scope: Mapped[str | None] = mapped_column(
-        Text, nullable=True, comment="授权范围"
-    )
+    scope: Mapped[str | None] = mapped_column(Text, nullable=True, comment="授权范围")
     access_token_expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True, comment="user_access_token 过期时间"
     )
