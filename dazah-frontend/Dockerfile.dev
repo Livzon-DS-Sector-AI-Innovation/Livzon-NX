@@ -5,10 +5,12 @@ WORKDIR /app
 # Use Chinese npm mirror for faster downloads
 ENV COREPACK_NPM_REGISTRY=https://registry.npmmirror.com
 
-COPY .npmrc package.json pnpm-lock.yaml* ./
+COPY --chown=node:node .npmrc package.json pnpm-lock.yaml* ./
 RUN corepack enable pnpm && pnpm install --frozen-lockfile
 
-COPY . .
+COPY --chown=node:node . .
+
+USER node
 
 EXPOSE 3000
 

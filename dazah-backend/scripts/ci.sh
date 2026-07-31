@@ -35,7 +35,11 @@ run_quality() {
   bash "${repository_dir}/scripts/wait-for-database.sh"
   uv run --no-sync alembic upgrade head
   echo "== Backend unit tests =="
-  uv run --no-sync pytest tests/unit tests/core -m "not integration" -ra
+  uv run --no-sync pytest \
+    tests/unit tests/core \
+    -m "not integration" \
+    -ra \
+    --junitxml=.pytest_cache/backend-quality-junit.xml
 }
 
 run_integration() {
@@ -65,6 +69,7 @@ run_integration() {
     --cov-branch \
     --cov-report=term-missing \
     --cov-report=xml \
+    --junitxml=.pytest_cache/backend-integration-junit.xml \
     -ra
   echo "== Backend line and branch coverage floors =="
   uv run --no-sync python "${repository_dir}/scripts/check-coverage-floor.py" \

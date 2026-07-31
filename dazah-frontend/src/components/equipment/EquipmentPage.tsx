@@ -16,6 +16,7 @@ import { EquipmentDrawer } from './EquipmentDrawer'
 import { CategoryDrawer } from './CategoryDrawer'
 import { LocationDrawer } from './LocationDrawer'
 import { RepairDrawer } from './RepairDrawer'
+import { getEquipmentRecoveryNeeds } from './EquipmentPage.logic'
 
 interface EquipmentPageProps {
   initialCategories: EquipmentCategory[]
@@ -91,18 +92,23 @@ export function EquipmentPage({
   // 客户端补偿加载：如果服务端初始数据为空（某个 API 失败导致），从客户端重新获取
   useEffect(() => {
     const loadMissing = async () => {
+      const recoveryNeeds = getEquipmentRecoveryNeeds(
+        categories.length,
+        locations.length,
+        departments.length,
+      )
       const tasks: Promise<void>[] = []
-      if (!categories.length) {
+      if (recoveryNeeds.categories) {
         tasks.push(
           fetchCategoriesClient().then(cats => { setCategories(cats) }).catch(e => { console.warn('客户端加载分类失败:', e) })
         )
       }
-      if (!locations.length) {
+      if (recoveryNeeds.locations) {
         tasks.push(
           fetchLocationsClient().then(locs => { setLocations(locs) }).catch(e => { console.warn('客户端加载位置失败:', e) })
         )
       }
-      if (!departments.length) {
+      if (recoveryNeeds.departments) {
         tasks.push(
           fetchDepartmentsClient().then(depts => { setDepartments(depts) }).catch(e => { console.warn('客户端加载部门失败:', e) })
         )

@@ -5,6 +5,7 @@ import { App, Button, Card, Select, Space } from 'antd'
 import { FileTextOutlined, PrinterOutlined, DownloadOutlined } from '@ant-design/icons'
 import { Employee } from '@/types/hr'
 import { fetchEmployees, fetchOnboardingTrainingRecord } from '@/lib/api/hr'
+import { getTrainingRecordErrorMessage } from './TrainingRecordClient.logic'
 
 export default function TrainingRecordClient() {
   const { message } = App.useApp()
@@ -20,7 +21,10 @@ export default function TrainingRecordClient() {
       })
       .catch((err) => {
         console.error('fetchEmployees error:', err)
-        message.error('加载员工列表失败: ' + (err.message || JSON.stringify(err) || '未知错误'))
+        message.error(
+          '加载员工列表失败: '
+          + getTrainingRecordErrorMessage(err, '未知错误'),
+        )
       })
   }, [message])
 
@@ -36,7 +40,7 @@ export default function TrainingRecordClient() {
       await fetchOnboardingTrainingRecord(selectedEmployee.id, selectedEmployee.name)
       message.success('培训记录已导出')
     } catch (err: unknown) {
-      message.error(err instanceof Error ? err.message : '导出失败')
+      message.error(getTrainingRecordErrorMessage(err, '导出失败'))
     } finally {
       setDownloading(false)
     }

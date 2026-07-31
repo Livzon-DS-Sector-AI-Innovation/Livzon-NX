@@ -35,7 +35,7 @@ const DEFAULT_VALUES: CredentialsFormValues = {
   gateway_enabled: true,
 }
 
-async function requestFeishuConfig<T>(
+export async function requestFeishuConfig<T>(
   path: string,
   payload: FeishuConfigUpsert,
   method: 'POST' | 'PUT',
@@ -60,7 +60,7 @@ async function requestFeishuConfig<T>(
   return body.data
 }
 
-function buildPayload(
+export function buildPayload(
   values: CredentialsFormValues,
   config: FeishuConfig | null,
 ): FeishuConfigUpsert {

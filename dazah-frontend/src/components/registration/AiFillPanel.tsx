@@ -15,6 +15,11 @@ import {
   fetchAssetCategories, aiPreviewExtraction, aiConfirmAndFill,
   splitPreview, splitConfirmAndInsert,
 } from '@/lib/api/dossier-writer-client'
+import {
+  countFilledResults,
+  getAiFillErrorMessage,
+  getTableColumnCount,
+} from './AiFillPanel.logic'
 
 const { Text, Paragraph } = Typography
 
@@ -111,7 +116,7 @@ export function AiFillPanel({ chapterId, chapterCode, assets, onAssetsChange, on
         message.warning(result.message)
       }
     } catch (err: unknown) {
-      message.error(err instanceof Error ? err.message : 'AI 提取失败')
+      message.error(getAiFillErrorMessage(err, 'AI 提取失败'))
     } finally {
       setPreviewLoading(false)
     }
@@ -135,16 +140,14 @@ export function AiFillPanel({ chapterId, chapterCode, assets, onAssetsChange, on
         setFillResults(result.results || [])
         setFillDone(true)
         onFillComplete?.()
-        const filled = (result.results || []).filter((resultItem) => (
-          resultItem.status === 'filled'
-        )).length
+        const filled = countFilledResults(result.results || [])
         const total = (result.results || []).length
         message.success(`填充完成: ${filled}/${total} 个字段`)
       } else {
         message.warning(result.message || '填充失败')
       }
     } catch (err: unknown) {
-      message.error(err instanceof Error ? err.message : '填充失败')
+      message.error(getAiFillErrorMessage(err, '填充失败'))
     } finally {
       setFilling(false)
     }
@@ -195,7 +198,7 @@ export function AiFillPanel({ chapterId, chapterCode, assets, onAssetsChange, on
       const result = await splitPreview(asset.id, slots)
       setSplitPages(result.pages || [])
     } catch (err: unknown) {
-      message.error(err instanceof Error ? err.message : '页面拆分失败')
+      message.error(getAiFillErrorMessage(err, '页面拆分失败'))
     } finally {
       setSplitLoading(false)
     }
@@ -233,7 +236,7 @@ export function AiFillPanel({ chapterId, chapterCode, assets, onAssetsChange, on
       // Trigger refresh
       onAssetsChange()
     } catch (err: unknown) {
-      message.error(err instanceof Error ? err.message : '插入失败')
+      message.error(getAiFillErrorMessage(err, '插入失败'))
     } finally {
       setSplitInserting(false)
     }
@@ -340,7 +343,7 @@ export function AiFillPanel({ chapterId, chapterCode, assets, onAssetsChange, on
 
                 {field.field_type === 'table' && Array.isArray(field.value) ? (
                   <div className="text-xs text-gray-500">
-                    表格数据: {field.value.length} 行 × {field.value[0]?.length ?? 0} 列
+                    表格数据: {field.value.length} 行 × {getTableColumnCount(field.value)} 列
                   </div>
                 ) : field.field_type === 'image_appendix' ? (
                   <div className="flex items-center justify-between gap-2">
