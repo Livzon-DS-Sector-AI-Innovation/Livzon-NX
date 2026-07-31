@@ -22,6 +22,7 @@ from app.modules.agent.service import (
 )
 from app.modules.agent.tool_registration import ensure_agent_tools_registered
 from app.modules.agent.tools import tool_registry
+from app.platform.identity.models import User
 
 
 class AllowAllAccessScopeService:
@@ -311,6 +312,15 @@ async def test_workflow_creation_stores_user_scoped_workflow() -> None:
 async def test_workflow_run_refetches_updated_state_before_response(
     db_session: AsyncSession,
 ) -> None:
+    user = User(
+        name="工作流测试用户",
+        username=f"workflow-{uuid.uuid4().hex[:12]}",
+        role="user",
+        status="active",
+        auth_source="local",
+    )
+    db_session.add(user)
+    await db_session.flush()
     service = AgentService(
         settings=SimpleNamespace(),
         access_scope_service=AllowAllAccessScopeService(),
@@ -327,14 +337,14 @@ async def test_workflow_run_refetches_updated_state_before_response(
                 }
             ],
         ),
-        user_id=uuid.uuid4(),
+        user_id=user.id,
         session_id=None,
     )
 
     result = await service._start_workflow_run(
         db_session,
         workflow=workflow,
-        user_id=None,
+        user_id=user.id,
         session_id=None,
     )
 

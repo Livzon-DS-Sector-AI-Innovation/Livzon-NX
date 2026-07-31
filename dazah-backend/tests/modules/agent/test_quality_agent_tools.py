@@ -100,7 +100,13 @@ EXPECTED_QUALITY_OPERATIONS = {
 
 
 class FakeDb:
-    pass
+    async def get(self, _model, item_id):
+        return SimpleNamespace(
+            id=item_id,
+            status="active",
+            is_deleted=False,
+            role="user",
+        )
 
 
 class FakeAgentRepository:

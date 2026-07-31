@@ -62,14 +62,11 @@ async def test_notify_creates_one_idempotent_delivery_per_local_recipient(
     await db_session.flush()
 
     async def fake_send(*_args: object, **_kwargs: object) -> dict:
-        return {
-            "results": [
-                {"status": "sent", "message_id": "om_phase_three_delivery"}
-            ]
-        }
+        return {"status": "sent", "message_id": "om_phase_three_delivery"}
 
     monkeypatch.setattr(
-        "app.modules.agent.push_delivery_service.send_livzon_feishu_message",
+        "app.modules.agent.push_delivery_service."
+        "PushDeliveryService._enqueue_gateway_delivery",
         fake_send,
     )
     step = NotifyStep.model_validate(
@@ -221,17 +218,14 @@ async def test_notify_creates_one_idempotent_delivery_per_local_recipient(
 
     async def fake_timeout_after_accept(*_args: object, **_kwargs: object) -> dict:
         return {
-            "results": [
-                {
-                    "status": "failed",
-                    "message_id": "om_phase_three_timeout_reconciled",
-                    "error_message": "gateway timeout",
-                }
-            ]
+            "status": "failed",
+            "message_id": "om_phase_three_timeout_reconciled",
+            "error_message": "gateway timeout",
         }
 
     monkeypatch.setattr(
-        "app.modules.agent.push_delivery_service.send_livzon_feishu_message",
+        "app.modules.agent.push_delivery_service."
+        "PushDeliveryService._enqueue_gateway_delivery",
         fake_timeout_after_accept,
     )
     timeout_run = await new_run()
@@ -249,10 +243,11 @@ async def test_notify_creates_one_idempotent_delivery_per_local_recipient(
     assert timeout_delivery["deliveries"][0]["status"] == "sent"
 
     async def fake_failed(*_args: object, **_kwargs: object) -> dict:
-        return {"results": [{"status": "failed", "error_code": "unavailable"}]}
+        return {"status": "failed", "error_code": "unavailable"}
 
     monkeypatch.setattr(
-        "app.modules.agent.push_delivery_service.send_livzon_feishu_message",
+        "app.modules.agent.push_delivery_service."
+        "PushDeliveryService._enqueue_gateway_delivery",
         fake_failed,
     )
     incident_step = aggregation_step.model_copy(
@@ -272,7 +267,9 @@ async def test_notify_creates_one_idempotent_delivery_per_local_recipient(
     assert failed["deliveries"][0]["status"] == "failed"
 
     monkeypatch.setattr(
-        "app.modules.agent.push_delivery_service.send_livzon_feishu_message", fake_send
+        "app.modules.agent.push_delivery_service."
+        "PushDeliveryService._enqueue_gateway_delivery",
+        fake_send,
     )
     service.max_attempts = 3
     recovery_run = await new_run()
