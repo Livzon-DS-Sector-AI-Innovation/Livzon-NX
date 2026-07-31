@@ -16,7 +16,6 @@ import {
 } from '@ant-design/icons'
 
 import { T } from '@/components/safety/shared-styles'
-import { isSopTableChapter } from './SopContentEditor.logic'
 
 /* ─────── design tokens ─────── */
 
@@ -1652,7 +1651,7 @@ export default function SopContentEditor({
   /** Dispatch to the correct chapter renderer. */
   function renderChapterContent(chapterId: number, content: string) {
       // Table chapters: 3, 4, 5, 8
-      if (isSopTableChapter(chapterId)) {
+      if ([3, 4, 5, 8].includes(chapterId)) {
         return renderTableChapter(chapterId, content)
       }
 
