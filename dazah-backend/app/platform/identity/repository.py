@@ -1,3 +1,4 @@
+from typing import cast
 from uuid import UUID
 
 from sqlalchemy import func, or_, select
@@ -47,10 +48,13 @@ class ExternalIdentityBindingRepository:
         session: AsyncSession,
         binding_id: UUID,
     ) -> ExternalIdentityBinding | None:
-        return await session.scalar(
-            select(ExternalIdentityBinding).where(
-                ExternalIdentityBinding.id == binding_id,
-                ExternalIdentityBinding.is_deleted == False,  # noqa: E712
+        return cast(
+            ExternalIdentityBinding | None,
+            await session.scalar(
+                select(ExternalIdentityBinding).where(
+                    ExternalIdentityBinding.id == binding_id,
+                    ExternalIdentityBinding.is_deleted == False,  # noqa: E712
+                )
             )
         )
 

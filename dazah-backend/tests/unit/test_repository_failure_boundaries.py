@@ -9,6 +9,7 @@ from sqlalchemy.exc import IntegrityError, OperationalError
 
 from app.modules.warehouse.repository import WarehouseRepository
 from app.platform.identity.repository import (
+    ExternalIdentityBindingRepository,
     FeishuConfigRepository,
     FeishuUserTokenRepository,
     UserRepository,
@@ -78,6 +79,77 @@ async def test_identity_create_propagates_integrity_error_to_owner() -> None:
             username="duplicate",
         )
     session.rollback.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_external_identity_binding_repository_lifecycle() -> None:
+    binding_id = uuid4()
+    local_user_id = uuid4()
+    actor_id = uuid4()
+    result_binding = SimpleNamespace(id=binding_id)
+    query_result = SimpleNamespace(
+        scalar_one_or_none=lambda: result_binding,
+        scalars=lambda: SimpleNamespace(all=lambda: [result_binding]),
+    )
+    added: list[object] = []
+    session = SimpleNamespace(
+        add=added.append,
+        flush=AsyncMock(),
+        scalar=AsyncMock(return_value=result_binding),
+        execute=AsyncMock(return_value=query_result),
+    )
+    repository = ExternalIdentityBindingRepository()
+
+    created = await repository.create(
+        session,
+        tenant_id="tenant",
+        platform="feishu",
+        app_fingerprint="app",
+        external_user_id="user",
+        external_open_id=None,
+        external_union_id=None,
+        local_user_id=local_user_id,
+        actor_id=actor_id,
+    )
+    assert created in added
+    assert created.local_user_id == local_user_id
+    assert created.status == "active"
+
+    assert await repository.get(session, binding_id) is result_binding
+    disabled = await repository.disable(
+        session,
+        SimpleNamespace(status="active", updated_by=None),
+        actor_id=actor_id,
+    )
+    assert disabled.status == "disabled"
+    assert disabled.updated_by == actor_id
+
+    session.execute.reset_mock()
+    assert (
+        await repository.resolve(
+            session,
+            tenant_id="tenant",
+            platform="feishu",
+            app_fingerprint="app",
+            external_user_id=None,
+            external_open_id=None,
+            external_union_id=None,
+        )
+        is None
+    )
+    session.execute.assert_not_awaited()
+
+    resolved = await repository.resolve(
+        session,
+        tenant_id="tenant",
+        platform="feishu",
+        app_fingerprint="app",
+        external_user_id="user",
+        external_open_id="open",
+        external_union_id=None,
+    )
+    assert resolved is result_binding
+    assert await repository.list(session) == [result_binding]
 
 
 @pytest.mark.asyncio

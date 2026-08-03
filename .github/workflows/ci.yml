@@ -24,171 +24,135 @@ env:
   PYTHON_VERSION: "3.12"
 
 jobs:
-  test-impact:
-    name: Test Impact
+  change-scope:
+    name: Change Scope
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      frontend_changed: ${{ steps.scope.outputs.frontend_changed }}
+      backend_changed: ${{ steps.scope.outputs.backend_changed }}
+      hermes_changed: ${{ steps.scope.outputs.hermes_changed }}
+      docker_changed: ${{ steps.scope.outputs.docker_changed }}
+      shared_changed: ${{ steps.scope.outputs.shared_changed }}
+      docs_only: ${{ steps.scope.outputs.docs_only }}
     steps:
       - name: Check out repository with full history
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Resolve changed scopes
+        id: scope
+        env:
+          CI_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          CI_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: python .github/scripts/change_scope.py
 
       - name: Verify production changes include corresponding tests
         env:
           CI_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-          CI_HEAD_SHA: ${{ github.sha }}
+          CI_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: python scripts/check-test-impact.py
 
-  lint:
-    name: Lint
+  source-security:
+    name: Source Security
+    needs: change-scope
+    if: ${{ always() }}
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Generate complete Trivy source report
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+          format: json
+          output: trivy-source.json
+          exit-code: "0"
+
+      - name: Enforce source security gate
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          format: table
+          exit-code: "1"
+
+      - name: Upload source security report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: source-security-report
+          path: trivy-source.json
+          if-no-files-found: warn
+          retention-days: 14
+
+  frontend-quality:
+    name: Frontend Quality
+    needs: change-scope
+    if: >-
+      ${{ needs.change-scope.outputs.frontend_changed == 'true' ||
+          needs.change-scope.outputs.shared_changed == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    defaults:
+      run:
+        working-directory: dazah-frontend
+    env:
+      API_BASE_URL: http://127.0.0.1:8000
+      COVERAGE_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+      COVERAGE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Check out repository with full history
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           fetch-depth: 0
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa
         with:
           version: ${{ env.PNPM_VERSION }}
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-          cache-dependency-path: dazah-frontend/pnpm-lock.yaml
-
-      - name: Install frontend dependencies
-        working-directory: dazah-frontend
-        run: pnpm install --frozen-lockfile
-
-      - name: Run ESLint
-        working-directory: dazah-frontend
-        run: pnpm lint
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v6
-        with:
-          enable-cache: true
-          cache-dependency-glob: dazah-backend/uv.lock
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Install backend dependencies
-        working-directory: dazah-backend
-        run: uv sync --frozen --extra dev --group dev
-
-      - name: Run Ruff on changed Python files
-        working-directory: dazah-backend
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          PUSH_BASE_SHA: ${{ github.event.before }}
-        run: |
-          if [[ "$EVENT_NAME" == "pull_request" ]]; then
-            base_sha="$PR_BASE_SHA"
-          else
-            base_sha="$PUSH_BASE_SHA"
-          fi
-
-          if [[ -z "$base_sha" || "$base_sha" =~ ^0+$ ]] ||
-             ! git cat-file -e "${base_sha}^{commit}" 2>/dev/null; then
-            base_sha="$(
-              git rev-parse HEAD^ 2>/dev/null ||
-                git rev-list --max-parents=0 HEAD
-            )"
-          fi
-
-          files=()
-          while IFS= read -r -d '' file; do
-            files+=("${file#dazah-backend/}")
-          done < <(
-            git diff --name-only --diff-filter=ACMR -z \
-              "$base_sha" "$GITHUB_SHA" -- 'dazah-backend/**/*.py'
-          )
-
-          if (( ${#files[@]} == 0 )); then
-            echo "No changed backend Python files."
-            exit 0
-          fi
-
-          printf 'Ruff checking %s\n' "${files[@]}"
-          uv run --no-sync ruff check "${files[@]}"
-
-  type-check:
-    name: Type Check
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: dazah-frontend
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-          cache-dependency-path: dazah-frontend/pnpm-lock.yaml
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Run TypeScript type checking
-        run: pnpm typecheck
-
-  unit-tests:
-    name: Unit Tests
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: dazah-frontend
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
           cache-dependency-path: dazah-frontend/pnpm-lock.yaml
 
       - name: Set up Python for coverage policy
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install dependencies
+      - name: Install dependencies once
         run: pnpm install --frozen-lockfile
 
-      - name: Run frontend unit tests
-        env:
-          COVERAGE_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-          COVERAGE_HEAD_SHA: ${{ github.sha }}
+      - name: Verify generated API contract
+        run: |
+          pnpm generate:api
+          git diff --exit-code -- src/types/generated/schema.ts
+
+      - name: Run ESLint
+        run: pnpm lint
+
+      - name: Run TypeScript type checking
+        run: pnpm typecheck
+
+      - name: Run unit tests and coverage gates
         run: |
           pnpm test:coverage
           python ../scripts/check-diff-coverage.py \
@@ -196,9 +160,18 @@ jobs:
             --path-prefix dazah-frontend \
             --minimum 80
 
-      - name: Upload frontend coverage report
-        if: ${{ always() && hashFiles('dazah-frontend/coverage/cobertura-coverage.xml') != '' }}
-        uses: actions/upload-artifact@v4
+      - name: Build production application
+        run: pnpm build
+
+      - name: Validate Compose and build frontend image
+        run: |
+          docker compose --env-file /dev/null \
+            -f docker-compose.yml config --no-env-resolution --quiet
+          docker build --tag "dazah-frontend:ci-${GITHUB_SHA}" .
+
+      - name: Upload frontend coverage
+        if: ${{ always() && hashFiles('dazah-frontend/coverage/**') != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: frontend-coverage
           path: dazah-frontend/coverage
@@ -206,22 +179,31 @@ jobs:
           retention-days: 14
 
   frontend-e2e:
-    name: Frontend E2E
+    name: Stable Frontend E2E
+    needs:
+      - change-scope
+      - frontend-quality
+    if: >-
+      ${{ needs.change-scope.outputs.frontend_changed == 'true' ||
+          needs.change-scope.outputs.shared_changed == 'true' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     defaults:
       run:
         working-directory: dazah-frontend
+    env:
+      API_BASE_URL: http://127.0.0.1:4100
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa
         with:
           version: ${{ env.PNPM_VERSION }}
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
@@ -233,230 +215,595 @@ jobs:
       - name: Install Chromium
         run: pnpm exec playwright install --with-deps chromium
 
-      - name: Run critical Playwright tests
-        env:
-          API_BASE_URL: http://localhost:8000
-        run: pnpm test:e2e:critical
+      - name: Build production application
+        run: pnpm build
 
-  frontend-build:
-    name: Frontend Build
+      - name: Run stable critical Playwright tests
+        run: pnpm exec playwright test e2e/purchasing --grep-invert @flaky
+
+      - name: Upload stable E2E report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: frontend-e2e-report
+          path: |
+            dazah-frontend/playwright-report
+            dazah-frontend/test-results
+          if-no-files-found: warn
+          retention-days: 14
+
+  frontend-flaky-quarantine:
+    name: Frontend Flaky Quarantine
+    needs:
+      - change-scope
+      - frontend-quality
+    if: >-
+      ${{ needs.change-scope.outputs.frontend_changed == 'true' ||
+          needs.change-scope.outputs.shared_changed == 'true' }}
+    continue-on-error: true
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     defaults:
       run:
         working-directory: dazah-frontend
     env:
-      API_BASE_URL: http://localhost:8000
+      API_BASE_URL: http://127.0.0.1:4100
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Detect quarantined tests
+        id: flaky
+        shell: bash
+        run: |
+          if grep -R -E --include='*.spec.ts' '@flaky' e2e; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "### Flaky quarantine" >> "$GITHUB_STEP_SUMMARY"
+            echo "No tests tagged \`@flaky\` are currently quarantined." \
+              >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+        if: ${{ steps.flaky.outputs.found == 'true' }}
+        uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa
         with:
           version: ${{ env.PNPM_VERSION }}
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        if: ${{ steps.flaky.outputs.found == 'true' }}
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
           cache-dependency-path: dazah-frontend/pnpm-lock.yaml
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Install dependencies and Chromium
+        if: ${{ steps.flaky.outputs.found == 'true' }}
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm exec playwright install --with-deps chromium
 
-      - name: Build Next.js application
+      - name: Build production application
+        if: ${{ steps.flaky.outputs.found == 'true' }}
         run: pnpm build
 
-  docker-build:
-    name: Docker Build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
+      - name: Run quarantined Playwright tests
+        if: ${{ steps.flaky.outputs.found == 'true' }}
+        run: pnpm exec playwright test --grep @flaky
 
-      - name: Build frontend image
-        run: docker build --tag dazah-frontend:ci ./dazah-frontend
+      - name: Upload quarantine report
+        if: ${{ always() && steps.flaky.outputs.found == 'true' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: frontend-flaky-quarantine-report
+          path: |
+            dazah-frontend/playwright-report
+            dazah-frontend/test-results
+          if-no-files-found: warn
+          retention-days: 14
 
-  frontend-test:
-    name: Frontend Test
-    if: ${{ always() }}
-    needs:
-      - lint
-      - type-check
-      - unit-tests
-      - frontend-e2e
-      - frontend-build
-      - docker-build
+  backend-quality:
+    name: Backend Quality
+    needs: change-scope
+    if: >-
+      ${{ needs.change-scope.outputs.backend_changed == 'true' ||
+          needs.change-scope.outputs.shared_changed == 'true' }}
     runs-on: ubuntu-latest
-    steps:
-      - name: Verify frontend checks
-        env:
-          LINT_RESULT: ${{ needs.lint.result }}
-          TYPE_CHECK_RESULT: ${{ needs.type-check.result }}
-          UNIT_TESTS_RESULT: ${{ needs.unit-tests.result }}
-          E2E_RESULT: ${{ needs.frontend-e2e.result }}
-          FRONTEND_BUILD_RESULT: ${{ needs.frontend-build.result }}
-          DOCKER_BUILD_RESULT: ${{ needs.docker-build.result }}
-        run: |
-          for result in \
-            "$LINT_RESULT" \
-            "$TYPE_CHECK_RESULT" \
-            "$UNIT_TESTS_RESULT" \
-            "$E2E_RESULT" \
-            "$FRONTEND_BUILD_RESULT" \
-            "$DOCKER_BUILD_RESULT"; do
-            test "$result" = "success"
-          done
-
-  backend-test:
-    name: Backend Test
-    runs-on: ubuntu-latest
+    timeout-minutes: 35
     services:
       postgres:
         image: postgres:17
         env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: dazah_test
+          POSTGRES_USER: dazah_ci
+          POSTGRES_PASSWORD: dazah_ci_test
+          POSTGRES_DB: dazah_ci_test
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U postgres -d dazah_test"
-          --health-interval 10s
+          --health-cmd "pg_isready -U dazah_ci -d dazah_ci_test"
+          --health-interval 5s
           --health-timeout 5s
-          --health-retries 5
+          --health-retries 12
     env:
+      CI_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+      CI_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: dazah_ci
+      PGPASSWORD: dazah_ci_test
+      PGDATABASE: dazah_ci_test
       APP_ENV: test
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/dazah_test
-      TEST_DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/dazah_test
+      DATABASE_URL: postgresql+asyncpg://dazah_ci:dazah_ci_test@localhost:5432/dazah_ci_test
+      TEST_DATABASE_URL: postgresql+asyncpg://dazah_ci:dazah_ci_test@localhost:5432/dazah_ci_test
       REDIS_URL: redis://localhost:6379/0
       SECRET_KEY: ci-only-secret-key
       ENCRYPTION_KEY: MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=
-      FEISHU_APP_ID: ci_dummy_app_id
-      FEISHU_APP_SECRET: ci_dummy_app_secret
-      FEISHU_REDIRECT_URI: http://localhost:3000/callback
       FRONTEND_URL: http://localhost:3000
       FEISHU_WS_ENABLED: "false"
       EQUIPMENT_FEISHU_WS_ENABLED: "false"
       LIVZON_FEISHU_CARD_CALLBACK_WS_ENABLED: "false"
       LIVZON_FEISHU_EVENT_WS_ENABLED: "false"
       MINIO_ENABLED: "false"
-    defaults:
-      run:
-        working-directory: dazah-backend
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
+      - name: Check out repository with full history
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           fetch-depth: 0
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff
         with:
           enable-cache: true
           cache-dependency-glob: dazah-backend/uv.lock
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install dependencies
-        run: uv sync --frozen --group dev
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install --yes postgresql-client
 
-      - name: Verify a single Alembic head
-        run: test "$(uv run alembic heads | wc -l)" -eq 1
+      - name: Run backend quality checks
+        run: bash dazah-backend/scripts/ci.sh quality
 
-      - name: Apply Alembic migrations
-        run: uv run alembic upgrade head
-
-      - name: Run unit and API integration tests with coverage
-        env:
-          COVERAGE_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-          COVERAGE_HEAD_SHA: ${{ github.sha }}
-        run: |
-          uv run pytest \
-            --cov=app \
-            --cov-branch \
-            --cov-report=term-missing \
-            --cov-report=xml
-          uv run python ../scripts/check-coverage-floor.py \
-            --coverage-file coverage.xml \
-            --min-lines 60 \
-            --min-branches 33.5
-          uv run python ../scripts/check-diff-coverage.py \
-            --coverage-file coverage.xml \
-            --path-prefix dazah-backend/app \
-            --minimum 80
-
-      - name: Upload coverage report
-        if: ${{ always() && hashFiles('dazah-backend/coverage.xml') != '' }}
-        uses: actions/upload-artifact@v4
+      - name: Upload backend quality report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: backend-coverage
-          path: dazah-backend/coverage.xml
+          name: backend-quality-report
+          path: dazah-backend/.pytest_cache/backend-quality-junit.xml
           if-no-files-found: ignore
           retention-days: 14
 
-  backend-docker-build:
-    name: Backend Docker Build
+  backend-integration:
+    name: Backend Integration
+    needs:
+      - change-scope
+      - backend-quality
+    if: >-
+      ${{ needs.change-scope.outputs.backend_changed == 'true' ||
+          needs.change-scope.outputs.shared_changed == 'true' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: dazah_ci
+          POSTGRES_PASSWORD: dazah_ci_test
+          POSTGRES_DB: dazah_ci_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U dazah_ci -d dazah_ci_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+      redis:
+        image: redis:8-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      CI_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+      CI_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      COVERAGE_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+      COVERAGE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: dazah_ci
+      PGPASSWORD: dazah_ci_test
+      PGDATABASE: dazah_ci_test
+      APP_ENV: test
+      DATABASE_URL: postgresql+asyncpg://dazah_ci:dazah_ci_test@localhost:5432/dazah_ci_test
+      TEST_DATABASE_URL: postgresql+asyncpg://dazah_ci:dazah_ci_test@localhost:5432/dazah_ci_test
+      REDIS_URL: redis://localhost:6379/0
+      SECRET_KEY: ci-only-secret-key
+      ENCRYPTION_KEY: MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=
+      FRONTEND_URL: http://localhost:3000
+      FEISHU_WS_ENABLED: "false"
+      EQUIPMENT_FEISHU_WS_ENABLED: "false"
+      LIVZON_FEISHU_CARD_CALLBACK_WS_ENABLED: "false"
+      LIVZON_FEISHU_EVENT_WS_ENABLED: "false"
+      MINIO_ENABLED: "false"
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Build backend image
-        run: docker build --tag dazah-backend:ci ./dazah-backend
-
-  hermes-test:
-    name: Hermes Test
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: Hermes-Lite
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
+      - name: Check out repository with full history
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff
+        with:
+          enable-cache: true
+          cache-dependency-glob: dazah-backend/uv.lock
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install --yes postgresql-client
+
+      - name: Run backend integration and coverage checks
+        run: bash dazah-backend/scripts/ci.sh integration
+
+      - name: Upload backend integration reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: backend-integration-reports
+          path: |
+            dazah-backend/.pytest_cache/backend-integration-junit.xml
+            dazah-backend/coverage.xml
+          if-no-files-found: ignore
+          retention-days: 14
+
+  backend-image-verify:
+    name: Backend Image Verify
+    needs:
+      - change-scope
+      - backend-quality
+    if: >-
+      ${{ needs.change-scope.outputs.backend_changed == 'true' ||
+          needs.change-scope.outputs.shared_changed == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      IMAGE_TAG: dazah-backend:ci-${{ github.sha }}
+      NETWORK_NAME: dazah-backend-ci
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+
+      - name: Build backend image once
+        run: |
+          docker buildx build \
+            --load \
+            --cache-from type=gha \
+            --cache-to type=gha,mode=max \
+            --tag "$IMAGE_TAG" \
+            ./dazah-backend
+
+      - name: Generate complete image vulnerability report
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        with:
+          scan-type: image
+          image-ref: ${{ env.IMAGE_TAG }}
+          severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+          format: json
+          output: trivy-backend-image.json
+          exit-code: "0"
+
+      - name: Enforce image vulnerability gate
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        with:
+          scan-type: image
+          image-ref: ${{ env.IMAGE_TAG }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          format: table
+          exit-code: "1"
+
+      - name: Start isolated dependencies
+        run: |
+          docker network create "$NETWORK_NAME"
+          docker run --detach --name dazah-ci-postgres \
+            --network "$NETWORK_NAME" \
+            --env POSTGRES_USER=dazah_ci \
+            --env POSTGRES_PASSWORD=dazah_ci_test \
+            --env POSTGRES_DB=dazah_ci_test \
+            --health-cmd "pg_isready -U dazah_ci -d dazah_ci_test" \
+            --health-interval 2s \
+            --health-timeout 5s \
+            --health-retries 30 \
+            postgres:17
+          docker run --detach --name dazah-ci-redis \
+            --network "$NETWORK_NAME" \
+            --health-cmd "redis-cli ping" \
+            --health-interval 2s \
+            --health-timeout 5s \
+            --health-retries 30 \
+            redis:8-alpine
+
+      - name: Wait for isolated dependencies
+        shell: bash
+        run: |
+          for container in dazah-ci-postgres dazah-ci-redis; do
+            for attempt in {1..30}; do
+              status="$(docker inspect --format '{{.State.Health.Status}}' "$container")"
+              if [[ "$status" == "healthy" ]]; then
+                break
+              fi
+              if [[ "$status" == "unhealthy" || "$attempt" -eq 30 ]]; then
+                docker logs "$container"
+                exit 1
+              fi
+              sleep 2
+            done
+          done
+
+      - name: Migrate container database
+        run: |
+          docker run --rm \
+            --network "$NETWORK_NAME" \
+            --env APP_ENV=test \
+            --env DATABASE_URL=postgresql+asyncpg://dazah_ci:dazah_ci_test@dazah-ci-postgres:5432/dazah_ci_test \
+            --env TEST_DATABASE_URL=postgresql+asyncpg://dazah_ci:dazah_ci_test@dazah-ci-postgres:5432/dazah_ci_test \
+            --env REDIS_URL=redis://dazah-ci-redis:6379/0 \
+            --env SECRET_KEY=ci-only-secret-key \
+            --env ENCRYPTION_KEY=MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA= \
+            --env FRONTEND_URL=http://localhost:3000 \
+            "$IMAGE_TAG" \
+            .venv/bin/alembic upgrade head
+
+      - name: Start backend container
+        run: |
+          docker run --detach --name dazah-backend-ci \
+            --network "$NETWORK_NAME" \
+            --publish 8000:8000 \
+            --env APP_ENV=test \
+            --env DATABASE_URL=postgresql+asyncpg://dazah_ci:dazah_ci_test@dazah-ci-postgres:5432/dazah_ci_test \
+            --env TEST_DATABASE_URL=postgresql+asyncpg://dazah_ci:dazah_ci_test@dazah-ci-postgres:5432/dazah_ci_test \
+            --env REDIS_URL=redis://dazah-ci-redis:6379/0 \
+            --env SECRET_KEY=ci-only-secret-key \
+            --env ENCRYPTION_KEY=MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA= \
+            --env FRONTEND_URL=http://localhost:3000 \
+            --env FEISHU_WS_ENABLED=false \
+            --env EQUIPMENT_FEISHU_WS_ENABLED=false \
+            --env LIVZON_FEISHU_CARD_CALLBACK_WS_ENABLED=false \
+            --env LIVZON_FEISHU_EVENT_WS_ENABLED=false \
+            --env MINIO_ENABLED=false \
+            "$IMAGE_TAG"
+
+      - name: Run bounded health and smoke checks
+        shell: bash
+        run: |
+          curl --fail --silent --show-error \
+            --retry 30 --retry-delay 2 --retry-all-errors \
+            --connect-timeout 2 --max-time 5 \
+            http://127.0.0.1:8000/health \
+            --output health.json
+          python3 -c \
+            "import json; assert json.load(open('health.json', encoding='utf-8')) == {'status': 'ok'}"
+          docker inspect --format '{{.State.Running}}' dazah-backend-ci |
+            grep --fixed-strings true
+
+      - name: Print container logs on failure
+        if: ${{ failure() }}
+        run: |
+          docker logs dazah-backend-ci 2>&1 || true
+          docker logs dazah-ci-postgres 2>&1 || true
+          docker logs dazah-ci-redis 2>&1 || true
+
+      - name: Upload image vulnerability report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: backend-image-security-report
+          path: trivy-backend-image.json
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Clean up containers
+        if: ${{ always() }}
+        run: |
+          docker rm --force dazah-backend-ci dazah-ci-postgres dazah-ci-redis \
+            2>/dev/null || true
+          docker network rm "$NETWORK_NAME" 2>/dev/null || true
+
+  hermes-quality:
+    name: Hermes Quality
+    needs: change-scope
+    if: >-
+      ${{ needs.change-scope.outputs.hermes_changed == 'true' ||
+          needs.change-scope.outputs.shared_changed == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff
         with:
           enable-cache: true
           cache-dependency-glob: Hermes-Lite/uv.lock
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Run Hermes-Lite compile checks and tests
-        run: bash scripts/ci.sh
+      - name: Run Hermes quality checks
+        run: bash Hermes-Lite/scripts/ci.sh
+
+      - name: Upload Hermes quality report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hermes-quality-report
+          path: Hermes-Lite/.pytest_cache/hermes-quality-junit.xml
+          if-no-files-found: ignore
+          retention-days: 14
+
+  hermes-contract:
+    name: Hermes Contract
+    needs:
+      - change-scope
+      - backend-quality
+      - hermes-quality
+    if: >-
+      ${{ always() &&
+          needs.change-scope.result == 'success' &&
+          (needs.change-scope.outputs.backend_changed == 'true' ||
+           needs.change-scope.outputs.hermes_changed == 'true' ||
+           needs.change-scope.outputs.shared_changed == 'true') &&
+          (needs.backend-quality.result == 'success' ||
+           needs.backend-quality.result == 'skipped') &&
+          (needs.hermes-quality.result == 'success' ||
+           needs.hermes-quality.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: dazah_ci
+          POSTGRES_PASSWORD: dazah_ci_test
+          POSTGRES_DB: dazah_ci_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U dazah_ci -d dazah_ci_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+      redis:
+        image: redis:8-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      APP_ENV: test
+      DATABASE_URL: postgresql+asyncpg://dazah_ci:dazah_ci_test@localhost:5432/dazah_ci_test
+      TEST_DATABASE_URL: postgresql+asyncpg://dazah_ci:dazah_ci_test@localhost:5432/dazah_ci_test
+      REDIS_URL: redis://localhost:6379/0
+      SECRET_KEY: ci-only-secret-key
+      ENCRYPTION_KEY: MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=
+      FRONTEND_URL: http://localhost:3000
+      AGENT_TOOL_TOKEN: ci-agent-tool-token
+      FEISHU_WS_ENABLED: "false"
+      EQUIPMENT_FEISHU_WS_ENABLED: "false"
+      LIVZON_FEISHU_CARD_CALLBACK_WS_ENABLED: "false"
+      LIVZON_FEISHU_EVENT_WS_ENABLED: "false"
+      MINIO_ENABLED: "false"
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            dazah-backend/uv.lock
+            Hermes-Lite/uv.lock
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install backend contract dependencies
+        working-directory: dazah-backend
+        run: |
+          uv sync --frozen --extra dev --group dev
+          uv run --no-sync alembic upgrade head
+
+      - name: Run backend Agent and Tool Registry contracts
+        working-directory: dazah-backend
+        run: |
+          uv run --no-sync pytest \
+            tests/modules/agent/test_agent_v2_contracts.py \
+            tests/modules/agent/test_tool_registry_executor.py \
+            tests/modules/agent/test_user_tool_api.py \
+            -ra \
+            --junitxml=.pytest_cache/hermes-contract-backend-junit.xml
+
+      - name: Install Hermes contract dependencies
+        working-directory: Hermes-Lite
+        run: uv sync --frozen --extra dev
+
+      - name: Run Hermes adapter contracts
+        working-directory: Hermes-Lite
+        run: |
+          uv run --no-sync pytest \
+            tests/test_dazah_feishu_tool_payload.py \
+            tests/test_dazah_backend_contract.py \
+            -ra \
+            --junitxml=.pytest_cache/hermes-contract-adapter-junit.xml
+
+      - name: Upload Hermes contract reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hermes-contract-reports
+          path: |
+            dazah-backend/.pytest_cache/hermes-contract-backend-junit.xml
+            Hermes-Lite/.pytest_cache/hermes-contract-adapter-junit.xml
+          if-no-files-found: ignore
+          retention-days: 14
 
   ci-gate:
     name: CI Gate
     if: ${{ always() }}
     needs:
-      - test-impact
-      - frontend-test
-      - backend-test
-      - backend-docker-build
-      - hermes-test
+      - change-scope
+      - source-security
+      - frontend-quality
+      - frontend-e2e
+      - backend-quality
+      - backend-integration
+      - backend-image-verify
+      - hermes-quality
+      - hermes-contract
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-      - name: Verify all merge checks
+      - name: Check out gate evaluator
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Evaluate required checks
         env:
-          TEST_IMPACT_RESULT: ${{ needs.test-impact.result }}
-          FRONTEND_RESULT: ${{ needs.frontend-test.result }}
-          BACKEND_RESULT: ${{ needs.backend-test.result }}
-          BACKEND_CONTAINER_RESULT: ${{ needs.backend-docker-build.result }}
-          HERMES_RESULT: ${{ needs.hermes-test.result }}
-        run: |
-          for result in \
-            "$TEST_IMPACT_RESULT" \
-            "$FRONTEND_RESULT" \
-            "$BACKEND_RESULT" \
-            "$BACKEND_CONTAINER_RESULT" \
-            "$HERMES_RESULT"; do
-            test "$result" = "success"
-          done
+          FRONTEND_CHANGED: ${{ needs.change-scope.outputs.frontend_changed }}
+          BACKEND_CHANGED: ${{ needs.change-scope.outputs.backend_changed }}
+          HERMES_CHANGED: ${{ needs.change-scope.outputs.hermes_changed }}
+          DOCKER_CHANGED: ${{ needs.change-scope.outputs.docker_changed }}
+          SHARED_CHANGED: ${{ needs.change-scope.outputs.shared_changed }}
+          DOCS_ONLY: ${{ needs.change-scope.outputs.docs_only }}
+          CHANGE_SCOPE_RESULT: ${{ needs.change-scope.result }}
+          SOURCE_SECURITY_RESULT: ${{ needs.source-security.result }}
+          FRONTEND_QUALITY_RESULT: ${{ needs.frontend-quality.result }}
+          FRONTEND_E2E_RESULT: ${{ needs.frontend-e2e.result }}
+          BACKEND_QUALITY_RESULT: ${{ needs.backend-quality.result }}
+          BACKEND_INTEGRATION_RESULT: ${{ needs.backend-integration.result }}
+          BACKEND_IMAGE_VERIFY_RESULT: ${{ needs.backend-image-verify.result }}
+          HERMES_QUALITY_RESULT: ${{ needs.hermes-quality.result }}
+          HERMES_CONTRACT_RESULT: ${{ needs.hermes-contract.result }}
+        run: python3 .github/scripts/ci_gate.py
