@@ -1,11 +1,19 @@
+/* @vitest-environment happy-dom */
+
+import { act, type ReactNode } from 'react'
+import { createRoot } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import {
   buildFeishuLoginHref,
   getLoginErrorMessage,
   LoginPanel,
 } from './LoginPanel'
+
+vi.mock('./AuthLayout', () => ({
+  AuthLayout: ({ children }: { children: ReactNode }) => children,
+}))
 
 describe('LoginPanel', () => {
   it('builds the Feishu login URL with an encoded completion destination', () => {
@@ -61,5 +69,44 @@ describe('LoginPanel', () => {
       '登录失败，请重新尝试。',
     )
     expect(getLoginErrorMessage()).toBeNull()
+  })
+
+  it('starts Feishu authentication and expands local login on demand', () => {
+    vi.useFakeTimers()
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+
+    try {
+      act(() => {
+        root.render(
+          <LoginPanel nextPath="/production" localLoginMode="enabled" />,
+        )
+      })
+
+      const buttons = Array.from(container.querySelectorAll('button'))
+      const feishuButton = buttons.find((button) =>
+        button.textContent?.includes('使用飞书企业账号登录'),
+      )
+      const localLoginButton = buttons.find(
+        (button) => button.textContent?.trim() === '▶本地账号登录',
+      )
+
+      expect(feishuButton).toBeDefined()
+      expect(localLoginButton).toBeDefined()
+
+      act(() => feishuButton?.click())
+      expect(feishuButton?.disabled).toBe(true)
+      expect(feishuButton?.textContent).toContain('正在打开飞书认证')
+
+      act(() => localLoginButton?.click())
+      expect(localLoginButton?.getAttribute('aria-expanded')).toBe('true')
+      expect(container.querySelector('input[name="username"]')).not.toBeNull()
+    } finally {
+      act(() => root.unmount())
+      container.remove()
+      vi.clearAllTimers()
+      vi.useRealTimers()
+    }
   })
 })
