@@ -15,6 +15,9 @@ command -v uv >/dev/null 2>&1 || {
 
 uv sync --frozen --extra dev
 
+echo "== AgentBackend V2 residual scan =="
+uv run --no-sync python "${project_dir}/../scripts/check-agent-v2-residuals.py"
+
 echo "== Hermes-Lite Python compilation =="
 uv run --no-sync python -m py_compile \
   run_agent.py \
@@ -23,5 +26,15 @@ uv run --no-sync python -m py_compile \
   services/dazah_agent_service.py \
   tools/dazah_platform.py
 
+echo "== Hermes-Lite Ruff =="
+uv run --no-sync ruff check \
+  services/dazah_agent_service.py \
+  services/dazah_feishu_gateway.py \
+  tools/dazah_platform.py \
+  tests/test_dazah_*.py \
+  tests/test_feishu_runtime.py
+
 echo "== Hermes-Lite tests =="
-uv run --no-sync pytest -ra
+uv run --no-sync pytest \
+  -ra \
+  --junitxml=.pytest_cache/hermes-quality-junit.xml

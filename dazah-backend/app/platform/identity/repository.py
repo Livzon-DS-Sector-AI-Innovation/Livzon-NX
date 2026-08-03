@@ -1,5 +1,4 @@
-from datetime import datetime
-from typing import Any
+from typing import cast
 from uuid import UUID
 
 from sqlalchemy import func, or_, select
@@ -7,11 +6,117 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.platform.identity.models import (
     Department,
-    FeishuCardAction,
+    ExternalIdentityBinding,
     FeishuConfig,
     FeishuUserToken,
     User,
 )
+
+
+class ExternalIdentityBindingRepository:
+    async def create(
+        self,
+        session: AsyncSession,
+        *,
+        tenant_id: str,
+        platform: str,
+        app_fingerprint: str,
+        external_user_id: str | None,
+        external_open_id: str | None,
+        external_union_id: str | None,
+        local_user_id: UUID,
+        actor_id: UUID,
+    ) -> ExternalIdentityBinding:
+        binding = ExternalIdentityBinding(
+            tenant_id=tenant_id,
+            platform=platform,
+            app_fingerprint=app_fingerprint,
+            external_user_id=external_user_id,
+            external_open_id=external_open_id,
+            external_union_id=external_union_id,
+            local_user_id=local_user_id,
+            status="active",
+            created_by=actor_id,
+            updated_by=actor_id,
+        )
+        session.add(binding)
+        await session.flush()
+        return binding
+
+    async def get(
+        self,
+        session: AsyncSession,
+        binding_id: UUID,
+    ) -> ExternalIdentityBinding | None:
+        return cast(
+            ExternalIdentityBinding | None,
+            await session.scalar(
+                select(ExternalIdentityBinding).where(
+                    ExternalIdentityBinding.id == binding_id,
+                    ExternalIdentityBinding.is_deleted == False,  # noqa: E712
+                )
+            )
+        )
+
+    async def disable(
+        self,
+        session: AsyncSession,
+        binding: ExternalIdentityBinding,
+        *,
+        actor_id: UUID,
+    ) -> ExternalIdentityBinding:
+        binding.status = "disabled"
+        binding.updated_by = actor_id
+        await session.flush()
+        return binding
+
+    async def resolve(
+        self,
+        session: AsyncSession,
+        *,
+        tenant_id: str,
+        platform: str,
+        app_fingerprint: str,
+        external_user_id: str | None,
+        external_open_id: str | None,
+        external_union_id: str | None,
+    ) -> ExternalIdentityBinding | None:
+        identifiers = [
+            ExternalIdentityBinding.external_user_id == external_user_id
+            if external_user_id
+            else None,
+            ExternalIdentityBinding.external_open_id == external_open_id
+            if external_open_id
+            else None,
+            ExternalIdentityBinding.external_union_id == external_union_id
+            if external_union_id
+            else None,
+        ]
+        clauses = [item for item in identifiers if item is not None]
+        if not clauses:
+            return None
+        result = await session.execute(
+            select(ExternalIdentityBinding).where(
+                ExternalIdentityBinding.tenant_id == tenant_id,
+                ExternalIdentityBinding.platform == platform,
+                ExternalIdentityBinding.app_fingerprint == app_fingerprint,
+                ExternalIdentityBinding.status == "active",
+                ExternalIdentityBinding.is_deleted == False,  # noqa: E712
+                or_(*clauses),
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def list(
+        self,
+        session: AsyncSession,
+    ) -> list[ExternalIdentityBinding]:
+        result = await session.execute(
+            select(ExternalIdentityBinding)
+            .where(ExternalIdentityBinding.is_deleted == False)  # noqa: E712
+            .order_by(ExternalIdentityBinding.created_at.desc())
+        )
+        return list(result.scalars().all())
 
 
 class UserRepository:
@@ -32,7 +137,9 @@ class UserRepository:
         return result.scalar_one_or_none()
 
     async def get_by_username(
-        self, session: AsyncSession, username: str,
+        self,
+        session: AsyncSession,
+        username: str,
     ) -> User | None:
         result = await session.execute(
             select(User).where(
@@ -43,7 +150,9 @@ class UserRepository:
         return result.scalar_one_or_none()
 
     async def get_by_username_including_deleted(
-        self, session: AsyncSession, username: str,
+        self,
+        session: AsyncSession,
+        username: str,
     ) -> User | None:
         result = await session.execute(
             select(User).where(
@@ -53,7 +162,9 @@ class UserRepository:
         return result.scalar_one_or_none()
 
     async def get_by_login_identifier(
-        self, session: AsyncSession, identifier: str,
+        self,
+        session: AsyncSession,
+        identifier: str,
     ) -> User | None:
         normalized = identifier.strip().lower()
         result = await session.execute(
@@ -70,7 +181,9 @@ class UserRepository:
         return result.scalar_one_or_none()
 
     async def get_by_feishu_open_id(
-        self, session: AsyncSession, open_id: str,
+        self,
+        session: AsyncSession,
+        open_id: str,
     ) -> User | None:
         result = await session.execute(
             select(User).where(
@@ -81,7 +194,9 @@ class UserRepository:
         return result.scalar_one_or_none()
 
     async def get_by_feishu_user_id(
-        self, session: AsyncSession, user_id: str,
+        self,
+        session: AsyncSession,
+        user_id: str,
     ) -> User | None:
         result = await session.execute(
             select(User).where(
@@ -187,8 +302,12 @@ class UserRepository:
         limit: int = 100,
     ) -> tuple[list[User], int]:
         base = select(User).where(User.is_deleted == False)  # noqa: E712
-        count_stmt = select(func.count()).select_from(User).where(
-            User.is_deleted == False  # noqa: E712
+        count_stmt = (
+            select(func.count())
+            .select_from(User)
+            .where(
+                User.is_deleted == False  # noqa: E712
+            )
         )
 
         if keyword:
@@ -256,7 +375,9 @@ class UserRepository:
 
 class DepartmentRepository:
     async def get_by_feishu_id(
-        self, session: AsyncSession, feishu_dept_id: str,
+        self,
+        session: AsyncSession,
+        feishu_dept_id: str,
     ) -> Department | None:
         result = await session.execute(
             select(Department).where(
@@ -266,8 +387,10 @@ class DepartmentRepository:
         return result.scalar_one_or_none()
 
     async def list_all(
-        self, session: AsyncSession,
-        *, include_deleted: bool = False,
+        self,
+        session: AsyncSession,
+        *,
+        include_deleted: bool = False,
     ) -> list[Department]:
         stmt = select(Department).where(
             Department.is_deleted == False,  # noqa: E712
@@ -279,7 +402,9 @@ class DepartmentRepository:
         return list(result.scalars().all())
 
     async def get_children(
-        self, session: AsyncSession, parent_id: str,
+        self,
+        session: AsyncSession,
+        parent_id: str,
     ) -> list[Department]:
         stmt = (
             select(Department)
@@ -328,89 +453,6 @@ class FeishuConfigRepository:
         session.add(config)
         await session.flush()
         return config
-
-
-class FeishuCardActionRepository:
-    async def create(
-        self,
-        session: AsyncSession,
-        *,
-        message_id: str | None,
-        card_id: str | None,
-        local_user_id: UUID | None,
-        recipient_open_id: str | None,
-        business_ref: dict[str, Any] | None,
-        action_key: str,
-        action_label: str,
-        expires_at: datetime | None,
-    ) -> FeishuCardAction:
-        action = FeishuCardAction(
-            message_id=message_id,
-            card_id=card_id,
-            local_user_id=local_user_id,
-            recipient_open_id=recipient_open_id,
-            business_ref=business_ref,
-            action_key=action_key,
-            action_label=action_label,
-            expires_at=expires_at,
-        )
-        session.add(action)
-        await session.flush()
-        return action
-
-    async def get_pending_by_id(
-        self, session: AsyncSession, action_id: UUID | str
-    ) -> FeishuCardAction | None:
-        if isinstance(action_id, str):
-            try:
-                action_id = UUID(action_id)
-            except ValueError:
-                return None
-        result = await session.execute(
-            select(FeishuCardAction).where(
-                FeishuCardAction.id == action_id,
-                FeishuCardAction.is_deleted == False,  # noqa: E712
-            )
-        )
-        return result.scalar_one_or_none()
-
-    async def get_by_id_for_update(
-        self, session: AsyncSession, action_id: UUID | str
-    ) -> FeishuCardAction | None:
-        """Lock a callback action while its state transition is processed."""
-        if isinstance(action_id, str):
-            try:
-                action_id = UUID(action_id)
-            except ValueError:
-                return None
-        result = await session.execute(
-            select(FeishuCardAction)
-            .where(
-                FeishuCardAction.id == action_id,
-                FeishuCardAction.is_deleted == False,  # noqa: E712
-            )
-            .with_for_update()
-        )
-        return result.scalar_one_or_none()
-
-    async def set_message_id_for_card(
-        self,
-        session: AsyncSession,
-        *,
-        card_id: str,
-        message_id: str | None,
-    ) -> None:
-        if not message_id:
-            return
-        result = await session.execute(
-            select(FeishuCardAction).where(
-                FeishuCardAction.card_id == card_id,
-                FeishuCardAction.is_deleted == False,  # noqa: E712
-            )
-        )
-        for action in result.scalars().all():
-            action.message_id = message_id
-        await session.flush()
 
 
 class FeishuUserTokenRepository:

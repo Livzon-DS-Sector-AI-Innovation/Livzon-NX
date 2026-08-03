@@ -16,10 +16,7 @@ def test_dazah_prompt_routes_quality_requests_to_quality_tools() -> None:
 def test_skill_resolver_default_scope_includes_quality() -> None:
     source = SERVICE_SOURCE.read_text(encoding="utf-8")
 
-    assert (
-        'default_scope = ["identity", "energy", "warehouse", "procurement", "quality"]'
-        in source
-    )
+    assert 'default_scope = ["identity", "energy", "warehouse", "procurement", "quality"]' in source
     assert '"business_scope": _business_scope(payload.context)' in source
 
 
@@ -27,7 +24,8 @@ def test_quality_requests_do_not_bypass_agent_orchestration() -> None:
     source = SERVICE_SOURCE.read_text(encoding="utf-8")
     platform_source = PLATFORM_TOOL_SOURCE.read_text(encoding="utf-8")
 
-    assert '"quality.list_deviation_report_records"' in platform_source
+    assert 'enum": ["search", "describe", "execute"]' in platform_source
+    assert "ALLOWED_OPERATIONS" not in platform_source
     assert "def _try_direct_quality_response" not in source
     assert "_try_direct_quality_response(payload)" not in source
 
@@ -43,6 +41,7 @@ def test_energy_feishu_config_writes_route_through_confirmed_tools() -> None:
         "energy.delete_source_sheets",
     ):
         assert operation in source
-        assert f'"{operation}"' in platform_source
+        assert f'"{operation}"' not in platform_source
+    assert "action=search" in platform_source
     assert "三类写操作都只能生成待确认项" in source
     assert "不得声称会修改或删除飞书原表内容" in source

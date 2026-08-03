@@ -24,12 +24,20 @@ desktop.ini
 /docs/*
 !/docs/gitea-ci.md
 !/docs/module-development-ci.md
+!/docs/dazah-enterprise-agent-gateway-tool-registry-implementation-plan-2026-07-30.md
+!/docs/tasks/
+/docs/tasks/*
+!/docs/tasks/dazah-enterprise-agent-gateway-tool-registry-tasks-2026-07-30.md
+!/docs/runbooks/
+/docs/runbooks/*
+!/docs/runbooks/hermes-native-feishu-gateway-phase0-runbook.md
 !/scripts/
 /scripts/*
 !/scripts/ci.sh
 !/scripts/check-branch-policy.sh
 !/scripts/check-coverage-floor.py
 !/scripts/check-diff-coverage.py
+!/scripts/check-agent-v2-residuals.py
 !/scripts/check-test-impact.py
 !/scripts/prepare-integration.sh
 !/scripts/tests/
@@ -40,6 +48,7 @@ desktop.ini
 # Python
 **/__pycache__/
 **/.pytest_cache/
+**/.pytest-cache/
 **/.ruff_cache/
 **/.mypy_cache/
 **/.venv/

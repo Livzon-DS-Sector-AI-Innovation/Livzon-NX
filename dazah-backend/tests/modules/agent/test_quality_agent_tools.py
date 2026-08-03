@@ -1,14 +1,12 @@
 from __future__ import annotations
 
-import ast
 import uuid
 from datetime import UTC, datetime
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
-from app.modules.agent.schemas import AgentToolExecuteRequest
+from app.modules.agent.schemas import AgentToolExecuteRequest, AgentTrustedSubject
 from app.modules.agent.service import AgentService
 from app.modules.agent.tool_registration import ensure_agent_tools_registered
 from app.modules.agent.tools import tool_registry
@@ -102,7 +100,13 @@ EXPECTED_QUALITY_OPERATIONS = {
 
 
 class FakeDb:
-    pass
+    async def get(self, _model, item_id):
+        return SimpleNamespace(
+            id=item_id,
+            status="active",
+            is_deleted=False,
+            role="user",
+        )
 
 
 class FakeAgentRepository:
@@ -177,25 +181,8 @@ class FakeAgentRepository:
 def _quality_operation_names() -> set[str]:
     ensure_agent_tools_registered()
     return {
-        tool.name
-        for tool in tool_registry.list()
-        if tool.name.startswith("quality.")
+        tool.name for tool in tool_registry.list() if tool.name.startswith("quality.")
     }
-
-
-def _hermes_allowed_operations() -> set[str]:
-    repo_root = Path(__file__).resolve().parents[4]
-    hermes_tool = repo_root / "Hermes-Lite" / "tools" / "dazah_platform.py"
-    tree = ast.parse(hermes_tool.read_text(encoding="utf-8"))
-    for node in tree.body:
-        if isinstance(node, ast.Assign):
-            names = [
-                target.id for target in node.targets if isinstance(target, ast.Name)
-            ]
-            if "ALLOWED_OPERATIONS" in names:
-                value = ast.literal_eval(node.value)
-                return {item for item in value if str(item).startswith("quality.")}
-    raise AssertionError("ALLOWED_OPERATIONS not found")
 
 
 def test_quality_agent_tools_are_registered() -> None:
@@ -213,8 +200,7 @@ def test_quality_tools_exclude_deleted_approval_and_config_operations() -> None:
 
 
 @pytest.mark.anyio
-async def test_quality_write_tool_returns_confirmation_without_invoking_business_logic(
-) -> None:
+async def test_quality_write_tool_returns_confirmation_before_execution() -> None:
     repo = FakeAgentRepository()
     service = AgentService(
         settings=SimpleNamespace(AGENT_WRITE_CONFIRM_TTL_SECONDS=300),
@@ -226,6 +212,11 @@ async def test_quality_write_tool_returns_confirmation_without_invoking_business
         FakeDb(),
         request=AgentToolExecuteRequest(
             operation="quality.create_deviation",
+            subject=AgentTrustedSubject(
+                tenant_id="test",
+                user_id=uuid.uuid4(),
+                source="internal",
+            ),
             body={
                 "description": "洁净区压差异常",
                 "affected_items": "产品A/批号B001",
@@ -297,5 +288,5 @@ async def test_list_inspection_records_tool_uses_quality_service(
     assert result["items"][0]["inspection_no"] == "QC-001"
 
 
-def test_hermes_quality_allowed_operations_match_backend_registry() -> None:
-    assert _hermes_allowed_operations() == _quality_operation_names()
+def test_quality_operations_are_available_from_backend_registry() -> None:
+    assert _quality_operation_names()

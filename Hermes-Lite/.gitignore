@@ -35,6 +35,7 @@ USER.md
 /memories/
 /cache/
 /context_length_cache.yaml
+/larksuite-cli-1.0.76.tgz
 
 # OS / editor
 .DS_Store

@@ -117,8 +117,7 @@ class AgentOperationsService:
                         "automation_id": item["automation_id"],
                         "kind": "failure_review",
                         "message": (
-                            "建议检查失败步骤、权限范围，"
-                            "或将不稳定操作改为人工待办。"
+                            "建议检查失败步骤、权限范围，或将不稳定操作改为人工待办。"
                         ),
                         "evidence": item["evidence"],
                         "requires_owner_confirmation": True,

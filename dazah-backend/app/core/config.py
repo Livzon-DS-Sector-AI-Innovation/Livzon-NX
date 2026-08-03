@@ -75,9 +75,6 @@ class Settings(BaseSettings):
     FEISHU_SYNC_ROOT_DEPT_ID: str = ""  # 部门同步的根部门 ID（API 触发）
     FEISHU_SYNC_MEMBER_DEPT_ID: str = ""  # 成员同步的目标部门 ID（每日 00:00）
 
-    # Feishu WebSocket 长连接（接收消息/事件推送）
-    FEISHU_WS_ENABLED: bool = True
-
     # Feishu 安全模块机器人（独立应用凭证）
     SAFETY_FEISHU_APP_ID: str = ""
     SAFETY_FEISHU_APP_SECRET: str = ""
@@ -186,7 +183,7 @@ class Settings(BaseSettings):
     MCP_AGENT_API_KEYS: str = ""
 
     # Hermes 中枢 Agent
-    HERMES_AGENT_URL: str = ""
+    HERMES_AGENT_V2_URL: str = ""
     HERMES_AGENT_TOKEN: str = ""
     HERMES_INTERNAL_URL: str = ""
     HERMES_INTERNAL_TOKEN: str = ""
@@ -199,12 +196,16 @@ class Settings(BaseSettings):
     AGENT_HERMES_TIMEOUT_SECONDS: int = 210
     AGENT_INTERNAL_API_TIMEOUT_SECONDS: int = 120
 
-    # Livzon assistant Feishu card callback. Enable this in development when
-    # Feishu cannot reach a public HTTPS callback URL.
-    LIVZON_FEISHU_CARD_CALLBACK_WS_ENABLED: bool = False
-    # Livzon assistant Feishu event long connection. The legacy card callback
-    # switch remains an alias so deployed configurations continue to work.
-    LIVZON_FEISHU_EVENT_WS_ENABLED: bool = False
+    @field_validator("HERMES_AGENT_V2_URL")
+    @classmethod
+    def require_agent_backend_v2_url(cls, value: str) -> str:
+        normalized = value.rstrip("/")
+        if normalized and not normalized.endswith("/v2/agent/runs"):
+            raise ValueError(
+                "HERMES_AGENT_V2_URL must target AgentBackend V2 "
+                "(/v2/agent/runs)"
+            )
+        return normalized
 
     # API
     API_V1_PREFIX: str = "/api/v1"

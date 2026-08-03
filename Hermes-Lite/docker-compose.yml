@@ -16,6 +16,7 @@ services:
       HERMES_DAZAH_MAX_TOOL_ITERATIONS: ${HERMES_DAZAH_MAX_TOOL_ITERATIONS:-30}
       LARK_CLI_PATH: /usr/local/bin/lark-cli
       HERMES_FEISHU_TMPFS: /run/hermes-feishu
+      HERMES_GATEWAY_LOCK_DIR: /run/hermes-feishu/gateway-locks
       PYTHONUNBUFFERED: "1"
     ports:
       - "${HERMES_BIND_HOST:-127.0.0.1}:${HERMES_PORT:-8100}:8100"

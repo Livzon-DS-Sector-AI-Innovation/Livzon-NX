@@ -1,6 +1,7 @@
 FROM python:3.9-slim-bookworm
 
 WORKDIR /app
+RUN groupadd --system app && useradd --system --gid app --home-dir /app app
 
 # Install patchelf for PyTorch fixes
 RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple patchelf
@@ -34,6 +35,9 @@ RUN set -e; \
 
 # Copy service code
 COPY edbo_service/ .
+RUN chown -R app:app /app
+
+USER app
 
 EXPOSE 8000
 

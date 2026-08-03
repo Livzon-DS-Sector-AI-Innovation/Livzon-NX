@@ -4,7 +4,7 @@ import { getAuthHeaders } from '@/lib/auth'
 import { getServerApiBaseUrl } from '@/lib/server-api'
 import type { components } from '@/types/generated/schema'
 
-type AgentToolExecuteRequest = components['schemas']['AgentToolExecuteRequest']
+type AgentToolControlRequest = components['schemas']['AgentToolControlRequest']
 
 interface AgentConfirmation {
   id: string
@@ -52,9 +52,9 @@ async function postAgentApi<T>(path: string, body?: unknown): Promise<T> {
 }
 
 export async function requestLivzonTaskTool(
-  input: AgentToolExecuteRequest,
+  input: AgentToolControlRequest,
 ): Promise<AgentToolExecuteResponse> {
-  return postAgentApi<AgentToolExecuteResponse>('/tools/execute/user', input)
+  return postAgentApi<AgentToolExecuteResponse>('/control/tools/execute', input)
 }
 
 export async function executeLivzonTaskConfirmation(

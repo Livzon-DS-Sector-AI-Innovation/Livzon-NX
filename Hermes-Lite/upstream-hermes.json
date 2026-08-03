@@ -1,0 +1,69 @@
+{
+  "repository": "https://github.com/NousResearch/hermes-agent",
+  "release_tag": "v2026.7.7.2",
+  "release_version": "0.18.2",
+  "tag_object_sha": "b7751df34688835a108e0d630f3495fc11f3df79",
+  "commit_sha": "9de9c25f620ff7f1ce0fd5457d596052d5159596",
+  "archive_sha256": "4986ef5c422f5855eaa51a104d833d2202ffcfa372bd0f83e3dbb21ae80864d3",
+  "adapter_path": "plugins/platforms/feishu/adapter.py",
+  "required_files": [
+    "gateway/config.py",
+    "gateway/platforms/base.py",
+    "gateway/session.py",
+    "plugins/platforms/feishu/adapter.py"
+  ],
+  "required_classes": {
+    "gateway/platforms/base.py": {
+      "BasePlatformAdapter": [
+        "connect",
+        "disconnect",
+        "edit_message",
+        "handle_message",
+        "on_processing_complete",
+        "on_processing_start",
+        "send",
+        "send_draft",
+        "set_message_handler",
+        "supports_draft_streaming"
+      ]
+    },
+    "plugins/platforms/feishu/adapter.py": {
+      "FeishuAdapter": [
+        "_feishu_send_with_retry",
+        "connect",
+        "disconnect",
+        "edit_message",
+        "send",
+        "send_exec_approval"
+      ]
+    }
+  },
+  "required_class_attributes": {
+    "gateway/platforms/base.py": {
+      "MessageEvent": [
+        "media_types",
+        "media_urls",
+        "message_id",
+        "message_type",
+        "metadata",
+        "reply_to_message_id",
+        "reply_to_text",
+        "source",
+        "text"
+      ]
+    },
+    "gateway/session.py": {
+      "SessionSource": [
+        "chat_id",
+        "chat_type",
+        "message_id",
+        "parent_chat_id",
+        "platform",
+        "thread_id",
+        "user_id",
+        "user_id_alt",
+        "user_name"
+      ]
+    }
+  }
+}

@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.agent.schemas import (
     AgentSkillResolveRequest,
     AgentToolExecuteRequest,
+    AgentTrustedSubject,
     AgentWorkflowCreate,
     AgentWorkflowUpdate,
 )
@@ -21,6 +22,7 @@ from app.modules.agent.service import (
 )
 from app.modules.agent.tool_registration import ensure_agent_tools_registered
 from app.modules.agent.tools import tool_registry
+from app.platform.identity.models import User
 
 
 class AllowAllAccessScopeService:
@@ -181,9 +183,7 @@ def test_workflow_capabilities_mark_high_risk_as_not_allowed() -> None:
     assert (
         by_operation["procurement.list_purchase_requests"]["workflow_allowed"] is True
     )
-    approve_capability = by_operation[
-        "procurement.approve_purchase_request"
-    ]
+    approve_capability = by_operation["procurement.approve_purchase_request"]
     assert approve_capability["workflow_allowed"] is False
     assert by_operation["warehouse.restart_feishu_ws"]["workflow_allowed"] is False
 
@@ -192,9 +192,9 @@ def test_procurement_supplier_query_is_exposed_as_workflow_capability() -> None:
     service = AgentService(settings=SimpleNamespace())
 
     capabilities = service._workflow_capabilities()["capabilities"]
-    supplier_capability = {
-        item["operation"]: item for item in capabilities
-    }["procurement.list_suppliers"]
+    supplier_capability = {item["operation"]: item for item in capabilities}[
+        "procurement.list_suppliers"
+    ]
 
     assert supplier_capability["method"] == "GET"
     assert supplier_capability["path"] == "/procurement/suppliers"
@@ -210,6 +210,11 @@ def test_workflow_create_normalizes_title_and_rejects_missing_path_params() -> N
     request = service._normalize_tool_request(
         AgentToolExecuteRequest(
             operation="agent.create_workflow",
+            subject=AgentTrustedSubject(
+                tenant_id="test",
+                user_id=uuid.uuid4(),
+                source="internal",
+            ),
             body={
                 "title": "采购申请批量提交",
                 "description": "查询草稿申请并提交",
@@ -307,6 +312,15 @@ async def test_workflow_creation_stores_user_scoped_workflow() -> None:
 async def test_workflow_run_refetches_updated_state_before_response(
     db_session: AsyncSession,
 ) -> None:
+    user = User(
+        name="工作流测试用户",
+        username=f"workflow-{uuid.uuid4().hex[:12]}",
+        role="user",
+        status="active",
+        auth_source="local",
+    )
+    db_session.add(user)
+    await db_session.flush()
     service = AgentService(
         settings=SimpleNamespace(),
         access_scope_service=AllowAllAccessScopeService(),
@@ -323,14 +337,14 @@ async def test_workflow_run_refetches_updated_state_before_response(
                 }
             ],
         ),
-        user_id=uuid.uuid4(),
+        user_id=user.id,
         session_id=None,
     )
 
     result = await service._start_workflow_run(
         db_session,
         workflow=workflow,
-        user_id=None,
+        user_id=user.id,
         session_id=None,
     )
 

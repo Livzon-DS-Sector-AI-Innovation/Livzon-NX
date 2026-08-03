@@ -1559,6 +1559,27 @@
         "title": "AgentConfirmationOut",
         "type": "object"
       },
+      "AgentConfirmationResolveRequest": {
+        "properties": {
+          "choice": {
+            "enum": [
+              "allow",
+              "reject"
+            ],
+            "title": "Choice",
+            "type": "string"
+          },
+          "subject": {
+            "$ref": "#/components/schemas/AgentTrustedSubject"
+          }
+        },
+        "required": [
+          "subject",
+          "choice"
+        ],
+        "title": "AgentConfirmationResolveRequest",
+        "type": "object"
+      },
       "AgentMessageOut": {
         "properties": {
           "content": {
@@ -1938,7 +1959,9 @@
         "title": "AgentSkillUpdate",
         "type": "object"
       },
-      "AgentToolExecuteRequest": {
+      "AgentToolControlRequest": {
+        "additionalProperties": false,
+        "description": "Authenticated web control-plane request without caller-owned identity.",
         "properties": {
           "body": {
             "anyOf": [
@@ -1952,9 +1975,84 @@
             ],
             "title": "Body"
           },
-          "context": {
+          "operation": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Operation",
+            "type": "string"
+          },
+          "params": {
             "additionalProperties": true,
-            "title": "Context",
+            "title": "Params",
+            "type": "object"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
+          },
+          "trace_id": {
+            "format": "uuid",
+            "title": "Trace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "operation"
+        ],
+        "title": "AgentToolControlRequest",
+        "type": "object"
+      },
+      "AgentToolEnabledUpdate": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "AgentToolEnabledUpdate",
+        "type": "object"
+      },
+      "AgentToolExecuteRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          },
+          "execution_context": {
+            "additionalProperties": true,
+            "title": "Execution Context",
             "type": "object"
           },
           "operation": {
@@ -1979,12 +2077,128 @@
               }
             ],
             "title": "Reason"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
+          },
+          "subject": {
+            "$ref": "#/components/schemas/AgentTrustedSubject"
+          },
+          "trace_id": {
+            "format": "uuid",
+            "title": "Trace Id",
+            "type": "string"
           }
         },
         "required": [
-          "operation"
+          "operation",
+          "subject"
         ],
         "title": "AgentToolExecuteRequest",
+        "type": "object"
+      },
+      "AgentToolSearchRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "limit": {
+            "default": 12,
+            "maximum": 50.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "module": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Module"
+          },
+          "query": {
+            "default": "",
+            "maxLength": 500,
+            "title": "Query",
+            "type": "string"
+          },
+          "subject": {
+            "$ref": "#/components/schemas/AgentTrustedSubject"
+          }
+        },
+        "required": [
+          "subject"
+        ],
+        "title": "AgentToolSearchRequest",
+        "type": "object"
+      },
+      "AgentTrustedSubject": {
+        "additionalProperties": false,
+        "properties": {
+          "display_name": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "external_binding_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Binding Id"
+          },
+          "source": {
+            "enum": [
+              "web",
+              "feishu",
+              "automation",
+              "internal"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "tenant_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tenant_id",
+          "user_id",
+          "source"
+        ],
+        "title": "AgentTrustedSubject",
         "type": "object"
       },
       "AnnualTrainingPlanCreate": {
@@ -17117,6 +17331,146 @@
         "title": "ExportRequest",
         "type": "object"
       },
+      "ExternalIdentityBindingCreate": {
+        "properties": {
+          "app_fingerprint": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "App Fingerprint",
+            "type": "string"
+          },
+          "external_open_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Open Id"
+          },
+          "external_union_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Union Id"
+          },
+          "external_user_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External User Id"
+          },
+          "local_user_id": {
+            "format": "uuid",
+            "title": "Local User Id",
+            "type": "string"
+          },
+          "platform": {
+            "const": "feishu",
+            "default": "feishu",
+            "title": "Platform",
+            "type": "string"
+          },
+          "tenant_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Tenant Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tenant_id",
+          "app_fingerprint",
+          "local_user_id"
+        ],
+        "title": "ExternalIdentityBindingCreate",
+        "type": "object"
+      },
+      "ExternalIdentityResolveRequest": {
+        "properties": {
+          "app_fingerprint": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "App Fingerprint",
+            "type": "string"
+          },
+          "chat_id": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chat Id"
+          },
+          "external_open_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Open Id"
+          },
+          "external_union_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Union Id"
+          },
+          "external_user_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External User Id"
+          },
+          "tenant_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Tenant Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tenant_id",
+          "app_fingerprint"
+        ],
+        "title": "ExternalIdentityResolveRequest",
+        "type": "object"
+      },
       "ExternalQualityFeishuSyncOut": {
         "properties": {
           "entity_code": {
@@ -17318,47 +17672,6 @@
         "title": "FailureCodeUpdate",
         "type": "object"
       },
-      "FeishuCardCallbackResponse": {
-        "properties": {
-          "card": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Card"
-          },
-          "challenge": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Challenge"
-          },
-          "toast": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Toast"
-          }
-        },
-        "title": "FeishuCardCallbackResponse",
-        "type": "object"
-      },
       "FeishuConfigApiResponse": {
         "properties": {
           "code": {
@@ -17398,35 +17711,20 @@
             "title": "App Secret Masked",
             "type": "string"
           },
-          "card_callback_encrypt_key_configured": {
-            "default": false,
-            "title": "Card Callback Encrypt Key Configured",
-            "type": "boolean"
-          },
-          "card_callback_encrypt_key_masked": {
-            "default": "",
-            "title": "Card Callback Encrypt Key Masked",
-            "type": "string"
-          },
-          "card_callback_url": {
-            "default": "/api/v1/identity/feishu/card-callback",
-            "title": "Card Callback Url",
-            "type": "string"
-          },
-          "card_callback_verification_token_configured": {
-            "default": false,
-            "title": "Card Callback Verification Token Configured",
-            "type": "boolean"
-          },
-          "card_callback_verification_token_masked": {
-            "default": "",
-            "title": "Card Callback Verification Token Masked",
-            "type": "string"
-          },
           "config_name": {
             "default": "Livzon 助手飞书设置",
             "title": "Config Name",
             "type": "string"
+          },
+          "config_version": {
+            "default": 0,
+            "title": "Config Version",
+            "type": "integer"
+          },
+          "gateway_enabled": {
+            "default": true,
+            "title": "Gateway Enabled",
+            "type": "boolean"
           },
           "id": {
             "anyOf": [
@@ -17543,6 +17841,11 @@
               }
             ],
             "title": "Sync Root Department Id"
+          },
+          "tenant_id": {
+            "default": "default",
+            "title": "Tenant Id",
+            "type": "string"
           }
         },
         "title": "FeishuConfigResponse",
@@ -17568,30 +17871,6 @@
             ],
             "title": "App Secret"
           },
-          "card_callback_encrypt_key": {
-            "anyOf": [
-              {
-                "maxLength": 500,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Card Callback Encrypt Key"
-          },
-          "card_callback_verification_token": {
-            "anyOf": [
-              {
-                "maxLength": 512,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Card Callback Verification Token"
-          },
           "config_name": {
             "default": "Livzon 助手飞书设置",
             "description": "配置名称，仅用于 Livzon 助手",
@@ -17599,6 +17878,11 @@
             "minLength": 1,
             "title": "Config Name",
             "type": "string"
+          },
+          "gateway_enabled": {
+            "default": true,
+            "title": "Gateway Enabled",
+            "type": "boolean"
           },
           "is_active": {
             "default": true,
@@ -17628,6 +17912,13 @@
               }
             ],
             "title": "Sync Root Department Id"
+          },
+          "tenant_id": {
+            "default": "default",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Tenant Id",
+            "type": "string"
           }
         },
         "required": [
@@ -22313,97 +22604,6 @@
           "sync_status"
         ],
         "title": "LivzonAccessScopeOut",
-        "type": "object"
-      },
-      "LivzonFeishuEventWsStatus": {
-        "properties": {
-          "enabled": {
-            "title": "Enabled",
-            "type": "boolean"
-          },
-          "event_types": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Event Types",
-            "type": "array"
-          },
-          "event_ws_enabled": {
-            "title": "Event Ws Enabled",
-            "type": "boolean"
-          },
-          "frames": {
-            "additionalProperties": {
-              "type": "integer"
-            },
-            "title": "Frames",
-            "type": "object"
-          },
-          "last_connected_at": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Last Connected At"
-          },
-          "last_error": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Last Error"
-          },
-          "legacy_card_callback_ws_enabled": {
-            "title": "Legacy Card Callback Ws Enabled",
-            "type": "boolean"
-          },
-          "ping_interval": {
-            "title": "Ping Interval",
-            "type": "integer"
-          },
-          "running": {
-            "title": "Running",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "enabled",
-          "event_ws_enabled",
-          "legacy_card_callback_ws_enabled",
-          "running",
-          "ping_interval"
-        ],
-        "title": "LivzonFeishuEventWsStatus",
-        "type": "object"
-      },
-      "LivzonFeishuEventWsStatusApiResponse": {
-        "properties": {
-          "code": {
-            "default": 200,
-            "title": "Code",
-            "type": "integer"
-          },
-          "data": {
-            "$ref": "#/components/schemas/LivzonFeishuEventWsStatus"
-          },
-          "message": {
-            "default": "success",
-            "title": "Message",
-            "type": "string"
-          }
-        },
-        "required": [
-          "data"
-        ],
-        "title": "LivzonFeishuEventWsStatusApiResponse",
         "type": "object"
       },
       "LivzonModuleScopeOut": {
@@ -48803,6 +49003,177 @@
         ]
       }
     },
+    "/api/v1/agent/confirmations/{confirmation_id}/resolve": {
+      "post": {
+        "operationId": "resolve_confirmation_from_gateway_api_v1_agent_confirmations__confirmation_id__resolve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "confirmation_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Confirmation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentConfirmationResolveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Resolve Confirmation From Gateway",
+        "tags": [
+          "中枢 Agent"
+        ]
+      }
+    },
+    "/api/v1/agent/control/tools": {
+      "get": {
+        "operationId": "list_control_plane_tools_api_v1_agent_control_tools_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Control Plane Tools",
+        "tags": [
+          "中枢 Agent"
+        ]
+      }
+    },
+    "/api/v1/agent/control/tools/execute": {
+      "post": {
+        "operationId": "execute_control_plane_tool_api_v1_agent_control_tools_execute_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentToolControlRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Execute Control Plane Tool",
+        "tags": [
+          "中枢 Agent"
+        ]
+      }
+    },
     "/api/v1/agent/domain-events/{correlation_id}": {
       "get": {
         "operationId": "list_domain_events_api_v1_agent_domain_events__correlation_id__get",
@@ -50043,53 +50414,6 @@
         ]
       }
     },
-    "/api/v1/agent/tools": {
-      "get": {
-        "operationId": "list_tools_api_v1_agent_tools_get",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "authorization",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "List Tools",
-        "tags": [
-          "中枢 Agent"
-        ]
-      }
-    },
     "/api/v1/agent/tools/execute": {
       "post": {
         "operationId": "execute_tool_api_v1_agent_tools_execute_post",
@@ -50147,13 +50471,13 @@
         ]
       }
     },
-    "/api/v1/agent/tools/execute/user": {
+    "/api/v1/agent/tools/search": {
       "post": {
-        "operationId": "execute_tool_as_current_user_api_v1_agent_tools_execute_user_post",
+        "operationId": "search_tools_api_v1_agent_tools_search_post",
         "parameters": [
           {
-            "in": "cookie",
-            "name": "auth_token",
+            "in": "header",
+            "name": "authorization",
             "required": false,
             "schema": {
               "anyOf": [
@@ -50164,7 +50488,7 @@
                   "type": "null"
                 }
               ],
-              "title": "Auth Token"
+              "title": "Authorization"
             }
           }
         ],
@@ -50172,7 +50496,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/AgentToolExecuteRequest"
+                "$ref": "#/components/schemas/AgentToolSearchRequest"
               }
             }
           },
@@ -50198,7 +50522,139 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Execute Tool As Current User",
+        "summary": "Search Tools",
+        "tags": [
+          "中枢 Agent"
+        ]
+      }
+    },
+    "/api/v1/agent/tools/{operation}": {
+      "get": {
+        "operationId": "describe_tool_api_v1_agent_tools__operation__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "operation",
+            "required": true,
+            "schema": {
+              "title": "Operation",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "subject_user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Subject User Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Describe Tool",
+        "tags": [
+          "中枢 Agent"
+        ]
+      }
+    },
+    "/api/v1/agent/tools/{operation}/enabled": {
+      "post": {
+        "operationId": "set_tool_enabled_api_v1_agent_tools__operation__enabled_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "operation",
+            "required": true,
+            "schema": {
+              "title": "Operation",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentToolEnabledUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Tool Enabled",
         "tags": [
           "中枢 Agent"
         ]
@@ -67400,6 +67856,168 @@
         ]
       }
     },
+    "/api/v1/identity/external-identity-bindings": {
+      "get": {
+        "operationId": "list_external_identity_bindings_api_v1_identity_external_identity_bindings_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "管理员查询外部身份绑定",
+        "tags": [
+          "用户信息",
+          "用户信息"
+        ]
+      },
+      "post": {
+        "operationId": "create_external_identity_binding_api_v1_identity_external_identity_bindings_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExternalIdentityBindingCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "管理员创建外部身份绑定",
+        "tags": [
+          "用户信息",
+          "用户信息"
+        ]
+      }
+    },
+    "/api/v1/identity/external-identity-bindings/{binding_id}/disable": {
+      "post": {
+        "operationId": "disable_external_identity_binding_api_v1_identity_external_identity_bindings__binding_id__disable_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "binding_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Binding Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "管理员停用外部身份绑定",
+        "tags": [
+          "用户信息",
+          "用户信息"
+        ]
+      }
+    },
     "/api/v1/identity/feishu-config": {
       "get": {
         "description": "获取仅用于 Livzon 助手的飞书通讯录配置。",
@@ -67633,6 +68251,54 @@
         ]
       }
     },
+    "/api/v1/identity/feishu-config/gateway-status": {
+      "get": {
+        "operationId": "get_livzon_feishu_gateway_status_api_v1_identity_feishu_config_gateway_status_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "查询 Hermes Feishu Gateway 状态",
+        "tags": [
+          "Livzon 助手飞书设置",
+          "Livzon 助手飞书设置"
+        ]
+      }
+    },
     "/api/v1/identity/feishu-config/test": {
       "post": {
         "description": "通过实际飞书 API 调用诊断 Livzon 助手通讯录权限。",
@@ -67698,227 +68364,6 @@
         "tags": [
           "Livzon 助手飞书设置",
           "Livzon 助手飞书设置"
-        ]
-      }
-    },
-    "/api/v1/identity/feishu/card-callback": {
-      "post": {
-        "description": "处理 Livzon 助手飞书交互卡片回传事件。",
-        "operationId": "livzon_feishu_card_callback_api_v1_identity_feishu_card_callback_post",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FeishuCardCallbackResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Livzon 助手飞书交互卡片回调",
-        "tags": [
-          "Livzon 助手飞书",
-          "Livzon 助手飞书"
-        ]
-      }
-    },
-    "/api/v1/identity/feishu/card-callback-ws/restart": {
-      "post": {
-        "description": "重启 Livzon 助手飞书卡片回调长连接。",
-        "operationId": "restart_livzon_feishu_card_callback_ws_api_v1_identity_feishu_card_callback_ws_restart_post",
-        "parameters": [
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "重启 Livzon 助手飞书卡片长连接",
-        "tags": [
-          "Livzon 助手飞书",
-          "Livzon 助手飞书"
-        ]
-      }
-    },
-    "/api/v1/identity/feishu/card-callback-ws/status": {
-      "get": {
-        "description": "查询 Livzon 助手飞书卡片回调长连接状态。",
-        "operationId": "livzon_feishu_card_callback_ws_status_api_v1_identity_feishu_card_callback_ws_status_get",
-        "parameters": [
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "查询 Livzon 助手飞书卡片长连接状态",
-        "tags": [
-          "Livzon 助手飞书",
-          "Livzon 助手飞书"
-        ]
-      }
-    },
-    "/api/v1/identity/feishu/event-ws/restart": {
-      "post": {
-        "operationId": "restart_livzon_feishu_event_ws_api_v1_identity_feishu_event_ws_restart_post",
-        "parameters": [
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/LivzonFeishuEventWsStatusApiResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "重启 Livzon 助手飞书事件长连接",
-        "tags": [
-          "Livzon 助手飞书",
-          "Livzon 助手飞书"
-        ]
-      }
-    },
-    "/api/v1/identity/feishu/event-ws/status": {
-      "get": {
-        "operationId": "livzon_feishu_event_ws_status_api_v1_identity_feishu_event_ws_status_get",
-        "parameters": [
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/LivzonFeishuEventWsStatusApiResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "查询 Livzon 助手飞书事件长连接状态",
-        "tags": [
-          "Livzon 助手飞书",
-          "Livzon 助手飞书"
         ]
       }
     },
@@ -68815,57 +69260,6 @@
         ]
       }
     },
-    "/api/v1/internal/feishu/access-snapshot": {
-      "get": {
-        "operationId": "get_access_snapshot_api_v1_internal_feishu_access_snapshot_get",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "authorization",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Get Access Snapshot Api V1 Internal Feishu Access Snapshot Get",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Get Access Snapshot",
-        "tags": [
-          "Hermes 飞书内部接口"
-        ]
-      }
-    },
     "/api/v1/internal/feishu/audit": {
       "post": {
         "operationId": "ingest_audit_event_api_v1_internal_feishu_audit_post",
@@ -68924,6 +69318,67 @@
           }
         },
         "summary": "Ingest Audit Event",
+        "tags": [
+          "Hermes 飞书内部接口"
+        ]
+      }
+    },
+    "/api/v1/internal/feishu/identity/resolve": {
+      "post": {
+        "operationId": "resolve_external_identity_api_v1_internal_feishu_identity_resolve_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExternalIdentityResolveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Resolve External Identity Api V1 Internal Feishu Identity Resolve Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Resolve External Identity",
         "tags": [
           "Hermes 飞书内部接口"
         ]

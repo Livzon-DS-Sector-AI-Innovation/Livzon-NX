@@ -7,7 +7,6 @@ import os
 from typing import Any
 
 from services.feishu_runtime import (
-    authorize,
     classify_risk,
     create_confirmation,
     enqueue_audit,
@@ -78,7 +77,6 @@ async def lark_cli(
         safe_args = validate_args(args, attachment_refs)
         risk, reason = classify_risk(safe_args, risk_hint)
         write = risk != "low" or any(word in " ".join(safe_args).lower() for word in ("append", "comment", "add"))
-        user = authorize(user_id, write=write, module=module)
         credentials = load_credentials()
         if credentials is None:
             raise RuntimeError("Feishu credentials are not configured")
@@ -160,7 +158,7 @@ async def lark_cli(
                 "output": result.stdout,
                 "error": result.stderr,
                 "elapsed_ms": result.elapsed_ms,
-                "user": user.get("display_name") or user_id,
+                "user": context.get("user_name") or user_id,
             },
             ensure_ascii=False,
         )
@@ -175,13 +173,26 @@ registry.register(
         "name": "lark_cli",
         "description": (
             "Use the pinned official lark-cli as the Feishu bot identity. Pass an argument array only. "
+            "For Base records use `base +record-list`; use `base +record-search` for keyword search and "
+            "`base +record-get` when record IDs are known. Resolve Base/Wiki URLs with `base +url-resolve`, "
+            "then reuse the returned base_token/table_id. Never add a Dazah `subject` argument. "
             "Reads and small traceable additions may execute immediately; edits return confirmation data; "
             "deletes, moves, sharing, permissions and version replacement always require one-time confirmation."
         ),
         "parameters": {
             "type": "object",
             "properties": {
-                "args": {"type": "array", "items": {"type": "string"}, "minItems": 1, "maxItems": 64},
+                "args": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "minItems": 1,
+                    "maxItems": 64,
+                    "description": (
+                        "Exact lark-cli argv. Base record example: "
+                        "['base','+record-list','--base-token','<token>','--table-id','<table_id>',"
+                        "'--limit','50','--format','json','--as','bot']."
+                    ),
+                },
                 "stdin_json": {
                     "type": "object",
                     "description": "Optional JSON object passed to lark-cli stdin.",

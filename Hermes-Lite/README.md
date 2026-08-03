@@ -26,14 +26,14 @@ Livzon Agent 前端悬浮助手
 Dazah 后端 /api/v1/agent/chat 或 /api/v1/agent/chat/stream
         |
         v
-Hermes-Lite /v1/chat 或 /v1/chat/stream
+Hermes-Lite /v2/agent/runs 或 /v2/agent/runs/stream
         |
         +-- LLM：Dazah 后端 /api/v1/agent/llm/chat/completions
         |
         +-- 工具：dazah_tool
               |
               v
-           Dazah 后端 /api/v1/agent/tools/execute
+           Dazah 后端 Tool Registry（search / describe / execute）
               |
               v
            仓储 / 采购 / 审批 / 飞书同步等业务模块
@@ -129,10 +129,11 @@ Hermes-Lite 为 Dazah Agent 网关提供两个接口：
 | 接口 | 说明 |
 | --- | --- |
 | `GET /health` | 健康检查 |
-| `POST /v1/chat` | 普通非流式对话 |
-| `POST /v1/chat/stream` | SSE 流式对话 |
+| `POST /v2/agent/runs` | AgentBackend V2 非流式运行 |
+| `POST /v2/agent/runs/stream` | AgentBackend V2 类型化 SSE 事件流 |
 
-`/v1/chat/stream` 用于 Livzon Agent 前端逐字输出回复内容。Dazah 前端可通过后端代理接口消费 SSE，用户点击“停止”时由前端中断当前流式请求。
+V2 流事件包含 Trace、Run、事件 ID 和递增序列；断线恢复只恢复展示，
+不得重复执行工具。
 
 ## 3. 兼容性说明
 
@@ -201,7 +202,9 @@ enabled_toolsets=["agent", "dazah"]
 
 以下工具由 Dazah 后端通过 `@agent_tool` 注册并由 `ToolRegistry` 统一管理。Hermes-Lite 的 `dazah_tool` 调用这些 operation 时，后端会再次校验工具是否注册、用户是否有权限、参数是否符合 InputSchema，以及该操作是否需要确认或必须人工判断。
 
-Hermes-Lite 中 `tools/dazah_platform.py` 的 `ALLOWED_OPERATIONS` 仍保留为本地防御层和模型 tool schema 枚举，实际授权以 Dazah 后端 `GET /api/v1/agent/tools` 与 `POST /api/v1/agent/tools/execute` 为准。新增工具后，应同步后端注册表与 Hermes 本地 schema，避免模型选择未暴露的 operation。
+Hermes-Lite 只注册一个 `dazah_tool`。模型先调用 `search`，按需调用
+`describe`，再调用 `execute`；运行时目录以后端 Tool Registry 为唯一事实源，
+不维护本地 operation 枚举或白名单。
 
 ### 5.1 能源模块
 
@@ -232,9 +235,7 @@ Hermes-Lite 中 `tools/dazah_platform.py` 的 `ALLOWED_OPERATIONS` 仍保留为�
 | `identity.get_department_tree` | 查询 Livzon 助手已同步的飞书部门树 |
 | `identity.search_personnel` | 查询 Livzon 助手已同步的飞书人员、手机号、邮箱和部门关系 |
 | `identity.check_feishu_permissions` | 诊断 Livzon 助手飞书通讯录权限（管理员） |
-| `identity.send_feishu_message` | 按 Livzon 规则发送文本、卡片或交互卡片，执行前必须确认收件人、消息形态和内容摘要 |
-| `identity.send_feishu_text_message` | 兼容旧文本消息工具，优先使用统一发送工具 |
-| `identity.send_feishu_card_message` | 兼容旧卡片消息工具，优先使用统一发送工具 |
+| `identity.deliver_feishu_message` | 通过 Hermes Delivery API 幂等投递消息，执行前确认收件人和内容摘要 |
 | `warehouse.list_raw_materials` | 查询原辅料库存 |
 | `warehouse.list_packaging_materials` | 查询包材库存 |
 | `warehouse.list_products` | 查询成品库存 |
@@ -376,7 +377,7 @@ Livzon Task 规则由 Dazah 后端 `ToolRegistry` 和 `ToolExecutor` 控制：
 
 - 对话层只保留“自动化流程”和“定时任务”两类，不再暴露旧工作流操作。
 - 不含时间语义时调用 `agent.create_automation`；出现日期、星期、时刻、间隔或重复语义时调用 `agent.create_scheduled_task`。
-- 创建定时任务时，`requirement` 必须保留用户完整原始需求；需要通过飞书发送查询数据、汇总、统计、清单、报表或记录时，`actions` 必须先执行对应查询，再执行 `identity.send_feishu_message`。
+- 创建定时任务时，`requirement` 必须保留用户完整原始需求；需要通过飞书发送查询数据、汇总、统计、清单、报表或记录时，`actions` 必须先执行对应查询，再执行 `identity.deliver_feishu_message`。
 - 后端会在每次定时运行时把前序查询结果合并到飞书正文；仅发送固定寒暄或“请查收”的数据任务会被拒绝创建。
 - 后端负责生成、编译和校验节点定义，LLM 不拼装底层 `notify`、`condition` 或触发器结构。
 - 审批、驳回、批准、重启等人工责任判断操作不得被加入自动化。
@@ -474,18 +475,15 @@ import app.modules.quality.agent_tools  # noqa: F401
 注册成功后，Dazah 后端会通过以下接口暴露工具元数据：
 
 ```text
-GET /api/v1/agent/tools
+POST /api/v1/agent/tools/search
+GET /api/v1/agent/tools/{operation}
+POST /api/v1/agent/tools/execute
 ```
 
-### 6.5 同步 Hermes-Lite 本地 schema
+### 6.5 自动发现
 
-Hermes-Lite 当前仍在 `tools/dazah_platform.py` 中保留 `ALLOWED_OPERATIONS`，用于模型工具 schema 枚举和本地防御层。新增后端工具后，需要同步：
-
-- `ALLOWED_OPERATIONS`
-- `DAZAH_TOOL_SCHEMA["parameters"]["properties"]["operation"]["enum"]`
-- 如有必要，更新 README 工具清单和系统提示词
-
-后续如果 Hermes 改为启动时动态读取 `GET /api/v1/agent/tools`，则 `ALLOWED_OPERATIONS` 可以降级为离线兜底缓存。
+业务模块在 `module_registry` 声明 Agent Tool Provider。新增、更新、禁用或
+替换工具不需要修改 Hermes-Lite；目录刷新后立即生效。
 
 ### 6.6 更新工具 schema 描述
 
@@ -630,11 +628,13 @@ curl http://127.0.0.1:8100/health
 Dazah 后端工具发现检查：
 
 ```bash
-curl -H "Authorization: Bearer $DAZAH_AGENT_TOOL_TOKEN" \
-  "$DAZAH_API_BASE_URL/agent/tools"
+curl -X POST -H "Authorization: Bearer $DAZAH_AGENT_TOOL_TOKEN" \
+  -H "Content-Type: application/json" \
+  "$DAZAH_API_BASE_URL/agent/tools/search" \
+  -d '{"query":"库存","subject":{"tenant_id":"default","user_id":"<uuid>","source":"internal"}}'
 ```
 
-该接口应返回后端当前注册的 Agent 工具列表。Hermes 本地 `ALLOWED_OPERATIONS` 应与该列表保持同步。
+该接口只返回可信主体有权发现的活动工具。
 
 ## 10. 环境变量
 

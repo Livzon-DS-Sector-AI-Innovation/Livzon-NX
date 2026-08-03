@@ -37,6 +37,9 @@ from .models import (
 )
 from .repository import AgentRepository
 from .schemas import (
+    AgentBackendSource,
+    AgentBackendV2Event,
+    AgentBackendV2Request,
     AgentChatRequest,
     AgentChatResponse,
     AgentConfirmationOut,
@@ -52,6 +55,7 @@ from .schemas import (
     AgentSkillUpdate,
     AgentToolExecuteRequest,
     AgentToolExecuteResponse,
+    AgentTrustedSubject,
     AgentWorkflowCreate,
     AgentWorkflowOut,
     AgentWorkflowRunOut,
@@ -122,9 +126,7 @@ def _extract_attachment_text(extension: str, data: bytes) -> str:
                 rows.append(f"工作表：{worksheet.title}")
                 for row in worksheet.iter_rows(values_only=True):
                     rows.append(
-                        "\t".join(
-                            "" if value is None else str(value) for value in row
-                        )
+                        "\t".join("" if value is None else str(value) for value in row)
                     )
         finally:
             workbook.close()
@@ -718,7 +720,6 @@ class AgentService:
             current_user=current_user,
             attachment_metadata=attachment_metadata,
         )
-        yield self._sse_event("start", {"session_id": str(session.id)})
         policy_response = await self._human_decision_required_chat_response(
             db,
             session_id=session.id,
@@ -726,11 +727,31 @@ class AgentService:
             current_user=current_user,
         )
         if policy_response:
-            yield self._sse_event("done", policy_response.model_dump(mode="json"))
+            trace_id = uuid.uuid4()
+            run_id = uuid.uuid4()
+            yield self._sse_backend_event(
+                AgentBackendV2Event(
+                    trace_id=trace_id,
+                    run_id=run_id,
+                    sequence=1,
+                    type="accepted",
+                    data={"session_id": str(session.id)},
+                )
+            )
+            yield self._sse_backend_event(
+                AgentBackendV2Event(
+                    trace_id=trace_id,
+                    run_id=run_id,
+                    sequence=2,
+                    type="finished",
+                    data=policy_response.model_dump(mode="json"),
+                )
+            )
             return
 
         assistant_text = ""
-        async for event, data in self._call_hermes_stream(
+        last_event: AgentBackendV2Event | None = None
+        async for backend_event in self._call_hermes_stream(
             session_id=session.id,
             user=current_user,
             message=request.message,
@@ -738,24 +759,29 @@ class AgentService:
             history=history,
             attachments=attachments,
         ):
-            if event == "ping":
-                yield self._sse_event("ping", data)
+            last_event = backend_event
+            event = backend_event.type
+            data = backend_event.data
+            if event == "accepted":
+                yield self._sse_backend_event(
+                    backend_event.model_copy(
+                        update={"data": {**data, "session_id": str(session.id)}}
+                    )
+                )
                 continue
 
-            if event == "delta":
+            if event == "text_delta":
                 text = str(data.get("text") or "")
                 assistant_text += text
-                yield self._sse_event("delta", {"text": text})
+                yield self._sse_backend_event(backend_event)
                 continue
 
             if event == "error":
-                message = str(
-                    data.get("message") or "Livzon Agent 服务暂不可用，请稍后重试。"
-                )
-                yield self._sse_event("error", {"message": message})
+                yield self._sse_backend_event(backend_event)
                 return
 
-            if event != "done":
+            if event != "finished":
+                yield self._sse_backend_event(backend_event)
                 continue
 
             hermes_result = {
@@ -795,8 +821,34 @@ class AgentService:
                 pending_confirmations=pending_confirmations,
                 tool_trace=list(hermes_result.get("tool_trace") or []),
             )
-            yield self._sse_event("done", response.model_dump(mode="json"))
+            yield self._sse_backend_event(
+                backend_event.model_copy(
+                    update={"data": response.model_dump(mode="json")}
+                )
+            )
             return
+
+        if last_event is None:
+            trace_id = uuid.uuid4()
+            run_id = uuid.uuid4()
+            sequence = 1
+        else:
+            trace_id = last_event.trace_id
+            run_id = last_event.run_id
+            sequence = last_event.sequence + 1
+        yield self._sse_backend_event(
+            AgentBackendV2Event(
+                trace_id=trace_id,
+                run_id=run_id,
+                sequence=sequence,
+                type="error",
+                data={
+                    "message": (
+                        "Livzon Agent 连接已中断，未收到 V2 finished 事件，请重试。"
+                    )
+                },
+            )
+        )
 
     async def _prepare_chat_context(
         self,
@@ -931,9 +983,7 @@ class AgentService:
         session = await self.repo.get_session(db, session_id)
         if session is None or session.user_id != current_user.id:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Agent session not found")
-        await self.repo.archive_session(
-            db, session=session, user_id=current_user.id
-        )
+        await self.repo.archive_session(db, session=session, user_id=current_user.id)
         return self._session_item(session, 0, None, 0)
 
     async def _human_decision_required_chat_response(
@@ -977,7 +1027,7 @@ class AgentService:
         request = self._normalize_tool_request(request)
         validation_error = self._tool_request_validation_error(request)
         if validation_error:
-            session_id = self._uuid_or_none(request.context.get("session_id"))
+            session_id = request.session_id
             call = await self.repo.create_tool_call(
                 db,
                 session_id=session_id,
@@ -1011,9 +1061,7 @@ class AgentService:
         confirmation_id: uuid.UUID,
         current_user: User,
     ) -> tuple[AgentConfirmation, AgentToolExecuteResponse]:
-        confirmation = await self.repo.get_confirmation_for_update(
-            db, confirmation_id
-        )
+        confirmation = await self.repo.get_confirmation_for_update(db, confirmation_id)
         if confirmation is None:
             raise HTTPException(
                 status.HTTP_404_NOT_FOUND, "Agent confirmation not found"
@@ -1056,7 +1104,7 @@ class AgentService:
                 await db.flush()
             raise
 
-        workflow_context = request.context or {}
+        workflow_context = request.execution_context
         workflow_run_id = self._uuid_or_none(workflow_context.get("workflow_run_id"))
         if workflow_run_id:
             workflow_data = await self._continue_workflow_after_step_confirmation(
@@ -1092,9 +1140,7 @@ class AgentService:
         confirmation_id: uuid.UUID,
         current_user: User,
     ) -> AgentConfirmation:
-        confirmation = await self.repo.get_confirmation_for_update(
-            db, confirmation_id
-        )
+        confirmation = await self.repo.get_confirmation_for_update(db, confirmation_id)
         if confirmation is None:
             raise HTTPException(
                 status.HTTP_404_NOT_FOUND, "Agent confirmation not found"
@@ -1134,10 +1180,10 @@ class AgentService:
         history: list[dict[str, Any]],
         attachments: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
-        if not self.settings.HERMES_AGENT_URL:
+        if not self.settings.HERMES_AGENT_V2_URL:
             return {
                 "message": (
-                    "Livzon Agent 服务尚未配置。请设置 HERMES_AGENT_URL "
+                    "Livzon Agent 服务尚未配置。请设置 HERMES_AGENT_V2_URL "
                     "后再使用业务智能助手。"
                 ),
                 "pending_confirmations": [],
@@ -1146,31 +1192,28 @@ class AgentService:
         headers = {"Content-Type": "application/json"}
         if self.settings.HERMES_AGENT_TOKEN:
             headers["Authorization"] = f"Bearer {self.settings.HERMES_AGENT_TOKEN}"
-        payload = {
-            "session_id": str(session_id),
-            "message": message,
-            "messages": history,
-            "attachments": attachments or [],
-            "context": {
-                **context,
-                "session_id": str(session_id),
-                "user_id": str(user.id),
-                "user_name": getattr(user, "name", None),
-                "scope": [
-                    "identity",
-                    "energy",
-                    "warehouse",
-                    "procurement",
-                    "quality",
-                ],
-            },
-        }
+        payload = AgentBackendV2Request(
+            session_id=f"web:{session_id}",
+            subject=AgentTrustedSubject(
+                tenant_id=user.tenant_key or "default",
+                user_id=user.id,
+                display_name=user.name,
+                source="web",
+            ),
+            source=AgentBackendSource(platform="web"),
+            message=message,
+            messages=history,
+            attachments=attachments or [],
+            client_capabilities=["structured_events"],
+        ).model_dump(mode="json")
         try:
             async with httpx.AsyncClient(
                 timeout=self._hermes_timeout_seconds()
             ) as client:
                 response = await client.post(
-                    self.settings.HERMES_AGENT_URL, json=payload, headers=headers
+                    self.settings.HERMES_AGENT_V2_URL,
+                    json=payload,
+                    headers=headers,
                 )
                 response.raise_for_status()
                 data = response.json()
@@ -1184,7 +1227,7 @@ class AgentService:
         except httpx.HTTPError:
             logger.exception(
                 "Hermes-Lite request failed: url=%s session_id=%s user_id=%s",
-                self.settings.HERMES_AGENT_URL,
+                self.settings.HERMES_AGENT_V2_URL,
                 session_id,
                 user.id,
             )
@@ -1203,13 +1246,30 @@ class AgentService:
         context: dict[str, Any],
         history: list[dict[str, Any]],
         attachments: list[dict[str, Any]] | None = None,
-    ) -> AsyncIterator[tuple[str, dict[str, Any]]]:
-        if not self.settings.HERMES_AGENT_URL:
-            yield (
-                "error",
-                {
+    ) -> AsyncIterator[AgentBackendV2Event]:
+        agent_request = AgentBackendV2Request(
+            session_id=f"web:{session_id}",
+            subject=AgentTrustedSubject(
+                tenant_id=user.tenant_key or "default",
+                user_id=user.id,
+                display_name=user.name,
+                source="web",
+            ),
+            source=AgentBackendSource(platform="web"),
+            message=message,
+            messages=history,
+            attachments=attachments or [],
+            client_capabilities=["structured_events", "streaming"],
+        )
+        if not self.settings.HERMES_AGENT_V2_URL:
+            yield AgentBackendV2Event(
+                trace_id=agent_request.trace_id,
+                run_id=agent_request.run_id,
+                sequence=1,
+                type="error",
+                data={
                     "message": (
-                        "Livzon Agent 服务尚未配置。请设置 HERMES_AGENT_URL "
+                        "Livzon Agent 服务尚未配置。请设置 HERMES_AGENT_V2_URL "
                         "后再使用业务智能助手。"
                     )
                 },
@@ -1218,26 +1278,9 @@ class AgentService:
         headers = {"Content-Type": "application/json"}
         if self.settings.HERMES_AGENT_TOKEN:
             headers["Authorization"] = f"Bearer {self.settings.HERMES_AGENT_TOKEN}"
-        payload = {
-            "session_id": str(session_id),
-            "message": message,
-            "messages": history,
-            "attachments": attachments or [],
-            "context": {
-                **context,
-                "session_id": str(session_id),
-                "user_id": str(user.id) if user else None,
-                "user_name": getattr(user, "name", None),
-                "scope": [
-                    "identity",
-                    "energy",
-                    "warehouse",
-                    "procurement",
-                    "quality",
-                ],
-            },
-        }
+        payload = agent_request.model_dump(mode="json")
         stream_url = self._hermes_stream_url()
+        last_sequence = 0
         try:
             hermes_timeout = self._hermes_timeout_seconds()
             timeout = httpx.Timeout(hermes_timeout, read=hermes_timeout)
@@ -1250,9 +1293,14 @@ class AgentService:
                 ) as response:
                     if response.status_code >= 400:
                         content = await response.aread()
-                        yield (
-                            "error",
-                            {"message": content.decode(errors="ignore")[:1000]},
+                        yield AgentBackendV2Event(
+                            trace_id=agent_request.trace_id,
+                            run_id=agent_request.run_id,
+                            sequence=1,
+                            type="error",
+                            data={
+                                "message": content.decode(errors="ignore")[:1000]
+                            },
                         )
                         return
                     event = "message"
@@ -1271,11 +1319,44 @@ class AgentService:
                             try:
                                 data = json.loads(raw_data)
                             except json.JSONDecodeError:
-                                data = {"text": raw_data}
-                            yield (
-                                event,
-                                data if isinstance(data, dict) else {"data": data},
-                            )
+                                data = None
+                            try:
+                                backend_event = AgentBackendV2Event.model_validate(data)
+                            except ValidationError:
+                                yield AgentBackendV2Event(
+                                    trace_id=agent_request.trace_id,
+                                    run_id=agent_request.run_id,
+                                    sequence=last_sequence + 1,
+                                    type="error",
+                                    data={
+                                        "message": (
+                                            "Hermes-Lite 返回了无效的 AgentBackend "
+                                            "V2 流事件。"
+                                        )
+                                    },
+                                )
+                                return
+                            if (
+                                backend_event.type != event
+                                or backend_event.trace_id != agent_request.trace_id
+                                or backend_event.run_id != agent_request.run_id
+                                or backend_event.sequence <= last_sequence
+                            ):
+                                yield AgentBackendV2Event(
+                                    trace_id=agent_request.trace_id,
+                                    run_id=agent_request.run_id,
+                                    sequence=last_sequence + 1,
+                                    type="error",
+                                    data={
+                                        "message": (
+                                            "Hermes-Lite 返回了不一致的 AgentBackend "
+                                            "V2 流事件。"
+                                        )
+                                    },
+                                )
+                                return
+                            last_sequence = backend_event.sequence
+                            yield backend_event
                             event = "message"
         except httpx.HTTPError:
             logger.exception(
@@ -1284,20 +1365,28 @@ class AgentService:
                 session_id,
                 getattr(user, "id", None),
             )
-            yield (
-                "error",
-                {"message": "Livzon Agent 服务暂不可用，已保留你的问题。请稍后重试。"},
+            yield AgentBackendV2Event(
+                trace_id=agent_request.trace_id,
+                run_id=agent_request.run_id,
+                sequence=last_sequence + 1,
+                type="error",
+                data={
+                    "message": (
+                        "Livzon Agent 服务暂不可用，已保留你的问题。请稍后重试。"
+                    )
+                },
             )
 
     def _hermes_stream_url(self) -> str:
-        base = self.settings.HERMES_AGENT_URL.rstrip("/")
-        if base.endswith("/v1/chat"):
-            return f"{base}/stream"
+        base = self.settings.HERMES_AGENT_V2_URL.rstrip("/")
         return f"{base}/stream"
 
     @staticmethod
-    def _sse_event(event: str, data: dict[str, Any]) -> str:
-        return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+    def _sse_backend_event(event: AgentBackendV2Event) -> str:
+        return (
+            f"event: {event.type}\n"
+            f"data: {event.model_dump_json()}\n\n"
+        )
 
     async def _perform_operation(
         self,
@@ -1473,18 +1562,14 @@ class AgentService:
             workflow_run.updated_by = user_id
             await db.flush()
             workflow_run = await self._refetch_workflow_run(db, workflow_run)
-            return {
-                "run": self._workflow_run_out(workflow_run).model_dump(mode="json")
-            }
+            return {"run": self._workflow_run_out(workflow_run).model_dump(mode="json")}
         if operation == "agent.get_workflow_run":
             self._require_local_db(db)
             assert db is not None
             workflow_run = await self._get_user_workflow_run(
                 db, params, user_id=user_id
             )
-            return {
-                "run": self._workflow_run_out(workflow_run).model_dump(mode="json")
-            }
+            return {"run": self._workflow_run_out(workflow_run).model_dump(mode="json")}
         return None
 
     def _workflow_capabilities(self) -> dict[str, Any]:
@@ -1569,9 +1654,7 @@ class AgentService:
         if request.steps is not None:
             steps = self._validated_workflow_steps(request.steps)
             user = (
-                await db.get(User, user_id)
-                if user_id and hasattr(db, "get")
-                else None
+                await db.get(User, user_id) if user_id and hasattr(db, "get") else None
             )
             for step in steps:
                 spec = tool_registry.require(str(step["operation"]))
@@ -1776,9 +1859,7 @@ class AgentService:
                 return {"run": self._workflow_run_out(run).model_dump(mode="json")}
             if spec.write:
                 summary = f"工作流「{workflow.name}」：{step.get('title') or operation}"
-                context = {
-                    "session_id": str(run.session_id) if run.session_id else None,
-                    "user_id": str(run.user_id) if run.user_id else None,
+                execution_context = {
                     "workflow_id": str(workflow.id),
                     "workflow_run_id": str(run.id),
                     "workflow_step_index": step_index,
@@ -1794,7 +1875,14 @@ class AgentService:
                         operation=operation,
                         params=step.get("params") or {},
                         body=step.get("body"),
-                        context=context,
+                        subject=AgentTrustedSubject(
+                            tenant_id=acting_user.tenant_key or "default",
+                            user_id=acting_user.id,
+                            display_name=acting_user.name,
+                            source="automation",
+                        ),
+                        session_id=run.session_id,
+                        execution_context=execution_context,
                         reason=summary,
                     ).model_dump(mode="json"),
                     expires_at=datetime.now(UTC)
@@ -1833,11 +1921,14 @@ class AgentService:
                         operation=operation,
                         params=step.get("params") or {},
                         body=step.get("body"),
-                        context={
-                            "session_id": str(run.session_id)
-                            if run.session_id
-                            else None,
-                            "user_id": str(run.user_id) if run.user_id else None,
+                        subject=AgentTrustedSubject(
+                            tenant_id=acting_user.tenant_key or "default",
+                            user_id=acting_user.id,
+                            display_name=acting_user.name,
+                            source="automation",
+                        ),
+                        session_id=run.session_id,
+                        execution_context={
                             "workflow_id": str(workflow.id),
                             "workflow_run_id": str(run.id),
                             "workflow_step_index": step_index,
@@ -2670,9 +2761,7 @@ class AgentService:
                 continue
             seen.add(operation)
             params = (
-                trace.get("params")
-                if isinstance(trace.get("params"), dict)
-                else {}
+                trace.get("params") if isinstance(trace.get("params"), dict) else {}
             )
             sources.append(
                 {

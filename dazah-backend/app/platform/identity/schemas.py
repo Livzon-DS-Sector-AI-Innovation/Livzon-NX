@@ -3,11 +3,39 @@ from datetime import datetime
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 UserRole = Literal["admin", "user"]
 UserStatus = Literal["active", "disabled"]
 AuthSource = Literal["local", "feishu"]
+
+
+class ExternalIdentityBindingCreate(BaseModel):
+    tenant_id: str = Field(min_length=1, max_length=128)
+    platform: Literal["feishu"] = "feishu"
+    app_fingerprint: str = Field(min_length=1, max_length=255)
+    external_user_id: str | None = Field(default=None, max_length=128)
+    external_open_id: str | None = Field(default=None, max_length=128)
+    external_union_id: str | None = Field(default=None, max_length=128)
+    local_user_id: UUID
+
+    @model_validator(mode="after")
+    def require_external_identifier(self) -> "ExternalIdentityBindingCreate":
+        if not any(
+            (self.external_user_id, self.external_open_id, self.external_union_id)
+        ):
+            raise ValueError("至少需要一个飞书外部用户标识")
+        return self
+
+
+class ExternalIdentityBindingOut(ExternalIdentityBindingCreate):
+    id: UUID
+    status: Literal["active", "disabled"]
+    last_seen_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
 
 
 class TokenResponse(BaseModel):
@@ -145,9 +173,7 @@ class ModulePermissionDefinitionOut(BaseModel):
 class UserModulePermissionsOut(BaseModel):
     user_id: UUID
     grant_version: int
-    available_modules: list[ModulePermissionDefinitionOut] = Field(
-        default_factory=list
-    )
+    available_modules: list[ModulePermissionDefinitionOut] = Field(default_factory=list)
     grants: list[ModulePermissionGrantOut] = Field(default_factory=list)
     livzon_sync_status: str | None = None
     livzon_source_grant_version: int | None = None
@@ -216,6 +242,7 @@ class DepartmentResponse(BaseModel):
 
 class DepartmentTreeNode(BaseModel):
     """组织架构树节点（含子部门）"""
+
     id: UUID
     feishu_department_id: str
     name: str
@@ -232,6 +259,7 @@ class DepartmentTreeNode(BaseModel):
 
 class PersonnelItem(BaseModel):
     """人员列表项"""
+
     id: UUID
     name: str
     en_name: str | None = None
@@ -278,6 +306,7 @@ class PersonnelItem(BaseModel):
 
 class PersonnelListResponse(BaseModel):
     """人员分页列表"""
+
     items: list[PersonnelItem]
     total: int
     offset: int
@@ -296,8 +325,8 @@ class FeishuConfigUpsert(BaseModel):
     )
     app_id: str = Field(..., min_length=1, max_length=128)
     app_secret: str | None = Field(default=None, max_length=500)
-    card_callback_verification_token: str | None = Field(default=None, max_length=512)
-    card_callback_encrypt_key: str | None = Field(default=None, max_length=500)
+    tenant_id: str = Field(default="default", min_length=1, max_length=128)
+    gateway_enabled: bool = True
     sync_root_department_id: str | None = Field(default=None, max_length=128)
     sync_member_department_id: str | None = Field(default=None, max_length=128)
     is_active: bool = True
@@ -306,8 +335,7 @@ class FeishuConfigUpsert(BaseModel):
         "config_name",
         "app_id",
         "app_secret",
-        "card_callback_verification_token",
-        "card_callback_encrypt_key",
+        "tenant_id",
         "sync_root_department_id",
         "sync_member_department_id",
         mode="before",
@@ -324,13 +352,11 @@ class FeishuConfigResponse(BaseModel):
     id: UUID | None = None
     config_name: str = "Livzon 助手飞书设置"
     app_id: str = ""
+    tenant_id: str = "default"
+    gateway_enabled: bool = True
+    config_version: int = 0
     app_secret_configured: bool = False
     app_secret_masked: str = ""
-    card_callback_verification_token_configured: bool = False
-    card_callback_verification_token_masked: str = ""
-    card_callback_encrypt_key_configured: bool = False
-    card_callback_encrypt_key_masked: str = ""
-    card_callback_url: str = "/api/v1/identity/feishu/card-callback"
     sync_root_department_id: str | None = None
     sync_member_department_id: str | None = None
     is_active: bool = True
@@ -378,27 +404,3 @@ class FeishuDiagnosticApiResponse(BaseModel):
     code: int = 200
     message: str = "success"
     data: FeishuDiagnosticResult
-
-
-class LivzonFeishuEventWsStatus(BaseModel):
-    enabled: bool
-    event_ws_enabled: bool
-    legacy_card_callback_ws_enabled: bool
-    running: bool
-    last_connected_at: float | None = None
-    last_error: str | None = None
-    ping_interval: int
-    frames: dict[str, int] = Field(default_factory=dict)
-    event_types: list[str] = Field(default_factory=list)
-
-
-class LivzonFeishuEventWsStatusApiResponse(BaseModel):
-    code: int = 200
-    message: str = "success"
-    data: LivzonFeishuEventWsStatus
-
-
-class FeishuCardCallbackResponse(BaseModel):
-    toast: dict[str, Any] | None = None
-    card: dict[str, Any] | None = None
-    challenge: str | None = None

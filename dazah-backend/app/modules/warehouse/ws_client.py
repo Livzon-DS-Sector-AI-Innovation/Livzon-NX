@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 
 import lark_oapi as lark
 from lark_oapi.api.drive.v1 import P2DriveFileBitableRecordChangedV1
+from sqlalchemy import select
 
 from app.core.database import async_session_factory
 from app.core.secrets import decrypt_secret
@@ -13,6 +14,7 @@ from app.modules.warehouse.feishu_client import WarehouseFeishuClient
 from app.modules.warehouse.repository import WarehouseRepository
 from app.modules.warehouse.schemas import WarehouseFeishuWsStatus
 from app.modules.warehouse.service import WarehouseService
+from app.platform.identity.models import FeishuConfig
 from app.platform.integrations.feishu.ws_client import start_ws_client, stop_ws_client
 
 logger = logging.getLogger(__name__)
@@ -130,14 +132,28 @@ async def restart_ws_from_db() -> WarehouseFeishuWsStatus:
     return await start_ws_from_db()
 
 
+async def _is_hermes_owned_app(app_id: str) -> bool:
+    async with async_session_factory() as session:
+        return bool(
+            await session.scalar(
+                select(FeishuConfig.id)
+                .where(
+                    FeishuConfig.app_id == app_id,
+                    FeishuConfig.is_active.is_(True),
+                    FeishuConfig.gateway_enabled.is_(True),
+                    FeishuConfig.is_deleted.is_(False),
+                )
+                .limit(1)
+            )
+        )
+
+
 async def restart_ws_with_config(
     *,
     app_id: str,
     app_secret: str,
     app_tokens: dict[str, str],
 ) -> WarehouseFeishuWsStatus:
-    from app.core.config import get_settings
-
     global _app_id, _app_tokens, _connected, _enabled, _last_error, _last_started_at
     if _main_loop is None:
         set_main_loop(asyncio.get_running_loop())
@@ -161,13 +177,12 @@ async def restart_ws_with_config(
                 app_token=app_token,
             )
             await client.subscribe_bitable()
-        settings = get_settings()
-        if settings.FEISHU_WS_ENABLED and app_id == settings.FEISHU_APP_ID:
+        if await _is_hermes_owned_app(app_id):
             _connected = True
             _last_started_at = datetime.now(UTC)
             logger.info(
-                "仓储与全局飞书使用同一应用，复用平台长连接，"
-                "不再启动重复事件消费者"
+                "仓储与 Livzon 使用同一飞书应用；该应用由 Hermes Gateway "
+                "独占消费，仓储不启动重复事件消费者"
             )
             return await get_ws_status()
         start_ws_client(

@@ -377,17 +377,13 @@ function shortenedText(value: unknown, limit = 140) {
 
 function confirmationNarrative(confirmation: AgentConfirmation) {
   const payload = businessPayloadOf(confirmation)
-  const recipientCount = Array.isArray(payload.user_ids) ? payload.user_ids.length : 0
+  const recipientCount = Array.isArray(payload.recipient_user_ids)
+    ? payload.recipient_user_ids.length
+    : 0
   const title = shortenedText(payload.title, 60)
   const content = shortenedText(payload.markdown || payload.text)
 
-  if (confirmation.operation === "identity.send_feishu_card_message") {
-    return `将向 ${recipientCount || 1} 位已同步飞书用户发送卡片${title ? `《${title}》` : ""}${content ? `，内容：${content}` : ""}。`
-  }
-  if (confirmation.operation === "identity.send_feishu_text_message") {
-    return `将向 ${recipientCount || 1} 位已同步飞书用户发送消息${content ? `：${content}` : ""}。`
-  }
-  if (confirmation.operation === "identity.send_feishu_message") {
+  if (confirmation.operation === "identity.deliver_feishu_message") {
     return `将向 ${recipientCount || 1} 位已同步飞书用户发送通知${title ? `《${title}》` : ""}${content ? `，内容：${content}` : ""}。`
   }
   if (confirmation.operation === "agent.run_automation") return "确认后将立即运行该自动化流程，并记录本次运行结果。"

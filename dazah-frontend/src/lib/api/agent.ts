@@ -100,6 +100,64 @@ interface ApiEnvelope<T> {
   data?: T
 }
 
+const AGENT_BACKEND_V2_EVENT_TYPES = new Set([
+  "accepted",
+  "thinking",
+  "capability_search",
+  "tool_call",
+  "tool_result",
+  "text_delta",
+  "confirmation",
+  "delivery",
+  "error",
+  "finished",
+  "ping",
+])
+
+interface AgentBackendV2Event {
+  event_id: string
+  trace_id: string
+  run_id: string
+  sequence: number
+  occurred_at: string
+  type: string
+  data: Record<string, unknown>
+}
+
+function parseAgentBackendV2Event(
+  eventName: string,
+  rawData: string,
+): AgentBackendV2Event {
+  let candidate: unknown
+  try {
+    candidate = JSON.parse(rawData) as unknown
+  } catch {
+    throw new Error("Livzon Agent 返回了无效的 V2 流事件。")
+  }
+  if (typeof candidate !== "object" || candidate === null) {
+    throw new Error("Livzon Agent 返回了无效的 V2 流事件。")
+  }
+  const event = candidate as Partial<AgentBackendV2Event>
+  if (
+    typeof event.event_id !== "string"
+    || typeof event.trace_id !== "string"
+    || typeof event.run_id !== "string"
+    || typeof event.sequence !== "number"
+    || !Number.isInteger(event.sequence)
+    || event.sequence < 1
+    || typeof event.occurred_at !== "string"
+    || typeof event.type !== "string"
+    || !AGENT_BACKEND_V2_EVENT_TYPES.has(event.type)
+    || event.type !== eventName
+    || typeof event.data !== "object"
+    || event.data === null
+    || Array.isArray(event.data)
+  ) {
+    throw new Error("Livzon Agent 返回了无效的 V2 流事件。")
+  }
+  return event as AgentBackendV2Event
+}
+
 async function readEnvelope<T>(response: Response): Promise<T> {
   const text = await response.text()
   let payload: ApiEnvelope<T> | null = null
@@ -176,6 +234,9 @@ export async function streamAgentMessage(
   const decoder = new TextDecoder()
   let buffer = ""
   let terminalEventReceived = false
+  let activeTraceId: string | null = null
+  let activeRunId: string | null = null
+  let lastSequence = 0
 
   function handleFrame(frame: string) {
     let event = "message"
@@ -190,32 +251,34 @@ export async function streamAgentMessage(
         dataLines.push(line.slice(5).replace(/^ /, ""))
       }
     }
-    if (event === "ping") {
-      handlers.onPing?.()
-      return
-    }
     if (dataLines.length === 0) return
     const rawData = dataLines.join("\n")
-    let data: Record<string, unknown>
-    try {
-      const parsed = JSON.parse(rawData) as unknown
-      data = typeof parsed === "object" && parsed !== null
-        ? parsed as Record<string, unknown>
-        : { data: parsed }
-    } catch {
-      data = { message: rawData, text: rawData }
+    const backendEvent = parseAgentBackendV2Event(event, rawData)
+    if (activeTraceId === null) {
+      activeTraceId = backendEvent.trace_id
+      activeRunId = backendEvent.run_id
+    } else if (
+      backendEvent.trace_id !== activeTraceId
+      || backendEvent.run_id !== activeRunId
+      || backendEvent.sequence <= lastSequence
+    ) {
+      throw new Error("Livzon Agent V2 流事件顺序或运行标识不一致。")
     }
+    lastSequence = backendEvent.sequence
+    const data = backendEvent.data
 
-    if (event === "start") {
+    if (event === "accepted") {
       handlers.onStart?.({ session_id: typeof data.session_id === "string" ? data.session_id : undefined })
-    } else if (event === "delta") {
+    } else if (event === "text_delta") {
       handlers.onDelta?.(typeof data.text === "string" ? data.text : "")
-    } else if (event === "done") {
+    } else if (event === "finished") {
       terminalEventReceived = true
       handlers.onDone?.(data as unknown as AgentChatData)
     } else if (event === "error") {
       terminalEventReceived = true
       throw new Error(typeof data.message === "string" ? data.message : "中枢助手请求失败")
+    } else if (event === "ping") {
+      handlers.onPing?.()
     }
   }
 

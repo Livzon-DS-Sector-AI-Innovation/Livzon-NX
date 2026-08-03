@@ -16,7 +16,7 @@ from app.modules.agent.models import (
     AgentRunEvent,
 )
 from app.modules.agent.push_delivery_service import PushDeliveryService
-from app.platform.identity.models import FeishuCardAction, User
+from app.platform.identity.models import User
 
 
 def _user() -> User:
@@ -62,14 +62,11 @@ async def test_notify_creates_one_idempotent_delivery_per_local_recipient(
     await db_session.flush()
 
     async def fake_send(*_args: object, **_kwargs: object) -> dict:
-        return {
-            "results": [
-                {"status": "sent", "message_id": "om_phase_three_delivery"}
-            ]
-        }
+        return {"status": "sent", "message_id": "om_phase_three_delivery"}
 
     monkeypatch.setattr(
-        "app.modules.agent.push_delivery_service.send_livzon_feishu_message",
+        "app.modules.agent.push_delivery_service."
+        "PushDeliveryService._enqueue_gateway_delivery",
         fake_send,
     )
     step = NotifyStep.model_validate(
@@ -149,23 +146,6 @@ async def test_notify_creates_one_idempotent_delivery_per_local_recipient(
     assert delivery.status == "sent"
     assert delivery.attempt_count == 2
 
-    action = FeishuCardAction(
-        message_id=delivery.external_message_id,
-        card_id="phase-three-card",
-        local_user_id=owner.id,
-        recipient_open_id=owner.feishu_open_id,
-        action_key="mark_done",
-        action_label="标记完成",
-        status="processed",
-        clicked_open_id=owner.feishu_open_id,
-        executed_at=datetime.now(UTC),
-    )
-    db_session.add(action)
-    await db_session.flush()
-    assert await service.reconcile_card_actions(db_session) == 1
-    assert delivery.status == "interacted"
-    assert delivery.card_action_status == "processed"
-
     other_user = _user()
     db_session.add(other_user)
     await db_session.flush()
@@ -238,17 +218,14 @@ async def test_notify_creates_one_idempotent_delivery_per_local_recipient(
 
     async def fake_timeout_after_accept(*_args: object, **_kwargs: object) -> dict:
         return {
-            "results": [
-                {
-                    "status": "failed",
-                    "message_id": "om_phase_three_timeout_reconciled",
-                    "error_message": "gateway timeout",
-                }
-            ]
+            "status": "failed",
+            "message_id": "om_phase_three_timeout_reconciled",
+            "error_message": "gateway timeout",
         }
 
     monkeypatch.setattr(
-        "app.modules.agent.push_delivery_service.send_livzon_feishu_message",
+        "app.modules.agent.push_delivery_service."
+        "PushDeliveryService._enqueue_gateway_delivery",
         fake_timeout_after_accept,
     )
     timeout_run = await new_run()
@@ -266,10 +243,11 @@ async def test_notify_creates_one_idempotent_delivery_per_local_recipient(
     assert timeout_delivery["deliveries"][0]["status"] == "sent"
 
     async def fake_failed(*_args: object, **_kwargs: object) -> dict:
-        return {"results": [{"status": "failed", "error_code": "unavailable"}]}
+        return {"status": "failed", "error_code": "unavailable"}
 
     monkeypatch.setattr(
-        "app.modules.agent.push_delivery_service.send_livzon_feishu_message",
+        "app.modules.agent.push_delivery_service."
+        "PushDeliveryService._enqueue_gateway_delivery",
         fake_failed,
     )
     incident_step = aggregation_step.model_copy(
@@ -289,7 +267,9 @@ async def test_notify_creates_one_idempotent_delivery_per_local_recipient(
     assert failed["deliveries"][0]["status"] == "failed"
 
     monkeypatch.setattr(
-        "app.modules.agent.push_delivery_service.send_livzon_feishu_message", fake_send
+        "app.modules.agent.push_delivery_service."
+        "PushDeliveryService._enqueue_gateway_delivery",
+        fake_send,
     )
     service.max_attempts = 3
     recovery_run = await new_run()
