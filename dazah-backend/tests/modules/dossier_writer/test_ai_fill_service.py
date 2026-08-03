@@ -527,3 +527,42 @@ async def test_confirm_page_splits_inserts_images_and_updates_split_records(
         [],
     )
     assert missing["success"] is False
+
+
+@pytest.mark.anyio
+async def test_auto_image_insert_rejects_missing_or_unmatched_assets(
+    tmp_path: Path,
+) -> None:
+    missing_asset = SimpleNamespace(
+        _category_name="工艺资料",
+        original_filename="missing.pdf",
+        file_path=str(tmp_path / "missing.pdf"),
+    )
+    mapping = SimpleNamespace(source_category="工艺资料")
+    db = SimpleNamespace(
+        get=AsyncMock(return_value=mapping),
+        execute=AsyncMock(
+            return_value=SimpleNamespace(
+                scalars=lambda: SimpleNamespace(all=lambda: []),
+            )
+        ),
+    )
+    service = AIFillService(db)
+    chapter = SimpleNamespace(chapter_code="3.2.S.2")
+
+    assert not await service._auto_insert_image(
+        Document(),
+        "工艺流程图片",
+        {"field_mapping_id": str(uuid4()), "value": "附录1"},
+        chapter,
+        [missing_asset],
+    )
+
+    db.get.return_value = None
+    assert not await service._auto_insert_image(
+        Document(),
+        "工艺流程图片",
+        {"value": "附录1"},
+        chapter,
+        [],
+    )

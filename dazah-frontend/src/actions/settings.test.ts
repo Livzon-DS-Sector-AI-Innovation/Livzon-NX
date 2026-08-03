@@ -12,6 +12,10 @@ vi.mock('@/lib/server-api', () => ({
 }))
 
 import {
+  createExternalIdentityBinding,
+  disableExternalIdentityBinding,
+  getAgentToolCatalog,
+  getExternalIdentityBindings,
   getLivzonFeishuGatewayStatus,
   setAgentToolEnabled,
 } from './settings'
@@ -74,5 +78,71 @@ describe('settings Agent and Feishu actions', () => {
         body: JSON.stringify({ enabled: false }),
       }),
     )
+  })
+
+  it('uses the external identity binding endpoints and payloads', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ data: [{ id: 'binding-1' }] }), {
+          status: 200,
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ data: { id: 'binding-2' } }), {
+          status: 200,
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ data: { id: 'binding-2', status: 'disabled' } }),
+          { status: 200 },
+        ),
+      )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(getExternalIdentityBindings()).resolves.toEqual([
+      { id: 'binding-1' },
+    ])
+    const payload = {
+      tenant_id: 'tenant-a',
+      platform: 'feishu' as const,
+      app_fingerprint: 'cli_app',
+      external_open_id: 'ou_user',
+      local_user_id: '00000000-0000-0000-0000-000000000001',
+    }
+    await createExternalIdentityBinding(payload)
+    await disableExternalIdentityBinding('binding-2')
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      'http://backend.test/api/v1/identity/external-identity-bindings',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+    )
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      'http://backend.test/api/v1/identity/external-identity-bindings/binding-2/disable',
+      expect.objectContaining({ method: 'POST' }),
+    )
+  })
+
+  it('loads the discovered Agent tool catalog', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            data: [{ operation: 'quality.create_deviation', status: 'active' }],
+          }),
+          { status: 200 },
+        ),
+      ),
+    )
+
+    await expect(getAgentToolCatalog()).resolves.toEqual([
+      { operation: 'quality.create_deviation', status: 'active' },
+    ])
   })
 })
