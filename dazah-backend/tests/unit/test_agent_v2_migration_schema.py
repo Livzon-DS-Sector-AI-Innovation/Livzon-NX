@@ -11,10 +11,16 @@ MIGRATION_PATH = (
     / "versions"
     / "4e7b9c1d2f30_add_agent_v2_identity_and_tool_catalog.py"
 )
+GOVERNANCE_MIGRATION_PATH = (
+    Path(__file__).parents[2]
+    / "alembic"
+    / "versions"
+    / "7a31c9e4d2b8_add_agent_governance_controls.py"
+)
 
 
-def _load_migration():
-    spec = importlib.util.spec_from_file_location("agent_v2_migration", MIGRATION_PATH)
+def _load_migration(path: Path = MIGRATION_PATH):
+    spec = importlib.util.spec_from_file_location("agent_v2_migration", path)
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -22,11 +28,14 @@ def _load_migration():
     return module
 
 
-def test_agent_v2_migration_is_current_linear_head() -> None:
+def test_agent_governance_migration_extends_v2_head() -> None:
     migration = _load_migration()
+    governance = _load_migration(GOVERNANCE_MIGRATION_PATH)
 
     assert migration.revision == "4e7b9c1d2f30"
     assert migration.down_revision == "fbffa92623e9"
+    assert governance.revision == "7a31c9e4d2b8"
+    assert governance.down_revision == migration.revision
 
 
 def test_admin_enabled_belongs_to_tool_catalog_only(

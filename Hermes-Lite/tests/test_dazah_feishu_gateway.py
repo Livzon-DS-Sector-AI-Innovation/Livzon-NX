@@ -6,13 +6,16 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock
 
+import httpx
 import pytest
 
 from services.dazah_feishu_gateway import (
     ConversationHistoryStore,
     DazahFeishuGateway,
+    DazahGatewayAttachment,
     DazahInboundEnvelope,
     build_dazah_confirmation_card,
+    cleanup_cached_attachments,
 )
 
 
@@ -139,6 +142,7 @@ async def _events(
 ) -> Any:
     for sequence, (event_type, data) in enumerate(items, start=1):
         yield event_type, {
+            "protocol_version": "2.0",
             "event_id": f"event-{sequence}",
             "trace_id": "trace-1",
             "run_id": "run-1",
@@ -163,6 +167,14 @@ def test_confirmation_card_buttons_follow_risk_policy() -> None:
     assert native_medium_choices == ["allow", "always", "reject"]
     assert high_choices == ["allow", "reject"]
     assert high["header"]["template"] == "red"
+
+
+def test_confirmation_card_displays_expiry_in_beijing_time() -> None:
+    card = build_dazah_confirmation_card(_confirmation())
+    content = card["elements"][0]["content"]
+
+    assert "过期时间：** 2026-07-30 20:00:00（北京时间）" in content
+    assert "2026-07-30T12:00:00Z" not in content
 
 
 def test_inbound_envelope_preserves_native_feishu_context_and_attachments() -> None:
@@ -213,6 +225,20 @@ def test_inbound_envelope_preserves_native_feishu_context_and_attachments() -> N
         }
     ]
 
+    persistent_request = envelope.to_agent_backend_v2_request(
+        subject={
+            "tenant_id": "tenant",
+            "user_id": "00000000-0000-0000-0000-000000000001",
+            "source": "feishu",
+        },
+        trace_id="00000000-0000-0000-0000-000000000002",
+        run_id="00000000-0000-0000-0000-000000000003",
+        persistent_session_id="00000000-0000-0000-0000-000000000004",
+    )
+    assert persistent_request["session_id"] == (
+        "feishu:00000000-0000-0000-0000-000000000004"
+    )
+
 
 def test_inbound_envelope_falls_back_to_open_id_and_chat_session() -> None:
     event = SimpleNamespace(
@@ -240,6 +266,75 @@ def test_inbound_envelope_falls_back_to_open_id_and_chat_session() -> None:
     assert envelope.sender_id == "ou_open"
     assert envelope.session_id == "feishu:oc_chat:ou_open"
     assert envelope.attachments == ()
+
+
+def test_attachment_only_envelope_synthesizes_request_text() -> None:
+    event = SimpleNamespace(
+        text="",
+        message_type="document",
+        source=SimpleNamespace(
+            user_id="ou_open",
+            user_id_alt=None,
+            user_name=None,
+            chat_id="oc_chat",
+            chat_type="dm",
+            thread_id=None,
+            parent_chat_id=None,
+            message_id=None,
+        ),
+        message_id="om_document",
+        reply_to_message_id=None,
+        reply_to_text=None,
+        media_urls=["/data/hermes/cache/documents/report.pdf"],
+        media_types=["application/pdf"],
+    )
+    envelope = DazahInboundEnvelope.from_event(event)
+
+    request = envelope.to_agent_backend_v2_request(
+        subject={
+            "tenant_id": "tenant",
+            "user_id": "00000000-0000-0000-0000-000000000001",
+            "source": "feishu",
+        },
+        trace_id="00000000-0000-0000-0000-000000000002",
+        run_id="00000000-0000-0000-0000-000000000003",
+    )
+
+    assert envelope.request_text == "请分析用户发送的附件并概括主要内容。"
+    assert request["message"] == envelope.request_text
+    assert request["attachments"][0]["kind"] == "document"
+
+
+def test_cached_attachments_are_removed_only_from_hermes_cache(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path / "hermes"))
+    cached_path = tmp_path / "hermes" / "cache" / "documents" / "report.pdf"
+    cached_path.parent.mkdir(parents=True)
+    cached_path.write_bytes(b"pdf")
+    outside_path = tmp_path / "outside.pdf"
+    outside_path.write_bytes(b"outside")
+    attachments = (
+        DazahGatewayAttachment(
+            kind="document",
+            content_type="application/pdf",
+            local_path=str(cached_path),
+            filename="report.pdf",
+        ),
+        DazahGatewayAttachment(
+            kind="document",
+            content_type="application/pdf",
+            local_path=str(outside_path),
+            filename="outside.pdf",
+        ),
+    )
+
+    removed = cleanup_cached_attachments(attachments)
+
+    assert removed == 1
+    assert not cached_path.exists()
+    assert outside_path.exists()
 
 
 def test_conversation_history_preserves_base_follow_up_and_is_bounded() -> None:
@@ -371,6 +466,77 @@ async def test_delivery_worker_uses_native_gateway_and_records_receipt(
 
 
 @pytest.mark.asyncio
+async def test_card_delivery_worker_records_native_message_receipt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from services import feishu_gateway_worker
+
+    delivery = {
+        "id": "delivery-card-1",
+        "delivery_type": "card",
+        "chat_id": "chat-1",
+        "card": {"schema": "2.0"},
+    }
+    completed: list[tuple[str, str | None]] = []
+    failed: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        feishu_gateway_worker,
+        "claim_due_deliveries",
+        lambda: [delivery],
+    )
+    monkeypatch.setattr(
+        feishu_gateway_worker,
+        "complete_delivery",
+        lambda delivery_id, message_id=None: completed.append((delivery_id, message_id)),
+    )
+    monkeypatch.setattr(
+        feishu_gateway_worker,
+        "fail_delivery",
+        lambda delivery_id, error: failed.append((delivery_id, error)),
+    )
+
+    class CardGateway:
+        async def send_card(self, chat_id, card):
+            assert chat_id == "chat-1"
+            assert card == {"schema": "2.0"}
+            return _SendResult(True, "om_card_receipt")
+
+    count = await feishu_gateway_worker._deliver_pending(CardGateway())
+
+    assert count == 1
+    assert completed == [("delivery-card-1", "om_card_receipt")]
+    assert failed == []
+
+
+@pytest.mark.asyncio
+async def test_private_card_compatibility_normalizes_sdk_receipt() -> None:
+    class RawData:
+        message_id = "om_card_receipt"
+
+    class RawResponse:
+        code = 0
+        msg = "ok"
+        data = RawData()
+
+    adapter = _Adapter()
+
+    async def compat_result(**kwargs):
+        adapter.calls.append(("compat_card", kwargs))
+        return RawResponse()
+
+    adapter._feishu_send_with_retry = compat_result  # type: ignore[method-assign]
+    adapter._response_succeeded = lambda response: response.code == 0  # type: ignore[attr-defined]
+    result = await DazahFeishuGateway(adapter).send_card(
+        "chat-1",
+        {"schema": "2.0"},
+    )
+
+    assert result.success is True
+    assert result.message_id == "om_card_receipt"
+    assert result.error is None
+
+
+@pytest.mark.asyncio
 async def test_native_stream_sends_then_finalizes_rich_message() -> None:
     from services.feishu_gateway_worker import _consume_agent_stream
 
@@ -483,6 +649,7 @@ async def test_sse_parser_requires_agent_backend_v2_envelopes() -> None:
     class _Response:
         async def aiter_lines(self) -> Any:
             payload = {
+                "protocol_version": "2.0",
                 "event_id": "event-1",
                 "trace_id": "trace-1",
                 "run_id": "run-1",
@@ -534,6 +701,27 @@ def test_worker_has_no_direct_private_upstream_dependency() -> None:
     worker = (Path(__file__).resolve().parents[1] / "services" / "feishu_gateway_worker.py").read_text(encoding="utf-8")
 
     assert "_feishu_send_with_retry" not in worker
+
+
+def test_delivery_event_data_is_safe_and_requires_delivery_id() -> None:
+    from services.dazah_agent_service import _delivery_event_data
+
+    assert _delivery_event_data({"status": "completed"}) is None
+    assert _delivery_event_data(
+        {
+            "operation": "agent.create_delivery",
+            "result": {
+                "delivery_id": "delivery-1",
+                "status": "sent",
+                "channel": "feishu",
+                "content": "must not leak",
+            },
+        }
+    ) == {
+        "delivery_id": "delivery-1",
+        "status": "sent",
+        "channel": "feishu",
+    }
 
 
 def test_worker_rejects_removed_agent_backend_v1_url() -> None:
@@ -622,3 +810,158 @@ def test_confirmation_card_callback_is_parsed_fail_closed(
     from services.feishu_gateway_worker import _parse_confirmation_action
 
     assert _parse_confirmation_action(text) == expected
+
+
+@pytest.mark.asyncio
+async def test_confirmation_callback_identity_does_not_apply_false_group_gate(
+    monkeypatch,
+) -> None:
+    from dataclasses import replace
+
+    from services import feishu_gateway_worker as worker
+
+    recorded: dict[str, object] = {}
+
+    class FakeResponse:
+        status_code = 200
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, object]:
+            return {"subject": {"user_id": "local-user"}}
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs) -> None:
+            del args, kwargs
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args) -> None:
+            del args
+
+        async def post(self, url, *, headers, json):
+            del url, headers
+            recorded.update(json)
+            return FakeResponse()
+
+    monkeypatch.setattr(worker.httpx, "AsyncClient", FakeAsyncClient)
+    envelope = replace(
+        _envelope(),
+        text=(
+            '/card button {"livzon_choice":"allow",'
+            '"confirmation_id":"confirmation-1"}'
+        ),
+        message_type="command",
+        chat_type="group",
+    )
+
+    subject = await worker._resolve_trusted_subject(
+        {
+            "dazah_api_base_url": "http://app:8000/api/v1",
+            "internal_token": "test-token",
+            "tenant_id": "default",
+            "app_id": "cli_test",
+        },
+        envelope,
+    )
+
+    assert subject == {"user_id": "local-user"}
+    assert recorded["chat_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_ordinary_group_identity_still_applies_group_gate(monkeypatch) -> None:
+    from dataclasses import replace
+
+    from services import feishu_gateway_worker as worker
+
+    recorded: dict[str, object] = {}
+
+    class FakeResponse:
+        status_code = 200
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, object]:
+            return {"subject": {"user_id": "local-user"}}
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs) -> None:
+            del args, kwargs
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args) -> None:
+            del args
+
+        async def post(self, url, *, headers, json):
+            del url, headers
+            recorded.update(json)
+            return FakeResponse()
+
+    monkeypatch.setattr(worker.httpx, "AsyncClient", FakeAsyncClient)
+    envelope = replace(_envelope(), text="普通群消息", chat_type="group")
+
+    await worker._resolve_trusted_subject(
+        {
+            "dazah_api_base_url": "http://app:8000/api/v1",
+            "internal_token": "test-token",
+            "tenant_id": "default",
+            "app_id": "cli_test",
+        },
+        envelope,
+    )
+
+    assert recorded["chat_id"] == envelope.chat_id
+
+
+def test_confirmation_conflict_feedback_is_safe() -> None:
+    from services.feishu_gateway_worker import _confirmation_error_feedback
+
+    request = httpx.Request("POST", "http://app/confirmations/example/resolve")
+    response = httpx.Response(409, request=request)
+    error = httpx.HTTPStatusError(
+        "conflict with sensitive upstream body",
+        request=request,
+        response=response,
+    )
+
+    assert _confirmation_error_feedback(error) == "该确认已处理或已过期，未重复执行。"
+
+
+@pytest.mark.asyncio
+async def test_confirmation_feedback_is_sent_without_action_token_reply() -> None:
+    from services.feishu_gateway_worker import _send_confirmation_feedback
+
+    calls: list[dict[str, object]] = []
+
+    class FeedbackGateway:
+        async def send(self, chat_id, content, *, reply_to=None, metadata=None):
+            calls.append(
+                {
+                    "chat_id": chat_id,
+                    "content": content,
+                    "reply_to": reply_to,
+                    "metadata": metadata,
+                }
+            )
+            return _SendResult(True, "om_feedback")
+
+    await _send_confirmation_feedback(
+        FeedbackGateway(),
+        _envelope(),
+        "该确认已处理或已过期，未重复执行。",
+    )
+
+    assert calls == [
+        {
+            "chat_id": "oc_chat",
+            "content": "该确认已处理或已过期，未重复执行。",
+            "reply_to": None,
+            "metadata": {"source": "confirmation_callback"},
+        }
+    ]

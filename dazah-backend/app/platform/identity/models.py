@@ -165,6 +165,12 @@ class ExternalIdentityBinding(BaseModel):
     status: Mapped[str] = mapped_column(
         String(32), nullable=False, default="active", server_default="active"
     )
+    source: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="admin", server_default="admin"
+    )
+    verified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     last_seen_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
@@ -287,6 +293,12 @@ class FeishuConfig(BaseModel):
         default=True,
         server_default="true",
         comment="是否启用 Hermes Feishu Gateway",
+    )
+    allowed_group_chat_ids: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default="[]"
+    )
+    require_group_mention: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
     )
     config_version: Mapped[int] = mapped_column(
         Integer,

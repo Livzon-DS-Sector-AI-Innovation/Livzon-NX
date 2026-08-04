@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import os
 from collections import OrderedDict
-from dataclasses import dataclass
-from pathlib import Path
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any, Protocol
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
 class FeishuGatewayAdapter(Protocol):
@@ -120,6 +123,48 @@ class DazahGatewayAttachment:
 
 
 @dataclass(frozen=True)
+class DazahCardSendResult:
+    """Stable send receipt normalized from the pinned private card API."""
+
+    success: bool
+    message_id: str | None = None
+    error: str | None = None
+
+
+def cleanup_cached_attachments(
+    attachments: tuple[DazahGatewayAttachment, ...],
+) -> int:
+    """Remove per-message Gateway cache files after processing completes."""
+    hermes_home = Path(os.getenv("HERMES_HOME", "/data/hermes")).resolve()
+    roots = (
+        hermes_home / "cache",
+        hermes_home / "image_cache",
+        hermes_home / "audio_cache",
+        hermes_home / "video_cache",
+        hermes_home / "document_cache",
+        Path(
+            os.getenv(
+                "HERMES_FEISHU_FILES_DIR",
+                str(hermes_home / "feishu-files"),
+            )
+        ).resolve(),
+    )
+    removed = 0
+    for attachment in attachments:
+        candidate = Path(attachment.local_path).resolve()
+        if not candidate.is_file() or not any(
+            candidate.is_relative_to(root.resolve()) for root in roots
+        ):
+            continue
+        try:
+            candidate.unlink()
+            removed += 1
+        except OSError:
+            continue
+    return removed
+
+
+@dataclass(frozen=True)
 class DazahInboundEnvelope:
     """Stable Dazah view of a Hermes platform-neutral message event."""
 
@@ -181,6 +226,15 @@ class DazahInboundEnvelope:
         participant = self.sender_union_id or self.sender_open_id or "unknown"
         return f"feishu:{conversation}:{participant}"
 
+    @property
+    def request_text(self) -> str:
+        text = self.text.strip()
+        if text:
+            return text
+        if self.attachments:
+            return "请分析用户发送的附件并概括主要内容。"
+        return "请处理用户发送的飞书消息。"
+
     def to_agent_backend_v2_request(
         self,
         *,
@@ -188,11 +242,17 @@ class DazahInboundEnvelope:
         trace_id: str,
         run_id: str,
         messages: list[dict[str, str]] | None = None,
+        persistent_session_id: str | None = None,
     ) -> dict[str, Any]:
         return {
+            "protocol_version": "2.0",
             "run_id": run_id,
             "trace_id": trace_id,
-            "session_id": self.session_id,
+            "session_id": (
+                f"feishu:{persistent_session_id}"
+                if persistent_session_id
+                else self.session_id
+            ),
             "subject": subject,
             "source": {
                 "platform": "feishu",
@@ -205,7 +265,7 @@ class DazahInboundEnvelope:
                 "reply_to": self.reply_to_message_id or None,
                 "message_id": self.message_id or None,
             },
-            "message": self.text,
+            "message": self.request_text,
             "messages": list(messages or []),
             "attachments": [attachment.to_request() for attachment in self.attachments],
             "client_capabilities": [
@@ -235,6 +295,20 @@ def _confirmation_button(
             "resource_domain": resource_domain,
         },
     }
+
+
+def _format_beijing_datetime(value: Any) -> str:
+    if not isinstance(value, str) or not value.strip():
+        return "-"
+    normalized = value.strip()
+    try:
+        parsed = datetime.fromisoformat(normalized.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=UTC)
+        beijing = parsed.astimezone(ZoneInfo("Asia/Shanghai"))
+    except (ValueError, ZoneInfoNotFoundError):
+        return normalized
+    return f"{beijing:%Y-%m-%d %H:%M:%S}（北京时间）"
 
 
 def build_dazah_confirmation_card(confirmation: dict[str, Any]) -> dict[str, Any]:
@@ -289,7 +363,8 @@ def build_dazah_confirmation_card(confirmation: dict[str, Any]) -> dict[str, Any
                     f"**风险原因：** {confirmation.get('reason') or '-'}\n"
                     f"**关键变更预览：**\n```\n"
                     f"{str(confirmation.get('preview') or '-')[:1800]}\n```\n"
-                    f"**过期时间：** {confirmation.get('expires_at') or '-'}"
+                    f"**过期时间：** "
+                    f"{_format_beijing_datetime(confirmation.get('expires_at'))}"
                 ),
             },
             {"tag": "action", "actions": actions},
@@ -331,9 +406,9 @@ class DazahFeishuGateway:
             metadata=metadata,
         )
 
-    async def send_card(self, chat_id: str, card: dict[str, Any]) -> None:
+    async def send_card(self, chat_id: str, card: dict[str, Any]) -> Any:
         """Send a native interactive card through the pinned adapter transport."""
-        await self._send_interactive_card(chat_id, card)
+        return await self._send_interactive_card(chat_id, card)
 
     async def edit_message(
         self,
@@ -366,21 +441,34 @@ class DazahFeishuGateway:
         self,
         chat_id: str,
         card: dict[str, Any],
-    ) -> None:
+    ) -> Any:
         public_sender = getattr(self._adapter, "send_interactive_card", None)
         if callable(public_sender):
-            await public_sender(chat_id, card)
-            return
+            return await public_sender(chat_id, card)
 
         # Hermes v2026.7.7.2 has no public raw-card API. Keep the compatibility
         # dependency in this one contract-tested method until upstream exposes it.
         compat_sender = getattr(self._adapter, "_feishu_send_with_retry", None)
         if not callable(compat_sender):
             raise RuntimeError("pinned Hermes Feishu adapter has no interactive-card transport")
-        await compat_sender(
+        response = await compat_sender(
             chat_id=chat_id,
             msg_type="interactive",
             payload=json.dumps(card, ensure_ascii=False),
             reply_to=None,
             metadata=None,
+        )
+        response_succeeded = getattr(self._adapter, "_response_succeeded", None)
+        success = (
+            bool(response_succeeded(response))
+            if callable(response_succeeded)
+            else getattr(response, "code", None) == 0
+        )
+        data = getattr(response, "data", None)
+        message_id = str(getattr(data, "message_id", None) or "") or None
+        error = None if success else str(getattr(response, "msg", None) or "native card send failed")
+        return DazahCardSendResult(
+            success=success,
+            message_id=message_id,
+            error=error,
         )

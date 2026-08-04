@@ -158,6 +158,23 @@ def test_agent_tool_rejects_duplicate_registration() -> None:
             return None
 
 
+def test_agent_tool_infers_non_empty_output_schema_from_return_annotation() -> None:
+    registry = ToolRegistry()
+
+    @agent_tool(name="test.inferred_output", summary="Output", registry=registry)
+    async def inferred_output(context, data) -> list[dict[str, str]]:
+        return []
+
+    schema = registry.require("test.inferred_output").output_schema
+
+    assert schema["x-dazah-schema-source"] == "return_annotation"
+    assert schema["type"] == "array"
+    assert schema["items"] == {
+        "type": "object",
+        "additionalProperties": {"type": "string"},
+    }
+
+
 @pytest.mark.anyio
 async def test_unregistered_tool_returns_400() -> None:
     executor = ToolExecutor(registry=ToolRegistry(), repo=FakeRepo())

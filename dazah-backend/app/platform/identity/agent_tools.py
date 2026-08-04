@@ -1,8 +1,8 @@
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 import httpx
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.core.config import get_settings
 from app.modules.agent.tools import ToolContext, agent_tool
@@ -21,10 +21,17 @@ class PersonnelSearchInput(BaseModel):
 
 class FeishuDeliveryInput(BaseModel):
     recipient_user_ids: list[UUID] = Field(min_length=1, max_length=50)
+    message_form: Literal["card", "text"] = "card"
     title: str = Field(min_length=1, max_length=200)
     markdown: str = Field(min_length=1, max_length=20_000)
     actions: list[dict[str, Any]] = Field(default_factory=list, max_length=5)
     idempotency_key: str = Field(min_length=1, max_length=128)
+
+    @model_validator(mode="after")
+    def validate_message_form(self) -> "FeishuDeliveryInput":
+        if self.message_form == "text" and self.actions:
+            raise ValueError("text delivery does not support actions")
+        return self
 
 
 def _build_tree(
@@ -151,32 +158,43 @@ async def deliver_feishu_message(
                     }
                 )
                 continue
-            card: dict[str, Any] = {
-                "schema": "2.0",
-                "header": {"title": {"tag": "plain_text", "content": data.title}},
-                "body": {"elements": [{"tag": "markdown", "content": data.markdown}]},
-            }
-            if data.actions:
-                card["body"]["elements"].append(
-                    {
-                        "tag": "action",
-                        "actions": [
-                            {
-                                "tag": "button",
-                                "text": {
-                                    "tag": "plain_text",
-                                    "content": str(action.get("label") or "查看"),
-                                },
-                                "value": {
-                                    **action,
-                                    "resource_domain": "dazah_business",
-                                    "trace_id": str(context.raw_request.trace_id or ""),
-                                },
-                            }
-                            for action in data.actions
-                        ],
-                    }
-                )
+            delivery_body: dict[str, Any]
+            if data.message_form == "text":
+                delivery_body = {"content": data.markdown}
+            else:
+                card: dict[str, Any] = {
+                    "schema": "2.0",
+                    "header": {
+                        "title": {"tag": "plain_text", "content": data.title}
+                    },
+                    "body": {
+                        "elements": [{"tag": "markdown", "content": data.markdown}]
+                    },
+                }
+                if data.actions:
+                    card["body"]["elements"].append(
+                        {
+                            "tag": "action",
+                            "actions": [
+                                {
+                                    "tag": "button",
+                                    "text": {
+                                        "tag": "plain_text",
+                                        "content": str(action.get("label") or "查看"),
+                                    },
+                                    "value": {
+                                        **action,
+                                        "resource_domain": "dazah_business",
+                                        "trace_id": str(
+                                            context.raw_request.trace_id or ""
+                                        ),
+                                    },
+                                }
+                                for action in data.actions
+                            ],
+                        }
+                    )
+                delivery_body = {"card": card}
             response = await client.post(
                 f"{base_url}/internal/feishu/deliveries",
                 headers={"Authorization": f"Bearer {token}"},
@@ -185,7 +203,7 @@ async def deliver_feishu_message(
                         :128
                     ],
                     "chat_id": user.feishu_open_id,
-                    "card": card,
+                    **delivery_body,
                     "metadata": {
                         "trace_id": str(context.raw_request.trace_id or ""),
                         "recipient_user_id": str(recipient_user_id),

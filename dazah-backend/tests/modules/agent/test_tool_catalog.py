@@ -8,8 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.agent.access_scope import AgentAccessScopeService
 from app.modules.agent.catalog import ToolCatalogService
 from app.modules.agent.models import AgentToolCatalog
-from app.modules.agent.schemas import AgentToolSearchRequest
-from app.modules.agent.tools import tool_registry
+from app.modules.agent.schemas import AgentToolExecuteRequest, AgentToolSearchRequest
+from app.modules.agent.tools import ToolExecutor, tool_registry
 from app.platform.identity.models import User
 
 
@@ -115,6 +115,11 @@ async def test_synchronize_creates_updates_and_disables_stale_rows(
     assert len(entries) >= len(tool_registry.list())
     assert any(entry.operation == "removed.tool" for entry in entries)
     assert all(entry.version for entry in entries)
+    assert all(
+        entry.output_schema
+        for entry in entries
+        if entry.operation != "removed.tool"
+    )
 
 
 @pytest.mark.anyio
@@ -145,6 +150,73 @@ async def test_enable_disable_and_missing_catalog_entry(
             enabled=True,
         )
     assert exc.value.status_code == status.HTTP_404_NOT_FOUND
+
+
+@pytest.mark.anyio
+async def test_disabled_catalog_blocks_direct_execution(
+    db_session: AsyncSession,
+) -> None:
+    user = _user()
+    user.role = "admin"
+    db_session.add(user)
+    await db_session.flush()
+    catalog = ToolCatalogService()
+    operation = "quality.list_deviations"
+    await catalog.set_enabled(db_session, operation=operation, enabled=False)
+
+    try:
+        with pytest.raises(HTTPException) as exc:
+            await ToolExecutor().execute(
+                db_session,
+                request=AgentToolExecuteRequest.model_validate(
+                    {
+                        "operation": operation,
+                        "subject": {
+                            "tenant_id": "local",
+                            "user_id": user.id,
+                            "source": "internal",
+                        },
+                    }
+                ),
+            )
+    finally:
+        await catalog.set_enabled(db_session, operation=operation, enabled=True)
+
+    assert exc.value.status_code == status.HTTP_409_CONFLICT
+    assert exc.value.detail == "该能力已被管理员停用，当前无法执行"
+
+
+@pytest.mark.anyio
+async def test_list_page_filters_catalog_and_reports_total(
+    db_session: AsyncSession,
+) -> None:
+    service = ToolCatalogService()
+    await service.synchronize(db_session)
+    first = tool_registry.list()[0]
+
+    entries, total = await service.list_page(
+        db_session,
+        page=1,
+        page_size=5,
+        keyword=first.name,
+        module=first.module,
+        risk_level=first.risk_level,
+        write=first.write,
+    )
+
+    assert total >= 1
+    assert entries
+    assert all(first.name in entry.operation for entry in entries)
+
+    platform_entries, platform_total = await service.list_page(
+        db_session,
+        page=1,
+        page_size=100,
+        module="platform",
+    )
+    assert platform_total >= 1
+    assert platform_entries
+    assert all(entry.module is None for entry in platform_entries)
 
 
 @pytest.mark.anyio

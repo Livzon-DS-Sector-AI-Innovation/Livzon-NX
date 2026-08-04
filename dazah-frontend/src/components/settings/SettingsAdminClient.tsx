@@ -16,7 +16,7 @@ export default function SettingsAdminClient() {
           系统设置
         </h1>
         <p className="m-0 mt-1 text-[13px] text-[var(--color-steel)]">
-          管理平台用户、角色权限、模型配置、Livzon Task、Skill 与操作审计。
+          管理平台用户、角色权限、模型配置、Livzon Agent 治理、Task、Skill 与操作审计。
         </p>
       </div>
       <Tabs
@@ -39,7 +39,7 @@ export default function SettingsAdminClient() {
           },
           {
             key: 'feishu',
-            label: '飞书设置',
+            label: 'Livzon Agent 管理',
             children: <FeishuSettingsClient />,
           },
           {

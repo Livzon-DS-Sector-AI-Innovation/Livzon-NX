@@ -18,17 +18,74 @@ dazah_request_context: contextvars.ContextVar[dict[str, Any]] = contextvars.Cont
 _dazah_thread_request_context = threading.local()
 _MISSING_THREAD_CONTEXT = object()
 _task_request_contexts: dict[str, dict[str, Any]] = {}
+_task_tool_traces: dict[str, list[dict[str, Any]]] = {}
 _task_request_contexts_lock = threading.Lock()
+_FORCED_OPERATION_FALLBACKS = frozenset({"identity.deliver_feishu_message"})
 
 
 def register_dazah_task_context(task_id: str, context: dict[str, Any]) -> None:
     with _task_request_contexts_lock:
         _task_request_contexts[task_id] = dict(context)
+        _task_tool_traces[task_id] = []
 
 
 def unregister_dazah_task_context(task_id: str) -> None:
     with _task_request_contexts_lock:
         _task_request_contexts.pop(task_id, None)
+        _task_tool_traces.pop(task_id, None)
+
+
+def current_dazah_task_tool_trace(task_id: str) -> list[dict[str, Any]]:
+    """Return only tool executions recorded for the registered runtime task."""
+    with _task_request_contexts_lock:
+        return [dict(item) for item in _task_tool_traces.get(task_id, [])]
+
+
+def _record_dazah_task_tool_trace(
+    task_id: str | None,
+    item: dict[str, Any],
+) -> None:
+    if not task_id:
+        return
+    with _task_request_contexts_lock:
+        trace = _task_tool_traces.get(task_id)
+        if trace is not None:
+            trace.append(dict(item))
+
+
+def _execute_trace_item(
+    operation: str,
+    payload: dict[str, Any],
+    *,
+    status_code: int,
+) -> dict[str, Any]:
+    data = payload.get("data")
+    result = data if isinstance(data, dict) and "ok" in data else payload
+    ok = status_code < 400 and result.get("ok") is True
+    requires_confirmation = result.get("requires_confirmation") is True
+    trace_item: dict[str, Any] = {
+        "action": "execute",
+        "operation": operation,
+        "ok": ok,
+        "status": (
+            "confirmation_required"
+            if ok and requires_confirmation
+            else "completed"
+            if ok
+            else "failed"
+        ),
+        "confirmation_created": ok and requires_confirmation,
+    }
+    result_data = result.get("data")
+    if isinstance(result_data, dict):
+        delivery = {
+            key: result_data[key]
+            for key in ("delivery_id", "status", "channel")
+            if result_data.get(key) is not None
+        }
+        if delivery:
+            trace_item["result"] = delivery
+    return trace_item
 
 
 def current_dazah_request_context(task_id: str | None = None) -> dict[str, Any]:
@@ -120,6 +177,12 @@ async def dazah_tool(
     except PermissionError as exc:
         return json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False)
 
+    context = current_dazah_request_context(task_id)
+    if action == "execute" and not operation:
+        forced_operation = str(context.get("forced_operation") or "").strip()
+        if forced_operation in _FORCED_OPERATION_FALLBACKS:
+            operation = forced_operation
+
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
@@ -154,7 +217,6 @@ async def dazah_tool(
                         {"ok": False, "error": "operation is required for execute"},
                         ensure_ascii=False,
                     )
-                context = current_dazah_request_context(task_id)
                 response = await client.post(
                     f"{_base_url()}/agent/tools/execute",
                     json={
@@ -162,12 +224,22 @@ async def dazah_tool(
                         "params": params or {},
                         "body": body,
                         "subject": subject,
+                        "session_id": context.get("platform_session_id"),
                         "trace_id": context.get("trace_id"),
                         "reason": reason,
                     },
                     headers=headers,
                 )
         if response.status_code >= 400:
+            if action == "execute" and operation:
+                _record_dazah_task_tool_trace(
+                    task_id,
+                    _execute_trace_item(
+                        operation,
+                        {},
+                        status_code=response.status_code,
+                    ),
+                )
             return json.dumps(
                 {
                     "ok": False,
@@ -178,8 +250,23 @@ async def dazah_tool(
                 },
                 ensure_ascii=False,
             )
-        return json.dumps(response.json(), ensure_ascii=False)
+        response_payload = response.json()
+        if action == "execute" and operation and isinstance(response_payload, dict):
+            _record_dazah_task_tool_trace(
+                task_id,
+                _execute_trace_item(
+                    operation,
+                    response_payload,
+                    status_code=response.status_code,
+                ),
+            )
+        return json.dumps(response_payload, ensure_ascii=False)
     except httpx.HTTPError as exc:
+        if action == "execute" and operation:
+            _record_dazah_task_tool_trace(
+                task_id,
+                _execute_trace_item(operation, {}, status_code=503),
+            )
         return json.dumps(
             {
                 "ok": False,
@@ -189,6 +276,27 @@ async def dazah_tool(
             },
             ensure_ascii=False,
         )
+
+
+async def _dispatch_dazah_tool(
+    args: dict[str, Any],
+    *,
+    task_id: str | None = None,
+    user_task: str | None = None,
+) -> str:
+    """Adapt the registry's dict-argument contract to ``dazah_tool`` kwargs."""
+    return await dazah_tool(
+        action=args.get("action", ""),
+        query=args.get("query", ""),
+        module=args.get("module"),
+        limit=args.get("limit", 12),
+        operation=args.get("operation"),
+        params=args.get("params"),
+        body=args.get("body"),
+        reason=args.get("reason"),
+        task_id=task_id,
+        user_task=user_task,
+    )
 
 
 DAZAH_TOOL_SCHEMA = {
@@ -236,7 +344,7 @@ registry.register(
     name="dazah_tool",
     toolset="dazah",
     schema=DAZAH_TOOL_SCHEMA,
-    handler=dazah_tool,
+    handler=_dispatch_dazah_tool,
     check_fn=check_dazah_requirements,
     requires_env=["DAZAH_AGENT_TOOL_TOKEN"],
     is_async=True,

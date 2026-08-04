@@ -22,6 +22,7 @@ from app.modules.quality.schemas import (
     CreateChangeRequest,
     CreateDeviationRequest,
     CreateValidationRequest,
+    DeviationListItem,
     SubmitInvestigationRequest,
     UpdateCapaRequest,
     UpdateChangeActionPlanRequest,
@@ -128,6 +129,13 @@ class DeviationListInput(PageInput):
     investigation_completed_to: str | None = None
     root_cause_keyword: str | None = None
     corrective_actions_keyword: str | None = None
+
+
+class DeviationListOutput(BaseModel):
+    items: list[DeviationListItem]
+    total: int = Field(ge=0)
+    page: int = Field(ge=1)
+    page_size: int = Field(ge=1)
 
 
 class DeviationIdInput(BaseModel):
@@ -385,6 +393,7 @@ def _without(data: BaseModel, *fields: str) -> dict[str, Any]:
     input_model=DeviationListInput,
     method="GET",
     path="/quality/deviations",
+    output_schema=DeviationListOutput.model_json_schema(),
 )
 async def list_deviations(context: ToolContext, data: DeviationListInput) -> dict[str, Any]:
     return _dump(await quality_management.get_deviation_list(context.db, **data.model_dump()))

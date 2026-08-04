@@ -3,7 +3,7 @@ import json
 import uuid
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.platform.identity.models import User
@@ -98,6 +98,29 @@ class ToolCatalogService:
         await db.flush()
         return _catalog_entry(row)
 
+    async def require_enabled(
+        self,
+        db: AsyncSession,
+        *,
+        operation: str,
+    ) -> None:
+        """Fail closed when an administrator has disabled an operation."""
+        row = await db.scalar(
+            select(AgentToolCatalog).where(AgentToolCatalog.operation == operation)
+        )
+        if row is None:
+            await self.synchronize(db)
+            row = await db.scalar(
+                select(AgentToolCatalog).where(
+                    AgentToolCatalog.operation == operation
+                )
+            )
+        if row is None or row.status != "active" or not row.admin_enabled:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "该能力已被管理员停用，当前无法执行",
+            )
+
     async def list_all(
         self,
         db: AsyncSession,
@@ -116,6 +139,64 @@ class ToolCatalogService:
             .all()
         )
         return [_catalog_entry(row) for row in rows]
+
+    async def list_page(
+        self,
+        db: AsyncSession,
+        *,
+        page: int,
+        page_size: int,
+        keyword: str | None = None,
+        module: str | None = None,
+        status_value: str | None = None,
+        risk_level: str | None = None,
+        write: bool | None = None,
+    ) -> tuple[list[AgentToolCatalogEntry], int]:
+        await self.synchronize(db)
+        conditions = []
+        if keyword:
+            pattern = f"%{keyword.strip()}%"
+            conditions.append(
+                or_(
+                    AgentToolCatalog.operation.ilike(pattern),
+                    AgentToolCatalog.summary.ilike(pattern),
+                )
+            )
+        if module:
+            conditions.append(
+                AgentToolCatalog.module.is_(None)
+                if module == "platform"
+                else AgentToolCatalog.module == module
+            )
+        if status_value:
+            conditions.append(AgentToolCatalog.status == status_value)
+        if risk_level:
+            conditions.append(AgentToolCatalog.risk_level == risk_level)
+        if write is not None:
+            conditions.append(AgentToolCatalog.write == write)
+        total = int(
+            await db.scalar(
+                select(func.count()).select_from(AgentToolCatalog).where(*conditions)
+            )
+            or 0
+        )
+        rows = list(
+            (
+                await db.execute(
+                    select(AgentToolCatalog)
+                    .where(*conditions)
+                    .order_by(
+                        AgentToolCatalog.module.asc(),
+                        AgentToolCatalog.operation.asc(),
+                    )
+                    .offset((page - 1) * page_size)
+                    .limit(page_size)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        return [_catalog_entry(row) for row in rows], total
 
     async def _trusted_user(
         self,

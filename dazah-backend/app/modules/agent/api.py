@@ -1,14 +1,17 @@
+import hashlib
+import json
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
 from app.core.database import get_db
-from app.core.response import success_response
+from app.core.response import error_response, success_response
 from app.platform.audit.models import AuditLog
 from app.platform.identity.deps import RequiredUser
 from app.platform.identity.models import User
@@ -19,8 +22,16 @@ from .automation_service import AgentAutomationService
 from .catalog import ToolCatalogService
 from .event_service import AgentDomainEventService
 from .llm_proxy import forward_chat_completion, list_active_text_models
+from .models import (
+    AgentConfirmation,
+    AgentDomainEvent,
+    AgentMessage,
+    AgentPushDelivery,
+    AgentToolCall,
+)
 from .operations_service import AgentOperationsService
 from .push_delivery_service import PushDeliveryService
+from .repository import AgentRepository
 from .schemas import (
     AgentAccessScopeOut,
     AgentAuditSessionDetail,
@@ -35,11 +46,16 @@ from .schemas import (
     AgentSkillCreate,
     AgentSkillResolveRequest,
     AgentSkillUpdate,
+    AgentToolCatalogPage,
     AgentToolControlRequest,
     AgentToolEnabledUpdate,
     AgentToolExecuteRequest,
     AgentToolSearchRequest,
     AgentTrustedSubject,
+    FeishuConversationCompleteRequest,
+    FeishuConversationCompleteResponse,
+    FeishuConversationPrepareRequest,
+    FeishuConversationPrepareResponse,
 )
 from .service import AgentService
 
@@ -206,6 +222,21 @@ def require_service_token(expected: str, authorization: str | None) -> None:
     token = _bearer_token(authorization)
     if not expected or token != expected:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid Agent service token")
+
+
+async def _require_feishu_subject_user(
+    db: AsyncSession,
+    *,
+    subject: AgentTrustedSubject,
+) -> User:
+    if subject.source != "feishu":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Feishu subject required")
+    user = await db.get(User, subject.user_id)
+    if user is None or user.is_deleted or user.status != "active":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Feishu user is not active")
+    if (user.tenant_key or "default") != subject.tenant_id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Feishu tenant mismatch")
+    return user
 
 
 @router.get("/domain-events/{correlation_id}")
@@ -501,6 +532,47 @@ async def list_automation_run_events(
     return success_response(data=[item.model_dump(mode="json") for item in result])
 
 
+@router.post(
+    "/internal/feishu/conversations/prepare",
+    response_model=FeishuConversationPrepareResponse,
+)
+async def prepare_internal_feishu_conversation(
+    payload: FeishuConversationPrepareRequest,
+    db: AsyncSession = Depends(get_db),
+    authorization: str | None = Header(default=None),
+    settings: Settings = Depends(get_settings),
+):
+    require_service_token(settings.HERMES_INTERNAL_TOKEN, authorization)
+    user = await _require_feishu_subject_user(db, subject=payload.subject)
+    await AgentAccessScopeService().get_current_scope(db, user=user)
+    return await AgentService(settings).prepare_feishu_conversation(
+        db,
+        request=payload,
+        current_user=user,
+    )
+
+
+@router.post(
+    "/internal/feishu/conversations/{session_id}/complete",
+    response_model=FeishuConversationCompleteResponse,
+)
+async def complete_internal_feishu_conversation(
+    session_id: uuid.UUID,
+    payload: FeishuConversationCompleteRequest,
+    db: AsyncSession = Depends(get_db),
+    authorization: str | None = Header(default=None),
+    settings: Settings = Depends(get_settings),
+):
+    require_service_token(settings.HERMES_INTERNAL_TOKEN, authorization)
+    user = await _require_feishu_subject_user(db, subject=payload.subject)
+    return await AgentService(settings).complete_feishu_conversation(
+        db,
+        session_id=session_id,
+        request=payload,
+        current_user=user,
+    )
+
+
 @router.post("/chat")
 async def chat(
     payload: AgentChatRequest,
@@ -651,6 +723,371 @@ async def list_control_plane_tools(
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Admin required")
     result = await ToolCatalogService().list_all(db)
     return success_response(data=[item.model_dump(mode="json") for item in result])
+
+
+@router.get("/control/tools/page", response_model=None)
+async def list_control_plane_tools_page(
+    page: int = 1,
+    page_size: int = 20,
+    keyword: str | None = None,
+    module: str | None = None,
+    status_value: str | None = None,
+    risk_level: str | None = None,
+    write: bool | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+):
+    if current_user.role != "admin":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Admin required")
+    normalized_page = max(1, page)
+    normalized_size = min(max(1, page_size), 100)
+    items, total = await ToolCatalogService().list_page(
+        db,
+        page=normalized_page,
+        page_size=normalized_size,
+        keyword=keyword,
+        module=module,
+        status_value=status_value,
+        risk_level=risk_level,
+        write=write,
+    )
+    result = AgentToolCatalogPage(
+        items=items,
+        page=normalized_page,
+        page_size=normalized_size,
+        total=total,
+    )
+    return success_response(data=result.model_dump(mode="json"))
+
+
+@router.get("/control/confirmations")
+async def list_control_plane_confirmations(
+    page: int = 1,
+    page_size: int = 20,
+    status_value: str | None = None,
+    user_id: uuid.UUID | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+):
+    if current_user.role != "admin":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Admin required")
+    await AgentRepository().expire_due_confirmations(db)
+    conditions: list[Any] = [AgentConfirmation.is_deleted.is_(False)]
+    if status_value:
+        conditions.append(AgentConfirmation.status == status_value)
+    if user_id:
+        conditions.append(AgentConfirmation.user_id == user_id)
+    normalized_page = max(1, page)
+    normalized_size = min(max(1, page_size), 100)
+    total = int(
+        await db.scalar(
+            select(func.count()).select_from(AgentConfirmation).where(*conditions)
+        )
+        or 0
+    )
+    rows = list(
+        (
+            await db.execute(
+                select(AgentConfirmation)
+                .where(*conditions)
+                .order_by(AgentConfirmation.created_at.desc())
+                .offset((normalized_page - 1) * normalized_size)
+                .limit(normalized_size)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return success_response(
+        data={
+            "items": [
+                {
+                    "id": str(item.id),
+                    "session_id": str(item.session_id) if item.session_id else None,
+                    "user_id": str(item.user_id) if item.user_id else None,
+                    "operation": item.operation,
+                    "summary": item.summary,
+                    "risk_level": item.risk_level,
+                    "status": item.status,
+                    "expires_at": item.expires_at.isoformat(),
+                    "executed_at": item.executed_at.isoformat()
+                    if item.executed_at
+                    else None,
+                    "created_at": item.created_at.isoformat(),
+                }
+                for item in rows
+            ],
+            "page": normalized_page,
+            "page_size": normalized_size,
+            "total": total,
+        }
+    )
+
+
+@router.get("/control/traces/{trace_id}")
+async def get_control_plane_trace(
+    trace_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+):
+    if current_user.role != "admin":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Admin required")
+    tool_calls = list(
+        (
+            await db.execute(
+                select(AgentToolCall)
+                .where(
+                    AgentToolCall.correlation_id == trace_id,
+                    AgentToolCall.is_deleted.is_(False),
+                )
+                .order_by(AgentToolCall.created_at.asc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+    messages = list(
+        (
+            await db.execute(
+                select(AgentMessage)
+                .where(
+                    AgentMessage.message_metadata["trace_id"].astext
+                    == str(trace_id),
+                    AgentMessage.is_deleted.is_(False),
+                )
+                .order_by(AgentMessage.created_at.asc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+    confirmations = list(
+        (
+            await db.execute(
+                select(AgentConfirmation)
+                .where(
+                    AgentConfirmation.request_payload["trace_id"].astext
+                    == str(trace_id),
+                    AgentConfirmation.is_deleted.is_(False),
+                )
+                .order_by(AgentConfirmation.created_at.asc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+    domain_events = list(
+        (
+            await db.execute(
+                select(AgentDomainEvent)
+                .where(
+                    AgentDomainEvent.correlation_id == trace_id,
+                    AgentDomainEvent.is_deleted.is_(False),
+                )
+                .order_by(AgentDomainEvent.occurred_at.asc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+    deliveries = list(
+        (
+            await db.execute(
+                select(AgentPushDelivery)
+                .where(
+                    AgentPushDelivery.run_id == trace_id,
+                    AgentPushDelivery.is_deleted.is_(False),
+                )
+                .order_by(AgentPushDelivery.created_at.asc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+    timeline: list[dict[str, Any]] = [
+        {
+            "type": "tool_call",
+            "id": str(item.id),
+            "occurred_at": item.created_at.isoformat(),
+            "status": item.status,
+            "summary": item.operation,
+            "operation": item.operation,
+            "error_code": "agent.tool_failed" if item.error_message else None,
+        }
+        for item in tool_calls
+    ]
+    timeline.extend(
+        {
+            "type": "inbound_message"
+            if item.role == "user"
+            else "assistant_response",
+            "id": str(item.id),
+            "occurred_at": item.created_at.isoformat(),
+            "status": "recorded",
+            "summary": (
+                "飞书入站消息（正文已隐藏）"
+                if item.role == "user"
+                else "Livzon Agent 回复（正文已隐藏）"
+            ),
+            "operation": None,
+            "error_code": None,
+            "session_id": str(item.session_id),
+            "channel": item.message_metadata.get("channel") or "web",
+        }
+        for item in messages
+        if item.role in {"user", "assistant"}
+    )
+    timeline.extend(
+        {
+            "type": "confirmation",
+            "id": str(item.id),
+            "occurred_at": item.created_at.isoformat(),
+            "status": item.status,
+            "summary": item.operation,
+            "operation": item.operation,
+            "error_code": None,
+            "session_id": str(item.session_id) if item.session_id else None,
+            "risk_level": item.risk_level,
+        }
+        for item in confirmations
+    )
+    timeline.extend(
+        {
+            "type": "domain_event",
+            "id": str(item.id),
+            "occurred_at": item.occurred_at.isoformat(),
+            "status": "recorded",
+            "summary": item.event_type,
+            "operation": None,
+            "error_code": None,
+        }
+        for item in domain_events
+    )
+    timeline.extend(
+        {
+            "type": "delivery",
+            "id": str(item.id),
+            "occurred_at": item.created_at.isoformat(),
+            "status": item.status,
+            "summary": item.template_key,
+            "operation": None,
+            "error_code": item.last_error_code,
+            "external_message_id": item.external_message_id,
+            "attempt_count": item.attempt_count,
+        }
+        for item in deliveries
+    )
+    timeline.sort(key=lambda item: item["occurred_at"])
+    return success_response(
+        data={
+            "trace_id": str(trace_id),
+            "timeline": timeline,
+            "counts": {
+                "tool_calls": len(tool_calls),
+                "messages": len(messages),
+                "confirmations": len(confirmations),
+                "domain_events": len(domain_events),
+                "deliveries": len(deliveries),
+            },
+        }
+    )
+
+
+@router.get("/control/traces/{trace_id}/export")
+async def export_control_plane_trace(
+    trace_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+):
+    response = await get_control_plane_trace(
+        trace_id=trace_id,
+        db=db,
+        current_user=current_user,
+    )
+    envelope = json.loads(response.body)
+    trace = envelope["data"]
+    canonical = json.dumps(
+        trace,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode()
+    export = {
+        "schema_version": "1.0",
+        "generated_at": datetime.now(UTC).isoformat(),
+        "filters": {"trace_id": str(trace_id)},
+        "content_policy": "metadata_only_no_business_body_or_credentials",
+        "trace": trace,
+        "verification": {"sha256": hashlib.sha256(canonical).hexdigest()},
+    }
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            method="GET",
+            path=f"/api/v1/agent/control/traces/{trace_id}/export",
+            status_code=200,
+            resource_type="agent_trace",
+            action="export_agent_trace_diagnostic",
+            extra={"trace_id": str(trace_id)},
+        )
+    )
+    return JSONResponse(
+        content=export,
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="livzon-trace-{trace_id}.json"'
+            )
+        },
+    )
+
+
+@router.get("/control/runtime-overview")
+async def get_control_plane_runtime_overview(
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+):
+    if current_user.role != "admin":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Admin required")
+    pending_confirmations = int(
+        await db.scalar(
+            select(func.count(AgentConfirmation.id)).where(
+                AgentConfirmation.status == "pending",
+                AgentConfirmation.expires_at > datetime.now(UTC),
+                AgentConfirmation.is_deleted.is_(False),
+            )
+        )
+        or 0
+    )
+    failed_deliveries = int(
+        await db.scalar(
+            select(func.count(AgentPushDelivery.id)).where(
+                AgentPushDelivery.status == "failed",
+                AgentPushDelivery.is_deleted.is_(False),
+            )
+        )
+        or 0
+    )
+    latest_failed_call = await db.scalar(
+        select(AgentToolCall)
+        .where(
+            AgentToolCall.status == "failed",
+            AgentToolCall.is_deleted.is_(False),
+        )
+        .order_by(AgentToolCall.created_at.desc())
+        .limit(1)
+    )
+    return success_response(
+        data={
+            "pending_confirmations": pending_confirmations,
+            "failed_deliveries": failed_deliveries,
+            "latest_error_trace_id": str(latest_failed_call.correlation_id)
+            if latest_failed_call
+            else None,
+            "latest_error_at": latest_failed_call.created_at.isoformat()
+            if latest_failed_call
+            else None,
+        }
+    )
 
 
 @router.post("/tools/search")
@@ -835,6 +1272,11 @@ async def execute_confirmation(
         confirmation_id=confirmation_id,
         current_user=current_user,
     )
+    if result is None:
+        return error_response(
+            message="Agent confirmation has expired",
+            status_code=status.HTTP_409_CONFLICT,
+        )
     response = AgentConfirmationExecuteResponse(
         confirmation=AgentService(settings)._confirmation_out(confirmation),
         result=result,
@@ -892,6 +1334,11 @@ async def resolve_confirmation_from_gateway(
         confirmation_id=confirmation_id,
         current_user=user,
     )
+    if result is None:
+        return error_response(
+            message="Agent confirmation has expired",
+            status_code=status.HTTP_409_CONFLICT,
+        )
     return success_response(
         data={
             "confirmation": service._confirmation_out(confirmation).model_dump(

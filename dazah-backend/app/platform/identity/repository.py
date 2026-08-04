@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+from typing import cast
 from uuid import UUID
 
 from sqlalchemy import func, or_, select
@@ -24,6 +26,7 @@ class ExternalIdentityBindingRepository:
         external_open_id: str | None,
         external_union_id: str | None,
         local_user_id: UUID,
+        source: str,
         actor_id: UUID,
     ) -> ExternalIdentityBinding:
         binding = ExternalIdentityBinding(
@@ -35,6 +38,8 @@ class ExternalIdentityBindingRepository:
             external_union_id=external_union_id,
             local_user_id=local_user_id,
             status="active",
+            source=source,
+            verified_at=datetime.now(UTC),
             created_by=actor_id,
             updated_by=actor_id,
         )
@@ -47,23 +52,28 @@ class ExternalIdentityBindingRepository:
         session: AsyncSession,
         binding_id: UUID,
     ) -> ExternalIdentityBinding | None:
-        return await session.scalar(
-            select(ExternalIdentityBinding).where(
-                ExternalIdentityBinding.id == binding_id,
-                ExternalIdentityBinding.is_deleted == False,  # noqa: E712
-            )
+        return cast(
+            ExternalIdentityBinding | None,
+            await session.scalar(
+                select(ExternalIdentityBinding).where(
+                    ExternalIdentityBinding.id == binding_id,
+                    ExternalIdentityBinding.is_deleted == False,  # noqa: E712
+                )
+            ),
         )
 
-    async def disable(
+    async def set_status(
         self,
         session: AsyncSession,
         binding: ExternalIdentityBinding,
         *,
+        status_value: str,
         actor_id: UUID,
     ) -> ExternalIdentityBinding:
-        binding.status = "disabled"
+        binding.status = status_value
         binding.updated_by = actor_id
         await session.flush()
+        await session.refresh(binding)
         return binding
 
     async def resolve(
@@ -103,14 +113,71 @@ class ExternalIdentityBindingRepository:
         )
         return result.scalar_one_or_none()
 
-    async def list(
+    async def list_page(
         self,
         session: AsyncSession,
+        *,
+        page: int,
+        page_size: int,
+        keyword: str | None = None,
+        tenant_id: str | None = None,
+        status_value: str | None = None,
+        department: str | None = None,
+        active_since: datetime | None = None,
+    ) -> tuple[list[tuple[ExternalIdentityBinding, User]], int]:
+        conditions = [ExternalIdentityBinding.is_deleted == False]  # noqa: E712
+        if tenant_id:
+            conditions.append(ExternalIdentityBinding.tenant_id == tenant_id)
+        if status_value:
+            conditions.append(ExternalIdentityBinding.status == status_value)
+        if department:
+            conditions.append(User.department.ilike(f"%{department.strip()}%"))
+        if active_since:
+            conditions.append(ExternalIdentityBinding.last_seen_at >= active_since)
+        if keyword:
+            pattern = f"%{keyword.strip()}%"
+            conditions.append(
+                or_(
+                    ExternalIdentityBinding.external_user_id.ilike(pattern),
+                    ExternalIdentityBinding.external_open_id.ilike(pattern),
+                    ExternalIdentityBinding.external_union_id.ilike(pattern),
+                    User.name.ilike(pattern),
+                    User.employee_no.ilike(pattern),
+                )
+            )
+        total = int(
+            await session.scalar(
+                select(func.count())
+                .select_from(ExternalIdentityBinding)
+                .join(User, User.id == ExternalIdentityBinding.local_user_id)
+                .where(*conditions)
+            )
+            or 0
+        )
+        result = await session.execute(
+            select(ExternalIdentityBinding, User)
+            .join(User, User.id == ExternalIdentityBinding.local_user_id)
+            .where(*conditions)
+            .order_by(ExternalIdentityBinding.created_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+        return [(row[0], row[1]) for row in result.all()], total
+
+    async def list_for_app(
+        self,
+        session: AsyncSession,
+        *,
+        tenant_id: str,
+        app_fingerprint: str,
     ) -> list[ExternalIdentityBinding]:
         result = await session.execute(
-            select(ExternalIdentityBinding)
-            .where(ExternalIdentityBinding.is_deleted == False)  # noqa: E712
-            .order_by(ExternalIdentityBinding.created_at.desc())
+            select(ExternalIdentityBinding).where(
+                ExternalIdentityBinding.tenant_id == tenant_id,
+                ExternalIdentityBinding.platform == "feishu",
+                ExternalIdentityBinding.app_fingerprint == app_fingerprint,
+                ExternalIdentityBinding.is_deleted == False,  # noqa: E712
+            )
         )
         return list(result.scalars().all())
 

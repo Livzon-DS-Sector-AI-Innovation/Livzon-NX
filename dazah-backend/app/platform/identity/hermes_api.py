@@ -85,9 +85,13 @@ async def resolve_external_identity(
             status.HTTP_403_FORBIDDEN,
             "Bound local user is not active",
         )
+    configured_groups = config.allowed_group_chat_ids or []
     allowed_groups = {
         item.strip()
-        for item in settings.LIVZON_FEISHU_ALLOWED_GROUPS.split(",")
+        for item in (
+            configured_groups
+            or settings.LIVZON_FEISHU_ALLOWED_GROUPS.split(",")
+        )
         if item.strip()
     }
     if payload.chat_id and payload.chat_id not in allowed_groups:
@@ -99,7 +103,9 @@ async def resolve_external_identity(
     await db.flush()
     return {
         "subject": {
-            "tenant_id": binding.tenant_id,
+            # The binding tenant identifies the external Feishu application
+            # namespace. Agent authorization must use the local user's tenant.
+            "tenant_id": user.tenant_key or "default",
             "user_id": str(user.id),
             "display_name": user.name,
             "source": "feishu",

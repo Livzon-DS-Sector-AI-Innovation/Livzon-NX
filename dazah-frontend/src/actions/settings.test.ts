@@ -12,8 +12,11 @@ vi.mock('@/lib/server-api', () => ({
 }))
 
 import {
+  getAgentTrace,
+  getExternalIdentityBindings,
   getLivzonFeishuGatewayStatus,
   setAgentToolEnabled,
+  updateExternalIdentityBindingStatus,
 } from './settings'
 
 describe('settings Agent and Feishu actions', () => {
@@ -73,6 +76,66 @@ describe('settings Agent and Feishu actions', () => {
         method: 'POST',
         body: JSON.stringify({ enabled: false }),
       }),
+    )
+  })
+
+  it('uses server-side paging and filters for identity governance', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: { items: [], page: 2, page_size: 25, total: 0 },
+        }),
+        { status: 200 },
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await getExternalIdentityBindings({
+      page: 2,
+      pageSize: 25,
+      keyword: '张 三',
+      status: 'suspended',
+    })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://backend.test/api/v1/identity/external-identity-bindings?page=2&page_size=25&keyword=%E5%BC%A0+%E4%B8%89&status_value=suspended',
+      expect.any(Object),
+    )
+  })
+
+  it('records explicit identity lifecycle transitions', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ data: { status: 'revoked' } }), {
+        status: 200,
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await updateExternalIdentityBindingStatus('binding/a', 'revoked')
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://backend.test/api/v1/identity/external-identity-bindings/binding%2Fa/status',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ status: 'revoked' }),
+      }),
+    )
+  })
+
+  it('encodes trace identifiers and keeps diagnostics server-side', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({ data: { trace_id: 'trace/a', timeline: [] } }),
+        { status: 200 },
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await getAgentTrace('trace/a')
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://backend.test/api/v1/agent/control/traces/trace%2Fa',
+      expect.any(Object),
     )
   })
 })

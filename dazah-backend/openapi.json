@@ -1438,6 +1438,120 @@
         "title": "AgentAutomationAuditItem",
         "type": "object"
       },
+      "AgentBackendSource": {
+        "additionalProperties": false,
+        "properties": {
+          "chat_id": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chat Id"
+          },
+          "chat_type": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chat Type"
+          },
+          "message_id": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message Id"
+          },
+          "platform": {
+            "enum": [
+              "web",
+              "feishu"
+            ],
+            "title": "Platform",
+            "type": "string"
+          },
+          "reply_to": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reply To"
+          },
+          "sender_open_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sender Open Id"
+          },
+          "sender_union_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sender Union Id"
+          },
+          "sender_user_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sender User Id"
+          },
+          "thread_id": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thread Id"
+          }
+        },
+        "required": [
+          "platform"
+        ],
+        "title": "AgentBackendSource",
+        "type": "object"
+      },
       "AgentChatRequest": {
         "properties": {
           "attachments": {
@@ -17386,6 +17500,16 @@
             "title": "Platform",
             "type": "string"
           },
+          "source": {
+            "default": "admin",
+            "enum": [
+              "admin",
+              "directory_sync",
+              "oauth"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
           "tenant_id": {
             "maxLength": 128,
             "minLength": 1,
@@ -17399,6 +17523,74 @@
           "local_user_id"
         ],
         "title": "ExternalIdentityBindingCreate",
+        "type": "object"
+      },
+      "ExternalIdentityBindingStatusUpdate": {
+        "properties": {
+          "status": {
+            "enum": [
+              "active",
+              "suspended",
+              "revoked"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "ExternalIdentityBindingStatusUpdate",
+        "type": "object"
+      },
+      "ExternalIdentityConflictOut": {
+        "properties": {
+          "conflict_type": {
+            "enum": [
+              "external_owned_by_other",
+              "local_binding_mismatch"
+            ],
+            "title": "Conflict Type",
+            "type": "string"
+          },
+          "conflicting_binding_id": {
+            "format": "uuid",
+            "title": "Conflicting Binding Id",
+            "type": "string"
+          },
+          "department": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Department"
+          },
+          "external_identifier": {
+            "title": "External Identifier",
+            "type": "string"
+          },
+          "local_user_id": {
+            "format": "uuid",
+            "title": "Local User Id",
+            "type": "string"
+          },
+          "local_user_name": {
+            "title": "Local User Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "local_user_id",
+          "local_user_name",
+          "external_identifier",
+          "conflict_type",
+          "conflicting_binding_id"
+        ],
+        "title": "ExternalIdentityConflictOut",
         "type": "object"
       },
       "ExternalIdentityResolveRequest": {
@@ -17696,6 +17888,13 @@
       },
       "FeishuConfigResponse": {
         "properties": {
+          "allowed_group_chat_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Allowed Group Chat Ids",
+            "type": "array"
+          },
           "app_id": {
             "default": "",
             "title": "App Id",
@@ -17820,6 +18019,11 @@
             ],
             "title": "Last Synced At"
           },
+          "require_group_mention": {
+            "default": true,
+            "title": "Require Group Mention",
+            "type": "boolean"
+          },
           "sync_member_department_id": {
             "anyOf": [
               {
@@ -17846,6 +18050,29 @@
             "default": "default",
             "title": "Tenant Id",
             "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "updated_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By"
           }
         },
         "title": "FeishuConfigResponse",
@@ -17853,6 +18080,14 @@
       },
       "FeishuConfigUpsert": {
         "properties": {
+          "allowed_group_chat_ids": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 200,
+            "title": "Allowed Group Chat Ids",
+            "type": "array"
+          },
           "app_id": {
             "maxLength": 128,
             "minLength": 1,
@@ -17887,6 +18122,11 @@
           "is_active": {
             "default": true,
             "title": "Is Active",
+            "type": "boolean"
+          },
+          "require_group_mention": {
+            "default": true,
+            "title": "Require Group Mention",
             "type": "boolean"
           },
           "sync_member_department_id": {
@@ -17925,6 +18165,211 @@
           "app_id"
         ],
         "title": "FeishuConfigUpsert",
+        "type": "object"
+      },
+      "FeishuConversationAttachment": {
+        "additionalProperties": false,
+        "properties": {
+          "content_type": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Content Type",
+            "type": "string"
+          },
+          "filename": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Filename",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "image",
+              "audio",
+              "video",
+              "document"
+            ],
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "filename",
+          "content_type",
+          "kind"
+        ],
+        "title": "FeishuConversationAttachment",
+        "type": "object"
+      },
+      "FeishuConversationCompleteRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "assistant_message": {
+            "maxLength": 100000,
+            "minLength": 1,
+            "title": "Assistant Message",
+            "type": "string"
+          },
+          "external_message_id": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "External Message Id",
+            "type": "string"
+          },
+          "run_id": {
+            "format": "uuid",
+            "title": "Run Id",
+            "type": "string"
+          },
+          "subject": {
+            "$ref": "#/components/schemas/AgentTrustedSubject"
+          },
+          "tool_trace": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "maxItems": 100,
+            "title": "Tool Trace",
+            "type": "array"
+          },
+          "trace_id": {
+            "format": "uuid",
+            "title": "Trace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "subject",
+          "external_message_id",
+          "trace_id",
+          "run_id",
+          "assistant_message"
+        ],
+        "title": "FeishuConversationCompleteRequest",
+        "type": "object"
+      },
+      "FeishuConversationCompleteResponse": {
+        "properties": {
+          "duplicate": {
+            "default": false,
+            "title": "Duplicate",
+            "type": "boolean"
+          },
+          "message_id": {
+            "format": "uuid",
+            "title": "Message Id",
+            "type": "string"
+          },
+          "session_id": {
+            "format": "uuid",
+            "title": "Session Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "message_id"
+        ],
+        "title": "FeishuConversationCompleteResponse",
+        "type": "object"
+      },
+      "FeishuConversationPrepareRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "attachments": {
+            "items": {
+              "$ref": "#/components/schemas/FeishuConversationAttachment"
+            },
+            "maxItems": 5,
+            "title": "Attachments",
+            "type": "array"
+          },
+          "external_message_id": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "External Message Id",
+            "type": "string"
+          },
+          "message": {
+            "maxLength": 8000,
+            "minLength": 1,
+            "title": "Message",
+            "type": "string"
+          },
+          "peer_id": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Peer Id",
+            "type": "string"
+          },
+          "run_id": {
+            "format": "uuid",
+            "title": "Run Id",
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/AgentBackendSource"
+          },
+          "subject": {
+            "$ref": "#/components/schemas/AgentTrustedSubject"
+          },
+          "trace_id": {
+            "format": "uuid",
+            "title": "Trace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "subject",
+          "peer_id",
+          "external_message_id",
+          "message",
+          "trace_id",
+          "run_id",
+          "source"
+        ],
+        "title": "FeishuConversationPrepareRequest",
+        "type": "object"
+      },
+      "FeishuConversationPrepareResponse": {
+        "properties": {
+          "duplicate": {
+            "default": false,
+            "title": "Duplicate",
+            "type": "boolean"
+          },
+          "messages": {
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "title": "Messages",
+            "type": "array"
+          },
+          "response_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Response Text"
+          },
+          "session_id": {
+            "format": "uuid",
+            "title": "Session Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id"
+        ],
+        "title": "FeishuConversationPrepareResponse",
         "type": "object"
       },
       "FeishuDiagnosticApiResponse": {
@@ -49070,6 +49515,153 @@
         ]
       }
     },
+    "/api/v1/agent/control/confirmations": {
+      "get": {
+        "operationId": "list_control_plane_confirmations_api_v1_agent_control_confirmations_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status_value",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status Value"
+            }
+          },
+          {
+            "in": "query",
+            "name": "user_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "User Id"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Control Plane Confirmations",
+        "tags": [
+          "中枢 Agent"
+        ]
+      }
+    },
+    "/api/v1/agent/control/runtime-overview": {
+      "get": {
+        "operationId": "get_control_plane_runtime_overview_api_v1_agent_control_runtime_overview_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Control Plane Runtime Overview",
+        "tags": [
+          "中枢 Agent"
+        ]
+      }
+    },
     "/api/v1/agent/control/tools": {
       "get": {
         "operationId": "list_control_plane_tools_api_v1_agent_control_tools_get",
@@ -49174,6 +49766,267 @@
         ]
       }
     },
+    "/api/v1/agent/control/tools/page": {
+      "get": {
+        "operationId": "list_control_plane_tools_page_api_v1_agent_control_tools_page_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "keyword",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Keyword"
+            }
+          },
+          {
+            "in": "query",
+            "name": "module",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Module"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status_value",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status Value"
+            }
+          },
+          {
+            "in": "query",
+            "name": "risk_level",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Risk Level"
+            }
+          },
+          {
+            "in": "query",
+            "name": "write",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Write"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Control Plane Tools Page",
+        "tags": [
+          "中枢 Agent"
+        ]
+      }
+    },
+    "/api/v1/agent/control/traces/{trace_id}": {
+      "get": {
+        "operationId": "get_control_plane_trace_api_v1_agent_control_traces__trace_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "trace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Trace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Control Plane Trace",
+        "tags": [
+          "中枢 Agent"
+        ]
+      }
+    },
+    "/api/v1/agent/control/traces/{trace_id}/export": {
+      "get": {
+        "operationId": "export_control_plane_trace_api_v1_agent_control_traces__trace_id__export_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "trace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Trace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export Control Plane Trace",
+        "tags": [
+          "中枢 Agent"
+        ]
+      }
+    },
     "/api/v1/agent/domain-events/{correlation_id}": {
       "get": {
         "operationId": "list_domain_events_api_v1_agent_domain_events__correlation_id__get",
@@ -49226,6 +50079,134 @@
           }
         },
         "summary": "List Domain Events",
+        "tags": [
+          "中枢 Agent"
+        ]
+      }
+    },
+    "/api/v1/agent/internal/feishu/conversations/prepare": {
+      "post": {
+        "operationId": "prepare_internal_feishu_conversation_api_v1_agent_internal_feishu_conversations_prepare_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeishuConversationPrepareRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeishuConversationPrepareResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Prepare Internal Feishu Conversation",
+        "tags": [
+          "中枢 Agent"
+        ]
+      }
+    },
+    "/api/v1/agent/internal/feishu/conversations/{session_id}/complete": {
+      "post": {
+        "operationId": "complete_internal_feishu_conversation_api_v1_agent_internal_feishu_conversations__session_id__complete_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeishuConversationCompleteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeishuConversationCompleteResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Complete Internal Feishu Conversation",
         "tags": [
           "中枢 Agent"
         ]
@@ -67861,6 +68842,107 @@
         "operationId": "list_external_identity_bindings_api_v1_identity_external_identity_bindings_get",
         "parameters": [
           {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "keyword",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Keyword"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tenant Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status_value",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status Value"
+            }
+          },
+          {
+            "in": "query",
+            "name": "department",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Department"
+            }
+          },
+          {
+            "in": "query",
+            "name": "active_since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Active Since"
+            }
+          },
+          {
             "in": "cookie",
             "name": "auth_token",
             "required": false,
@@ -67960,9 +69042,63 @@
         ]
       }
     },
-    "/api/v1/identity/external-identity-bindings/{binding_id}/disable": {
+    "/api/v1/identity/external-identity-bindings/conflicts": {
+      "get": {
+        "operationId": "list_external_identity_binding_conflicts_api_v1_identity_external_identity_bindings_conflicts_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ExternalIdentityConflictOut"
+                  },
+                  "title": "Response List External Identity Binding Conflicts Api V1 Identity External Identity Bindings Conflicts Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "管理员查询飞书身份绑定冲突",
+        "tags": [
+          "用户信息",
+          "用户信息"
+        ]
+      }
+    },
+    "/api/v1/identity/external-identity-bindings/{binding_id}/status": {
       "post": {
-        "operationId": "disable_external_identity_binding_api_v1_identity_external_identity_bindings__binding_id__disable_post",
+        "operationId": "update_external_identity_binding_status_api_v1_identity_external_identity_bindings__binding_id__status_post",
         "parameters": [
           {
             "in": "path",
@@ -67991,6 +69127,16 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExternalIdentityBindingStatusUpdate"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {
@@ -68011,7 +69157,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "管理员停用外部身份绑定",
+        "summary": "管理员更新外部身份绑定状态",
         "tags": [
           "用户信息",
           "用户信息"

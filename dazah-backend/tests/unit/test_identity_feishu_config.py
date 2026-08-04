@@ -1,19 +1,25 @@
+from datetime import UTC, datetime
 from types import SimpleNamespace
+from uuid import uuid4
 
 import pytest
 from fastapi import HTTPException
 
 from app.platform.identity import service
 from app.platform.identity.models import FeishuConfig
-from app.platform.identity.schemas import FeishuConfigUpsert
+from app.platform.identity.schemas import ExternalIdentityBindingOut, FeishuConfigUpsert
 
 
 class FakeDb:
     def __init__(self) -> None:
         self.flush_count = 0
+        self.refresh_count = 0
 
     async def flush(self) -> None:
         self.flush_count += 1
+
+    async def refresh(self, instance) -> None:
+        self.refresh_count += 1
 
 
 class FakeFeishuConfigRepo:
@@ -32,6 +38,48 @@ class FakeFeishuConfigRepo:
         self.config = config
         await db.flush()
         return config
+
+
+class FakeHttpResponse:
+    def __init__(self, status_code: int) -> None:
+        self.status_code = status_code
+        self.is_success = 200 <= status_code < 300
+
+
+class FakeHttpClient:
+    status_code = 200
+
+    def __init__(self, **kwargs) -> None:
+        pass
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb) -> None:
+        return None
+
+    async def put(self, *args, **kwargs) -> FakeHttpResponse:
+        return FakeHttpResponse(self.status_code)
+
+
+def test_external_identity_binding_out_normalizes_migrated_source() -> None:
+    now = datetime.now(UTC)
+    binding = ExternalIdentityBindingOut.model_validate(
+        {
+            "id": uuid4(),
+            "tenant_id": "default",
+            "platform": "feishu",
+            "app_fingerprint": "cli_test",
+            "external_open_id": "ou_test",
+            "local_user_id": uuid4(),
+            "source": "identity.users",
+            "status": "active",
+            "created_at": now,
+            "updated_at": now,
+        }
+    )
+
+    assert binding.source == "directory_sync"
 
 
 @pytest.mark.anyio
@@ -109,6 +157,34 @@ async def test_save_livzon_feishu_config_reports_secret_encryption_error(
 
     assert exc_info.value.status_code == 500
     assert "ENCRYPTION_KEY" in str(exc_info.value.detail)
+
+
+@pytest.mark.anyio
+async def test_push_livzon_credentials_reports_hermes_version_conflict(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        service,
+        "get_settings",
+        lambda: SimpleNamespace(
+            HERMES_INTERNAL_URL="http://hermes",
+            HERMES_INTERNAL_TOKEN="test-token",
+        ),
+    )
+    FakeHttpClient.status_code = 409
+    monkeypatch.setattr(service.httpx, "AsyncClient", FakeHttpClient)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await service._push_livzon_credentials_to_hermes(
+            app_id="cli_test",
+            app_secret="secret",
+            tenant_id="default",
+            gateway_enabled=True,
+            version=3,
+        )
+
+    assert exc_info.value.status_code == 409
+    assert "过期" in str(exc_info.value.detail)
 
 
 @pytest.mark.anyio
