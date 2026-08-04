@@ -447,6 +447,14 @@ describe('FeishuSettingsClient governance lifecycle', () => {
     invokeEffects()
     await vi.waitFor(() => expect(actions.getAgentConfirmations).toHaveBeenCalled())
 
+    const userIdInput = walk(tree).find(
+      (element) => element.props?.placeholder === '本地用户编号（UUID）',
+    )
+    ;(userIdInput?.props?.onChange as (event: { target: { value: string } }) => void)(
+      { target: { value: 'user-2' } },
+    )
+    expect(lifecycle.setters[0]).toHaveBeenCalledWith('user-2')
+
     await (findButton(tree, '查询授权').props?.onClick as () => Promise<void>)()
     expect(actions.getFeishuAuthorizations).toHaveBeenCalledWith('user-1')
 
@@ -470,10 +478,11 @@ describe('FeishuSettingsClient governance lifecycle', () => {
     resetHooks({ 0: 'failed', 1: [{ id: 'delivery-1', status: 'failed' }], 2: false })
     actions.exportAgentTrace.mockResolvedValue({ filename: 'trace.json', content: '{}' })
     const onQuery = vi.fn().mockResolvedValue(undefined)
+    const onTraceIdChange = vi.fn()
     const tree = TraceDelivery({
       traceId: 'trace-1',
       trace,
-      onTraceIdChange: vi.fn(),
+      onTraceIdChange,
       onQuery,
     })
     invokeEffects()
@@ -487,12 +496,25 @@ describe('FeishuSettingsClient governance lifecycle', () => {
       (element) => element.props?.title === '调用链路（Trace）用于定位故障',
     )).toBe(true)
 
+    const traceInput = walk(tree).find(
+      (element) => element.props?.placeholder === '输入调用链路编号或运行编号',
+    )
+    ;(traceInput?.props?.onChange as (event: { target: { value: string } }) => void)(
+      { target: { value: 'trace-2' } },
+    )
+    expect(onTraceIdChange).toHaveBeenCalledWith('trace-2')
+
     const list = walk(tree).find((element) => typeof element.props?.renderItem === 'function')
     ;(list?.props?.renderItem as (item: typeof trace.timeline[number]) => unknown)(trace.timeline[0])
     const table = walk(tree).find((element) => Array.isArray(element.props?.columns))
-    const statusColumn = (table?.props?.columns as Array<Record<string, unknown>>).find(
+    const columns = table?.props?.columns as Array<Record<string, unknown>>
+    const channelColumn = columns.find((column) => column.dataIndex === 'channel')
+    expect((channelColumn?.render as (value: string) => unknown)('feishu')).toBeDefined()
+    expect((channelColumn?.render as (value: string) => unknown)('custom')).toBeDefined()
+    const statusColumn = columns.find(
       (column) => column.dataIndex === 'status',
     )
     ;(statusColumn?.render as (value: string) => unknown)('failed')
+    expect((table?.props?.rowKey as (item: { id: number }) => string)({ id: 7 })).toBe('7')
   })
 })
