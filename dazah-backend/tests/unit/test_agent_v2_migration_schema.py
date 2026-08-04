@@ -17,6 +17,12 @@ GOVERNANCE_MIGRATION_PATH = (
     / "versions"
     / "7a31c9e4d2b8_add_agent_governance_controls.py"
 )
+ALIGNMENT_MIGRATION_PATH = (
+    Path(__file__).parents[2]
+    / "alembic"
+    / "versions"
+    / "9a1c2e3f4b5d_align_agent_v2_identity_metadata.py"
+)
 
 
 def _load_migration(path: Path = MIGRATION_PATH):
@@ -30,12 +36,15 @@ def _load_migration(path: Path = MIGRATION_PATH):
 
 def test_agent_governance_migration_extends_v2_head() -> None:
     migration = _load_migration()
+    alignment = _load_migration(ALIGNMENT_MIGRATION_PATH)
     governance = _load_migration(GOVERNANCE_MIGRATION_PATH)
 
     assert migration.revision == "4e7b9c1d2f30"
     assert migration.down_revision == "fbffa92623e9"
+    assert alignment.revision == "9a1c2e3f4b5d"
+    assert alignment.down_revision == migration.revision
     assert governance.revision == "7a31c9e4d2b8"
-    assert governance.down_revision == migration.revision
+    assert governance.down_revision == alignment.revision
 
 
 def test_admin_enabled_belongs_to_tool_catalog_only(

@@ -1,60 +1,144 @@
-# CI 测试与合并门禁
+# GitHub CI 与合并门禁
 
-根目录工作流 `workflows/ci.yml` 是单体仓库唯一生效的 GitHub Actions
-入口，在 `main`、`dev` 的 push、pull request 以及手动触发时运行。
+`.github/workflows/ci.yml` 是 GitHub 的单体仓库 CI，在 `dev`、`main` 的
+push、pull request 以及手动触发时运行。Workflow 不使用顶层 `paths`
+过滤；所有运行都产生稳定的 `CI Gate`。
 
-## Required checks
+## Workflow DAG
 
-GitHub 分支保护如可用，应只绑定稳定汇总 job：
+```mermaid
+flowchart LR
+  trigger["PR / dev / main"] --> scope["Change Scope"]
+  scope --> security["Source Security"]
+  scope --> frontend["Frontend Quality"]
+  frontend --> e2e["Stable Frontend E2E"]
+  frontend --> flaky["Frontend Flaky Quarantine"]
+  scope --> backend["Backend Quality"]
+  backend --> integration["Backend Integration"]
+  backend --> image["Backend Image Verify"]
+  scope --> hermes["Hermes Quality"]
+  backend --> contract["Hermes Contract"]
+  hermes --> contract
+  scope --> gate["CI Gate"]
+  security --> gate
+  frontend --> gate
+  e2e --> gate
+  backend --> gate
+  integration --> gate
+  image --> gate
+  hermes --> gate
+  contract --> gate
+  flaky -. non-blocking .-> report["Quarantine report"]
+```
 
-- `CI Gate`
+`Backend Integration` 和 `Backend Image Verify` 在 `Backend Quality` 成功后
+并行。镜像构建、Trivy 镜像扫描、迁移、容器启动、健康检查和 smoke test
+位于同一个 runner，不依赖跨 Job 的本地镜像或服务。
 
-`CI Gate` 汇总 `Test Impact`、`Frontend Test`、`Backend Test`、
-`Backend Docker Build` 和 `Hermes Test`。`Frontend Test` 继续汇总所有前端
-检查；任一依赖失败、取消或跳过，最终门禁都会失败。
+## Change Scope
 
-`Test Impact` 根据 `.ci/test-impact-policy.toml` 验证生产变更是否同步了对应
-模块测试。未分类的生产路径失败关闭，详细开发契约见
-`docs/module-development-ci.md`。
+`Change Scope` 使用完整 Git 历史计算以下输出：
 
-`Backend Test` 使用独立的 PostgreSQL `dazah_test` 服务容器，检查唯一 Alembic
-head、在空库执行全量 migration，再运行包含接口集成测试的全量 Pytest。
+- `frontend_changed`
+- `backend_changed`
+- `hermes_changed`
+- `docker_changed`
+- `shared_changed`
+- `docs_only`
 
-## 测试分层
+脚本处理 PR base/head、普通 push、merge commit、手动运行、首次 push 和
+全零/不可用 before SHA。无法可信解析 base 时按完整 HEAD 文件树执行，
+以增加验证代价换取不漏跑门禁。
 
-- 静态检查：前端全量 ESLint、TypeScript `tsc --noEmit`；后端 Ruff
-  仅阻断 pull request 或 push 中新增、复制、修改、重命名的 Python 文件。
-  这是历史问题清理期间的渐进门禁，变更文件必须零 Ruff 错误；基线清零后改回全库检查。
-- 单元测试：前端 Vitest 同时采集全量 `src` 覆盖率；后端单元测试包含在全量
-  Pytest 中；Hermes-Lite 执行 Pytest 和关键入口编译检查。
-- 接口集成测试：使用真实 FastAPI 路由和 PostgreSQL 测试容器运行后端测试集。
-- 数据库测试：空 PostgreSQL 数据库必须能从零升级到唯一 Alembic head。
-- 浏览器测试：`Frontend E2E` 使用 Playwright Chromium 执行不依赖真实外部服务的
-  采购关键流程。
-- 构建测试：Next.js production build、前端 Docker build、后端 Docker build。
+纯 `docs/` 或 Markdown、MDX、reStructuredText 变更只运行 Change Scope、
+Source Security 和 CI Gate。`.github` Workflow、根配置、`.ci`、`.gitea`、
+共享脚本与 OpenAPI 契约属于 shared change，会触发全部相关模块。
 
-## 覆盖率提升计划
+Change Scope 同时运行 `.ci/test-impact-policy.toml`，生产代码变更没有对应
+测试时直接失败。
 
-当前覆盖率门禁采用渐进治理：
+## 检查内容
 
-- 前端覆盖整个 `src`（生成类型除外），初始基线为行 0.15%、语句 0.15%、
-  函数 0.14%、分支 0.17%。这些数值只允许上调；PR 变更的可执行行覆盖率不得
-  低于 80%。
-- 后端覆盖 `app`，行覆盖率不得低于 60%，分支覆盖率不得低于 33.5%，PR
-  变更的可执行行覆盖率不得低于 80%。
-- 低覆盖模块不通过排除生产代码处理。触达模块时由变更行门禁强制补测试，
-  全局和分支基线只允许随测试建设逐步上调。
+### Frontend
 
-覆盖率报告作为 CI artifact 保留 14 天。提升基线必须在同一 pull request 中提交
-具有业务断言的测试，优先覆盖业务规则、权限、确认流程、失败分支和真实
-FastAPI 路由。
+`Frontend Quality` 一次安装依赖后执行生成 API 契约漂移、ESLint、
+TypeScript、Vitest coverage、80% 变更行覆盖率、Next.js production build、
+Compose 校验和前端 Docker build。
 
-## Gitea 合并门禁
+`Stable Frontend E2E` 重新构建 production bundle，通过 standalone server 运行
+`e2e/purchasing` 且排除 `@flaky`。CI 只允许一次测试级重试；失败时上传
+Playwright HTML、trace、截图和视频。
 
-`.gitea/workflows/ci.yml` 在 PR 的合并结果工作树上执行同一套前后端覆盖率策略，
-并运行 `test-impact`、`frontend-e2e` 和 `hermes-quality`。稳定的
-`merge-gate` 汇总全部子检查；Gitea 分支保护只需要长期绑定一次
-`merge-gate`，以后可以在不修改保护规则的情况下扩展其依赖。
+`Frontend Flaky Quarantine` 只运行带 `@flaky` 的测试，Job
+`continue-on-error` 且不进入 CI Gate。当前没有隔离测试，因此只写 Step
+Summary。新增隔离项必须在测试标题或邻近注释记录 Issue、隔离原因、负责人和
+计划修复日期。
 
-ESLint 当前同样保持零 error 门禁；历史 warning 不会被本次基线阻断，但新增代码
-不得扩大 warning 数量，并应按模块逐步清理。
+### Backend
+
+`Backend Quality` 执行 AgentBackend V2 残留检查、变更 Python 文件 Ruff、
+compileall、现有 `mypy app/core` 基线和 unit/core 测试。
+
+`Backend Integration` 使用独立 PostgreSQL 17 和 Redis 8，检查唯一 Alembic
+head、空库 upgrade、model/migration drift、FastAPI import、OpenAPI 漂移，
+然后运行全量 Pytest、60% 行覆盖率、33.5% 分支覆盖率和 80% 变更行覆盖率。
+
+`Backend Image Verify` 使用 `${GITHUB_SHA}` 标记镜像并通过 Buildx/GHA cache
+只构建一次。完整漏洞报告作为 artifact；存在有修复版本的 High/Critical
+漏洞时阻塞。容器使用隔离 Docker network 和临时 PostgreSQL/Redis。
+
+### Hermes
+
+`Hermes Quality` 执行残留检查、编译、Dazah 自有兼容边界的 Ruff 和全量
+Pytest。固定上游 Hermes 源码不纳入新增的全库 Ruff 门禁，避免用本项目配置
+约束禁止本地修改的上游快照。
+
+`Hermes Contract` 使用自己的 PostgreSQL/Redis 环境，运行后端 Agent V2、
+Tool Registry、执行入口、权限和参数契约，以及 Hermes
+search/describe/execute adapter、OpenAPI 路径、超时和服务不可用契约。
+
+### Security
+
+`Source Security` 始终运行 Trivy filesystem
+`vuln,secret,misconfig` 扫描。完整严重度报告非阻塞上传；Secret 或有修复版本
+的 High/Critical 漏洞及配置问题阻塞。不维护大范围 ignore，当前也没有
+`.trivyignore`。
+
+所有外部 Action 使用完整 commit SHA，Workflow 默认权限只有
+`contents: read`。PR 不推送正式镜像。
+
+## CI Gate 语义
+
+`CI Gate` 使用 `if: always()`，对每个阻塞 Job 同时检查 scope 预期和
+`needs.<job>.result`：
+
+- 模块未变化且 Job 为 `skipped`：允许；
+- 模块变化且 Job 为 `success`：允许；
+- 模块变化但 Job 为 `skipped`：失败；
+- 任意阻塞 Job 为 `failure` 或 `cancelled`：失败；
+- Change Scope 或 Source Security 不是 `success`：失败。
+
+Gate 会将 scope 和“Job、预期、实际结果、结论、原因”表格写入
+GitHub Step Summary。Quarantine 不在 Gate 的 `needs` 中。
+
+## GitHub Ruleset / Branch Protection
+
+先让新 Workflow 在一个 PR 上至少成功运行一次，使 GitHub 注册检查名，然后：
+
+1. 打开仓库 **Settings → Rules → Rulesets**（或 Branch protection rules）。
+2. 为 `dev` 和 `main` 启用 Require a pull request before merging。
+3. 启用 Require status checks to pass，Required check 只选择 `CI Gate`。
+4. 启用 Require branches to be up to date before merging。
+5. 对 `main` 启用 Block force pushes、Block deletions，并限制直接 push；
+   管理员是否允许 bypass 按组织治理要求设置。
+6. 新 Gate 稳定后，移除旧的 `Frontend Test`、`Backend Test`、
+   `Backend Docker Build`、`Hermes Test` 等 Required Checks。
+
+Workflow 没有生产发布逻辑。以后接入发布时，发布 Job 必须
+`needs: ci-gate`，并只允许在目标分支的 `push` 事件执行。
+
+## Nightly
+
+本次不创建 nightly Workflow。仓库出现有完整隔离元数据的真实 `@flaky`
+测试后，再增加夜间全量 E2E、quarantine、完整安全扫描和长集成测试；nightly
+不得成为现有 PR 的 Required Check。

@@ -4,7 +4,7 @@ export default defineConfig({
   testDir: './e2e',
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
+  retries: process.env.CI ? 1 : 0,
   workers: 1,
   reporter: 'html',
   webServer: [
@@ -15,10 +15,14 @@ export default defineConfig({
       timeout: 30_000,
     },
     {
-      command: 'pnpm dev --port 3200',
+      command: process.env.CI
+        ? 'node scripts/start-standalone.mjs'
+        : 'pnpm dev --port 3200',
       url: 'http://127.0.0.1:3200',
       env: {
         API_BASE_URL: 'http://127.0.0.1:4100',
+        HOSTNAME: '127.0.0.1',
+        PORT: '3200',
       },
       reuseExistingServer: !process.env.CI,
       timeout: 180_000,
@@ -28,7 +32,7 @@ export default defineConfig({
     baseURL: 'http://127.0.0.1:3200',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
-    video: 'retain-on-failure',
+    video: 'on-first-retry',
   },
   projects: [
     {

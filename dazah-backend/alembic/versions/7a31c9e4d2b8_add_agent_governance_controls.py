@@ -1,7 +1,7 @@
 """add Agent governance identity and Feishu admission controls
 
 Revision ID: 7a31c9e4d2b8
-Revises: 4e7b9c1d2f30
+Revises: 9a1c2e3f4b5d
 Create Date: 2026-07-31 17:00:00.000000
 """
 
@@ -13,7 +13,7 @@ from sqlalchemy.dialects import postgresql
 from alembic import op
 
 revision: str = "7a31c9e4d2b8"
-down_revision: str | None = "4e7b9c1d2f30"
+down_revision: str | None = "9a1c2e3f4b5d"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

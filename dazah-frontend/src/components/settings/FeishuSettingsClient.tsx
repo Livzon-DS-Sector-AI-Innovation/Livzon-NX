@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   ApiOutlined,
   AuditOutlined,
@@ -127,7 +127,7 @@ function downloadTextFile(filename: string, content: string) {
   URL.revokeObjectURL(url)
 }
 
-function buildConfigPayload(
+export function buildPayload(
   values: CredentialsFormValues,
   config: FeishuConfig | null,
 ): FeishuConfigUpsert {
@@ -268,7 +268,7 @@ function FeishuAccess({
 
   const save = async () => {
     const values = await form.validateFields()
-    const payload = buildConfigPayload(values, config)
+    const payload = buildPayload(values, config)
     modal.confirm({
       title: payload.gateway_enabled ? '确认更新飞书接入配置' : '确认停用 Hermes Gateway',
       icon: <ExclamationCircleOutlined />,
@@ -313,7 +313,7 @@ function FeishuAccess({
   }
 
   const test = async () => {
-    const payload = buildConfigPayload(await form.validateFields(), config)
+    const payload = buildPayload(await form.validateFields(), config)
     setTesting(true)
     try {
       const result = await testLivzonFeishuConfig(payload)

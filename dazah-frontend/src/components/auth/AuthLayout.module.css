@@ -1,0 +1,562 @@
+.authPage {
+  display: grid;
+  min-height: 100dvh;
+  grid-template-columns: minmax(0, 44fr) minmax(32rem, 56fr);
+  background: var(--color-canvas);
+}
+.brandPane {
+  position: relative;
+  min-height: 100%;
+  overflow: hidden;
+  border-right: 1px solid rgba(86, 69, 212, 0.1);
+  background:
+    radial-gradient(circle at 18% 18%, rgba(255, 255, 255, 0.88), transparent 25rem),
+    linear-gradient(145deg, #f8f7ff 0%, #eeebfb 58%, #e8eefc 100%);
+}
+
+.brandPane::before,
+.brandPane::after {
+  position: absolute;
+  border: 1px solid rgba(86, 69, 212, 0.08);
+  border-radius: 50%;
+  content: "";
+  pointer-events: none;
+}
+
+.brandPane::before {
+  right: -14rem;
+  bottom: -16rem;
+  width: 36rem;
+  height: 36rem;
+}
+
+.brandPane::after {
+  right: -7rem;
+  bottom: -9rem;
+  width: 23rem;
+  height: 23rem;
+}
+
+.brandGlow {
+  position: absolute;
+  top: 28%;
+  right: -8rem;
+  width: 25rem;
+  height: 25rem;
+  border-radius: 50%;
+  background: rgba(125, 151, 231, 0.12);
+  filter: blur(4rem);
+  pointer-events: none;
+}
+
+.brandContent {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  width: min(100%, 42rem);
+  min-height: 100dvh;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: clamp(2rem, 5vw, 4.5rem);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.brandMark {
+  display: grid;
+  width: 2.75rem;
+  height: 2.75rem;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(38, 31, 96, 0.1);
+}
+
+.brandMark img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.brandName {
+  color: var(--color-brand-navy);
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+}
+
+.brandMessage {
+  max-width: 32rem;
+  padding-block: 3rem;
+}
+
+.internalBadge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.75rem;
+  margin-bottom: 1.25rem;
+  border: 1px solid rgba(86, 69, 212, 0.18);
+  border-radius: var(--rounded-full);
+  background: rgba(255, 255, 255, 0.58);
+  padding: 0.25rem 0.75rem;
+  color: var(--color-primary);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.brandMessage h1 {
+  max-width: 11em;
+  margin: 0;
+  color: var(--color-brand-navy);
+  font-size: clamp(2rem, 3.3vw, 3rem);
+  font-weight: 650;
+  letter-spacing: -0.035em;
+  line-height: 1.18;
+}
+
+.brandMessage p {
+  max-width: 31rem;
+  margin: 1.5rem 0 0;
+  color: var(--color-slate);
+  font-size: 1rem;
+  line-height: 1.85;
+}
+
+.brandFootnote {
+  margin: 0;
+  color: var(--color-steel);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.accessPane {
+  display: grid;
+  min-width: 0;
+  min-height: 100dvh;
+  grid-template-rows: 1fr auto;
+  align-items: center;
+  background: var(--color-canvas);
+  padding: clamp(2rem, 6vw, 5rem);
+}
+
+.accessContent {
+  width: min(100%, 26.25rem);
+  margin: auto;
+}
+
+.mobileBrand {
+  display: none;
+}
+
+.accessFooter {
+  width: 100%;
+  margin: 2rem 0 0;
+  color: var(--color-steel);
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+.panelHeader {
+  margin-bottom: 2rem;
+}
+
+.panelEyebrow {
+  margin: 0 0 0.75rem;
+  color: var(--color-primary);
+  font-size: 0.75rem;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+}
+
+.panelHeader h2 {
+  margin: 0;
+  color: var(--color-ink);
+  font-size: clamp(1.75rem, 2.5vw, 2rem);
+  font-weight: 650;
+  letter-spacing: -0.025em;
+  line-height: 1.25;
+}
+
+.panelHeader p {
+  margin: 0.75rem 0 0;
+  color: var(--color-slate);
+  font-size: 0.9375rem;
+  line-height: 1.7;
+}
+
+.errorNotice {
+  display: flex;
+  gap: 0.625rem;
+  align-items: flex-start;
+  margin-bottom: 1.25rem;
+  border: 1px solid rgba(224, 49, 49, 0.2);
+  border-radius: var(--rounded-md);
+  background: #fff7f6;
+  padding: 0.75rem 0.875rem;
+  color: #b42318;
+  font-size: 0.875rem;
+  line-height: 1.55;
+}
+
+.errorNotice::before {
+  display: grid;
+  width: 1.125rem;
+  height: 1.125rem;
+  flex: 0 0 auto;
+  place-items: center;
+  margin-top: 0.08rem;
+  border-radius: 50%;
+  background: #e03131;
+  color: #ffffff;
+  content: "!";
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.primaryButton,
+.secondaryButton,
+.localSubmit {
+  display: inline-flex;
+  min-height: 3rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--rounded-md);
+  padding: 0.75rem 1rem;
+  font: inherit;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.primaryButton {
+  width: 100%;
+  border: 1px solid var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  box-shadow: 0 1px 2px rgba(31, 23, 93, 0.12);
+}
+
+.primaryButton:hover:not(:disabled) {
+  border-color: #6b5ddb;
+  background: #6b5ddb;
+}
+
+.primaryButton:active:not(:disabled),
+.secondaryButton:active:not(:disabled),
+.localSubmit:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.primaryButton:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.primaryButton:focus-visible,
+.secondaryButton:focus-visible,
+.localSubmit:focus-visible,
+.emergencyToggle:focus-visible,
+.field input:focus-visible {
+  outline: 3px solid rgba(86, 69, 212, 0.22);
+  outline-offset: 2px;
+}
+
+.buttonSpinner {
+  width: 1rem;
+  height: 1rem;
+  margin-right: 0.625rem;
+  border: 2px solid rgba(255, 255, 255, 0.45);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: auth-spin 700ms linear infinite;
+}
+
+.securityHint {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: center;
+  margin: 0.875rem 0 0;
+  color: var(--color-steel);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.securityHint::before {
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+  background: var(--color-success);
+  content: "";
+}
+
+.emergencyArea {
+  margin-top: 2rem;
+  border-top: 1px solid var(--color-hairline-soft);
+  padding-top: 1.25rem;
+}
+
+.emergencyToggle {
+  display: flex;
+  min-height: 2.25rem;
+  align-items: center;
+  gap: 0.5rem;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--color-slate);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 550;
+  cursor: pointer;
+}
+
+.toggleChevron {
+  color: var(--color-steel);
+  font-size: 0.65rem;
+  transition: transform 160ms ease;
+}
+
+.emergencyToggle[aria-expanded="true"] .toggleChevron {
+  transform: rotate(90deg);
+}
+
+.localForm {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1rem;
+  border-radius: var(--rounded-lg);
+  background: var(--color-surface-soft);
+  padding: 1rem;
+}
+
+.localHint {
+  margin: 0;
+  border-left: 3px solid var(--color-warning);
+  padding-left: 0.75rem;
+  color: var(--color-slate);
+  font-size: 0.8125rem;
+  line-height: 1.6;
+}
+
+.field {
+  display: grid;
+  gap: 0.5rem;
+  color: var(--color-charcoal);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.field input {
+  width: 100%;
+  min-height: 2.75rem;
+  border: 1px solid var(--color-hairline-strong);
+  border-radius: var(--rounded-md);
+  background: var(--color-canvas);
+  padding: 0.625rem 0.75rem;
+  color: var(--color-ink);
+  font: inherit;
+  font-size: 0.9375rem;
+  font-weight: 400;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.field input:hover {
+  border-color: #9a8de2;
+}
+
+.field input:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(86, 69, 212, 0.08);
+}
+
+.localSubmit,
+.secondaryButton {
+  border: 1px solid var(--color-hairline-strong);
+  background: var(--color-canvas);
+  color: var(--color-charcoal);
+}
+
+.localSubmit {
+  width: 100%;
+  min-height: 2.75rem;
+}
+
+.localSubmit:hover,
+.secondaryButton:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.completionCard {
+  text-align: center;
+}
+
+.completionVisual {
+  display: grid;
+  width: 4rem;
+  height: 4rem;
+  place-items: center;
+  margin: 0 auto 1.5rem;
+  border-radius: 50%;
+  background: var(--color-primary-bg, #ede9f8);
+  color: var(--color-primary);
+}
+
+.completionVisual[data-tone="success"] {
+  background: var(--color-success-bg, #e6f7e6);
+  color: var(--color-success);
+}
+
+.completionVisual[data-tone="error"] {
+  background: #fff1f0;
+  color: var(--color-error);
+}
+
+.statusSpinner {
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 3px solid rgba(86, 69, 212, 0.18);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: auth-spin 750ms linear infinite;
+}
+
+.statusSymbol {
+  font-size: 1.75rem;
+  font-weight: 650;
+  line-height: 1;
+}
+
+.completionCard h2 {
+  margin: 0;
+  color: var(--color-ink);
+  font-size: 1.75rem;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+}
+
+.completionDescription {
+  margin: 0.75rem auto 0;
+  color: var(--color-slate);
+  font-size: 0.9375rem;
+  line-height: 1.7;
+}
+
+.identityName {
+  display: inline-flex;
+  margin-top: 1.25rem;
+  border-radius: var(--rounded-full);
+  background: var(--color-surface);
+  padding: 0.4rem 0.875rem;
+  color: var(--color-charcoal);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.completionError {
+  margin-top: 1.25rem;
+  text-align: left;
+}
+
+.completionActions {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+@keyframes auth-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 768px) {
+  .authPage {
+    display: block;
+    background:
+      linear-gradient(180deg, #f5f3fd 0, #ffffff 12rem);
+  }
+
+  .brandPane {
+    display: none;
+  }
+
+  .accessPane {
+    min-height: 100dvh;
+    grid-template-rows: auto 1fr auto;
+    padding: 1.5rem;
+  }
+
+  .mobileBrand {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .mobileBrand img {
+    border-radius: 50%;
+  }
+
+  .mobileBrand div {
+    display: grid;
+    gap: 0.15rem;
+  }
+
+  .mobileBrand strong {
+    color: var(--color-brand-navy);
+    font-size: 0.8125rem;
+    letter-spacing: 0.12em;
+  }
+
+  .mobileBrand span {
+    color: var(--color-slate);
+    font-size: 0.75rem;
+  }
+
+  .accessContent {
+    padding-block: 3rem 2rem;
+  }
+}
+
+@media (max-width: 420px) {
+  .accessPane {
+    padding: 1.25rem;
+  }
+
+  .panelHeader {
+    margin-bottom: 1.5rem;
+  }
+
+  .panelHeader h2,
+  .completionCard h2 {
+    font-size: 1.625rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .primaryButton,
+  .secondaryButton,
+  .localSubmit,
+  .toggleChevron {
+    transition: none;
+  }
+
+  .buttonSpinner,
+  .statusSpinner {
+    animation-duration: 1.5s;
+  }
+}

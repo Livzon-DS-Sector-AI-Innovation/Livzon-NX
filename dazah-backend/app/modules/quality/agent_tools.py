@@ -74,9 +74,7 @@ class InspectionRecordIdInput(BaseModel):
 
 class OosOotRecordListInput(PageInput):
     record_type: str | None = Field(default=None, pattern="^(OOS|OOT)$")
-    status: str | None = Field(
-        default=None, pattern="^(open|investigating|closed)$"
-    )
+    status: str | None = Field(default=None, pattern="^(open|investigating|closed)$")
     keyword: str | None = None
 
 
@@ -85,9 +83,7 @@ class OosOotRecordIdInput(BaseModel):
 
 
 class SupplierListInput(PageInput):
-    status: str | None = Field(
-        default=None, pattern="^(active|suspended|blacklisted)$"
-    )
+    status: str | None = Field(default=None, pattern="^(active|suspended|blacklisted)$")
     category: str | None = None
     keyword: str | None = None
 
@@ -395,8 +391,12 @@ def _without(data: BaseModel, *fields: str) -> dict[str, Any]:
     path="/quality/deviations",
     output_schema=DeviationListOutput.model_json_schema(),
 )
-async def list_deviations(context: ToolContext, data: DeviationListInput) -> dict[str, Any]:
-    return _dump(await quality_management.get_deviation_list(context.db, **data.model_dump()))
+async def list_deviations(
+    context: ToolContext, data: DeviationListInput
+) -> dict[str, Any]:
+    return _dump(
+        await quality_management.get_deviation_list(context.db, **data.model_dump())
+    )
 
 
 @agent_tool(
@@ -407,7 +407,9 @@ async def list_deviations(context: ToolContext, data: DeviationListInput) -> dic
     path="/quality/deviations/{deviation_id}",
 )
 async def get_deviation(context: ToolContext, data: DeviationIdInput) -> dict[str, Any]:
-    return _dump(await quality_management.get_deviation_detail(context.db, data.deviation_id))
+    return _dump(
+        await quality_management.get_deviation_detail(context.db, data.deviation_id)
+    )
 
 
 @agent_tool(
@@ -417,7 +419,9 @@ async def get_deviation(context: ToolContext, data: DeviationIdInput) -> dict[st
     method="GET",
     path="/quality/deviations/report-records",
 )
-async def list_deviation_report_records(context: ToolContext, data: PageInput) -> dict[str, Any]:
+async def list_deviation_report_records(
+    context: ToolContext, data: PageInput
+) -> dict[str, Any]:
     return _dump(
         await quality_management.get_deviation_report_record_list(
             context.db,
@@ -434,8 +438,14 @@ async def list_deviation_report_records(context: ToolContext, data: PageInput) -
     method="GET",
     path="/quality/deviations/{deviation_id}/related-capas",
 )
-async def get_related_capas(context: ToolContext, data: DeviationIdInput) -> list[dict[str, Any]]:
-    return _dump(await quality_management.get_related_capas_for_deviation(context.db, data.deviation_id))
+async def get_related_capas(
+    context: ToolContext, data: DeviationIdInput
+) -> list[dict[str, Any]]:
+    return _dump(
+        await quality_management.get_related_capas_for_deviation(
+            context.db, data.deviation_id
+        )
+    )
 
 
 @agent_tool(
@@ -444,7 +454,9 @@ async def get_related_capas(context: ToolContext, data: DeviationIdInput) -> lis
     method="GET",
     path="/quality/statistics/deviations",
 )
-async def get_deviation_statistics(context: ToolContext, _: BaseModel) -> dict[str, Any]:
+async def get_deviation_statistics(
+    context: ToolContext, _: BaseModel
+) -> dict[str, Any]:
     return _dump(await quality_management.get_deviation_statistics(context.db))
 
 
@@ -457,7 +469,9 @@ async def get_deviation_statistics(context: ToolContext, _: BaseModel) -> dict[s
     method="POST",
     path="/quality/deviations",
 )
-async def create_deviation(context: ToolContext, data: CreateDeviationRequest) -> dict[str, Any]:
+async def create_deviation(
+    context: ToolContext, data: CreateDeviationRequest
+) -> dict[str, Any]:
     return _dump(
         await quality_management.create_deviation(
             context.db,
@@ -477,7 +491,9 @@ async def create_deviation(context: ToolContext, data: CreateDeviationRequest) -
     method="PUT",
     path="/quality/deviations/{deviation_id}",
 )
-async def update_deviation(context: ToolContext, data: DeviationUpdateInput) -> dict[str, Any]:
+async def update_deviation(
+    context: ToolContext, data: DeviationUpdateInput
+) -> dict[str, Any]:
     payload = UpdateDeviationRequest.model_validate(_without(data, "deviation_id"))
     return _dump(
         await quality_management.update_deviation(
@@ -498,7 +514,9 @@ async def update_deviation(context: ToolContext, data: DeviationUpdateInput) -> 
     method="POST",
     path="/quality/deviations/{deviation_id}/submit",
 )
-async def submit_deviation(context: ToolContext, data: DeviationIdInput) -> dict[str, Any]:
+async def submit_deviation(
+    context: ToolContext, data: DeviationIdInput
+) -> dict[str, Any]:
     return _dump(
         await quality_management.submit_for_review(
             context.db,
@@ -540,7 +558,9 @@ async def submit_deviation_investigation(
     method="POST",
     path="/quality/deviations/{deviation_id}/resubmit",
 )
-async def resubmit_deviation(context: ToolContext, data: DeviationIdInput) -> dict[str, Any]:
+async def resubmit_deviation(
+    context: ToolContext, data: DeviationIdInput
+) -> dict[str, Any]:
     return _dump(
         await quality_management.resubmit_deviation(
             context.db,
@@ -558,7 +578,9 @@ async def resubmit_deviation(context: ToolContext, data: DeviationIdInput) -> di
     path="/quality/capas",
 )
 async def list_capas(context: ToolContext, data: CapaListInput) -> dict[str, Any]:
-    return _dump(await quality_management.get_capa_list(context.db, **data.model_dump()))
+    return _dump(
+        await quality_management.get_capa_list(context.db, **data.model_dump())
+    )
 
 
 @agent_tool(
@@ -589,8 +611,12 @@ async def list_capa_departments(context: ToolContext, _: BaseModel) -> list[str]
     method="GET",
     path="/quality/capas/auto-fill/{deviation_id}",
 )
-async def auto_fill_capa_from_deviation(context: ToolContext, data: DeviationIdInput) -> dict[str, Any]:
-    return _dump(await quality_management.auto_fill_from_deviation(context.db, data.deviation_id))
+async def auto_fill_capa_from_deviation(
+    context: ToolContext, data: DeviationIdInput
+) -> dict[str, Any]:
+    return _dump(
+        await quality_management.auto_fill_from_deviation(context.db, data.deviation_id)
+    )
 
 
 @agent_tool(
@@ -613,7 +639,9 @@ async def get_capa_statistics(context: ToolContext, _: BaseModel) -> dict[str, A
     path="/quality/capas",
 )
 async def create_capa(context: ToolContext, data: CreateCapaRequest) -> dict[str, Any]:
-    return _dump(await quality_management.create_capa(context.db, data, _user_id(context)))
+    return _dump(
+        await quality_management.create_capa(context.db, data, _user_id(context))
+    )
 
 
 @agent_tool(
@@ -647,7 +675,11 @@ async def update_capa(context: ToolContext, data: CapaUpdateInput) -> dict[str, 
     path="/quality/capas/{capa_id}/submit",
 )
 async def submit_capa(context: ToolContext, data: CapaIdInput) -> dict[str, Any]:
-    return _dump(await quality_management.submit_capa(context.db, data.capa_id, _user_id(context)))
+    return _dump(
+        await quality_management.submit_capa(
+            context.db, data.capa_id, _user_id(context)
+        )
+    )
 
 
 @agent_tool(
@@ -660,7 +692,11 @@ async def submit_capa(context: ToolContext, data: CapaIdInput) -> dict[str, Any]
     path="/quality/capas/{capa_id}/resubmit",
 )
 async def resubmit_capa(context: ToolContext, data: CapaIdInput) -> dict[str, Any]:
-    return _dump(await quality_management.resubmit_capa(context.db, data.capa_id, _user_id(context)))
+    return _dump(
+        await quality_management.resubmit_capa(
+            context.db, data.capa_id, _user_id(context)
+        )
+    )
 
 
 @agent_tool(
@@ -672,7 +708,9 @@ async def resubmit_capa(context: ToolContext, data: CapaIdInput) -> dict[str, An
     method="POST",
     path="/quality/capas/{capa_id}/link-deviation",
 )
-async def link_capa_deviation(context: ToolContext, data: CapaLinkDeviationInput) -> dict[str, Any]:
+async def link_capa_deviation(
+    context: ToolContext, data: CapaLinkDeviationInput
+) -> dict[str, Any]:
     return _dump(
         await quality_management.link_deviation(
             context.db,
@@ -692,7 +730,9 @@ async def link_capa_deviation(context: ToolContext, data: CapaLinkDeviationInput
     method="POST",
     path="/quality/capas/{capa_id}/complete-part",
 )
-async def complete_capa_part(context: ToolContext, data: CapaCompletePartInput) -> dict[str, Any]:
+async def complete_capa_part(
+    context: ToolContext, data: CapaCompletePartInput
+) -> dict[str, Any]:
     return _dump(
         await quality_management.complete_part(
             context.db,
@@ -733,7 +773,9 @@ async def add_capa_execution_track(
     path="/quality/changes",
 )
 async def list_changes(context: ToolContext, data: ChangeListInput) -> dict[str, Any]:
-    return _dump(await quality_management.get_change_list(context.db, **data.model_dump()))
+    return _dump(
+        await quality_management.get_change_list(context.db, **data.model_dump())
+    )
 
 
 @agent_tool(
@@ -754,7 +796,9 @@ async def get_change(context: ToolContext, data: ChangeIdInput) -> dict[str, Any
     path="/quality/changes/next-code",
 )
 async def get_next_change_code(context: ToolContext, _: BaseModel) -> dict[str, str]:
-    return {"change_code": await quality_management.generate_next_change_code(context.db)}
+    return {
+        "change_code": await quality_management.generate_next_change_code(context.db)
+    }
 
 
 @agent_tool(
@@ -776,8 +820,12 @@ async def get_change_statistics(context: ToolContext, _: BaseModel) -> dict[str,
     method="POST",
     path="/quality/changes",
 )
-async def create_change(context: ToolContext, data: CreateChangeRequest) -> dict[str, Any]:
-    return _dump(await quality_management.create_change(context.db, data, _user_id(context)))
+async def create_change(
+    context: ToolContext, data: CreateChangeRequest
+) -> dict[str, Any]:
+    return _dump(
+        await quality_management.create_change(context.db, data, _user_id(context))
+    )
 
 
 @agent_tool(
@@ -789,7 +837,9 @@ async def create_change(context: ToolContext, data: CreateChangeRequest) -> dict
     method="PUT",
     path="/quality/changes/{change_id}",
 )
-async def update_change(context: ToolContext, data: ChangeUpdateInput) -> dict[str, Any]:
+async def update_change(
+    context: ToolContext, data: ChangeUpdateInput
+) -> dict[str, Any]:
     payload = UpdateChangeRequest.model_validate(_without(data, "change_id"))
     return _dump(
         await quality_management.update_change(
@@ -811,7 +861,11 @@ async def update_change(context: ToolContext, data: ChangeUpdateInput) -> dict[s
 async def list_change_action_plans(
     context: ToolContext, data: ChangeActionPlanListInput
 ) -> dict[str, Any]:
-    return _dump(await change_action_plan.get_change_action_plan_list(context.db, **data.model_dump()))
+    return _dump(
+        await change_action_plan.get_change_action_plan_list(
+            context.db, **data.model_dump()
+        )
+    )
 
 
 @agent_tool(
@@ -824,7 +878,11 @@ async def list_change_action_plans(
 async def list_change_action_plans_by_change(
     context: ToolContext, data: ChangeIdInput
 ) -> list[dict[str, Any]]:
-    return _dump(await change_action_plan.get_change_action_plans_for_change(context.db, data.change_id))
+    return _dump(
+        await change_action_plan.get_change_action_plans_for_change(
+            context.db, data.change_id
+        )
+    )
 
 
 @agent_tool(
@@ -880,8 +938,14 @@ async def update_change_action_plan(
     method="POST",
     path="/quality/change-action-plans/{plan_id}/sync-to-feishu",
 )
-async def sync_change_action_plan(context: ToolContext, data: ChangeActionPlanIdInput) -> dict[str, Any]:
-    return _dump(await change_action_plan.sync_change_action_plan_to_feishu(context.db, data.plan_id))
+async def sync_change_action_plan(
+    context: ToolContext, data: ChangeActionPlanIdInput
+) -> dict[str, Any]:
+    return _dump(
+        await change_action_plan.sync_change_action_plan_to_feishu(
+            context.db, data.plan_id
+        )
+    )
 
 
 @agent_tool(
@@ -892,7 +956,9 @@ async def sync_change_action_plan(context: ToolContext, data: ChangeActionPlanId
     method="POST",
     path="/quality/change-action-plans/sync-from-feishu",
 )
-async def sync_change_action_plans_from_feishu(context: ToolContext, _: BaseModel) -> dict[str, Any]:
+async def sync_change_action_plans_from_feishu(
+    context: ToolContext, _: BaseModel
+) -> dict[str, Any]:
     return _dump(
         await change_action_plan.sync_change_action_plans_from_feishu(
             context.db,
@@ -909,8 +975,12 @@ async def sync_change_action_plans_from_feishu(context: ToolContext, _: BaseMode
     method="POST",
     path="/quality/change-action-plans/reminders/run",
 )
-async def run_change_action_plan_reminders(context: ToolContext, _: BaseModel) -> dict[str, Any]:
-    return _dump(await change_action_plan.run_change_action_plan_reminders_now(context.db))
+async def run_change_action_plan_reminders(
+    context: ToolContext, _: BaseModel
+) -> dict[str, Any]:
+    return _dump(
+        await change_action_plan.run_change_action_plan_reminders_now(context.db)
+    )
 
 
 @agent_tool(
@@ -940,7 +1010,9 @@ async def send_change_action_plan_reminder(
     method="GET",
     path="/quality/validations",
 )
-async def list_validations(context: ToolContext, data: ValidationListInput) -> dict[str, Any]:
+async def list_validations(
+    context: ToolContext, data: ValidationListInput
+) -> dict[str, Any]:
     return _dump(await validation.get_validation_list(context.db, **data.model_dump()))
 
 
@@ -951,7 +1023,9 @@ async def list_validations(context: ToolContext, data: ValidationListInput) -> d
     method="GET",
     path="/quality/validations/{validation_id}",
 )
-async def get_validation(context: ToolContext, data: ValidationIdInput) -> dict[str, Any]:
+async def get_validation(
+    context: ToolContext, data: ValidationIdInput
+) -> dict[str, Any]:
     return _dump(await validation.get_validation_detail(context.db, data.validation_id))
 
 
@@ -961,7 +1035,9 @@ async def get_validation(context: ToolContext, data: ValidationIdInput) -> dict[
     method="GET",
     path="/quality/statistics/validations",
 )
-async def get_validation_statistics(context: ToolContext, _: BaseModel) -> dict[str, Any]:
+async def get_validation_statistics(
+    context: ToolContext, _: BaseModel
+) -> dict[str, Any]:
     return _dump(await validation.get_validation_statistics(context.db))
 
 
@@ -975,7 +1051,9 @@ async def get_validation_statistics(context: ToolContext, _: BaseModel) -> dict[
 async def list_validation_executions(
     context: ToolContext, data: ValidationExecutionListInput
 ) -> dict[str, Any]:
-    return _dump(await validation.get_validation_execution_list(context.db, **data.model_dump()))
+    return _dump(
+        await validation.get_validation_execution_list(context.db, **data.model_dump())
+    )
 
 
 @agent_tool(
@@ -987,8 +1065,12 @@ async def list_validation_executions(
     method="POST",
     path="/quality/validations",
 )
-async def create_validation(context: ToolContext, data: CreateValidationRequest) -> dict[str, Any]:
-    return _dump(await validation.create_validation(context.db, data, _user_id(context)))
+async def create_validation(
+    context: ToolContext, data: CreateValidationRequest
+) -> dict[str, Any]:
+    return _dump(
+        await validation.create_validation(context.db, data, _user_id(context))
+    )
 
 
 @agent_tool(
@@ -1000,7 +1082,9 @@ async def create_validation(context: ToolContext, data: CreateValidationRequest)
     method="PUT",
     path="/quality/validations/{validation_id}",
 )
-async def update_validation(context: ToolContext, data: ValidationUpdateInput) -> dict[str, Any]:
+async def update_validation(
+    context: ToolContext, data: ValidationUpdateInput
+) -> dict[str, Any]:
     payload = UpdateValidationRequest.model_validate(_without(data, "validation_id"))
     return _dump(
         await validation.update_validation(
@@ -1045,7 +1129,9 @@ async def update_validation_execution(
     method="GET",
     path="/quality/cpv/products",
 )
-async def list_cpv_products(context: ToolContext, data: CpvProductListInput) -> dict[str, Any]:
+async def list_cpv_products(
+    context: ToolContext, data: CpvProductListInput
+) -> dict[str, Any]:
     items, total = await cpv_product.get_products(
         context.db,
         keyword=data.keyword,
@@ -1071,7 +1157,9 @@ async def list_cpv_products(context: ToolContext, data: CpvProductListInput) -> 
     method="GET",
     path="/quality/cpv/products/{product_id}",
 )
-async def get_cpv_product(context: ToolContext, data: CpvProductIdInput) -> dict[str, Any]:
+async def get_cpv_product(
+    context: ToolContext, data: CpvProductIdInput
+) -> dict[str, Any]:
     item = await cpv_product.get_product_by_id(context.db, data.product_id)
     return CpvProductResponse.model_validate(item).model_dump(mode="json")
 
@@ -1085,7 +1173,9 @@ async def get_cpv_product(context: ToolContext, data: CpvProductIdInput) -> dict
     method="POST",
     path="/quality/cpv/products",
 )
-async def create_cpv_product(context: ToolContext, data: CpvProductCreate) -> dict[str, Any]:
+async def create_cpv_product(
+    context: ToolContext, data: CpvProductCreate
+) -> dict[str, Any]:
     item = await cpv_product.create_product(context.db, data)
     return CpvProductResponse.model_validate(item).model_dump(mode="json")
 
@@ -1099,7 +1189,9 @@ async def create_cpv_product(context: ToolContext, data: CpvProductCreate) -> di
     method="PUT",
     path="/quality/cpv/products/{product_id}",
 )
-async def update_cpv_product(context: ToolContext, data: CpvProductUpdateInput) -> dict[str, Any]:
+async def update_cpv_product(
+    context: ToolContext, data: CpvProductUpdateInput
+) -> dict[str, Any]:
     payload = CpvProductUpdate.model_validate(_without(data, "product_id"))
     item = await cpv_product.update_product(context.db, data.product_id, payload)
     return CpvProductResponse.model_validate(item).model_dump(mode="json")
@@ -1168,7 +1260,9 @@ async def update_cpv_parameter(
     method="GET",
     path="/quality/cpv/products/{product_id}/batches",
 )
-async def list_cpv_batches(context: ToolContext, data: CpvBatchListInput) -> dict[str, Any]:
+async def list_cpv_batches(
+    context: ToolContext, data: CpvBatchListInput
+) -> dict[str, Any]:
     items, total = await cpv_batch.get_batches(
         context.db,
         data.product_id,
@@ -1249,7 +1343,9 @@ async def list_cpv_cqa_batches(
     method="GET",
     path="/quality/cpv/products/{product_id}/statistics",
 )
-async def get_cpv_statistics(context: ToolContext, data: CpvMetricInput) -> dict[str, Any]:
+async def get_cpv_statistics(
+    context: ToolContext, data: CpvMetricInput
+) -> dict[str, Any]:
     return _dump(
         await cpv_statistics.get_statistics(
             context.db,
@@ -1292,7 +1388,11 @@ async def get_cpv_trend(context: ToolContext, data: CpvMetricInput) -> dict[str,
 async def list_quality_sync_conflicts(
     context: ToolContext, data: SyncConflictListInput
 ) -> list[dict[str, Any]]:
-    return _dump(await quality_feishu_sync.get_quality_sync_conflicts(context.db, limit=data.limit))
+    return _dump(
+        await quality_feishu_sync.get_quality_sync_conflicts(
+            context.db, limit=data.limit
+        )
+    )
 
 
 @agent_tool(
@@ -1307,7 +1407,11 @@ async def list_quality_sync_conflicts(
 async def pull_quality_records_from_feishu(
     context: ToolContext, data: PullQualityRecordsInput
 ) -> dict[str, Any]:
-    return _dump(await quality_feishu_sync.pull_quality_records_from_feishu(context.db, data.entity_code))
+    return _dump(
+        await quality_feishu_sync.pull_quality_records_from_feishu(
+            context.db, data.entity_code
+        )
+    )
 
 
 @agent_tool(
@@ -1319,8 +1423,14 @@ async def pull_quality_records_from_feishu(
     method="POST",
     path="/quality/feishu-sync/deviations/{deviation_id}",
 )
-async def sync_deviation_to_feishu(context: ToolContext, data: DeviationIdInput) -> dict[str, Any]:
-    return _dump(await quality_feishu_sync.sync_deviation_to_feishu(context.db, data.deviation_id))
+async def sync_deviation_to_feishu(
+    context: ToolContext, data: DeviationIdInput
+) -> dict[str, Any]:
+    return _dump(
+        await quality_feishu_sync.sync_deviation_to_feishu(
+            context.db, data.deviation_id
+        )
+    )
 
 
 @agent_tool(
@@ -1353,8 +1463,12 @@ async def sync_deviation_report_record_to_feishu(
     method="POST",
     path="/quality/feishu-sync/capas/{capa_id}",
 )
-async def sync_capa_to_feishu(context: ToolContext, data: CapaIdInput) -> dict[str, Any]:
-    return _dump(await quality_feishu_sync.sync_capa_to_feishu(context.db, data.capa_id))
+async def sync_capa_to_feishu(
+    context: ToolContext, data: CapaIdInput
+) -> dict[str, Any]:
+    return _dump(
+        await quality_feishu_sync.sync_capa_to_feishu(context.db, data.capa_id)
+    )
 
 
 @agent_tool(
@@ -1369,7 +1483,11 @@ async def sync_capa_to_feishu(context: ToolContext, data: CapaIdInput) -> dict[s
 async def sync_capa_plan_track_to_feishu(
     context: ToolContext, data: CapaPlanTrackIdInput
 ) -> dict[str, Any]:
-    return _dump(await quality_feishu_sync.sync_capa_plan_track_to_feishu(context.db, data.track_id))
+    return _dump(
+        await quality_feishu_sync.sync_capa_plan_track_to_feishu(
+            context.db, data.track_id
+        )
+    )
 
 
 @agent_tool(
@@ -1408,7 +1526,9 @@ async def get_feishu_capa_ledger(
 async def list_feishu_capa_plan_tracks(
     context: ToolContext, data: FeishuCapaPlanTrackListInput
 ) -> dict[str, Any]:
-    return _dump(await feishu_capa.list_capa_plan_tracks(context.db, **data.model_dump()))
+    return _dump(
+        await feishu_capa.list_capa_plan_tracks(context.db, **data.model_dump())
+    )
 
 
 @agent_tool(
@@ -1421,7 +1541,9 @@ async def list_feishu_capa_plan_tracks(
 async def get_feishu_capa_plan_track(
     context: ToolContext, data: FeishuRecordIdInput
 ) -> dict[str, Any]:
-    return _dump(await feishu_capa.get_capa_plan_track_record(context.db, data.record_id))
+    return _dump(
+        await feishu_capa.get_capa_plan_track_record(context.db, data.record_id)
+    )
 
 
 @agent_tool(
@@ -1520,9 +1642,7 @@ async def list_inspection_records(
             "department": data.department,
         },
     )
-    return _page_result(
-        items, total, data.page, data.page_size, InspectionRecordOut
-    )
+    return _page_result(items, total, data.page, data.page_size, InspectionRecordOut)
 
 
 @agent_tool(

@@ -70,6 +70,17 @@ def normalize_path(value: str) -> str:
     return value.replace("\\", "/").lstrip("./")
 
 
+def repository_root() -> Path:
+    completed = subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"],
+        check=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    return Path(completed.stdout.strip())
+
+
 def read_coverage(path: Path) -> dict[str, dict[int, int]]:
     root = ET.parse(path).getroot()
     result: dict[str, dict[int, int]] = {}
@@ -106,6 +117,7 @@ def read_changed_lines(
         capture_output=True,
         text=True,
         encoding="utf-8",
+        cwd=repository_root(),
     )
     changed: dict[str, set[int]] = defaultdict(set)
     current_file: str | None = None
