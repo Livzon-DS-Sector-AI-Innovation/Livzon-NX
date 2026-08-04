@@ -6,10 +6,15 @@ from uuid import uuid4
 
 import pytest
 from fastapi import HTTPException, status
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.database import get_db
+from app.main import app
 from app.modules.agent import api
+from app.modules.agent.models import AgentToolCall
 from app.modules.agent.repository import AgentRepository
+from app.platform.identity.deps import get_current_user
 
 
 @pytest.mark.anyio
@@ -57,6 +62,73 @@ async def test_runtime_overview_reports_empty_healthy_baseline(
         "latest_error_trace_id": None,
         "latest_error_at": None,
     }
+
+
+@pytest.mark.anyio
+async def test_runtime_overview_clears_failure_after_same_tool_recovers(
+    db_session: AsyncSession,
+) -> None:
+    correlation_id = uuid4()
+    failed_at = datetime.now(UTC) - timedelta(minutes=2)
+    db_session.add(
+        AgentToolCall(
+            correlation_id=correlation_id,
+            operation="quality.list_deviations",
+            status="failed",
+            request_payload={},
+            error_message="Agent tool is currently disabled",
+            created_at=failed_at,
+            updated_at=failed_at,
+        )
+    )
+    await db_session.flush()
+
+    admin = SimpleNamespace(id=uuid4(), role="admin")
+
+    async def override_db():
+        yield db_session
+
+    async def override_current_user():
+        return admin
+
+    app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[get_current_user] = override_current_user
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test",
+        ) as client:
+            failed_response = await client.get(
+                "/api/v1/agent/control/runtime-overview"
+            )
+            assert failed_response.status_code == status.HTTP_200_OK
+            assert (
+                failed_response.json()["data"]["latest_error_trace_id"]
+                == str(correlation_id)
+            )
+
+            recovered_at = datetime.now(UTC) - timedelta(minutes=1)
+            db_session.add(
+                AgentToolCall(
+                    correlation_id=uuid4(),
+                    operation="quality.list_deviations",
+                    status="succeeded",
+                    request_payload={},
+                    created_at=recovered_at,
+                    updated_at=recovered_at,
+                )
+            )
+            await db_session.flush()
+
+            recovered_response = await client.get(
+                "/api/v1/agent/control/runtime-overview"
+            )
+            assert recovered_response.status_code == status.HTTP_200_OK
+            assert recovered_response.json()["data"]["latest_error_trace_id"] is None
+            assert recovered_response.json()["data"]["latest_error_at"] is None
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+        app.dependency_overrides.pop(get_current_user, None)
 
 
 @pytest.mark.anyio

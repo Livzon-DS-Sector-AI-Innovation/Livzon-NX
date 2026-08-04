@@ -39,10 +39,12 @@ desktop.ini
 !/scripts/check-coverage-floor.py
 !/scripts/check-diff-coverage.py
 !/scripts/check-agent-v2-residuals.py
+!/scripts/check-agent-instruction-bridges.py
 !/scripts/check-test-impact.py
 !/scripts/prepare-integration.sh
 !/scripts/tests/
 /scripts/tests/*
+!/scripts/tests/test_check_agent_instruction_bridges.py
 !/scripts/tests/test_check_test_impact.py
 !/scripts/wait-for-database.sh
 

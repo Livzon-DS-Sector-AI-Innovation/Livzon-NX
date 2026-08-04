@@ -97,6 +97,25 @@ const statusLabels: Record<string, string> = {
   connected: '已连接',
   inactive: '未启用',
   starting: '连接中',
+  retry: '等待重试',
+  sent: '已发送',
+  delivered: '已送达',
+  recorded: '已记录',
+  unknown: '未知',
+}
+
+const traceEventLabels: Record<string, string> = {
+  tool_call: '工具调用',
+  inbound_message: '收到消息',
+  assistant_response: '助手回复',
+  confirmation: '业务确认',
+  domain_event: '业务事件',
+  delivery: '消息投递',
+}
+
+const channelLabels: Record<string, string> = {
+  feishu: '飞书',
+  web: '网页',
 }
 
 function statusTag(status: string) {
@@ -154,22 +173,16 @@ function Overview({
   config: FeishuConfig | null
   status: FeishuGatewayStatus | null
   health: AgentRuntimeOverview | null
-  onNavigate: (key: string) => void
+  onNavigate: (key: string, traceId?: string) => void
 }) {
-  const validationItems = [
-    '真实飞书测试 App 十项验收',
-    '单一生产事件消费者证明',
-    'Base 记录读取与两轮连续对话',
-    '生产冒烟与回滚演练',
-  ]
   return (
     <Space direction="vertical" size={16} className="w-full">
       <Row gutter={[16, 16]}>
         <Col xs={24} md={8} xl={6}>
-          <Card><Statistic title="Gateway" value={statusLabels[status?.gateway || ''] || status?.gateway || '未知'} /></Card>
+          <Card><Statistic title="飞书网关" value={statusLabels[status?.gateway || ''] || status?.gateway || '未知'} /></Card>
         </Col>
         <Col xs={24} md={8} xl={6}>
-          <Card><Statistic title="审计 Outbox" value={status?.outbox_depth ?? 0} /></Card>
+          <Card><Statistic title="待写入审计事件" value={status?.outbox_depth ?? 0} /></Card>
         </Col>
         <Col xs={24} md={8} xl={6}>
           <Card><Statistic title="待确认" value={status?.pending_confirmations ?? 0} /></Card>
@@ -186,47 +199,27 @@ function Overview({
           <Descriptions.Item label="重连次数">{status?.gateway_reconnects ?? 0}</Descriptions.Item>
           <Descriptions.Item label="当前消费者">{status?.event_consumer || '—'}</Descriptions.Item>
           <Descriptions.Item label="消费者数量">{status?.event_consumer_count ?? 0}</Descriptions.Item>
-          <Descriptions.Item label="Hermes Release">{status?.gateway_upstream?.release_tag || '—'}</Descriptions.Item>
-          <Descriptions.Item label="Commit">{status?.gateway_upstream?.commit_sha?.slice(0, 12) || '—'}</Descriptions.Item>
+          <Descriptions.Item label="Hermes 发布版本">{status?.gateway_upstream?.release_tag || '—'}</Descriptions.Item>
+          <Descriptions.Item label="代码版本">{status?.gateway_upstream?.commit_sha?.slice(0, 12) || '—'}</Descriptions.Item>
           <Descriptions.Item label="最近配置变更">{formatDate(config?.updated_at)}</Descriptions.Item>
           <Descriptions.Item label="配置变更人">{config?.updated_by || '—'}</Descriptions.Item>
         </Descriptions>
       </Card>
       {health?.latest_error_trace_id && (
         <Alert
-          type="error"
-          showIcon
-          title={`最近异常 Trace：${health.latest_error_trace_id}`}
-          description={`发生时间：${formatDate(health.latest_error_at)}`}
-          action={<Button size="small" onClick={() => onNavigate('trace')}>查看 Trace</Button>}
-        />
-      )}
-      <Card
-        title="外部验收状态"
-        extra={<Button onClick={() => onNavigate('trace')}>进入诊断</Button>}
-      >
-        <Alert
           type="warning"
           showIcon
-          title="自动化测试不能替代真实飞书验收"
-          description="以下项目尚未形成脱敏验收证据，保持待处理状态。"
-          className="mb-3"
+          title={`最近异常调用链路：${health.latest_error_trace_id}`}
+          description={`发生时间：${formatDate(health.latest_error_at)}。这是最近一次失败记录，不代表当前仍异常；若重复出现或已影响业务，请查看完整链路。`}
+          action={<Button size="small" onClick={() => onNavigate('trace', health.latest_error_trace_id || undefined)}>查看调用链路</Button>}
         />
-        <List
-          dataSource={validationItems}
-          renderItem={(item) => (
-            <List.Item>
-              <Space><ExclamationCircleOutlined className="text-orange-500" />{item}<Tag>待验收</Tag></Space>
-            </List.Item>
-          )}
-        />
-      </Card>
+      )}
       {health && (
         <Card title="自动化健康摘要">
           <Descriptions size="small">
             <Descriptions.Item label="待确认">{health.pending_confirmations}</Descriptions.Item>
             <Descriptions.Item label="失败投递">{health.failed_deliveries}</Descriptions.Item>
-            <Descriptions.Item label="最近异常">{health.latest_error_trace_id || '无'}</Descriptions.Item>
+            <Descriptions.Item label="最近异常链路">{health.latest_error_trace_id || '无'}</Descriptions.Item>
           </Descriptions>
         </Card>
       )}
@@ -270,11 +263,11 @@ function FeishuAccess({
     const values = await form.validateFields()
     const payload = buildPayload(values, config)
     modal.confirm({
-      title: payload.gateway_enabled ? '确认更新飞书接入配置' : '确认停用 Hermes Gateway',
+      title: payload.gateway_enabled ? '确认更新飞书接入配置' : '确认停用 Hermes 飞书网关',
       icon: <ExclamationCircleOutlined />,
       content: payload.gateway_enabled
         ? '保存后 Hermes 将校验候选凭证并按新版本重建连接。失败时保留当前可用版本。'
-        : '停用后 Livzon 助手将停止消费该飞书应用消息。',
+        : '停用后丽珠智能助手将停止处理该飞书应用的消息。',
       okText: payload.gateway_enabled ? '确认保存' : '确认停用',
       okButtonProps: { danger: !payload.gateway_enabled },
       async onOk() {
@@ -284,7 +277,7 @@ function FeishuAccess({
           const result = await saveLivzonFeishuConfig(payload)
           onSaved(result)
           form.setFieldValue('app_secret', '')
-          const description = `配置版本 ${result.config_version} 已写入，Gateway ${result.gateway_enabled ? '已启用' : '已停用'}。`
+          const description = `配置版本 ${result.config_version} 已写入，飞书网关${result.gateway_enabled ? '已启用' : '已停用'}。`
           setOperationFeedback({
             type: 'success',
             title: '飞书接入配置保存成功',
@@ -339,7 +332,7 @@ function FeishuAccess({
   return (
     <Row gutter={[16, 16]}>
       <Col xs={24} xl={14}>
-        <Card title="飞书应用与 Gateway">
+        <Card title="飞书应用与网关">
           <Space className="mb-4" wrap>
             <Text strong>当前状态</Text>
             {statusTag(status?.gateway || 'unknown')}
@@ -348,7 +341,7 @@ function FeishuAccess({
           <Form form={form} layout="vertical">
             <Row gutter={16}>
               <Col xs={24} md={12}>
-                <Form.Item name="app_id" label="App ID" rules={[{ required: true, message: '请输入 App ID' }]}>
+                <Form.Item name="app_id" label="应用编号（App ID）" rules={[{ required: true, message: '请输入应用编号' }]}>
                   <Input placeholder="cli_xxx" />
                 </Form.Item>
               </Col>
@@ -360,23 +353,23 @@ function FeishuAccess({
             </Row>
             <Form.Item
               name="app_secret"
-              label="App Secret"
+              label="应用密钥（App Secret）"
               extra={config?.app_secret_configured ? '凭证已保存；留空表示不修改。' : '首次保存必须填写。'}
-              rules={[{ required: !config?.app_secret_configured, message: '请输入 App Secret' }]}
+              rules={[{ required: !config?.app_secret_configured, message: '请输入应用密钥' }]}
             >
               <Input.Password autoComplete="new-password" placeholder="留空则不修改" />
             </Form.Item>
-            <Form.Item name="allowed_group_chat_ids" label="允许接入的群聊" extra="输入飞书 chat_id；私聊不受此列表影响。">
+            <Form.Item name="allowed_group_chat_ids" label="允许接入的群聊" extra="输入飞书群聊编号（chat_id）；私聊不受此列表影响。">
               <Select mode="tags" tokenSeparators={[',', ' ']} placeholder="oc_xxx" />
             </Form.Item>
             <Row gutter={16}>
               <Col xs={24} md={12}>
-                <Form.Item name="gateway_enabled" label="启用 Hermes Feishu Gateway" valuePropName="checked">
+                <Form.Item name="gateway_enabled" label="启用 Hermes 飞书网关" valuePropName="checked">
                   <Switch />
                 </Form.Item>
               </Col>
               <Col xs={24} md={12}>
-                <Form.Item name="require_group_mention" label="群聊必须 @Livzon" valuePropName="checked">
+                <Form.Item name="require_group_mention" label="群聊必须 @丽珠智能助手" valuePropName="checked">
                   <Switch disabled />
                 </Form.Item>
               </Col>
@@ -472,7 +465,7 @@ function IdentityAdmission({ tenantId, appId }: { tenantId: string; appId: strin
   const changeStatus = (item: ExternalIdentityBinding, next: ExternalIdentityBinding['status']) => {
     modal.confirm({
       title: next === 'active' ? '恢复身份绑定' : next === 'revoked' ? '撤销身份绑定' : '暂停身份绑定',
-      content: next === 'active' ? '恢复后该飞书身份可以重新使用 Livzon 助手。' : '变更后该身份的新请求将立即失败关闭。',
+      content: next === 'active' ? '恢复后该飞书身份可以重新使用丽珠智能助手。' : '变更后该身份的新请求将立即失败关闭。',
       okButtonProps: { danger: next !== 'active' },
       async onOk() {
         await updateExternalIdentityBindingStatus(item.id, next)
@@ -767,10 +760,10 @@ function ToolGovernance() {
               <Descriptions.Item label="幂等">{selected.idempotent ? '是' : '否'}</Descriptions.Item>
               <Descriptions.Item label="受影响自动化">{impacts.filter((item) => item.operation === selected.operation).length}</Descriptions.Item>
             </Descriptions>
-            <Title level={5}>输入 Schema</Title>
+            <Title level={5}>输入数据结构</Title>
             <pre className="max-h-72 overflow-auto rounded bg-slate-50 p-3 text-xs">{JSON.stringify(selected.input_schema, null, 2)}</pre>
             <Space>
-              <Title level={5} className="!mb-0">输出 Schema</Title>
+              <Title level={5} className="!mb-0">输出数据结构</Title>
               <Tag color={selectedOutputSchemaIsInferred ? 'gold' : 'green'}>
                 {selectedOutputSchemaIsInferred ? '通用契约 · 待细化' : '字段级契约'}
               </Tag>
@@ -779,7 +772,7 @@ function ToolGovernance() {
               <Alert
                 type="warning"
                 showIcon
-                title="当前 Schema 由 handler 返回注解推导，仅保证容器类型；字段级输出仍需由业务模块补充。"
+                title="当前数据结构由处理程序的返回类型推导，仅保证容器类型；字段级输出仍需由业务模块补充。"
               />
             )}
             <pre className="max-h-72 overflow-auto rounded bg-slate-50 p-3 text-xs">{JSON.stringify(selected.output_schema, null, 2)}</pre>
@@ -847,7 +840,7 @@ function AuthorizationConfirmation() {
     <Space direction="vertical" size={16} className="w-full">
       <Card title="Hermes 飞书记忆授权">
         <Space className="mb-4">
-          <Input value={userId} onChange={(event) => setUserId(event.target.value)} placeholder="本地用户 UUID" style={{ width: 340 }} />
+          <Input value={userId} onChange={(event) => setUserId(event.target.value)} placeholder="本地用户编号（UUID）" style={{ width: 340 }} />
           <Button icon={<SearchOutlined />} disabled={!userId.trim()} onClick={async () => setGrants(await getFeishuAuthorizations(userId.trim()))}>查询授权</Button>
         </Space>
         <Alert className="mb-4" type="info" showIcon title="高风险操作不允许记忆授权；撤销不会执行或回滚已经完成的操作。" />
@@ -868,27 +861,47 @@ function AuthorizationConfirmation() {
   )
 }
 
-function TraceDelivery() {
+function TraceDelivery({
+  traceId,
+  trace,
+  onTraceIdChange,
+  onQuery,
+}: {
+  traceId: string
+  trace: AgentTraceResult | null
+  onTraceIdChange: (value: string) => void
+  onQuery: (traceId: string) => Promise<void>
+}) {
   const { message } = App.useApp()
-  const [traceId, setTraceId] = useState('')
-  const [trace, setTrace] = useState<AgentTraceResult | null>(null)
   const [deliveryStatus, setDeliveryStatus] = useState<string>()
   const [deliveries, setDeliveries] = useState<Array<Record<string, unknown>>>([])
+  const [deliveryLoading, setDeliveryLoading] = useState(false)
+  const [deliveryError, setDeliveryError] = useState<string>()
 
   const loadDeliveries = useCallback(async () => {
-    const result = await getAgentDeliveries(deliveryStatus)
-    const source = Array.isArray(result) ? result : Array.isArray(result.items) ? result.items : []
-    setDeliveries(source as Array<Record<string, unknown>>)
-  }, [deliveryStatus])
+    setDeliveryLoading(true)
+    setDeliveryError(undefined)
+    try {
+      const result = await getAgentDeliveries(deliveryStatus)
+      const source = Array.isArray(result) ? result : Array.isArray(result.items) ? result.items : []
+      setDeliveries(source as Array<Record<string, unknown>>)
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : '加载投递队列失败'
+      setDeliveryError(detail)
+      message.error(detail)
+    } finally {
+      setDeliveryLoading(false)
+    }
+  }, [deliveryStatus, message])
   useEffect(() => {
     const timer = window.setTimeout(() => void loadDeliveries(), 0)
     return () => window.clearTimeout(timer)
   }, [loadDeliveries])
 
   const deliveryColumns: ColumnsType<Record<string, unknown>> = [
-    { title: 'Delivery ID', dataIndex: 'id', width: 230, ellipsis: true },
-    { title: 'Run ID', dataIndex: 'run_id', width: 230, ellipsis: true },
-    { title: '渠道', dataIndex: 'channel', width: 90 },
+    { title: '投递编号', dataIndex: 'id', width: 230, ellipsis: true },
+    { title: '运行编号', dataIndex: 'run_id', width: 230, ellipsis: true },
+    { title: '渠道', dataIndex: 'channel', width: 90, render: (value) => channelLabels[String(value)] || String(value) },
     { title: '状态', dataIndex: 'status', width: 110, render: (value) => statusTag(String(value)) },
     { title: '尝试次数', dataIndex: 'attempt_count', width: 100 },
     { title: '错误码', dataIndex: 'last_error_code', width: 180, ellipsis: true },
@@ -897,19 +910,21 @@ function TraceDelivery() {
 
   return (
     <Space direction="vertical" size={16} className="w-full">
-      <Card title="Trace 查询">
+      <Card title="调用链路查询">
+        <Alert
+          className="mb-4"
+          type="info"
+          showIcon
+          title="调用链路（Trace）用于定位故障"
+          description="它用同一个链路编号串联消息、工具调用、业务确认、系统事件和飞书投递，帮助管理员判断失败发生在哪一环节。"
+        />
         <Space.Compact className="mb-4 w-full max-w-[720px]">
-          <Input value={traceId} onChange={(event) => setTraceId(event.target.value)} placeholder="输入 trace_id / run_id" />
+          <Input value={traceId} onChange={(event) => onTraceIdChange(event.target.value)} placeholder="输入调用链路编号或运行编号" />
           <Button
             type="primary"
             icon={<SearchOutlined />}
-            onClick={async () => {
-              try {
-                setTrace(await getAgentTrace(traceId.trim()))
-              } catch (error) {
-                message.error(error instanceof Error ? error.message : 'Trace 查询失败')
-              }
-            }}
+            disabled={!traceId.trim()}
+            onClick={() => onQuery(traceId.trim())}
           >
             查询
           </Button>
@@ -929,9 +944,9 @@ function TraceDelivery() {
                 try {
                   const exported = await exportAgentTrace(trace.trace_id)
                   downloadTextFile(exported.filename, exported.content)
-                  message.success('脱敏 Trace 诊断已导出')
+                  message.success('已导出脱敏链路诊断文件')
                 } catch (error) {
-                  message.error(error instanceof Error ? error.message : 'Trace 导出失败')
+                  message.error(error instanceof Error ? error.message : '调用链路导出失败')
                 }
               }}
             >
@@ -939,27 +954,41 @@ function TraceDelivery() {
             </Button>
             <List
               dataSource={trace.timeline}
-              locale={{ emptyText: '该 Trace 暂无事件' }}
+              locale={{ emptyText: '该调用链路暂无事件' }}
               renderItem={(item) => (
                 <List.Item>
-                  <List.Item.Meta title={`${item.type} · ${item.summary}`} description={`${formatDate(item.occurred_at)} · ${item.error_code || '无错误码'}`} />
+                  <List.Item.Meta title={`${traceEventLabels[item.type] || item.type} · ${item.summary}`} description={`${formatDate(item.occurred_at)} · ${item.error_code || '无错误码'}`} />
                   {statusTag(item.status)}
                 </List.Item>
               )}
             />
           </>
-        ) : <Empty description="输入 Trace ID 查询完整链路" />}
+        ) : <Empty description="输入链路编号查询完整调用过程" />}
       </Card>
       <Card title="飞书投递队列">
+        <Alert
+          className="mb-4"
+          type="info"
+          showIcon
+          title="此处仅显示自动任务的飞书主动投递"
+          description="普通飞书对话不进入该队列。尚未执行自动通知时，队列为空属于正常情况。"
+        />
         <Select
           allowClear
           placeholder="投递状态"
           style={{ width: 160 }}
-          options={['pending', 'retry', 'sent', 'delivered', 'failed'].map((value) => ({ value }))}
+          options={['pending', 'retry', 'sent', 'delivered', 'failed'].map((value) => ({ value, label: statusLabels[value] }))}
           onChange={setDeliveryStatus}
           className="mb-4"
         />
-        <Table rowKey={(item) => String(item.id)} columns={deliveryColumns} dataSource={deliveries} scroll={{ x: 1150 }} />
+        <Table
+          rowKey={(item) => String(item.id)}
+          columns={deliveryColumns}
+          dataSource={deliveries}
+          loading={deliveryLoading}
+          locale={{ emptyText: deliveryError || '暂无自动任务投递记录' }}
+          scroll={{ x: 1150 }}
+        />
       </Card>
     </Space>
   )
@@ -971,7 +1000,23 @@ export default function FeishuSettingsClient() {
   const [config, setConfig] = useState<FeishuConfig | null>(null)
   const [status, setStatus] = useState<FeishuGatewayStatus | null>(null)
   const [health, setHealth] = useState<AgentRuntimeOverview | null>(null)
+  const [traceQuery, setTraceQuery] = useState<{
+    traceId: string
+    result: AgentTraceResult | null
+  }>({ traceId: '', result: null })
   const [loading, setLoading] = useState(true)
+
+  const queryTrace = useCallback(async (traceId: string) => {
+    const normalizedTraceId = traceId.trim()
+    if (!normalizedTraceId) return
+    setTraceQuery({ traceId: normalizedTraceId, result: null })
+    try {
+      const result = await getAgentTrace(normalizedTraceId)
+      setTraceQuery({ traceId: normalizedTraceId, result })
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '调用链路查询失败')
+    }
+  }, [message])
 
   const loadOverview = useCallback(async () => {
     setLoading(true)
@@ -996,7 +1041,7 @@ export default function FeishuSettingsClient() {
     {
       key: 'overview',
       label: <Space><CloudServerOutlined />运行总览</Space>,
-      children: <Overview config={config} status={status} health={health} onNavigate={setActiveKey} />,
+      children: <Overview config={config} status={status} health={health} onNavigate={(key, traceId) => { if (traceId) void queryTrace(traceId); setActiveKey(key) }} />,
     },
     {
       key: 'feishu',
@@ -1022,8 +1067,15 @@ export default function FeishuSettingsClient() {
     },
     {
       key: 'trace',
-      label: <Space><AuditOutlined />Trace 与投递诊断</Space>,
-      children: <TraceDelivery />,
+      label: <Space><AuditOutlined />调用链路与投递诊断</Space>,
+      children: (
+        <TraceDelivery
+          traceId={traceQuery.traceId}
+          trace={traceQuery.result}
+          onTraceIdChange={(traceId) => setTraceQuery({ traceId, result: null })}
+          onQuery={queryTrace}
+        />
+      ),
     },
   ]
 
@@ -1033,14 +1085,14 @@ export default function FeishuSettingsClient() {
         <div>
           <Title level={3} style={{ margin: 0 }}>
             <SettingOutlined className="mr-2" />
-            Livzon Agent 管理
+            Livzon Agent管理
           </Title>
-          <Text type="secondary">统一管理 Hermes 运行、飞书接入、可信身份、企业能力、授权确认与 Trace。</Text>
+          <Text type="secondary">统一管理助手编排服务（Hermes）、飞书接入、可信身份、企业能力、授权确认与调用链路。</Text>
         </div>
         <Button loading={loading} icon={<ReloadOutlined />} onClick={() => void loadOverview()}>刷新运行状态</Button>
       </div>
       {status?.gateway === 'failed' && (
-        <Alert type="error" showIcon title="Hermes Feishu Gateway 连接失败" description="请先在“飞书接入”运行诊断，再通过 Trace 与投递诊断定位失败环节。" className="mb-4" />
+        <Alert type="error" showIcon title="Hermes 飞书网关连接失败" description="请先在“飞书接入”运行诊断，再通过“调用链路与投递诊断”定位失败环节。" className="mb-4" />
       )}
       <Tabs activeKey={activeKey} onChange={setActiveKey} items={items} />
     </div>

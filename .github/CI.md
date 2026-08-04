@@ -54,8 +54,9 @@ flowchart LR
 Source Security 和 CI Gate。`.github` Workflow、根配置、`.ci`、`.gitea`、
 共享脚本与 OpenAPI 契约属于 shared change，会触发全部相关模块。
 
-Change Scope 同时运行 `.ci/test-impact-policy.toml`，生产代码变更没有对应
-测试时直接失败。
+Change Scope 同时检查每个 `AGENTS.md` 都有同目录 `CLAUDE.md` 导入桥接，并
+运行 `.ci/test-impact-policy.toml`；Claude Code 规范入口缺失或生产代码变更
+没有对应测试时直接失败。
 
 ## 检查内容
 

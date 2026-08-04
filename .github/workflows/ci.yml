@@ -46,6 +46,9 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
+      - name: Verify Claude Code instruction bridges
+        run: python scripts/check-agent-instruction-bridges.py
+
       - name: Resolve changed scopes
         id: scope
         env:

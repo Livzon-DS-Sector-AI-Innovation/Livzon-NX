@@ -393,8 +393,8 @@ const server = createServer(async (request, response) => {
       data: {
         pending_confirmations: 0,
         failed_deliveries: 0,
-        latest_error_trace_id: null,
-        latest_error_at: null,
+        latest_error_trace_id: '00000000-0000-0000-0000-000000000099',
+        latest_error_at: '2026-07-31T09:00:00Z',
       },
     }))
     return
