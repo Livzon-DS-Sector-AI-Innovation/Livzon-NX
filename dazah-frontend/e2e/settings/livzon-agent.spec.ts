@@ -4,7 +4,7 @@ test.describe('Livzon Agent 治理台', () => {
   async function openAgentGovernance(page: import('@playwright/test').Page) {
     await page.goto('/settings')
     await page.waitForLoadState('networkidle')
-    const agentTab = page.getByRole('tab', { name: 'Livzon Agent 管理' })
+    const agentTab = page.getByRole('tab', { name: 'Livzon Agent管理' })
     await agentTab.click()
     await expect(agentTab).toHaveAttribute('aria-selected', 'true')
   }
@@ -17,16 +17,31 @@ test.describe('Livzon Agent 治理台', () => {
     await expect(page.getByRole('tab', { name: '身份与准入' })).toBeVisible()
     await expect(page.getByRole('tab', { name: '能力目录与策略' })).toBeVisible()
     await expect(page.getByRole('tab', { name: '授权与确认' })).toBeVisible()
-    await expect(page.getByRole('tab', { name: 'Trace 与投递诊断' })).toBeVisible()
-    await expect(page.getByText('自动化测试不能替代真实飞书验收')).toBeVisible()
+    await expect(page.getByRole('tab', { name: '调用链路与投递诊断' })).toBeVisible()
+    await expect(page.getByText('外部验收状态')).toHaveCount(0)
+  })
+
+  test('从最近异常直接打开并查询调用链路', async ({ page }) => {
+    await openAgentGovernance(page)
+
+    await page.getByRole('button', { name: '查看调用链路' }).click()
+
+    await expect(
+      page.getByRole('tab', { name: '调用链路与投递诊断' }),
+    ).toHaveAttribute('aria-selected', 'true')
+    await expect(page.getByPlaceholder('输入调用链路编号或运行编号')).toHaveValue(
+      '00000000-0000-0000-0000-000000000099',
+    )
+    await expect(page.getByText('飞书入站消息（正文已隐藏）')).toBeVisible()
+    await expect(page.getByText('普通飞书对话不进入该队列')).toBeVisible()
   })
 
   test('飞书接入页不会展示 Secret 明文', async ({ page }) => {
     await openAgentGovernance(page)
     await page.getByRole('tab', { name: '飞书接入' }).click()
 
-    await expect(page.getByLabel('App Secret')).toHaveAttribute('type', 'password')
-    await expect(page.getByLabel('App Secret')).toHaveAttribute(
+    await expect(page.getByLabel('应用密钥（App Secret）')).toHaveAttribute('type', 'password')
+    await expect(page.getByLabel('应用密钥（App Secret）')).toHaveAttribute(
       'placeholder',
       '留空则不修改',
     )
@@ -44,7 +59,7 @@ test.describe('Livzon Agent 治理台', () => {
         .getByRole('alert')
         .filter({ hasText: '飞书接入配置保存成功' }),
     ).toBeVisible()
-    await expect(page.getByText('配置版本 2 已写入，Gateway 已启用。')).toBeVisible()
+    await expect(page.getByText('配置版本 2 已写入，飞书网关已启用。')).toBeVisible()
   })
 
   test('六个治理区域的读取接口均能渲染', async ({ page }) => {
@@ -71,7 +86,7 @@ test.describe('Livzon Agent 治理台', () => {
       .click()
     const capabilityDrawer = page.getByRole('dialog')
     await expect(capabilityDrawer.getByText('通用契约 · 待细化')).toBeVisible()
-    await expect(capabilityDrawer.getByText('当前 Schema 由 handler 返回注解推导')).toBeVisible()
+    await expect(capabilityDrawer.getByText('当前数据结构由处理程序的返回类型推导')).toBeVisible()
     await expect(capabilityDrawer.getByText(/additionalProperties/)).toBeVisible()
     await expect(
       capabilityDrawer.getByRole('rowheader', { name: '版本' }).locator('..'),
@@ -81,14 +96,14 @@ test.describe('Livzon Agent 治理台', () => {
     await page.getByRole('tab', { name: '授权与确认' }).click()
     await expect(page.getByText('Hermes 飞书记忆授权')).toBeVisible()
 
-    await page.getByRole('tab', { name: 'Trace 与投递诊断' }).click()
-    await expect(page.getByText('Trace 查询')).toBeVisible()
+    await page.getByRole('tab', { name: '调用链路与投递诊断' }).click()
+    await expect(page.getByText('调用链路查询')).toBeVisible()
   })
 
-  test('Trace 查询展示跨渠道事件并导出脱敏诊断', async ({ page }) => {
+  test('调用链路查询展示跨渠道事件并导出脱敏诊断', async ({ page }) => {
     await openAgentGovernance(page)
-    await page.getByRole('tab', { name: 'Trace 与投递诊断' }).click()
-    await page.getByPlaceholder('输入 trace_id / run_id').fill(
+    await page.getByRole('tab', { name: '调用链路与投递诊断' }).click()
+    await page.getByPlaceholder('输入调用链路编号或运行编号').fill(
       '00000000-0000-0000-0000-000000000099',
     )
     await page.getByRole('button', { name: '查询' }).click()

@@ -29,6 +29,24 @@ def test_backend_openapi_exposes_progressive_tool_contract() -> None:
     assert "post" in paths["/api/v1/agent/tools/execute"]
 
 
+def test_backend_openapi_exposes_runtime_overview_contract() -> None:
+    openapi_path = Path(__file__).parents[2] / "dazah-backend" / "openapi.json"
+    document = json.loads(openapi_path.read_text(encoding="utf-8"))
+
+    operation = document["paths"][
+        "/api/v1/agent/control/runtime-overview"
+    ]["get"]
+
+    assert operation["operationId"].startswith(
+        "get_control_plane_runtime_overview_"
+    )
+    assert "200" in operation["responses"]
+    assert any(
+        parameter["name"] == "auth_token" and parameter["in"] == "cookie"
+        for parameter in operation["parameters"]
+    )
+
+
 def test_describe_uses_operation_and_trusted_subject(monkeypatch) -> None:
     recorded: dict[str, object] = {}
 

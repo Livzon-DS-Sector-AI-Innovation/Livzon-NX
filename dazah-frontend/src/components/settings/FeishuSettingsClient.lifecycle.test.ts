@@ -252,6 +252,11 @@ describe('FeishuSettingsClient governance lifecycle', () => {
       items: [], page: 1, page_size: 50, total: 0,
     })
     actions.getAgentDeliveries.mockResolvedValue({ items: [] })
+    actions.getAgentTrace.mockResolvedValue({
+      trace_id: 'trace-1',
+      counts: { messages: 0, tool_calls: 1, confirmations: 0, domain_events: 0, deliveries: 0 },
+      timeline: [],
+    })
     actions.getFeishuAuthorizations.mockResolvedValue([])
     actions.saveLivzonFeishuConfig.mockResolvedValue(config)
     actions.testLivzonFeishuConfig.mockResolvedValue({
@@ -290,12 +295,21 @@ describe('FeishuSettingsClient governance lifecycle', () => {
       expect(actions.getLivzonFeishuConfig).toHaveBeenCalledOnce()
       expect(actions.getLivzonFeishuGatewayStatus).toHaveBeenCalledOnce()
       expect(actions.getAgentRuntimeOverview).toHaveBeenCalledOnce()
-      expect(lifecycle.setters[4]).toHaveBeenLastCalledWith(false)
+      expect(lifecycle.setters[5]).toHaveBeenLastCalledWith(false)
     })
 
     await (findButton(tree, '刷新运行状态').props?.onClick as () => Promise<void>)()
     expect(actions.getAgentRuntimeOverview).toHaveBeenCalledTimes(2)
 
+    const tabs = walk(tree).find((element) => Array.isArray(element.props?.items))
+    const overviewTab = (tabs?.props?.items as Array<{ children: ElementLike }>)[0].children
+    ;(overviewTab.props?.onNavigate as (key: string, traceId: string) => void)(
+      'trace',
+      'trace-1',
+    )
+    await vi.waitFor(() => expect(actions.getAgentTrace).toHaveBeenCalledWith('trace-1'))
+
+    const onNavigate = vi.fn()
     const overview = Overview({
       config,
       status: {
@@ -319,12 +333,16 @@ describe('FeishuSettingsClient governance lifecycle', () => {
         latest_error_trace_id: 'trace-1',
         latest_error_at: 'invalid-date',
       },
-      onNavigate: vi.fn(),
+      onNavigate,
     })
-    const list = walk(overview).find((element) => typeof element.props?.renderItem === 'function')
-    ;(list?.props?.renderItem as (item: string) => unknown)('真实飞书验收')
-    await (findButton(overview, '查看 Trace').props?.onClick as () => void)()
-    await (findButton(overview, '进入诊断').props?.onClick as () => void)()
+    expect(walk(overview).some(
+      (element) => element.props?.title === '外部验收状态',
+    )).toBe(false)
+    expect(walk(overview).some(
+      (element) => String(element.props?.description).includes('不代表当前仍异常'),
+    )).toBe(true)
+    await (findButton(overview, '查看调用链路').props?.onClick as () => void)()
+    expect(onNavigate).toHaveBeenCalledWith('trace', 'trace-1')
   })
 
   it('saves and diagnoses Feishu access configuration', async () => {
@@ -429,6 +447,14 @@ describe('FeishuSettingsClient governance lifecycle', () => {
     invokeEffects()
     await vi.waitFor(() => expect(actions.getAgentConfirmations).toHaveBeenCalled())
 
+    const userIdInput = walk(tree).find(
+      (element) => element.props?.placeholder === '本地用户编号（UUID）',
+    )
+    ;(userIdInput?.props?.onChange as (event: { target: { value: string } }) => void)(
+      { target: { value: 'user-2' } },
+    )
+    expect(lifecycle.setters[0]).toHaveBeenCalledWith('user-2')
+
     await (findButton(tree, '查询授权').props?.onClick as () => Promise<void>)()
     expect(actions.getFeishuAuthorizations).toHaveBeenCalledWith('user-1')
 
@@ -449,24 +475,46 @@ describe('FeishuSettingsClient governance lifecycle', () => {
         summary: '工具执行', error_code: null,
       }],
     }
-    resetHooks({ 0: 'trace-1', 1: trace, 2: 'failed', 3: [{ id: 'delivery-1', status: 'failed' }] })
-    actions.getAgentTrace.mockResolvedValue(trace)
+    resetHooks({ 0: 'failed', 1: [{ id: 'delivery-1', status: 'failed' }], 2: false })
     actions.exportAgentTrace.mockResolvedValue({ filename: 'trace.json', content: '{}' })
-    const tree = TraceDelivery()
+    const onQuery = vi.fn().mockResolvedValue(undefined)
+    const onTraceIdChange = vi.fn()
+    const tree = TraceDelivery({
+      traceId: 'trace-1',
+      trace,
+      onTraceIdChange,
+      onQuery,
+    })
     invokeEffects()
     await vi.waitFor(() => expect(actions.getAgentDeliveries).toHaveBeenCalledWith('failed'))
 
     await (findButton(tree, '查询').props?.onClick as () => Promise<void>)()
     await (findButton(tree, '导出安全诊断').props?.onClick as () => Promise<void>)()
-    expect(actions.getAgentTrace).toHaveBeenCalledWith('trace-1')
+    expect(onQuery).toHaveBeenCalledWith('trace-1')
     expect(actions.exportAgentTrace).toHaveBeenCalledWith('trace-1')
+    expect(walk(tree).some(
+      (element) => element.props?.title === '调用链路（Trace）用于定位故障',
+    )).toBe(true)
+
+    const traceInput = walk(tree).find(
+      (element) => element.props?.placeholder === '输入调用链路编号或运行编号',
+    )
+    ;(traceInput?.props?.onChange as (event: { target: { value: string } }) => void)(
+      { target: { value: 'trace-2' } },
+    )
+    expect(onTraceIdChange).toHaveBeenCalledWith('trace-2')
 
     const list = walk(tree).find((element) => typeof element.props?.renderItem === 'function')
     ;(list?.props?.renderItem as (item: typeof trace.timeline[number]) => unknown)(trace.timeline[0])
     const table = walk(tree).find((element) => Array.isArray(element.props?.columns))
-    const statusColumn = (table?.props?.columns as Array<Record<string, unknown>>).find(
+    const columns = table?.props?.columns as Array<Record<string, unknown>>
+    const channelColumn = columns.find((column) => column.dataIndex === 'channel')
+    expect((channelColumn?.render as (value: string) => unknown)('feishu')).toBeDefined()
+    expect((channelColumn?.render as (value: string) => unknown)('custom')).toBeDefined()
+    const statusColumn = columns.find(
       (column) => column.dataIndex === 'status',
     )
     ;(statusColumn?.render as (value: string) => unknown)('failed')
+    expect((table?.props?.rowKey as (item: { id: number }) => string)({ id: 7 })).toBe('7')
   })
 })

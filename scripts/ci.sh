@@ -22,10 +22,14 @@ run_test_impact() {
   python "${repository_dir}/scripts/check-test-impact.py"
 }
 
+run_instruction_bridges() {
+  python "${repository_dir}/scripts/check-agent-instruction-bridges.py"
+}
+
 usage() {
   cat >&2 <<'EOF'
 Usage: ./scripts/ci.sh {
-  test-impact|quality|build|integration|container|security|all|
+  instructions|test-impact|quality|build|integration|container|security|all|
   frontend-quality|frontend-build|frontend-e2e|frontend-container|frontend-security|
   backend-quality|backend-integration|backend-container|backend-security|
   hermes-quality
@@ -35,6 +39,7 @@ EOF
 }
 
 case "${1:-}" in
+  instructions) run_instruction_bridges ;;
   test-impact) run_test_impact ;;
   quality)
     run_frontend quality
@@ -61,6 +66,7 @@ case "${1:-}" in
   backend-security) run_backend security ;;
   hermes-quality) run_hermes ;;
   all)
+    run_instruction_bridges
     run_test_impact
     run_frontend quality
     run_frontend build
