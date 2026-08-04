@@ -17,6 +17,7 @@ from uuid import UUID
 import httpx
 import jwt
 from fastapi import HTTPException, status
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -28,11 +29,13 @@ from app.platform.identity.models import (
     User,
 )
 from app.platform.identity.repository import (
+    ExternalIdentityBindingRepository,
     FeishuConfigRepository,
     FeishuUserTokenRepository,
     UserRepository,
 )
 from app.platform.identity.schemas import (
+    ExternalIdentityConflictOut,
     FeishuConfigResponse,
     FeishuConfigUpsert,
     FeishuDiagnosticResult,
@@ -74,13 +77,16 @@ async def _push_livzon_credentials_to_hermes(
     gateway_enabled: bool,
     version: int,
 ) -> bool:
-    """Best-effort credential rotation; Hermes keeps its last healthy version."""
+    """Rotate Hermes credentials or raise a stable API error."""
     settings = get_settings()
     base_url = settings.HERMES_INTERNAL_URL.rstrip("/")
     token = settings.HERMES_INTERNAL_TOKEN
     if not base_url or not token:
         logger.warning("Hermes internal Feishu credential delivery is not configured")
-        return False
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "Hermes 内部接口未配置，飞书接入配置未保存",
+        )
     signed = (
         f"{app_id}\n{tenant_id}\n{str(gateway_enabled).lower()}\n"
         f"{version}\n{app_secret}"
@@ -107,13 +113,25 @@ async def _push_livzon_credentials_to_hermes(
             version,
             response.status_code,
         )
+        if response.status_code == status.HTTP_409_CONFLICT:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Hermes 拒绝了重复或过期的飞书配置版本，请刷新后重试",
+            )
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            "Hermes 未接受飞书接入配置，当前可用版本保持不变",
+        )
     except httpx.HTTPError as exc:
         logger.error(
             "Hermes Feishu credential delivery failed for version %s: %s",
             version,
             type(exc).__name__,
         )
-    return False
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "Hermes 暂时不可达，飞书接入配置未保存",
+        ) from exc
 
 
 def hash_password(password: str) -> str:
@@ -266,6 +284,8 @@ def _feishu_config_to_response(config: FeishuConfig | None) -> FeishuConfigRespo
         app_id=config.app_id,
         tenant_id=config.tenant_id,
         gateway_enabled=config.gateway_enabled,
+        allowed_group_chat_ids=config.allowed_group_chat_ids or [],
+        require_group_mention=config.require_group_mention,
         config_version=config.config_version,
         app_secret_configured=bool(config.encrypted_app_secret),
         app_secret_masked=mask_secret(secret),
@@ -279,6 +299,8 @@ def _feishu_config_to_response(config: FeishuConfig | None) -> FeishuConfigRespo
         last_diagnostic_message=config.last_diagnostic_message,
         last_diagnostic_result=config.last_diagnostic_result,
         last_diagnosed_at=config.last_diagnosed_at,
+        updated_at=config.updated_at,
+        updated_by=config.updated_by,
     )
 
 
@@ -315,6 +337,8 @@ async def save_livzon_feishu_config(
         existing.app_id = payload.app_id
         existing.tenant_id = payload.tenant_id
         existing.gateway_enabled = payload.gateway_enabled
+        existing.allowed_group_chat_ids = payload.allowed_group_chat_ids
+        existing.require_group_mention = payload.require_group_mention
         existing.config_version = (existing.config_version or 0) + 1
         existing.encrypted_app_secret = encrypted_secret
         existing.sync_root_department_id = payload.sync_root_department_id
@@ -322,12 +346,14 @@ async def save_livzon_feishu_config(
         existing.is_active = payload.is_active
         existing.is_deleted = False
         await db.flush()
+        await db.refresh(existing)
         effective_secret = payload.app_secret
         if not effective_secret:
             try:
                 effective_secret = decrypt_secret(existing.encrypted_app_secret)
             except RuntimeError as exc:
                 raise _secret_runtime_error(exc) from exc
+        response = _feishu_config_to_response(existing)
         await _push_livzon_credentials_to_hermes(
             app_id=existing.app_id,
             app_secret=effective_secret,
@@ -335,13 +361,15 @@ async def save_livzon_feishu_config(
             gateway_enabled=existing.gateway_enabled and existing.is_active,
             version=existing.config_version,
         )
-        return _feishu_config_to_response(existing)
+        return response
 
     config = FeishuConfig(
         config_name=target_name,
         app_id=payload.app_id,
         tenant_id=payload.tenant_id,
         gateway_enabled=payload.gateway_enabled,
+        allowed_group_chat_ids=payload.allowed_group_chat_ids,
+        require_group_mention=payload.require_group_mention,
         config_version=1,
         encrypted_app_secret=encrypted_secret,
         sync_root_department_id=payload.sync_root_department_id,
@@ -349,6 +377,8 @@ async def save_livzon_feishu_config(
         is_active=payload.is_active,
     )
     await _feishu_config_repo.save(db, config)
+    await db.refresh(config)
+    response = _feishu_config_to_response(config)
     await _push_livzon_credentials_to_hermes(
         app_id=config.app_id,
         app_secret=payload.app_secret or "",
@@ -356,7 +386,7 @@ async def save_livzon_feishu_config(
         gateway_enabled=config.gateway_enabled and config.is_active,
         version=config.config_version,
     )
-    return _feishu_config_to_response(config)
+    return response
 
 
 async def _effective_feishu_credentials(
@@ -715,7 +745,11 @@ async def _save_diagnostic_result(
     await db.flush()
 
 
-async def run_livzon_feishu_sync_all(db: AsyncSession) -> JsonObject:
+async def run_livzon_feishu_sync_all(
+    db: AsyncSession,
+    *,
+    actor_id: UUID | None = None,
+) -> JsonObject:
     from app.platform.integrations.feishu.contact import get_contact_scope
     from app.platform.integrations.feishu.sync import (
         sync_departments,
@@ -812,6 +846,16 @@ async def run_livzon_feishu_sync_all(db: AsyncSession) -> JsonObject:
     )
     if sync_status == "warning":
         sync_message = f"{sync_message} 部分部门同步失败：{'; '.join(all_errors)}"
+    binding_result = await reconcile_livzon_identity_bindings(
+        db,
+        actor_id=actor_id,
+    )
+    conflict_count = len(binding_result["conflicts"])
+    if conflict_count:
+        sync_status = "warning"
+        sync_message = (
+            f"{sync_message} 发现 {conflict_count} 个身份绑定冲突，请处理后重试。"
+        )
     if config is not None:
         config.last_sync_status = sync_status
         config.last_sync_message = sync_message
@@ -838,8 +882,179 @@ async def run_livzon_feishu_sync_all(db: AsyncSession) -> JsonObject:
             "direct_user_result": direct_user_result,
             "errors": member_errors + nested_member_errors,
         },
+        "bindings": binding_result,
         "status": sync_status,
         "message": sync_message,
+    }
+
+
+async def list_livzon_identity_conflicts(
+    db: AsyncSession,
+) -> list[ExternalIdentityConflictOut]:
+    config = await _feishu_config_repo.get_active(db)
+    if config is None:
+        return []
+    users = list(
+        (
+            await db.execute(
+                select(User).where(
+                    User.is_deleted.is_(False),
+                    User.tenant_key == config.tenant_id,
+                    or_(
+                        User.feishu_user_id.is_not(None),
+                        User.feishu_open_id.is_not(None),
+                        User.feishu_union_id.is_not(None),
+                    ),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    bindings = await ExternalIdentityBindingRepository().list_for_app(
+        db,
+        tenant_id=config.tenant_id,
+        app_fingerprint=config.app_id,
+    )
+    conflicts: list[ExternalIdentityConflictOut] = []
+    for user in users:
+        identifiers = {
+            value
+            for value in (
+                user.feishu_user_id,
+                user.feishu_open_id,
+                user.feishu_union_id,
+            )
+            if value
+        }
+        externally_matched = next(
+            (
+                binding
+                for binding in bindings
+                if identifiers
+                & {
+                    value
+                    for value in (
+                        binding.external_user_id,
+                        binding.external_open_id,
+                        binding.external_union_id,
+                    )
+                    if value
+                }
+            ),
+            None,
+        )
+        local_binding = next(
+            (binding for binding in bindings if binding.local_user_id == user.id),
+            None,
+        )
+        if externally_matched and externally_matched.local_user_id != user.id:
+            conflicts.append(
+                ExternalIdentityConflictOut(
+                    local_user_id=user.id,
+                    local_user_name=user.name,
+                    department=user.department,
+                    external_identifier=sorted(identifiers)[0],
+                    conflict_type="external_owned_by_other",
+                    conflicting_binding_id=externally_matched.id,
+                )
+            )
+        elif local_binding and not externally_matched:
+            conflicts.append(
+                ExternalIdentityConflictOut(
+                    local_user_id=user.id,
+                    local_user_name=user.name,
+                    department=user.department,
+                    external_identifier=sorted(identifiers)[0],
+                    conflict_type="local_binding_mismatch",
+                    conflicting_binding_id=local_binding.id,
+                )
+            )
+    return conflicts
+
+
+async def reconcile_livzon_identity_bindings(
+    db: AsyncSession,
+    *,
+    actor_id: UUID | None,
+) -> JsonObject:
+    config = await _feishu_config_repo.get_active(db)
+    if config is None:
+        return {"created": 0, "existing": 0, "conflicts": []}
+    users = list(
+        (
+            await db.execute(
+                select(User).where(
+                    User.is_deleted.is_(False),
+                    User.status == "active",
+                    User.tenant_key == config.tenant_id,
+                    or_(
+                        User.feishu_user_id.is_not(None),
+                        User.feishu_open_id.is_not(None),
+                        User.feishu_union_id.is_not(None),
+                    ),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    repo = ExternalIdentityBindingRepository()
+    existing_bindings = await repo.list_for_app(
+        db,
+        tenant_id=config.tenant_id,
+        app_fingerprint=config.app_id,
+    )
+    created = 0
+    existing = 0
+    for user in users:
+        identifiers = {
+            value
+            for value in (
+                user.feishu_user_id,
+                user.feishu_open_id,
+                user.feishu_union_id,
+            )
+            if value
+        }
+        matched = any(
+            binding.local_user_id == user.id
+            or bool(
+                identifiers
+                & {
+                    value
+                    for value in (
+                        binding.external_user_id,
+                        binding.external_open_id,
+                        binding.external_union_id,
+                    )
+                    if value
+                }
+            )
+            for binding in existing_bindings
+        )
+        if matched:
+            existing += 1
+            continue
+        binding = await repo.create(
+            db,
+            tenant_id=config.tenant_id,
+            platform="feishu",
+            app_fingerprint=config.app_id,
+            external_user_id=user.feishu_user_id,
+            external_open_id=user.feishu_open_id,
+            external_union_id=user.feishu_union_id,
+            local_user_id=user.id,
+            source="directory_sync",
+            actor_id=actor_id or user.id,
+        )
+        existing_bindings.append(binding)
+        created += 1
+    conflicts = await list_livzon_identity_conflicts(db)
+    return {
+        "created": created,
+        "existing": existing,
+        "conflicts": [item.model_dump(mode="json") for item in conflicts],
     }
 
 

@@ -412,6 +412,7 @@ export function AgentFloatingAssistant() {
   const [sessions, setSessions] = useState<AgentSessionItem[]>([])
   const [attachments, setAttachments] = useState<SelectedAttachment[]>([])
   const [attachmentReading, setAttachmentReading] = useState(false)
+  const [progressLabel, setProgressLabel] = useState<string | null>(null)
   const pendingStreamDoneRef = useRef<{
     messageId: string
     result: AgentChatData
@@ -571,6 +572,7 @@ export function AgentFloatingAssistant() {
     resetStreamBuffer(true)
     setStreaming(false)
     setLoading(false)
+    setProgressLabel(null)
   }
 
   async function handleAttachmentSelection(files: FileList | null) {
@@ -648,6 +650,7 @@ export function AgentFloatingAssistant() {
     const abortController = new AbortController()
     abortControllerRef.current = abortController
     setStreaming(true)
+    setProgressLabel("正在接收请求")
     setError(null)
     setDraft("")
     setAttachments([])
@@ -704,7 +707,24 @@ export function AgentFloatingAssistant() {
               hasDisplayedContent = true
             })
           },
+          onProgress: ({ type, data }) => {
+            if (type === "capability_search") {
+              setProgressLabel("正在匹配可用能力")
+            } else if (type === "thinking") {
+              setProgressLabel("正在分析请求")
+            } else if (type === "tool_call") {
+              const operation = typeof data.operation === "string" ? data.operation : "业务能力"
+              setProgressLabel(`正在调用 ${operation}`)
+            } else if (type === "tool_result") {
+              setProgressLabel(data.ok === false ? "工具执行未成功，正在整理结果" : "工具执行完成，正在整理结果")
+            } else if (type === "confirmation") {
+              setProgressLabel("操作需要确认")
+            } else if (type === "delivery") {
+              setProgressLabel("正在投递结果")
+            }
+          },
           onDone: (result) => {
+            setProgressLabel(null)
             for (const confirmation of collectConfirmations(result)) {
               upsertConfirmation(confirmation)
             }
@@ -749,6 +769,7 @@ export function AgentFloatingAssistant() {
       }
       setStreaming(false)
       setLoading(false)
+      setProgressLabel(null)
     }
   }
 
@@ -950,6 +971,15 @@ export function AgentFloatingAssistant() {
             onCancel={cancelConfirmation}
           />
         ))}
+        {loading && progressLabel && (
+          <div
+            aria-live="polite"
+            className="flex items-center gap-2 rounded-lg bg-[var(--color-bg-secondary)] px-3 py-2 text-xs text-[var(--color-text-secondary)]"
+          >
+            <LoadingOutlined />
+            <span>{progressLabel}</span>
+          </div>
+        )}
         {loading && messages[messages.length - 1]?.role !== "assistant" && (
           <div className="rounded-xl border border-[var(--color-border)] bg-white p-3">
             <Skeleton active paragraph={{ rows: 2 }} title={false} />

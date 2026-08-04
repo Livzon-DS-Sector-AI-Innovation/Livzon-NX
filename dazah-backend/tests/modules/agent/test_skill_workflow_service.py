@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.agent.catalog import ToolCatalogService
 from app.modules.agent.schemas import (
     AgentSkillResolveRequest,
     AgentToolExecuteRequest,
@@ -325,6 +326,11 @@ async def test_workflow_run_refetches_updated_state_before_response(
         settings=SimpleNamespace(),
         access_scope_service=AllowAllAccessScopeService(),
     )
+    await ToolCatalogService().set_enabled(
+        db_session,
+        operation="procurement.list_contract_templates",
+        enabled=True,
+    )
     workflow = await service._create_workflow_from_request(
         db_session,
         request=AgentWorkflowCreate(
@@ -349,7 +355,7 @@ async def test_workflow_run_refetches_updated_state_before_response(
     )
 
     run = result["run"]
-    assert run["status"] == "succeeded"
+    assert run["status"] == "succeeded", run["error_message"]
     assert run["current_step"] == 1
     assert run["updated_at"] is not None
     assert run["step_results"][0]["operation"] == "procurement.list_contract_templates"

@@ -1,11 +1,19 @@
 import base64
+import uuid
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
 from pydantic import ValidationError
 
-from app.modules.agent.schemas import AgentAttachmentIn, AgentChatRequest
+from app.modules.agent.schemas import (
+    AgentAttachmentIn,
+    AgentBackendSource,
+    AgentBackendV2Request,
+    AgentChatRequest,
+    AgentTrustedSubject,
+)
 from app.modules.agent.service import AgentService
 
 
@@ -39,6 +47,22 @@ async def test_prepare_text_attachment_extracts_content_and_redacts_raw_data() -
         }
     ]
     assert "data_base64" not in metadata[0]
+
+    backend_request = AgentBackendV2Request(
+        session_id=f"web:{uuid.uuid4()}",
+        subject=AgentTrustedSubject(
+            tenant_id="default",
+            user_id=uuid.uuid4(),
+            source="web",
+        ),
+        source=AgentBackendSource(platform="web"),
+        message=request.message,
+        attachments=prepared,
+    )
+    serialized = backend_request.model_dump(mode="json")["attachments"][0]
+    assert serialized["kind"] == "document"
+    assert "DV-001" in serialized["text"]
+    assert serialized["data_base64"] is None
 
 
 @pytest.mark.asyncio
@@ -126,3 +150,42 @@ def test_attachment_schema_enforces_per_file_limit() -> None:
             size=10 * 1024 * 1024 + 1,
             data_base64="YQ==",
         )
+
+
+@pytest.mark.asyncio
+async def test_archive_session_refreshes_server_managed_fields() -> None:
+    user_id = uuid.uuid4()
+    session = SimpleNamespace(
+        id=uuid.uuid4(),
+        user_id=user_id,
+        title="附件会话",
+        status="active",
+        context={"channel": "web"},
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+
+    class Repo:
+        async def get_session(self, db, session_id):
+            return session
+
+        async def archive_session(self, db, *, session, user_id):
+            session.status = "archived"
+            return session
+
+    class Db:
+        refreshed = False
+
+        async def refresh(self, item):
+            assert item is session
+            self.refreshed = True
+
+    db = Db()
+    result = await AgentService(SimpleNamespace(), repo=Repo()).archive_session(
+        db,
+        session_id=session.id,
+        current_user=SimpleNamespace(id=user_id),
+    )
+
+    assert db.refreshed is True
+    assert result.status == "archived"

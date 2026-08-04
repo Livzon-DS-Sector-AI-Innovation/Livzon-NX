@@ -18,6 +18,7 @@ class ExternalIdentityBindingCreate(BaseModel):
     external_open_id: str | None = Field(default=None, max_length=128)
     external_union_id: str | None = Field(default=None, max_length=128)
     local_user_id: UUID
+    source: Literal["admin", "directory_sync", "oauth"] = "admin"
 
     @model_validator(mode="after")
     def require_external_identifier(self) -> "ExternalIdentityBindingCreate":
@@ -30,12 +31,36 @@ class ExternalIdentityBindingCreate(BaseModel):
 
 class ExternalIdentityBindingOut(ExternalIdentityBindingCreate):
     id: UUID
-    status: Literal["active", "disabled"]
+    status: Literal["active", "suspended", "revoked"]
     last_seen_at: datetime | None = None
+    verified_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
+    local_user_name: str | None = None
+    local_user_department: str | None = None
+    local_user_status: str | None = None
+
+    @field_validator("source", mode="before")
+    @classmethod
+    def normalize_legacy_source(cls, value: object) -> object:
+        if value == "identity.users":
+            return "directory_sync"
+        return value
 
     model_config = {"from_attributes": True}
+
+
+class ExternalIdentityBindingStatusUpdate(BaseModel):
+    status: Literal["active", "suspended", "revoked"]
+
+
+class ExternalIdentityConflictOut(BaseModel):
+    local_user_id: UUID
+    local_user_name: str
+    department: str | None = None
+    external_identifier: str
+    conflict_type: Literal["external_owned_by_other", "local_binding_mismatch"]
+    conflicting_binding_id: UUID
 
 
 class TokenResponse(BaseModel):
@@ -327,6 +352,8 @@ class FeishuConfigUpsert(BaseModel):
     app_secret: str | None = Field(default=None, max_length=500)
     tenant_id: str = Field(default="default", min_length=1, max_length=128)
     gateway_enabled: bool = True
+    allowed_group_chat_ids: list[str] = Field(default_factory=list, max_length=200)
+    require_group_mention: bool = True
     sync_root_department_id: str | None = Field(default=None, max_length=128)
     sync_member_department_id: str | None = Field(default=None, max_length=128)
     is_active: bool = True
@@ -354,6 +381,8 @@ class FeishuConfigResponse(BaseModel):
     app_id: str = ""
     tenant_id: str = "default"
     gateway_enabled: bool = True
+    allowed_group_chat_ids: list[str] = Field(default_factory=list)
+    require_group_mention: bool = True
     config_version: int = 0
     app_secret_configured: bool = False
     app_secret_masked: str = ""
@@ -367,8 +396,15 @@ class FeishuConfigResponse(BaseModel):
     last_diagnostic_message: str | None = None
     last_diagnostic_result: str | None = None
     last_diagnosed_at: str | None = None
+    updated_at: str | None = None
+    updated_by: UUID | None = None
 
-    @field_validator("last_synced_at", "last_diagnosed_at", mode="before")
+    @field_validator(
+        "last_synced_at",
+        "last_diagnosed_at",
+        "updated_at",
+        mode="before",
+    )
     @classmethod
     def datetime_to_str(cls, value: object) -> str | None:
         if value is None:

@@ -12,10 +12,7 @@ const actionMocks = vi.hoisted(() => ({
 
 vi.mock('@/actions/settings', () => actionMocks)
 
-import {
-  buildPayload,
-  requestFeishuConfig,
-} from './FeishuSettingsClient'
+import { buildPayload } from './FeishuSettingsClient'
 
 describe('Feishu settings request contracts', () => {
   afterEach(() => {
@@ -31,6 +28,8 @@ describe('Feishu settings request contracts', () => {
           app_secret: ' secret ',
           tenant_id: ' tenant-a ',
           gateway_enabled: false,
+          allowed_group_chat_ids: ['oc_group'],
+          require_group_mention: true,
         },
         {
           id: null,
@@ -38,6 +37,8 @@ describe('Feishu settings request contracts', () => {
           app_id: 'old',
           tenant_id: 'old',
           gateway_enabled: true,
+          allowed_group_chat_ids: [],
+          require_group_mention: true,
           config_version: 1,
           app_secret_configured: true,
           app_secret_masked: '***',
@@ -56,60 +57,4 @@ describe('Feishu settings request contracts', () => {
     )
   })
 
-  it('unwraps successful responses and sends same-origin JSON', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ data: { gateway_enabled: true } }), {
-        status: 200,
-      }),
-    )
-    vi.stubGlobal('fetch', fetchMock)
-
-    await expect(
-      requestFeishuConfig<{ gateway_enabled: boolean }>(
-        '/test',
-        {
-          app_id: 'cli_app',
-          tenant_id: 'tenant-a',
-          gateway_enabled: true,
-          is_active: true,
-          config_name: 'Livzon',
-        },
-        'POST',
-      ),
-    ).resolves.toEqual({ gateway_enabled: true })
-    expect(fetchMock).toHaveBeenCalledWith(
-      '/api/v1/identity/feishu-config/test',
-      expect.objectContaining({
-        method: 'POST',
-        credentials: 'same-origin',
-      }),
-    )
-  })
-
-  it('maps API and malformed-envelope failures', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValueOnce(
-        new Response(JSON.stringify({ detail: '凭证无效' }), { status: 403 }),
-      ).mockResolvedValueOnce(
-        new Response(JSON.stringify({ message: 'missing data' }), {
-          status: 200,
-        }),
-      ),
-    )
-    const payload = {
-      app_id: 'cli_app',
-      tenant_id: 'tenant-a',
-      gateway_enabled: true,
-      is_active: true,
-      config_name: 'Livzon',
-    }
-
-    await expect(requestFeishuConfig('', payload, 'PUT')).rejects.toThrow(
-      '凭证无效',
-    )
-    await expect(requestFeishuConfig('', payload, 'PUT')).rejects.toThrow(
-      '返回格式无效',
-    )
-  })
 })

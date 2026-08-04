@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import unquote
 
+import anyio
 import httpx
 from fastapi import HTTPException, status
 from pydantic import ValidationError
@@ -60,6 +61,10 @@ from .schemas import (
     AgentWorkflowOut,
     AgentWorkflowRunOut,
     AgentWorkflowUpdate,
+    FeishuConversationCompleteRequest,
+    FeishuConversationCompleteResponse,
+    FeishuConversationPrepareRequest,
+    FeishuConversationPrepareResponse,
 )
 from .tool_registration import ensure_agent_tools_registered
 from .tools import ToolExecutor, tool_registry
@@ -751,82 +756,136 @@ class AgentService:
 
         assistant_text = ""
         last_event: AgentBackendV2Event | None = None
-        async for backend_event in self._call_hermes_stream(
+        terminal_event_received = False
+        backend_stream = self._call_hermes_stream(
             session_id=session.id,
             user=current_user,
             message=request.message,
             context=request.context,
             history=history,
             attachments=attachments,
-        ):
-            last_event = backend_event
-            event = backend_event.type
-            data = backend_event.data
-            if event == "accepted":
+        )
+        try:
+            while True:
+                try:
+                    backend_event = await anext(backend_stream)
+                except StopAsyncIteration:
+                    break
+                except Exception:
+                    logger.exception(
+                        "Hermes V2 stream pipeline failed: session_id=%s user_id=%s",
+                        session.id,
+                        current_user.id,
+                    )
+                    trace_id = last_event.trace_id if last_event else uuid.uuid4()
+                    run_id = last_event.run_id if last_event else uuid.uuid4()
+                    sequence = last_event.sequence + 1 if last_event else 1
+                    yield self._sse_backend_event(
+                        AgentBackendV2Event(
+                            trace_id=trace_id,
+                            run_id=run_id,
+                            sequence=sequence,
+                            type="error",
+                            data={
+                                "code": "agent.internal_error",
+                                "message": (
+                                    "Livzon Agent 处理请求失败，请稍后重试并向管理员"
+                                    "提供 Trace ID。"
+                                ),
+                            },
+                        )
+                    )
+                    return
+                last_event = backend_event
+                event = backend_event.type
+                data = backend_event.data
+                if event == "accepted":
+                    yield self._sse_backend_event(
+                        backend_event.model_copy(
+                            update={"data": {**data, "session_id": str(session.id)}}
+                        )
+                    )
+                    continue
+
+                if event == "text_delta":
+                    text = str(data.get("text") or "")
+                    assistant_text += text
+                    yield self._sse_backend_event(backend_event)
+                    continue
+
+                if event == "error":
+                    terminal_event_received = True
+                    yield self._sse_backend_event(backend_event)
+                    return
+
+                if event != "finished":
+                    yield self._sse_backend_event(backend_event)
+                    continue
+
+                terminal_event_received = True
+                hermes_result = {
+                    "message": data.get("message") or assistant_text,
+                    "pending_confirmations": data.get("pending_confirmations") or [],
+                    "tool_trace": data.get("tool_trace") or [],
+                }
+                assistant_text = str(hermes_result["message"] or assistant_text)
+                if not assistant_text:
+                    assistant_text = (
+                        "Livzon Agent 已返回空结果，请稍后重试或换一种描述。"
+                    )
+                assistant = await self.repo.add_message(
+                    db,
+                    session_id=session.id,
+                    role="assistant",
+                    content=assistant_text,
+                    metadata=self._assistant_metadata(hermes_result, request.context),
+                    user_id=current_user.id if current_user else None,
+                )
+                await db.commit()
+                pending_confirmations = [
+                    self._confirmation_out(item)
+                    for item in await self._resolve_pending_confirmations(
+                        db,
+                        hermes_result,
+                        session_id=session.id,
+                    )
+                ]
+                response = AgentChatResponse(
+                    session_id=session.id,
+                    message=AgentMessageOut(
+                        id=assistant.id,
+                        role="assistant",
+                        content=assistant.content,
+                        created_at=assistant.created_at,
+                        metadata=assistant.message_metadata,
+                    ),
+                    pending_confirmations=pending_confirmations,
+                    tool_trace=list(hermes_result.get("tool_trace") or []),
+                )
                 yield self._sse_backend_event(
                     backend_event.model_copy(
-                        update={"data": {**data, "session_id": str(session.id)}}
+                        update={"data": response.model_dump(mode="json")}
                     )
                 )
-                continue
-
-            if event == "text_delta":
-                text = str(data.get("text") or "")
-                assistant_text += text
-                yield self._sse_backend_event(backend_event)
-                continue
-
-            if event == "error":
-                yield self._sse_backend_event(backend_event)
                 return
-
-            if event != "finished":
-                yield self._sse_backend_event(backend_event)
-                continue
-
-            hermes_result = {
-                "message": data.get("message") or assistant_text,
-                "pending_confirmations": data.get("pending_confirmations") or [],
-                "tool_trace": data.get("tool_trace") or [],
-            }
-            assistant_text = str(hermes_result["message"] or assistant_text)
-            if not assistant_text:
-                assistant_text = "Livzon Agent 已返回空结果，请稍后重试或换一种描述。"
-            assistant = await self.repo.add_message(
-                db,
-                session_id=session.id,
-                role="assistant",
-                content=assistant_text,
-                metadata=self._assistant_metadata(hermes_result, request.context),
-                user_id=current_user.id if current_user else None,
-            )
-            await db.commit()
-            pending_confirmations = [
-                self._confirmation_out(item)
-                for item in await self._resolve_pending_confirmations(
-                    db,
-                    hermes_result,
-                    session_id=session.id,
-                )
-            ]
-            response = AgentChatResponse(
-                session_id=session.id,
-                message=AgentMessageOut(
-                    id=assistant.id,
-                    role="assistant",
-                    content=assistant.content,
-                    created_at=assistant.created_at,
-                    metadata=assistant.message_metadata,
-                ),
-                pending_confirmations=pending_confirmations,
-                tool_trace=list(hermes_result.get("tool_trace") or []),
-            )
-            yield self._sse_backend_event(
-                backend_event.model_copy(
-                    update={"data": response.model_dump(mode="json")}
-                )
-            )
-            return
+        except (asyncio.CancelledError, GeneratorExit):
+            if assistant_text and not terminal_event_received:
+                # A browser abort cancels the request task. Shield the final database
+                # write so the partial response remains available after history reload.
+                with anyio.CancelScope(shield=True):
+                    await self.repo.add_message(
+                        db,
+                        session_id=session.id,
+                        role="assistant",
+                        content=assistant_text,
+                        metadata={
+                            **self._assistant_metadata({}, request.context),
+                            "generation_status": "stopped",
+                        },
+                        user_id=current_user.id if current_user else None,
+                    )
+                    await db.commit()
+            raise
 
         if last_event is None:
             trace_id = uuid.uuid4()
@@ -934,6 +993,148 @@ class AgentService:
             total=total,
         )
 
+    async def prepare_feishu_conversation(
+        self,
+        db: AsyncSession,
+        *,
+        request: FeishuConversationPrepareRequest,
+        current_user: User,
+    ) -> FeishuConversationPrepareResponse:
+        existing = await self.repo.get_channel_message_by_external_id(
+            db,
+            user_id=current_user.id,
+            channel="feishu",
+            external_message_id=request.external_message_id,
+        )
+        session: AgentSession | None
+        if existing is not None:
+            session, _ = existing
+            completed = await self.repo.get_channel_message_by_external_id(
+                db,
+                user_id=current_user.id,
+                channel="feishu",
+                external_message_id=request.external_message_id,
+                metadata_key="in_reply_to_external_message_id",
+            )
+            return FeishuConversationPrepareResponse(
+                session_id=session.id,
+                duplicate=True,
+                response_text=completed[1].content if completed else None,
+            )
+
+        session = await self.repo.get_active_channel_session(
+            db,
+            user_id=current_user.id,
+            channel="feishu",
+            peer_id=request.peer_id,
+        )
+        if session is None:
+            session = await self.repo.create_session(
+                db,
+                user_id=current_user.id,
+                context={
+                    "channel": "feishu",
+                    "peer_id": request.peer_id,
+                    "tenant_id": request.subject.tenant_id,
+                    "chat_id": request.source.chat_id,
+                    "chat_type": request.source.chat_type,
+                    "thread_id": request.source.thread_id,
+                },
+                title=request.message[:80],
+            )
+
+        history = await self.repo.list_messages(db, session_id=session.id)
+        await self.repo.add_message(
+            db,
+            session_id=session.id,
+            role="user",
+            content=request.message,
+            metadata={
+                "channel": "feishu",
+                "external_message_id": request.external_message_id,
+                "trace_id": str(request.trace_id),
+                "run_id": str(request.run_id),
+                "source": {
+                    "chat_type": request.source.chat_type,
+                    "has_reply": bool(request.source.reply_to),
+                },
+                "attachments": [
+                    item.model_dump(mode="json") for item in request.attachments
+                ],
+            },
+            user_id=current_user.id,
+        )
+        await db.flush()
+        return FeishuConversationPrepareResponse(
+            session_id=session.id,
+            messages=[
+                {"role": item.role, "content": item.content}
+                for item in history
+                if item.role in {"user", "assistant"}
+            ],
+        )
+
+    async def complete_feishu_conversation(
+        self,
+        db: AsyncSession,
+        *,
+        session_id: uuid.UUID,
+        request: FeishuConversationCompleteRequest,
+        current_user: User,
+    ) -> FeishuConversationCompleteResponse:
+        session = await self.repo.get_session(db, session_id)
+        if (
+            session is None
+            or session.user_id != current_user.id
+            or session.context.get("channel") != "feishu"
+        ):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Feishu session not found")
+        existing = await self.repo.get_channel_message_by_external_id(
+            db,
+            user_id=current_user.id,
+            channel="feishu",
+            external_message_id=request.external_message_id,
+            metadata_key="in_reply_to_external_message_id",
+        )
+        if existing is not None:
+            return FeishuConversationCompleteResponse(
+                session_id=session.id,
+                message_id=existing[1].id,
+                duplicate=True,
+            )
+
+        sources = []
+        for item in request.tool_trace:
+            operation = item.get("operation") if isinstance(item, dict) else None
+            if not isinstance(operation, str):
+                continue
+            sources.append(
+                {
+                    "operation": operation,
+                    "status": item.get("status"),
+                    "ok": item.get("ok"),
+                }
+            )
+        message = await self.repo.add_message(
+            db,
+            session_id=session.id,
+            role="assistant",
+            content=request.assistant_message,
+            metadata={
+                "channel": "feishu",
+                "in_reply_to_external_message_id": request.external_message_id,
+                "trace_id": str(request.trace_id),
+                "run_id": str(request.run_id),
+                "evidence": {"sources": sources[:50]},
+            },
+            user_id=current_user.id,
+        )
+        await db.flush()
+        return FeishuConversationCompleteResponse(
+            session_id=session.id,
+            message_id=message.id,
+        )
+
     async def get_session_detail(
         self,
         db: AsyncSession,
@@ -944,6 +1145,11 @@ class AgentService:
         session = await self.repo.get_session(db, session_id)
         if session is None or session.user_id != current_user.id:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Agent session not found")
+        await self.repo.expire_due_confirmations(
+            db,
+            session_id=session.id,
+            user_id=current_user.id,
+        )
         messages = await self.repo.list_all_messages(db, session_id=session.id)
         confirmations = await self.repo.list_session_confirmations(
             db, session_id=session.id
@@ -984,6 +1190,7 @@ class AgentService:
         if session is None or session.user_id != current_user.id:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Agent session not found")
         await self.repo.archive_session(db, session=session, user_id=current_user.id)
+        await db.refresh(session)
         return self._session_item(session, 0, None, 0)
 
     async def _human_decision_required_chat_response(
@@ -1060,7 +1267,7 @@ class AgentService:
         *,
         confirmation_id: uuid.UUID,
         current_user: User,
-    ) -> tuple[AgentConfirmation, AgentToolExecuteResponse]:
+    ) -> tuple[AgentConfirmation, AgentToolExecuteResponse | None]:
         confirmation = await self.repo.get_confirmation_for_update(db, confirmation_id)
         if confirmation is None:
             raise HTTPException(
@@ -1076,11 +1283,12 @@ class AgentService:
                 status.HTTP_409_CONFLICT, "Agent confirmation is not pending"
             )
         if confirmation.expires_at <= datetime.now(UTC):
-            confirmation.status = "expired"
-            await db.flush()
-            raise HTTPException(
-                status.HTTP_409_CONFLICT, "Agent confirmation has expired"
+            confirmation = await self.repo.expire_confirmation(
+                db,
+                confirmation,
+                user_id=current_user.id,
             )
+            return confirmation, None
 
         payload = confirmation.request_payload
         request = AgentToolExecuteRequest.model_validate(payload)
@@ -1841,6 +2049,14 @@ class AgentService:
                 run = await self._refetch_workflow_run(db, run)
                 return {"run": self._workflow_run_out(run).model_dump(mode="json")}
             acting_user = await db.get(User, run.user_id) if run.user_id else None
+            if acting_user is None:
+                run.status = "failed"
+                run.error_message = "Workflow owner is unavailable"
+                run.finished_at = datetime.now(UTC)
+                await self._sync_workflow_last_run(workflow, run)
+                await db.flush()
+                run = await self._refetch_workflow_run(db, run)
+                return {"run": self._workflow_run_out(run).model_dump(mode="json")}
             try:
                 await self.access_scope_service.require_tool_access(
                     db,

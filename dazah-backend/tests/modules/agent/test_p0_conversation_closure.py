@@ -54,6 +54,16 @@ async def test_user_can_restore_own_session_with_confirmation_state(
         request_payload={"body": {"deviation_id": "DEV-1"}},
         expires_at=datetime.now(UTC) + timedelta(hours=1),
     )
+    expired_confirmation = await service.repo.create_confirmation(
+        db_session,
+        session_id=session.id,
+        user_id=user.id,
+        operation="identity.deliver_feishu_message",
+        summary="已过期的飞书投递",
+        risk_level="medium",
+        request_payload={"body": {"message": "不会发送"}},
+        expires_at=datetime.now(UTC) - timedelta(seconds=1),
+    )
 
     detail = await service.get_session_detail(
         db_session, session_id=session.id, current_user=user
@@ -62,6 +72,8 @@ async def test_user_can_restore_own_session_with_confirmation_state(
     assert [message.role for message in detail.messages] == ["user", "assistant"]
     assert detail.confirmations[0].id == confirmation.id
     assert detail.confirmations[0].status == "pending"
+    assert detail.confirmations[1].id == expired_confirmation.id
+    assert detail.confirmations[1].status == "expired"
     assert detail.session.pending_confirmation_count == 1
 
     page = await service.list_sessions(

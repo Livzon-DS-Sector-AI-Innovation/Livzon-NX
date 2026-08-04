@@ -4,13 +4,8 @@ import { useEffect, useRef, useState } from 'react'
 
 import type { LocalLoginMode } from '@/lib/local-auth'
 
-import {
-  IdentityBubble,
-  type IdentityBubbleState,
-} from './IdentityBubble'
-import styles from './IdentityBubble.module.css'
-import { LivzonCircuitField } from './LivzonCircuitField'
-import { LoginAtmosphere } from './LoginAtmosphere'
+import { AuthLayout } from './AuthLayout'
+import styles from './AuthLayout.module.css'
 
 const errorMessages: Record<string, string> = {
   feishu_not_configured: '飞书应用凭证未配置，请联系系统管理员。',
@@ -32,10 +27,6 @@ interface LoginPanelProps {
   localLoginMode: LocalLoginMode
 }
 
-function BrandMark() {
-  return <span aria-hidden="true" className={styles.brandMark} />
-}
-
 export function LoginPanel({
   error,
   nextPath,
@@ -46,13 +37,10 @@ export function LoginPanel({
     error?.startsWith('local_') || error === 'missing_credentials',
   )
   const [showLocalLogin, setShowLocalLogin] = useState(localError)
-  const [bubbleState, setBubbleState] = useState<IdentityBubbleState>(
-    error && !localError ? 'error' : 'idle',
-  )
+  const [isRedirecting, setIsRedirecting] = useState(false)
 
-  const message = error ? errorMessages[error] || '登录失败，请重新尝试。' : null
-  const completionPath = `/login/complete?next=${encodeURIComponent(nextPath)}`
-  const feishuHref = `/auth/login?next=${encodeURIComponent(completionPath)}`
+  const message = getLoginErrorMessage(error)
+  const feishuHref = buildFeishuLoginHref(nextPath)
   const localLoginAvailable = localLoginMode !== 'disabled'
   const emergencyOnly = localLoginMode === 'admin_only'
 
@@ -64,118 +52,100 @@ export function LoginPanel({
   )
 
   function startFeishuLogin() {
-    if (bubbleState === 'launching') return
-    setBubbleState('launching')
+    if (isRedirecting) return
+    setIsRedirecting(true)
     redirectTimer.current = setTimeout(() => {
       window.location.assign(feishuHref)
     }, 240)
   }
 
-  const statusText =
-    bubbleState === 'launching'
-      ? 'CONNECTING TO FEISHU IDENTITY'
-      : bubbleState === 'error'
-        ? 'RETRY IDENTITY CHECKPOINT'
-        : 'FEISHU IDENTITY CHECKPOINT'
-
   return (
-    <main className={styles.loginExperience}>
-      <LoginAtmosphere />
-      <header className={styles.loginHeader}>
-        <div className={styles.brand}>
-          <BrandMark />
-          <div>
-            <p className={styles.brandName}>LIVZON</p>
-            <p className={styles.companyName}>
-              ACTIVE PHARMACEUTICAL INGREDIENT
-              <br />
-              FACTORY MANAGEMENT PLATFORM
-            </p>
-          </div>
+    <AuthLayout>
+      <div className={styles.panelHeader}>
+        <p className={styles.panelEyebrow}>企业身份认证</p>
+        <h2>欢迎登录</h2>
+        <p>使用丽珠企业飞书账号验证身份并进入管理平台。</p>
+      </div>
+
+      {message && (
+        <div role="alert" className={styles.errorNotice}>
+          {message}
         </div>
-        <span className={styles.internalFlag}>
-          <strong>INTERNAL SYSTEM</strong>
-          <small>STATUS — OPERATIONAL</small>
-        </span>
-      </header>
+      )}
 
-      <section className={styles.loginStage} aria-label="身份认证">
-        <LivzonCircuitField />
-        <div className={styles.stageContent}>
-          <IdentityBubble
-            state={bubbleState}
-            statusText={statusText}
-            detailText={
-              bubbleState === 'launching'
-                ? 'OPENING LIVZON ENTERPRISE AUTHORIZATION'
-                : 'CLICK ANYWHERE ON LIVZON TO AUTHENTICATE'
-            }
-            onActivate={startFeishuLogin}
-            disabled={bubbleState === 'launching'}
-          />
+      <button
+        type="button"
+        className={styles.primaryButton}
+        onClick={startFeishuLogin}
+        disabled={isRedirecting}
+        aria-busy={isRedirecting}
+      >
+        {isRedirecting && (
+          <span className={styles.buttonSpinner} aria-hidden="true" />
+        )}
+        {isRedirecting ? '正在打开飞书认证…' : '使用飞书企业账号登录'}
+      </button>
+      <p className={styles.securityHint}>企业身份认证通道运行正常</p>
 
-          {message && (
-            <div role="alert" className={styles.errorNotice}>
-              {message}
-            </div>
-          )}
+      {localLoginAvailable && (
+        <div className={styles.emergencyArea}>
+          <button
+            type="button"
+            className={styles.emergencyToggle}
+            aria-expanded={showLocalLogin}
+            aria-controls="local-login-form"
+            onClick={() => setShowLocalLogin((value) => !value)}
+          >
+            <span className={styles.toggleChevron} aria-hidden="true">
+              ▶
+            </span>
+            {emergencyOnly ? '管理员应急登录' : '本地账号登录'}
+          </button>
 
-          {localLoginAvailable && (
-            <div className={styles.emergencyArea}>
-              <button
-                type="button"
-                className={styles.emergencyToggle}
-                aria-expanded={showLocalLogin}
-                aria-controls="local-login-form"
-                onClick={() => setShowLocalLogin((value) => !value)}
-              >
-                {showLocalLogin
-                  ? 'CLOSE RECOVERY ACCESS'
-                  : emergencyOnly
-                    ? 'ADMIN RECOVERY ACCESS'
-                    : 'LOCAL RECOVERY ACCESS'}
-              </button>
-
-              {showLocalLogin && (
-                <form
-                  id="local-login-form"
-                  action="/auth/local-login"
-                  method="post"
-                  className={styles.localForm}
-                >
-                  <input type="hidden" name="next" value={nextPath} />
-                  {emergencyOnly && (
-                    <p className={styles.localHint}>
-                      仅用于飞书认证故障期间的系统恢复，普通本地账号无法登录。
-                    </p>
-                  )}
-                  <label className={styles.field}>
-                    <span>账号</span>
-                    <input name="username" autoComplete="username" required />
-                  </label>
-                  <label className={styles.field}>
-                    <span>密码</span>
-                    <input
-                      name="password"
-                      type="password"
-                      autoComplete="current-password"
-                      required
-                    />
-                  </label>
-                  <button type="submit" className={styles.localSubmit}>
-                    验证并进入系统
-                  </button>
-                </form>
+          {showLocalLogin && (
+            <form
+              id="local-login-form"
+              action="/auth/local-login"
+              method="post"
+              className={styles.localForm}
+            >
+              <input type="hidden" name="next" value={nextPath} />
+              {emergencyOnly && (
+                <p className={styles.localHint}>
+                  仅用于飞书认证故障期间的系统恢复，普通本地账号无法登录。
+                </p>
               )}
-            </div>
+              <label className={styles.field}>
+                <span>账号</span>
+                <input name="username" autoComplete="username" required />
+              </label>
+              <label className={styles.field}>
+                <span>密码</span>
+                <input
+                  name="password"
+                  type="password"
+                  autoComplete="current-password"
+                  required
+                />
+              </label>
+              <button type="submit" className={styles.localSubmit}>
+                验证并进入系统
+              </button>
+            </form>
           )}
         </div>
-      </section>
-
-      <footer className={styles.loginFooter}>
-        <span>LOG STREAM　——　ONLINE</span>
-        <span>TIME SYNC　——　UTC+08:00</span>
-      </footer>
-    </main>
+      )}
+    </AuthLayout>
   )
+}
+
+export function buildFeishuLoginHref(nextPath: string): string {
+  const completionPath = `/login/complete?next=${encodeURIComponent(nextPath)}`
+  return `/auth/login?next=${encodeURIComponent(completionPath)}`
+}
+
+export function getLoginErrorMessage(error?: string): string | null {
+  return error
+    ? errorMessages[error] || '登录失败，请重新尝试。'
+    : null
 }

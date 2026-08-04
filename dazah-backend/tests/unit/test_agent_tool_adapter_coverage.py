@@ -404,4 +404,18 @@ async def test_identity_agent_tool_adapters_cover_tree_search_and_delivery(
     }
     request = post.await_args.kwargs["json"]
     assert request["chat_id"] == "ou_001"
+    assert "card" in request
+    assert "content" not in request
     assert request["metadata"]["recipient_user_id"] == str(user_id)
+
+    text_delivery = identity_tools.FeishuDeliveryInput(
+        recipient_user_ids=[user_id],
+        message_form="text",
+        title="文本标题",
+        markdown="纯文本正文",
+        idempotency_key="adapter-text-delivery",
+    )
+    await identity_tools.deliver_feishu_message(context, text_delivery)
+    text_request = post.await_args.kwargs["json"]
+    assert text_request["content"] == "纯文本正文"
+    assert "card" not in text_request

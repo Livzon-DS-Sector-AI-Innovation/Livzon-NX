@@ -115,6 +115,7 @@ const AGENT_BACKEND_V2_EVENT_TYPES = new Set([
 ])
 
 interface AgentBackendV2Event {
+  protocol_version: "2.0"
   event_id: string
   trace_id: string
   run_id: string
@@ -139,7 +140,8 @@ function parseAgentBackendV2Event(
   }
   const event = candidate as Partial<AgentBackendV2Event>
   if (
-    typeof event.event_id !== "string"
+    event.protocol_version !== "2.0"
+    || typeof event.event_id !== "string"
     || typeof event.trace_id !== "string"
     || typeof event.run_id !== "string"
     || typeof event.sequence !== "number"
@@ -211,6 +213,10 @@ export async function streamAgentMessage(
   handlers: {
     onStart?: (data: { session_id?: string }) => void
     onDelta?: (text: string) => void
+    onProgress?: (event: {
+      type: "thinking" | "capability_search" | "tool_call" | "tool_result" | "confirmation" | "delivery"
+      data: Record<string, unknown>
+    }) => void
     onDone?: (data: AgentChatData) => void
     onPing?: () => void
   },
@@ -271,6 +277,15 @@ export async function streamAgentMessage(
       handlers.onStart?.({ session_id: typeof data.session_id === "string" ? data.session_id : undefined })
     } else if (event === "text_delta") {
       handlers.onDelta?.(typeof data.text === "string" ? data.text : "")
+    } else if (
+      event === "thinking"
+      || event === "capability_search"
+      || event === "tool_call"
+      || event === "tool_result"
+      || event === "confirmation"
+      || event === "delivery"
+    ) {
+      handlers.onProgress?.({ type: event, data })
     } else if (event === "finished") {
       terminalEventReceived = true
       handlers.onDone?.(data as unknown as AgentChatData)

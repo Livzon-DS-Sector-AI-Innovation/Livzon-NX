@@ -8,6 +8,7 @@ from fastapi import HTTPException, status
 from app.modules.agent import api
 from app.modules.agent.schemas import (
     AgentConfirmationResolveRequest,
+    AgentToolCatalogEntry,
     AgentToolControlRequest,
     AgentToolEnabledUpdate,
     AgentToolSearchRequest,
@@ -39,6 +40,7 @@ class FakeAgentService:
         self.executed_request = None
         self.cancelled = False
         self.confirmed = False
+        self.expired = False
 
     async def execute_tool(self, db, *, request):
         self.executed_request = request
@@ -50,6 +52,8 @@ class FakeAgentService:
 
     async def execute_confirmation(self, db, **kwargs):
         self.confirmed = True
+        if self.expired:
+            return SimpleNamespace(id=kwargs["confirmation_id"]), None
         return (
             SimpleNamespace(id=kwargs["confirmation_id"]),
             Dumpable(ok=True, operation="agent.test"),
@@ -65,6 +69,24 @@ class FakeCatalogService:
 
     async def list_all(self, db):
         return [Dumpable(operation="agent.test")]
+
+    async def list_page(self, db, **kwargs):
+        return [
+            AgentToolCatalogEntry(
+                operation="agent.test",
+                module="agent",
+                version="1",
+                summary="test",
+                status="active",
+                risk_level="low",
+                write=False,
+                confirmation_required=False,
+                input_schema={},
+                output_schema={},
+                timeout_seconds=30,
+                idempotent=True,
+            )
+        ], 1
 
     async def search(self, db, request):
         return [Dumpable(operation="agent.test")]
@@ -125,6 +147,42 @@ async def test_control_plane_tool_routes_delegate_and_enforce_admin(
     assert exc.value.status_code == status.HTTP_403_FORBIDDEN
     listed = await api.list_control_plane_tools(db, admin)
     assert _response_payload(listed)["data"] == [{"operation": "agent.test"}]
+
+    listed_page = await api.list_control_plane_tools_page(
+        page=1,
+        page_size=20,
+        keyword=None,
+        module=None,
+        status_value=None,
+        risk_level=None,
+        write=None,
+        db=db,
+        current_user=admin,
+    )
+    assert _response_payload(listed_page)["data"]["total"] == 1
+    assert (
+        _response_payload(listed_page)["data"]["items"][0]["operation"]
+        == "agent.test"
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await api.list_control_plane_confirmations(
+            page=1,
+            page_size=20,
+            status_value=None,
+            user_id=None,
+            db=db,
+            current_user=regular,
+        )
+    assert exc.value.status_code == status.HTTP_403_FORBIDDEN
+
+    with pytest.raises(HTTPException) as exc:
+        await api.get_control_plane_trace(
+            trace_id=uuid.uuid4(),
+            db=db,
+            current_user=regular,
+        )
+    assert exc.value.status_code == status.HTTP_403_FORBIDDEN
 
     searched = await api.search_tools(
         AgentToolSearchRequest.model_validate(
@@ -228,3 +286,28 @@ async def test_gateway_confirmation_resolution_delegates_choice(
     else:
         assert service.confirmed
         assert payload["result"]["ok"] is True
+
+
+@pytest.mark.anyio
+async def test_gateway_expired_confirmation_returns_conflict_response(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user_id = uuid.uuid4()
+    user = SimpleNamespace(id=user_id, is_deleted=False, status="active")
+    service = FakeAgentService()
+    service.expired = True
+    monkeypatch.setattr(api, "require_service_token", lambda *args: None)
+    monkeypatch.setattr(api, "AgentService", lambda settings: service)
+
+    response = await api.resolve_confirmation_from_gateway(
+        uuid.uuid4(),
+        AgentConfirmationResolveRequest.model_validate(
+            {"subject": _subject(user_id), "choice": "allow"}
+        ),
+        FakeDb(user),
+        "Bearer token",
+        SimpleNamespace(AGENT_TOOL_TOKEN="token"),
+    )
+
+    assert response.status_code == status.HTTP_409_CONFLICT
+    assert _response_payload(response)["message"] == "Agent confirmation has expired"

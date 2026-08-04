@@ -240,6 +240,10 @@ def test_quality_tools_are_exposed_to_workflow_capabilities() -> None:
 
     assert by_operation["quality.list_deviations"]["workflow_allowed"] is True
     assert by_operation["quality.list_deviations"]["write"] is False
+    output_schema = tool_registry.require("quality.list_deviations").output_schema
+    assert output_schema["type"] == "object"
+    assert set(output_schema["properties"]) == {"items", "total", "page", "page_size"}
+    assert output_schema["properties"]["items"]["type"] == "array"
     assert by_operation["quality.create_deviation"]["workflow_allowed"] is True
     assert by_operation["quality.create_deviation"]["write"] is True
     assert by_operation["quality.create_deviation"]["risk_level"] == "medium"

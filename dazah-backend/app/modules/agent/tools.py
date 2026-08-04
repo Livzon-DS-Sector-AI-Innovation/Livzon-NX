@@ -3,10 +3,10 @@ import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from typing import Any, Literal, TypeVar, cast
+from typing import Any, Literal, TypeVar, cast, get_type_hints
 
 from fastapi import HTTPException, status
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, TypeAdapter, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.correlation import normalize_correlation_id
@@ -130,6 +130,18 @@ class ToolRegistry:
 tool_registry = ToolRegistry()
 
 
+def _inferred_output_schema(handler: Callable[..., Any]) -> dict[str, Any]:
+    """Build a non-empty baseline contract from the handler return annotation."""
+    try:
+        annotation = get_type_hints(handler).get("return", Any)
+        schema = TypeAdapter(annotation).json_schema()
+    except (NameError, TypeError, ValueError):
+        schema = {}
+    if not schema:
+        schema = {"type": "object", "additionalProperties": True}
+    return {"x-dazah-schema-source": "return_annotation", **schema}
+
+
 def agent_tool(
     *,
     name: str,
@@ -168,6 +180,9 @@ def agent_tool(
             inferred_permission_key = (
                 "module.agent.execute" if write else "module.agent.read"
             )
+        resolved_output_schema = (
+            dict(output_schema) if output_schema else _inferred_output_schema(func)
+        )
         spec = AgentToolSpec(
             name=name,
             summary=summary,
@@ -194,7 +209,7 @@ def agent_tool(
             idempotent=idempotent,
             supports_dry_run=supports_dry_run,
             timeout_seconds=timeout_seconds,
-            output_schema=output_schema or {},
+            output_schema=resolved_output_schema,
             events_emitted=tuple(events_emitted),
             deprecated_at=deprecated_at,
             replacement_operation=replacement_operation,
@@ -240,6 +255,7 @@ class ToolExecutor:
         )
 
         try:
+            await self._check_catalog_enabled(db, operation=request.operation)
             if spec.human_decision_required:
                 result = self._policy_refusal(request.operation)
                 await self.repo.finish_tool_call(
@@ -405,6 +421,7 @@ class ToolExecutor:
         agent_service: Any = None,
     ) -> AgentToolExecuteResponse:
         spec = self.registry.require(request.operation)
+        await self._check_catalog_enabled(db, operation=request.operation)
         if not spec.write:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
@@ -446,6 +463,20 @@ class ToolExecutor:
             response_payload=result.model_dump(mode="json"),
         )
         return result
+
+    async def _check_catalog_enabled(
+        self,
+        db: AsyncSession,
+        *,
+        operation: str,
+    ) -> None:
+        # Isolated registries and lightweight unit-test DB doubles do not
+        # participate in the platform's synchronized administration catalog.
+        if self.registry is not tool_registry or not isinstance(db, AsyncSession):
+            return
+        from .catalog import ToolCatalogService
+
+        await ToolCatalogService().require_enabled(db, operation=operation)
 
     def _validate_input(
         self,

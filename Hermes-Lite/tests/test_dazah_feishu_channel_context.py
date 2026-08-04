@@ -15,6 +15,7 @@ from tools.dazah_platform import (
 
 def _payload(*, chat_type: str = "dm") -> service.AgentBackendV2Request:
     return service.AgentBackendV2Request(
+        protocol_version="2.0",
         run_id=uuid.uuid4(),
         trace_id=uuid.uuid4(),
         session_id="feishu:oc_test:ou_test",
@@ -53,6 +54,14 @@ def test_feishu_group_conversation_is_identified_as_group() -> None:
 
     assert "飞书群聊会话" in instruction
     assert "chat_type=group" in instruction
+
+
+def test_persistent_feishu_session_is_forwarded_to_dazah_tools() -> None:
+    payload = _payload()
+    persistent_id = uuid.uuid4()
+    payload.session_id = f"feishu:{persistent_id}"
+
+    assert payload.context["platform_session_id"] == str(persistent_id)
 
 
 def test_untrusted_channel_without_feishu_session_prefix_is_not_feishu() -> None:
@@ -215,7 +224,7 @@ def test_agent_receives_feishu_platform_and_chat_type(monkeypatch) -> None:
     agent, result = service._run_agent_conversation(_payload(chat_type="p2p"))
 
     assert isinstance(agent, FakeAgent)
-    assert result == {"final_response": "ok"}
+    assert result == {"final_response": "ok", "tool_trace": []}
     assert captured["init"]["platform"] == "feishu"
     assert captured["init"]["chat_type"] == "dm"
     assert captured["request_context"]["feishu_sender_id"] == "ou_test"
@@ -224,6 +233,55 @@ def test_agent_receives_feishu_platform_and_chat_type(monkeypatch) -> None:
     assert "必须使用 lark_cli" in captured["run"]["system_message"]
     assert service.dazah_request_context.get({}) == {}
     assert current_dazah_request_context() == {}
+
+
+def test_agent_replaces_untrusted_session_tool_trace_with_current_run_trace(
+    monkeypatch,
+) -> None:
+    class FakeAgent:
+        def __init__(self, **kwargs: Any) -> None:
+            pass
+
+        def run_conversation(self, message: str, **kwargs: Any) -> dict[str, Any]:
+            return {
+                "final_response": "数据来源：Dazah 平台 quality.list_deviations 操作",
+                "tool_trace": [
+                    {"operation": "quality.list_deviations", "ok": True}
+                ],
+            }
+
+    monkeypatch.setattr(service, "DazahAIAgent", FakeAgent)
+
+    _, result = service._run_agent_conversation(_payload(chat_type="p2p"))
+
+    assert result["tool_trace"] == []
+    assert service._verified_agent_message(
+        result["final_response"],
+        [],
+        result["tool_trace"],
+    ).startswith("没有取得 Dazah 平台本轮真实工具查询结果")
+
+
+def test_explicit_self_delivery_binds_forced_operation_to_trusted_task_context(
+    monkeypatch,
+) -> None:
+    captured: dict[str, Any] = {}
+
+    class FakeAgent:
+        def __init__(self, **kwargs: Any) -> None:
+            pass
+
+        def run_conversation(self, message: str, **kwargs: Any) -> dict[str, Any]:
+            captured.update(current_dazah_request_context(kwargs["task_id"]))
+            return {"final_response": "ok"}
+
+    monkeypatch.setattr(service, "DazahAIAgent", FakeAgent)
+    payload = _payload()
+    payload.message = "请给我发送一条飞书消息"
+
+    service._run_agent_conversation(payload)
+
+    assert captured["forced_operation"] == "identity.deliver_feishu_message"
 
 
 def test_agent_prompt_places_feishu_resource_route_after_progressive_skill(
