@@ -1046,3 +1046,12 @@ export default function FeishuSettingsClient() {
     </div>
   )
 }
+
+export {
+  AuthorizationConfirmation,
+  FeishuAccess,
+  IdentityAdmission,
+  Overview,
+  ToolGovernance,
+  TraceDelivery,
+}
