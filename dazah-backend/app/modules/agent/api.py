@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from app.core.config import Settings, get_settings
 from app.core.database import get_db
@@ -1067,11 +1068,23 @@ async def get_control_plane_runtime_overview(
         )
         or 0
     )
+    recovered_call = aliased(AgentToolCall)
+    has_later_success = (
+        select(recovered_call.id)
+        .where(
+            recovered_call.operation == AgentToolCall.operation,
+            recovered_call.status == "succeeded",
+            recovered_call.created_at > AgentToolCall.created_at,
+            recovered_call.is_deleted.is_(False),
+        )
+        .exists()
+    )
     latest_failed_call = await db.scalar(
         select(AgentToolCall)
         .where(
             AgentToolCall.status == "failed",
             AgentToolCall.is_deleted.is_(False),
+            ~has_later_success,
         )
         .order_by(AgentToolCall.created_at.desc())
         .limit(1)

@@ -39,7 +39,7 @@ export default function SettingsAdminClient() {
           },
           {
             key: 'feishu',
-            label: 'Livzon Agent 管理',
+            label: 'Livzon Agent管理',
             children: <FeishuSettingsClient />,
           },
           {
