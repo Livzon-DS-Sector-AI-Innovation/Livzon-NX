@@ -24,6 +24,7 @@ AgentBackendEventType = Literal[
     "finished",
     "ping",
 ]
+AGENT_BACKEND_PROTOCOL_VERSION: Literal["2.0"] = "2.0"
 
 
 class AgentTrustedSubject(BaseModel):
@@ -48,8 +49,20 @@ class AgentBackendSource(BaseModel):
     message_id: str | None = Field(default=None, max_length=255)
 
 
+class AgentBackendAttachment(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    filename: str = Field(min_length=1, max_length=255)
+    content_type: str = Field(min_length=1, max_length=120)
+    size: int = Field(gt=0, le=10 * 1024 * 1024)
+    kind: Literal["image", "document"]
+    data_base64: str | None = Field(default=None, max_length=14 * 1024 * 1024)
+    text: str | None = Field(default=None, max_length=50_000)
+    truncated: bool = False
+
+
 class AgentBackendV2Request(BaseModel):
     model_config = ConfigDict(extra="forbid")
+    protocol_version: Literal["2.0"] = AGENT_BACKEND_PROTOCOL_VERSION
     run_id: uuid.UUID = Field(default_factory=uuid.uuid4)
     trace_id: uuid.UUID = Field(default_factory=uuid.uuid4)
     session_id: str = Field(min_length=1, max_length=512)
@@ -57,12 +70,15 @@ class AgentBackendV2Request(BaseModel):
     source: AgentBackendSource
     message: str = Field(min_length=1, max_length=8000)
     messages: list[dict[str, Any]] = Field(default_factory=list)
-    attachments: list["AgentAttachmentIn"] = Field(default_factory=list, max_length=5)
+    attachments: list[AgentBackendAttachment] = Field(
+        default_factory=list, max_length=5
+    )
     client_capabilities: list[str] = Field(default_factory=list)
 
 
 class AgentBackendV2Event(BaseModel):
     model_config = ConfigDict(extra="forbid")
+    protocol_version: Literal["2.0"] = AGENT_BACKEND_PROTOCOL_VERSION
     event_id: uuid.UUID = Field(default_factory=uuid.uuid4)
     trace_id: uuid.UUID
     run_id: uuid.UUID
@@ -84,6 +100,50 @@ class AgentChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=8000)
     context: dict[str, Any] = Field(default_factory=dict)
     attachments: list[AgentAttachmentIn] = Field(default_factory=list, max_length=5)
+
+
+class FeishuConversationAttachment(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    filename: str = Field(min_length=1, max_length=255)
+    content_type: str = Field(min_length=1, max_length=120)
+    kind: Literal["image", "audio", "video", "document"]
+
+
+class FeishuConversationPrepareRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    subject: AgentTrustedSubject
+    peer_id: str = Field(min_length=1, max_length=512)
+    external_message_id: str = Field(min_length=1, max_length=255)
+    message: str = Field(min_length=1, max_length=8000)
+    trace_id: uuid.UUID
+    run_id: uuid.UUID
+    source: AgentBackendSource
+    attachments: list[FeishuConversationAttachment] = Field(
+        default_factory=list, max_length=5
+    )
+
+
+class FeishuConversationPrepareResponse(BaseModel):
+    session_id: uuid.UUID
+    messages: list[dict[str, str]] = Field(default_factory=list)
+    duplicate: bool = False
+    response_text: str | None = None
+
+
+class FeishuConversationCompleteRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    subject: AgentTrustedSubject
+    external_message_id: str = Field(min_length=1, max_length=255)
+    trace_id: uuid.UUID
+    run_id: uuid.UUID
+    assistant_message: str = Field(min_length=1, max_length=100_000)
+    tool_trace: list[dict[str, Any]] = Field(default_factory=list, max_length=100)
+
+
+class FeishuConversationCompleteResponse(BaseModel):
+    session_id: uuid.UUID
+    message_id: uuid.UUID
+    duplicate: bool = False
 
 
 class AgentMessageOut(BaseModel):
@@ -260,6 +320,13 @@ class AgentToolCatalogEntry(BaseModel):
     output_schema: dict[str, Any] = Field(default_factory=dict)
     timeout_seconds: int
     idempotent: bool
+
+
+class AgentToolCatalogPage(BaseModel):
+    items: list[AgentToolCatalogEntry] = Field(default_factory=list)
+    page: int
+    page_size: int
+    total: int
 
 
 class AgentToolEnabledUpdate(BaseModel):

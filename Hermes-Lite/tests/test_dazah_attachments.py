@@ -1,5 +1,8 @@
-from pathlib import Path
 import uuid
+from pathlib import Path
+
+from pypdf import PdfWriter
+from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
 
 from services.dazah_agent_service import (
     AgentBackendSource,
@@ -12,6 +15,7 @@ from services.dazah_agent_service import (
 
 def _payload(**values) -> AgentBackendV2Request:
     return AgentBackendV2Request(
+        protocol_version="2.0",
         run_id=uuid.uuid4(),
         trace_id=uuid.uuid4(),
         session_id="web:session-1",
@@ -49,6 +53,225 @@ def test_document_attachment_is_added_as_user_content() -> None:
     assert isinstance(content, str)
     assert "记录.txt" in content
     assert "批次状态正常" in content
+
+
+def test_gateway_cached_pdf_text_is_extracted_without_exposing_path(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+    pdf_path = tmp_path / "cache" / "documents" / "示例文档.pdf"
+    pdf_path.parent.mkdir(parents=True)
+    writer = PdfWriter()
+    page = writer.add_blank_page(width=300, height=300)
+    font = DictionaryObject(
+        {
+            NameObject("/Type"): NameObject("/Font"),
+            NameObject("/Subtype"): NameObject("/Type1"),
+            NameObject("/BaseFont"): NameObject("/Helvetica"),
+        }
+    )
+    page[NameObject("/Resources")] = DictionaryObject(
+        {NameObject("/Font"): DictionaryObject({NameObject("/F1"): writer._add_object(font)})}
+    )
+    stream = DecodedStreamObject()
+    stream.set_data(b"BT /F1 12 Tf 40 200 Td (PDF acceptance text) Tj ET")
+    page[NameObject("/Contents")] = writer._add_object(stream)
+    with pdf_path.open("wb") as output:
+        writer.write(output)
+    payload = _payload(
+        message="请总结",
+        attachments=[
+            {
+                "filename": "示例文档.pdf",
+                "content_type": "application/pdf",
+                "kind": "document",
+                "local_path": str(pdf_path),
+            }
+        ],
+    )
+
+    content = _user_message_with_attachments(payload)
+
+    assert isinstance(content, str)
+    assert "PDF acceptance text" in content
+    assert str(pdf_path) not in content
+
+
+def test_gateway_cached_csv_supports_chinese_encoding_without_exposing_path(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+    csv_path = tmp_path / "cache" / "documents" / "批次.csv"
+    csv_path.parent.mkdir(parents=True)
+    csv_path.write_bytes("批次,状态\nB-001,合格\n".encode("gb18030"))
+    payload = _payload(
+        message="读取表格",
+        attachments=[
+            {
+                "filename": "批次.csv",
+                "content_type": "text/csv",
+                "kind": "document",
+                "local_path": str(csv_path),
+            }
+        ],
+    )
+
+    content = _user_message_with_attachments(payload)
+
+    assert isinstance(content, str)
+    assert "[CSV 数据]" in content
+    assert "批次\t状态" in content
+    assert "B-001\t合格" in content
+    assert str(csv_path) not in content
+
+
+def test_gateway_cached_xlsx_extracts_multiple_sheets_without_exposing_path(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    from openpyxl import Workbook
+
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+    xlsx_path = tmp_path / "cache" / "documents" / "批次.xlsx"
+    xlsx_path.parent.mkdir(parents=True)
+    workbook = Workbook()
+    active = workbook.active
+    active.title = "批次"
+    active.append(["批次号", "状态"])
+    active.append(["B-001", "合格"])
+    summary = workbook.create_sheet("汇总")
+    summary.append(["总数", 1])
+    workbook.save(xlsx_path)
+    payload = _payload(
+        message="读取工作簿",
+        attachments=[
+            {
+                "filename": "批次.xlsx",
+                "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                "kind": "document",
+                "local_path": str(xlsx_path),
+            }
+        ],
+    )
+
+    content = _user_message_with_attachments(payload)
+
+    assert isinstance(content, str)
+    assert "[工作表: 批次]" in content
+    assert "批次号\t状态" in content
+    assert "B-001\t合格" in content
+    assert "[工作表: 汇总]" in content
+    assert "总数\t1" in content
+    assert str(xlsx_path) not in content
+
+
+def test_gateway_cached_xls_uses_legacy_workbook_reader(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    import xlrd
+
+    class FakeSheet:
+        nrows = 2
+        ncols = 2
+
+        @staticmethod
+        def cell_value(row_index: int, column_index: int) -> str:
+            return (("批次号", "状态"), ("B-002", "待检"))[row_index][column_index]
+
+    class FakeWorkbook:
+        @staticmethod
+        def sheet_names() -> list[str]:
+            return ["旧版数据"]
+
+        @staticmethod
+        def sheet_by_name(_name: str) -> FakeSheet:
+            return FakeSheet()
+
+        @staticmethod
+        def release_resources() -> None:
+            return None
+
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+    xls_path = tmp_path / "cache" / "documents" / "旧版批次.xls"
+    xls_path.parent.mkdir(parents=True)
+    xls_path.write_bytes(b"legacy workbook")
+    monkeypatch.setattr(xlrd, "open_workbook", lambda *_args, **_kwargs: FakeWorkbook())
+    payload = _payload(
+        message="读取旧版工作簿",
+        attachments=[
+            {
+                "filename": "旧版批次.xls",
+                "content_type": "application/vnd.ms-excel",
+                "kind": "document",
+                "local_path": str(xls_path),
+            }
+        ],
+    )
+
+    content = _user_message_with_attachments(payload)
+
+    assert isinstance(content, str)
+    assert "[工作表: 旧版数据]" in content
+    assert "批次号\t状态" in content
+    assert "B-002\t待检" in content
+    assert str(xls_path) not in content
+
+
+def test_unextractable_cached_document_does_not_expose_path(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+    document_path = tmp_path / "cache" / "documents" / "扫描件.bin"
+    document_path.parent.mkdir(parents=True)
+    document_path.write_bytes(b"binary")
+    payload = _payload(
+        message="请总结",
+        attachments=[
+            {
+                "filename": "扫描件.bin",
+                "content_type": "application/octet-stream",
+                "kind": "document",
+                "local_path": str(document_path),
+            }
+        ],
+    )
+
+    content = _user_message_with_attachments(payload)
+
+    assert isinstance(content, str)
+    assert "无法提取文本内容" in content
+    assert str(document_path) not in content
+
+
+def test_cached_audio_does_not_expose_path(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+    audio_path = tmp_path / "cache" / "audio" / "语音.opus"
+    audio_path.parent.mkdir(parents=True)
+    audio_path.write_bytes(b"audio")
+    payload = _payload(
+        message="请转写",
+        attachments=[
+            {
+                "filename": "语音.opus",
+                "content_type": "audio/opus",
+                "kind": "audio",
+                "local_path": str(audio_path),
+            }
+        ],
+    )
+
+    content = _user_message_with_attachments(payload)
+
+    assert isinstance(content, str)
+    assert "当前未启用内容转写" in content
+    assert str(audio_path) not in content
 
 
 def test_image_attachment_builds_multimodal_user_content() -> None:

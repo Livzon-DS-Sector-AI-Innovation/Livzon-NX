@@ -65,6 +65,19 @@ def test_v2_event_requires_sequence_and_trace_envelope() -> None:
 
     assert event.sequence == 1
     assert event.event_id
+    assert event.protocol_version == "2.0"
+
+    with pytest.raises(ValidationError):
+        AgentBackendV2Event.model_validate(
+            {
+                "protocol_version": "1.0",
+                "trace_id": str(uuid.uuid4()),
+                "run_id": str(uuid.uuid4()),
+                "sequence": 1,
+                "type": "accepted",
+                "data": {},
+            }
+        )
 
 
 def test_module_registry_declares_provider_modules() -> None:

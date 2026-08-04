@@ -1,13 +1,16 @@
 from __future__ import annotations
 
-import base64
 import asyncio
+import base64
+import hashlib
+import hmac
 import os
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
 from cryptography.fernet import Fernet
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 
@@ -159,6 +162,92 @@ def test_internal_delivery_api_requires_auth_and_returns_status(
     )
     assert status_response.status_code == 200
     assert status_response.json()["status"] == "pending"
+
+
+@pytest.mark.anyio
+async def test_feishu_config_migrates_legacy_runtime_version(
+    runtime,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from services import dazah_agent_service as service
+
+    token = "internal-test-token"
+    secret = "new-secret"
+    source_version = 3
+    runtime_version = 1_784_884_127_348_647_672
+    signed = f"cli_test\ndefault\ntrue\n{source_version}\n{secret}".encode()
+    payload = service.FeishuCredentialConfig(
+        app_id="cli_test",
+        app_secret=secret,
+        tenant_id="default",
+        gateway_enabled=True,
+        version=source_version,
+        signature=hmac.new(token.encode(), signed, hashlib.sha256).hexdigest(),
+    )
+    staged: list[int] = []
+    saved: list[int] = []
+
+    monkeypatch.setenv("HERMES_INTERNAL_TOKEN", token)
+    monkeypatch.setattr(
+        service,
+        "load_credentials",
+        lambda: ("cli_old", "old-secret", runtime_version),
+    )
+    monkeypatch.setattr(
+        service,
+        "load_gateway_settings",
+        lambda: {"tenant_id": "default", "gateway_enabled": True, "version": 2},
+    )
+
+    async def fake_stage(app_id: str, app_secret: str, version: int) -> dict:
+        staged.append(version)
+        return {"app_id": app_id, "version": version, "status": "active"}
+
+    def fake_save_gateway_settings(**kwargs) -> None:
+        saved.append(kwargs["version"])
+
+    monkeypatch.setattr(service, "stage_credentials", fake_stage)
+    monkeypatch.setattr(service, "save_gateway_settings", fake_save_gateway_settings)
+
+    response = await service.put_feishu_config(payload, f"Bearer {token}")
+
+    assert response["version"] == runtime_version + 1
+    assert staged == [runtime_version + 1]
+    assert saved == [source_version]
+
+
+@pytest.mark.anyio
+async def test_feishu_config_rejects_replayed_source_version(
+    runtime,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from services import dazah_agent_service as service
+
+    token = "internal-test-token"
+    secret = "new-secret"
+    source_version = 2
+    signed = f"cli_test\ndefault\ntrue\n{source_version}\n{secret}".encode()
+    payload = service.FeishuCredentialConfig(
+        app_id="cli_test",
+        app_secret=secret,
+        tenant_id="default",
+        gateway_enabled=True,
+        version=source_version,
+        signature=hmac.new(token.encode(), signed, hashlib.sha256).hexdigest(),
+    )
+
+    monkeypatch.setenv("HERMES_INTERNAL_TOKEN", token)
+    monkeypatch.setattr(
+        service,
+        "load_gateway_settings",
+        lambda: {"tenant_id": "default", "gateway_enabled": True, "version": 2},
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await service.put_feishu_config(payload, f"Bearer {token}")
+
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.detail == "configuration version must increase"
 
 
 @pytest.mark.parametrize("bad", [["drive", "list;whoami"], ["api", "$(id)"], ["config", "show"]])

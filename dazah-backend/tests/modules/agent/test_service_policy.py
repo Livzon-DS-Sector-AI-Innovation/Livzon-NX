@@ -164,6 +164,11 @@ class FakeAgentRepository:
     async def get_confirmation_for_update(self, db, confirmation_id):
         return self.confirmations.get(confirmation_id)
 
+    async def expire_confirmation(self, db, confirmation, *, user_id):
+        confirmation.status = "expired"
+        confirmation.updated_by = user_id
+        return confirmation
+
     async def list_pending_confirmations(
         self,
         db,
@@ -185,6 +190,33 @@ class FakeAgentRepository:
 class PolicyOnlyAgentService(AgentService):
     async def _call_hermes(self, **kwargs):
         raise AssertionError("policy-blocked messages must not reach Hermes")
+
+
+@pytest.mark.anyio
+async def test_expired_confirmation_is_returned_as_terminal_state() -> None:
+    repo = FakeAgentRepository()
+    service = AgentService(settings=SimpleNamespace(), repo=repo)
+    user = SimpleNamespace(id=uuid.uuid4())
+    confirmation = await repo.create_confirmation(
+        FakeDb(),
+        session_id=repo.session.id,
+        user_id=user.id,
+        operation="identity.deliver_feishu_message",
+        summary="过期投递确认",
+        risk_level="medium",
+        request_payload={},
+        expires_at=datetime.now(UTC) - timedelta(seconds=1),
+    )
+
+    resolved, result = await service.execute_confirmation(
+        FakeDb(),
+        confirmation_id=confirmation.id,
+        current_user=user,
+    )
+
+    assert result is None
+    assert resolved.status == "expired"
+    assert resolved.updated_by == user.id
 
 
 class StreamingAgentService(AgentService):
@@ -257,6 +289,12 @@ class ErrorStreamingAgentService(AgentService):
             type="error",
             data={"message": "上游中断"},
         )
+
+
+class CrashingStreamingAgentService(AgentService):
+    async def _call_hermes_stream(self, **kwargs):
+        raise ValueError("internal contract mismatch")
+        yield  # pragma: no cover
 
 
 def parse_sse_events(frames: list[str]) -> list[tuple[str, dict]]:
@@ -382,6 +420,28 @@ async def test_stream_chat_emits_agent_backend_v2_events() -> None:
 
 
 @pytest.mark.anyio
+async def test_stream_chat_persists_partial_response_when_client_stops() -> None:
+    repo = FakeAgentRepository()
+    service = StreamingAgentService(settings=SimpleNamespace(), repo=repo)
+    user = SimpleNamespace(id=uuid.uuid4(), name="测试用户")
+    db = FakeDb()
+
+    stream = service.stream_chat(
+        db,
+        request=AgentChatRequest(message="生成长回复"),
+        current_user=user,
+    )
+    await anext(stream)  # accepted
+    await anext(stream)  # first text delta
+    await stream.aclose()
+
+    assert [message.role for message in repo.messages] == ["user", "assistant"]
+    assert repo.messages[-1].content == "你好，"
+    assert repo.messages[-1].message_metadata["generation_status"] == "stopped"
+    assert db.committed is True
+
+
+@pytest.mark.anyio
 async def test_stream_chat_error_does_not_store_assistant_message() -> None:
     repo = FakeAgentRepository()
     service = ErrorStreamingAgentService(settings=SimpleNamespace(), repo=repo)
@@ -406,6 +466,28 @@ async def test_stream_chat_error_does_not_store_assistant_message() -> None:
     assert events[-1][1]["data"]["message"] == "上游中断"
     assert [message.role for message in repo.messages] == ["user"]
     assert db.committed is True
+
+
+@pytest.mark.anyio
+async def test_stream_chat_pipeline_exception_emits_stable_error_event() -> None:
+    repo = FakeAgentRepository()
+    service = CrashingStreamingAgentService(settings=SimpleNamespace(), repo=repo)
+    user = SimpleNamespace(id=uuid.uuid4(), name="测试用户")
+
+    frames = [
+        frame
+        async for frame in service.stream_chat(
+            FakeDb(),
+            request=AgentChatRequest(message="分析附件"),
+            current_user=user,
+        )
+    ]
+    events = parse_sse_events(frames)
+
+    assert [event for event, _ in events] == ["error"]
+    assert events[0][1]["data"]["code"] == "agent.internal_error"
+    assert "contract mismatch" not in events[0][1]["data"]["message"]
+    assert [message.role for message in repo.messages] == ["user"]
 
 
 @pytest.mark.anyio

@@ -28,6 +28,7 @@ desktop.ini
 !/docs/tasks/
 /docs/tasks/*
 !/docs/tasks/dazah-enterprise-agent-gateway-tool-registry-tasks-2026-07-30.md
+!/docs/tasks/hermes-v2-remaining-tasks-2026-07-31.md
 !/docs/runbooks/
 /docs/runbooks/*
 !/docs/runbooks/hermes-native-feishu-gateway-phase0-runbook.md

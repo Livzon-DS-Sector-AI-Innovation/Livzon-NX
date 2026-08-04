@@ -3,6 +3,9 @@
 > 对应方案：`docs/dazah-enterprise-agent-gateway-tool-registry-implementation-plan-2026-07-30.md`  
 > 建立日期：2026-07-30  
 > 当前阶段：Phase 0 初验通过，等待真实飞书测试应用与单消费者切换验收
+>
+> 最新未完成任务统一维护在
+> `docs/tasks/hermes-v2-remaining-tasks-2026-07-31.md`。
 
 ## 1. 执行规则
 
@@ -755,6 +758,112 @@
 - 遗留项：
   - 未主动向真实会话发送消息；需要用户在飞书验证同一消息只产生一个 Agent run
     和一个回复气泡。
+
+### 2026-07-31 17:02：V2 契约收口与 Livzon Agent 治理台
+
+- 阶段：Phase 2 协议收口、Phase 3 治理可视化第一阶段。
+- 状态：代码实现与自动化回验完成；真实飞书和生产切换验收仍待外部执行。
+- 实现：
+  - AgentBackend V2 输入和事件增加固定 `protocol_version=2.0`，错误事件使用稳定
+    错误码并隐藏内部异常；流式输出增加真实工具调用/结果事件，Web 助手展示能力
+    搜索、工具执行、确认与投递进度。
+  - 身份绑定增加来源、验证时间和 active/suspended/revoked 生命周期；飞书配置增加
+    群白名单与群聊必须 `@Livzon` 准入项；身份列表和工具目录改为服务端分页。
+  - 新增确认治理、脱敏 Trace 时间线、投递查询、授权查询/撤销和能力影响查询入口。
+  - 系统设置中的“飞书设置”升级为“Livzon Agent 管理”，包含运行总览、飞书接入、
+    身份与准入、能力目录与策略、授权与确认、Trace 与投递诊断六个区域；危险操作
+    二次确认，Secret 只允许覆盖写入且不回显。
+  - OpenAPI 与前端生成类型已同步；新增治理迁移
+    `7a31c9e4d2b8_add_agent_governance_controls.py`。
+- 验证结果：
+  - 专用 `dazah_test` 数据库 Alembic 升级到 head 成功；后端受影响测试
+    `19 passed`，目标 Ruff 通过。
+  - Hermes-Lite 全量测试 `83 passed, 5 warnings`。
+  - 前端 typecheck、lint 基线、生产 build 和全量 unit 均通过；unit
+    `20 passed`；新增 Livzon Agent 设置 E2E `2 passed`。
+  - OpenAPI 通过隔离容器重新导出，前端生成类型重新生成。
+- 未执行项及原因：
+  - 未执行真实飞书 App 十项验收、单消费者证明、生产冒烟、真实凭证轮换与回滚
+    演练；这些操作需要用户指定测试 App、会话和生产切换窗口，不能由 mock 代替。
+  - 未运行整个后端 coverage 门禁与镜像构建；本地 `uv` 仍因
+    `.venv\lib64` 权限拒绝不可用，本次使用隔离容器和专用测试库完成受影响验证。
+- migration/OpenAPI/环境变量/生成文件：
+  - 涉及一项 Alembic migration、后端 OpenAPI 和前端生成类型。
+  - 未新增环境变量，也未修改 Hermes 上游源码。
+- 风险与下一步：
+  - 飞书连续会话仍主要依赖 Gateway 进程内历史，Web/飞书统一会话审计与完整跨渠道
+    Trace 仍需后续数据模型工作。
+  - 按运行手册完成真实飞书、Base 两轮选择、重复/乱序/断线恢复、单消费者和回滚
+    证据后，才能把生产体验闭环标记为完成。
+
+### 2026-07-31 17:18：前端容器切换为开发运行态
+
+- 状态：已完成并复核。
+- 根因：原 `dazah-frontend-frontend-1` 使用 `docker-compose.yml`，环境为
+  `NODE_ENV=production`，命令为 `node server.js`，没有工作区源码挂载，因此仍展示
+  构建时的旧版“飞书设置”。
+- 处理：使用现有 `dazah-frontend/docker-compose.dev.yml` 重建 frontend 服务。
+- 复核：
+  - `NODE_ENV=development`。
+  - 命令为 `pnpm dev:webpack --hostname 0.0.0.0 --port 3000`。
+  - `dazah-frontend/` 已 bind mount 到容器 `/app`。
+  - `node_modules` 与 `.next` 使用独立 Docker volume。
+  - API 地址保持 `http://app:8000`，后端网络未改变。
+- 注意：开发容器首次访问路由需要冷编译；生产发布仍必须重新构建 production
+  image，不能把开发容器作为生产部署。
+
+### 2026-07-31 17:28：治理接口迁移修复与保存反馈
+
+- 状态：已完成并回验。
+- 根因：当前开发数据库停留在 migration `4e7b9c1d2f30`，治理代码查询新增字段
+  `allowed_group_chat_ids` 和 `require_group_mention` 时返回 500；前端保存确认回调
+  没有捕获异常，因此用户看不到明确的成功或失败结果。
+- 处理：
+  - 当前 `dazah` 数据库升级到 `7a31c9e4d2b8 (head)`。
+  - 保存和诊断操作增加错误捕获、消息提示及表单内持久结果 Alert。
+  - 保存成功显示配置版本及 Gateway 启停状态；失败显示脱敏接口错误。
+  - 设置 E2E mock 补齐治理接口响应，并覆盖保存反馈和六个治理区域读取。
+- 验证：
+  - migration current：`7a31c9e4d2b8 (head)`。
+  - 实际登录页面重新请求配置与 Gateway 状态：后端均返回 200。
+  - 12 个治理 API 未认证探针均返回 401，无 404/500，证明路由存在且鉴权关闭。
+  - 前端 typecheck、目标 ESLint、设置 Action unit 通过。
+  - Livzon Agent 设置 E2E：`4 passed`。
+- 遗留：真实写入仍应由已登录管理员在页面确认执行；测试探针未绕过鉴权，也未写入
+  伪造配置。真实飞书诊断、单消费者和生产验收继续按未完成任务清单执行。
+
+### 2026-08-03 09:35：Hermes V2 本地闭环与全量回验
+
+- 阶段：V2 跨渠道会话、身份治理、Trace 运维与发布门禁收口。
+- 状态：本地实现和全量自动化回验完成；真实飞书、单消费者切换和生产演练待外部执行。
+- 实现：
+  - 飞书会话与消息持久化进入平台会话审计链，Gateway 使用平台历史恢复上下文，并按
+    外部 `message_id` 实现跨重启幂等。
+  - Trace 关联飞书入站/回复、工具、确认、领域事件和投递，新增脱敏诊断导出、摘要
+    校验及导出审计；运行总览新增消费者、配置变更和异常 Trace。
+  - 身份目录同步落地绑定来源与验证时间，增加部门/活动筛选和冲突工作台；修复目录
+    对账的租户过滤，禁止跨租户创建或扫描绑定。
+  - 助手关键 Playwright E2E 覆盖停止生成、附件与历史、多确认/过期/部分成功和断线恢复。
+- 验证：
+  - 后端全量 `898 passed`；coverage lines `62.71%`、branches `33.75%`；Ruff 通过。
+  - 独立 `dazah_test` 完成 migration downgrade/upgrade，最终为
+    `7a31c9e4d2b8 (head)`；OpenAPI 与前端生成类型同步成功。
+  - Hermes-Lite 全量 `84 passed`；前端 unit `20 passed`、关键 E2E `13 passed`，
+    lint/typecheck/coverage 命令/production build 均通过。
+  - 三项目 development Compose 镜像构建成功；运行态冒烟：前端设置入口 `307`
+    （未登录跳转）、后端健康 `200`、治理路由未认证 `401`、Hermes 健康 `200`。
+- 未执行项及原因：
+  - 真实飞书十项验收、单消费者证明、凭证轮换、生产冒烟与回滚需要指定测试 App、
+    会话、验收人和切换窗口。
+  - 按本地开发规范只构建开发 Docker 镜像，生产镜像留待获授权的发布流程；工作区
+    未提交，test-impact/diff coverage
+    无法针对当前未提交差异生成有效结果。
+  - Mypy 全目录仍有 205 项跨模块既有类型债务；本次触达路径的 Ruff、测试和运行契约
+    已通过，不将既有债务伪报为本次回归。
+- migration/OpenAPI/环境变量/生成文件：涉及既有新增 migration、后端 OpenAPI 和
+  前端生成类型；未新增环境变量，未修改 Hermes 上游源码。
+- 下一工作单元：进入真实飞书验收；形成提交后执行 test-impact/diff coverage，
+  再在获授权的发布流程完成生产镜像和切换门禁。
 
 ## 13. 实时更新模板
 

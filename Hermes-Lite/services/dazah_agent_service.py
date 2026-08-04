@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
 """Hermes-Lite service adapter for Dazah Agent gateway."""
 
-import json
 import asyncio
 import base64
+import csv
 import hashlib
 import hmac
+import json
 import logging
 import os
 import re
-import time
 import sys
+import time
 import uuid
+import zipfile
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -23,28 +25,32 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
 from run_agent import AIAgent
+from services.feishu_runtime import (
+    enqueue_delivery,
+    get_delivery,
+    list_grants,
+    load_credentials,
+    load_gateway_settings,
+    platform_sync_loop,
+    restore_credentials,
+    revoke_grant,
+    runtime_metrics,
+    save_gateway_settings,
+    stage_credentials,
+)
 from tools.dazah_platform import (
     bind_dazah_thread_request_context,
+    current_dazah_task_tool_trace,
+    dazah_tool,
     dazah_request_context,
     register_dazah_task_context,
     reset_dazah_thread_request_context,
     unregister_dazah_task_context,
 )
-from services.feishu_runtime import (
-    enqueue_delivery,
-    get_delivery,
-    load_credentials,
-    load_gateway_settings,
-    list_grants,
-    platform_sync_loop,
-    restore_credentials,
-    stage_credentials,
-    revoke_grant,
-    runtime_metrics,
-    save_gateway_settings,
-)
 
 logger = logging.getLogger(__name__)
+AGENT_BACKEND_PROTOCOL_VERSION = "2.0"
+SELF_DELIVERY_OPERATION = "identity.deliver_feishu_message"
 
 
 class AgentTrustedSubject(BaseModel):
@@ -71,6 +77,7 @@ class AgentBackendSource(BaseModel):
 
 class AgentBackendV2Request(BaseModel):
     model_config = ConfigDict(extra="forbid")
+    protocol_version: Literal["2.0"]
     run_id: uuid.UUID
     trace_id: uuid.UUID
     session_id: str = Field(min_length=1, max_length=512)
@@ -83,6 +90,13 @@ class AgentBackendV2Request(BaseModel):
 
     @property
     def context(self) -> dict[str, Any]:
+        persistent_session_id = None
+        if self.session_id.startswith(("feishu:", "web:")):
+            candidate = self.session_id.split(":", 1)[1]
+            try:
+                persistent_session_id = str(uuid.UUID(candidate))
+            except ValueError:
+                persistent_session_id = None
         return {
             "tenant_id": self.subject.tenant_id,
             "user_id": self.subject.user_id,
@@ -102,10 +116,12 @@ class AgentBackendV2Request(BaseModel):
             "feishu_message_id": self.source.message_id,
             "trace_id": str(self.trace_id),
             "run_id": str(self.run_id),
+            "platform_session_id": persistent_session_id,
         }
 
 
 class AgentBackendV2Result(BaseModel):
+    protocol_version: Literal["2.0"] = AGENT_BACKEND_PROTOCOL_VERSION
     message: str
     pending_confirmations: list[dict[str, Any]] = Field(default_factory=list)
     tool_trace: list[dict[str, Any]] = Field(default_factory=list)
@@ -257,7 +273,15 @@ async def put_feishu_config(
     if not hmac.compare_digest(payload.signature, expected_signature):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid credential signature")
     try:
-        result = await stage_credentials(payload.app_id, secret, payload.version)
+        gateway_settings = load_gateway_settings()
+        if payload.version <= gateway_settings["version"]:
+            raise ValueError("configuration version must increase")
+        current_credentials = load_credentials()
+        runtime_version = max(
+            payload.version,
+            current_credentials[2] + 1 if current_credentials else payload.version,
+        )
+        result = await stage_credentials(payload.app_id, secret, runtime_version)
         save_gateway_settings(
             tenant_id=payload.tenant_id,
             gateway_enabled=payload.gateway_enabled,
@@ -281,6 +305,12 @@ async def get_feishu_internal_status(
     _require_internal_token(authorization)
     credentials = load_credentials()
     gateway_settings = load_gateway_settings()
+    gateway_process = getattr(app.state, "feishu_gateway_process", None)
+    consumer_active = bool(
+        gateway_process
+        and gateway_process.returncode is None
+        and getattr(app.state, "feishu_gateway_status", "inactive") == "connected"
+    )
     return {
         "configured": credentials is not None,
         "credential_version": credentials[2] if credentials else None,
@@ -290,6 +320,8 @@ async def get_feishu_internal_status(
         "gateway": getattr(app.state, "feishu_gateway_status", "inactive"),
         "gateway_upstream": getattr(app.state, "feishu_gateway_upstream", None),
         "gateway_reconnects": getattr(app.state, "feishu_gateway_reconnects", 0),
+        "event_consumer": "hermes_native_feishu_gateway" if consumer_active else None,
+        "event_consumer_count": 1 if consumer_active else 0,
         **runtime_metrics(),
     }
 
@@ -437,9 +469,9 @@ def _system_prompt(progressive_skills: list[dict[str, Any]] | None = None) -> st
         "需要处理按钮时传 requires_business_action=true，并使用 interactive_card。"
         "不得自行声称‘卡片格式验证失败’或改用文本；只有用户确认执行后，后端工具返回"
         "真实发送失败结果时，才能据实说明失败原因。"
-        "调用飞书消息工具时，收件人必须放在 body.user_ids 数组，"
-        "可填本地用户UUID、飞书user_id、open_id、工号、手机号、邮箱或姓名；"
-        "消息正文必须放在 body.text。"
+        "调用飞书消息工具时，必须遵循实时目录 Schema：收件人放在 "
+        "body.recipient_user_ids 数组，标题放在 body.title，正文放在 body.markdown，"
+        "并提供稳定的 body.idempotency_key；recipient_user_ids 使用本地用户 UUID。"
         "调用发送工具创建待确认项时，必须把收件人、消息形态、标题/正文摘要和处理按钮信息"
         "完整放入工具参数，供前端确认执行卡片展示；不得先用普通回复询问是否发送。"
         "回答要像业务系统里的卡片式回复，禁止输出 Markdown 表格，禁止使用 |---| 这类表格语法。"
@@ -513,7 +545,11 @@ def _task_routing_instruction(message: str) -> str:
     )
 
 
-def _write_confirmation_routing_instruction(message: str) -> str:
+def _write_confirmation_routing_instruction(
+    message: str,
+    *,
+    current_user_id: str | None = None,
+) -> str:
     """Turn an explicit send command into a tool-call postcondition.
 
     The confirmation card is already the safety boundary for message writes.
@@ -543,13 +579,131 @@ def _write_confirmation_routing_instruction(message: str) -> str:
     if not any(re.search(pattern, normalized) for pattern in explicit_send_patterns):
         return ""
 
+    self_recipient_instruction = ""
+    self_recipient_patterns = (
+        r"(?:给|向)(?:我|本人)(?:发送|推送)",
+        r"(?:发送|推送)(?:给|至|到)(?:我|本人)",
+    )
+    if current_user_id and any(
+        re.search(pattern, normalized) for pattern in self_recipient_patterns
+    ):
+        self_recipient_instruction = (
+            "用户已明确指定收件人为当前会话用户本人。必须使用可信主体的本地用户 UUID，"
+            f"即 body.recipient_user_ids=[{json.dumps(current_user_id)}]；"
+            "不得再次询问收件人，也不得使用飞书 open_id 代替本地用户 UUID。"
+        )
+
     return (
         "\n\n# 本轮写操作确认强制路由\n"
         "规则已识别到用户明确下达了发送或推送指令。确认执行卡片本身就是发送前的二次确认，"
         "不得再询问‘是否发送’、‘是否确认发送’，也不得在普通回复中伪造确认按钮。"
+        "必须先调用 dazah_tool(action='search', query='identity.deliver_feishu_message')，"
+        "再对搜索结果调用 action='describe'，最后按实时 Schema 调用 action='execute'；"
+        "不得用中文近义词搜索后因空结果声称工具不可用。"
         "收件人和消息内容可从本轮需求、会话上下文或本轮查询结果确定时，必须立即调用 "
         "identity.deliver_feishu_message 创建后端真实 pending confirmation；"
         "只有缺少无法推断的收件人或消息内容时，才只追问缺失字段。"
+        + self_recipient_instruction
+    )
+
+
+def _business_read_routing_instruction(message: str) -> str:
+    normalized = re.sub(r"\s+", "", message).lower()
+    is_quality_deviation_query = (
+        any(marker in normalized for marker in ("质量", "quality"))
+        and any(marker in normalized for marker in ("偏差", "deviation"))
+        and any(marker in normalized for marker in ("查询", "查看", "列出", "最近", "记录"))
+        and not any(marker in normalized for marker in ("报告记录", "reportrecord", "capa"))
+    )
+    if not is_quality_deviation_query:
+        return ""
+    return (
+        "\n\n# 本轮业务只读强制路由\n"
+        "已由规则识别为质量偏差列表查询。必须通过 dazah_tool 动态搜索并描述 "
+        "quality.list_deviations，再按实时 Schema 执行查询；最终记录只能来自本轮成功的 "
+        "Tool Trace。没有成功工具结果时必须明确失败关闭，严禁复用历史记录、示例数据或推测数据。"
+    )
+
+
+def _quoted_message_field(message: str, field: str) -> str | None:
+    match = re.search(
+        rf"{re.escape(field)}\s*(?:是|为|[:：])\s*[“\"]([^”\"]+)[”\"]",
+        message,
+    )
+    if not match:
+        return None
+    value = match.group(1).strip()
+    return value or None
+
+
+def _explicit_self_delivery_body(
+    payload: AgentBackendV2Request,
+) -> dict[str, Any] | None:
+    instruction = _write_confirmation_routing_instruction(
+        payload.message,
+        current_user_id=payload.subject.user_id,
+    )
+    if "用户已明确指定收件人为当前会话用户本人" not in instruction:
+        return None
+    markdown = _quoted_message_field(payload.message, "内容")
+    if not markdown:
+        return None
+    title = _quoted_message_field(payload.message, "标题") or markdown[:200]
+    message_form = (
+        "text"
+        if any(
+            marker in payload.message
+            for marker in ("文本消息", "文字消息", "纯文本消息", "纯文本")
+        )
+        else "card"
+    )
+    return {
+        "recipient_user_ids": [payload.subject.user_id],
+        "message_form": message_form,
+        "title": title[:200],
+        "markdown": markdown[:20_000],
+        "actions": [],
+        "idempotency_key": f"hermes-feishu:{payload.run_id}",
+    }
+
+
+async def _try_explicit_self_delivery_confirmation(
+    payload: AgentBackendV2Request,
+) -> AgentBackendV2Result | None:
+    body = _explicit_self_delivery_body(payload)
+    if body is None:
+        return None
+
+    search_result = await dazah_tool(
+        "search",
+        query=SELF_DELIVERY_OPERATION,
+    )
+    if SELF_DELIVERY_OPERATION not in search_result:
+        return AgentBackendV2Result(
+            message="当前用户没有可用的飞书主动投递能力，本次未执行任何操作。",
+        )
+    describe_result = await dazah_tool(
+        "describe",
+        operation=SELF_DELIVERY_OPERATION,
+    )
+    if SELF_DELIVERY_OPERATION not in describe_result:
+        return AgentBackendV2Result(
+            message="飞书主动投递能力 Schema 暂不可用，本次未执行任何操作。",
+        )
+    execute_result = await dazah_tool(
+        "execute",
+        operation=SELF_DELIVERY_OPERATION,
+        body=body,
+        reason="向当前会话用户主动投递飞书消息",
+    )
+    confirmations = _collect_confirmations(execute_result, set())
+    if not confirmations:
+        return AgentBackendV2Result(
+            message="没有查询到后端真实确认记录，本次未执行任何操作。",
+        )
+    return AgentBackendV2Result(
+        message="已生成待确认操作，请在确认卡片中选择允许或拒绝。",
+        pending_confirmations=confirmations,
     )
 
 
@@ -580,6 +734,170 @@ def _trusted_gateway_attachment_path(raw_path: Any) -> Path | None:
     return candidate
 
 
+def _extract_cached_document_text(path: Path) -> str | None:
+    """Extract bounded text from a trusted Gateway document without exposing its path."""
+    suffix = path.suffix.lower()
+    if suffix == ".csv":
+        return _extract_csv_text(path)
+    if suffix == ".xlsx":
+        return _extract_xlsx_text(path)
+    if suffix == ".xls":
+        return _extract_xls_text(path)
+    if suffix in {
+        ".json",
+        ".log",
+        ".md",
+        ".txt",
+        ".xml",
+        ".yaml",
+        ".yml",
+    }:
+        return path.read_text(encoding="utf-8", errors="replace")[:200_000]
+
+    if suffix != ".pdf":
+        return None
+
+    try:
+        from pypdf import PdfReader
+
+        reader = PdfReader(path)
+        parts: list[str] = []
+        remaining = 200_000
+        for page in reader.pages[:50]:
+            page_text = (page.extract_text() or "").strip()
+            if not page_text:
+                continue
+            parts.append(page_text[:remaining])
+            remaining -= len(parts[-1])
+            if remaining <= 0:
+                break
+        return "\n\n".join(parts) or None
+    except Exception as exc:
+        logger.warning("Unable to extract cached PDF attachment: %s", type(exc).__name__)
+        return None
+
+
+_TABULAR_MAX_CHARS = 200_000
+_TABULAR_MAX_SHEETS = 20
+_TABULAR_MAX_ROWS_PER_SHEET = 5_000
+_TABULAR_MAX_COLUMNS = 100
+_XLSX_MAX_UNCOMPRESSED_BYTES = 100 * 1024 * 1024
+
+
+def _tabular_cell_text(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, datetime):
+        value = value.isoformat()
+    return str(value).replace("\r", " ").replace("\n", " ").replace("\t", " ")
+
+
+def _bounded_tabular_text(parts: list[str], *, truncated: bool) -> str | None:
+    content = "\n".join(parts)
+    if len(content) > _TABULAR_MAX_CHARS:
+        content = content[:_TABULAR_MAX_CHARS]
+        truncated = True
+    if truncated:
+        content = f"{content}\n[表格内容已按安全上限截断]"
+    return content or None
+
+
+def _extract_csv_text(path: Path) -> str | None:
+    raw = path.read_bytes()
+    decoded: str | None = None
+    for encoding in ("utf-8-sig", "gb18030"):
+        try:
+            decoded = raw.decode(encoding)
+            break
+        except UnicodeDecodeError:
+            continue
+    if decoded is None:
+        decoded = raw.decode("utf-8", errors="replace")
+
+    try:
+        dialect = csv.Sniffer().sniff(decoded[:8_192], delimiters=",;\t|")
+    except csv.Error:
+        dialect = csv.excel
+    rows = csv.reader(decoded.splitlines(), dialect)
+    parts = ["[CSV 数据]"]
+    truncated = False
+    for row_index, row in enumerate(rows):
+        if row_index >= _TABULAR_MAX_ROWS_PER_SHEET:
+            truncated = True
+            break
+        if len(row) > _TABULAR_MAX_COLUMNS:
+            truncated = True
+        parts.append(
+            "\t".join(_tabular_cell_text(value) for value in row[:_TABULAR_MAX_COLUMNS])
+        )
+    return _bounded_tabular_text(parts, truncated=truncated)
+
+
+def _extract_xlsx_text(path: Path) -> str | None:
+    try:
+        with zipfile.ZipFile(path) as archive:
+            if sum(item.file_size for item in archive.infolist()) > _XLSX_MAX_UNCOMPRESSED_BYTES:
+                logger.warning("Unable to extract cached XLSX attachment: archive_too_large")
+                return None
+
+        from openpyxl import load_workbook
+
+        workbook = load_workbook(path, read_only=True, data_only=True)
+        parts: list[str] = []
+        truncated = len(workbook.sheetnames) > _TABULAR_MAX_SHEETS
+        try:
+            for worksheet in workbook.worksheets[:_TABULAR_MAX_SHEETS]:
+                parts.append(f"[工作表: {worksheet.title}]")
+                max_row = min(worksheet.max_row or 1, _TABULAR_MAX_ROWS_PER_SHEET)
+                max_column = min(worksheet.max_column or 1, _TABULAR_MAX_COLUMNS)
+                if (worksheet.max_row or 0) > max_row or (worksheet.max_column or 0) > max_column:
+                    truncated = True
+                for row in worksheet.iter_rows(
+                    min_row=1,
+                    max_row=max_row,
+                    min_col=1,
+                    max_col=max_column,
+                    values_only=True,
+                ):
+                    parts.append("\t".join(_tabular_cell_text(value) for value in row))
+        finally:
+            workbook.close()
+        return _bounded_tabular_text(parts, truncated=truncated)
+    except Exception as exc:
+        logger.warning("Unable to extract cached XLSX attachment: %s", type(exc).__name__)
+        return None
+
+
+def _extract_xls_text(path: Path) -> str | None:
+    try:
+        import xlrd
+
+        workbook = xlrd.open_workbook(path, on_demand=True)
+        parts: list[str] = []
+        truncated = len(workbook.sheet_names()) > _TABULAR_MAX_SHEETS
+        try:
+            for sheet_name in workbook.sheet_names()[:_TABULAR_MAX_SHEETS]:
+                worksheet = workbook.sheet_by_name(sheet_name)
+                parts.append(f"[工作表: {sheet_name}]")
+                row_count = min(worksheet.nrows, _TABULAR_MAX_ROWS_PER_SHEET)
+                column_count = min(worksheet.ncols, _TABULAR_MAX_COLUMNS)
+                if worksheet.nrows > row_count or worksheet.ncols > column_count:
+                    truncated = True
+                for row_index in range(row_count):
+                    parts.append(
+                        "\t".join(
+                            _tabular_cell_text(worksheet.cell_value(row_index, column_index))
+                            for column_index in range(column_count)
+                        )
+                    )
+        finally:
+            workbook.release_resources()
+        return _bounded_tabular_text(parts, truncated=truncated)
+    except Exception as exc:
+        logger.warning("Unable to extract cached XLS attachment: %s", type(exc).__name__)
+        return None
+
+
 def _user_message_with_attachments(
     payload: AgentBackendV2Request,
 ) -> str | list[dict[str, Any]]:
@@ -594,28 +912,16 @@ def _user_message_with_attachments(
         local_path = _trusted_gateway_attachment_path(attachment.get("local_path"))
         if kind == "document":
             content = attachment.get("text")
-            if (
-                not content
-                and local_path
-                and local_path.suffix.lower()
-                in {
-                    ".csv",
-                    ".json",
-                    ".log",
-                    ".md",
-                    ".txt",
-                    ".xml",
-                    ".yaml",
-                    ".yml",
-                }
-            ):
-                content = local_path.read_text(encoding="utf-8", errors="replace")[:200_000]
+            if not content and local_path:
+                content = _extract_cached_document_text(local_path)
             if content:
                 text_parts.append(
                     f"\n<document filename={json.dumps(filename, ensure_ascii=False)}>\n{str(content)}\n</document>"
                 )
             elif local_path:
-                text_parts.append(f"\n文档附件已由 Hermes Gateway 安全缓存：{filename}（本地路径：{local_path}）")
+                text_parts.append(
+                    f"\n文档附件无法提取文本内容：{filename}（可能是扫描件、加密文件或不受支持的格式）"
+                )
             else:
                 text_parts.append(f"\n文档附件不可读取：{filename}")
         elif kind == "image":
@@ -638,7 +944,7 @@ def _user_message_with_attachments(
                 text_parts.append(f"\n图片附件不可读取：{filename}")
         elif kind in {"audio", "video"}:
             if local_path:
-                text_parts.append(f"\n{kind} 附件已由 Hermes Gateway 安全缓存：{filename}（本地路径：{local_path}）")
+                text_parts.append(f"\n{kind} 附件已接收，但当前未启用内容转写：{filename}")
             else:
                 text_parts.append(f"\n{kind} 附件不可读取：{filename}")
 
@@ -914,10 +1220,38 @@ def _verified_agent_message(
     message: str,
     confirmations: list[dict[str, Any]],
     tool_trace: list[dict[str, Any]],
+    *,
+    enforce_write_confirmation: bool = True,
 ) -> str:
     """Reject confirmation/execution claims that have no gateway evidence."""
     if confirmations:
         return _normalize_pending_confirmation_message(message)
+
+    claimed_business_operations = set(
+        re.findall(
+            r"\b(?:agent|energy|warehouse|procurement|quality|identity)"
+            r"\.[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*\b",
+            message,
+            flags=re.IGNORECASE,
+        )
+    )
+    if claimed_business_operations and any(
+        marker in message for marker in ("数据来源", "查询结果", "Dazah 平台")
+    ):
+        verified_operations = {
+            str(item.get("operation"))
+            for item in tool_trace
+            if isinstance(item, dict)
+            and item.get("operation")
+            and item.get("ok") is True
+        }
+        if not claimed_business_operations.issubset(verified_operations):
+            return (
+                "没有取得 Dazah 平台本轮真实工具查询结果，本次不展示任何业务记录。"
+                "请稍后重试并向管理员提供 Trace ID。"
+            )
+    if not enforce_write_confirmation:
+        return message
 
     claim_markers = (
         "已生成确认",
@@ -1045,10 +1379,17 @@ def _run_agent_conversation(
     is_feishu = _is_feishu_conversation(payload)
     raw_chat_type = str(payload.context.get("feishu_chat_type") or "").strip().lower()
     agent_chat_type = ("dm" if raw_chat_type in {"dm", "p2p", "private", "direct"} else "group") if is_feishu else None
-    request_context_token = dazah_request_context.set(payload.context)
-    previous_thread_context = bind_dazah_thread_request_context(payload.context)
+    write_confirmation_instruction = _write_confirmation_routing_instruction(
+        payload.message,
+        current_user_id=payload.subject.user_id,
+    )
+    request_context = payload.context
+    if write_confirmation_instruction:
+        request_context["forced_operation"] = SELF_DELIVERY_OPERATION
+    request_context_token = dazah_request_context.set(request_context)
+    previous_thread_context = bind_dazah_thread_request_context(request_context)
     runtime_task_id = uuid.uuid4().hex
-    register_dazah_task_context(runtime_task_id, payload.context)
+    register_dazah_task_context(runtime_task_id, request_context)
     try:
         agent = DazahAIAgent(
             base_url=os.getenv("DAZAH_LLM_BASE_URL", "http://127.0.0.1:8000/api/v1/agent/llm"),
@@ -1062,9 +1403,21 @@ def _run_agent_conversation(
             platform="feishu" if is_feishu else "dazah",
             chat_type=agent_chat_type,
             max_iterations=_env_int("HERMES_DAZAH_MAX_TOOL_ITERATIONS", 30, minimum=1, maximum=90),
-            user_id=payload.context.get("user_id"),
+            user_id=request_context.get("user_id"),
             thread_id=payload.session_id,
         )
+        conversation_history = _history(payload.messages)
+        if write_confirmation_instruction:
+            conversation_history.append(
+                {
+                    "role": "system",
+                    "content": (
+                        write_confirmation_instruction
+                        + "\n此前会话中关于工具不可用或缺少 operation 的回复均为旧运行结果，"
+                        "不得复述；必须在本轮重新实际调用工具。"
+                    ),
+                }
+            )
         result = agent.run_conversation(
             _user_message_with_attachments(payload),
             system_message=(
@@ -1072,13 +1425,18 @@ def _run_agent_conversation(
                 + _conversation_channel_instruction(payload)
                 + _feishu_resource_routing_instruction(payload)
                 + _task_routing_instruction(payload.message)
-                + _write_confirmation_routing_instruction(payload.message)
+                + _business_read_routing_instruction(payload.message)
             ),
-            conversation_history=_history(payload.messages),
+            conversation_history=conversation_history,
             task_id=runtime_task_id,
             stream_callback=stream_callback,
             persist_user_message=payload.message,
         )
+        result = dict(result)
+        # The agent session can contain tool traces from earlier turns. Security
+        # decisions must use only executions observed by the trusted gateway for
+        # this runtime task, never a trace supplied by the model or session.
+        result["tool_trace"] = current_dazah_task_tool_trace(runtime_task_id)
         return agent, result
     finally:
         unregister_dazah_task_context(runtime_task_id)
@@ -1098,6 +1456,7 @@ def _backend_event(
     data: dict[str, Any],
 ) -> dict[str, Any]:
     return {
+        "protocol_version": AGENT_BACKEND_PROTOCOL_VERSION,
         "event_id": str(uuid.uuid4()),
         "trace_id": str(payload.trace_id),
         "run_id": str(payload.run_id),
@@ -1105,6 +1464,24 @@ def _backend_event(
         "occurred_at": datetime.now(UTC).isoformat(),
         "type": event_type,
         "data": data,
+    }
+
+
+def _delivery_event_data(tool_trace_item: dict[str, Any]) -> dict[str, Any] | None:
+    result = tool_trace_item.get("result")
+    result_data = result if isinstance(result, dict) else {}
+    delivery_id = tool_trace_item.get("delivery_id") or result_data.get("delivery_id")
+    if not delivery_id:
+        return None
+    return {
+        "delivery_id": str(delivery_id),
+        "status": (
+            tool_trace_item.get("delivery_status")
+            or result_data.get("status")
+            or tool_trace_item.get("status")
+            or "pending"
+        ),
+        "channel": result_data.get("channel") or tool_trace_item.get("channel"),
     }
 
 
@@ -1122,6 +1499,9 @@ async def run_agent_v2(
     token = dazah_request_context.set(payload.context)
     try:
         direct_response = _try_conversation_context_response(payload)
+        if direct_response is not None:
+            return direct_response
+        direct_response = await _try_explicit_self_delivery_confirmation(payload)
         if direct_response is not None:
             return direct_response
 
@@ -1159,6 +1539,9 @@ async def run_agent_v2(
             result.get("final_response") or "我没有生成有效回复，请稍后重试。",
             confirmations,
             tool_trace,
+            enforce_write_confirmation=not _is_direct_feishu_resource_request(
+                payload
+            ),
         )
         return AgentBackendV2Result(
             message=message,
@@ -1205,6 +1588,8 @@ async def stream_agent_v2(
         try:
             yield encode("accepted", {"session_id": payload.session_id})
             direct_response = _try_conversation_context_response(payload)
+            if direct_response is None:
+                direct_response = await _try_explicit_self_delivery_confirmation(payload)
             if direct_response is not None:
                 yield encode(
                     "finished",
@@ -1220,7 +1605,10 @@ async def stream_agent_v2(
             if proxy_error:
                 yield encode(
                     "error",
-                    {"message": f"Livzon Agent 运行异常：{proxy_error}"},
+                    {
+                        "code": "agent.llm_proxy_unavailable",
+                        "message": "Livzon Agent 模型服务暂不可用，请稍后重试。",
+                    },
                 )
                 return
 
@@ -1249,7 +1637,10 @@ async def stream_agent_v2(
                     logger.warning("Hermes-Lite Dazah stream chat timed out")
                     yield encode(
                         "error",
-                        {"message": "Livzon Agent 运行超时：模型或工具调用响应时间过长，请稍后重试。"},
+                        {
+                            "code": "agent.run_timeout",
+                            "message": "Livzon Agent 运行超时，请稍后重试。",
+                        },
                     )
                     return
                 try:
@@ -1269,14 +1660,20 @@ async def stream_agent_v2(
                 logger.exception("Hermes-Lite Dazah stream chat timed out")
                 yield encode(
                     "error",
-                    {"message": "Livzon Agent 运行超时：模型或工具调用响应时间过长，请稍后重试。"},
+                    {
+                        "code": "agent.run_timeout",
+                        "message": "Livzon Agent 运行超时，请稍后重试。",
+                    },
                 )
                 return
-            except Exception as exc:
+            except Exception:
                 logger.exception("Hermes-Lite Dazah stream chat failed")
                 yield encode(
                     "error",
-                    {"message": f"Livzon Agent 运行异常：{type(exc).__name__}: {exc}"},
+                    {
+                        "code": "agent.internal_error",
+                        "message": "Livzon Agent 运行异常，请稍后重试并向管理员提供 Trace ID。",
+                    },
                 )
                 return
 
@@ -1286,16 +1683,34 @@ async def stream_agent_v2(
                 result.get("final_response") or "我没有生成有效回复，请稍后重试。",
                 confirmations,
                 tool_trace,
+                enforce_write_confirmation=not _is_direct_feishu_resource_request(
+                    payload
+                ),
             )
             for item in tool_trace:
                 if isinstance(item, dict):
+                    operation = item.get("operation") or item.get("tool") or item.get("name")
+                    call_id = item.get("call_id") or item.get("id") or str(uuid.uuid4())
+                    yield encode(
+                        "tool_call",
+                        {
+                            "operation": operation,
+                            "call_id": call_id,
+                            "summary": item.get("summary"),
+                        },
+                    )
                     yield encode(
                         "tool_result",
                         {
-                            "tool": item.get("tool") or item.get("name"),
+                            "operation": operation,
+                            "call_id": call_id,
                             "status": item.get("status") or "completed",
+                            "ok": item.get("ok"),
                         },
                     )
+                    delivery_data = _delivery_event_data(item)
+                    if delivery_data is not None:
+                        yield encode("delivery", delivery_data)
             for confirmation in confirmations:
                 yield encode("confirmation", confirmation)
             yield encode(

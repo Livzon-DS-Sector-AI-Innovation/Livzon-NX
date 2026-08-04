@@ -10,7 +10,7 @@
     "lint": "node scripts/lint-with-baseline.mjs",
     "test:unit": "vitest run src",
     "test:coverage": "vitest run src --coverage",
-    "test:e2e:critical": "playwright test e2e/purchasing",
+    "test:e2e:critical": "playwright test e2e/purchasing e2e/settings/livzon-agent.spec.ts e2e/agent/assistant-critical.spec.ts",
     "generate:api": "node scripts/generate-api.mjs",
     "typecheck": "tsc --noEmit"
   },

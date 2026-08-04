@@ -90,11 +90,13 @@ async def test_external_identity_binding_repository_lifecycle() -> None:
     query_result = SimpleNamespace(
         scalar_one_or_none=lambda: result_binding,
         scalars=lambda: SimpleNamespace(all=lambda: [result_binding]),
+        all=lambda: [(result_binding, SimpleNamespace(name="张三"))],
     )
     added: list[object] = []
     session = SimpleNamespace(
         add=added.append,
         flush=AsyncMock(),
+        refresh=AsyncMock(),
         scalar=AsyncMock(return_value=result_binding),
         execute=AsyncMock(return_value=query_result),
     )
@@ -109,6 +111,7 @@ async def test_external_identity_binding_repository_lifecycle() -> None:
         external_open_id=None,
         external_union_id=None,
         local_user_id=local_user_id,
+        source="admin",
         actor_id=actor_id,
     )
     assert created in added
@@ -116,13 +119,15 @@ async def test_external_identity_binding_repository_lifecycle() -> None:
     assert created.status == "active"
 
     assert await repository.get(session, binding_id) is result_binding
-    disabled = await repository.disable(
+    suspended = await repository.set_status(
         session,
         SimpleNamespace(status="active", updated_by=None),
+        status_value="suspended",
         actor_id=actor_id,
     )
-    assert disabled.status == "disabled"
-    assert disabled.updated_by == actor_id
+    assert suspended.status == "suspended"
+    assert suspended.updated_by == actor_id
+    session.refresh.assert_awaited_once_with(suspended)
 
     session.execute.reset_mock()
     assert (
@@ -149,7 +154,20 @@ async def test_external_identity_binding_repository_lifecycle() -> None:
         external_union_id=None,
     )
     assert resolved is result_binding
-    assert await repository.list(session) == [result_binding]
+    assert await repository.list_for_app(
+        session,
+        tenant_id="tenant",
+        app_fingerprint="app",
+    ) == [result_binding]
+
+    session.scalar.return_value = 1
+    items, total = await repository.list_page(
+        session,
+        page=1,
+        page_size=20,
+    )
+    assert items[0][0] is result_binding
+    assert total == 1
 
 
 @pytest.mark.asyncio

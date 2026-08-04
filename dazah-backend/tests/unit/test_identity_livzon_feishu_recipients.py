@@ -30,3 +30,17 @@ def test_feishu_delivery_input_accepts_explicit_local_user_id() -> None:
     )
 
     assert message.recipient_user_ids == [user_id]
+
+
+def test_feishu_text_delivery_rejects_card_actions() -> None:
+    with pytest.raises(ValidationError, match="text delivery does not support actions"):
+        FeishuDeliveryInput.model_validate(
+            {
+                "recipient_user_ids": [str(uuid.uuid4())],
+                "message_form": "text",
+                "title": "通知",
+                "markdown": "纯文本内容",
+                "actions": [{"label": "查看"}],
+                "idempotency_key": "identity-text-actions-invalid",
+            }
+        )

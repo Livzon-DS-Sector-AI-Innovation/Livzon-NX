@@ -14,11 +14,14 @@ from sqlalchemy.exc import IntegrityError
 from app.platform.identity import api as identity_api
 from app.platform.identity.api import (
     create_external_identity_binding,
-    disable_external_identity_binding,
     get_livzon_feishu_gateway_status,
     list_external_identity_bindings,
+    update_external_identity_binding_status,
 )
-from app.platform.identity.schemas import ExternalIdentityBindingCreate
+from app.platform.identity.schemas import (
+    ExternalIdentityBindingCreate,
+    ExternalIdentityBindingStatusUpdate,
+)
 
 
 def _binding():
@@ -33,6 +36,8 @@ def _binding():
         external_union_id=None,
         local_user_id=uuid4(),
         status="active",
+        source="admin",
+        verified_at=now,
         last_seen_at=None,
         created_at=now,
         updated_at=now,
@@ -45,11 +50,12 @@ async def test_external_identity_binding_admin_endpoints(
 ) -> None:
     binding = _binding()
     current_user = SimpleNamespace(id=uuid4())
-    db = SimpleNamespace(rollback=AsyncMock())
+    db = SimpleNamespace(rollback=AsyncMock(), add=lambda _item: None)
+    user = SimpleNamespace(name="张三", department="质量部", status="active")
 
     class BindingRepository:
-        async def list(self, _db):
-            return [binding]
+        async def list_page(self, _db, **_kwargs):
+            return [(binding, user)], 1
 
         async def create(self, _db, **kwargs):
             assert kwargs["actor_id"] == current_user.id
@@ -58,9 +64,9 @@ async def test_external_identity_binding_admin_endpoints(
         async def get(self, _db, binding_id):
             return binding if binding_id == binding.id else None
 
-        async def disable(self, _db, item, **kwargs):
+        async def set_status(self, _db, item, *, status_value, **kwargs):
             assert kwargs["actor_id"] == current_user.id
-            item.status = "disabled"
+            item.status = status_value
             return item
 
     class UserRepository:
@@ -80,19 +86,28 @@ async def test_external_identity_binding_admin_endpoints(
         local_user_id=binding.local_user_id,
     )
 
-    listed = await list_external_identity_bindings(db, current_user)
-    assert json.loads(listed.body)["data"][0]["id"] == str(binding.id)
+    listed = await list_external_identity_bindings(
+        db=db,
+        current_user=current_user,
+    )
+    assert json.loads(listed.body)["data"]["items"][0]["id"] == str(binding.id)
     created = await create_external_identity_binding(payload, db, current_user)
     assert json.loads(created.body)["data"]["external_open_id"] == "open"
-    disabled = await disable_external_identity_binding(
+    suspended = await update_external_identity_binding_status(
         binding.id,
+        ExternalIdentityBindingStatusUpdate(status="suspended"),
         db,
         current_user,
     )
-    assert json.loads(disabled.body)["data"]["status"] == "disabled"
+    assert json.loads(suspended.body)["data"]["status"] == "suspended"
 
     with pytest.raises(HTTPException, match="不存在"):
-        await disable_external_identity_binding(uuid4(), db, current_user)
+        await update_external_identity_binding_status(
+            uuid4(),
+            ExternalIdentityBindingStatusUpdate(status="revoked"),
+            db,
+            current_user,
+        )
 
 
 @pytest.mark.asyncio

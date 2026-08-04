@@ -350,6 +350,32 @@ class AgentRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_channel_message_by_external_id(
+        self,
+        db: AsyncSession,
+        *,
+        user_id: uuid.UUID,
+        channel: str,
+        external_message_id: str,
+        metadata_key: str = "external_message_id",
+    ) -> tuple[AgentSession, AgentMessage] | None:
+        result = await db.execute(
+            select(AgentSession, AgentMessage)
+            .join(AgentMessage, AgentMessage.session_id == AgentSession.id)
+            .where(
+                AgentSession.user_id == user_id,
+                AgentSession.context["channel"].astext == channel,
+                AgentSession.is_deleted.is_(False),
+                AgentMessage.message_metadata[metadata_key].astext
+                == external_message_id,
+                AgentMessage.is_deleted.is_(False),
+            )
+            .order_by(AgentMessage.created_at.desc())
+            .limit(1)
+        )
+        row = result.first()
+        return (row[0], row[1]) if row else None
+
     async def archive_active_channel_sessions(
         self,
         db: AsyncSession,
@@ -444,6 +470,30 @@ class AgentRepository:
             .order_by(AgentConfirmation.created_at.asc())
         )
         return list(result.scalars().all())
+
+    async def expire_due_confirmations(
+        self,
+        db: AsyncSession,
+        *,
+        session_id: uuid.UUID | None = None,
+        user_id: uuid.UUID | None = None,
+    ) -> int:
+        stmt = select(AgentConfirmation).where(
+            AgentConfirmation.status == "pending",
+            AgentConfirmation.expires_at <= datetime.now(UTC),
+            AgentConfirmation.is_deleted.is_(False),
+        )
+        if session_id is not None:
+            stmt = stmt.where(AgentConfirmation.session_id == session_id)
+        if user_id is not None:
+            stmt = stmt.where(AgentConfirmation.user_id == user_id)
+        result = await db.execute(stmt.with_for_update(skip_locked=True))
+        confirmations = list(result.scalars().all())
+        for confirmation in confirmations:
+            confirmation.status = "expired"
+        if confirmations:
+            await db.flush()
+        return len(confirmations)
 
     async def create_tool_call(
         self,
@@ -571,6 +621,26 @@ class AgentRepository:
         confirmation.status = "executed"
         confirmation.executed_at = datetime.now(UTC)
         confirmation.result_payload = result_payload
+        confirmation.updated_by = user_id
+        await db.flush()
+        refreshed = await db.execute(
+            select(AgentConfirmation)
+            .where(
+                AgentConfirmation.id == confirmation.id,
+                AgentConfirmation.is_deleted.is_(False),
+            )
+            .execution_options(populate_existing=True)
+        )
+        return refreshed.scalar_one()
+
+    async def expire_confirmation(
+        self,
+        db: AsyncSession,
+        confirmation: AgentConfirmation,
+        *,
+        user_id: uuid.UUID | None,
+    ) -> AgentConfirmation:
+        confirmation.status = "expired"
         confirmation.updated_by = user_id
         await db.flush()
         refreshed = await db.execute(

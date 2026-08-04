@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from datetime import datetime
 from urllib.parse import urlencode
 from uuid import UUID
 
@@ -32,6 +33,8 @@ from app.platform.identity.schemas import (
     DepartmentTreeNode,
     ExternalIdentityBindingCreate,
     ExternalIdentityBindingOut,
+    ExternalIdentityBindingStatusUpdate,
+    ExternalIdentityConflictOut,
     FeishuConfigApiResponse,
     FeishuConfigUpsert,
     FeishuDiagnosticApiResponse,
@@ -381,16 +384,58 @@ async def reset_user_password(
     summary="管理员查询外部身份绑定",
 )
 async def list_external_identity_bindings(
+    page: int = 1,
+    page_size: int = 20,
+    keyword: str | None = None,
+    tenant_id: str | None = None,
+    status_value: str | None = None,
+    department: str | None = None,
+    active_since: datetime | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: AdminUser = None,
 ) -> JSONResponse:
-    items = await ExternalIdentityBindingRepository().list(db)
-    return success_response(
-        data=[
-            ExternalIdentityBindingOut.model_validate(item).model_dump(mode="json")
-            for item in items
-        ]
+    items, total = await ExternalIdentityBindingRepository().list_page(
+        db,
+        page=max(1, page),
+        page_size=min(max(1, page_size), 100),
+        keyword=keyword,
+        tenant_id=tenant_id,
+        status_value=status_value,
+        department=department,
+        active_since=active_since,
     )
+    return success_response(
+        data={
+            "items": [
+                {
+                    **ExternalIdentityBindingOut.model_validate(binding).model_dump(
+                        mode="json"
+                    ),
+                    "local_user_name": user.name,
+                    "local_user_department": user.department,
+                    "local_user_status": user.status,
+                }
+                for binding, user in items
+            ],
+            "page": max(1, page),
+            "page_size": min(max(1, page_size), 100),
+            "total": total,
+        }
+    )
+
+
+@user_router.get(
+    "/external-identity-bindings/conflicts",
+    summary="管理员查询飞书身份绑定冲突",
+    response_model=list[ExternalIdentityConflictOut],
+)
+async def list_external_identity_binding_conflicts(
+    db: AsyncSession = Depends(get_db),
+    current_user: AdminUser = None,
+):
+    from app.platform.identity.service import list_livzon_identity_conflicts
+
+    return await list_livzon_identity_conflicts(db)
 
 
 @user_router.post(
@@ -403,6 +448,8 @@ async def create_external_identity_binding(
     db: AsyncSession = Depends(get_db),
     current_user: AdminUser = None,
 ) -> JSONResponse:
+    from app.platform.audit.models import AuditLog
+
     local_user = await UserRepository().get_by_id(db, payload.local_user_id)
     if local_user is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "本地用户不存在")
@@ -418,25 +465,57 @@ async def create_external_identity_binding(
             status.HTTP_409_CONFLICT,
             "该飞书身份已经绑定",
         ) from exc
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            method="POST",
+            path="/api/v1/identity/external-identity-bindings",
+            status_code=201,
+            resource_type="external_identity_binding",
+            resource_id=binding.id,
+            action="create_external_identity_binding",
+            extra={"tenant_id": binding.tenant_id, "source": binding.source},
+        )
+    )
     return success_response(
         data=ExternalIdentityBindingOut.model_validate(binding).model_dump(mode="json")
     )
 
 
 @user_router.post(
-    "/external-identity-bindings/{binding_id}/disable",
-    summary="管理员停用外部身份绑定",
+    "/external-identity-bindings/{binding_id}/status",
+    summary="管理员更新外部身份绑定状态",
 )
-async def disable_external_identity_binding(
+async def update_external_identity_binding_status(
     binding_id: UUID,
+    payload: ExternalIdentityBindingStatusUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: AdminUser = None,
 ) -> JSONResponse:
+    from app.platform.audit.models import AuditLog
+
     repo = ExternalIdentityBindingRepository()
     binding = await repo.get(db, binding_id)
     if binding is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "外部身份绑定不存在")
-    binding = await repo.disable(db, binding, actor_id=current_user.id)
+    binding = await repo.set_status(
+        db,
+        binding,
+        status_value=payload.status,
+        actor_id=current_user.id,
+    )
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            method="POST",
+            path=f"/api/v1/identity/external-identity-bindings/{binding_id}/status",
+            status_code=200,
+            resource_type="external_identity_binding",
+            resource_id=binding.id,
+            action="update_external_identity_binding_status",
+            extra={"status": payload.status},
+        )
+    )
     return success_response(
         data=ExternalIdentityBindingOut.model_validate(binding).model_dump(mode="json")
     )
@@ -944,5 +1023,24 @@ async def trigger_sync_all(
     """同步 Livzon 助手使用的部门、用户、手机号、邮箱和部门关系。"""
     from app.platform.identity.service import run_livzon_feishu_sync_all
 
-    data = await run_livzon_feishu_sync_all(db)
+    data = await run_livzon_feishu_sync_all(db, actor_id=current_user.id)
+    from app.platform.audit.models import AuditLog
+
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            method="POST",
+            path="/api/v1/identity/sync/all",
+            status_code=200,
+            resource_type="external_identity_binding",
+            action="sync_livzon_feishu_directory",
+            extra={
+                "status": data.get("status"),
+                "created_bindings": data.get("bindings", {}).get("created", 0),
+                "conflict_count": len(
+                    data.get("bindings", {}).get("conflicts", [])
+                ),
+            },
+        )
+    )
     return success_response(data=data)

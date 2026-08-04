@@ -1,63 +1,130 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { ApiOutlined, SafetyCertificateOutlined, SaveOutlined } from '@ant-design/icons'
-import { App, Button, Card, Form, Input, List, Space, Switch, Tag, Typography } from 'antd'
+import { useCallback, useEffect, useState } from 'react'
+import {
+  ApiOutlined,
+  AuditOutlined,
+  CloudServerOutlined,
+  ExclamationCircleOutlined,
+  LinkOutlined,
+  ReloadOutlined,
+  SafetyCertificateOutlined,
+  SearchOutlined,
+  SettingOutlined,
+  TeamOutlined,
+  ToolOutlined,
+} from '@ant-design/icons'
+import {
+  Alert,
+  App,
+  Button,
+  Card,
+  Col,
+  Descriptions,
+  Drawer,
+  Empty,
+  Form,
+  Input,
+  List,
+  Pagination,
+  Row,
+  Select,
+  Space,
+  Statistic,
+  Switch,
+  Table,
+  Tabs,
+  Tag,
+  Typography,
+} from 'antd'
+import type { ColumnsType } from 'antd/es/table'
 import {
   createExternalIdentityBinding,
-  disableExternalIdentityBinding,
+  exportAgentTrace,
+  getAgentCapabilityImpacts,
+  getAgentConfirmations,
+  getAgentDeliveries,
+  getAgentRuntimeOverview,
   getAgentToolCatalog,
+  getAgentToolCatalogPage,
+  getAgentTrace,
   getExternalIdentityBindings,
-  getLivzonFeishuGatewayStatus,
+  getExternalIdentityConflicts,
+  getFeishuAuthorizations,
   getLivzonFeishuConfig,
+  getLivzonFeishuGatewayStatus,
+  revokeFeishuAuthorization,
+  saveLivzonFeishuConfig,
   setAgentToolEnabled,
+  syncLivzonFeishuDirectory,
+  testLivzonFeishuConfig,
+  updateExternalIdentityBindingStatus,
+  type AgentConfirmationGovernanceItem,
+  type AgentToolCatalogEntry,
+  type AgentTraceResult,
+  type AgentRuntimeOverview,
+  type ExternalIdentityBinding,
+  type ExternalIdentityBindingCreate,
+  type ExternalIdentityConflict,
+  type FeishuAuthorization,
+  type FeishuConfig,
+  type FeishuConfigUpsert,
+  type FeishuGatewayStatus,
 } from '@/actions/settings'
-import type {
-  FeishuConfig,
-  FeishuConfigUpsert,
-  FeishuGatewayStatus,
-  ExternalIdentityBinding,
-  ExternalIdentityBindingCreate,
-  AgentToolCatalogEntry,
-} from '@/actions/settings'
+import { getUsers, type UserManagementItem } from '@/actions/users'
 
 const { Text, Title } = Typography
 
 type CredentialsFormValues = Pick<
   FeishuConfigUpsert,
-  'app_id' | 'app_secret' | 'tenant_id' | 'gateway_enabled'
+  | 'app_id'
+  | 'app_secret'
+  | 'tenant_id'
+  | 'gateway_enabled'
+  | 'allowed_group_chat_ids'
+  | 'require_group_mention'
 >
 
-const DEFAULT_VALUES: CredentialsFormValues = {
-  app_id: '',
-  app_secret: '',
-  tenant_id: 'default',
-  gateway_enabled: true,
+const statusLabels: Record<string, string> = {
+  active: '有效',
+  suspended: '暂停',
+  revoked: '已撤销',
+  pending: '待处理',
+  executed: '已执行',
+  rejected: '已拒绝',
+  expired: '已过期',
+  failed: '失败',
+  connected: '已连接',
+  inactive: '未启用',
+  starting: '连接中',
 }
 
-export async function requestFeishuConfig<T>(
-  path: string,
-  payload: FeishuConfigUpsert,
-  method: 'POST' | 'PUT',
-): Promise<T> {
-  const response = await fetch(`/api/v1/identity/feishu-config${path}`, {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-    credentials: 'same-origin',
-  })
-  const body = (await response.json().catch(() => null)) as
-    | { data?: T; detail?: string; message?: string }
-    | null
-  if (!response.ok) {
-    throw new Error(
-      body?.detail || body?.message || `API error: ${response.status}`,
-    )
-  }
-  if (!body || body.data === undefined) {
-    throw new Error('飞书配置接口返回格式无效')
-  }
-  return body.data
+function statusTag(status: string) {
+  const color = status === 'active' || status === 'connected' || status === 'executed'
+    ? 'green'
+    : status === 'failed' || status === 'revoked'
+      ? 'red'
+      : status === 'pending' || status === 'starting'
+        ? 'orange'
+        : 'default'
+  return <Tag color={color}>{statusLabels[status] || status}</Tag>
+}
+
+function formatDate(value?: string | null) {
+  if (!value) return '—'
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
+}
+
+function downloadTextFile(filename: string, content: string) {
+  const url = URL.createObjectURL(new Blob([content], { type: 'application/json' }))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
 }
 
 export function buildPayload(
@@ -70,285 +137,921 @@ export function buildPayload(
     app_secret: values.app_secret?.trim() || undefined,
     tenant_id: values.tenant_id.trim(),
     gateway_enabled: values.gateway_enabled,
+    allowed_group_chat_ids: values.allowed_group_chat_ids || [],
+    require_group_mention: values.require_group_mention,
     sync_root_department_id: config?.sync_root_department_id,
     sync_member_department_id: config?.sync_member_department_id,
     is_active: config?.is_active ?? true,
   }
 }
 
-export default function FeishuSettingsClient() {
-  const { message } = App.useApp()
+function Overview({
+  config,
+  status,
+  health,
+  onNavigate,
+}: {
+  config: FeishuConfig | null
+  status: FeishuGatewayStatus | null
+  health: AgentRuntimeOverview | null
+  onNavigate: (key: string) => void
+}) {
+  const validationItems = [
+    '真实飞书测试 App 十项验收',
+    '单一生产事件消费者证明',
+    'Base 记录读取与两轮连续对话',
+    '生产冒烟与回滚演练',
+  ]
+  return (
+    <Space direction="vertical" size={16} className="w-full">
+      <Row gutter={[16, 16]}>
+        <Col xs={24} md={8} xl={6}>
+          <Card><Statistic title="Gateway" value={statusLabels[status?.gateway || ''] || status?.gateway || '未知'} /></Card>
+        </Col>
+        <Col xs={24} md={8} xl={6}>
+          <Card><Statistic title="审计 Outbox" value={status?.outbox_depth ?? 0} /></Card>
+        </Col>
+        <Col xs={24} md={8} xl={6}>
+          <Card><Statistic title="待确认" value={status?.pending_confirmations ?? 0} /></Card>
+        </Col>
+        <Col xs={24} md={8} xl={6}>
+          <Card><Statistic title="待投递" value={status?.pending_deliveries ?? 0} /></Card>
+        </Col>
+      </Row>
+      <Card title="运行版本与连接">
+        <Descriptions column={{ xs: 1, md: 2, xl: 3 }} size="small">
+          <Descriptions.Item label="连接状态">{statusTag(status?.gateway || 'unknown')}</Descriptions.Item>
+          <Descriptions.Item label="配置版本">{status?.config_version ?? 0}</Descriptions.Item>
+          <Descriptions.Item label="凭证版本">{status?.credential_version ?? '—'}</Descriptions.Item>
+          <Descriptions.Item label="重连次数">{status?.gateway_reconnects ?? 0}</Descriptions.Item>
+          <Descriptions.Item label="当前消费者">{status?.event_consumer || '—'}</Descriptions.Item>
+          <Descriptions.Item label="消费者数量">{status?.event_consumer_count ?? 0}</Descriptions.Item>
+          <Descriptions.Item label="Hermes Release">{status?.gateway_upstream?.release_tag || '—'}</Descriptions.Item>
+          <Descriptions.Item label="Commit">{status?.gateway_upstream?.commit_sha?.slice(0, 12) || '—'}</Descriptions.Item>
+          <Descriptions.Item label="最近配置变更">{formatDate(config?.updated_at)}</Descriptions.Item>
+          <Descriptions.Item label="配置变更人">{config?.updated_by || '—'}</Descriptions.Item>
+        </Descriptions>
+      </Card>
+      {health?.latest_error_trace_id && (
+        <Alert
+          type="error"
+          showIcon
+          title={`最近异常 Trace：${health.latest_error_trace_id}`}
+          description={`发生时间：${formatDate(health.latest_error_at)}`}
+          action={<Button size="small" onClick={() => onNavigate('trace')}>查看 Trace</Button>}
+        />
+      )}
+      <Card
+        title="外部验收状态"
+        extra={<Button onClick={() => onNavigate('trace')}>进入诊断</Button>}
+      >
+        <Alert
+          type="warning"
+          showIcon
+          title="自动化测试不能替代真实飞书验收"
+          description="以下项目尚未形成脱敏验收证据，保持待处理状态。"
+          className="mb-3"
+        />
+        <List
+          dataSource={validationItems}
+          renderItem={(item) => (
+            <List.Item>
+              <Space><ExclamationCircleOutlined className="text-orange-500" />{item}<Tag>待验收</Tag></Space>
+            </List.Item>
+          )}
+        />
+      </Card>
+      {health && (
+        <Card title="自动化健康摘要">
+          <Descriptions size="small">
+            <Descriptions.Item label="待确认">{health.pending_confirmations}</Descriptions.Item>
+            <Descriptions.Item label="失败投递">{health.failed_deliveries}</Descriptions.Item>
+            <Descriptions.Item label="最近异常">{health.latest_error_trace_id || '无'}</Descriptions.Item>
+          </Descriptions>
+        </Card>
+      )}
+    </Space>
+  )
+}
+
+function FeishuAccess({
+  config,
+  status,
+  onSaved,
+}: {
+  config: FeishuConfig | null
+  status: FeishuGatewayStatus | null
+  onSaved: (value: FeishuConfig) => void
+}) {
+  const { message, modal } = App.useApp()
   const [form] = Form.useForm<CredentialsFormValues>()
-  const [bindingForm] = Form.useForm<ExternalIdentityBindingCreate>()
-  const [config, setConfig] = useState<FeishuConfig | null>(null)
-  const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
-  const [gatewayStatus, setGatewayStatus] = useState<FeishuGatewayStatus | null>(null)
-  const [bindings, setBindings] = useState<ExternalIdentityBinding[]>([])
-  const [tools, setTools] = useState<AgentToolCatalogEntry[]>([])
-
-  const configuredSecret = !!config?.app_secret_configured
+  const [diagnostic, setDiagnostic] = useState<Awaited<ReturnType<typeof testLivzonFeishuConfig>> | null>(null)
+  const [operationFeedback, setOperationFeedback] = useState<{
+    type: 'success' | 'error'
+    title: string
+    description: string
+  } | null>(null)
 
   useEffect(() => {
-    let cancelled = false
+    if (!config) return
+    form.setFieldsValue({
+      app_id: config.app_id,
+      app_secret: '',
+      tenant_id: config.tenant_id,
+      gateway_enabled: config.gateway_enabled,
+      allowed_group_chat_ids: config.allowed_group_chat_ids || [],
+      require_group_mention: config.require_group_mention,
+    })
+  }, [config, form])
 
-    Promise.all([
-      getLivzonFeishuConfig(),
-      getLivzonFeishuGatewayStatus().catch(() => null),
-      getExternalIdentityBindings(),
-      getAgentToolCatalog(),
-    ])
-      .then(([data, status, identityBindings, catalog]) => {
-        if (cancelled) return
-        setConfig(data)
-        setGatewayStatus(status)
-        setBindings(identityBindings)
-        setTools(catalog)
-        form.setFieldsValue({
-          app_id: data.app_id || '',
-          app_secret: '',
-          tenant_id: data.tenant_id || 'default',
-          gateway_enabled: data.gateway_enabled,
-        })
-        bindingForm.setFieldsValue({
-          tenant_id: data.tenant_id || 'default',
-          platform: 'feishu',
-          app_fingerprint: data.app_id || '',
-        })
-      })
-      .catch((error) => {
-        if (cancelled) return
-        console.error('Failed to load Livzon Feishu config:', error)
-        message.error('加载 Livzon 助手设置失败')
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [bindingForm, form, message])
-
-  const handleSave = async () => {
-    try {
-      const payload = buildPayload(await form.validateFields(), config)
-      setSaving(true)
-      const data = await requestFeishuConfig<FeishuConfig>('', payload, 'PUT')
-      setConfig(data)
-      setGatewayStatus(await getLivzonFeishuGatewayStatus().catch(() => null))
-      form.setFieldValue('app_secret', '')
-      message.success('Livzon 助手凭证已保存')
-    } catch (error) {
-      console.error('Save Livzon Feishu credentials failed:', error)
-      message.error(error instanceof Error ? error.message : '保存凭证失败')
-    } finally {
-      setSaving(false)
-    }
+  const save = async () => {
+    const values = await form.validateFields()
+    const payload = buildPayload(values, config)
+    modal.confirm({
+      title: payload.gateway_enabled ? '确认更新飞书接入配置' : '确认停用 Hermes Gateway',
+      icon: <ExclamationCircleOutlined />,
+      content: payload.gateway_enabled
+        ? '保存后 Hermes 将校验候选凭证并按新版本重建连接。失败时保留当前可用版本。'
+        : '停用后 Livzon 助手将停止消费该飞书应用消息。',
+      okText: payload.gateway_enabled ? '确认保存' : '确认停用',
+      okButtonProps: { danger: !payload.gateway_enabled },
+      async onOk() {
+        setSaving(true)
+        setOperationFeedback(null)
+        try {
+          const result = await saveLivzonFeishuConfig(payload)
+          onSaved(result)
+          form.setFieldValue('app_secret', '')
+          const description = `配置版本 ${result.config_version} 已写入，Gateway ${result.gateway_enabled ? '已启用' : '已停用'}。`
+          setOperationFeedback({
+            type: 'success',
+            title: '飞书接入配置保存成功',
+            description,
+          })
+          message.success({
+            content: '飞书接入配置保存成功',
+            duration: 4,
+          })
+        } catch (error) {
+          const detail = error instanceof Error ? error.message : '未知错误'
+          setOperationFeedback({
+            type: 'error',
+            title: '飞书接入配置保存失败',
+            description: detail,
+          })
+          message.error({
+            content: `保存失败：${detail}`,
+            duration: 6,
+          })
+        } finally {
+          setSaving(false)
+        }
+      },
+    })
   }
 
-  const handleTest = async () => {
+  const test = async () => {
+    const payload = buildPayload(await form.validateFields(), config)
+    setTesting(true)
     try {
-      const payload = buildPayload(await form.validateFields(), config)
-      setTesting(true)
-      const result = await requestFeishuConfig<{
-        message?: string
-        steps?: Array<{ name: string; status: string; message?: string }>
-      }>('/test', payload, 'POST')
-      const credentialStep = result.steps?.find((step) => step.name === 'tenant_access_token')
-      if (credentialStep?.status === 'ok') {
-        message.success('Livzon 助手凭证连通性测试通过')
-      } else {
-        message.error(credentialStep?.message || result.message || '连通性测试失败')
-      }
+      const result = await testLivzonFeishuConfig(payload)
+      setDiagnostic(result)
+      if (result.status === 'error') message.error(result.message)
+      else message.success(result.message)
     } catch (error) {
-      console.error('Test Livzon Feishu credentials failed:', error)
-      message.error(error instanceof Error ? error.message : '连通性测试失败')
+      const detail = error instanceof Error ? error.message : '未知错误'
+      setOperationFeedback({
+        type: 'error',
+        title: '连通性诊断执行失败',
+        description: detail,
+      })
+      message.error({
+        content: `运行诊断失败：${detail}`,
+        duration: 6,
+      })
     } finally {
       setTesting(false)
     }
   }
 
   return (
-    <div className="max-w-[760px]">
-      <div className="mb-5">
-        <Title level={3} style={{ margin: 0 }}>
-          <SafetyCertificateOutlined style={{ marginRight: 10 }} />
-          Livzon 助手设置
-        </Title>
-        <Text className="mt-2 block text-[13px] text-[var(--color-steel)]">
-          配置 Livzon 助手使用的飞书应用凭证。
-        </Text>
-      </div>
+    <Row gutter={[16, 16]}>
+      <Col xs={24} xl={14}>
+        <Card title="飞书应用与 Gateway">
+          <Space className="mb-4" wrap>
+            <Text strong>当前状态</Text>
+            {statusTag(status?.gateway || 'unknown')}
+            <Text type="secondary">配置版本 {status?.config_version ?? 0} · 重连 {status?.gateway_reconnects ?? 0}</Text>
+          </Space>
+          <Form form={form} layout="vertical">
+            <Row gutter={16}>
+              <Col xs={24} md={12}>
+                <Form.Item name="app_id" label="App ID" rules={[{ required: true, message: '请输入 App ID' }]}>
+                  <Input placeholder="cli_xxx" />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={12}>
+                <Form.Item name="tenant_id" label="租户标识" rules={[{ required: true, message: '请输入租户标识' }]}>
+                  <Input />
+                </Form.Item>
+              </Col>
+            </Row>
+            <Form.Item
+              name="app_secret"
+              label="App Secret"
+              extra={config?.app_secret_configured ? '凭证已保存；留空表示不修改。' : '首次保存必须填写。'}
+              rules={[{ required: !config?.app_secret_configured, message: '请输入 App Secret' }]}
+            >
+              <Input.Password autoComplete="new-password" placeholder="留空则不修改" />
+            </Form.Item>
+            <Form.Item name="allowed_group_chat_ids" label="允许接入的群聊" extra="输入飞书 chat_id；私聊不受此列表影响。">
+              <Select mode="tags" tokenSeparators={[',', ' ']} placeholder="oc_xxx" />
+            </Form.Item>
+            <Row gutter={16}>
+              <Col xs={24} md={12}>
+                <Form.Item name="gateway_enabled" label="启用 Hermes Feishu Gateway" valuePropName="checked">
+                  <Switch />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={12}>
+                <Form.Item name="require_group_mention" label="群聊必须 @Livzon" valuePropName="checked">
+                  <Switch disabled />
+                </Form.Item>
+              </Col>
+            </Row>
+            <Space>
+              <Button type="primary" loading={saving} onClick={() => void save()}>保存配置</Button>
+              <Button icon={<ApiOutlined />} loading={testing} onClick={() => void test()}>运行诊断</Button>
+            </Space>
+            {operationFeedback && (
+              <Alert
+                className="mt-4"
+                type={operationFeedback.type}
+                showIcon
+                closable
+                title={operationFeedback.title}
+                description={operationFeedback.description}
+                onClose={() => setOperationFeedback(null)}
+              />
+            )}
+          </Form>
+        </Card>
+      </Col>
+      <Col xs={24} xl={10}>
+        <Card title="连通性诊断">
+          {diagnostic ? (
+            <List
+              dataSource={diagnostic.steps}
+              renderItem={(step) => (
+                <List.Item>
+                  <List.Item.Meta title={step.name} description={step.suggestion || step.message} />
+                  {statusTag(step.status)}
+                </List.Item>
+              )}
+            />
+          ) : <Empty description="尚未运行诊断" />}
+        </Card>
+      </Col>
+    </Row>
+  )
+}
 
-      <Card>
-        <Space className="mb-4" wrap>
-          <Text strong>Gateway</Text>
-          <Tag color={gatewayStatus?.gateway === 'connected' ? 'green' : 'orange'}>
-            {gatewayStatus?.gateway || 'unknown'}
-          </Tag>
-          <Text type="secondary">
-            配置版本 {gatewayStatus?.config_version ?? config?.config_version ?? 0}
-            {' · '}重连 {gatewayStatus?.gateway_reconnects ?? 0}
-          </Text>
+function IdentityAdmission({ tenantId, appId }: { tenantId: string; appId: string }) {
+  const { message, modal } = App.useApp()
+  const [form] = Form.useForm<ExternalIdentityBindingCreate>()
+  const [items, setItems] = useState<ExternalIdentityBinding[]>([])
+  const [users, setUsers] = useState<UserManagementItem[]>([])
+  const [page, setPage] = useState(1)
+  const [total, setTotal] = useState(0)
+  const [keyword, setKeyword] = useState('')
+  const [status, setStatus] = useState<string>()
+  const [department, setDepartment] = useState<string>()
+  const [activeDays, setActiveDays] = useState<number>()
+  const [conflicts, setConflicts] = useState<ExternalIdentityConflict[]>([])
+  const [syncing, setSyncing] = useState(false)
+  const [syncFeedback, setSyncFeedback] = useState<{ status: 'ok' | 'warning'; message: string } | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const [bindings, userPage, conflictItems] = await Promise.all([
+        getExternalIdentityBindings({
+          page,
+          pageSize: 20,
+          keyword,
+          tenantId,
+          status,
+          department,
+          activeSince: activeDays
+            ? new Date(Date.now() - activeDays * 86_400_000).toISOString()
+            : undefined,
+        }),
+        getUsers({ status: 'active' }),
+        getExternalIdentityConflicts(),
+      ])
+      setItems(bindings.items)
+      setTotal(bindings.total)
+      setUsers(userPage.items)
+      setConflicts(conflictItems)
+    } finally {
+      setLoading(false)
+    }
+  }, [activeDays, department, keyword, page, status, tenantId])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => void load(), 0)
+    return () => window.clearTimeout(timer)
+  }, [load])
+  useEffect(() => {
+    form.setFieldsValue({ tenant_id: tenantId, platform: 'feishu', app_fingerprint: appId, source: 'admin' })
+  }, [appId, form, tenantId])
+
+  const changeStatus = (item: ExternalIdentityBinding, next: ExternalIdentityBinding['status']) => {
+    modal.confirm({
+      title: next === 'active' ? '恢复身份绑定' : next === 'revoked' ? '撤销身份绑定' : '暂停身份绑定',
+      content: next === 'active' ? '恢复后该飞书身份可以重新使用 Livzon 助手。' : '变更后该身份的新请求将立即失败关闭。',
+      okButtonProps: { danger: next !== 'active' },
+      async onOk() {
+        await updateExternalIdentityBindingStatus(item.id, next)
+        message.success('身份状态已更新')
+        await load()
+      },
+    })
+  }
+
+  const syncDirectory = () => {
+    modal.confirm({
+      title: '同步飞书通讯录与身份绑定',
+      content: '将读取已授权的飞书部门和用户，更新本地目录并为无冲突用户建立可信身份绑定。冲突项不会自动覆盖。',
+      okText: '开始同步',
+      async onOk() {
+        setSyncing(true)
+        try {
+          const result = await syncLivzonFeishuDirectory()
+          setSyncFeedback({ status: result.status, message: result.message })
+          if (result.status === 'warning') message.warning(result.message)
+          else message.success(result.message)
+          await load()
+        } catch (error) {
+          message.error(error instanceof Error ? error.message : '飞书通讯录同步失败')
+          throw error
+        } finally {
+          setSyncing(false)
+        }
+      },
+    })
+  }
+
+  const columns: ColumnsType<ExternalIdentityBinding> = [
+    {
+      title: '本地用户',
+      width: 220,
+      render: (_, item) => item.local_user_name || item.local_user_id,
+    },
+    { title: '部门', dataIndex: 'local_user_department', width: 160, render: (value) => value || '—' },
+    {
+      title: '飞书身份',
+      width: 220,
+      render: (_, item) => item.external_open_id || item.external_union_id || item.external_user_id || '—',
+    },
+    { title: '租户', dataIndex: 'tenant_id', width: 130 },
+    { title: '来源', dataIndex: 'source', width: 120 },
+    { title: '最近活动', dataIndex: 'last_seen_at', width: 180, render: formatDate },
+    { title: '状态', dataIndex: 'status', width: 100, render: statusTag },
+    {
+      title: '操作',
+      fixed: 'right',
+      width: 180,
+      render: (_, item) => (
+        <Space>
+          {item.status !== 'active' && <Button type="link" onClick={() => changeStatus(item, 'active')}>恢复</Button>}
+          {item.status === 'active' && <Button type="link" onClick={() => changeStatus(item, 'suspended')}>暂停</Button>}
+          {item.status !== 'revoked' && <Button danger type="link" onClick={() => changeStatus(item, 'revoked')}>撤销</Button>}
         </Space>
+      ),
+    },
+  ]
+
+  return (
+    <Space direction="vertical" size={16} className="w-full">
+      <Card title="建立可信身份绑定">
         <Form
           form={form}
           layout="vertical"
-          initialValues={DEFAULT_VALUES}
-          disabled={loading}
-        >
-          <Form.Item
-            name="app_id"
-            label="App ID"
-            rules={[{ required: true, message: '请输入 App ID' }]}
-          >
-            <Input placeholder="cli_xxx" />
-          </Form.Item>
-
-          <Form.Item
-            name="tenant_id"
-            label="租户标识"
-            rules={[{ required: true, message: '请输入租户标识' }]}
-          >
-            <Input placeholder="default" />
-          </Form.Item>
-
-          <Form.Item
-            name="gateway_enabled"
-            label="启用 Hermes Feishu Gateway"
-            valuePropName="checked"
-          >
-            <Switch />
-          </Form.Item>
-
-          <Form.Item
-            name="app_secret"
-            label="App Secret"
-            extra={configuredSecret ? '已保存凭证；留空则不修改。' : '首次保存必须填写。'}
-            rules={[{ required: !configuredSecret, message: '请输入 App Secret' }]}
-          >
-            <Input.Password
-              autoComplete="new-password"
-              placeholder={configuredSecret ? '留空则不修改' : '请输入 App Secret'}
-            />
-          </Form.Item>
-
-          <Space wrap>
-            <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={handleSave}>
-              保存凭证
-            </Button>
-            <Button icon={<ApiOutlined />} loading={testing} onClick={handleTest}>
-              测试连通性
-            </Button>
-          </Space>
-        </Form>
-      </Card>
-
-      <Card className="mt-4" title="可信飞书身份绑定">
-        <Form
-          form={bindingForm}
-          layout="vertical"
-          initialValues={{
-            tenant_id: config?.tenant_id || 'default',
-            platform: 'feishu',
-            app_fingerprint: config?.app_id || '',
-          }}
           onFinish={async (values) => {
-            try {
-              await createExternalIdentityBinding(values)
-              setBindings(await getExternalIdentityBindings())
-              bindingForm.resetFields([
-                'external_user_id',
-                'external_open_id',
-                'external_union_id',
-                'local_user_id',
-              ])
-              message.success('身份绑定已创建')
-            } catch (error) {
-              message.error(error instanceof Error ? error.message : '创建绑定失败')
-            }
+            await createExternalIdentityBinding(values)
+            message.success('身份绑定已创建')
+            form.resetFields(['external_user_id', 'external_open_id', 'external_union_id', 'local_user_id'])
+            await load()
           }}
         >
-          <Space wrap align="start">
-            <Form.Item name="tenant_id" label="租户" rules={[{ required: true }]}>
-              <Input />
-            </Form.Item>
-            <Form.Item name="app_fingerprint" label="App ID" rules={[{ required: true }]}>
-              <Input />
-            </Form.Item>
-            <Form.Item name="external_open_id" label="飞书 Open ID">
-              <Input placeholder="ou_xxx" />
-            </Form.Item>
-            <Form.Item name="external_union_id" label="飞书 Union ID">
-              <Input placeholder="on_xxx" />
-            </Form.Item>
-            <Form.Item name="local_user_id" label="本地用户 UUID" rules={[{ required: true }]}>
-              <Input />
-            </Form.Item>
-            <Form.Item label=" ">
-              <Button htmlType="submit" type="primary">创建绑定</Button>
-            </Form.Item>
-          </Space>
+          <Row gutter={16}>
+            <Col xs={24} md={8}>
+              <Form.Item name="local_user_id" label="本地用户" rules={[{ required: true }]}>
+                <Select
+                  showSearch
+                  optionFilterProp="label"
+                  options={users.map((user) => ({ value: user.id, label: `${user.name}（${user.username}）` }))}
+                />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={8}>
+              <Form.Item name="external_open_id" label="飞书 Open ID">
+                <Input placeholder="ou_xxx" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={8}>
+              <Form.Item name="external_union_id" label="飞书 Union ID">
+                <Input placeholder="on_xxx" />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Form.Item name="tenant_id" hidden><Input /></Form.Item>
+          <Form.Item name="platform" hidden><Input /></Form.Item>
+          <Form.Item name="app_fingerprint" hidden><Input /></Form.Item>
+          <Form.Item name="source" hidden><Input /></Form.Item>
+          <Button type="primary" htmlType="submit">创建绑定</Button>
         </Form>
-        <List
-          dataSource={bindings}
-          locale={{ emptyText: '暂无身份绑定' }}
-          renderItem={(item) => (
-            <List.Item
-              actions={item.status === 'active' ? [
-                <Button
-                  key="disable"
-                  danger
-                  type="link"
-                  onClick={async () => {
-                    await disableExternalIdentityBinding(item.id)
-                    setBindings(await getExternalIdentityBindings())
-                  }}
-                >
-                  停用
-                </Button>,
-              ] : undefined}
-            >
-              <List.Item.Meta
-                title={`${item.external_open_id || item.external_union_id || item.external_user_id} → ${item.local_user_id}`}
-                description={`${item.tenant_id} · ${item.app_fingerprint}`}
-              />
-              <Tag color={item.status === 'active' ? 'green' : 'default'}>{item.status}</Tag>
-            </List.Item>
-          )}
-        />
       </Card>
+      <Card title="身份与准入目录">
+        {syncFeedback && (
+          <Alert
+            className="mb-4"
+            showIcon
+            closable
+            type={syncFeedback.status === 'ok' ? 'success' : 'warning'}
+            title={syncFeedback.message}
+            onClose={() => setSyncFeedback(null)}
+          />
+        )}
+        <Space className="mb-4" wrap>
+          <Input.Search
+            allowClear
+            placeholder="搜索飞书外部 ID"
+            onSearch={(value) => { setPage(1); setKeyword(value) }}
+            style={{ width: 280 }}
+          />
+          <Select
+            allowClear
+            placeholder="状态"
+            style={{ width: 140 }}
+            options={[
+              { value: 'active', label: '有效' },
+              { value: 'suspended', label: '暂停' },
+              { value: 'revoked', label: '已撤销' },
+            ]}
+            onChange={(value) => { setPage(1); setStatus(value) }}
+          />
+          <Select
+            allowClear
+            showSearch
+            placeholder="部门"
+            style={{ width: 180 }}
+            options={Array.from(new Set(users.map((user) => user.department).filter(Boolean))).map((value) => ({ value, label: value }))}
+            onChange={(value) => { setPage(1); setDepartment(value) }}
+          />
+          <Select
+            allowClear
+            placeholder="最近活动"
+            style={{ width: 150 }}
+            options={[
+              { value: 7, label: '最近 7 天' },
+              { value: 30, label: '最近 30 天' },
+              { value: 90, label: '最近 90 天' },
+            ]}
+            onChange={(value) => { setPage(1); setActiveDays(value) }}
+          />
+          <Button icon={<ReloadOutlined />} onClick={() => void load()}>刷新</Button>
+          <Button type="primary" icon={<TeamOutlined />} loading={syncing} onClick={syncDirectory}>同步飞书目录</Button>
+        </Space>
+        <Table rowKey="id" columns={columns} dataSource={items} loading={loading} pagination={false} scroll={{ x: 1100 }} />
+        <Pagination className="mt-4 text-right" current={page} pageSize={20} total={total} onChange={setPage} />
+      </Card>
+      <Card title={`身份冲突工作台（${conflicts.length}）`}>
+        {conflicts.length ? (
+          <Table
+            rowKey={(item) => `${item.local_user_id}-${item.conflicting_binding_id}`}
+            pagination={false}
+            dataSource={conflicts}
+            columns={[
+              { title: '本地用户', dataIndex: 'local_user_name' },
+              { title: '部门', dataIndex: 'department', render: (value) => value || '—' },
+              { title: '外部标识', dataIndex: 'external_identifier', ellipsis: true },
+              {
+                title: '冲突类型',
+                dataIndex: 'conflict_type',
+                render: (value) => value === 'external_owned_by_other' ? '外部身份已绑定其他用户' : '本地用户已有不同绑定',
+              },
+              { title: '冲突绑定', dataIndex: 'conflicting_binding_id', ellipsis: true },
+            ]}
+            scroll={{ x: 900 }}
+          />
+        ) : <Empty description="未发现身份绑定冲突" />}
+      </Card>
+    </Space>
+  )
+}
 
-      <Card className="mt-4" title="企业工具目录">
-        <List
-          dataSource={tools}
-          locale={{ emptyText: '暂无已发现工具' }}
-          renderItem={(item) => (
-            <List.Item
-              actions={[
-                <Switch
-                  key="enabled"
-                  checked={item.status === 'active'}
-                  onChange={async (enabled) => {
-                    await setAgentToolEnabled(item.operation, enabled)
-                    setTools(await getAgentToolCatalog())
-                  }}
-                />,
-              ]}
-            >
-              <List.Item.Meta
-                title={item.operation}
-                description={`${item.module || 'platform'} · ${item.summary}`}
-              />
-              <Tag color={item.risk_level === 'high' ? 'red' : item.risk_level === 'medium' ? 'orange' : 'blue'}>
-                {item.risk_level}
+function ToolGovernance() {
+  const { message, modal } = App.useApp()
+  const [items, setItems] = useState<AgentToolCatalogEntry[]>([])
+  const [moduleOptions, setModuleOptions] = useState<string[]>([])
+  const [selected, setSelected] = useState<AgentToolCatalogEntry | null>(null)
+  const [impacts, setImpacts] = useState<Array<Record<string, unknown>>>([])
+  const [page, setPage] = useState(1)
+  const [total, setTotal] = useState(0)
+  const [keyword, setKeyword] = useState('')
+  const [module, setModule] = useState<string>()
+  const [risk, setRisk] = useState<string>()
+  const [status, setStatus] = useState<string>()
+  const [loading, setLoading] = useState(false)
+  const selectedOutputSchemaSource = selected?.output_schema?.['x-dazah-schema-source']
+  const selectedOutputSchemaIsInferred = selectedOutputSchemaSource === 'return_annotation'
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const [catalog, impactRows] = await Promise.all([
+        getAgentToolCatalogPage({ page, pageSize: 20, keyword, module, riskLevel: risk, status }),
+        getAgentCapabilityImpacts(),
+      ])
+      setItems(catalog.items)
+      setTotal(catalog.total)
+      setImpacts(impactRows)
+    } finally {
+      setLoading(false)
+    }
+  }, [keyword, module, page, risk, status])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => void load(), 0)
+    return () => window.clearTimeout(timer)
+  }, [load])
+  useEffect(() => {
+    let active = true
+    void getAgentToolCatalog().then((catalog) => {
+      if (!active) return
+      setModuleOptions(
+        Array.from(new Set(catalog.map((item) => item.module || 'platform'))).sort(),
+      )
+    })
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const toggle = (item: AgentToolCatalogEntry, enabled: boolean) => {
+    const affected = impacts.filter((impact) => impact.operation === item.operation)
+    modal.confirm({
+      title: enabled ? '启用 Agent 能力' : '紧急禁用 Agent 能力',
+      content: enabled
+        ? `确认启用 ${item.operation}。`
+        : `禁用后模型、Skill 和自动化均不能调用该能力。当前识别到 ${affected.length} 个自动化影响项。`,
+      okButtonProps: { danger: !enabled },
+      async onOk() {
+        await setAgentToolEnabled(item.operation, enabled)
+        message.success(enabled ? '能力已启用' : '能力已禁用')
+        await load()
+      },
+    })
+  }
+
+  const columns: ColumnsType<AgentToolCatalogEntry> = [
+    { title: 'Operation', dataIndex: 'operation', width: 250, ellipsis: true },
+    { title: '摘要', dataIndex: 'summary', width: 280, ellipsis: true },
+    { title: '模块', dataIndex: 'module', width: 110, render: (value) => value || 'platform' },
+    { title: '版本', dataIndex: 'version', width: 90 },
+    { title: '读写', dataIndex: 'write', width: 80, render: (value) => value ? <Tag color="orange">写</Tag> : <Tag>读</Tag> },
+    { title: '风险', dataIndex: 'risk_level', width: 90, render: (value) => <Tag color={value === 'high' ? 'red' : value === 'medium' ? 'orange' : 'blue'}>{value}</Tag> },
+    { title: '确认', dataIndex: 'confirmation_required', width: 80, render: (value) => value ? '需要' : '无需' },
+    { title: '状态', dataIndex: 'status', width: 90, render: statusTag },
+    {
+      title: '操作',
+      fixed: 'right',
+      width: 150,
+      render: (_, item) => (
+        <Space>
+          <Button type="link" onClick={() => setSelected(item)}>详情</Button>
+          <Switch checked={item.status === 'active'} onChange={(value) => toggle(item, value)} />
+        </Space>
+      ),
+    },
+  ]
+
+  return (
+    <Card title="企业能力目录与策略">
+      <Space className="mb-4" wrap>
+        <Input.Search placeholder="搜索 operation 或摘要" allowClear style={{ width: 280 }} onSearch={(value) => { setPage(1); setKeyword(value) }} />
+        <Select aria-label="模块" allowClear placeholder="模块" style={{ width: 140 }} options={moduleOptions.map((value) => ({ value }))} onChange={(value) => { setPage(1); setModule(value) }} />
+        <Select allowClear placeholder="风险" style={{ width: 120 }} options={['low', 'medium', 'high'].map((value) => ({ value }))} onChange={(value) => { setPage(1); setRisk(value) }} />
+        <Select allowClear placeholder="状态" style={{ width: 120 }} options={[{ value: 'active', label: '有效' }, { value: 'disabled', label: '停用' }]} onChange={(value) => { setPage(1); setStatus(value) }} />
+      </Space>
+      <Table rowKey="operation" columns={columns} dataSource={items} loading={loading} pagination={false} scroll={{ x: 1350 }} />
+      <Pagination className="mt-4 text-right" current={page} pageSize={20} total={total} onChange={setPage} />
+      <Drawer title={selected?.operation || '能力详情'} width={680} open={!!selected} onClose={() => setSelected(null)}>
+        {selected && (
+          <Space direction="vertical" className="w-full">
+            <Descriptions column={1} size="small" bordered>
+              <Descriptions.Item label="摘要">{selected.summary}</Descriptions.Item>
+              <Descriptions.Item label="模块">{selected.module || 'platform'}</Descriptions.Item>
+              <Descriptions.Item label="版本">{selected.version}</Descriptions.Item>
+              <Descriptions.Item label="状态">{statusTag(selected.status)}</Descriptions.Item>
+              <Descriptions.Item label="读写">{selected.write ? <Tag color="orange">写</Tag> : <Tag>读</Tag>}</Descriptions.Item>
+              <Descriptions.Item label="风险"><Tag color={selected.risk_level === 'high' ? 'red' : selected.risk_level === 'medium' ? 'orange' : 'blue'}>{selected.risk_level}</Tag></Descriptions.Item>
+              <Descriptions.Item label="人工确认">{selected.confirmation_required ? '需要' : '无需'}</Descriptions.Item>
+              <Descriptions.Item label="权限键">{selected.permission_key || '—'}</Descriptions.Item>
+              <Descriptions.Item label="超时">{selected.timeout_seconds} 秒</Descriptions.Item>
+              <Descriptions.Item label="幂等">{selected.idempotent ? '是' : '否'}</Descriptions.Item>
+              <Descriptions.Item label="受影响自动化">{impacts.filter((item) => item.operation === selected.operation).length}</Descriptions.Item>
+            </Descriptions>
+            <Title level={5}>输入 Schema</Title>
+            <pre className="max-h-72 overflow-auto rounded bg-slate-50 p-3 text-xs">{JSON.stringify(selected.input_schema, null, 2)}</pre>
+            <Space>
+              <Title level={5} className="!mb-0">输出 Schema</Title>
+              <Tag color={selectedOutputSchemaIsInferred ? 'gold' : 'green'}>
+                {selectedOutputSchemaIsInferred ? '通用契约 · 待细化' : '字段级契约'}
               </Tag>
-            </List.Item>
-          )}
-        />
+            </Space>
+            {selectedOutputSchemaIsInferred && (
+              <Alert
+                type="warning"
+                showIcon
+                title="当前 Schema 由 handler 返回注解推导，仅保证容器类型；字段级输出仍需由业务模块补充。"
+              />
+            )}
+            <pre className="max-h-72 overflow-auto rounded bg-slate-50 p-3 text-xs">{JSON.stringify(selected.output_schema, null, 2)}</pre>
+          </Space>
+        )}
+      </Drawer>
+    </Card>
+  )
+}
+
+function AuthorizationConfirmation() {
+  const { message, modal } = App.useApp()
+  const [userId, setUserId] = useState('')
+  const [grants, setGrants] = useState<FeishuAuthorization[]>([])
+  const [confirmations, setConfirmations] = useState<AgentConfirmationGovernanceItem[]>([])
+  const [confirmationStatus, setConfirmationStatus] = useState<string>()
+
+  const loadConfirmations = useCallback(async () => {
+    const result = await getAgentConfirmations({ pageSize: 50, status: confirmationStatus })
+    setConfirmations(result.items)
+  }, [confirmationStatus])
+  useEffect(() => {
+    const timer = window.setTimeout(() => void loadConfirmations(), 0)
+    return () => window.clearTimeout(timer)
+  }, [loadConfirmations])
+
+  const grantColumns: ColumnsType<FeishuAuthorization> = [
+    { title: '资源', dataIndex: 'resource', ellipsis: true },
+    { title: '动作', dataIndex: 'action', width: 150 },
+    { title: '风险', dataIndex: 'risk', width: 90, render: (value) => <Tag>{value}</Tag> },
+    { title: '创建时间', dataIndex: 'created_at', width: 180, render: (value: number) => new Date(value * 1000).toLocaleString() },
+    {
+      title: '操作',
+      width: 100,
+      render: (_, item) => (
+        <Button
+          danger
+          type="link"
+          onClick={() => modal.confirm({
+            title: '撤销记忆授权',
+            content: '撤销后该资源的下一次写操作将重新要求用户确认。',
+            okButtonProps: { danger: true },
+            async onOk() {
+              await revokeFeishuAuthorization(item.id, userId)
+              setGrants(await getFeishuAuthorizations(userId))
+              message.success('授权已撤销')
+            },
+          })}
+        >
+          撤销
+        </Button>
+      ),
+    },
+  ]
+  const confirmationColumns: ColumnsType<AgentConfirmationGovernanceItem> = [
+    { title: '摘要', dataIndex: 'summary', ellipsis: true },
+    { title: 'Operation', dataIndex: 'operation', width: 230, ellipsis: true },
+    { title: '风险', dataIndex: 'risk_level', width: 90, render: (value) => <Tag>{value}</Tag> },
+    { title: '状态', dataIndex: 'status', width: 100, render: statusTag },
+    { title: '创建时间', dataIndex: 'created_at', width: 180, render: formatDate },
+    { title: '过期时间', dataIndex: 'expires_at', width: 180, render: formatDate },
+  ]
+
+  return (
+    <Space direction="vertical" size={16} className="w-full">
+      <Card title="Hermes 飞书记忆授权">
+        <Space className="mb-4">
+          <Input value={userId} onChange={(event) => setUserId(event.target.value)} placeholder="本地用户 UUID" style={{ width: 340 }} />
+          <Button icon={<SearchOutlined />} disabled={!userId.trim()} onClick={async () => setGrants(await getFeishuAuthorizations(userId.trim()))}>查询授权</Button>
+        </Space>
+        <Alert className="mb-4" type="info" showIcon title="高风险操作不允许记忆授权；撤销不会执行或回滚已经完成的操作。" />
+        <Table rowKey="id" columns={grantColumns} dataSource={grants} pagination={false} />
       </Card>
+      <Card title="业务确认记录">
+        <Select
+          allowClear
+          placeholder="状态"
+          style={{ width: 140 }}
+          options={['pending', 'executed', 'rejected', 'expired', 'failed'].map((value) => ({ value, label: statusLabels[value] }))}
+          onChange={setConfirmationStatus}
+          className="mb-4"
+        />
+        <Table rowKey="id" columns={confirmationColumns} dataSource={confirmations} scroll={{ x: 1050 }} />
+      </Card>
+    </Space>
+  )
+}
+
+function TraceDelivery() {
+  const { message } = App.useApp()
+  const [traceId, setTraceId] = useState('')
+  const [trace, setTrace] = useState<AgentTraceResult | null>(null)
+  const [deliveryStatus, setDeliveryStatus] = useState<string>()
+  const [deliveries, setDeliveries] = useState<Array<Record<string, unknown>>>([])
+
+  const loadDeliveries = useCallback(async () => {
+    const result = await getAgentDeliveries(deliveryStatus)
+    const source = Array.isArray(result) ? result : Array.isArray(result.items) ? result.items : []
+    setDeliveries(source as Array<Record<string, unknown>>)
+  }, [deliveryStatus])
+  useEffect(() => {
+    const timer = window.setTimeout(() => void loadDeliveries(), 0)
+    return () => window.clearTimeout(timer)
+  }, [loadDeliveries])
+
+  const deliveryColumns: ColumnsType<Record<string, unknown>> = [
+    { title: 'Delivery ID', dataIndex: 'id', width: 230, ellipsis: true },
+    { title: 'Run ID', dataIndex: 'run_id', width: 230, ellipsis: true },
+    { title: '渠道', dataIndex: 'channel', width: 90 },
+    { title: '状态', dataIndex: 'status', width: 110, render: (value) => statusTag(String(value)) },
+    { title: '尝试次数', dataIndex: 'attempt_count', width: 100 },
+    { title: '错误码', dataIndex: 'last_error_code', width: 180, ellipsis: true },
+    { title: '飞书消息 ID', dataIndex: 'external_message_id', width: 200, ellipsis: true },
+  ]
+
+  return (
+    <Space direction="vertical" size={16} className="w-full">
+      <Card title="Trace 查询">
+        <Space.Compact className="mb-4 w-full max-w-[720px]">
+          <Input value={traceId} onChange={(event) => setTraceId(event.target.value)} placeholder="输入 trace_id / run_id" />
+          <Button
+            type="primary"
+            icon={<SearchOutlined />}
+            onClick={async () => {
+              try {
+                setTrace(await getAgentTrace(traceId.trim()))
+              } catch (error) {
+                message.error(error instanceof Error ? error.message : 'Trace 查询失败')
+              }
+            }}
+          >
+            查询
+          </Button>
+        </Space.Compact>
+        {trace ? (
+          <>
+            <Descriptions size="small" className="mb-4">
+              <Descriptions.Item label="工具调用">{trace.counts.tool_calls}</Descriptions.Item>
+              <Descriptions.Item label="会话事件">{trace.counts.messages}</Descriptions.Item>
+              <Descriptions.Item label="确认">{trace.counts.confirmations}</Descriptions.Item>
+              <Descriptions.Item label="领域事件">{trace.counts.domain_events}</Descriptions.Item>
+              <Descriptions.Item label="投递">{trace.counts.deliveries}</Descriptions.Item>
+            </Descriptions>
+            <Button
+              className="mb-4"
+              onClick={async () => {
+                try {
+                  const exported = await exportAgentTrace(trace.trace_id)
+                  downloadTextFile(exported.filename, exported.content)
+                  message.success('脱敏 Trace 诊断已导出')
+                } catch (error) {
+                  message.error(error instanceof Error ? error.message : 'Trace 导出失败')
+                }
+              }}
+            >
+              导出安全诊断
+            </Button>
+            <List
+              dataSource={trace.timeline}
+              locale={{ emptyText: '该 Trace 暂无事件' }}
+              renderItem={(item) => (
+                <List.Item>
+                  <List.Item.Meta title={`${item.type} · ${item.summary}`} description={`${formatDate(item.occurred_at)} · ${item.error_code || '无错误码'}`} />
+                  {statusTag(item.status)}
+                </List.Item>
+              )}
+            />
+          </>
+        ) : <Empty description="输入 Trace ID 查询完整链路" />}
+      </Card>
+      <Card title="飞书投递队列">
+        <Select
+          allowClear
+          placeholder="投递状态"
+          style={{ width: 160 }}
+          options={['pending', 'retry', 'sent', 'delivered', 'failed'].map((value) => ({ value }))}
+          onChange={setDeliveryStatus}
+          className="mb-4"
+        />
+        <Table rowKey={(item) => String(item.id)} columns={deliveryColumns} dataSource={deliveries} scroll={{ x: 1150 }} />
+      </Card>
+    </Space>
+  )
+}
+
+export default function FeishuSettingsClient() {
+  const { message } = App.useApp()
+  const [activeKey, setActiveKey] = useState('overview')
+  const [config, setConfig] = useState<FeishuConfig | null>(null)
+  const [status, setStatus] = useState<FeishuGatewayStatus | null>(null)
+  const [health, setHealth] = useState<AgentRuntimeOverview | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  const loadOverview = useCallback(async () => {
+    setLoading(true)
+    const [configResult, statusResult, healthResult] = await Promise.allSettled([
+      getLivzonFeishuConfig(),
+      getLivzonFeishuGatewayStatus(),
+      getAgentRuntimeOverview(),
+    ])
+    if (configResult.status === 'fulfilled') setConfig(configResult.value)
+    else message.error('加载飞书配置失败')
+    if (statusResult.status === 'fulfilled') setStatus(statusResult.value)
+    if (healthResult.status === 'fulfilled') setHealth(healthResult.value)
+    setLoading(false)
+  }, [message])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => void loadOverview(), 0)
+    return () => window.clearTimeout(timer)
+  }, [loadOverview])
+
+  const items = [
+    {
+      key: 'overview',
+      label: <Space><CloudServerOutlined />运行总览</Space>,
+      children: <Overview config={config} status={status} health={health} onNavigate={setActiveKey} />,
+    },
+    {
+      key: 'feishu',
+      label: <Space><LinkOutlined />飞书接入</Space>,
+      children: <FeishuAccess config={config} status={status} onSaved={(value) => { setConfig(value); void loadOverview() }} />,
+    },
+    {
+      key: 'identity',
+      label: <Space><TeamOutlined />身份与准入</Space>,
+      children: config
+        ? <IdentityAdmission tenantId={config.tenant_id} appId={config.app_id} />
+        : <Alert type="warning" showIcon title="请先完成飞书接入配置" />,
+    },
+    {
+      key: 'tools',
+      label: <Space><ToolOutlined />能力目录与策略</Space>,
+      children: <ToolGovernance />,
+    },
+    {
+      key: 'authorizations',
+      label: <Space><SafetyCertificateOutlined />授权与确认</Space>,
+      children: <AuthorizationConfirmation />,
+    },
+    {
+      key: 'trace',
+      label: <Space><AuditOutlined />Trace 与投递诊断</Space>,
+      children: <TraceDelivery />,
+    },
+  ]
+
+  return (
+    <div className="w-full">
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <Title level={3} style={{ margin: 0 }}>
+            <SettingOutlined className="mr-2" />
+            Livzon Agent 管理
+          </Title>
+          <Text type="secondary">统一管理 Hermes 运行、飞书接入、可信身份、企业能力、授权确认与 Trace。</Text>
+        </div>
+        <Button loading={loading} icon={<ReloadOutlined />} onClick={() => void loadOverview()}>刷新运行状态</Button>
+      </div>
+      {status?.gateway === 'failed' && (
+        <Alert type="error" showIcon title="Hermes Feishu Gateway 连接失败" description="请先在“飞书接入”运行诊断，再通过 Trace 与投递诊断定位失败环节。" className="mb-4" />
+      )}
+      <Tabs activeKey={activeKey} onChange={setActiveKey} items={items} />
     </div>
   )
+}
+
+export {
+  AuthorizationConfirmation,
+  FeishuAccess,
+  IdentityAdmission,
+  Overview,
+  ToolGovernance,
+  TraceDelivery,
 }

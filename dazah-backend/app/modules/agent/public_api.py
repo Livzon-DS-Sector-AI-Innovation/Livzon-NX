@@ -88,7 +88,7 @@ async def execute_feishu_confirmation(
     *,
     confirmation_id: UUID,
     user: User,
-) -> tuple[AgentConfirmation, AgentToolExecuteResponse]:
+) -> tuple[AgentConfirmation, AgentToolExecuteResponse | None]:
     return await AgentService(get_settings()).execute_confirmation(
         db,
         confirmation_id=confirmation_id,
