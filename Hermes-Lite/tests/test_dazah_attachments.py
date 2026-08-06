@@ -1,8 +1,10 @@
 import uuid
 from pathlib import Path
 
+import pytest
 from pypdf import PdfWriter
 from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
+from services import dazah_agent_service
 
 from services.dazah_agent_service import (
     AgentBackendSource,
@@ -36,8 +38,9 @@ def test_dazah_proxy_keeps_multimodal_message_parts() -> None:
     assert agent._model_supports_vision() is True
 
 
-def test_help_command_returns_without_model_execution() -> None:
-    response = _try_basic_command_response(_payload(message="/help"))
+@pytest.mark.asyncio
+async def test_help_command_returns_without_model_execution() -> None:
+    response = await _try_basic_command_response(_payload(message="/help"))
 
     assert response is not None
     assert "`/new`" in response.message
@@ -45,17 +48,67 @@ def test_help_command_returns_without_model_execution() -> None:
     assert response.tool_trace == []
 
 
-def test_restrat_typo_is_not_a_command() -> None:
-    response = _try_basic_command_response(_payload(message="/restrat"))
+@pytest.mark.asyncio
+async def test_restrat_typo_is_not_a_command() -> None:
+    response = await _try_basic_command_response(_payload(message="/restrat"))
 
     assert response is None
 
 
-def test_status_command_reports_current_channel() -> None:
-    response = _try_basic_command_response(_payload(message="/status"))
+@pytest.mark.asyncio
+async def test_status_command_reports_current_channel() -> None:
+    response = await _try_basic_command_response(_payload(message="/status"))
 
     assert response is not None
     assert "渠道：Web" in response.message
+
+
+@pytest.mark.asyncio
+async def test_tasks_command_returns_recent_progress(monkeypatch) -> None:
+    async def fake_execute(operation, *, params):
+        assert operation == "agent.list_automation_runs"
+        assert params["scope"] == "mine"
+        return {
+            "data": {
+                "items": [
+                    {"id": str(uuid.uuid4()), "status": "failed", "error_code": "tool.timeout"}
+                ]
+            }
+        }
+
+    monkeypatch.setattr(dazah_agent_service, "_execute_deterministic_operation", fake_execute)
+
+    response = await _try_basic_command_response(_payload(message="/tasks"))
+
+    assert response is not None
+    assert "最近任务进度" in response.message
+    assert "tool.timeout" in response.message
+    assert "/retry" in response.message
+
+
+@pytest.mark.asyncio
+async def test_retry_command_returns_real_confirmation(monkeypatch) -> None:
+    run_id = str(uuid.uuid4())
+    confirmation = {
+        "id": str(uuid.uuid4()),
+        "operation": "agent.retry_automation_run",
+        "summary": "重试失败运行",
+        "risk_level": "medium",
+        "status": "pending",
+        "expires_at": "2026-08-06T08:00:00Z",
+    }
+
+    async def fake_execute(operation, *, params):
+        assert operation == "agent.retry_automation_run"
+        assert params == {"run_id": run_id}
+        return {"requires_confirmation": True, "confirmation": confirmation}
+
+    monkeypatch.setattr(dazah_agent_service, "_execute_deterministic_operation", fake_execute)
+
+    response = await _try_basic_command_response(_payload(message=f"/retry {run_id}"))
+
+    assert response is not None
+    assert response.pending_confirmations == [confirmation]
 
 
 def test_document_attachment_is_added_as_user_content() -> None:

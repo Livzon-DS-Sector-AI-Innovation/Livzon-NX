@@ -176,6 +176,28 @@ Hermes-Lite 当前主要使用 OpenAI-compatible Chat Completions 接口。实�
 - 工具调用格式是否符合 OpenAI tool calling 语义。
 - 模型是否稳定支持中文业务指令和结构化 JSON 参数生成。
 
+### 3.4 Dazah 用户记忆
+
+Dazah Agent 不使用上游全局 `MEMORY.md` / `USER.md` 作为产品用户画像。用户长期
+记忆保存在 `$HERMES_HOME/memories/user-memory.sqlite3`，以可信的
+`tenant_id + Dazah user_id` 隔离，因此同一用户可在 Web 和飞书私聊间共享画像，
+飞书群聊则完全不读取或写入个人记忆。
+
+每位用户默认最多保存 32 KiB 有效内容，达到 80% 时将较早的任务、决策和交互
+明细压缩为长期摘要，目标占用为 60%；用户明确要求保留的项目不会被自动淘汰。
+每次注入 Agent 的记忆最多 6 KiB。用户可在私聊中使用 `/memory`、
+`/memory forget <关键词>` 和 `/memory clear` 查看或管理自己的记忆。
+
+回复后的记忆复盘先写入同一 SQLite 数据库中的有界任务队列，再由带租约的 Worker
+异步处理；进程重启后可重新认领未完成任务，相同 `run_id` 只能由一个 Worker
+处理。任务历史只接受脱敏后的可信工具执行证据或用户明确要求保存的陈述；稳定画像
+使用 `memory_key` 覆盖旧值，避免职位、偏好等新旧事实同时生效。幂等记录和失败任务
+均有数量及时间保留上限，不随会话数无限增长。
+
+压缩会在单次摘要后重新核对实际 UTF-8 占用，并继续缩短可压缩摘要，直到达到约 60% 的
+目标容量或确认已无安全压缩空间。用户明确说“记住”“记一下”或“保存到记忆”时，本轮改为
+同步提取与写入，并在回复中明确报告确认保存、未通过校验或保存失败；普通对话仍走后台队列。
+
 ## 4. 当前启用的工具集
 
 Hermes-Lite 的工具集定义位于 `toolsets.py`。
@@ -183,14 +205,15 @@ Hermes-Lite 的工具集定义位于 `toolsets.py`。
 当前 Dazah Agent 服务在 `services/dazah_agent_service.py` 中启用：
 
 ```python
-enabled_toolsets=["agent", "dazah"]
+enabled_toolsets=["agent", "dazah", "feishu"]
+disabled_toolsets=["memory"]
 ```
 
 主要工具如下：
 
 | 工具集 | 工具 | 用途 |
 | --- | --- | --- |
-| `agent` | `memory` | 保存稳定的用户或项目偏好 |
+| Dazah 用户记忆服务 | 后台提取与 `/memory` 命令 | 保存租户隔离、容量受控的用户画像 |
 | `agent` | `session_search` | 检索历史会话 |
 | `agent` | `todo` | 任务拆解与步骤管理 |
 | `agent` | `clarify` | 在意图不明确时提出澄清问题 |

@@ -1911,6 +1911,8 @@ def create_confirmation(
     verification_mode: str | None = None,
     verification_text: str = "",
     attachment_refs: list[str] | None = None,
+    trace_id: str = "",
+    run_id: str = "",
 ) -> dict[str, Any]:
     request = {
         "args": args,
@@ -1921,6 +1923,8 @@ def create_confirmation(
         "verification_mode": verification_mode,
         "verification_text": verification_text,
         "attachment_refs": attachment_refs or [],
+        "trace_id": trace_id,
+        "run_id": run_id,
     }
     normalized = json.dumps(request, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
     request_hash = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
@@ -2032,6 +2036,8 @@ async def _reconcile_failed_verifiable_write(
                 "confirmation": "reconciled",
                 "result": "completed",
                 "duration_ms": 0,
+                "trace_id": request.get("trace_id"),
+                "run_id": request.get("run_id"),
             }
         )
         if row["resource"]:
@@ -2039,6 +2045,8 @@ async def _reconcile_failed_verifiable_write(
                 {
                     "resource_fingerprint": row["resource"],
                     "capability": row["action"],
+                    "trace_id": request.get("trace_id"),
+                    "run_id": request.get("run_id"),
                 },
                 event_type="resource_change",
             )
@@ -2199,6 +2207,8 @@ async def resolve_confirmation(confirmation_id: str, *, user_id: str, choice: st
             "confirmation": choice,
             "result": new_status,
             "duration_ms": result.elapsed_ms,
+            "trace_id": request.get("trace_id"),
+            "run_id": request.get("run_id"),
         }
     )
     if new_status == "completed" and row["resource"]:
@@ -2206,6 +2216,8 @@ async def resolve_confirmation(confirmation_id: str, *, user_id: str, choice: st
             {
                 "resource_fingerprint": row["resource"],
                 "capability": row["action"],
+                "trace_id": request.get("trace_id"),
+                "run_id": request.get("run_id"),
             },
             event_type="resource_change",
         )

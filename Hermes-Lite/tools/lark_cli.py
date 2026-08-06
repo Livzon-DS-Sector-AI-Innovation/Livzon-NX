@@ -234,13 +234,24 @@ async def lark_cli(
                     "risk": risk,
                     "confirmation": "none" if risk == "low" else "pending",
                     "impact_count": impact_count,
+                    "trace_id": context.get("trace_id"),
+                    "run_id": context.get("run_id"),
                 }
             )
             dry_run_args = safe_args if "--dry-run" in safe_args else [*safe_args, "--dry-run"]
             preview = await run_cli(dry_run_args, stdin_text=json.dumps(stdin_json or {}, ensure_ascii=False))
             if not cli_result_succeeded(preview):
                 return json.dumps(
-                    {"ok": False, "stage": "dry_run", "risk": risk, "error": preview.stderr[-1000:]},
+                    {
+                        "ok": False,
+                        "stage": "dry_run",
+                        "risk": risk,
+                        "error": preview.stderr[-1000:],
+                        "repair_hint": (
+                            "请管理员先在飞书开放平台为 Livzon 应用补充对应 API Scope，"
+                            "再将目标文档、Base、Wiki 或云盘资源明确分享给该应用后重试。"
+                        ),
+                    },
                     ensure_ascii=False,
                 )
             ensure_run_active()
@@ -276,6 +287,8 @@ async def lark_cli(
                     verification_mode=verification_mode,
                     verification_text=verification_text,
                     attachment_refs=attachment_refs,
+                    trace_id=str(context.get("trace_id") or ""),
+                    run_id=str(context.get("run_id") or ""),
                 )
                 record_dazah_task_confirmation(task_id, pending)
                 return json.dumps(
@@ -325,6 +338,8 @@ async def lark_cli(
                 {
                     "resource_fingerprint": fingerprint,
                     "capability": " ".join(safe_args[:2]),
+                    "trace_id": context.get("trace_id"),
+                    "run_id": context.get("run_id"),
                 },
                 event_type="resource_change",
             )
@@ -341,6 +356,11 @@ async def lark_cli(
                 "elapsed_ms": result.elapsed_ms,
                 "user": context.get("user_name") or user_id,
                 "verification": verification,
+                "repair_hint": (
+                    "请管理员核对 Livzon 应用的飞书 API Scope，并确认目标资源已分享给应用。"
+                    if not execution_succeeded
+                    else None
+                ),
             },
             ensure_ascii=False,
         )

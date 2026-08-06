@@ -50,6 +50,59 @@ AGENT_BACKEND_V2_EVENT_TYPES = {
 AGENT_BACKEND_PROTOCOL_VERSION = "2.0"
 
 
+def _public_command_response(text: str) -> str | None:
+    """Return commands that are safe before local identity resolution."""
+    if text.strip().lower() not in {"/help", "/帮助"}:
+        return None
+    return (
+        "Livzon 助手命令：\n"
+        "- `/help`：查看命令帮助（无需绑定身份）\n"
+        "- `/tasks`：查询当前用户最近任务进度\n"
+        "- `/retry <运行ID>`：重试失败任务，写操作仍需确认\n"
+        "- `/status`：查看服务状态\n\n"
+        "如 `/tasks` 提示身份未绑定，请管理员先在“系统设置 → Livzon Agent → "
+        "飞书接入”确认当前 App 与租户，再到“身份与准入”同步飞书目录并绑定当前用户。"
+    )
+
+
+def _identity_denial_message(response: httpx.Response) -> str:
+    detail = ""
+    try:
+        body = response.json()
+        if isinstance(body, dict):
+            detail = str(body.get("detail") or body.get("message") or "")
+    except (TypeError, ValueError):
+        pass
+    normalized = detail.lower()
+    if "not the active" in normalized:
+        return (
+            "当前飞书 App 与 Livzon Agent 后台激活 App 不一致。请管理员前往“系统设置 → "
+            "Livzon Agent → 飞书接入”，激活当前 App，或改用已激活 App 后重试。"
+        )
+    if "inconsistent" in normalized:
+        return (
+            "当前飞书账号的 user_id/open_id/union_id 绑定发生冲突，系统已拒绝继续。"
+            "请管理员在飞书接入中清理重复绑定并重新同步目录。"
+        )
+    if "not bound" in normalized:
+        return (
+            "当前飞书账号尚未绑定 Dazah 用户。请管理员先在“系统设置 → Livzon Agent → "
+            "飞书接入”确认 App 与租户，再到“身份与准入”同步飞书目录并绑定当前用户；"
+            "完成后重新发送命令。"
+        )
+    if "not active" in normalized:
+        return "绑定的 Dazah 用户已停用或删除。请管理员恢复账号，或将飞书身份重新绑定到有效用户。"
+    if "group is not admitted" in normalized:
+        return (
+            "当前飞书群尚未加入 Livzon Agent 群聊白名单。请管理员在“飞书接入”中添加本群，"
+            "保存配置后重试。"
+        )
+    return (
+        "飞书身份尚未获得助手准入。请管理员在“系统设置 → Livzon Agent”中核对“飞书接入”"
+        "的 App、租户和群聊白名单，并在“身份与准入”检查目录绑定。"
+    )
+
+
 async def _resolve_trusted_subject(
     config: dict[str, Any],
     envelope: DazahInboundEnvelope,
@@ -63,7 +116,10 @@ async def _resolve_trusted_subject(
     payload = {
         "tenant_id": str(config.get("tenant_id") or "default"),
         "app_fingerprint": str(config["app_id"]),
-        "external_user_id": envelope.sender_id or None,
+        # The pinned adapter exposes ``source.user_id`` as tenant user_id when
+        # available, otherwise as app-scoped open_id. The envelope classifies
+        # the primary value by Feishu's documented ``ou_`` open_id prefix.
+        "external_user_id": envelope.sender_user_id or None,
         "external_open_id": envelope.sender_open_id or None,
         "external_union_id": envelope.sender_union_id or None,
         # The pinned upstream adapter currently labels card callbacks from a
@@ -84,7 +140,7 @@ async def _resolve_trusted_subject(
             json=payload,
         )
     if response.status_code == 403:
-        raise PermissionError("飞书身份尚未绑定或未获得助手准入")
+        raise PermissionError(_identity_denial_message(response))
     response.raise_for_status()
     data = response.json()
     subject = data.get("subject") if isinstance(data, dict) else None
@@ -130,7 +186,7 @@ async def _prepare_persistent_conversation(
         "run_id": run_id,
         "source": {
             "platform": "feishu",
-            "sender_user_id": envelope.sender_id or None,
+            "sender_user_id": envelope.sender_user_id or None,
             "sender_open_id": envelope.sender_open_id or None,
             "sender_union_id": envelope.sender_union_id or None,
             "chat_id": envelope.chat_id or None,
@@ -273,6 +329,23 @@ def _trusted_confirmation_owner(subject: dict[str, Any]) -> str:
 
 
 def _confirmation_result_feedback(result: dict[str, Any], choice: str) -> str:
+    envelope = result.get("data")
+    if isinstance(envelope, dict):
+        result = envelope.get("result") if isinstance(envelope.get("result"), dict) else envelope
+    data = result.get("data") if isinstance(result.get("data"), dict) else {}
+    success_count = data.get("success_count", result.get("success_count"))
+    failed_count = data.get("failed_count", result.get("failed_count"))
+    if (
+        result.get("status") in {"partial", "partial_success"}
+        or isinstance(success_count, int)
+        and isinstance(failed_count, int)
+        and success_count > 0
+        and failed_count > 0
+    ):
+        return (
+            f"操作部分成功：成功 {success_count or 0} 项，失败 {failed_count or 0} 项。"
+            "系统未自动重试失败项；请发送 `/tasks` 查看进度，核对后再决定是否重试。"
+        )
     if choice == "reject" or result.get("status") == "rejected":
         return "操作已拒绝。"
     status_value = str(result.get("status") or "")
@@ -422,6 +495,7 @@ async def _consume_agent_stream(
     final_message = ""
     confirmations: list[dict[str, Any]] = []
     stream_error = ""
+    finished_received = False
     last_sequence = 0
     reply_to = envelope.reply_to_message_id or envelope.message_id or None
     metadata = {"thread_id": envelope.thread_id} if envelope.thread_id else None
@@ -459,6 +533,7 @@ async def _consume_agent_stream(
         elif event_name == "confirmation":
             confirmations.append(data)
         elif event_name == "finished":
+            finished_received = True
             final_message = str(data.get("message") or accumulated or "Livzon 助手没有生成有效回复。")
             raw_confirmations = data.get("pending_confirmations")
             if isinstance(raw_confirmations, list):
@@ -466,6 +541,9 @@ async def _consume_agent_stream(
         elif event_name == "error":
             stream_error = str(data.get("message") or "Livzon Agent 流式响应异常，请稍后重试。")
 
+    if not finished_received and not stream_error:
+        stream_error = "Livzon Agent 连接已中断，未收到完整回复，请重试。"
+        confirmations = []
     final_content = stream_error or final_message or accumulated
     if on_complete is not None:
         completion = on_complete(final_content)
@@ -577,6 +655,9 @@ async def _main() -> None:
             cleanup_cached_attachments(envelope.attachments)
             return None
         try:
+            public_response = _public_command_response(envelope.text)
+            if public_response is not None:
+                return public_response
             try:
                 subject = await _resolve_trusted_subject(config_data, envelope)
             except (PermissionError, httpx.HTTPError, RuntimeError) as exc:
