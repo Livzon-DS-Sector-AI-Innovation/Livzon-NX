@@ -5,10 +5,14 @@ from io import BytesIO
 from types import SimpleNamespace
 
 import pytest
+from fastapi import HTTPException
 from openpyxl import Workbook, load_workbook
+from pydantic import BaseModel
 
+from app.modules.agent import agent_tools
 from app.modules.agent.attachment_service import AgentAttachmentService
 from app.modules.agent.service import AgentService
+from app.modules.agent.tools import ToolContext
 
 
 class FakeDb:
@@ -19,6 +23,10 @@ class FakeDb:
 class FailingDb:
     async def flush(self) -> None:
         raise RuntimeError("database flush failed")
+
+
+class EmptyInput(BaseModel):
+    pass
 
 
 class FakeRepo:
@@ -382,3 +390,380 @@ async def test_follow_up_materializes_persisted_image_bytes(
 
     assert base64.b64decode(restored[0]["data_base64"]) == raw
     assert restored[0]["attachment_id"] == str(attachment.id)
+
+
+@pytest.mark.anyio
+async def test_persist_rejects_unavailable_storage_and_invalid_bytes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import app.modules.agent.attachment_service as module
+
+    service = AgentAttachmentService(FakeRepo())
+    kwargs = {
+        "session_id": uuid.uuid4(),
+        "message_id": uuid.uuid4(),
+        "user_id": uuid.uuid4(),
+        "uploads": [
+            {
+                "attachment_id": str(uuid.uuid4()),
+                "filename": "bad.txt",
+                "content_type": "text/plain",
+                "kind": "document",
+                "data": "not-bytes",
+            }
+        ],
+    }
+
+    monkeypatch.setattr(module, "is_enabled", lambda: False)
+    with pytest.raises(HTTPException) as unavailable:
+        await service.persist(FakeDb(), **kwargs)
+    assert unavailable.value.status_code == 503
+
+    monkeypatch.setattr(module, "is_enabled", lambda: True)
+    with pytest.raises(TypeError, match="must be bytes"):
+        await service.persist(FakeDb(), **kwargs)
+
+
+@pytest.mark.anyio
+async def test_persist_reports_readback_failure_and_attempts_cleanup(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import app.modules.agent.attachment_service as module
+
+    cleanup_errors: list[str] = []
+    monkeypatch.setattr(module, "is_enabled", lambda: True)
+    monkeypatch.setattr(module, "upload_object", lambda *_args: None)
+    monkeypatch.setattr(module, "get_object", lambda *_args: None)
+    monkeypatch.setattr(
+        module,
+        "delete_object",
+        lambda *_args: (_ for _ in ()).throw(RuntimeError("cleanup failed")),
+    )
+    monkeypatch.setattr(
+        module.logger,
+        "exception",
+        lambda message, *_args: cleanup_errors.append(message),
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await AgentAttachmentService(FakeRepo()).persist(
+            FakeDb(),
+            session_id=uuid.uuid4(),
+            message_id=None,
+            user_id=uuid.uuid4(),
+            uploads=[
+                {
+                    "attachment_id": str(uuid.uuid4()),
+                    "filename": "source.txt",
+                    "content_type": "text/plain",
+                    "kind": "document",
+                    "data": b"source",
+                }
+            ],
+        )
+
+    assert exc_info.value.status_code == 503
+    assert cleanup_errors == [
+        "Failed to clean up attachment object after persist failure: object_key=%s"
+    ]
+
+
+@pytest.mark.anyio
+async def test_materialize_rejects_missing_or_tampered_images_and_bounds_text(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import app.modules.agent.attachment_service as module
+
+    image = SimpleNamespace(
+        id=uuid.uuid4(),
+        filename="photo.png",
+        content_type="image/png",
+        size=4,
+        kind="image",
+        object_key="image-key",
+        sha256=hashlib.sha256(b"safe").hexdigest(),
+        extracted_text=None,
+    )
+    monkeypatch.setattr(module, "get_object", lambda *_args: None)
+    with pytest.raises(HTTPException) as missing:
+        await AgentAttachmentService().materialize_for_context([image], text_limit=10)
+    assert missing.value.status_code == 409
+
+    monkeypatch.setattr(
+        module,
+        "get_object",
+        lambda *_args: (b"evil", "image/png"),
+    )
+    with pytest.raises(HTTPException, match="校验失败"):
+        await AgentAttachmentService().materialize_for_context([image], text_limit=10)
+
+    text_attachment = SimpleNamespace(
+        id=uuid.uuid4(),
+        filename="empty.txt",
+        content_type="text/plain",
+        size=0,
+        kind="document",
+        object_key="text-key",
+        sha256=hashlib.sha256(b"").hexdigest(),
+        extracted_text=None,
+    )
+    [restored] = await AgentAttachmentService().materialize_for_context(
+        [text_attachment],
+        text_limit=4,
+    )
+    assert restored["text"] == "（未提取"
+    assert restored["truncated"] is True
+
+
+@pytest.mark.anyio
+async def test_attachment_lookup_and_storage_failure_boundaries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import app.modules.agent.attachment_service as module
+
+    repo = FakeRepo()
+    service = AgentAttachmentService(repo)
+    with pytest.raises(HTTPException) as no_session:
+        await service.require(
+            FakeDb(),
+            session_id=None,
+            user_id=uuid.uuid4(),
+            attachment_ref="missing",
+        )
+    assert no_session.value.status_code == 400
+
+    with pytest.raises(HTTPException) as not_found:
+        await service.require(
+            FakeDb(),
+            session_id=uuid.uuid4(),
+            user_id=uuid.uuid4(),
+            attachment_ref="missing",
+        )
+    assert not_found.value.status_code == 404
+
+    attachment = SimpleNamespace(
+        id=uuid.uuid4(),
+        filename="notes.txt",
+        content_type="text/plain",
+        size=5,
+        kind="document",
+        object_key="missing-key",
+        sha256=hashlib.sha256(b"notes").hexdigest(),
+        extracted_text="notes",
+        version=1,
+        is_deleted=False,
+        updated_by=None,
+        session_id=uuid.uuid4(),
+        user_id=uuid.uuid4(),
+    )
+    repo.items.append(attachment)
+    monkeypatch.setattr(module, "get_object", lambda *_args: None)
+
+    with pytest.raises(HTTPException) as mutate_missing:
+        await service.mutate_tabular(
+            FakeDb(),
+            session_id=attachment.session_id,
+            user_id=attachment.user_id,
+            attachment_ref=str(attachment.id),
+            action="append_row",
+            sheet_name=None,
+            row_number=None,
+            values=["value"],
+        )
+    assert mutate_missing.value.status_code == 409
+
+    monkeypatch.setattr(
+        module,
+        "get_object",
+        lambda *_args: (b"notes", "text/plain"),
+    )
+    with pytest.raises(HTTPException) as unsupported:
+        await service.mutate_tabular(
+            FakeDb(),
+            session_id=attachment.session_id,
+            user_id=attachment.user_id,
+            attachment_ref=str(attachment.id),
+            action="append_row",
+            sheet_name=None,
+            row_number=None,
+            values=["value"],
+        )
+    assert unsupported.value.status_code == 400
+
+    monkeypatch.setattr(module, "get_object", lambda *_args: None)
+    with pytest.raises(HTTPException) as delete_missing:
+        await service.delete(
+            FakeDb(),
+            session_id=attachment.session_id,
+            user_id=attachment.user_id,
+            attachment_ref=str(attachment.id),
+        )
+    assert delete_missing.value.status_code == 409
+
+
+def test_tabular_mutation_validation_and_csv_operations() -> None:
+    service = AgentAttachmentService()
+    raw_xlsx = _xlsx_bytes()
+
+    with pytest.raises(HTTPException, match="工作表不存在"):
+        service._mutate_xlsx(
+            raw_xlsx,
+            action="append_row",
+            sheet_name="不存在",
+            row_number=None,
+            values=["B", 20],
+        )
+    with pytest.raises(HTTPException, match="新增行"):
+        service._mutate_xlsx(
+            raw_xlsx,
+            action="append_row",
+            sheet_name=None,
+            row_number=None,
+            values=[],
+        )
+    with pytest.raises(HTTPException, match="row_number"):
+        service._mutate_xlsx(
+            raw_xlsx,
+            action="update_row",
+            sheet_name="销售",
+            row_number=99,
+            values=["B", 20],
+        )
+    with pytest.raises(HTTPException, match="修改行"):
+        service._mutate_xlsx(
+            raw_xlsx,
+            action="update_row",
+            sheet_name="销售",
+            row_number=2,
+            values=[],
+        )
+
+    raw_csv = "产品,销量\r\nA,10\r\n".encode()
+    appended = service._mutate_csv(
+        raw_csv,
+        action="append_row",
+        row_number=None,
+        values=["B", 20, None],
+    )
+    updated = service._mutate_csv(
+        appended,
+        action="update_row",
+        row_number=2,
+        values=["A", 15],
+    )
+    deleted = service._mutate_csv(
+        updated,
+        action="delete_row",
+        row_number=2,
+        values=[],
+    )
+    assert "B,20," in appended.decode("utf-8-sig")
+    assert "A,15" in updated.decode("utf-8-sig")
+    assert "A,15" not in deleted.decode("utf-8-sig")
+
+    with pytest.raises(HTTPException, match="新增行"):
+        service._mutate_csv(
+            raw_csv,
+            action="append_row",
+            row_number=None,
+            values=[],
+        )
+    with pytest.raises(HTTPException, match="row_number"):
+        service._mutate_csv(
+            raw_csv,
+            action="update_row",
+            row_number=0,
+            values=["A", 15],
+        )
+    with pytest.raises(HTTPException, match="修改行"):
+        service._mutate_csv(
+            raw_csv,
+            action="update_row",
+            row_number=2,
+            values=[],
+        )
+    with pytest.raises(HTTPException, match="编码不受支持"):
+        service._mutate_csv(
+            b"\x81",
+            action="append_row",
+            row_number=None,
+            values=["A"],
+        )
+
+
+@pytest.mark.anyio
+async def test_agent_attachment_tool_handlers_enforce_context_and_delegate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = SimpleNamespace(id=uuid.uuid4())
+    session_id = uuid.uuid4()
+    calls: list[tuple[str, dict[str, object]]] = []
+    item = SimpleNamespace(
+        id=uuid.uuid4(),
+        filename="data.csv",
+        content_type="text/csv",
+        size=12,
+        kind="document",
+        version=3,
+    )
+
+    class FakeAttachmentService:
+        async def list_for_session(self, _db, **kwargs):
+            calls.append(("list", kwargs))
+            return [item]
+
+        async def read(self, _db, **kwargs):
+            calls.append(("read", kwargs))
+            return {"content": "row"}
+
+        async def mutate_tabular(self, _db, **kwargs):
+            calls.append(("mutate", kwargs))
+            return {"version": 4}
+
+        async def delete(self, _db, **kwargs):
+            calls.append(("delete", kwargs))
+            return {"deleted": True}
+
+    monkeypatch.setattr(agent_tools, "AgentAttachmentService", FakeAttachmentService)
+
+    def context(*, active_user=user, active_session=session_id):
+        return ToolContext(
+            db=object(),  # type: ignore[arg-type]
+            session_id=active_session,
+            user_id=getattr(active_user, "id", None),
+            user=active_user,  # type: ignore[arg-type]
+            reason=None,
+            raw_request=SimpleNamespace(operation="agent.list_attachments"),  # type: ignore[arg-type]
+        )
+
+    with pytest.raises(HTTPException) as unauthenticated:
+        await agent_tools.list_attachments(context(active_user=None), EmptyInput())
+    assert unauthenticated.value.status_code == 401
+
+    with pytest.raises(HTTPException) as no_session:
+        await agent_tools.list_attachments(context(active_session=None), EmptyInput())
+    assert no_session.value.status_code == 400
+
+    listed = await agent_tools.list_attachments(context(), EmptyInput())
+    read = await agent_tools.read_attachment(
+        context(),
+        agent_tools.AttachmentReadInput(attachment_ref="data.csv", offset=1, limit=10),
+    )
+    mutated = await agent_tools.mutate_tabular_attachment(
+        context(),
+        agent_tools.TabularAttachmentMutationInput(
+            attachment_ref="data.csv",
+            action="append_row",
+            values=["B", 20],
+        ),
+    )
+    deleted = await agent_tools.delete_attachment(
+        context(),
+        agent_tools.AttachmentRefInput(attachment_ref="data.csv"),
+    )
+
+    assert listed[0]["attachment_id"] == str(item.id)
+    assert read == {"content": "row"}
+    assert mutated == {"version": 4}
+    assert deleted == {"deleted": True}
+    assert [name for name, _ in calls] == ["list", "read", "mutate", "delete"]

@@ -277,6 +277,9 @@ def test_follow_up_write_reuses_trusted_recent_resource(monkeypatch) -> None:
 def test_mismatched_readback_target_is_blocked_before_any_cli_call(monkeypatch) -> None:
     calls: list[list[str]] = []
 
+    monkeypatch.setenv("HERMES_FEISHU_CREDENTIAL_KEY", "test-key")
+    monkeypatch.setattr(lark_cli_tool, "load_credentials", lambda: ("app-id", "secret", 1))
+
     async def fake_run_cli(args, **_kwargs):
         calls.append(args)
         return SimpleNamespace(returncode=0, stdout='{"ok":true}', stderr="", elapsed_ms=1)
