@@ -201,7 +201,7 @@ class DazahInboundEnvelope:
     text: str
     message_type: str
     sender_id: str
-    sender_open_id: str
+    sender_primary_id: str
     sender_union_id: str
     sender_name: str
     chat_id: str
@@ -216,7 +216,7 @@ class DazahInboundEnvelope:
     @classmethod
     def from_event(cls, event: Any) -> DazahInboundEnvelope:
         source = getattr(event, "source", None)
-        open_id = _string_attr(source, "user_id")
+        primary_id = _string_attr(source, "user_id")
         union_id = _string_attr(source, "user_id_alt")
         message_type = _message_type_value(event)
         media_paths = list(getattr(event, "media_urls", None) or [])
@@ -236,8 +236,8 @@ class DazahInboundEnvelope:
         return cls(
             text=str(getattr(event, "text", None) or ""),
             message_type=message_type,
-            sender_id=union_id or open_id,
-            sender_open_id=open_id,
+            sender_id=union_id or primary_id,
+            sender_primary_id=primary_id,
             sender_union_id=union_id,
             sender_name=_string_attr(source, "user_name"),
             chat_id=_string_attr(source, "chat_id"),
@@ -249,6 +249,14 @@ class DazahInboundEnvelope:
             reply_to_text=_string_attr(event, "reply_to_text"),
             attachments=attachments,
         )
+
+    @property
+    def sender_open_id(self) -> str:
+        return self.sender_primary_id if self.sender_primary_id.startswith("ou_") else ""
+
+    @property
+    def sender_user_id(self) -> str:
+        return self.sender_primary_id if self.sender_primary_id and not self.sender_open_id else ""
 
     @property
     def session_id(self) -> str:
@@ -287,7 +295,7 @@ class DazahInboundEnvelope:
             "subject": subject,
             "source": {
                 "platform": "feishu",
-                "sender_user_id": self.sender_id or None,
+                "sender_user_id": self.sender_user_id or None,
                 "sender_open_id": self.sender_open_id or None,
                 "sender_union_id": self.sender_union_id or None,
                 "chat_id": self.chat_id,
@@ -376,7 +384,26 @@ def build_dazah_confirmation_card(confirmation: dict[str, Any]) -> dict[str, Any
             resource_domain=resource_domain,
         )
     )
-    preview = str(confirmation.get("preview") or "-")[:1800]
+    request_payload = confirmation.get("request_payload")
+    request_payload = request_payload if isinstance(request_payload, dict) else {}
+    summary = str(confirmation.get("summary") or confirmation.get("operation") or "待确认操作")[:500]
+    resource = str(
+        confirmation.get("resource")
+        or request_payload.get("resource")
+        or request_payload.get("operation")
+        or "Dazah 业务资源"
+    )[:300]
+    reason = str(
+        confirmation.get("reason")
+        or request_payload.get("reason")
+        or "该操作将修改业务或飞书资源，需要本人确认"
+    )[:500]
+    impact_count = confirmation.get("impact_count")
+    if not isinstance(impact_count, int):
+        impact_count = request_payload.get("impact_count")
+    if not isinstance(impact_count, int):
+        impact_count = 1
+    preview = str(confirmation.get("preview") or summary)[:1800]
     if resource_domain == "feishu_native":
         preview_block = f"**变更摘要：**\n{preview}\n"
     else:
@@ -394,10 +421,11 @@ def build_dazah_confirmation_card(confirmation: dict[str, Any]) -> dict[str, Any
             {
                 "tag": "markdown",
                 "content": (
-                    f"**文件/资源：** {confirmation.get('resource') or '-'}\n"
+                    f"**操作摘要：** {summary}\n"
+                    f"**文件/资源：** {resource}\n"
                     f"**动作：** {confirmation.get('operation') or '-'}\n"
-                    f"**影响数量：** {confirmation.get('impact_count') or 0}\n"
-                    f"**风险原因：** {confirmation.get('reason') or '-'}\n"
+                    f"**预计影响：** {impact_count} 项\n"
+                    f"**风险原因：** {reason}\n"
                     f"{preview_block}"
                     f"**过期时间：** "
                     f"{_format_beijing_datetime(confirmation.get('expires_at'))}"

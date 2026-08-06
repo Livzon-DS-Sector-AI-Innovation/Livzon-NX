@@ -251,6 +251,79 @@ async def test_feishu_config_rejects_replayed_source_version(
     assert exc_info.value.detail == "configuration version must increase"
 
 
+@pytest.mark.anyio
+async def test_restart_feishu_gateway_reconnects_child_process(
+    runtime,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from services import dazah_agent_service as service
+
+    class Process:
+        returncode: int | None = None
+
+        def terminate(self) -> None:
+            self.returncode = 0
+
+        def kill(self) -> None:
+            self.returncode = -9
+
+        async def wait(self) -> int:
+            return self.returncode or 0
+
+    old_process = Process()
+    new_process = Process()
+    service.app.state.feishu_gateway_process = old_process
+    service.app.state.feishu_gateway_status = "connected"
+    service.app.state.feishu_gateway_reconnects = 2
+    monkeypatch.setattr(service, "load_credentials", lambda: ("cli_test", "secret", 4))
+    monkeypatch.setattr(
+        service,
+        "load_gateway_settings",
+        lambda: {"tenant_id": "default", "gateway_enabled": True, "version": 3},
+    )
+
+    async def reconnect() -> None:
+        await asyncio.sleep(0)
+        service.app.state.feishu_gateway_process = new_process
+        service.app.state.feishu_gateway_reconnects = 3
+        service.app.state.feishu_gateway_status = "connected"
+
+    reconnect_task = asyncio.create_task(reconnect())
+    result = await service._restart_feishu_gateway(timeout_seconds=1)
+    await reconnect_task
+
+    assert old_process.returncode == 0
+    assert result == {
+        "status": "connected",
+        "message": "Hermes 飞书 Gateway 已重新建立连接",
+        "previous_reconnects": 2,
+        "gateway_reconnects": 3,
+        "credential_version": 4,
+        "config_version": 3,
+    }
+
+
+@pytest.mark.anyio
+async def test_restart_feishu_gateway_rejects_disabled_runtime(
+    runtime,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from services import dazah_agent_service as service
+
+    monkeypatch.setattr(service, "load_credentials", lambda: ("cli_test", "secret", 4))
+    monkeypatch.setattr(
+        service,
+        "load_gateway_settings",
+        lambda: {"tenant_id": "default", "gateway_enabled": False, "version": 3},
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await service._restart_feishu_gateway(timeout_seconds=0.01)
+
+    assert exc_info.value.status_code == 409
+    assert "未启用" in str(exc_info.value.detail)
+
+
 @pytest.mark.parametrize("bad", [["drive", "list;whoami"], ["api", "$(id)"], ["config", "show"]])
 def test_cli_argument_injection_and_control_commands_are_blocked(runtime, bad: list[str]) -> None:
     with pytest.raises(ValueError):

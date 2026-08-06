@@ -88,7 +88,9 @@ def test_describe_uses_operation_and_trusted_subject(monkeypatch) -> None:
         "/agent/tools/quality.list_deviations"
     )
     assert recorded["params"] == {
-        "subject_user_id": "00000000-0000-0000-0000-000000000001"
+        "subject_user_id": "00000000-0000-0000-0000-000000000001",
+        "subject_tenant_id": "tenant-contract",
+        "trace_id": "00000000-0000-0000-0000-000000000002",
     }
 
 

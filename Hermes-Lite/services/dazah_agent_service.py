@@ -42,6 +42,11 @@ from services.feishu_runtime import (
     save_gateway_settings,
     stage_credentials,
 )
+from services.memory_service import (
+    CATEGORY_LABELS,
+    UserMemoryRepository,
+    review_turn,
+)
 from tools.dazah_platform import (
     bind_dazah_thread_request_context,
     current_dazah_task_confirmations,
@@ -136,6 +141,29 @@ class AgentBackendV2Result(BaseModel):
 app = FastAPI(title="Hermes-Lite Dazah Adapter")
 
 
+def _build_user_memory_repository() -> UserMemoryRepository:
+    try:
+        from hermes_cli.config import load_config
+
+        config = (load_config().get("memory") or {})
+    except Exception:
+        config = {}
+    try:
+        return UserMemoryRepository(
+            limit_bytes=int(config.get("user_memory_limit_bytes", 32 * 1024)),
+            trigger_ratio=float(config.get("user_memory_compression_trigger", 0.80)),
+            target_ratio=float(config.get("user_memory_compression_target", 0.60)),
+            injection_bytes=int(config.get("user_memory_injection_bytes", 6 * 1024)),
+        )
+    except (TypeError, ValueError):
+        logger.warning("Invalid user memory limits in config.yaml; using safe defaults")
+        return UserMemoryRepository()
+
+
+user_memory_repository = _build_user_memory_repository()
+_memory_worker_tasks: list[asyncio.Task[Any]] = []
+
+
 class FeishuCredentialConfig(BaseModel):
     app_id: str = Field(min_length=1, max_length=255)
     app_secret: SecretStr
@@ -177,10 +205,21 @@ async def _restore_feishu_runtime() -> None:
         logger.exception("Feishu CLI credential restore failed; gateway remains inactive")
     app.state.feishu_platform_sync_task = asyncio.create_task(platform_sync_loop())
     app.state.feishu_gateway_task = asyncio.create_task(_feishu_gateway_supervisor())
+    if not _memory_worker_tasks:
+        _memory_worker_tasks.extend(
+            asyncio.create_task(_memory_review_worker(index), name=f"memory-worker-{index}")
+            for index in range(2)
+        )
 
 
 @app.on_event("shutdown")
 async def _stop_feishu_runtime() -> None:
+    memory_tasks = list(_memory_worker_tasks)
+    for memory_task in memory_tasks:
+        memory_task.cancel()
+    if memory_tasks:
+        await asyncio.gather(*memory_tasks, return_exceptions=True)
+    _memory_worker_tasks.clear()
     task = getattr(app.state, "feishu_platform_sync_task", None)
     if task:
         task.cancel()
@@ -270,6 +309,62 @@ async def _feishu_gateway_supervisor() -> None:
         await asyncio.sleep(3)
 
 
+async def _restart_feishu_gateway(timeout_seconds: float = 60) -> dict[str, Any]:
+    credentials = load_credentials()
+    gateway_settings = load_gateway_settings()
+    if credentials is None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "飞书 Gateway 尚未配置凭证")
+    if not gateway_settings["gateway_enabled"]:
+        raise HTTPException(status.HTTP_409_CONFLICT, "飞书 Gateway 当前未启用")
+
+    lock = getattr(app.state, "feishu_gateway_restart_lock", None)
+    if lock is None:
+        lock = asyncio.Lock()
+        app.state.feishu_gateway_restart_lock = lock
+    if lock.locked():
+        raise HTTPException(status.HTTP_409_CONFLICT, "飞书 Gateway 正在重启")
+
+    async with lock:
+        previous_reconnects = int(
+            getattr(app.state, "feishu_gateway_reconnects", 0)
+        )
+        process = getattr(app.state, "feishu_gateway_process", None)
+        app.state.feishu_gateway_status = "restarting"
+        app.state.feishu_gateway_upstream = None
+        if process is not None and process.returncode is None:
+            process.terminate()
+            try:
+                await asyncio.wait_for(process.wait(), timeout=10)
+            except TimeoutError:
+                process.kill()
+                await process.wait()
+
+        deadline = asyncio.get_running_loop().time() + timeout_seconds
+        while asyncio.get_running_loop().time() < deadline:
+            current_process = getattr(app.state, "feishu_gateway_process", None)
+            reconnects = int(getattr(app.state, "feishu_gateway_reconnects", 0))
+            if (
+                reconnects > previous_reconnects
+                and current_process is not None
+                and current_process.returncode is None
+                and getattr(app.state, "feishu_gateway_status", "inactive")
+                == "connected"
+            ):
+                return {
+                    "status": "connected",
+                    "message": "Hermes 飞书 Gateway 已重新建立连接",
+                    "previous_reconnects": previous_reconnects,
+                    "gateway_reconnects": reconnects,
+                    "credential_version": credentials[2],
+                    "config_version": gateway_settings["version"],
+                }
+            await asyncio.sleep(0.25)
+    raise HTTPException(
+        status.HTTP_504_GATEWAY_TIMEOUT,
+        "飞书 Gateway 重启后未在限定时间内恢复连接，请查看运行状态和诊断信息",
+    )
+
+
 @app.put("/internal/feishu/config")
 async def put_feishu_config(
     payload: FeishuCredentialConfig,
@@ -335,6 +430,14 @@ async def get_feishu_internal_status(
         "event_consumer_count": 1 if consumer_active else 0,
         **runtime_metrics(),
     }
+
+
+@app.post("/internal/feishu/gateway/restart")
+async def restart_feishu_gateway(
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    _require_internal_token(authorization)
+    return await _restart_feishu_gateway()
 
 
 @app.post("/internal/feishu/deliveries", status_code=status.HTTP_202_ACCEPTED)
@@ -1531,12 +1634,335 @@ def _try_conversation_context_response(
     )
 
 
-def _try_basic_command_response(
+def _tool_response_data(raw: str) -> dict[str, Any]:
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        return {}
+    if not isinstance(payload, dict):
+        return {}
+    envelope = payload.get("data")
+    if isinstance(envelope, dict) and "operation" in envelope:
+        return envelope
+    return payload
+
+
+async def _execute_deterministic_operation(
+    operation: str,
+    *,
+    params: dict[str, Any],
+) -> dict[str, Any]:
+    module = operation.partition(".")[0]
+    await dazah_tool("search", query=operation, module=module, limit=5)
+    await dazah_tool("describe", operation=operation)
+    return _tool_response_data(
+        await dazah_tool("execute", operation=operation, params=params)
+    )
+
+
+def _format_task_status(result: dict[str, Any]) -> str:
+    if result.get("ok") is False:
+        return str(
+            result.get("repair_hint")
+            or "任务进度查询失败。请稍后重试，并向管理员提供当前 Trace ID。"
+        )
+    data = result.get("data") if isinstance(result.get("data"), dict) else {}
+    items = data.get("items") if isinstance(data, dict) else None
+    if not isinstance(items, list) or not items:
+        return "暂无可见任务记录。"
+    lines = ["最近任务进度："]
+    for item in items[:5]:
+        if not isinstance(item, dict):
+            continue
+        run_id = str(item.get("id") or item.get("run_id") or "-")
+        status_value = str(item.get("status") or "unknown")
+        status_label = {
+            "pending": "等待执行",
+            "running": "执行中",
+            "waiting": "等待外部条件",
+            "waiting_confirmation": "等待确认",
+            "waiting_manual": "等待人工任务",
+            "retrying": "等待自动重试",
+            "completed": "已完成",
+            "failed": "失败",
+            "cancelled": "已取消",
+        }.get(status_value, status_value)
+        error = str(item.get("error_message") or item.get("error_code") or "").strip()
+        suffix = f"；失败原因：{error[:120]}" if error else ""
+        lines.append(f"- `{run_id}`：{status_label}{suffix}")
+    lines.append("失败任务可发送 `/retry <运行ID>` 生成重试确认卡。")
+    return "\n".join(lines)
+
+
+def _personal_memory_allowed(payload: AgentBackendV2Request) -> bool:
+    if payload.source.platform == "web":
+        return True
+    chat_type = str(payload.source.chat_type or "").strip().lower()
+    return chat_type in {"dm", "p2p", "private", "direct"}
+
+
+def _personal_memory_context(payload: AgentBackendV2Request) -> str:
+    if not _personal_memory_allowed(payload):
+        return ""
+    try:
+        user_memory_repository.migrate_legacy_user_file(
+            payload.subject.tenant_id,
+            payload.subject.user_id,
+        )
+        context = user_memory_repository.format_for_prompt(
+            payload.subject.tenant_id,
+            payload.subject.user_id,
+        )
+    except Exception:
+        logger.exception("User memory prompt projection failed")
+        return ""
+    return f"\n\n{context}" if context else ""
+
+
+async def _call_memory_llm(messages: list[dict[str, str]], task_name: str) -> str:
+    """Use the existing Dazah LLM proxy for extraction and compression."""
+
+    from agent.auxiliary_client import async_call_llm
+
+    response = await async_call_llm(
+        provider="custom",
+        model=os.getenv("DAZAH_LLM_MODEL", "dazah-active-text"),
+        base_url=os.getenv(
+            "DAZAH_LLM_BASE_URL",
+            "http://127.0.0.1:8000/api/v1/agent/llm",
+        ),
+        api_key=os.getenv("AGENT_LLM_PROXY_TOKEN", ""),
+        messages=messages,
+        temperature=0,
+        timeout=60,
+    )
+    content = response.choices[0].message.content
+    if not isinstance(content, str) or not content.strip():
+        raise ValueError(f"{task_name} returned empty content")
+    return content
+
+
+def _trusted_memory_tool_evidence(tool_trace: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    evidence: list[dict[str, Any]] = []
+    for index, item in enumerate(tool_trace[:20]):
+        if not isinstance(item, dict):
+            continue
+        status_value = str(item.get("status") or "").lower()
+        verified = bool(
+            item.get("ok") is True
+            and (
+                item.get("executed") is True
+                or status_value in {"completed", "success", "succeeded"}
+            )
+        )
+        evidence.append(
+            {
+                "evidence_id": str(item.get("call_id") or item.get("id") or f"tool-{index}"),
+                "operation": str(item.get("operation") or item.get("tool") or item.get("name") or "")[:160],
+                "status": status_value[:40],
+                "verified": verified,
+                "summary": str(item.get("summary") or "")[:240],
+            }
+        )
+    return evidence
+
+
+async def _memory_review_worker(worker_index: int) -> None:
+    while True:
+        job = await asyncio.to_thread(user_memory_repository.claim_job)
+        if job is None:
+            await asyncio.sleep(0.5)
+            continue
+        try:
+            await review_turn(
+                user_memory_repository,
+                tenant_id=str(job["tenant_id"]),
+                user_id=str(job["user_id"]),
+                session_id=str(job["session_id"]),
+                run_id=str(job["run_id"]),
+                user_message=str(job["user_message"]),
+                assistant_message=str(job["assistant_message"]),
+                tool_evidence=(job.get("tool_evidence") if isinstance(job.get("tool_evidence"), list) else []),
+                llm_call=_call_memory_llm,
+            )
+            await asyncio.to_thread(
+                user_memory_repository.complete_job,
+                str(job["tenant_id"]),
+                str(job["user_id"]),
+                str(job["run_id"]),
+            )
+        except asyncio.CancelledError:
+            user_memory_repository.retry_job(
+                str(job["tenant_id"]),
+                str(job["user_id"]),
+                str(job["run_id"]),
+                attempts=int(job["attempts"]),
+                error_code="worker_cancelled",
+            )
+            raise
+        except Exception as exc:
+            user_memory_repository.retry_job(
+                str(job["tenant_id"]),
+                str(job["user_id"]),
+                str(job["run_id"]),
+                attempts=int(job["attempts"]),
+                error_code=type(exc).__name__,
+            )
+            scope_hash = hashlib.sha256(
+                f"{job['tenant_id']}:{job['user_id']}".encode("utf-8")
+            ).hexdigest()[:12]
+            logger.exception(
+                "User memory worker failed worker=%s scope=%s run=%s",
+                worker_index,
+                scope_hash,
+                job["run_id"],
+            )
+
+
+def _schedule_memory_review(
+    payload: AgentBackendV2Request,
+    assistant_message: str,
+    tool_trace: list[dict[str, Any]],
+) -> None:
+    if not _personal_memory_allowed(payload):
+        return
+    raw_message = _current_user_message(payload).strip()
+    if not raw_message or raw_message.casefold().startswith("/memory"):
+        return
+
+    queued = user_memory_repository.enqueue_job(
+        payload.subject.tenant_id,
+        payload.subject.user_id,
+        str(payload.run_id),
+        session_id=payload.session_id,
+        user_message=raw_message,
+        assistant_message=assistant_message,
+        tool_evidence=_trusted_memory_tool_evidence(tool_trace),
+    )
+    if not queued:
+        scope_hash = hashlib.sha256(
+            f"{payload.subject.tenant_id}:{payload.subject.user_id}".encode("utf-8")
+        ).hexdigest()[:12]
+        logger.warning("User memory queue is full scope=%s", scope_hash)
+
+
+def _explicit_memory_save_requested(payload: AgentBackendV2Request) -> bool:
+    if not _personal_memory_allowed(payload):
+        return False
+    return re.search(
+        r"(?:记住|记一下|保存到(?:长期)?记忆|长期记忆)",
+        _current_user_message(payload),
+        flags=re.IGNORECASE,
+    ) is not None
+
+
+async def _finalize_user_memory(
+    payload: AgentBackendV2Request,
+    assistant_message: str,
+    tool_trace: list[dict[str, Any]],
+) -> str:
+    if not _personal_memory_allowed(payload):
+        return assistant_message
+    if not _explicit_memory_save_requested(payload):
+        _schedule_memory_review(payload, assistant_message, tool_trace)
+        return assistant_message
+    try:
+        stats = await asyncio.wait_for(
+            review_turn(
+                user_memory_repository,
+                tenant_id=payload.subject.tenant_id,
+                user_id=payload.subject.user_id,
+                session_id=payload.session_id,
+                run_id=str(payload.run_id),
+                user_message=_current_user_message(payload).strip(),
+                assistant_message=assistant_message,
+                tool_evidence=_trusted_memory_tool_evidence(tool_trace),
+                llm_call=_call_memory_llm,
+            ),
+            timeout=120,
+        )
+    except Exception:
+        scope_hash = hashlib.sha256(
+            f"{payload.subject.tenant_id}:{payload.subject.user_id}".encode("utf-8")
+        ).hexdigest()[:12]
+        logger.exception("Synchronous user memory save failed scope=%s run=%s", scope_hash, payload.run_id)
+        return f"{assistant_message}\n\n长期记忆保存失败，本次未确认写入；请稍后重试。"
+    if stats.get("added", 0) + stats.get("updated", 0) > 0:
+        return f"{assistant_message}\n\n已确认保存到你的长期记忆。"
+    if stats.get("forgotten", 0) > 0:
+        return f"{assistant_message}\n\n已确认删除匹配的长期记忆。"
+    return f"{assistant_message}\n\n本轮没有通过校验的可保存记忆，因此未写入长期记忆。"
+
+
+def _memory_command_response(payload: AgentBackendV2Request, raw_command: str) -> str | None:
+    normalized = re.sub(r"\s+", " ", raw_command.strip()).casefold()
+    if not normalized.startswith("/memory"):
+        return None
+    if not _personal_memory_allowed(payload):
+        return "为保护个人隐私，群聊不读取或修改个人记忆。请在与 Livzon 助手的私聊中使用 `/memory`。"
+
+    tenant_id = payload.subject.tenant_id
+    user_id = payload.subject.user_id
+    try:
+        user_memory_repository.migrate_legacy_user_file(tenant_id, user_id)
+        if normalized == "/memory":
+            return user_memory_repository.format_for_user(tenant_id, user_id)
+        if normalized == "/memory clear":
+            user_memory_repository.request_clear(tenant_id, user_id)
+            return (
+                "这将清空你的全部长期记忆，且无法从 Hermes 恢复。"
+                "如确认清空，请在 5 分钟内发送 `/memory clear confirm`。"
+            )
+        if normalized == "/memory clear confirm":
+            if user_memory_repository.confirm_clear(tenant_id, user_id):
+                return "你的长期记忆已清空。"
+            return "清空确认不存在或已过期。请重新发送 `/memory clear`。"
+        prefix = "/memory forget "
+        if normalized.startswith(prefix):
+            # Slice the original command so casing and non-ASCII text are retained.
+            needle = re.sub(r"\s+", " ", raw_command.strip())[len(prefix):].strip()
+            if not needle:
+                return "请提供要忘记的关键词，例如：`/memory forget 表格输出`。"
+            removed, matches = user_memory_repository.forget_unique(tenant_id, user_id, needle)
+            if removed:
+                return "已删除唯一匹配的记忆。"
+            if not matches:
+                return "没有找到匹配的记忆。"
+            lines = ["匹配到多条记忆，为避免误删，本次未执行。请使用更具体的关键词："]
+            for item in matches[:5]:
+                label = CATEGORY_LABELS.get(str(item.get("category")), "其他")
+                lines.append(f"- 【{label}】{str(item.get('content') or '')[:120]}")
+            return "\n".join(lines)
+        return (
+            "记忆命令：`/memory` 查看；`/memory forget <关键词>` 删除唯一匹配项；"
+            "`/memory clear` 发起清空确认。"
+        )
+    except Exception:
+        logger.exception("User memory command failed")
+        return "记忆服务暂时不可用，请稍后重试。"
+
+
+def _normalize_natural_memory_command(raw_message: str) -> str:
+    compact = re.sub(r"\s+", "", raw_message.strip()).rstrip("。！？?!")
+    if compact in {"你记得什么", "你记住了什么", "查看我的记忆", "查看你对我的记忆"}:
+        return "/memory"
+    match = re.fullmatch(r"(?:请)?(?:你)?忘记(?:关于)?[：:]?(.+)", compact)
+    if match and match.group(1).strip():
+        return f"/memory forget {match.group(1).strip()}"
+    return raw_message
+
+
+async def _try_basic_command_response(
     payload: AgentBackendV2Request,
 ) -> AgentBackendV2Result | None:
-    normalized = re.sub(
-        r"\s+", " ", _current_user_message(payload).strip()
-    ).lower()
+    raw_message = _current_user_message(payload).strip()
+    normalized = re.sub(r"\s+", " ", raw_message).lower()
+    memory_response = _memory_command_response(
+        payload,
+        _normalize_natural_memory_command(raw_message),
+    )
+    if memory_response is not None:
+        return AgentBackendV2Result(message=memory_response)
     if normalized in {"/new", "/restart", "/reset", "/新建会话"}:
         message = "已开启新对话，会话上下文已重置。请发送新的问题。"
     elif normalized in {"/help", "/帮助"}:
@@ -1545,7 +1971,10 @@ def _try_basic_command_response(
             "- `/new`：开启新对话并清除当前会话上下文\n"
             "- `/restart`：重新开始对话；兼容别名 `/reset`\n"
             "- `/help`：查看命令帮助\n"
-            "- `/status`：查看当前连接和会话状态"
+            "- `/status`：查看当前连接和会话状态\n"
+            "- `/memory`：查看和管理你的长期记忆\n"
+            "- `/tasks`：查询最近任务进度\n"
+            "- `/retry <运行ID>`：为失败任务生成重试确认卡"
         )
     elif normalized in {"/status", "/状态"}:
         channel = "飞书" if payload.source.platform == "feishu" else "Web"
@@ -1555,6 +1984,40 @@ def _try_basic_command_response(
             f"- 会话：有效\n"
             f"- 协议：Agent Backend {AGENT_BACKEND_PROTOCOL_VERSION}"
         )
+    elif normalized in {"/tasks", "/任务", "/任务进度"}:
+        result = await _execute_deterministic_operation(
+            "agent.list_automation_runs",
+            params={"scope": "mine", "page": 1, "page_size": 5},
+        )
+        message = _format_task_status(result)
+    elif normalized.startswith("/retry ") or normalized.startswith("/重试 "):
+        run_id = normalized.split(" ", 1)[1].strip()
+        try:
+            uuid.UUID(run_id)
+        except ValueError:
+            message = "运行 ID 格式无效。请先发送 `/tasks`，再复制完整运行 ID。"
+        else:
+            result = await _execute_deterministic_operation(
+                "agent.retry_automation_run",
+                params={"run_id": run_id},
+            )
+            confirmation = result.get("confirmation")
+            confirmations = [confirmation] if isinstance(confirmation, dict) else []
+            if confirmations:
+                return AgentBackendV2Result(
+                    message="已生成失败任务重试确认，请核对来源运行和影响范围后操作。",
+                    pending_confirmations=confirmations,
+                    tool_trace=[
+                        {
+                            "action": "execute",
+                            "operation": "agent.retry_automation_run",
+                            "status": "confirmation_required",
+                            "ok": True,
+                        }
+                    ],
+                )
+            repair_hint = str(result.get("repair_hint") or "").strip()
+            message = repair_hint or "未能生成重试确认。请确认该运行属于你且状态为失败。"
     else:
         return None
     return AgentBackendV2Result(
@@ -1780,7 +2243,8 @@ def _run_agent_conversation(
             model=os.getenv("DAZAH_LLM_MODEL", "dazah-active-text"),
             api_mode="chat_completions",
             enabled_toolsets=["agent", "dazah", "feishu"],
-            disabled_toolsets=[],
+            disabled_toolsets=["memory"],
+            skip_memory=True,
             quiet_mode=True,
             platform="feishu" if is_feishu else "dazah",
             chat_type=agent_chat_type,
@@ -1820,6 +2284,7 @@ def _run_agent_conversation(
                 + _single_base_record_create_instruction(payload)
                 + _task_routing_instruction(current_message)
                 + _business_read_routing_instruction(current_message)
+                + _personal_memory_context(payload)
             ),
             conversation_history=conversation_history,
             task_id=runtime_task_id,
@@ -1860,6 +2325,7 @@ def _run_agent_conversation(
                     + _single_base_record_create_instruction(payload)
                     + _task_routing_instruction(current_message)
                     + _business_read_routing_instruction(current_message)
+                    + _personal_memory_context(payload)
                 ),
                 conversation_history=retry_history,
                 task_id=runtime_task_id,
@@ -1946,7 +2412,7 @@ async def run_agent_v2(
     token = dazah_request_context.set(payload.context)
     cancellation_event = threading.Event()
     try:
-        direct_response = _try_basic_command_response(payload)
+        direct_response = await _try_basic_command_response(payload)
         if direct_response is None:
             direct_response = _try_conversation_context_response(payload)
         if direct_response is not None:
@@ -1991,6 +2457,9 @@ async def run_agent_v2(
                 tool_trace=[],
             )
         confirmations = _extract_confirmations(agent, result)
+        for confirmation in confirmations:
+            confirmation.setdefault("trace_id", str(payload.trace_id))
+            confirmation.setdefault("run_id", str(payload.run_id))
         tool_trace = result.get("tool_trace") or []
         message = _verified_agent_message(
             result.get("final_response") or "我没有生成有效回复，请稍后重试。",
@@ -2000,6 +2469,7 @@ async def run_agent_v2(
                 payload
             ),
         )
+        message = await _finalize_user_memory(payload, message, tool_trace)
         return AgentBackendV2Result(
             message=message,
             pending_confirmations=confirmations,
@@ -2045,7 +2515,7 @@ async def stream_agent_v2(
 
         try:
             yield encode("accepted", {"session_id": payload.session_id})
-            direct_response = _try_basic_command_response(payload)
+            direct_response = await _try_basic_command_response(payload)
             if direct_response is None:
                 direct_response = _try_conversation_context_response(payload)
             if direct_response is None:
@@ -2141,6 +2611,9 @@ async def stream_agent_v2(
                 return
 
             confirmations = _extract_confirmations(agent, result)
+            for confirmation in confirmations:
+                confirmation.setdefault("trace_id", str(payload.trace_id))
+                confirmation.setdefault("run_id", str(payload.run_id))
             tool_trace = result.get("tool_trace") or []
             message = _verified_agent_message(
                 result.get("final_response") or "我没有生成有效回复，请稍后重试。",
@@ -2176,6 +2649,7 @@ async def stream_agent_v2(
                         yield encode("delivery", delivery_data)
             for confirmation in confirmations:
                 yield encode("confirmation", confirmation)
+            message = await _finalize_user_memory(payload, message, tool_trace)
             yield encode(
                 "finished",
                 {

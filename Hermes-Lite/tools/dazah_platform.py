@@ -5,6 +5,7 @@ import contextvars
 import json
 import os
 import threading
+import uuid
 from typing import Any, Literal
 
 import httpx
@@ -208,6 +209,7 @@ async def dazah_tool(
         return json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False)
 
     context = current_dazah_request_context(task_id)
+    trace_id = str(context.get("trace_id") or uuid.uuid4())
     if action == "execute" and not operation:
         forced_operation = str(context.get("forced_operation") or "").strip()
         if forced_operation in _FORCED_OPERATION_FALLBACKS:
@@ -227,6 +229,7 @@ async def dazah_tool(
                         "module": module,
                         "limit": limit,
                         "subject": subject,
+                        "trace_id": trace_id,
                     },
                     headers=headers,
                 )
@@ -238,7 +241,11 @@ async def dazah_tool(
                     )
                 response = await client.get(
                     f"{_base_url()}/agent/tools/{operation}",
-                    params={"subject_user_id": subject["user_id"]},
+                    params={
+                        "subject_user_id": subject["user_id"],
+                        "subject_tenant_id": subject["tenant_id"],
+                        "trace_id": trace_id,
+                    },
                     headers=headers,
                 )
             else:
@@ -255,7 +262,7 @@ async def dazah_tool(
                         "body": body,
                         "subject": subject,
                         "session_id": context.get("platform_session_id"),
-                        "trace_id": context.get("trace_id"),
+                        "trace_id": trace_id,
                         "reason": reason,
                     },
                     headers=headers,
@@ -270,16 +277,19 @@ async def dazah_tool(
                         status_code=response.status_code,
                     ),
                 )
-            return json.dumps(
-                {
+            error_payload = {
                     "ok": False,
                     "action": action,
                     "operation": operation,
                     "status_code": response.status_code,
                     "error": response.text[:1000],
-                },
-                ensure_ascii=False,
-            )
+                }
+            if response.status_code == 403:
+                error_payload["repair_hint"] = (
+                    "当前 Dazah 身份没有此能力的模块 Scope 或数据权限。"
+                    "请管理员在用户模块权限中授权对应模块，并同步 Livzon Agent 访问范围后重试。"
+                )
+            return json.dumps(error_payload, ensure_ascii=False)
         response_payload = response.json()
         if action == "execute" and operation and isinstance(response_payload, dict):
             _record_dazah_task_tool_trace(
