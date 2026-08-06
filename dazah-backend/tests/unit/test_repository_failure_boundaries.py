@@ -86,10 +86,17 @@ async def test_external_identity_binding_repository_lifecycle() -> None:
     binding_id = uuid4()
     local_user_id = uuid4()
     actor_id = uuid4()
-    result_binding = SimpleNamespace(id=binding_id)
+    result_binding = SimpleNamespace(
+        id=binding_id,
+        external_user_id="user",
+        external_open_id="open",
+        external_union_id=None,
+    )
+    scalar_rows = SimpleNamespace(all=lambda: [result_binding])
+    scalar_rows.unique = lambda: scalar_rows
     query_result = SimpleNamespace(
         scalar_one_or_none=lambda: result_binding,
-        scalars=lambda: SimpleNamespace(all=lambda: [result_binding]),
+        scalars=lambda: scalar_rows,
         all=lambda: [(result_binding, SimpleNamespace(name="张三"))],
     )
     added: list[object] = []
