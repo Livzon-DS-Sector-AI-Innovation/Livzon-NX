@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
 
 import httpx
@@ -196,3 +196,30 @@ async def test_gateway_status_maps_configuration_and_upstream_results(
     monkeypatch.setattr(identity_api.httpx, "AsyncClient", FailingClient)
     with pytest.raises(HTTPException, match="状态查询失败"):
         await get_livzon_feishu_gateway_status(configured, current_user)
+
+
+@pytest.mark.asyncio
+async def test_gateway_restart_is_audited(monkeypatch) -> None:
+    from app.platform.identity import service
+    from app.platform.identity.schemas import FeishuGatewayRestartResult
+
+    async def restart():
+        return FeishuGatewayRestartResult(
+            status="connected",
+            message="已恢复",
+            previous_reconnects=2,
+            gateway_reconnects=3,
+            credential_version=4,
+            config_version=3,
+        )
+
+    monkeypatch.setattr(service, "restart_livzon_feishu_gateway", restart)
+    db = SimpleNamespace(add=Mock())
+    current_user = SimpleNamespace(id=uuid4())
+
+    response = await identity_api.restart_livzon_feishu_gateway(db, current_user)
+
+    assert json.loads(response.body)["data"]["status"] == "connected"
+    audit = db.add.call_args.args[0]
+    assert audit.action == "restart_livzon_feishu_gateway"
+    assert audit.user_id == current_user.id

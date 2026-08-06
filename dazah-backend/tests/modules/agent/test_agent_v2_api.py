@@ -197,6 +197,8 @@ async def test_control_plane_tool_routes_delegate_and_enforce_admin(
     described = await api.describe_tool(
         "agent.test",
         user_id,
+        "tenant-a",
+        uuid.uuid4(),
         db,
         "Bearer token",
         settings,
@@ -223,7 +225,12 @@ async def test_control_plane_tool_routes_delegate_and_enforce_admin(
         "operation": "agent.test",
         "enabled": True,
     }
-    assert len(db.added) == 1
+    assert len(db.added) == 3
+    assert [item.resource_type for item in db.added] == [
+        "agent_capability_search",
+        "agent_capability_description",
+        "agent_tool_catalog",
+    ]
 
 
 @pytest.mark.anyio

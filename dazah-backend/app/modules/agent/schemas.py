@@ -313,6 +313,7 @@ class AgentToolSearchRequest(BaseModel):
     module: str | None = Field(default=None, max_length=64)
     limit: int = Field(default=12, ge=1, le=50)
     subject: AgentTrustedSubject
+    trace_id: uuid.UUID = Field(default_factory=uuid.uuid4)
 
 
 class AgentToolCatalogEntry(BaseModel):

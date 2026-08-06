@@ -2647,6 +2647,8 @@ class AgentService:
                             else 0,
                         ),
                         "allow_always": bool(item.get("allow_always")),
+                        "trace_id": str(item.get("trace_id") or "")[:64] or None,
+                        "run_id": str(item.get("run_id") or "")[:64] or None,
                     },
                     expires_at=expires_at,
                 )

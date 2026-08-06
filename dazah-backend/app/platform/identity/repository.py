@@ -14,6 +14,10 @@ from app.platform.identity.models import (
 )
 
 
+class ExternalIdentityConflictError(ValueError):
+    """Raised when supplied Feishu identifiers do not resolve to one binding."""
+
+
 class ExternalIdentityBindingRepository:
     async def create(
         self,
@@ -111,7 +115,29 @@ class ExternalIdentityBindingRepository:
                 or_(*clauses),
             )
         )
-        return result.scalar_one_or_none()
+        matches = list(result.scalars().unique().all())
+        if len(matches) > 1:
+            raise ExternalIdentityConflictError(
+                "Feishu identity identifiers resolve to different bindings"
+            )
+        if not matches:
+            return None
+        binding = matches[0]
+        supplied = {
+            "external_user_id": external_user_id,
+            "external_open_id": external_open_id,
+            "external_union_id": external_union_id,
+        }
+        if any(
+            value is not None
+            and getattr(binding, field) is not None
+            and getattr(binding, field) != value
+            for field, value in supplied.items()
+        ):
+            raise ExternalIdentityConflictError(
+                "Feishu identity identifiers conflict with the trusted binding"
+            )
+        return binding
 
     async def list_page(
         self,
@@ -491,6 +517,7 @@ class FeishuConfigRepository:
                 FeishuConfig.is_active.is_(True),
             )
             .order_by(FeishuConfig.updated_at.desc())
+            .limit(1)
         )
         return result.scalar_one_or_none()
 

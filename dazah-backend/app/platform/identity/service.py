@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import json
 import logging
+import re
 import secrets
 from datetime import UTC, datetime, timedelta
 from hashlib import pbkdf2_hmac
@@ -40,6 +41,7 @@ from app.platform.identity.schemas import (
     FeishuConfigUpsert,
     FeishuDiagnosticResult,
     FeishuDiagnosticStep,
+    FeishuGatewayRestartResult,
 )
 from app.platform.integrations.feishu.oauth import FeishuOAuthClient
 
@@ -131,6 +133,74 @@ async def _push_livzon_credentials_to_hermes(
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE,
             "Hermes 暂时不可达，飞书接入配置未保存",
+        ) from exc
+
+
+async def restart_livzon_feishu_gateway() -> FeishuGatewayRestartResult:
+    """Restart only the managed Feishu Gateway child and wait for readiness."""
+    settings = get_settings()
+    base_url = settings.HERMES_INTERNAL_URL.rstrip("/")
+    token = settings.HERMES_INTERNAL_TOKEN
+    if not base_url or not token:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "Hermes 内部接口未配置，无法重启飞书 Gateway",
+        )
+    try:
+        async with httpx.AsyncClient(timeout=70) as client:
+            response = await client.post(
+                f"{base_url}/internal/feishu/gateway/restart",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+    except httpx.TimeoutException as exc:
+        raise HTTPException(
+            status.HTTP_504_GATEWAY_TIMEOUT,
+            "Hermes 飞书 Gateway 重启超时，请刷新运行状态并查看诊断信息",
+        ) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "Hermes 暂时不可达，未能发起飞书 Gateway 重启",
+        ) from exc
+
+    if response.status_code == status.HTTP_409_CONFLICT:
+        detail = "飞书 Gateway 当前状态不允许重启"
+        try:
+            payload = response.json()
+            if isinstance(payload, dict) and isinstance(payload.get("detail"), str):
+                detail = payload["detail"]
+        except ValueError:
+            pass
+        raise HTTPException(status.HTTP_409_CONFLICT, detail)
+    if response.status_code == status.HTTP_404_NOT_FOUND:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "当前运行的 Hermes 版本不支持管理面板重启，请先重新部署 Hermes 后再试",
+        )
+    if response.status_code in {
+        status.HTTP_401_UNAUTHORIZED,
+        status.HTTP_403_FORBIDDEN,
+    }:
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            "Hermes 内部鉴权失败，请管理员核对后端与 Hermes 的内部服务 Token",
+        )
+    if response.status_code == status.HTTP_504_GATEWAY_TIMEOUT:
+        raise HTTPException(
+            status.HTTP_504_GATEWAY_TIMEOUT,
+            "Hermes 飞书 Gateway 未在限定时间内恢复连接，请查看运行状态和诊断信息",
+        )
+    if not response.is_success:
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            "Hermes 拒绝了飞书 Gateway 重启请求",
+        )
+    try:
+        return FeishuGatewayRestartResult.model_validate(response.json())
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            "Hermes 返回了无效的飞书 Gateway 重启结果",
         ) from exc
 
 
@@ -440,6 +510,29 @@ def _diagnostic_status(steps: list[FeishuDiagnosticStep]) -> str:
     return "ok"
 
 
+def _feishu_error_code(exc: Exception) -> int | None:
+    matched = re.search(r"\bcode=(-?\d+)\b", str(exc))
+    return int(matched.group(1)) if matched else None
+
+
+def _contact_api_suggestion(exc: Exception, *, resource: str) -> str:
+    error_text = str(exc).lower()
+    if _feishu_error_code(exc) == 40004 or "no dept authority" in error_text:
+        return (
+            "Scope 已开通；飞书错误 40004 表示目标部门不在应用的通讯录权限范围内。"
+            f"请将{resource}对应部门加入通讯录权限范围，或把同步部门配置为已授权部门。"
+        )
+    if resource == "部门列表":
+        return (
+            "请核对 contact:department.base:readonly、"
+            "contact:department.organize:readonly 的发布状态和目标部门可见范围。"
+        )
+    return (
+        "请核对 contact:user.base:readonly 的发布状态，并确认应用通讯录权限范围"
+        "包含目标部门及其成员。"
+    )
+
+
 async def diagnose_livzon_feishu_config(
     db: AsyncSession,
     payload: FeishuConfigUpsert | None = None,
@@ -455,6 +548,7 @@ async def diagnose_livzon_feishu_config(
     departments: list[JsonObject] = []
     users: list[JsonObject] = []
     scope: JsonObject = {}
+    authorized_department_ids: list[str] = []
     stored = await _feishu_config_repo.get_active(db)
 
     try:
@@ -517,6 +611,11 @@ async def diagnose_livzon_feishu_config(
             tenant_access_token=token,
         )
         scope_department_count = len(scope.get("department_ids") or [])
+        authorized_department_ids = [
+            str(item)
+            for item in scope.get("department_ids") or []
+            if str(item).strip()
+        ]
         scope_user_count = len(scope.get("user_ids") or [])
         scope_group_count = len(scope.get("group_ids") or [])
         steps.append(
@@ -552,9 +651,30 @@ async def diagnose_livzon_feishu_config(
             )
         )
 
+    diagnostic_root_id = root_id
+    if authorized_department_ids and (
+        root_id == "0" or root_id not in authorized_department_ids
+    ):
+        diagnostic_root_id = authorized_department_ids[0]
+        steps.append(
+            FeishuDiagnosticStep(
+                name="诊断目标部门",
+                status="warning",
+                message=(
+                    f"配置的同步根部门 {root_id} 不在当前通讯录权限范围内；"
+                    "本次改用一个已授权部门进行连通性探测。"
+                ),
+                suggestion=(
+                    "若需要从该根部门同步，请在飞书开放平台扩大通讯录权限范围；"
+                    "否则请将同步根部门和成员同步部门改为已授权部门。"
+                ),
+                code=40004,
+            )
+        )
+
     try:
         departments = await get_all_departments(
-            root_department_id=root_id,
+            root_department_id=diagnostic_root_id,
             app_id=app_id,
             app_secret=app_secret,
             tenant_access_token=token,
@@ -562,20 +682,16 @@ async def diagnose_livzon_feishu_config(
         steps.append(
             FeishuDiagnosticStep(
                 name="部门列表",
-                status="ok" if departments else "warning",
+                status="ok",
                 message=(
                     f"读取到 {len(departments)} 个部门。"
                     if departments
-                    else "部门 API 调用成功，但未读取到部门数据。"
+                    else (
+                        f"部门 API 调用成功；已授权部门 {diagnostic_root_id} "
+                        "下没有可返回的子部门。"
+                    )
                 ),
-                suggestion=None
-                if departments
-                else (
-                    "请检查通讯录权限范围是否包含同步根部门；飞书要求使用 "
-                    "fetch_child=true 获取子部门，并开通 "
-                    "contact:department.base:readonly / "
-                    "contact:department.organize:readonly。"
-                ),
+                suggestion=None,
             )
         )
     except Exception as exc:
@@ -584,10 +700,8 @@ async def diagnose_livzon_feishu_config(
                 name="部门列表",
                 status="error",
                 message=f"读取部门列表失败：{exc}",
-                suggestion=(
-                    "请开通 contact:department.base:readonly、"
-                    "contact:department.organize:readonly，并确认通讯录权限范围。"
-                ),
+                suggestion=_contact_api_suggestion(exc, resource="部门列表"),
+                code=_feishu_error_code(exc),
             )
         )
 
@@ -598,10 +712,11 @@ async def diagnose_livzon_feishu_config(
         if dept.get("member_count")
     )
     for dept_id in [
+        *(authorized_department_ids[:3]),
+        diagnostic_root_id,
         member_id,
         *departments_with_members,
         *(dept.get("department_id", "") for dept in departments),
-        *((scope.get("department_ids") or [])[:3]),
         root_id,
     ]:
         if dept_id and dept_id not in sample_department_ids:
@@ -609,22 +724,26 @@ async def diagnose_livzon_feishu_config(
 
     sampled_department_id = ""
     if sample_department_ids:
-        last_error: Exception | None = None
+        errors: list[Exception] = []
         tried_ids: list[str] = []
-        try:
-            for sample_department_id in sample_department_ids:
-                tried_ids.append(sample_department_id)
+        successful_ids: list[str] = []
+        for sample_department_id in sample_department_ids:
+            tried_ids.append(sample_department_id)
+            try:
                 users = await find_users_by_department(
                     sample_department_id,
                     app_id=app_id,
                     app_secret=app_secret,
                     tenant_access_token=token,
                 )
-                if users:
-                    sampled_department_id = sample_department_id
-                    break
-            if not sampled_department_id and tried_ids:
-                sampled_department_id = tried_ids[0]
+            except Exception as exc:
+                errors.append(exc)
+                continue
+            successful_ids.append(sample_department_id)
+            sampled_department_id = sample_department_id
+            if users:
+                break
+        if successful_ids:
             steps.append(
                 FeishuDiagnosticStep(
                     name="部门用户",
@@ -634,7 +753,7 @@ async def diagnose_livzon_feishu_config(
                         if users
                         else (
                             "已尝试部门 "
-                            f"{', '.join(tried_ids[:5])}，API 调用成功，"
+                            f"{', '.join(successful_ids[:5])}，API 调用成功，"
                             "但未读取到用户。"
                         )
                     ),
@@ -647,17 +766,18 @@ async def diagnose_livzon_feishu_config(
                     ),
                 )
             )
-        except Exception as exc:
-            last_error = exc
+        else:
+            last_error = errors[-1]
             steps.append(
                 FeishuDiagnosticStep(
                     name="部门用户",
-                    status="error" if last_error else "warning",
-                    message=f"读取部门用户失败：{last_error or exc}",
-                    suggestion=(
-                        "请开通 contact:user.base:readonly，"
-                        "并确认应用通讯录权限范围包含目标部门。"
+                    status="error",
+                    message=f"读取部门用户失败：{last_error}",
+                    suggestion=_contact_api_suggestion(
+                        last_error,
+                        resource="部门用户",
                     ),
+                    code=_feishu_error_code(last_error),
                 )
             )
     else:

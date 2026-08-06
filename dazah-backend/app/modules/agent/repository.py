@@ -592,7 +592,9 @@ class AgentRepository:
         context = request_payload.get("context") or {}
         call = AgentToolCall(
             session_id=session_id,
-            correlation_id=normalize_correlation_id(context.get("correlation_id")),
+            correlation_id=normalize_correlation_id(
+                request_payload.get("trace_id") or context.get("correlation_id")
+            ),
             operation=operation,
             request_payload=request_payload,
         )

@@ -20,6 +20,7 @@ def _user(*, status_value: str = "active") -> User:
         role="user",
         status=status_value,
         auth_source="local",
+        tenant_key="local",
     )
 
 
@@ -278,6 +279,7 @@ async def test_describe_validates_status_user_and_access(
         db_session,
         operation=operation,
         user_id=active.id,
+        tenant_id="local",
     )
     assert entry.operation == operation
 
@@ -286,6 +288,7 @@ async def test_describe_validates_status_user_and_access(
             db_session,
             operation="missing.operation",
             user_id=active.id,
+            tenant_id="local",
         )
     assert exc.value.status_code == status.HTTP_404_NOT_FOUND
 
@@ -294,6 +297,7 @@ async def test_describe_validates_status_user_and_access(
             db_session,
             operation=operation,
             user_id=inactive.id,
+            tenant_id="local",
         )
     assert exc.value.status_code == status.HTTP_403_FORBIDDEN
 
@@ -302,5 +306,15 @@ async def test_describe_validates_status_user_and_access(
             db_session,
             operation=operation,
             user_id=uuid.uuid4(),
+            tenant_id="local",
+        )
+    assert exc.value.status_code == status.HTTP_403_FORBIDDEN
+
+    with pytest.raises(HTTPException) as exc:
+        await service.describe(
+            db_session,
+            operation=operation,
+            user_id=active.id,
+            tenant_id="other-tenant",
         )
     assert exc.value.status_code == status.HTTP_403_FORBIDDEN

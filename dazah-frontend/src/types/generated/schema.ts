@@ -4220,6 +4220,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/identity/feishu-config/gateway/restart": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 重启 Hermes Feishu Gateway
+         * @description 重建飞书 Gateway 子进程连接，不重启 Hermes 服务或部署镜像。
+         */
+        post: operations["restart_livzon_feishu_gateway_api_v1_identity_feishu_config_gateway_restart_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/identity/feishu-config/test": {
         parameters: {
             query?: never;
@@ -15859,6 +15879,11 @@ export interface components {
              */
             query: string;
             subject: components["schemas"]["AgentTrustedSubject"];
+            /**
+             * Trace Id
+             * Format: uuid
+             */
+            trace_id?: string;
         };
         /** AgentTrustedSubject */
         AgentTrustedSubject: {
@@ -22394,6 +22419,38 @@ export interface components {
             /** Suggestion */
             suggestion?: string | null;
         };
+        /** FeishuGatewayRestartApiResponse */
+        FeishuGatewayRestartApiResponse: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["FeishuGatewayRestartResult"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+        };
+        /** FeishuGatewayRestartResult */
+        FeishuGatewayRestartResult: {
+            /** Config Version */
+            config_version: number;
+            /** Credential Version */
+            credential_version?: number | null;
+            /** Gateway Reconnects */
+            gateway_reconnects: number;
+            /** Message */
+            message: string;
+            /** Previous Reconnects */
+            previous_reconnects: number;
+            /**
+             * Status
+             * @constant
+             */
+            status: "connected";
+        };
         /** FermentationCreate */
         FermentationCreate: {
             /** Attachment */
@@ -23125,6 +23182,10 @@ export interface components {
             result?: string | null;
             /** Risk */
             risk: string;
+            /** Run Id */
+            run_id?: string | null;
+            /** Trace Id */
+            trace_id?: string | null;
             /** User Id */
             user_id?: string | null;
         };
@@ -28700,6 +28761,10 @@ export interface components {
             id: string;
             /** Resource Fingerprint */
             resource_fingerprint: string;
+            /** Run Id */
+            run_id?: string | null;
+            /** Trace Id */
+            trace_id?: string | null;
         };
         /** RespondComplaintRequest */
         RespondComplaintRequest: {
@@ -35655,6 +35720,8 @@ export interface operations {
         parameters: {
             query: {
                 subject_user_id: string;
+                subject_tenant_id: string;
+                trace_id: string;
             };
             header?: {
                 authorization?: string | null;
@@ -45036,6 +45103,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restart_livzon_feishu_gateway_api_v1_identity_feishu_config_gateway_restart_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeishuGatewayRestartApiResponse"];
                 };
             };
             /** @description Validation Error */
