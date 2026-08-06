@@ -23,7 +23,9 @@ from httpx import AsyncClient
         (
             "GET",
             f"/api/v1/agent/tools/agent.get_current_time"
-            f"?subject_user_id={uuid.uuid4()}",
+            f"?subject_user_id={uuid.uuid4()}"
+            f"&subject_tenant_id=test"
+            f"&trace_id={uuid.uuid4()}",
             None,
         ),
         (
