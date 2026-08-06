@@ -149,6 +149,12 @@ const server = createServer(async (request, response) => {
   }
 
   if (request.url?.startsWith('/api/v1/identity/me')) {
+    if (authorization.includes('invalid-session')) {
+      response.statusCode = 401
+      response.end(JSON.stringify({ code: 401, message: 'authentication required', data: null }))
+      return
+    }
+
     const user = authorization.includes('restricted')
       ? { ...currentUser, module_codes: [] }
       : currentUser

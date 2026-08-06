@@ -24,6 +24,41 @@ def test_direct_feishu_resource_response_skips_dazah_write_claim_verifier() -> N
     assert result == message
 
 
+def test_direct_feishu_resource_cannot_claim_missing_confirmation() -> None:
+    message = "已生成待确认项，请在下方卡片中点击确认执行。"
+
+    result = service._verified_agent_message(
+        message,
+        [],
+        [{"operation": "lark_cli base +record-get", "status": "completed"}],
+        enforce_write_confirmation=False,
+    )
+
+    assert result == (
+        "未生成真实待确认项，本次没有可执行的确认卡片，也未执行任何写入。"
+        "请重新提交操作。"
+    )
+
+
+def test_current_run_confirmation_list_ignores_stale_session_confirmation() -> None:
+    stale = {
+        "id": "stale-confirmation",
+        "operation": "base +record-upsert",
+        "summary": "旧确认",
+        "risk_level": "medium",
+        "status": "pending",
+        "expires_at": "2026-08-06T03:00:00Z",
+    }
+    agent = type("Agent", (), {"_session_messages": [stale]})()
+
+    confirmations = service._extract_confirmations(
+        agent,
+        {"current_pending_confirmations": []},
+    )
+
+    assert confirmations == []
+
+
 def test_unverified_business_data_claims_are_blocked() -> None:
     message = (
         "查询结果\n数据来源：Dazah 平台 quality.list_deviations 操作\n"
@@ -115,6 +150,38 @@ def test_real_confirmation_replaces_redundant_send_question() -> None:
 
     assert "是否发送" not in message
     assert "点击“确认执行”" in message
+
+
+def test_pending_confirmation_instruction_is_deduplicated_and_canonical() -> None:
+    confirmation = {
+        "id": "7ff93cb9-1e5b-4e2c-aa43-9572f9a99bdd",
+        "operation": "base +record-upsert",
+        "summary": "新增记录",
+        "risk_level": "medium",
+        "status": "pending",
+        "expires_at": "2026-08-06T10:03:28+08:00",
+    }
+    model_message = (
+        "待确认项已生成。\n"
+        '已生成待确认项，请在下方卡片中点击 "*****"。\n\n'
+        "操作预览\n- 日期：2026-07-21\n\n"
+        '待确认项已生成，请在下方卡片中点击 ""。\n'
+        "待确认项已生成，请在下方确认执行卡片中点击“确认执行”。"
+    )
+
+    message = service._verified_agent_message(
+        model_message,
+        [confirmation],
+        [],
+    )
+
+    instruction = "待确认项已生成，请在下方确认执行卡片中点击“确认执行”。"
+    assert "操作预览" in message
+    assert "日期：2026-07-21" in message
+    assert "*****" not in message
+    assert '点击 ""' not in message
+    assert message.count(instruction) == 1
+    assert message.endswith(instruction)
 
 
 def test_write_route_is_injected_per_turn_for_continuing_session(monkeypatch) -> None:

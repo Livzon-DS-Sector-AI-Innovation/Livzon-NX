@@ -32,21 +32,19 @@ async def test_prepare_text_attachment_extracts_content_and_redacts_raw_data() -
         ],
     )
 
-    prepared, metadata = await AgentService(SimpleNamespace())._prepare_attachments(
-        request
-    )
+    prepared, metadata, uploads = await AgentService(
+        SimpleNamespace()
+    )._prepare_attachments(request)
 
     assert prepared[0]["kind"] == "document"
     assert "DV-001" in prepared[0]["text"]
-    assert metadata == [
-        {
-            "filename": "偏差.csv",
-            "content_type": "text/csv",
-            "size": len(raw),
-            "kind": "document",
-        }
-    ]
+    assert metadata[0]["filename"] == "偏差.csv"
+    assert metadata[0]["content_type"] == "text/csv"
+    assert metadata[0]["size"] == len(raw)
+    assert metadata[0]["kind"] == "document"
+    assert uuid.UUID(metadata[0]["attachment_id"])
     assert "data_base64" not in metadata[0]
+    assert uploads[0]["data"] == raw
 
     backend_request = AgentBackendV2Request(
         session_id=f"web:{uuid.uuid4()}",
@@ -112,13 +110,14 @@ async def test_prepare_attachment_accepts_common_image_formats(
         ],
     )
 
-    prepared, metadata = await AgentService(SimpleNamespace())._prepare_attachments(
-        request
-    )
+    prepared, metadata, uploads = await AgentService(
+        SimpleNamespace()
+    )._prepare_attachments(request)
 
     assert prepared[0]["kind"] == "image"
     assert prepared[0]["content_type"] == content_type
     assert metadata[0]["filename"] == filename
+    assert uploads[0]["data"] == raw
 
 
 @pytest.mark.asyncio

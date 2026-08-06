@@ -22244,6 +22244,8 @@ export interface components {
         FeishuConversationAttachment: {
             /** Content Type */
             content_type: string;
+            /** Data Base64 */
+            data_base64?: string | null;
             /** Filename */
             filename: string;
             /**
@@ -22251,6 +22253,8 @@ export interface components {
              * @enum {string}
              */
             kind: "image" | "audio" | "video" | "document";
+            /** Size */
+            size?: number | null;
         };
         /** FeishuConversationCompleteRequest */
         FeishuConversationCompleteRequest: {
@@ -22317,6 +22321,10 @@ export interface components {
         };
         /** FeishuConversationPrepareResponse */
         FeishuConversationPrepareResponse: {
+            /** Attachment Catalog */
+            attachment_catalog?: {
+                [key: string]: unknown;
+            }[];
             /**
              * Duplicate
              * @default false

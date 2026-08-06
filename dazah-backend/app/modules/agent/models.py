@@ -35,6 +35,32 @@ class AgentMessage(BaseModel):
     )
 
 
+class AgentAttachment(BaseModel):
+    __tablename__ = "agent_attachments"
+    __table_args__ = (
+        Index(
+            "ix_core_agent_attachments_session_active",
+            "session_id",
+            "is_deleted",
+        ),
+        {"schema": "core", "comment": "会话级持久附件及可恢复解析内容"},
+    )
+
+    session_id: Mapped[uuid.UUID] = mapped_column(nullable=False, index=True)
+    message_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True, index=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(nullable=False, index=True)
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    content_type: Mapped[str] = mapped_column(String(120), nullable=False)
+    size: Mapped[int] = mapped_column(Integer, nullable=False)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    object_key: Mapped[str] = mapped_column(String(512), nullable=False, unique=True)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    extracted_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
+
+
 class AgentToolCall(BaseModel):
     __tablename__ = "agent_tool_calls"
     __table_args__ = {"schema": "core", "comment": "Agent tool execution audit"}

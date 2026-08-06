@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from io import BytesIO
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import unquote
 
 import anyio
@@ -29,7 +29,9 @@ from app.modules.procurement.contract_generator import (
 from app.modules.procurement.schemas import ContractCategory
 from app.platform.identity.models import User
 
+from .attachment_service import AgentAttachmentService
 from .models import (
+    AgentAttachment,
     AgentConfirmation,
     AgentSession,
     AgentSkill,
@@ -38,6 +40,7 @@ from .models import (
 )
 from .repository import AgentRepository
 from .schemas import (
+    AgentAttachmentIn,
     AgentBackendSource,
     AgentBackendV2Event,
     AgentBackendV2Request,
@@ -91,6 +94,20 @@ AGENT_ATTACHMENT_CONTENT_TYPES: dict[str, set[str]] = {
     ".csv": {"text/csv", "application/vnd.ms-excel", "text/plain"},
 }
 AGENT_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
+AGENT_SESSION_RESET_COMMANDS = frozenset(
+    {"/new", "/restart", "/reset", "/新建会话"}
+)
+
+
+def normalize_agent_basic_command(message: str) -> str | None:
+    normalized = re.sub(r"\s+", " ", message.strip()).lower()
+    if normalized in AGENT_SESSION_RESET_COMMANDS:
+        return "new"
+    if normalized in {"/help", "/帮助"}:
+        return "help"
+    if normalized in {"/status", "/状态"}:
+        return "status"
+    return None
 
 
 def _decode_text_attachment(data: bytes) -> str:
@@ -401,6 +418,7 @@ class AgentService:
         ensure_agent_tools_registered()
         self.settings = settings
         self.repo = repo or AgentRepository()
+        self.attachment_service = AgentAttachmentService(self.repo)
         if access_scope_service is None:
             from app.modules.agent.access_scope import AgentAccessScopeService
 
@@ -552,12 +570,17 @@ class AgentService:
 
     async def _prepare_attachments(
         self, request: AgentChatRequest
-    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    ) -> tuple[
+        list[dict[str, Any]],
+        list[dict[str, Any]],
+        list[dict[str, Any]],
+    ]:
         if not request.attachments:
-            return [], []
+            return [], [], []
 
         prepared: list[dict[str, Any]] = []
         metadata: list[dict[str, Any]] = []
+        uploads: list[dict[str, Any]] = []
         total_bytes = 0
         total_text_chars = 0
         for attachment in request.attachments:
@@ -600,7 +623,9 @@ class AgentService:
                 )
 
             kind = "image" if extension in AGENT_IMAGE_EXTENSIONS else "document"
+            attachment_id = uuid.uuid4()
             item: dict[str, Any] = {
+                "attachment_id": str(attachment_id),
                 "filename": filename,
                 "content_type": content_type,
                 "size": len(data),
@@ -637,13 +662,89 @@ class AgentService:
             prepared.append(item)
             metadata.append(
                 {
+                    "attachment_id": str(attachment_id),
                     "filename": filename,
                     "content_type": content_type,
                     "size": len(data),
                     "kind": kind,
                 }
             )
-        return prepared, metadata
+            uploads.append(
+                {
+                    "attachment_id": str(attachment_id),
+                    "filename": filename,
+                    "content_type": content_type,
+                    "kind": kind,
+                    "data": data,
+                    "text": item.get("text"),
+                }
+            )
+        return prepared, metadata, uploads
+
+    @staticmethod
+    def _attachment_catalog(
+        attachments: list[AgentAttachment],
+    ) -> list[dict[str, Any]]:
+        return [
+            {
+                "attachment_id": str(item.id),
+                "filename": item.filename,
+                "content_type": item.content_type,
+                "size": item.size,
+                "kind": item.kind,
+                "version": item.version,
+            }
+            for item in attachments
+        ]
+
+    @staticmethod
+    def _selected_attachments(
+        attachments: list[AgentAttachment], message: str
+    ) -> list[AgentAttachment]:
+        normalized = message.casefold()
+        selected = [
+            item for item in attachments if item.filename.casefold() in normalized
+        ]
+        if not selected and attachments and any(
+            marker in message for marker in ("刚才", "之前", "上传", "附件", "文件")
+        ):
+            selected = attachments[:1]
+        return selected[:5]
+
+    @staticmethod
+    def _restored_attachments(
+        attachments: list[AgentAttachment], message: str
+    ) -> list[dict[str, Any]]:
+        selected = AgentService._selected_attachments(attachments, message)
+        return [
+            {
+                "attachment_id": str(item.id),
+                "filename": item.filename,
+                "content_type": item.content_type,
+                "size": item.size,
+                "kind": item.kind,
+                "text": (item.extracted_text or "（未提取到可读文本）")[
+                    :AGENT_ATTACHMENT_TEXT_MAX_CHARS
+                ],
+                "truncated": bool(
+                    item.extracted_text
+                    and len(item.extracted_text) > AGENT_ATTACHMENT_TEXT_MAX_CHARS
+                ),
+            }
+            for item in selected
+            if item.kind == "document"
+        ]
+
+    async def _materialize_restored_attachments(
+        self,
+        attachments: list[AgentAttachment],
+        message: str,
+    ) -> list[dict[str, Any]]:
+        selected = self._selected_attachments(attachments, message)
+        return await self.attachment_service.materialize_for_context(
+            selected,
+            text_limit=AGENT_ATTACHMENT_TEXT_MAX_CHARS,
+        )
 
     async def chat(
         self,
@@ -652,13 +753,30 @@ class AgentService:
         request: AgentChatRequest,
         current_user: User,
     ) -> AgentChatResponse:
-        attachments, attachment_metadata = await self._prepare_attachments(request)
-        session, history = await self._prepare_chat_context(
+        attachments, attachment_metadata, uploads = await self._prepare_attachments(
+            request
+        )
+        session, history, user_message = await self._prepare_chat_context(
             db,
             request=request,
             current_user=current_user,
             attachment_metadata=attachment_metadata,
         )
+        await self.attachment_service.persist(
+            db,
+            session_id=session.id,
+            message_id=user_message.id,
+            user_id=current_user.id,
+            uploads=uploads,
+        )
+        session_attachments = await self.attachment_service.list_for_session(
+            db, session_id=session.id, user_id=current_user.id
+        )
+        await db.commit()
+        if not attachments:
+            attachments = await self._materialize_restored_attachments(
+                session_attachments, request.message
+            )
         policy_response = await self._human_decision_required_chat_response(
             db,
             session_id=session.id,
@@ -675,6 +793,7 @@ class AgentService:
             context=request.context,
             history=history,
             attachments=attachments,
+            attachment_catalog=self._attachment_catalog(session_attachments),
         )
         assistant_text = str(
             hermes_result.get("message") or hermes_result.get("final_response") or ""
@@ -718,13 +837,30 @@ class AgentService:
         request: AgentChatRequest,
         current_user: User,
     ) -> AsyncIterator[str]:
-        attachments, attachment_metadata = await self._prepare_attachments(request)
-        session, history = await self._prepare_chat_context(
+        attachments, attachment_metadata, uploads = await self._prepare_attachments(
+            request
+        )
+        session, history, user_message = await self._prepare_chat_context(
             db,
             request=request,
             current_user=current_user,
             attachment_metadata=attachment_metadata,
         )
+        await self.attachment_service.persist(
+            db,
+            session_id=session.id,
+            message_id=user_message.id,
+            user_id=current_user.id,
+            uploads=uploads,
+        )
+        session_attachments = await self.attachment_service.list_for_session(
+            db, session_id=session.id, user_id=current_user.id
+        )
+        await db.commit()
+        if not attachments:
+            attachments = await self._materialize_restored_attachments(
+                session_attachments, request.message
+            )
         policy_response = await self._human_decision_required_chat_response(
             db,
             session_id=session.id,
@@ -764,6 +900,7 @@ class AgentService:
             context=request.context,
             history=history,
             attachments=attachments,
+            attachment_catalog=self._attachment_catalog(session_attachments),
         )
         try:
             while True:
@@ -916,9 +1053,10 @@ class AgentService:
         request: AgentChatRequest,
         current_user: User,
         attachment_metadata: list[dict[str, Any]] | None = None,
-    ) -> tuple[Any, list[dict[str, Any]]]:
+    ) -> tuple[Any, list[dict[str, Any]], Any]:
         user_id = current_user.id if current_user else None
         session = None
+        basic_command = normalize_agent_basic_command(request.message)
         if request.session_id:
             session = await self.repo.get_session(db, request.session_id)
             if session is None:
@@ -930,7 +1068,14 @@ class AgentService:
                     status.HTTP_403_FORBIDDEN,
                     "Agent session does not belong to current user",
                 )
-            if session.status != "active":
+            if basic_command == "new":
+                await self.repo.archive_session(
+                    db,
+                    session=session,
+                    user_id=current_user.id,
+                )
+                session = None
+            elif session.status != "active":
                 session.status = "active"
                 session.updated_by = user_id
                 await db.flush()
@@ -942,7 +1087,7 @@ class AgentService:
                 title=request.message[:80],
             )
 
-        await self.repo.add_message(
+        user_message = await self.repo.add_message(
             db,
             session_id=session.id,
             role="user",
@@ -954,11 +1099,6 @@ class AgentService:
             user_id=user_id,
         )
         history = await self.repo.list_messages(db, session_id=session.id)
-        # Hermes executes tools through a separate HTTP request and database
-        # session. Commit the session and user message before handing control
-        # to Hermes so tool-call audit rows do not wait on an uncommitted
-        # foreign-key target.
-        await db.commit()
         return (
             session,
             [
@@ -970,6 +1110,7 @@ class AgentService:
                 for msg in history
                 if msg.role in {"user", "assistant"}
             ],
+            user_message,
         )
 
     async def list_sessions(
@@ -1022,6 +1163,14 @@ class AgentService:
                 response_text=completed[1].content if completed else None,
             )
 
+        if normalize_agent_basic_command(request.message) == "new":
+            await self.repo.archive_active_channel_sessions(
+                db,
+                user_id=current_user.id,
+                channel="feishu",
+                peer_id=request.peer_id,
+            )
+
         session = await self.repo.get_active_channel_session(
             db,
             user_id=current_user.id,
@@ -1043,8 +1192,26 @@ class AgentService:
                 title=request.message[:80],
             )
 
+        persistable = [
+            AgentAttachmentIn(
+                filename=item.filename,
+                content_type=item.content_type,
+                size=item.size,
+                data_base64=item.data_base64,
+            )
+            for item in request.attachments
+            if item.size is not None
+            and item.data_base64 is not None
+            and Path(item.filename).suffix.lower() in AGENT_ATTACHMENT_CONTENT_TYPES
+        ]
+        _, persisted_metadata, uploads = await self._prepare_attachments(
+            AgentChatRequest(message=request.message, attachments=persistable)
+        )
+        persistent_by_filename = {
+            str(item["filename"]): item for item in persisted_metadata
+        }
         history = await self.repo.list_messages(db, session_id=session.id)
-        await self.repo.add_message(
+        user_message = await self.repo.add_message(
             db,
             session_id=session.id,
             role="user",
@@ -1059,9 +1226,28 @@ class AgentService:
                     "has_reply": bool(request.source.reply_to),
                 },
                 "attachments": [
-                    item.model_dump(mode="json") for item in request.attachments
+                    {
+                        **item.model_dump(
+                            mode="json",
+                            exclude={"data_base64"},
+                        ),
+                        **persistent_by_filename.get(item.filename, {}),
+                    }
+                    for item in request.attachments
                 ],
             },
+            user_id=current_user.id,
+        )
+        await self.attachment_service.persist(
+            db,
+            session_id=session.id,
+            message_id=user_message.id,
+            user_id=current_user.id,
+            uploads=uploads,
+        )
+        session_attachments = await self.attachment_service.list_for_session(
+            db,
+            session_id=session.id,
             user_id=current_user.id,
         )
         await db.flush()
@@ -1072,6 +1258,7 @@ class AgentService:
                 for item in history
                 if item.role in {"user", "assistant"}
             ],
+            attachment_catalog=self._attachment_catalog(session_attachments),
         )
 
     async def complete_feishu_conversation(
@@ -1290,6 +1477,48 @@ class AgentService:
             )
             return confirmation, None
 
+        if self._is_feishu_native_confirmation(confirmation):
+            remote_result = await self._resolve_feishu_native_confirmation(
+                confirmation,
+                current_user=current_user,
+                choice="allow",
+            )
+            remote_status = str(remote_result.get("status") or "failed")
+            ok = bool(remote_result.get("ok")) and remote_status == "completed"
+            confirmation = await self.repo.finish_external_confirmation(
+                db,
+                confirmation,
+                status="executed" if ok else "failed",
+                result_payload=remote_result,
+                user_id=current_user.id,
+            )
+            result = AgentToolExecuteResponse(
+                ok=ok,
+                operation=confirmation.operation,
+                data=remote_result,
+                meta={
+                    "resource_domain": "feishu_native",
+                    "verification": remote_result.get("verification"),
+                },
+            )
+            if confirmation.session_id:
+                await self.repo.add_message(
+                    db,
+                    session_id=confirmation.session_id,
+                    role="assistant",
+                    content=(
+                        f"已执行确认操作：{confirmation.summary}"
+                        if ok
+                        else f"确认操作执行失败：{confirmation.summary}"
+                    ),
+                    metadata={
+                        "confirmation_id": str(confirmation.id),
+                        "result": result.model_dump(mode="json"),
+                    },
+                    user_id=current_user.id,
+                )
+            return confirmation, result
+
         payload = confirmation.request_payload
         request = AgentToolExecuteRequest.model_validate(payload)
         request = self._normalize_tool_request(request)
@@ -1362,6 +1591,12 @@ class AgentService:
             raise HTTPException(
                 status.HTTP_409_CONFLICT, "Agent confirmation is not pending"
             )
+        if self._is_feishu_native_confirmation(confirmation):
+            await self._resolve_feishu_native_confirmation(
+                confirmation,
+                current_user=current_user,
+                choice="reject",
+            )
         confirmation = await self.repo.cancel_confirmation(
             db,
             confirmation,
@@ -1378,6 +1613,103 @@ class AgentService:
             )
         return confirmation
 
+    @staticmethod
+    def _is_feishu_native_confirmation(confirmation: AgentConfirmation) -> bool:
+        return confirmation.request_payload.get("resource_domain") == "feishu_native"
+
+    async def _resolve_feishu_native_confirmation(
+        self,
+        confirmation: AgentConfirmation,
+        *,
+        current_user: User,
+        choice: Literal["allow", "reject"],
+    ) -> dict[str, Any]:
+        base_url = self.settings.HERMES_INTERNAL_URL.rstrip("/")
+        token = self.settings.HERMES_INTERNAL_TOKEN
+        if not base_url or not token:
+            raise HTTPException(
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                "Hermes native Feishu confirmation bridge is not configured",
+            )
+        remote_id = str(
+            confirmation.request_payload.get("remote_confirmation_id")
+            or confirmation.id
+        )
+        headers = {"Authorization": f"Bearer {token}"}
+        endpoint = f"{base_url}/internal/feishu/confirmations/{remote_id}"
+        try:
+            async with httpx.AsyncClient(timeout=20) as client:
+                response = await client.post(
+                    f"{endpoint}/resolve",
+                    headers=headers,
+                    json={"user_id": str(current_user.id), "choice": choice},
+                )
+                response.raise_for_status()
+                payload = response.json()
+        except httpx.TimeoutException as exc:
+            payload = await self._reconcile_feishu_native_confirmation(
+                endpoint,
+                headers=headers,
+                user_id=str(current_user.id),
+            )
+            if str(payload.get("status")) == "pending":
+                raise HTTPException(
+                    status.HTTP_504_GATEWAY_TIMEOUT,
+                    "Hermes confirmation timed out and remains pending",
+                ) from exc
+            if str(payload.get("status")) == "expired":
+                raise HTTPException(
+                    status.HTTP_409_CONFLICT,
+                    "Hermes confirmation expired before execution",
+                ) from exc
+        except httpx.HTTPStatusError as exc:
+            mapped = {
+                404: status.HTTP_404_NOT_FOUND,
+                409: status.HTTP_409_CONFLICT,
+            }.get(exc.response.status_code, status.HTTP_502_BAD_GATEWAY)
+            raise HTTPException(
+                mapped,
+                "Hermes native confirmation could not be resolved",
+            ) from exc
+        except (httpx.HTTPError, ValueError) as exc:
+            raise HTTPException(
+                status.HTTP_502_BAD_GATEWAY,
+                "Hermes native confirmation service is unavailable",
+            ) from exc
+        if not isinstance(payload, dict):
+            raise HTTPException(
+                status.HTTP_502_BAD_GATEWAY,
+                "Hermes native confirmation returned an invalid response",
+            )
+        if "ok" not in payload and payload.get("status") in {"completed", "rejected"}:
+            payload["ok"] = True
+        elif payload.get("status") in {"completed_unverified", "verification_failed"}:
+            payload["ok"] = False
+        return payload
+
+    async def _reconcile_feishu_native_confirmation(
+        self,
+        endpoint: str,
+        *,
+        headers: dict[str, str],
+        user_id: str,
+    ) -> dict[str, Any]:
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                response = await client.get(
+                    endpoint,
+                    headers=headers,
+                    params={"user_id": user_id},
+                )
+                response.raise_for_status()
+                payload = response.json()
+        except httpx.HTTPError as exc:
+            raise HTTPException(
+                status.HTTP_504_GATEWAY_TIMEOUT,
+                "Unable to reconcile Hermes confirmation state",
+            ) from exc
+        return payload if isinstance(payload, dict) else {}
+
     async def _call_hermes(
         self,
         *,
@@ -1387,6 +1719,7 @@ class AgentService:
         context: dict[str, Any],
         history: list[dict[str, Any]],
         attachments: list[dict[str, Any]] | None = None,
+        attachment_catalog: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         if not self.settings.HERMES_AGENT_V2_URL:
             return {
@@ -1412,6 +1745,7 @@ class AgentService:
             message=message,
             messages=history,
             attachments=attachments or [],
+            attachment_catalog=attachment_catalog or [],
             client_capabilities=["structured_events"],
         ).model_dump(mode="json")
         try:
@@ -1454,6 +1788,7 @@ class AgentService:
         context: dict[str, Any],
         history: list[dict[str, Any]],
         attachments: list[dict[str, Any]] | None = None,
+        attachment_catalog: list[dict[str, Any]] | None = None,
     ) -> AsyncIterator[AgentBackendV2Event]:
         agent_request = AgentBackendV2Request(
             session_id=f"web:{session_id}",
@@ -1467,6 +1802,7 @@ class AgentService:
             message=message,
             messages=history,
             attachments=attachments or [],
+            attachment_catalog=attachment_catalog or [],
             client_capabilities=["structured_events", "streaming"],
         )
         if not self.settings.HERMES_AGENT_V2_URL:
@@ -2271,6 +2607,49 @@ class AgentService:
     ) -> list[AgentConfirmation]:
         confirmations: list[AgentConfirmation] = []
         seen: set[uuid.UUID] = set()
+        native_confirmations = self._extract_feishu_native_confirmations(hermes_result)
+        resolved_user_id = (
+            await self._resolve_user_id(db, session_id, user_id)
+            if native_confirmations
+            else None
+        )
+
+        if resolved_user_id is not None:
+            for item in native_confirmations:
+                confirmation_id = self._uuid_or_none(item.get("id"))
+                if confirmation_id is None:
+                    continue
+                try:
+                    expires_at = datetime.fromisoformat(
+                        str(item.get("expires_at") or "").replace("Z", "+00:00")
+                    )
+                except ValueError:
+                    continue
+                if expires_at.tzinfo is None:
+                    expires_at = expires_at.replace(tzinfo=UTC)
+                await self.repo.mirror_external_confirmation(
+                    db,
+                    confirmation_id=confirmation_id,
+                    session_id=session_id,
+                    user_id=resolved_user_id,
+                    operation=str(item.get("operation") or "feishu.file.write")[:120],
+                    summary=str(item.get("summary") or "飞书原生资源写操作")[:500],
+                    risk_level=str(item.get("risk_level") or "medium")[:32],
+                    request_payload={
+                        "resource_domain": "feishu_native",
+                        "remote_confirmation_id": str(confirmation_id),
+                        "resource": str(item.get("resource") or "飞书资源")[:120],
+                        "reason": str(item.get("reason") or "")[:300],
+                        "impact_count": max(
+                            0,
+                            item.get("impact_count")
+                            if isinstance(item.get("impact_count"), int)
+                            else 0,
+                        ),
+                        "allow_always": bool(item.get("allow_always")),
+                    },
+                    expires_at=expires_at,
+                )
 
         async def append_confirmation(confirmation: AgentConfirmation | None) -> None:
             if confirmation is None:
@@ -2298,6 +2677,42 @@ class AgentService:
             fetched_confirmation = await self.repo.get_confirmation(db, parsed_id)
             await append_confirmation(fetched_confirmation)
         return confirmations
+
+    @classmethod
+    def _extract_feishu_native_confirmations(
+        cls,
+        value: Any,
+    ) -> list[dict[str, Any]]:
+        found: list[dict[str, Any]] = []
+        seen: set[str] = set()
+
+        def visit(item: Any) -> None:
+            if isinstance(item, str):
+                try:
+                    visit(json.loads(item))
+                except json.JSONDecodeError:
+                    return
+                return
+            if isinstance(item, list):
+                for child in item:
+                    visit(child)
+                return
+            if not isinstance(item, dict):
+                return
+            confirmation_id = item.get("id")
+            if (
+                item.get("resource_domain") == "feishu_native"
+                and item.get("status") == "pending"
+                and isinstance(confirmation_id, str)
+                and confirmation_id not in seen
+            ):
+                seen.add(confirmation_id)
+                found.append(item)
+            for child in item.values():
+                visit(child)
+
+        visit(value)
+        return found
 
     def _extract_confirmation_ids(self, value: Any) -> list[str]:
         ids: list[str] = []

@@ -18176,6 +18176,19 @@
             "title": "Content Type",
             "type": "string"
           },
+          "data_base64": {
+            "anyOf": [
+              {
+                "maxLength": 14680064,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data Base64"
+          },
           "filename": {
             "maxLength": 255,
             "minLength": 1,
@@ -18191,6 +18204,19 @@
             ],
             "title": "Kind",
             "type": "string"
+          },
+          "size": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 10485760.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size"
           }
         },
         "required": [
@@ -18334,6 +18360,14 @@
       },
       "FeishuConversationPrepareResponse": {
         "properties": {
+          "attachment_catalog": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Attachment Catalog",
+            "type": "array"
+          },
           "duplicate": {
             "default": false,
             "title": "Duplicate",

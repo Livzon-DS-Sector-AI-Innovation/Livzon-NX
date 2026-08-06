@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import inspect
 import json
 import logging
@@ -20,6 +21,7 @@ from services.dazah_feishu_gateway import (
     DazahFeishuGateway,
     DazahInboundEnvelope,
     cleanup_cached_attachments,
+    read_cached_attachment,
 )
 from services.feishu_runtime import (
     claim_due_deliveries,
@@ -103,6 +105,22 @@ async def _prepare_persistent_conversation(
     token = str(config.get("internal_token") or "")
     if not base_url or not token:
         raise RuntimeError("Dazah persistent conversation API is not configured")
+    persistent_attachments: list[dict[str, Any]] = []
+    for item in envelope.attachments:
+        attachment: dict[str, Any] = {
+            "filename": item.filename,
+            "content_type": item.content_type,
+            "kind": item.kind,
+        }
+        try:
+            raw = read_cached_attachment(item) or b""
+        except OSError:
+            raw = b""
+        if raw and len(raw) <= 10 * 1024 * 1024:
+            attachment["size"] = len(raw)
+            attachment["data_base64"] = base64.b64encode(raw).decode("ascii")
+        persistent_attachments.append(attachment)
+
     payload = {
         "subject": subject,
         "peer_id": envelope.session_id,
@@ -121,14 +139,7 @@ async def _prepare_persistent_conversation(
             "reply_to": envelope.reply_to_message_id or None,
             "message_id": envelope.message_id,
         },
-        "attachments": [
-            {
-                "filename": item.filename,
-                "content_type": item.content_type,
-                "kind": item.kind,
-            }
-            for item in envelope.attachments
-        ],
+        "attachments": persistent_attachments,
     }
     async with httpx.AsyncClient(timeout=20) as client:
         response = await client.post(
@@ -252,6 +263,26 @@ def _confirmation_error_feedback(exc: Exception) -> str:
     ):
         return "该确认已处理或已过期，未重复执行。"
     return "确认处理失败，请稍后重试或联系管理员查看 Trace。"
+
+
+def _trusted_confirmation_owner(subject: dict[str, Any]) -> str:
+    owner = str(subject.get("user_id") or "").strip()
+    if not owner:
+        raise PermissionError("trusted confirmation owner is missing")
+    return owner
+
+
+def _confirmation_result_feedback(result: dict[str, Any], choice: str) -> str:
+    if choice == "reject" or result.get("status") == "rejected":
+        return "操作已拒绝。"
+    status_value = str(result.get("status") or "")
+    if status_value in {"completed_unverified", "verification_failed"}:
+        return "回读验证未通过，系统未将本次操作判定为成功；请先核对目标当前状态，避免重复写入。"
+    if result.get("ok") is False or status_value == "failed":
+        return "操作执行失败，未产生已验证变更。"
+    if status_value == "completed":
+        return "操作已确认、执行并完成回读验证。"
+    return "操作状态不明确，系统未将本次操作判定为成功；请联系管理员查看 Trace。"
 
 
 async def _send_confirmation_feedback(
@@ -545,12 +576,12 @@ async def _main() -> None:
             )
             cleanup_cached_attachments(envelope.attachments)
             return None
-        sender_id = envelope.sender_id
         try:
             try:
                 subject = await _resolve_trusted_subject(config_data, envelope)
             except (PermissionError, httpx.HTTPError, RuntimeError) as exc:
                 return f"Livzon 助手拒绝访问：{exc}"
+            confirmation_owner = _trusted_confirmation_owner(subject)
 
             text = envelope.text.strip()
             confirmation_action = _parse_confirmation_action(text)
@@ -560,7 +591,7 @@ async def _main() -> None:
                     if resource_domain == "feishu_native":
                         result = await resolve_confirmation(
                             confirmation_id,
-                            user_id=sender_id,
+                            user_id=confirmation_owner,
                             choice=choice,
                         )
                     else:
@@ -570,11 +601,10 @@ async def _main() -> None:
                             subject=subject,
                             choice=choice,
                         )
-                    del result
                     await _send_confirmation_feedback(
                         gateway,
                         envelope,
-                        "操作已拒绝。" if choice == "reject" else "操作已确认并执行。",
+                        _confirmation_result_feedback(result, choice),
                     )
                     return None
                 except (ValueError, PermissionError, RuntimeError, httpx.HTTPError) as exc:
@@ -586,10 +616,10 @@ async def _main() -> None:
                     return None
             command, _, command_arg = text.partition(" ")
             if text == "查看授权":
-                grants = list_grants(sender_id)
+                grants = list_grants(confirmation_owner)
                 return json.dumps({"authorizations": grants}, ensure_ascii=False)
             if command == "撤销授权" and command_arg:
-                revoked = revoke_grant(command_arg.strip(), sender_id)
+                revoked = revoke_grant(command_arg.strip(), confirmation_owner)
                 return "授权已撤销。" if revoked else "未找到可撤销的授权。"
 
             trace_id = str(uuid.uuid4())
@@ -614,6 +644,7 @@ async def _main() -> None:
                 )
             persistent_session_id = str(conversation["session_id"])
             persistent_messages = list(conversation.get("messages") or [])
+            attachment_catalog = list(conversation.get("attachment_catalog") or [])
             if envelope.reply_to_text and (
                 not persistent_messages
                 or persistent_messages[-1]
@@ -627,6 +658,7 @@ async def _main() -> None:
                 trace_id=trace_id,
                 run_id=run_id,
                 messages=persistent_messages,
+                attachment_catalog=attachment_catalog,
                 persistent_session_id=persistent_session_id,
             )
             headers = {}

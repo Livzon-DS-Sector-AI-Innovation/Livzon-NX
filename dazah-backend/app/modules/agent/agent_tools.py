@@ -1,11 +1,12 @@
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, status
 from pydantic import BaseModel, Field, model_validator
 
+from app.modules.agent.attachment_service import AgentAttachmentService
 from app.modules.agent.automation_schema import AutomationDefinitionV1
 from app.modules.agent.automation_service import AgentAutomationService
 from app.modules.agent.event_service import AgentDomainEventService
@@ -24,6 +25,30 @@ from app.platform.identity.models import User
 
 class AutomationIdInput(BaseModel):
     automation_id: UUID
+
+
+class AttachmentRefInput(BaseModel):
+    attachment_ref: str = Field(
+        min_length=1,
+        max_length=255,
+        description="附件 ID 或当前会话中完整文件名",
+    )
+
+
+class AttachmentReadInput(AttachmentRefInput):
+    offset: int = Field(default=0, ge=0)
+    limit: int = Field(default=20_000, ge=1, le=20_000)
+
+
+class TabularAttachmentMutationInput(AttachmentRefInput):
+    action: Literal["append_row", "update_row", "delete_row"]
+    sheet_name: str | None = Field(default=None, max_length=128)
+    row_number: int | None = Field(
+        default=None,
+        ge=1,
+        description="XLSX/CSV 的 1 基物理行号；新增行时省略",
+    )
+    values: list[Any] = Field(default_factory=list, max_length=100)
 
 
 class AutomationPreviewInput(BaseModel):
@@ -153,6 +178,106 @@ def _required_user(context: ToolContext) -> User:
 def _automation_service(context: ToolContext) -> AgentAutomationService:
     _required_user(context)
     return AgentAutomationService()
+
+
+@agent_tool(
+    name="agent.list_attachments",
+    summary="列出当前会话曾上传且仍可用的持久附件",
+    workflow_allowed=False,
+    idempotent=True,
+    output_hint="返回附件 ID、文件名、类型、大小和当前版本，不返回对象存储路径。",
+)
+async def list_attachments(context: ToolContext, _: BaseModel) -> list[dict[str, Any]]:
+    user = _required_user(context)
+    if context.session_id is None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "当前没有有效会话")
+    items = await AgentAttachmentService().list_for_session(
+        context.db,
+        session_id=context.session_id,
+        user_id=user.id,
+    )
+    return [
+        {
+            "attachment_id": str(item.id),
+            "filename": item.filename,
+            "content_type": item.content_type,
+            "size": item.size,
+            "kind": item.kind,
+            "version": item.version,
+        }
+        for item in items
+    ]
+
+
+@agent_tool(
+    name="agent.read_attachment",
+    summary="按附件 ID 或文件名读取当前会话上传文件的已解析数据",
+    input_model=AttachmentReadInput,
+    workflow_allowed=False,
+    idempotent=True,
+    sensitivity="sensitive",
+    output_hint="分页返回附件解析文本；如有 next_offset，继续读取下一段。",
+)
+async def read_attachment(
+    context: ToolContext, data: AttachmentReadInput
+) -> dict[str, Any]:
+    user = _required_user(context)
+    return await AgentAttachmentService().read(
+        context.db,
+        session_id=context.session_id,
+        user_id=user.id,
+        attachment_ref=data.attachment_ref,
+        offset=data.offset,
+        limit=data.limit,
+    )
+
+
+@agent_tool(
+    name="agent.mutate_tabular_attachment",
+    summary="新增、修改或删除当前会话 XLSX/CSV 附件中的数据行",
+    input_model=TabularAttachmentMutationInput,
+    write=True,
+    risk_level="medium",
+    workflow_allowed=False,
+    sensitivity="sensitive",
+    output_hint="写操作需用户确认；成功后返回附件新版本、哈希、工作表和行号。",
+)
+async def mutate_tabular_attachment(
+    context: ToolContext, data: TabularAttachmentMutationInput
+) -> dict[str, Any]:
+    user = _required_user(context)
+    return await AgentAttachmentService().mutate_tabular(
+        context.db,
+        session_id=context.session_id,
+        user_id=user.id,
+        attachment_ref=data.attachment_ref,
+        action=data.action,
+        sheet_name=data.sheet_name,
+        row_number=data.row_number,
+        values=data.values,
+    )
+
+
+@agent_tool(
+    name="agent.delete_attachment",
+    summary="删除当前会话上传的整个持久附件",
+    input_model=AttachmentRefInput,
+    write=True,
+    risk_level="high",
+    workflow_allowed=False,
+    sensitivity="sensitive",
+    output_hint="高风险操作，确认后删除对象内容并将附件标记为已删除。",
+)
+async def delete_attachment(
+    context: ToolContext, data: AttachmentRefInput
+) -> dict[str, Any]:
+    user = _required_user(context)
+    return await AgentAttachmentService().delete(
+        context.db,
+        session_id=context.session_id,
+        user_id=user.id,
+        attachment_ref=data.attachment_ref,
+    )
 
 
 @agent_tool(

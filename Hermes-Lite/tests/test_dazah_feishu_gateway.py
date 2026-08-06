@@ -16,6 +16,7 @@ from services.dazah_feishu_gateway import (
     DazahInboundEnvelope,
     build_dazah_confirmation_card,
     cleanup_cached_attachments,
+    read_cached_attachment,
 )
 
 
@@ -177,6 +178,25 @@ def test_confirmation_card_displays_expiry_in_beijing_time() -> None:
     assert "2026-07-30T12:00:00Z" not in content
 
 
+def test_native_confirmation_card_uses_readable_summary_without_json_block() -> None:
+    confirmation = _confirmation("medium", "feishu_native")
+    confirmation["preview"] = (
+        "- 操作：局部文本替换\n"
+        "- 原内容：UAT-APPEND-01\n"
+        "- 新内容：UAT-UPDATED-01"
+    )
+
+    card = build_dazah_confirmation_card(confirmation)
+    content = card["elements"][0]["content"]
+
+    assert "变更摘要" in content
+    assert "局部文本替换" in content
+    assert "UAT-APPEND-01" in content
+    assert "UAT-UPDATED-01" in content
+    assert "```" not in content
+    assert '"data"' not in content
+
+
 def test_inbound_envelope_preserves_native_feishu_context_and_attachments() -> None:
     source = SimpleNamespace(
         user_id="ou_open",
@@ -335,6 +355,35 @@ def test_cached_attachments_are_removed_only_from_hermes_cache(
     assert removed == 1
     assert not cached_path.exists()
     assert outside_path.exists()
+
+
+def test_cached_attachment_read_is_bounded_to_hermes_cache(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path / "hermes"))
+    cached_path = tmp_path / "hermes" / "cache" / "documents" / "sales.xlsx"
+    cached_path.parent.mkdir(parents=True)
+    cached_path.write_bytes(b"workbook")
+    outside_path = tmp_path / "outside.xlsx"
+    outside_path.write_bytes(b"outside")
+
+    assert read_cached_attachment(
+        DazahGatewayAttachment(
+            kind="document",
+            content_type="application/octet-stream",
+            local_path=str(cached_path),
+            filename="sales.xlsx",
+        )
+    ) == b"workbook"
+    assert read_cached_attachment(
+        DazahGatewayAttachment(
+            kind="document",
+            content_type="application/octet-stream",
+            local_path=str(outside_path),
+            filename="outside.xlsx",
+        )
+    ) is None
 
 
 def test_conversation_history_preserves_base_follow_up_and_is_bounded() -> None:
@@ -871,6 +920,14 @@ async def test_confirmation_callback_identity_does_not_apply_false_group_gate(
     assert recorded["chat_id"] is None
 
 
+def test_native_confirmation_callback_uses_stable_trusted_subject() -> None:
+    from services.feishu_gateway_worker import _trusted_confirmation_owner
+
+    assert _trusted_confirmation_owner({"user_id": "stable-user"}) == "stable-user"
+    with pytest.raises(PermissionError, match="owner"):
+        _trusted_confirmation_owner({})
+
+
 @pytest.mark.asyncio
 async def test_ordinary_group_identity_still_applies_group_gate(monkeypatch) -> None:
     from dataclasses import replace
@@ -931,6 +988,33 @@ def test_confirmation_conflict_feedback_is_safe() -> None:
     )
 
     assert _confirmation_error_feedback(error) == "该确认已处理或已过期，未重复执行。"
+
+
+@pytest.mark.parametrize(
+    ("result", "choice", "expected"),
+    [
+        ({"ok": False, "status": "failed"}, "allow", "操作执行失败，未产生已验证变更。"),
+        (
+            {"ok": False, "status": "verification_failed"},
+            "allow",
+            "回读验证未通过，系统未将本次操作判定为成功；请先核对目标当前状态，避免重复写入。",
+        ),
+        (
+            {"ok": True, "status": "completed"},
+            "allow",
+            "操作已确认、执行并完成回读验证。",
+        ),
+        ({"ok": True, "status": "rejected"}, "reject", "操作已拒绝。"),
+    ],
+)
+def test_confirmation_result_feedback_matches_real_terminal_status(
+    result: dict[str, Any],
+    choice: str,
+    expected: str,
+) -> None:
+    from services.feishu_gateway_worker import _confirmation_result_feedback
+
+    assert _confirmation_result_feedback(result, choice) == expected
 
 
 @pytest.mark.asyncio
