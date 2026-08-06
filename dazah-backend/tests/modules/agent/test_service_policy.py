@@ -16,6 +16,7 @@ from app.modules.agent.schemas import (
 from app.modules.agent.service import (
     HUMAN_DECISION_REQUIRED_MESSAGE,
     AgentService,
+    normalize_agent_basic_command,
 )
 from app.modules.procurement.contract_generator import generate_contract
 from app.modules.procurement.schemas import ContractGenerateRequest
@@ -54,6 +55,93 @@ def _subject() -> AgentTrustedSubject:
         user_id=uuid.uuid4(),
         source="internal",
     )
+
+
+@pytest.mark.parametrize(
+    "command",
+    ["/new", "/restart", "/reset", "/新建会话"],
+)
+def test_session_reset_command_aliases(command: str) -> None:
+    assert normalize_agent_basic_command(command) == "new"
+
+
+def test_basic_help_and_status_commands() -> None:
+    assert normalize_agent_basic_command(" /HELP ") == "help"
+    assert normalize_agent_basic_command("/status") == "status"
+    assert normalize_agent_basic_command("普通问题") is None
+    assert normalize_agent_basic_command("/restrat") is None
+
+
+@pytest.mark.anyio
+async def test_restart_command_archives_old_web_session_and_creates_new_one() -> None:
+    user_id = uuid.uuid4()
+    old_session = SimpleNamespace(
+        id=uuid.uuid4(),
+        user_id=user_id,
+        status="active",
+        context={"channel": "web"},
+        updated_by=user_id,
+    )
+    new_session = SimpleNamespace(
+        id=uuid.uuid4(),
+        user_id=user_id,
+        status="active",
+        context={"channel": "web"},
+        updated_by=user_id,
+    )
+    archived: list[uuid.UUID] = []
+    messages: list[SimpleNamespace] = []
+
+    class ResetRepository:
+        async def get_session(self, _db, session_id):
+            return old_session if session_id == old_session.id else None
+
+        async def archive_session(self, _db, *, session, user_id):
+            session.status = "archived"
+            archived.append(session.id)
+            return session
+
+        async def create_session(self, _db, *, user_id, context, title):
+            new_session.user_id = user_id
+            new_session.context = context
+            new_session.title = title
+            return new_session
+
+        async def add_message(
+            self, _db, *, session_id, role, content, metadata, user_id
+        ):
+            item = SimpleNamespace(
+                id=uuid.uuid4(),
+                session_id=session_id,
+                role=role,
+                content=content,
+                message_metadata=metadata,
+                created_at=datetime.now(UTC),
+            )
+            messages.append(item)
+            return item
+
+        async def list_messages(self, _db, *, session_id):
+            return [item for item in messages if item.session_id == session_id]
+
+    service = AgentService(SimpleNamespace())
+    service.repo = ResetRepository()
+    current_user = SimpleNamespace(id=user_id)
+
+    session, history, _message = await service._prepare_chat_context(
+        object(),
+        request=AgentChatRequest(
+            session_id=old_session.id,
+            message="/restart",
+            context={"channel": "web"},
+        ),
+        current_user=current_user,
+    )
+
+    assert archived == [old_session.id]
+    assert old_session.status == "archived"
+    assert session.id == new_session.id
+    assert history[-1]["content"] == "/restart"
 
 
 class FakeAgentRepository:
@@ -98,6 +186,11 @@ class FakeAgentRepository:
 
     async def list_messages(self, db, *, session_id, limit=20):
         return self.messages[-limit:]
+
+    async def list_session_attachments(
+        self, db, *, session_id, user_id, limit=50
+    ):
+        return []
 
     async def create_tool_call(
         self,
@@ -163,6 +256,33 @@ class FakeAgentRepository:
 
     async def get_confirmation_for_update(self, db, confirmation_id):
         return self.confirmations.get(confirmation_id)
+
+    async def mirror_external_confirmation(self, db, **values):
+        confirmation_id = values.pop("confirmation_id")
+        existing = self.confirmations.get(confirmation_id)
+        if existing is not None:
+            return existing
+        confirmation = SimpleNamespace(
+            id=confirmation_id,
+            status="pending",
+            **values,
+        )
+        self.confirmations[confirmation_id] = confirmation
+        return confirmation
+
+    async def finish_external_confirmation(
+        self,
+        db,
+        confirmation,
+        *,
+        status,
+        result_payload,
+        user_id,
+    ):
+        confirmation.status = status
+        confirmation.result_payload = result_payload
+        confirmation.updated_by = user_id
+        return confirmation
 
     async def expire_confirmation(self, db, confirmation, *, user_id):
         confirmation.status = "expired"
@@ -655,6 +775,82 @@ async def test_resolve_pending_confirmations_includes_session_pending() -> None:
     )
 
     assert pending == [first_confirmation, second_confirmation]
+
+
+@pytest.mark.anyio
+async def test_feishu_native_confirmation_is_mirrored_without_cli_payload() -> None:
+    repo = FakeAgentRepository()
+    service = AgentService(settings=SimpleNamespace(), repo=repo)
+    user_id = uuid.uuid4()
+    confirmation_id = uuid.uuid4()
+
+    pending = await service._resolve_pending_confirmations(
+        FakeDb(),
+        {
+            "pending_confirmations": [
+                {
+                    "id": str(confirmation_id),
+                    "operation": "sheets +cells-set",
+                    "summary": "修改飞书资源",
+                    "risk_level": "medium",
+                    "status": "pending",
+                    "expires_at": (
+                        datetime.now(UTC) + timedelta(minutes=5)
+                    ).isoformat(),
+                    "resource_domain": "feishu_native",
+                    "resource": "飞书资源 …ample",
+                    "impact_count": 2,
+                    "reason": "修改既有值",
+                    "preview": "不得复制到平台的正文",
+                }
+            ]
+        },
+        session_id=repo.session.id,
+        user_id=user_id,
+    )
+
+    assert [item.id for item in pending] == [confirmation_id]
+    mirrored = pending[0].request_payload
+    assert mirrored["resource_domain"] == "feishu_native"
+    assert mirrored["remote_confirmation_id"] == str(confirmation_id)
+    assert mirrored["impact_count"] == 2
+    assert "preview" not in mirrored
+
+
+@pytest.mark.anyio
+async def test_execute_feishu_native_confirmation_uses_remote_result(
+    monkeypatch,
+) -> None:
+    repo = FakeAgentRepository()
+    service = AgentService(settings=SimpleNamespace(), repo=repo)
+    user = SimpleNamespace(id=uuid.uuid4())
+    confirmation = await repo.create_confirmation(
+        FakeDb(),
+        session_id=None,
+        user_id=user.id,
+        operation="base +record-delete",
+        summary="删除飞书记录",
+        risk_level="high",
+        request_payload={
+            "resource_domain": "feishu_native",
+            "remote_confirmation_id": str(uuid.uuid4()),
+        },
+        expires_at=datetime.now(UTC) + timedelta(minutes=5),
+    )
+
+    async def resolve_remote(*args, **kwargs):
+        return {"ok": False, "status": "verification_failed"}
+
+    monkeypatch.setattr(service, "_resolve_feishu_native_confirmation", resolve_remote)
+    resolved, result = await service.execute_confirmation(
+        FakeDb(),
+        confirmation_id=confirmation.id,
+        current_user=user,
+    )
+
+    assert resolved.status == "failed"
+    assert result is not None and result.ok is False
+    assert result.data["status"] == "verification_failed"
 
 
 def test_contract_generation_sample_request_is_normalized() -> None:

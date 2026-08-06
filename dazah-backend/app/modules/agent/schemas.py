@@ -51,6 +51,7 @@ class AgentBackendSource(BaseModel):
 
 class AgentBackendAttachment(BaseModel):
     model_config = ConfigDict(extra="forbid")
+    attachment_id: uuid.UUID | None = None
     filename: str = Field(min_length=1, max_length=255)
     content_type: str = Field(min_length=1, max_length=120)
     size: int = Field(gt=0, le=10 * 1024 * 1024)
@@ -72,6 +73,9 @@ class AgentBackendV2Request(BaseModel):
     messages: list[dict[str, Any]] = Field(default_factory=list)
     attachments: list[AgentBackendAttachment] = Field(
         default_factory=list, max_length=5
+    )
+    attachment_catalog: list[dict[str, Any]] = Field(
+        default_factory=list, max_length=100
     )
     client_capabilities: list[str] = Field(default_factory=list)
 
@@ -107,6 +111,10 @@ class FeishuConversationAttachment(BaseModel):
     filename: str = Field(min_length=1, max_length=255)
     content_type: str = Field(min_length=1, max_length=120)
     kind: Literal["image", "audio", "video", "document"]
+    size: int | None = Field(default=None, gt=0, le=10 * 1024 * 1024)
+    data_base64: str | None = Field(
+        default=None, min_length=1, max_length=14 * 1024 * 1024
+    )
 
 
 class FeishuConversationPrepareRequest(BaseModel):
@@ -126,6 +134,7 @@ class FeishuConversationPrepareRequest(BaseModel):
 class FeishuConversationPrepareResponse(BaseModel):
     session_id: uuid.UUID
     messages: list[dict[str, str]] = Field(default_factory=list)
+    attachment_catalog: list[dict[str, Any]] = Field(default_factory=list)
     duplicate: bool = False
     response_text: str | None = None
 

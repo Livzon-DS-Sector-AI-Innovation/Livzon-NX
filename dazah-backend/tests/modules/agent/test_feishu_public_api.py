@@ -118,7 +118,11 @@ async def test_group_message_uses_group_specific_channel_session(monkeypatch) ->
 
 
 @pytest.mark.anyio
-async def test_new_command_archives_only_feishu_channel_session(monkeypatch) -> None:
+@pytest.mark.parametrize("command", ["/new", "/restart", "/reset"])
+async def test_new_command_archives_only_feishu_channel_session(
+    monkeypatch,
+    command: str,
+) -> None:
     user = _user()
     repository = FakeAgentRepository()
     monkeypatch.setattr(public_api, "AgentRepository", lambda: repository)
@@ -128,7 +132,7 @@ async def test_new_command_archives_only_feishu_channel_session(monkeypatch) -> 
         user=user,
         sender_open_id="ou_test",
         message_id="om_new",
-        text="/new",
+        text=command,
     )
 
     assert result.reset is True

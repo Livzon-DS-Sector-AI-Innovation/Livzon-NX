@@ -164,6 +164,36 @@ def cleanup_cached_attachments(
     return removed
 
 
+def read_cached_attachment(
+    attachment: DazahGatewayAttachment,
+    *,
+    max_bytes: int = 10 * 1024 * 1024,
+) -> bytes | None:
+    """Read only an inbound file located under an approved Hermes cache root."""
+    hermes_home = Path(os.getenv("HERMES_HOME", "/data/hermes")).resolve()
+    roots = (
+        hermes_home / "cache",
+        hermes_home / "image_cache",
+        hermes_home / "audio_cache",
+        hermes_home / "video_cache",
+        hermes_home / "document_cache",
+        Path(
+            os.getenv(
+                "HERMES_FEISHU_FILES_DIR",
+                str(hermes_home / "feishu-files"),
+            )
+        ).resolve(),
+    )
+    candidate = Path(attachment.local_path).resolve()
+    if (
+        not candidate.is_file()
+        or candidate.stat().st_size > max_bytes
+        or not any(candidate.is_relative_to(root.resolve()) for root in roots)
+    ):
+        return None
+    return candidate.read_bytes()
+
+
 @dataclass(frozen=True)
 class DazahInboundEnvelope:
     """Stable Dazah view of a Hermes platform-neutral message event."""
@@ -242,6 +272,7 @@ class DazahInboundEnvelope:
         trace_id: str,
         run_id: str,
         messages: list[dict[str, str]] | None = None,
+        attachment_catalog: list[dict[str, Any]] | None = None,
         persistent_session_id: str | None = None,
     ) -> dict[str, Any]:
         return {
@@ -268,6 +299,7 @@ class DazahInboundEnvelope:
             "message": self.request_text,
             "messages": list(messages or []),
             "attachments": [attachment.to_request() for attachment in self.attachments],
+            "attachment_catalog": list(attachment_catalog or []),
             "client_capabilities": [
                 "structured_events",
                 "streaming",
@@ -344,6 +376,11 @@ def build_dazah_confirmation_card(confirmation: dict[str, Any]) -> dict[str, Any
             resource_domain=resource_domain,
         )
     )
+    preview = str(confirmation.get("preview") or "-")[:1800]
+    if resource_domain == "feishu_native":
+        preview_block = f"**变更摘要：**\n{preview}\n"
+    else:
+        preview_block = f"**关键变更预览：**\n```\n{preview}\n```\n"
     return {
         "config": {"wide_screen_mode": True},
         "header": {
@@ -361,8 +398,7 @@ def build_dazah_confirmation_card(confirmation: dict[str, Any]) -> dict[str, Any
                     f"**动作：** {confirmation.get('operation') or '-'}\n"
                     f"**影响数量：** {confirmation.get('impact_count') or 0}\n"
                     f"**风险原因：** {confirmation.get('reason') or '-'}\n"
-                    f"**关键变更预览：**\n```\n"
-                    f"{str(confirmation.get('preview') or '-')[:1800]}\n```\n"
+                    f"{preview_block}"
                     f"**过期时间：** "
                     f"{_format_beijing_datetime(confirmation.get('expires_at'))}"
                 ),

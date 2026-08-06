@@ -19,6 +19,7 @@ _dazah_thread_request_context = threading.local()
 _MISSING_THREAD_CONTEXT = object()
 _task_request_contexts: dict[str, dict[str, Any]] = {}
 _task_tool_traces: dict[str, list[dict[str, Any]]] = {}
+_task_confirmations: dict[str, list[dict[str, Any]]] = {}
 _task_request_contexts_lock = threading.Lock()
 _FORCED_OPERATION_FALLBACKS = frozenset({"identity.deliver_feishu_message"})
 
@@ -27,18 +28,42 @@ def register_dazah_task_context(task_id: str, context: dict[str, Any]) -> None:
     with _task_request_contexts_lock:
         _task_request_contexts[task_id] = dict(context)
         _task_tool_traces[task_id] = []
+        _task_confirmations[task_id] = []
 
 
 def unregister_dazah_task_context(task_id: str) -> None:
     with _task_request_contexts_lock:
         _task_request_contexts.pop(task_id, None)
         _task_tool_traces.pop(task_id, None)
+        _task_confirmations.pop(task_id, None)
 
 
 def current_dazah_task_tool_trace(task_id: str) -> list[dict[str, Any]]:
     """Return only tool executions recorded for the registered runtime task."""
     with _task_request_contexts_lock:
         return [dict(item) for item in _task_tool_traces.get(task_id, [])]
+
+
+def current_dazah_task_confirmations(task_id: str) -> list[dict[str, Any]]:
+    """Return confirmations created by tools during this runtime task only."""
+    with _task_request_contexts_lock:
+        return [dict(item) for item in _task_confirmations.get(task_id, [])]
+
+
+def record_dazah_task_confirmation(
+    task_id: str | None,
+    confirmation: dict[str, Any],
+) -> None:
+    if not task_id or confirmation.get("status") != "pending":
+        return
+    confirmation_id = str(confirmation.get("id") or "")
+    if not confirmation_id:
+        return
+    with _task_request_contexts_lock:
+        items = _task_confirmations.get(task_id)
+        if items is None or any(str(item.get("id")) == confirmation_id for item in items):
+            return
+        items.append(dict(confirmation))
 
 
 def _record_dazah_task_tool_trace(
@@ -51,6 +76,11 @@ def _record_dazah_task_tool_trace(
         trace = _task_tool_traces.get(task_id)
         if trace is not None:
             trace.append(dict(item))
+
+
+def record_dazah_task_tool_trace(task_id: str | None, item: dict[str, Any]) -> None:
+    """Record a trusted tool attempt for gateway postcondition checks."""
+    _record_dazah_task_tool_trace(task_id, item)
 
 
 def _execute_trace_item(
@@ -260,6 +290,13 @@ async def dazah_tool(
                     status_code=response.status_code,
                 ),
             )
+            response_data = response_payload.get("data")
+            confirmation_source = (
+                response_data if isinstance(response_data, dict) else response_payload
+            )
+            confirmation = confirmation_source.get("confirmation")
+            if isinstance(confirmation, dict):
+                record_dazah_task_confirmation(task_id, confirmation)
         return json.dumps(response_payload, ensure_ascii=False)
     except httpx.HTTPError as exc:
         if action == "execute" and operation:

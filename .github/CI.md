@@ -66,9 +66,10 @@ Change Scope 同时检查每个 `AGENTS.md` 都有同目录 `CLAUDE.md` 导入�
 TypeScript、Vitest coverage、80% 变更行覆盖率、Next.js production build、
 Compose 校验和前端 Docker build。
 
-`Stable Frontend E2E` 重新构建 production bundle，通过 standalone server 运行
-`e2e/purchasing` 且排除 `@flaky`。CI 只允许一次测试级重试；失败时上传
-Playwright HTML、trace、截图和视频。
+`Stable Frontend E2E` 重新构建 production bundle，通过 standalone server 调用
+`pnpm test:e2e:critical`，运行身份与模块权限、采购、Livzon Agent 治理台和助手
+关键交互测试，且排除 `@flaky`。CI 只允许一次测试级重试；失败时上传 Playwright
+HTML、trace、截图和视频。
 
 `Frontend Flaky Quarantine` 只运行带 `@flaky` 的测试，Job
 `continue-on-error` 且不进入 CI Gate。当前没有隔离测试，因此只写 Step

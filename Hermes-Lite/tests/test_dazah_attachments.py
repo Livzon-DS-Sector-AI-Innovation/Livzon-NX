@@ -9,6 +9,8 @@ from services.dazah_agent_service import (
     AgentBackendV2Request,
     AgentTrustedSubject,
     DazahAIAgent,
+    _attachment_catalog_instruction,
+    _try_basic_command_response,
     _user_message_with_attachments,
 )
 
@@ -34,6 +36,28 @@ def test_dazah_proxy_keeps_multimodal_message_parts() -> None:
     assert agent._model_supports_vision() is True
 
 
+def test_help_command_returns_without_model_execution() -> None:
+    response = _try_basic_command_response(_payload(message="/help"))
+
+    assert response is not None
+    assert "`/new`" in response.message
+    assert "`/restart`" in response.message
+    assert response.tool_trace == []
+
+
+def test_restrat_typo_is_not_a_command() -> None:
+    response = _try_basic_command_response(_payload(message="/restrat"))
+
+    assert response is None
+
+
+def test_status_command_reports_current_channel() -> None:
+    response = _try_basic_command_response(_payload(message="/status"))
+
+    assert response is not None
+    assert "渠道：Web" in response.message
+
+
 def test_document_attachment_is_added_as_user_content() -> None:
     payload = _payload(
         message="请总结",
@@ -53,6 +77,28 @@ def test_document_attachment_is_added_as_user_content() -> None:
     assert isinstance(content, str)
     assert "记录.txt" in content
     assert "批次状态正常" in content
+
+
+def test_persistent_attachment_catalog_routes_follow_up_operations() -> None:
+    attachment_id = str(uuid.uuid4())
+    payload = _payload(
+        message="继续修改销售数据.xlsx",
+        attachment_catalog=[
+            {
+                "attachment_id": attachment_id,
+                "filename": "销售数据.xlsx",
+                "kind": "document",
+                "version": 2,
+            }
+        ],
+    )
+
+    instruction = _attachment_catalog_instruction(payload)
+
+    assert attachment_id in instruction
+    assert "agent.read_attachment" in instruction
+    assert "agent.mutate_tabular_attachment" in instruction
+    assert "agent.delete_attachment" in instruction
 
 
 def test_gateway_cached_pdf_text_is_extracted_without_exposing_path(
