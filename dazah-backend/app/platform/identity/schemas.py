@@ -430,6 +430,15 @@ class FeishuDiagnosticResult(BaseModel):
     sample_user_count: int = 0
 
 
+class FeishuGatewayRestartResult(BaseModel):
+    status: Literal["connected"]
+    message: str
+    previous_reconnects: int = Field(ge=0)
+    gateway_reconnects: int = Field(ge=1)
+    credential_version: int | None = None
+    config_version: int = Field(ge=0)
+
+
 class FeishuConfigApiResponse(BaseModel):
     code: int = 200
     message: str = "success"
@@ -440,3 +449,9 @@ class FeishuDiagnosticApiResponse(BaseModel):
     code: int = 200
     message: str = "success"
     data: FeishuDiagnosticResult
+
+
+class FeishuGatewayRestartApiResponse(BaseModel):
+    code: int = 200
+    message: str = "success"
+    data: FeishuGatewayRestartResult

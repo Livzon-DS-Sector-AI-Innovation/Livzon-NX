@@ -10,6 +10,10 @@ from fastapi import HTTPException
 from app.core.config import Settings
 from app.platform.identity import hermes_api
 from app.platform.identity.hermes_api import _require_internal
+from app.platform.identity.repository import (
+    ExternalIdentityBindingRepository,
+    ExternalIdentityConflictError,
+)
 
 
 class FakeIdentityDb:
@@ -22,6 +26,28 @@ class FakeIdentityDb:
 
     async def flush(self) -> None:
         self.flush_count += 1
+
+
+class _BindingScalarResult:
+    def __init__(self, bindings) -> None:
+        self.bindings = bindings
+
+    def scalars(self):
+        return self
+
+    def unique(self):
+        return self
+
+    def all(self):
+        return self.bindings
+
+
+class _BindingResolveDb:
+    def __init__(self, bindings) -> None:
+        self.bindings = bindings
+
+    async def execute(self, statement):
+        return _BindingScalarResult(self.bindings)
 
 
 def test_internal_token_is_required() -> None:
@@ -97,3 +123,155 @@ async def test_resolved_subject_uses_local_user_tenant(
 
     assert result["subject"]["tenant_id"] == "local-tenant"
     assert db.flush_count == 1
+
+
+@pytest.mark.anyio
+async def test_identity_resolution_rejects_non_active_app_before_binding_lookup(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = SimpleNamespace(app_id="app-a", allowed_group_chat_ids=[])
+
+    async def fake_get_active(self, db):
+        return config
+
+    async def unexpected_resolve(self, db, **kwargs):
+        raise AssertionError("binding lookup must not run for another app")
+
+    monkeypatch.setattr(
+        hermes_api.FeishuConfigRepository, "get_active", fake_get_active
+    )
+    monkeypatch.setattr(
+        hermes_api.ExternalIdentityBindingRepository,
+        "resolve",
+        unexpected_resolve,
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await hermes_api.resolve_external_identity(
+            hermes_api.ExternalIdentityResolveRequest(
+                tenant_id="tenant-a",
+                app_fingerprint="app-b",
+                external_open_id="ou-shared",
+            ),
+            FakeIdentityDb(SimpleNamespace(id=uuid4())),
+            Settings(LIVZON_FEISHU_ALLOWED_GROUPS=""),
+        )
+
+    assert exc.value.status_code == 403
+
+
+@pytest.mark.anyio
+async def test_identity_resolution_rejects_cross_tenant_identifier_reuse(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = SimpleNamespace(app_id="app-a", allowed_group_chat_ids=[])
+
+    async def fake_get_active(self, db):
+        return config
+
+    async def fake_resolve(self, db, **kwargs):
+        assert kwargs["tenant_id"] == "tenant-b"
+        return None
+
+    monkeypatch.setattr(
+        hermes_api.FeishuConfigRepository, "get_active", fake_get_active
+    )
+    monkeypatch.setattr(
+        hermes_api.ExternalIdentityBindingRepository, "resolve", fake_resolve
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await hermes_api.resolve_external_identity(
+            hermes_api.ExternalIdentityResolveRequest(
+                tenant_id="tenant-b",
+                app_fingerprint="app-a",
+                external_union_id="on-from-tenant-a",
+            ),
+            FakeIdentityDb(SimpleNamespace(id=uuid4())),
+            Settings(LIVZON_FEISHU_ALLOWED_GROUPS=""),
+        )
+
+    assert exc.value.status_code == 403
+
+
+@pytest.mark.anyio
+async def test_identity_resolution_fails_closed_on_conflicting_identifiers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = SimpleNamespace(app_id="app-a", allowed_group_chat_ids=[])
+
+    async def fake_get_active(self, db):
+        return config
+
+    async def fake_resolve(self, db, **kwargs):
+        raise ExternalIdentityConflictError("conflict")
+
+    monkeypatch.setattr(
+        hermes_api.FeishuConfigRepository, "get_active", fake_get_active
+    )
+    monkeypatch.setattr(
+        hermes_api.ExternalIdentityBindingRepository, "resolve", fake_resolve
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await hermes_api.resolve_external_identity(
+            hermes_api.ExternalIdentityResolveRequest(
+                tenant_id="tenant-a",
+                app_fingerprint="app-a",
+                external_open_id="ou-user-a",
+                external_union_id="on-user-b",
+            ),
+            FakeIdentityDb(SimpleNamespace(id=uuid4())),
+            Settings(LIVZON_FEISHU_ALLOWED_GROUPS=""),
+        )
+
+    assert exc.value.status_code == 403
+    assert "inconsistent" in str(exc.value.detail)
+
+
+@pytest.mark.anyio
+async def test_binding_repository_rejects_mixed_identifiers_on_one_candidate() -> None:
+    binding = SimpleNamespace(
+        external_user_id="user-a",
+        external_open_id="open-a",
+        external_union_id="union-a",
+    )
+
+    with pytest.raises(ExternalIdentityConflictError):
+        await ExternalIdentityBindingRepository().resolve(
+            _BindingResolveDb([binding]),
+            tenant_id="tenant-a",
+            platform="feishu",
+            app_fingerprint="app-a",
+            external_user_id="user-a",
+            external_open_id="open-attacker",
+            external_union_id="union-a",
+        )
+
+
+@pytest.mark.anyio
+async def test_binding_repository_rejects_identifiers_matching_multiple_bindings(
+) -> None:
+    bindings = [
+        SimpleNamespace(
+            external_user_id="user-a",
+            external_open_id="open-a",
+            external_union_id=None,
+        ),
+        SimpleNamespace(
+            external_user_id="user-b",
+            external_open_id=None,
+            external_union_id="union-b",
+        ),
+    ]
+
+    with pytest.raises(ExternalIdentityConflictError):
+        await ExternalIdentityBindingRepository().resolve(
+            _BindingResolveDb(bindings),
+            tenant_id="tenant-a",
+            platform="feishu",
+            app_fingerprint="app-a",
+            external_user_id="user-a",
+            external_open_id=None,
+            external_union_id="union-b",
+        )

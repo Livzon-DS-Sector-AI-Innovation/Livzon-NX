@@ -6,7 +6,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from fastapi.responses import JSONResponse, StreamingResponse
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -905,6 +905,30 @@ async def get_control_plane_trace(
         .scalars()
         .all()
     )
+    audit_receipts = list(
+        (
+            await db.execute(
+                select(AuditLog)
+                .where(
+                    AuditLog.resource_type.in_(
+                        (
+                            "agent_capability_search",
+                            "agent_capability_description",
+                            "feishu_resource",
+                            "feishu_resource_change",
+                        )
+                    ),
+                    or_(
+                        AuditLog.request_id == str(trace_id),
+                        AuditLog.extra["trace_id"].as_string() == str(trace_id),
+                    ),
+                )
+                .order_by(AuditLog.created_at.asc())
+            )
+        )
+        .scalars()
+        .all()
+    )
     timeline: list[dict[str, Any]] = [
         {
             "type": "tool_call",
@@ -978,6 +1002,28 @@ async def get_control_plane_trace(
         }
         for item in deliveries
     )
+    timeline.extend(
+        {
+            "type": (
+                "capability_search"
+                if item.resource_type
+                in {"agent_capability_search", "agent_capability_description"}
+                else "audit_receipt"
+            ),
+            "id": str(item.id),
+            "occurred_at": item.created_at.isoformat(),
+            "status": (
+                "recorded"
+                if item.status_code and item.status_code < 400
+                else "failed"
+            ),
+            "summary": item.action,
+            "operation": (item.extra or {}).get("operation"),
+            "error_code": None,
+            "receipt_id": item.request_id,
+        }
+        for item in audit_receipts
+    )
     timeline.sort(key=lambda item: item["occurred_at"])
     return success_response(
         data={
@@ -989,6 +1035,15 @@ async def get_control_plane_trace(
                 "confirmations": len(confirmations),
                 "domain_events": len(domain_events),
                 "deliveries": len(deliveries),
+                "capability_searches": sum(
+                    item.resource_type
+                    in {"agent_capability_search", "agent_capability_description"}
+                    for item in audit_receipts
+                ),
+                "audit_receipts": sum(
+                    item.resource_type in {"feishu_resource", "feishu_resource_change"}
+                    for item in audit_receipts
+                ),
             },
         }
     )
@@ -1112,6 +1167,22 @@ async def search_tools(
 ):
     require_service_token(settings.AGENT_TOOL_TOKEN, authorization)
     result = await ToolCatalogService().search(db, payload)
+    db.add(
+        AuditLog(
+            request_id=str(payload.trace_id),
+            user_id=payload.subject.user_id,
+            method="POST",
+            path="/api/v1/agent/tools/search",
+            status_code=200,
+            resource_type="agent_capability_search",
+            action="search_agent_tools",
+            extra={
+                "trace_id": str(payload.trace_id),
+                "module": payload.module,
+                "result_count": len(result),
+            },
+        )
+    )
     return success_response(data=[item.model_dump(mode="json") for item in result])
 
 
@@ -1119,6 +1190,8 @@ async def search_tools(
 async def describe_tool(
     operation: str,
     subject_user_id: uuid.UUID,
+    subject_tenant_id: str,
+    trace_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     authorization: str | None = Header(default=None),
     settings: Settings = Depends(get_settings),
@@ -1128,6 +1201,19 @@ async def describe_tool(
         db,
         operation=operation,
         user_id=subject_user_id,
+        tenant_id=subject_tenant_id,
+    )
+    db.add(
+        AuditLog(
+            request_id=str(trace_id),
+            user_id=subject_user_id,
+            method="GET",
+            path=f"/api/v1/agent/tools/{operation}",
+            status_code=200,
+            resource_type="agent_capability_description",
+            action="describe_agent_tool",
+            extra={"trace_id": str(trace_id), "operation": operation},
+        )
     )
     return success_response(data=result.model_dump(mode="json"))
 

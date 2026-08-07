@@ -47,6 +47,21 @@ def test_backend_openapi_exposes_runtime_overview_contract() -> None:
     )
 
 
+def test_backend_openapi_exposes_feishu_gateway_restart_contract() -> None:
+    openapi_path = Path(__file__).parents[2] / "dazah-backend" / "openapi.json"
+    document = json.loads(openapi_path.read_text(encoding="utf-8"))
+
+    operation = document["paths"][
+        "/api/v1/identity/feishu-config/gateway/restart"
+    ]["post"]
+
+    assert operation["operationId"].startswith("restart_livzon_feishu_gateway_")
+    response_schema = operation["responses"]["200"]["content"][
+        "application/json"
+    ]["schema"]
+    assert response_schema["$ref"].endswith("FeishuGatewayRestartApiResponse")
+
+
 def test_describe_uses_operation_and_trusted_subject(monkeypatch) -> None:
     recorded: dict[str, object] = {}
 

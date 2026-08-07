@@ -2250,6 +2250,11 @@
           },
           "subject": {
             "$ref": "#/components/schemas/AgentTrustedSubject"
+          },
+          "trace_id": {
+            "format": "uuid",
+            "title": "Trace Id",
+            "type": "string"
           }
         },
         "required": [
@@ -18519,6 +18524,76 @@
         "title": "FeishuDiagnosticStep",
         "type": "object"
       },
+      "FeishuGatewayRestartApiResponse": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/FeishuGatewayRestartResult"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "FeishuGatewayRestartApiResponse",
+        "type": "object"
+      },
+      "FeishuGatewayRestartResult": {
+        "properties": {
+          "config_version": {
+            "minimum": 0.0,
+            "title": "Config Version",
+            "type": "integer"
+          },
+          "credential_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credential Version"
+          },
+          "gateway_reconnects": {
+            "minimum": 1.0,
+            "title": "Gateway Reconnects",
+            "type": "integer"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "previous_reconnects": {
+            "minimum": 0.0,
+            "title": "Previous Reconnects",
+            "type": "integer"
+          },
+          "status": {
+            "const": "connected",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "message",
+          "previous_reconnects",
+          "gateway_reconnects",
+          "config_version"
+        ],
+        "title": "FeishuGatewayRestartResult",
+        "type": "object"
+      },
       "FermentationCreate": {
         "properties": {
           "attachment": {
@@ -20695,6 +20770,30 @@
             "minLength": 1,
             "title": "Risk",
             "type": "string"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "trace_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trace Id"
           },
           "user_id": {
             "anyOf": [
@@ -33802,6 +33901,30 @@
             "minLength": 1,
             "title": "Resource Fingerprint",
             "type": "string"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "trace_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trace Id"
           }
         },
         "required": [
@@ -51563,6 +51686,25 @@
             "schema": {
               "format": "uuid",
               "title": "Subject User Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "subject_tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Subject Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "trace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Trace Id",
               "type": "string"
             }
           },
@@ -69473,6 +69615,57 @@
           }
         },
         "summary": "查询 Hermes Feishu Gateway 状态",
+        "tags": [
+          "Livzon 助手飞书设置",
+          "Livzon 助手飞书设置"
+        ]
+      }
+    },
+    "/api/v1/identity/feishu-config/gateway/restart": {
+      "post": {
+        "description": "重建飞书 Gateway 子进程连接，不重启 Hermes 服务或部署镜像。",
+        "operationId": "restart_livzon_feishu_gateway_api_v1_identity_feishu_config_gateway_restart_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeishuGatewayRestartApiResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "重启 Hermes Feishu Gateway",
         "tags": [
           "Livzon 助手飞书设置",
           "Livzon 助手飞书设置"

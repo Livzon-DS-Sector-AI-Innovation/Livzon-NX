@@ -789,6 +789,56 @@ async def get_automation_run(
 
 
 @agent_tool(
+    name="agent.retry_automation_run",
+    summary="重试失败的 Livzon 自动化运行",
+    input_model=AutomationRunIdInput,
+    write=True,
+    risk_level="medium",
+    workflow_allowed=False,
+    method="POST",
+    path="/agent/automation-runs/{run_id}/retry",
+    output_hint=(
+        "仅允许重试当前用户有权访问且状态为 failed 的运行，并创建新的运行记录。"
+    ),
+)
+async def retry_automation_run(
+    context: ToolContext, data: AutomationRunIdInput
+) -> dict[str, Any]:
+    service = _automation_service(context)
+    failed_run = await service.get_run(
+        context.db,
+        user=_required_user(context),
+        run_id=data.run_id,
+    )
+    if failed_run.get("status") != "failed":
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "仅失败的自动化运行可以重试",
+        )
+    automation_id = UUID(str(failed_run["automation_id"]))
+    await service._require_owner(
+        context.db,
+        user=_required_user(context),
+        automation_id=automation_id,
+    )
+    from app.modules.agent.automation_runner import AgentAutomationRunner
+
+    retried = await AgentAutomationRunner().execute_manual(
+        context.db,
+        automation_id=automation_id,
+    )
+    result = await service.get_run(
+        context.db,
+        user=_required_user(context),
+        run_id=retried.id,
+    )
+    return {
+        "run": result,
+        "retried_from_run_id": str(data.run_id),
+    }
+
+
+@agent_tool(
     name="agent.get_current_time",
     summary="获取当前精确时间",
     method="GET",

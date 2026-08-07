@@ -38,6 +38,7 @@ from app.platform.identity.schemas import (
     FeishuConfigApiResponse,
     FeishuConfigUpsert,
     FeishuDiagnosticApiResponse,
+    FeishuGatewayRestartApiResponse,
     LivzonAccessScopeOut,
     LocalLoginRequest,
     LocalUserCreate,
@@ -432,7 +433,7 @@ async def list_external_identity_bindings(
 async def list_external_identity_binding_conflicts(
     db: AsyncSession = Depends(get_db),
     current_user: AdminUser = None,
-):
+) -> list[ExternalIdentityConflictOut]:
     from app.platform.identity.service import list_livzon_identity_conflicts
 
     return await list_livzon_identity_conflicts(db)
@@ -865,6 +866,39 @@ async def get_livzon_feishu_gateway_status(
             "Hermes Gateway 状态查询失败",
         ) from exc
     return success_response(data=response.json())
+
+
+@feishu_config_router.post(
+    "/gateway/restart",
+    summary="重启 Hermes Feishu Gateway",
+    response_model=FeishuGatewayRestartApiResponse,
+)
+async def restart_livzon_feishu_gateway(
+    db: AsyncSession = Depends(get_db),
+    current_user: AdminUser = None,
+) -> JSONResponse:
+    """重建飞书 Gateway 子进程连接，不重启 Hermes 服务或部署镜像。"""
+    from app.platform.audit.models import AuditLog
+    from app.platform.identity.service import restart_livzon_feishu_gateway as restart
+
+    data = await restart()
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            method="POST",
+            path="/api/v1/identity/feishu-config/gateway/restart",
+            status_code=200,
+            resource_type="feishu_gateway",
+            action="restart_livzon_feishu_gateway",
+            extra={
+                "status": data.status,
+                "previous_reconnects": data.previous_reconnects,
+                "gateway_reconnects": data.gateway_reconnects,
+                "config_version": data.config_version,
+            },
+        )
+    )
+    return success_response(data=data.model_dump(mode="json"))
 
 
 @feishu_config_router.put(

@@ -21,6 +21,7 @@ from app.platform.audit.models import AuditLog
 from app.platform.identity.models import User
 from app.platform.identity.repository import (
     ExternalIdentityBindingRepository,
+    ExternalIdentityConflictError,
     FeishuConfigRepository,
 )
 
@@ -68,15 +69,21 @@ async def resolve_external_identity(
             status.HTTP_403_FORBIDDEN,
             "Feishu application is not the active Hermes Gateway application",
         )
-    binding = await ExternalIdentityBindingRepository().resolve(
-        db,
-        tenant_id=payload.tenant_id,
-        platform="feishu",
-        app_fingerprint=payload.app_fingerprint,
-        external_user_id=payload.external_user_id,
-        external_open_id=payload.external_open_id,
-        external_union_id=payload.external_union_id,
-    )
+    try:
+        binding = await ExternalIdentityBindingRepository().resolve(
+            db,
+            tenant_id=payload.tenant_id,
+            platform="feishu",
+            app_fingerprint=payload.app_fingerprint,
+            external_user_id=payload.external_user_id,
+            external_open_id=payload.external_open_id,
+            external_union_id=payload.external_union_id,
+        )
+    except ExternalIdentityConflictError as exc:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Feishu identity identifiers are inconsistent",
+        ) from exc
     if binding is None:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Feishu identity is not bound")
     user = await db.get(User, binding.local_user_id)
@@ -125,6 +132,8 @@ class HermesAuditEvent(BaseModel):
     duration_ms: int | None = Field(default=None, ge=0)
     feishu_log_id: str | None = Field(default=None, max_length=128)
     impact_count: int | None = Field(default=None, ge=0)
+    trace_id: str | None = Field(default=None, max_length=64)
+    run_id: str | None = Field(default=None, max_length=64)
 
 
 @router.post("/audit", dependencies=[Depends(_require_internal)], status_code=202)
@@ -161,6 +170,8 @@ class ResourceChangeEvent(BaseModel):
     resource_fingerprint: str = Field(min_length=1, max_length=512)
     capability: str = Field(min_length=1, max_length=100)
     feishu_log_id: str | None = Field(default=None, max_length=128)
+    trace_id: str | None = Field(default=None, max_length=64)
+    run_id: str | None = Field(default=None, max_length=64)
 
 
 @router.post(
