@@ -30,7 +30,6 @@ export function AuthLayout({
           </div>
 
           <div className={styles.brandMessage}>
-            <span className={styles.internalBadge}>内部系统</span>
             <h1>原料药工厂管理平台</h1>
             <p>
               统一承载生产、质量、设备与安全业务，帮助工厂团队清晰、高效地完成日常管理工作。

@@ -39,6 +39,7 @@ const actions = vi.hoisted(() => ({
   getLivzonFeishuConfig: vi.fn(),
   getLivzonFeishuGatewayStatus: vi.fn(),
   revokeFeishuAuthorization: vi.fn(),
+  restartLivzonFeishuGateway: vi.fn(),
   saveLivzonFeishuConfig: vi.fn(),
   setAgentToolEnabled: vi.fn(),
   syncLivzonFeishuDirectory: vi.fn(),
@@ -259,6 +260,14 @@ describe('FeishuSettingsClient governance lifecycle', () => {
     })
     actions.getFeishuAuthorizations.mockResolvedValue([])
     actions.saveLivzonFeishuConfig.mockResolvedValue(config)
+    actions.restartLivzonFeishuGateway.mockResolvedValue({
+      status: 'connected',
+      message: '已恢复',
+      previous_reconnects: 1,
+      gateway_reconnects: 2,
+      credential_version: 3,
+      config_version: 3,
+    })
     actions.testLivzonFeishuConfig.mockResolvedValue({
       status: 'ok', message: '诊断通过', steps: [{ name: 'token', status: 'ok' }],
     })
@@ -348,10 +357,12 @@ describe('FeishuSettingsClient governance lifecycle', () => {
   it('saves and diagnoses Feishu access configuration', async () => {
     resetHooks()
     const onSaved = vi.fn()
+    const onRestarted = vi.fn()
     const tree = FeishuAccess({
       config,
       status: { gateway: 'connected', config_version: 3, gateway_reconnects: 1 } as never,
       onSaved,
+      onRestarted,
     })
     invokeEffects()
     expect(ui.form.setFieldsValue).toHaveBeenCalled()
@@ -365,10 +376,23 @@ describe('FeishuSettingsClient governance lifecycle', () => {
     ;(findButton(tree, '运行诊断').props?.onClick as () => void)()
     await vi.waitFor(() => expect(actions.testLivzonFeishuConfig).toHaveBeenCalled())
     expect(ui.message.success).toHaveBeenCalled()
+
+    ;(findButton(tree, '重启飞书网关').props?.onClick as () => void)()
+    await ui.modal.confirm.mock.calls.at(-1)?.[0].onOk()
+    expect(actions.restartLivzonFeishuGateway).toHaveBeenCalledOnce()
+    expect(onRestarted).toHaveBeenCalledWith(expect.objectContaining({ status: 'connected' }))
   })
 
   it('loads identities, creates bindings, syncs directory and changes status', async () => {
-    resetHooks({ 0: [binding], 1: [{ id: binding.local_user_id, name: '张三' }], 7: 7, 8: [{
+    const feishuUser = {
+      id: binding.local_user_id,
+      name: '张三',
+      department: '质量部',
+      feishu_user_id: 'u_user',
+      feishu_open_id: 'ou_user',
+      feishu_union_id: 'on_user',
+    }
+    resetHooks({ 0: [binding], 1: [feishuUser], 7: 7, 8: [{
       local_user_id: binding.local_user_id,
       local_user_name: '张三',
       external_identifier: 'ou_conflict',
@@ -379,10 +403,33 @@ describe('FeishuSettingsClient governance lifecycle', () => {
     invokeEffects()
     await vi.waitFor(() => expect(actions.getExternalIdentityBindings).toHaveBeenCalled())
     expect(ui.form.setFieldsValue).toHaveBeenCalled()
+    const userSelector = walk(tree).find(
+      (element) => element.props?.placeholder === '选择已同步的飞书用户',
+    )
+    expect(userSelector?.props?.options).toEqual([
+      { value: binding.local_user_id, label: '张三（质量部）' },
+    ])
+    expect(
+      walk(tree).some((element) =>
+        String(element.props?.extra).includes('无需手工填写 Open ID 或 Union ID'),
+      ),
+    ).toBe(true)
 
     const form = walk(tree).find((element) => typeof element.props?.onFinish === 'function')
-    await (form?.props?.onFinish as (value: typeof binding) => Promise<void>)(binding)
-    expect(actions.createExternalIdentityBinding).toHaveBeenCalledWith(binding)
+    const formValue = {
+      tenant_id: binding.tenant_id,
+      platform: binding.platform,
+      app_fingerprint: binding.app_fingerprint,
+      local_user_id: binding.local_user_id,
+      source: binding.source,
+    }
+    await (form?.props?.onFinish as (value: typeof formValue) => Promise<void>)(formValue)
+    expect(actions.createExternalIdentityBinding).toHaveBeenCalledWith({
+      ...formValue,
+      external_user_id: 'u_user',
+      external_open_id: 'ou_user',
+      external_union_id: 'on_user',
+    })
 
     ;(findButton(tree, '同步飞书目录').props?.onClick as () => void)()
     await ui.modal.confirm.mock.calls.at(-1)?.[0].onOk()
@@ -469,7 +516,15 @@ describe('FeishuSettingsClient governance lifecycle', () => {
   it('loads deliveries, queries trace data and exports safe diagnostics', async () => {
     const trace = {
       trace_id: 'trace-1',
-      counts: { messages: 1, tool_calls: 1, confirmations: 1, domain_events: 1, deliveries: 1 },
+      counts: {
+        messages: 1,
+        tool_calls: 1,
+        confirmations: 1,
+        domain_events: 1,
+        deliveries: 1,
+        capability_searches: 1,
+        audit_receipts: 1,
+      },
       timeline: [{
         type: 'tool', id: 'event-1', occurred_at: config.updated_at, status: 'executed',
         summary: '工具执行', error_code: null,
@@ -494,7 +549,7 @@ describe('FeishuSettingsClient governance lifecycle', () => {
     expect(actions.exportAgentTrace).toHaveBeenCalledWith('trace-1')
     expect(walk(tree).some(
       (element) => element.props?.title === '调用链路（Trace）用于定位故障',
-    )).toBe(true)
+    )).toBe(false)
 
     const traceInput = walk(tree).find(
       (element) => element.props?.placeholder === '输入调用链路编号或运行编号',
