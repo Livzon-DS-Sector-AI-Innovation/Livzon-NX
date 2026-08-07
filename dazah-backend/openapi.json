@@ -1694,6 +1694,115 @@
         "title": "AgentConfirmationResolveRequest",
         "type": "object"
       },
+      "AgentMemoryPolicyEnvelope": {
+        "additionalProperties": false,
+        "properties": {
+          "effective_mode": {
+            "enum": [
+              "auto",
+              "explicit_only",
+              "disabled"
+            ],
+            "title": "Effective Mode",
+            "type": "string"
+          },
+          "last_cleared_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Cleared At"
+          },
+          "notice_required": {
+            "default": false,
+            "title": "Notice Required",
+            "type": "boolean"
+          },
+          "policy_version": {
+            "minimum": 1.0,
+            "title": "Policy Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "effective_mode",
+          "policy_version"
+        ],
+        "title": "AgentMemoryPolicyEnvelope",
+        "type": "object"
+      },
+      "AgentMemoryTenantPolicyOut": {
+        "properties": {
+          "effective_mode": {
+            "enum": [
+              "auto",
+              "explicit_only",
+              "disabled"
+            ],
+            "title": "Effective Mode",
+            "type": "string"
+          },
+          "global_mode": {
+            "enum": [
+              "auto",
+              "explicit_only",
+              "disabled"
+            ],
+            "title": "Global Mode",
+            "type": "string"
+          },
+          "policy_version": {
+            "title": "Policy Version",
+            "type": "integer"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "tenant_mode": {
+            "enum": [
+              "auto",
+              "explicit_only",
+              "disabled"
+            ],
+            "title": "Tenant Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tenant_id",
+          "global_mode",
+          "tenant_mode",
+          "effective_mode",
+          "policy_version"
+        ],
+        "title": "AgentMemoryTenantPolicyOut",
+        "type": "object"
+      },
+      "AgentMemoryTenantPolicyUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "enum": [
+              "auto",
+              "explicit_only",
+              "disabled"
+            ],
+            "title": "Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "title": "AgentMemoryTenantPolicyUpdate",
+        "type": "object"
+      },
       "AgentMessageOut": {
         "properties": {
           "content": {
@@ -18247,6 +18356,11 @@
             "title": "External Message Id",
             "type": "string"
           },
+          "memory_notice_delivered": {
+            "default": false,
+            "title": "Memory Notice Delivered",
+            "type": "boolean"
+          },
           "run_id": {
             "format": "uuid",
             "title": "Run Id",
@@ -18377,6 +18491,16 @@
             "default": false,
             "title": "Duplicate",
             "type": "boolean"
+          },
+          "memory_policy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AgentMemoryPolicyEnvelope"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "messages": {
             "items": {
@@ -50458,6 +50582,112 @@
           }
         },
         "summary": "Agent Llm Models",
+        "tags": [
+          "中枢 Agent"
+        ]
+      }
+    },
+    "/api/v1/agent/memory/tenant-policy": {
+      "get": {
+        "operationId": "get_agent_memory_tenant_policy_api_v1_agent_memory_tenant_policy_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentMemoryTenantPolicyOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "获取租户 Agent 记忆治理策略",
+        "tags": [
+          "中枢 Agent"
+        ]
+      },
+      "put": {
+        "operationId": "update_agent_memory_tenant_policy_api_v1_agent_memory_tenant_policy_put",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentMemoryTenantPolicyUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentMemoryTenantPolicyOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "更新租户 Agent 记忆治理策略",
         "tags": [
           "中枢 Agent"
         ]

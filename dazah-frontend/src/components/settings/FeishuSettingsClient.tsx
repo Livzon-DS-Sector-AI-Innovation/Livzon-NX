@@ -21,6 +21,7 @@ import {
   Card,
   Col,
   Descriptions,
+  Divider,
   Drawer,
   Empty,
   Form,
@@ -74,8 +75,18 @@ import {
   type FeishuGatewayRestartResult,
 } from '@/actions/settings'
 import { getUsers, type UserManagementItem } from '@/actions/users'
+import MemoryGovernanceClient from './MemoryGovernanceClient'
 
 const { Text, Title } = Typography
+
+export const agentManagementTabKeys = [
+  'overview',
+  'feishu',
+  'identity',
+  'tools',
+  'authorizations',
+  'trace',
+] as const
 
 type CredentialsFormValues = Pick<
   FeishuConfigUpsert,
@@ -813,6 +824,8 @@ function ToolGovernance() {
 
   return (
     <Card title="企业能力目录与策略">
+      <MemoryGovernanceClient />
+      <Divider />
       <Space className="mb-4" wrap>
         <Input.Search placeholder="搜索 operation 或摘要" allowClear style={{ width: 280 }} onSearch={(value) => { setPage(1); setKeyword(value) }} />
         <Select aria-label="模块" allowClear placeholder="模块" style={{ width: 140 }} options={moduleOptions.map((value) => ({ value }))} onChange={(value) => { setPage(1); setModule(value) }} />

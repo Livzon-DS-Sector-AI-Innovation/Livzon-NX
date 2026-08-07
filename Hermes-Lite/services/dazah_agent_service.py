@@ -45,8 +45,11 @@ from services.feishu_runtime import (
 from services.memory_service import (
     CATEGORY_LABELS,
     UserMemoryRepository,
+    eligible_for_automatic_memory,
     review_turn,
+    sensitive_memory_category,
 )
+from services.command_help import build_agent_command_help
 from tools.dazah_platform import (
     bind_dazah_thread_request_context,
     current_dazah_task_confirmations,
@@ -85,6 +88,14 @@ class AgentBackendSource(BaseModel):
     message_id: str | None = Field(default=None, max_length=255)
 
 
+class AgentMemoryPolicyEnvelope(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    effective_mode: Literal["auto", "explicit_only", "disabled"]
+    policy_version: int = Field(ge=1)
+    notice_required: bool = False
+    last_cleared_at: datetime | None = None
+
+
 class AgentBackendV2Request(BaseModel):
     model_config = ConfigDict(extra="forbid")
     protocol_version: Literal["2.0"]
@@ -98,6 +109,7 @@ class AgentBackendV2Request(BaseModel):
     attachments: list[dict[str, Any]] = Field(default_factory=list, max_length=5)
     attachment_catalog: list[dict[str, Any]] = Field(default_factory=list, max_length=100)
     client_capabilities: list[str] = Field(default_factory=list)
+    memory_policy: AgentMemoryPolicyEnvelope | None = None
 
     @property
     def context(self) -> dict[str, Any]:
@@ -187,6 +199,15 @@ class FeishuConfirmationResolveRequest(BaseModel):
     choice: Literal["allow", "always", "reject"]
 
 
+class UserMemoryControlRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    tenant_id: str = Field(min_length=1, max_length=128)
+    user_id: str = Field(min_length=1, max_length=64)
+    action: Literal["list", "forget", "clear"]
+    argument: str | None = Field(default=None, max_length=200)
+    cleared_at: datetime | None = None
+
+
 def _require_internal_token(authorization: str | None) -> str:
     expected = os.getenv("HERMES_INTERNAL_TOKEN", "")
     if not expected:
@@ -199,6 +220,17 @@ def _require_internal_token(authorization: str | None) -> str:
 
 @app.on_event("startup")
 async def _restore_feishu_runtime() -> None:
+    if (
+        (
+            os.getenv("APP_ENV", "development").strip().lower() == "production"
+            or os.getenv("HERMES_USER_MEMORY_REQUIRE_POLICY", "false")
+            .strip()
+            .lower()
+            in {"1", "true", "yes"}
+        )
+        and user_memory_repository.cipher.ephemeral
+    ):
+        raise RuntimeError("HERMES_USER_MEMORY_KEYS is required in production")
     try:
         await restore_credentials()
     except Exception:
@@ -210,6 +242,50 @@ async def _restore_feishu_runtime() -> None:
             asyncio.create_task(_memory_review_worker(index), name=f"memory-worker-{index}")
             for index in range(2)
         )
+
+
+@app.post("/internal/user-memory/control")
+async def control_user_memory(
+    payload: UserMemoryControlRequest,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    _require_internal_token(authorization)
+    if payload.action == "list":
+        items = user_memory_repository.list_entries(payload.tenant_id, payload.user_id)
+        return {
+            "items": [
+                {
+                    "id": item["id"],
+                    "category": item["category"],
+                    "category_label": CATEGORY_LABELS.get(str(item["category"]), "其他"),
+                    "content": item["content"],
+                    "pinned": bool(item["pinned"]),
+                }
+                for item in items
+            ],
+            "used_bytes": user_memory_repository.usage_bytes(
+                payload.tenant_id, payload.user_id
+            ),
+        }
+    if payload.action == "forget":
+        if not payload.argument or not payload.argument.strip():
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "argument is required")
+        removed, matches = user_memory_repository.forget_unique(
+            payload.tenant_id, payload.user_id, payload.argument
+        )
+        return {
+            "removed": removed,
+            "items": [
+                {"id": item["id"], "category": item["category"]}
+                for item in matches
+            ],
+        }
+    user_memory_repository.clear_scope(
+        payload.tenant_id,
+        payload.user_id,
+        cleared_at=(payload.cleared_at.timestamp() if payload.cleared_at else None),
+    )
+    return {"cleared": True}
 
 
 @app.on_event("shutdown")
@@ -1694,17 +1770,53 @@ def _format_task_status(result: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def _personal_memory_allowed(payload: AgentBackendV2Request) -> bool:
+def _personal_memory_channel_allowed(payload: AgentBackendV2Request) -> bool:
     if payload.source.platform == "web":
         return True
     chat_type = str(payload.source.chat_type or "").strip().lower()
     return chat_type in {"dm", "p2p", "private", "direct"}
 
 
+def _effective_memory_mode(payload: AgentBackendV2Request) -> str:
+    if payload.memory_policy is not None:
+        return payload.memory_policy.effective_mode
+    required = os.getenv("HERMES_USER_MEMORY_REQUIRE_POLICY", "false").strip().lower()
+    return "disabled" if required in {"1", "true", "yes"} else "auto"
+
+
+def _personal_memory_allowed(payload: AgentBackendV2Request) -> bool:
+    return (
+        _personal_memory_channel_allowed(payload)
+        and _effective_memory_mode(payload) != "disabled"
+    )
+
+
+def _apply_memory_deletion_marker(payload: AgentBackendV2Request) -> None:
+    policy = payload.memory_policy
+    if policy is None or policy.last_cleared_at is None:
+        return
+    user_memory_repository.clear_scope(
+        payload.subject.tenant_id,
+        payload.subject.user_id,
+        cleared_at=policy.last_cleared_at.timestamp(),
+    )
+
+
+def _with_memory_notice(payload: AgentBackendV2Request, message: str) -> str:
+    if payload.memory_policy is None or not payload.memory_policy.notice_required:
+        return message
+    return (
+        f"{message}\n\n隐私提示：私聊中的长期记忆默认自动开启，可发送 "
+        "`/memory status` 查看，或使用 `/memory explicit`、`/memory pause` 调整；"
+        "高敏个人信息不会保存。"
+    )
+
+
 def _personal_memory_context(payload: AgentBackendV2Request) -> str:
     if not _personal_memory_allowed(payload):
         return ""
     try:
+        _apply_memory_deletion_marker(payload)
         user_memory_repository.migrate_legacy_user_file(
             payload.subject.tenant_id,
             payload.subject.user_id,
@@ -1824,10 +1936,14 @@ def _schedule_memory_review(
     assistant_message: str,
     tool_trace: list[dict[str, Any]],
 ) -> None:
-    if not _personal_memory_allowed(payload):
+    if not _personal_memory_allowed(payload) or _effective_memory_mode(payload) != "auto":
         return
     raw_message = _current_user_message(payload).strip()
     if not raw_message or raw_message.casefold().startswith("/memory"):
+        return
+
+    evidence = _trusted_memory_tool_evidence(tool_trace)
+    if not eligible_for_automatic_memory(raw_message, assistant_message, evidence):
         return
 
     queued = user_memory_repository.enqueue_job(
@@ -1837,7 +1953,7 @@ def _schedule_memory_review(
         session_id=payload.session_id,
         user_message=raw_message,
         assistant_message=assistant_message,
-        tool_evidence=_trusted_memory_tool_evidence(tool_trace),
+        tool_evidence=evidence,
     )
     if not queued:
         scope_hash = hashlib.sha256(
@@ -1847,7 +1963,7 @@ def _schedule_memory_review(
 
 
 def _explicit_memory_save_requested(payload: AgentBackendV2Request) -> bool:
-    if not _personal_memory_allowed(payload):
+    if not _personal_memory_channel_allowed(payload):
         return False
     return re.search(
         r"(?:记住|记一下|保存到(?:长期)?记忆|长期记忆)",
@@ -1861,11 +1977,25 @@ async def _finalize_user_memory(
     assistant_message: str,
     tool_trace: list[dict[str, Any]],
 ) -> str:
-    if not _personal_memory_allowed(payload):
+    if not _personal_memory_channel_allowed(payload):
         return assistant_message
-    if not _explicit_memory_save_requested(payload):
+    explicit_requested = _explicit_memory_save_requested(payload)
+    if _effective_memory_mode(payload) == "disabled":
+        if explicit_requested:
+            return _with_memory_notice(
+                payload,
+                f"{assistant_message}\n\n长期记忆当前已暂停或被管理员禁用；恢复后才能保存。",
+            )
+        return _with_memory_notice(payload, assistant_message)
+    sensitive_category = sensitive_memory_category(_current_user_message(payload))
+    if explicit_requested and sensitive_category is not None:
+        return _with_memory_notice(
+            payload,
+            f"{assistant_message}\n\n该内容属于高敏信息（{sensitive_category}），不能保存到长期记忆。",
+        )
+    if not explicit_requested:
         _schedule_memory_review(payload, assistant_message, tool_trace)
-        return assistant_message
+        return _with_memory_notice(payload, assistant_message)
     try:
         stats = await asyncio.wait_for(
             review_turn(
@@ -1886,60 +2016,26 @@ async def _finalize_user_memory(
             f"{payload.subject.tenant_id}:{payload.subject.user_id}".encode("utf-8")
         ).hexdigest()[:12]
         logger.exception("Synchronous user memory save failed scope=%s run=%s", scope_hash, payload.run_id)
-        return f"{assistant_message}\n\n长期记忆保存失败，本次未确认写入；请稍后重试。"
+        return _with_memory_notice(payload, f"{assistant_message}\n\n长期记忆保存失败，本次未确认写入；请稍后重试。")
     if stats.get("added", 0) + stats.get("updated", 0) > 0:
-        return f"{assistant_message}\n\n已确认保存到你的长期记忆。"
+        return _with_memory_notice(payload, f"{assistant_message}\n\n已确认保存到你的长期记忆。")
     if stats.get("forgotten", 0) > 0:
-        return f"{assistant_message}\n\n已确认删除匹配的长期记忆。"
-    return f"{assistant_message}\n\n本轮没有通过校验的可保存记忆，因此未写入长期记忆。"
+        return _with_memory_notice(payload, f"{assistant_message}\n\n已确认删除匹配的长期记忆。")
+    return _with_memory_notice(payload, f"{assistant_message}\n\n本轮没有通过校验的可保存记忆，因此未写入长期记忆。")
 
 
 def _memory_command_response(payload: AgentBackendV2Request, raw_command: str) -> str | None:
     normalized = re.sub(r"\s+", " ", raw_command.strip()).casefold()
     if not normalized.startswith("/memory"):
         return None
-    if not _personal_memory_allowed(payload):
+    if not _personal_memory_channel_allowed(payload):
         return "为保护个人隐私，群聊不读取或修改个人记忆。请在与 Livzon 助手的私聊中使用 `/memory`。"
-
-    tenant_id = payload.subject.tenant_id
-    user_id = payload.subject.user_id
-    try:
-        user_memory_repository.migrate_legacy_user_file(tenant_id, user_id)
-        if normalized == "/memory":
-            return user_memory_repository.format_for_user(tenant_id, user_id)
-        if normalized == "/memory clear":
-            user_memory_repository.request_clear(tenant_id, user_id)
-            return (
-                "这将清空你的全部长期记忆，且无法从 Hermes 恢复。"
-                "如确认清空，请在 5 分钟内发送 `/memory clear confirm`。"
-            )
-        if normalized == "/memory clear confirm":
-            if user_memory_repository.confirm_clear(tenant_id, user_id):
-                return "你的长期记忆已清空。"
-            return "清空确认不存在或已过期。请重新发送 `/memory clear`。"
-        prefix = "/memory forget "
-        if normalized.startswith(prefix):
-            # Slice the original command so casing and non-ASCII text are retained.
-            needle = re.sub(r"\s+", " ", raw_command.strip())[len(prefix):].strip()
-            if not needle:
-                return "请提供要忘记的关键词，例如：`/memory forget 表格输出`。"
-            removed, matches = user_memory_repository.forget_unique(tenant_id, user_id, needle)
-            if removed:
-                return "已删除唯一匹配的记忆。"
-            if not matches:
-                return "没有找到匹配的记忆。"
-            lines = ["匹配到多条记忆，为避免误删，本次未执行。请使用更具体的关键词："]
-            for item in matches[:5]:
-                label = CATEGORY_LABELS.get(str(item.get("category")), "其他")
-                lines.append(f"- 【{label}】{str(item.get('content') or '')[:120]}")
-            return "\n".join(lines)
-        return (
-            "记忆命令：`/memory` 查看；`/memory forget <关键词>` 删除唯一匹配项；"
-            "`/memory clear` 发起清空确认。"
-        )
-    except Exception:
-        logger.exception("User memory command failed")
-        return "记忆服务暂时不可用，请稍后重试。"
+    return (
+        "该记忆命令未经过 Dazah 后端治理链路，Hermes 本次不会直接读取、修改或清空记忆。"
+        "请从 Web 或飞书私聊重新发送命令；可用命令包括 `/memory status`、`/memory`、"
+        "`/memory auto`、`/memory explicit`、`/memory pause`、`/memory resume`、"
+        "`/memory forget <关键词>`、`/memory clear`、`/memory clear confirm` 和 `/memory help`。"
+    )
 
 
 def _normalize_natural_memory_command(raw_message: str) -> str:
@@ -1966,16 +2062,7 @@ async def _try_basic_command_response(
     if normalized in {"/new", "/restart", "/reset", "/新建会话"}:
         message = "已开启新对话，会话上下文已重置。请发送新的问题。"
     elif normalized in {"/help", "/帮助"}:
-        message = (
-            "可用基础命令：\n\n"
-            "- `/new`：开启新对话并清除当前会话上下文\n"
-            "- `/restart`：重新开始对话；兼容别名 `/reset`\n"
-            "- `/help`：查看命令帮助\n"
-            "- `/status`：查看当前连接和会话状态\n"
-            "- `/memory`：查看和管理你的长期记忆\n"
-            "- `/tasks`：查询最近任务进度\n"
-            "- `/retry <运行ID>`：为失败任务生成重试确认卡"
-        )
+        message = build_agent_command_help(identity_resolved=True)
     elif normalized in {"/status", "/状态"}:
         channel = "飞书" if payload.source.platform == "feishu" else "Web"
         message = (

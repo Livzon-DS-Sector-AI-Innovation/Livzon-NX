@@ -250,6 +250,7 @@ def test_inbound_envelope_preserves_native_feishu_context_and_attachments() -> N
         trace_id="00000000-0000-0000-0000-000000000002",
         run_id="00000000-0000-0000-0000-000000000003",
         messages=[{"role": "user", "content": "上一轮"}],
+        memory_policy={"effective_mode": "explicit_only", "policy_version": 2},
     )
 
     assert envelope.sender_id == "on_union"
@@ -257,6 +258,7 @@ def test_inbound_envelope_preserves_native_feishu_context_and_attachments() -> N
     assert request["source"]["sender_open_id"] == "ou_open"
     assert request["source"]["reply_to"] == "om_reply"
     assert request["messages"] == [{"role": "user", "content": "上一轮"}]
+    assert request["memory_policy"]["effective_mode"] == "explicit_only"
     assert request["attachments"] == [
         {
             "kind": "document",
@@ -677,13 +679,6 @@ async def test_native_stream_sends_then_finalizes_rich_message() -> None:
         metadata={"thread_id": "omt_thread"},
     )
     assert adapter.calls[0] == (
-        "public_card",
-        {
-            "chat_id": "oc_chat",
-            "card": build_dazah_confirmation_card(_confirmation()),
-        },
-    )
-    assert adapter.calls[1] == (
         "edit",
         {
             "chat_id": "oc_chat",
@@ -692,24 +687,41 @@ async def test_native_stream_sends_then_finalizes_rich_message() -> None:
             "finalize": True,
         },
     )
+    assert adapter.calls[1] == (
+        "public_card",
+        {
+            "chat_id": "oc_chat",
+            "card": build_dazah_confirmation_card(_confirmation()),
+        },
+    )
 
 
 @pytest.mark.asyncio
-async def test_native_stream_without_delta_returns_final_for_base_delivery() -> None:
+async def test_native_stream_without_delta_delivers_and_confirms_notice() -> None:
     from services.feishu_gateway_worker import _consume_agent_stream
 
     adapter = _Adapter()
-    completed: list[str] = []
+    completed: list[tuple[str, bool]] = []
     result = await _consume_agent_stream(
         _events(("finished", {"message": "直接回复"})),
         DazahFeishuGateway(adapter),
         _envelope(),
-        on_complete=completed.append,
+        on_complete=lambda message, delivered: completed.append((message, delivered)),
     )
 
-    assert result == "直接回复"
-    assert completed == ["直接回复"]
-    assert adapter.calls == []
+    assert result is None
+    assert completed == [("直接回复", True)]
+    assert adapter.calls == [
+        (
+            "send",
+            {
+                "chat_id": "oc_chat",
+                "content": "直接回复",
+                "reply_to": "om_reply",
+                "metadata": {"thread_id": "omt_thread"},
+            },
+        )
+    ]
 
 
 @pytest.mark.asyncio
@@ -784,8 +796,9 @@ async def test_native_stream_disconnect_fails_closed_and_hides_confirmations() -
         _envelope(),
     )
 
-    assert result == "Livzon Agent 连接已中断，未收到完整回复，请重试。"
-    assert adapter.calls == []
+    assert result is None
+    assert adapter.calls[0][0] == "send"
+    assert "未收到完整回复" in adapter.calls[0][1]["content"]
 
 
 @pytest.mark.asyncio
@@ -1063,6 +1076,9 @@ def test_help_is_available_before_identity_resolution() -> None:
     assert response is not None
     assert "无需绑定身份" in response
     assert "/tasks" in response
+    assert "/new" in response
+    assert "/memory clear confirm" in response
+    assert "仅 Web 或飞书私聊" in response
     assert _public_command_response("/tasks") is None
 
 

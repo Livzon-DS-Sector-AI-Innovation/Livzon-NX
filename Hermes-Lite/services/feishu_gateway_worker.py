@@ -23,6 +23,7 @@ from services.dazah_feishu_gateway import (
     cleanup_cached_attachments,
     read_cached_attachment,
 )
+from services.command_help import build_agent_command_help
 from services.feishu_runtime import (
     claim_due_deliveries,
     claim_inbound_message,
@@ -54,15 +55,7 @@ def _public_command_response(text: str) -> str | None:
     """Return commands that are safe before local identity resolution."""
     if text.strip().lower() not in {"/help", "/帮助"}:
         return None
-    return (
-        "Livzon 助手命令：\n"
-        "- `/help`：查看命令帮助（无需绑定身份）\n"
-        "- `/tasks`：查询当前用户最近任务进度\n"
-        "- `/retry <运行ID>`：重试失败任务，写操作仍需确认\n"
-        "- `/status`：查看服务状态\n\n"
-        "如 `/tasks` 提示身份未绑定，请管理员先在“系统设置 → Livzon Agent → "
-        "飞书接入”确认当前 App 与租户，再到“身份与准入”同步飞书目录并绑定当前用户。"
-    )
+    return build_agent_command_help(identity_resolved=False)
 
 
 def _identity_denial_message(response: httpx.Response) -> str:
@@ -219,6 +212,7 @@ async def _complete_persistent_conversation(
     trace_id: str,
     run_id: str,
     assistant_message: str,
+    memory_notice_delivered: bool = False,
 ) -> None:
     base_url = str(config.get("dazah_api_base_url") or "").rstrip("/")
     token = str(config.get("internal_token") or "")
@@ -233,6 +227,7 @@ async def _complete_persistent_conversation(
                 "run_id": run_id,
                 "assistant_message": assistant_message,
                 "tool_trace": [],
+                "memory_notice_delivered": memory_notice_delivered,
             },
         )
     response.raise_for_status()
@@ -486,7 +481,7 @@ async def _consume_agent_stream(
     *,
     edit_interval_seconds: float = 0.8,
     final_edit_attempts: int = 3,
-    on_complete: Callable[[str], Any] | None = None,
+    on_complete: Callable[[str, bool], Any] | None = None,
 ) -> str | None:
     accumulated = ""
     sent_message_id: str | None = None
@@ -545,14 +540,21 @@ async def _consume_agent_stream(
         stream_error = "Livzon Agent 连接已中断，未收到完整回复，请重试。"
         confirmations = []
     final_content = stream_error or final_message or accumulated
-    if on_complete is not None:
-        completion = on_complete(final_content)
-        if inspect.isawaitable(completion):
-            await completion
-    if confirmations:
-        await gateway.send_confirmations(envelope.chat_id, confirmations)
     if not delivered_partial:
-        return final_content or "Livzon 助手没有生成有效回复。"
+        result = await gateway.send(
+            envelope.chat_id,
+            final_content or "Livzon 助手没有生成有效回复。",
+            reply_to=reply_to,
+            metadata=metadata,
+        )
+        delivered, _, _ = _delivery_result(result)
+        if on_complete is not None:
+            completion = on_complete(final_content, delivered)
+            if inspect.isawaitable(completion):
+                await completion
+        if confirmations:
+            await gateway.send_confirmations(envelope.chat_id, confirmations)
+        return None if delivered else final_content or "Livzon 助手没有生成有效回复。"
 
     if sent_message_id:
         last_error = ""
@@ -565,6 +567,12 @@ async def _consume_agent_stream(
             )
             success, _, last_error = _delivery_result(result)
             if success:
+                if on_complete is not None:
+                    completion = on_complete(final_content, True)
+                    if inspect.isawaitable(completion):
+                        await completion
+                if confirmations:
+                    await gateway.send_confirmations(envelope.chat_id, confirmations)
                 return None
             if attempt + 1 < final_edit_attempts:
                 await asyncio.sleep(0.25 * (2**attempt))
@@ -574,6 +582,13 @@ async def _consume_agent_stream(
             max(1, final_edit_attempts),
             last_error or "native edit returned false",
         )
+
+    if on_complete is not None:
+        completion = on_complete(final_content, False)
+        if inspect.isawaitable(completion):
+            await completion
+    if confirmations:
+        await gateway.send_confirmations(envelope.chat_id, confirmations)
 
     # A partial response is already visible. Sending the full response as a new
     # message when the final edit fails creates an apparent delayed replay.
@@ -723,6 +738,8 @@ async def _main() -> None:
                     conversation.get("response_text")
                     or "该消息已被 Livzon 助手接收，正在处理中。"
                 )
+            if conversation.get("response_text"):
+                return str(conversation["response_text"])
             persistent_session_id = str(conversation["session_id"])
             persistent_messages = list(conversation.get("messages") or [])
             attachment_catalog = list(conversation.get("attachment_catalog") or [])
@@ -741,6 +758,11 @@ async def _main() -> None:
                 messages=persistent_messages,
                 attachment_catalog=attachment_catalog,
                 persistent_session_id=persistent_session_id,
+                memory_policy=(
+                    conversation.get("memory_policy")
+                    if isinstance(conversation.get("memory_policy"), dict)
+                    else None
+                ),
             )
             headers = {}
             if config_data.get("agent_token"):
@@ -762,7 +784,10 @@ async def _main() -> None:
                         json=payload,
                     ) as response:
                         response.raise_for_status()
-                        async def persist_response(assistant_message: str) -> None:
+                        async def persist_response(
+                            assistant_message: str,
+                            delivered: bool,
+                        ) -> None:
                             try:
                                 await _complete_persistent_conversation(
                                     config_data,
@@ -772,6 +797,13 @@ async def _main() -> None:
                                     trace_id=trace_id,
                                     run_id=run_id,
                                     assistant_message=assistant_message,
+                                    memory_notice_delivered=(
+                                        delivered
+                                        and bool(
+                                            isinstance(conversation.get("memory_policy"), dict)
+                                            and conversation["memory_policy"].get("notice_required")
+                                        )
+                                    ),
                                 )
                             except httpx.HTTPError:
                                 logging.getLogger(__name__).exception(

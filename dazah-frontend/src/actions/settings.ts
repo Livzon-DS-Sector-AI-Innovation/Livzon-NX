@@ -12,6 +12,10 @@ export type LLMConfigUpdate = components['schemas']['LLMConfigUpdate']
 export type LLMCapabilityDetection = components['schemas']['LLMCapabilityDetectionResponse']
 export type FeishuConfig = components['schemas']['FeishuConfigResponse']
 export type FeishuConfigUpsert = components['schemas']['FeishuConfigUpsert']
+export type AgentMemoryTenantPolicy =
+  components['schemas']['AgentMemoryTenantPolicyOut']
+export type AgentMemoryTenantPolicyUpdate =
+  components['schemas']['AgentMemoryTenantPolicyUpdate']
 type FeishuDiagnosticResult = components['schemas']['FeishuDiagnosticResult']
 export type FeishuGatewayRestartResult =
   components['schemas']['FeishuGatewayRestartResult']
@@ -342,6 +346,21 @@ export async function updateExternalIdentityBindingStatus(
 export async function getAgentToolCatalog() {
   const response = await fetchApi<unknown>('/agent/control/tools')
   return unwrapResponseData<AgentToolCatalogEntry[]>(response.data)
+}
+
+export async function getAgentMemoryTenantPolicy() {
+  const response = await fetchApi<unknown>('/agent/memory/tenant-policy')
+  return unwrapResponseData<AgentMemoryTenantPolicy>(response.data)
+}
+
+export async function saveAgentMemoryTenantPolicy(
+  data: AgentMemoryTenantPolicyUpdate,
+) {
+  const response = await fetchApi<unknown>('/agent/memory/tenant-policy', {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
+  return unwrapResponseData<AgentMemoryTenantPolicy>(response.data)
 }
 
 export async function getAgentToolCatalogPage(params: {

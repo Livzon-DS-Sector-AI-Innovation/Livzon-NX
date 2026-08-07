@@ -36,6 +36,12 @@ class FakeDb:
     async def commit(self) -> None:
         self.committed = True
 
+    async def flush(self) -> None:
+        return None
+
+    async def scalar(self, _query):
+        return None
+
     async def get(self, model, item_id):
         return SimpleNamespace(
             id=item_id,
@@ -187,9 +193,7 @@ class FakeAgentRepository:
     async def list_messages(self, db, *, session_id, limit=20):
         return self.messages[-limit:]
 
-    async def list_session_attachments(
-        self, db, *, session_id, user_id, limit=50
-    ):
+    async def list_session_attachments(self, db, *, session_id, user_id, limit=50):
         return []
 
     async def create_tool_call(

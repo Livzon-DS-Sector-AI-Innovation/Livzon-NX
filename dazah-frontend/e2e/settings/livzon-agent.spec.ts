@@ -18,6 +18,7 @@ test.describe('Livzon Agent 治理台', () => {
     await expect(page.getByRole('tab', { name: '能力目录与策略' })).toBeVisible()
     await expect(page.getByRole('tab', { name: '授权与确认' })).toBeVisible()
     await expect(page.getByRole('tab', { name: '调用链路与投递诊断' })).toBeVisible()
+    await expect(page.getByRole('tab', { name: '记忆治理' })).toHaveCount(0)
     await expect(page.getByText('外部验收状态')).toHaveCount(0)
   })
 
@@ -97,6 +98,8 @@ test.describe('Livzon Agent 治理台', () => {
     await expect(page.getByText('身份冲突工作台（0）')).toBeVisible()
 
     await page.getByRole('tab', { name: '能力目录与策略' }).click()
+    await expect(page.getByText('记忆策略', { exact: true })).toBeVisible()
+    await expect(page.getByLabel('租户记忆上限')).toBeVisible()
     await expect(page.getByText('quality.get_deviation')).toBeVisible()
     await page.getByRole('combobox', { name: '模块' }).click()
     const moduleDropdown = page.locator('.ant-select-dropdown:visible')

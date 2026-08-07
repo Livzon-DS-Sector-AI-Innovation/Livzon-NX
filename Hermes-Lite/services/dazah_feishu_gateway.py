@@ -282,8 +282,9 @@ class DazahInboundEnvelope:
         messages: list[dict[str, str]] | None = None,
         attachment_catalog: list[dict[str, Any]] | None = None,
         persistent_session_id: str | None = None,
+        memory_policy: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        return {
+        payload = {
             "protocol_version": "2.0",
             "run_id": run_id,
             "trace_id": trace_id,
@@ -315,6 +316,9 @@ class DazahInboundEnvelope:
                 "confirmation_card",
             ],
         }
+        if memory_policy is not None:
+            payload["memory_policy"] = memory_policy
+        return payload
 
 
 def _confirmation_button(
