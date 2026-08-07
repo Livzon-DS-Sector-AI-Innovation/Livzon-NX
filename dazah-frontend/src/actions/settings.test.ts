@@ -24,6 +24,7 @@ import {
   getExternalIdentityConflicts,
   getFeishuAuthorizations,
   getLivzonFeishuGatewayStatus,
+  restartLivzonFeishuGateway,
   revokeFeishuAuthorization,
   setAgentToolEnabled,
   syncLivzonFeishuDirectory,
@@ -150,6 +151,33 @@ describe('settings Agent and Feishu actions', () => {
     expect(fetchMock).toHaveBeenCalledWith(
       'http://backend.test/api/v1/agent/control/traces/trace%2Fa',
       expect.any(Object),
+    )
+  })
+
+  it('restarts the Hermes gateway through the protected backend action', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            status: 'connected',
+            message: '已恢复',
+            previous_reconnects: 1,
+            gateway_reconnects: 2,
+            credential_version: 3,
+            config_version: 3,
+          },
+        }),
+        { status: 200 },
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(restartLivzonFeishuGateway()).resolves.toEqual(
+      expect.objectContaining({ status: 'connected', gateway_reconnects: 2 }),
+    )
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://backend.test/api/v1/identity/feishu-config/gateway/restart',
+      expect.objectContaining({ method: 'POST' }),
     )
   })
 

@@ -13,6 +13,8 @@ export type LLMCapabilityDetection = components['schemas']['LLMCapabilityDetecti
 export type FeishuConfig = components['schemas']['FeishuConfigResponse']
 export type FeishuConfigUpsert = components['schemas']['FeishuConfigUpsert']
 type FeishuDiagnosticResult = components['schemas']['FeishuDiagnosticResult']
+export type FeishuGatewayRestartResult =
+  components['schemas']['FeishuGatewayRestartResult']
 export type ExternalIdentityBindingCreate =
   components['schemas']['ExternalIdentityBindingCreate']
 export interface ExternalIdentityBinding extends ExternalIdentityBindingCreate {
@@ -115,6 +117,8 @@ export interface AgentTraceResult {
     confirmations: number
     domain_events: number
     deliveries: number
+    capability_searches: number
+    audit_receipts: number
   }
   timeline: Array<{
     type: string
@@ -126,6 +130,7 @@ export interface AgentTraceResult {
     error_code?: string | null
     external_message_id?: string | null
     attempt_count?: number
+    receipt_id?: string | null
   }>
 }
 
@@ -257,6 +262,14 @@ export async function getLivzonFeishuGatewayStatus() {
     '/identity/feishu-config/gateway-status',
   )
   return unwrapResponseData<FeishuGatewayStatus>(response.data)
+}
+
+export async function restartLivzonFeishuGateway() {
+  const response = await fetchApi<unknown>(
+    '/identity/feishu-config/gateway/restart',
+    { method: 'POST' },
+  )
+  return unwrapResponseData<FeishuGatewayRestartResult>(response.data)
 }
 
 export async function getExternalIdentityBindings(params: {
