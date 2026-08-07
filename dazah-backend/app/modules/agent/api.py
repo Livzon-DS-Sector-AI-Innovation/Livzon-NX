@@ -920,7 +920,7 @@ async def get_control_plane_trace(
                     ),
                     or_(
                         AuditLog.request_id == str(trace_id),
-                        AuditLog.extra["trace_id"].astext == str(trace_id),
+                        AuditLog.extra["trace_id"].as_string() == str(trace_id),
                     ),
                 )
                 .order_by(AuditLog.created_at.asc())
