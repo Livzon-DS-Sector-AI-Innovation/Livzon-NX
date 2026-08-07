@@ -383,6 +383,27 @@ describe('FeishuSettingsClient governance lifecycle', () => {
     expect(onRestarted).toHaveBeenCalledWith(expect.objectContaining({ status: 'connected' }))
   })
 
+  it('reports a gateway restart failure without refreshing stale status', async () => {
+    actions.restartLivzonFeishuGateway.mockRejectedValue(new Error('网关不可用'))
+    resetHooks()
+    const onRestarted = vi.fn()
+    const tree = FeishuAccess({
+      config,
+      status: { gateway: 'failed', config_version: 3, gateway_reconnects: 1 } as never,
+      onSaved: vi.fn(),
+      onRestarted,
+    })
+
+    ;(findButton(tree, '重启飞书网关').props?.onClick as () => void)()
+    await ui.modal.confirm.mock.calls.at(-1)?.[0].onOk()
+
+    expect(ui.message.error).toHaveBeenCalledWith({
+      content: '重启失败：网关不可用',
+      duration: 6,
+    })
+    expect(onRestarted).not.toHaveBeenCalled()
+  })
+
   it('loads identities, creates bindings, syncs directory and changes status', async () => {
     const feishuUser = {
       id: binding.local_user_id,
@@ -430,6 +451,16 @@ describe('FeishuSettingsClient governance lifecycle', () => {
       external_open_id: 'ou_user',
       external_union_id: 'on_user',
     })
+
+    actions.createExternalIdentityBinding.mockClear()
+    await (form?.props?.onFinish as (value: typeof formValue) => Promise<void>)({
+      ...formValue,
+      local_user_id: 'not-synchronized',
+    })
+    expect(ui.message.error).toHaveBeenCalledWith(
+      '该用户尚未同步飞书身份，请先同步飞书目录',
+    )
+    expect(actions.createExternalIdentityBinding).not.toHaveBeenCalled()
 
     ;(findButton(tree, '同步飞书目录').props?.onClick as () => void)()
     await ui.modal.confirm.mock.calls.at(-1)?.[0].onOk()
