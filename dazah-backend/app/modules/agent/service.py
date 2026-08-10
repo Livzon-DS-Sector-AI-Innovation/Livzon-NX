@@ -30,6 +30,7 @@ from app.modules.procurement.schemas import ContractCategory
 from app.platform.identity.models import User
 
 from .attachment_service import AgentAttachmentService
+from .memory_policy import AgentMemoryPolicyService, is_private_memory_channel
 from .models import (
     AgentAttachment,
     AgentConfirmation,
@@ -47,6 +48,7 @@ from .schemas import (
     AgentChatRequest,
     AgentChatResponse,
     AgentConfirmationOut,
+    AgentMemoryPolicyEnvelope,
     AgentMessageOut,
     AgentSessionDetail,
     AgentSessionItem,
@@ -94,9 +96,7 @@ AGENT_ATTACHMENT_CONTENT_TYPES: dict[str, set[str]] = {
     ".csv": {"text/csv", "application/vnd.ms-excel", "text/plain"},
 }
 AGENT_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
-AGENT_SESSION_RESET_COMMANDS = frozenset(
-    {"/new", "/restart", "/reset", "/新建会话"}
-)
+AGENT_SESSION_RESET_COMMANDS = frozenset({"/new", "/restart", "/reset", "/新建会话"})
 
 
 def normalize_agent_basic_command(message: str) -> str | None:
@@ -419,6 +419,7 @@ class AgentService:
         self.settings = settings
         self.repo = repo or AgentRepository()
         self.attachment_service = AgentAttachmentService(self.repo)
+        self.memory_policy_service = AgentMemoryPolicyService(settings)
         if access_scope_service is None:
             from app.modules.agent.access_scope import AgentAccessScopeService
 
@@ -705,8 +706,12 @@ class AgentService:
         selected = [
             item for item in attachments if item.filename.casefold() in normalized
         ]
-        if not selected and attachments and any(
-            marker in message for marker in ("刚才", "之前", "上传", "附件", "文件")
+        if (
+            not selected
+            and attachments
+            and any(
+                marker in message for marker in ("刚才", "之前", "上传", "附件", "文件")
+            )
         ):
             selected = attachments[:1]
         return selected[:5]
@@ -777,6 +782,32 @@ class AgentService:
             attachments = await self._materialize_restored_attachments(
                 session_attachments, request.message
             )
+        memory_command = await self.memory_policy_service.handle_command(
+            db,
+            user=current_user,
+            message=request.message,
+            private_channel=True,
+        )
+        if memory_command is not None:
+            assistant = await self.repo.add_message(
+                db,
+                session_id=session.id,
+                role="assistant",
+                content=memory_command,
+                metadata={"source": "memory_command"},
+                user_id=current_user.id,
+            )
+            await db.commit()
+            return AgentChatResponse(
+                session_id=session.id,
+                message=AgentMessageOut(
+                    id=assistant.id,
+                    role="assistant",
+                    content=assistant.content,
+                    created_at=assistant.created_at,
+                    metadata=assistant.message_metadata,
+                ),
+            )
         policy_response = await self._human_decision_required_chat_response(
             db,
             session_id=session.id,
@@ -786,6 +817,8 @@ class AgentService:
         if policy_response:
             return policy_response
 
+        memory_policy = await self.memory_policy_service.resolve(db, user=current_user)
+        await db.commit()
         hermes_result = await self._call_hermes(
             session_id=session.id,
             user=current_user,
@@ -794,6 +827,7 @@ class AgentService:
             history=history,
             attachments=attachments,
             attachment_catalog=self._attachment_catalog(session_attachments),
+            memory_policy=memory_policy,
         )
         assistant_text = str(
             hermes_result.get("message") or hermes_result.get("final_response") or ""
@@ -808,6 +842,10 @@ class AgentService:
             metadata=self._assistant_metadata(hermes_result, request.context),
             user_id=current_user.id if current_user else None,
         )
+        if memory_policy.notice_required:
+            await self.memory_policy_service.mark_notice_sent(
+                db, user=current_user
+            )
 
         pending_confirmations = [
             self._confirmation_out(item)
@@ -861,6 +899,53 @@ class AgentService:
             attachments = await self._materialize_restored_attachments(
                 session_attachments, request.message
             )
+        memory_command = await self.memory_policy_service.handle_command(
+            db,
+            user=current_user,
+            message=request.message,
+            private_channel=True,
+        )
+        if memory_command is not None:
+            assistant = await self.repo.add_message(
+                db,
+                session_id=session.id,
+                role="assistant",
+                content=memory_command,
+                metadata={"source": "memory_command"},
+                user_id=current_user.id,
+            )
+            await db.commit()
+            trace_id = uuid.uuid4()
+            run_id = uuid.uuid4()
+            yield self._sse_backend_event(
+                AgentBackendV2Event(
+                    trace_id=trace_id,
+                    run_id=run_id,
+                    sequence=1,
+                    type="accepted",
+                    data={"session_id": str(session.id)},
+                )
+            )
+            response = AgentChatResponse(
+                session_id=session.id,
+                message=AgentMessageOut(
+                    id=assistant.id,
+                    role="assistant",
+                    content=assistant.content,
+                    created_at=assistant.created_at,
+                    metadata=assistant.message_metadata,
+                ),
+            )
+            yield self._sse_backend_event(
+                AgentBackendV2Event(
+                    trace_id=trace_id,
+                    run_id=run_id,
+                    sequence=2,
+                    type="finished",
+                    data=response.model_dump(mode="json"),
+                )
+            )
+            return
         policy_response = await self._human_decision_required_chat_response(
             db,
             session_id=session.id,
@@ -893,6 +978,8 @@ class AgentService:
         assistant_text = ""
         last_event: AgentBackendV2Event | None = None
         terminal_event_received = False
+        memory_policy = await self.memory_policy_service.resolve(db, user=current_user)
+        await db.commit()
         backend_stream = self._call_hermes_stream(
             session_id=session.id,
             user=current_user,
@@ -901,6 +988,7 @@ class AgentService:
             history=history,
             attachments=attachments,
             attachment_catalog=self._attachment_catalog(session_attachments),
+            memory_policy=memory_policy,
         )
         try:
             while True:
@@ -978,6 +1066,10 @@ class AgentService:
                     metadata=self._assistant_metadata(hermes_result, request.context),
                     user_id=current_user.id if current_user else None,
                 )
+                if memory_policy.notice_required:
+                    await self.memory_policy_service.mark_notice_sent(
+                        db, user=current_user
+                    )
                 await db.commit()
                 pending_confirmations = [
                     self._confirmation_out(item)
@@ -1250,6 +1342,35 @@ class AgentService:
             session_id=session.id,
             user_id=current_user.id,
         )
+        private_channel = is_private_memory_channel(
+            platform="feishu", chat_type=request.source.chat_type
+        )
+        memory_command = await self.memory_policy_service.handle_command(
+            db,
+            user=current_user,
+            message=request.message,
+            private_channel=private_channel,
+        )
+        memory_policy = await self.memory_policy_service.resolve(db, user=current_user)
+        if memory_command is not None:
+            await self.repo.add_message(
+                db,
+                session_id=session.id,
+                role="assistant",
+                content=memory_command,
+                metadata={
+                    "channel": "feishu",
+                    "in_reply_to_external_message_id": request.external_message_id,
+                    "source": "memory_command",
+                },
+                user_id=current_user.id,
+            )
+            await db.flush()
+            return FeishuConversationPrepareResponse(
+                session_id=session.id,
+                response_text=memory_command,
+                memory_policy=memory_policy,
+            )
         await db.flush()
         return FeishuConversationPrepareResponse(
             session_id=session.id,
@@ -1259,6 +1380,7 @@ class AgentService:
                 if item.role in {"user", "assistant"}
             ],
             attachment_catalog=self._attachment_catalog(session_attachments),
+            memory_policy=memory_policy,
         )
 
     async def complete_feishu_conversation(
@@ -1316,6 +1438,10 @@ class AgentService:
             },
             user_id=current_user.id,
         )
+        if request.memory_notice_delivered:
+            await self.memory_policy_service.mark_notice_sent(
+                db, user=current_user
+            )
         await db.flush()
         return FeishuConversationCompleteResponse(
             session_id=session.id,
@@ -1720,6 +1846,7 @@ class AgentService:
         history: list[dict[str, Any]],
         attachments: list[dict[str, Any]] | None = None,
         attachment_catalog: list[dict[str, Any]] | None = None,
+        memory_policy: AgentMemoryPolicyEnvelope | None = None,
     ) -> dict[str, Any]:
         if not self.settings.HERMES_AGENT_V2_URL:
             return {
@@ -1747,6 +1874,7 @@ class AgentService:
             attachments=attachments or [],
             attachment_catalog=attachment_catalog or [],
             client_capabilities=["structured_events"],
+            memory_policy=memory_policy,
         ).model_dump(mode="json")
         try:
             async with httpx.AsyncClient(
@@ -1789,6 +1917,7 @@ class AgentService:
         history: list[dict[str, Any]],
         attachments: list[dict[str, Any]] | None = None,
         attachment_catalog: list[dict[str, Any]] | None = None,
+        memory_policy: AgentMemoryPolicyEnvelope | None = None,
     ) -> AsyncIterator[AgentBackendV2Event]:
         agent_request = AgentBackendV2Request(
             session_id=f"web:{session_id}",
@@ -1804,6 +1933,7 @@ class AgentService:
             attachments=attachments or [],
             attachment_catalog=attachment_catalog or [],
             client_capabilities=["structured_events", "streaming"],
+            memory_policy=memory_policy,
         )
         if not self.settings.HERMES_AGENT_V2_URL:
             yield AgentBackendV2Event(
@@ -1842,9 +1972,7 @@ class AgentService:
                             run_id=agent_request.run_id,
                             sequence=1,
                             type="error",
-                            data={
-                                "message": content.decode(errors="ignore")[:1000]
-                            },
+                            data={"message": content.decode(errors="ignore")[:1000]},
                         )
                         return
                     event = "message"
@@ -1927,10 +2055,7 @@ class AgentService:
 
     @staticmethod
     def _sse_backend_event(event: AgentBackendV2Event) -> str:
-        return (
-            f"event: {event.type}\n"
-            f"data: {event.model_dump_json()}\n\n"
-        )
+        return f"event: {event.type}\ndata: {event.model_dump_json()}\n\n"
 
     async def _perform_operation(
         self,

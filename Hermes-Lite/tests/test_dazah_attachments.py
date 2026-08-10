@@ -45,6 +45,9 @@ async def test_help_command_returns_without_model_execution() -> None:
     assert response is not None
     assert "`/new`" in response.message
     assert "`/restart`" in response.message
+    assert "`/memory status`" in response.message
+    assert "`/memory clear confirm`" in response.message
+    assert "群聊不读取或修改个人记忆" in response.message
     assert response.tool_trace == []
 
 

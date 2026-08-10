@@ -14,6 +14,7 @@ vi.mock('@/lib/server-api', () => ({
 import {
   exportAgentTrace,
   getAgentCapabilityImpacts,
+  getAgentMemoryTenantPolicy,
   getAgentConfirmations,
   getAgentDeliveries,
   getAgentOperationsHealth,
@@ -27,6 +28,7 @@ import {
   restartLivzonFeishuGateway,
   revokeFeishuAuthorization,
   setAgentToolEnabled,
+  saveAgentMemoryTenantPolicy,
   syncLivzonFeishuDirectory,
   updateExternalIdentityBindingStatus,
 } from './settings'
@@ -151,6 +153,49 @@ describe('settings Agent and Feishu actions', () => {
     expect(fetchMock).toHaveBeenCalledWith(
       'http://backend.test/api/v1/agent/control/traces/trace%2Fa',
       expect.any(Object),
+    )
+  })
+
+  it('reads and updates the tenant memory policy', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            tenant_id: 'tenant-a',
+            global_mode: 'auto',
+            tenant_mode: 'explicit_only',
+            effective_mode: 'explicit_only',
+            policy_version: 2,
+          }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            tenant_id: 'tenant-a',
+            global_mode: 'auto',
+            tenant_mode: 'disabled',
+            effective_mode: 'disabled',
+            policy_version: 3,
+          }),
+          { status: 200 },
+        ),
+      )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(getAgentMemoryTenantPolicy()).resolves.toEqual(
+      expect.objectContaining({ tenant_mode: 'explicit_only' }),
+    )
+    await saveAgentMemoryTenantPolicy({ mode: 'disabled' })
+
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      'http://backend.test/api/v1/agent/memory/tenant-policy',
+      expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify({ mode: 'disabled' }),
+      }),
     )
   })
 

@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 import re
 import sqlite3
 import threading
@@ -21,6 +22,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Callable, Iterable, Literal
 
+from cryptography.fernet import Fernet, InvalidToken, MultiFernet
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from hermes_constants import get_hermes_home
@@ -57,16 +59,89 @@ MAX_ENTRY_BYTES = 2 * 1024
 CLEAR_CONFIRMATION_TTL_SECONDS = 5 * 60
 RUN_LEASE_SECONDS = 5 * 60
 RUN_RETENTION_SECONDS = 30 * 24 * 60 * 60
-FAILED_JOB_RETENTION_SECONDS = 7 * 24 * 60 * 60
+FAILED_JOB_RETENTION_SECONDS = 24 * 60 * 60
+JOB_RETENTION_SECONDS = 24 * 60 * 60
 MAX_JOBS_GLOBAL = 1000
 MAX_JOBS_PER_USER = 20
 MAX_JOB_ATTEMPTS = 3
 
 _SECRET_PATTERNS = (
     re.compile(r"(?i)\b(?:password|passwd|api[_ -]?key|access[_ -]?token|refresh[_ -]?token|cookie)\b\s*[:=]"),
+    re.compile(
+        r"(?:密码|口令|令牌|访问令牌|刷新令牌|接口密钥|API密钥|会话Cookie)"
+        r"\s*(?:是|为|[:：=])",
+        re.IGNORECASE,
+    ),
     re.compile(r"(?i)\b(?:bearer|authorization)\s+[a-z0-9._~+\-/]+=*"),
-    re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
+    re.compile(r"-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP )?PRIVATE KEY-----"),
 )
+_SENSITIVE_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    (
+        "identity_document",
+        re.compile(
+            r"(?<!\d)\d{17}[0-9Xx](?!\d)|"
+            r"(?:身份证|护照|港澳通行证|台湾通行证|驾驶证|社保卡|证件号)"
+        ),
+    ),
+    ("payment", re.compile(r"(?<!\d)\d{16,19}(?!\d)|(?:银行卡|支付账户|银行账号)")),
+    (
+        "phone",
+        re.compile(
+            r"(?<!\d)1[3-9]\d{9}(?!\d)|"
+            r"(?<!\d)(?:\+?86[- ]?)?0\d{2,3}[- ]?\d{7,8}(?!\d)|"
+            r"(?:手机号|手机号码|联系电话|联系方式|微信号|QQ号)"
+        ),
+    ),
+    (
+        "email",
+        re.compile(
+            r"(?<![A-Z0-9._%+-])[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}(?![A-Z0-9.-])",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "precise_location",
+        re.compile(
+            r"(?:详细地址|家庭住址|居住地址|收货地址|精确位置|定位坐标|经纬度)|"
+            r"(?:省|自治区|市).{0,30}(?:区|县).{0,30}(?:路|街|巷|道).{0,20}\d+号"
+        ),
+    ),
+    (
+        "health",
+        re.compile(
+            r"(?:病史|病历|诊断|确诊|过敏史|用药记录|处方|医疗记录|检查结果|"
+            r"健康状况|残疾|怀孕|血型|基因|生物识别|指纹|虹膜|声纹|人脸特征)|"
+            r"(?:我|本人|用户|患者).{0,12}(?:患有|得了|感染|过敏|正在服用|长期服用)"
+        ),
+    ),
+    ("compensation", re.compile(r"(?:工资|薪资|薪酬|奖金|绩效工资|月薪|年薪|个人收入)")),
+    ("discipline", re.compile(r"(?:处分|违纪调查|调查结论|个人绩效结论)")),
+    ("permission_context", re.compile(r"(?:权限上下文|完整prompt|原始prompt)", re.IGNORECASE)),
+)
+
+
+class MemoryCipher:
+    def __init__(self, raw_keys: str | None = None) -> None:
+        values = [item.strip() for item in (raw_keys or "").split(",") if item.strip()]
+        self.ephemeral = not values
+        if not values:
+            values = [Fernet.generate_key().decode("ascii")]
+        try:
+            self._fernets = [Fernet(value.encode("ascii")) for value in values]
+        except (ValueError, UnicodeEncodeError) as exc:
+            raise RuntimeError("HERMES_USER_MEMORY_KEYS must contain Fernet keys") from exc
+        self._multi = MultiFernet(self._fernets)
+
+    def encrypt(self, value: str) -> str:
+        return "enc:v1:" + self._fernets[0].encrypt(value.encode("utf-8")).decode("ascii")
+
+    def decrypt(self, value: str) -> str:
+        if not value.startswith("enc:v1:"):
+            return value
+        try:
+            return self._multi.decrypt(value[7:].encode("ascii")).decode("utf-8")
+        except (InvalidToken, UnicodeDecodeError, UnicodeEncodeError) as exc:
+            raise ValueError("Encrypted user memory cannot be decrypted") from exc
 
 
 class MemoryCandidate(BaseModel):
@@ -143,8 +218,33 @@ def _contains_secret(value: str) -> bool:
     return any(pattern.search(value) for pattern in _SECRET_PATTERNS)
 
 
+def sensitive_memory_category(value: str) -> str | None:
+    if _contains_secret(value):
+        return "credential"
+    for category, pattern in _SENSITIVE_PATTERNS:
+        if pattern.search(value):
+            return category
+    return None
+
+
 def _unsafe_memory(value: str) -> bool:
-    return _contains_secret(value) or first_threat_message(value, scope="strict") is not None
+    return sensitive_memory_category(value) is not None or first_threat_message(value, scope="strict") is not None
+
+
+def eligible_for_automatic_memory(
+    user_message: str,
+    assistant_message: str,
+    tool_evidence: list[dict[str, Any]],
+) -> bool:
+    if _unsafe_memory(user_message) or _unsafe_memory(assistant_message):
+        return False
+    if any(item.get("verified") is True for item in tool_evidence):
+        return True
+    return re.search(
+        r"(?:我(?:喜欢|偏好|习惯|负责|是|决定|希望)|以后请|请始终|每次都|记住|长期)",
+        user_message,
+        flags=re.IGNORECASE,
+    ) is not None
 
 
 def _clip_utf8(value: str, limit: int) -> str:
@@ -173,6 +273,7 @@ class UserMemoryRepository:
         self.trigger_bytes = int(self.limit_bytes * safe_trigger_ratio)
         self.target_bytes = int(self.limit_bytes * safe_target_ratio)
         self.injection_bytes = max(1024, int(injection_bytes))
+        self.cipher = MemoryCipher(os.getenv("HERMES_USER_MEMORY_KEYS"))
         self._schema_lock = threading.Lock()
         self._user_locks: dict[tuple[str, str], threading.RLock] = {}
         self._user_locks_guard = threading.Lock()
@@ -193,6 +294,7 @@ class UserMemoryRepository:
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA busy_timeout=10000")
         conn.execute("PRAGMA foreign_keys=ON")
+        conn.execute("PRAGMA secure_delete=ON")
         if not self._schema_ready:
             self._ensure_schema(conn)
         return conn
@@ -276,14 +378,50 @@ class UserMemoryRepository:
                 """
             )
             self._ensure_column(conn, "user_memory_entries", "memory_key", "TEXT")
+            self._ensure_column(conn, "user_memory_entries", "content_bytes", "INTEGER NOT NULL DEFAULT 0")
+            self._ensure_column(conn, "user_memory_jobs", "payload_ciphertext", "TEXT")
+            self._ensure_column(conn, "user_memory_jobs", "expires_at", "REAL NOT NULL DEFAULT 0")
             self._ensure_column(
                 conn, "user_memory_runs", "status", "TEXT NOT NULL DEFAULT 'completed'"
             )
             self._ensure_column(
                 conn, "user_memory_runs", "lease_until", "REAL NOT NULL DEFAULT 0"
             )
+            self._migrate_encrypted_storage(conn)
             conn.commit()
             self._schema_ready = True
+
+    def _migrate_encrypted_storage(self, conn: sqlite3.Connection) -> None:
+        rows = conn.execute("SELECT id, content FROM user_memory_entries").fetchall()
+        for row in rows:
+            plaintext = self.cipher.decrypt(str(row["content"]))
+            encrypted = self.cipher.encrypt(plaintext)
+            conn.execute(
+                "UPDATE user_memory_entries SET content=?, content_bytes=? WHERE id=?",
+                (encrypted, _utf8_len(plaintext), row["id"]),
+            )
+        # Queued turns are transient and legacy rows contain plaintext.
+        conn.execute("DELETE FROM user_memory_jobs WHERE payload_ciphertext IS NULL OR payload_ciphertext='' ")
+        jobs = conn.execute(
+            "SELECT tenant_id, user_id, run_id, payload_ciphertext FROM user_memory_jobs"
+        ).fetchall()
+        for job in jobs:
+            try:
+                rotated = self.cipher.encrypt(
+                    self.cipher.decrypt(str(job["payload_ciphertext"]))
+                )
+            except ValueError:
+                conn.execute(
+                    """DELETE FROM user_memory_jobs
+                       WHERE tenant_id=? AND user_id=? AND run_id=?""",
+                    (job["tenant_id"], job["user_id"], job["run_id"]),
+                )
+                continue
+            conn.execute(
+                """UPDATE user_memory_jobs SET payload_ciphertext=?
+                   WHERE tenant_id=? AND user_id=? AND run_id=?""",
+                (rotated, job["tenant_id"], job["user_id"], job["run_id"]),
+            )
 
     @staticmethod
     def _ensure_column(
@@ -313,7 +451,7 @@ class UserMemoryRepository:
     @staticmethod
     def _usage_in_conn(conn: sqlite3.Connection, tenant_id: str, user_id: str) -> int:
         row = conn.execute(
-            """SELECT COALESCE(SUM(length(CAST(content AS BLOB))), 0) AS used
+            """SELECT COALESCE(SUM(content_bytes), 0) AS used
                FROM user_memory_entries WHERE tenant_id=? AND user_id=?""",
             (tenant_id, user_id),
         ).fetchone()
@@ -399,8 +537,8 @@ class UserMemoryRepository:
         )
         conn.execute(
             """DELETE FROM user_memory_jobs
-               WHERE status='failed' AND updated_at<?""",
-            (now - FAILED_JOB_RETENTION_SECONDS,),
+               WHERE created_at<? OR (status='failed' AND updated_at<?)""",
+            (now - JOB_RETENTION_SECONDS, now - FAILED_JOB_RETENTION_SECONDS),
         )
         conn.execute(
             """DELETE FROM user_memory_jobs WHERE rowid IN (
@@ -421,6 +559,17 @@ class UserMemoryRepository:
         tool_evidence: list[dict[str, Any]],
     ) -> bool:
         now = time.time()
+        payload = self.cipher.encrypt(
+            json.dumps(
+                {
+                    "session_id": hashlib.sha256(session_id.encode("utf-8")).hexdigest(),
+                    "user_message": _clip_utf8(user_message, 4096),
+                    "assistant_message": _clip_utf8(assistant_message, 4096),
+                    "tool_evidence": tool_evidence[:20],
+                },
+                ensure_ascii=False,
+            )
+        )
         with self._locked_connection(tenant_id, user_id) as conn:
             self._prune_metadata_in_conn(conn, tenant_id, user_id)
             if conn.execute(
@@ -441,17 +590,16 @@ class UserMemoryRepository:
             conn.execute(
                 """INSERT INTO user_memory_jobs
                    (tenant_id, user_id, run_id, session_id, user_message, assistant_message,
-                    tool_evidence_json, status, attempts, next_attempt_at, lease_until,
-                    created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', 0, 0, 0, ?, ?)""",
+                     tool_evidence_json, payload_ciphertext, expires_at, status, attempts,
+                     next_attempt_at, lease_until, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, '', '', '[]', ?, ?, 'pending', 0, 0, 0, ?, ?)""",
                 (
                     tenant_id,
                     user_id,
                     run_id,
-                    session_id,
-                    _clip_utf8(user_message, 12000),
-                    _clip_utf8(assistant_message, 12000),
-                    json.dumps(tool_evidence, ensure_ascii=False),
+                    hashlib.sha256(session_id.encode("utf-8")).hexdigest(),
+                    payload,
+                    now + JOB_RETENTION_SECONDS,
                     now,
                     now,
                 ),
@@ -464,12 +612,14 @@ class UserMemoryRepository:
         with self._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
             try:
+                conn.execute("DELETE FROM user_memory_jobs WHERE expires_at<=?", (now,))
                 row = conn.execute(
                     """SELECT * FROM user_memory_jobs
-                       WHERE (status='pending' AND next_attempt_at<=?)
-                          OR (status='processing' AND lease_until<=?)
+                       WHERE expires_at>?
+                         AND ((status='pending' AND next_attempt_at<=?)
+                          OR (status='processing' AND lease_until<=?))
                        ORDER BY created_at ASC LIMIT 1""",
-                    (now, now),
+                    (now, now, now),
                 ).fetchone()
                 if not row:
                     conn.commit()
@@ -478,14 +628,16 @@ class UserMemoryRepository:
                     """UPDATE user_memory_jobs
                        SET status='processing', attempts=attempts+1, lease_until=?, updated_at=?
                        WHERE tenant_id=? AND user_id=? AND run_id=?
-                         AND ((status='pending' AND next_attempt_at<=?)
-                           OR (status='processing' AND lease_until<=?))""",
+                          AND expires_at>?
+                          AND ((status='pending' AND next_attempt_at<=?)
+                            OR (status='processing' AND lease_until<=?))""",
                     (
                         now + RUN_LEASE_SECONDS,
                         now,
                         row["tenant_id"],
                         row["user_id"],
                         row["run_id"],
+                        now,
                         now,
                         now,
                     ),
@@ -496,9 +648,17 @@ class UserMemoryRepository:
                 job = dict(row)
                 job["attempts"] = int(row["attempts"]) + 1
                 try:
-                    job["tool_evidence"] = json.loads(row["tool_evidence_json"] or "[]")
-                except json.JSONDecodeError:
-                    job["tool_evidence"] = []
+                    decoded = json.loads(self.cipher.decrypt(str(row["payload_ciphertext"])))
+                    if not isinstance(decoded, dict):
+                        raise ValueError("invalid encrypted job payload")
+                    job.update(decoded)
+                except (json.JSONDecodeError, ValueError):
+                    conn.execute(
+                        "DELETE FROM user_memory_jobs WHERE tenant_id=? AND user_id=? AND run_id=?",
+                        (row["tenant_id"], row["user_id"], row["run_id"]),
+                    )
+                    conn.commit()
+                    return None
                 return job
             except BaseException:
                 conn.rollback()
@@ -523,11 +683,11 @@ class UserMemoryRepository:
         now = time.time()
         with self._locked_connection(tenant_id, user_id) as conn:
             if attempts >= MAX_JOB_ATTEMPTS:
-                # Retain only bounded metadata for diagnostics; erase conversation text.
                 conn.execute(
                     """UPDATE user_memory_jobs
                        SET status='failed', user_message='', assistant_message='',
-                           tool_evidence_json='[]', lease_until=0, updated_at=?, last_error=?
+                           tool_evidence_json='[]', payload_ciphertext='', lease_until=0,
+                           updated_at=?, last_error=?
                        WHERE tenant_id=? AND user_id=? AND run_id=?""",
                     (now, error_code[:80], tenant_id, user_id, run_id),
                 )
@@ -558,7 +718,16 @@ class UserMemoryRepository:
                             importance DESC, last_seen DESC""",
                 (tenant_id, user_id),
             ).fetchall()
-        return [dict(row) for row in rows]
+        items: list[dict[str, Any]] = []
+        for row in rows:
+            item = dict(row)
+            try:
+                item["content"] = self.cipher.decrypt(str(item["content"]))
+            except ValueError:
+                logger.warning("Discarding undecryptable user memory entry id=%s", item["id"])
+                continue
+            items.append(item)
+        return items
 
     def format_for_prompt(self, tenant_id: str, user_id: str) -> str:
         rows = self.list_entries(tenant_id, user_id)
@@ -665,11 +834,10 @@ class UserMemoryRepository:
                     continue
                 if candidate.operation == "forget":
                     needle = (candidate.match_text or candidate.content).strip()
-                    matches = conn.execute(
-                        """SELECT id FROM user_memory_entries
-                           WHERE tenant_id=? AND user_id=? AND instr(lower(content), lower(?)) > 0""",
-                        (tenant_id, user_id, needle),
-                    ).fetchall()
+                    matches = [
+                        row for row in self._decrypted_rows(conn, tenant_id, user_id)
+                        if needle.casefold() in str(row["content"]).casefold()
+                    ]
                     if len(matches) == 1:
                         conn.execute("DELETE FROM user_memory_entries WHERE id=?", (matches[0]["id"],))
                         stats["forgotten"] += 1
@@ -685,14 +853,14 @@ class UserMemoryRepository:
                     continue
                 digest = _content_hash(content)
                 exact = conn.execute(
-                    """SELECT id, content, evidence_count, pinned FROM user_memory_entries
+                    """SELECT id, content, content_bytes, evidence_count, pinned FROM user_memory_entries
                        WHERE tenant_id=? AND user_id=? AND category=? AND content_hash=?""",
                     (tenant_id, user_id, candidate.category, digest),
                 ).fetchone()
                 keyed = None
                 if candidate.memory_key:
                     keyed = conn.execute(
-                        """SELECT id, content, evidence_count, pinned FROM user_memory_entries
+                        """SELECT id, content, content_bytes, evidence_count, pinned FROM user_memory_entries
                            WHERE tenant_id=? AND user_id=? AND category=? AND memory_key=?
                            ORDER BY last_seen DESC LIMIT 1""",
                         (tenant_id, user_id, candidate.category, candidate.memory_key),
@@ -703,12 +871,11 @@ class UserMemoryRepository:
                     if not needle:
                         stats["rejected"] += 1
                         continue
-                    matches = conn.execute(
-                        """SELECT id, content, evidence_count, pinned FROM user_memory_entries
-                           WHERE tenant_id=? AND user_id=? AND category=?
-                             AND instr(lower(content), lower(?)) > 0""",
-                        (tenant_id, user_id, candidate.category, needle),
-                    ).fetchall()
+                    matches = [
+                        row for row in self._decrypted_rows(conn, tenant_id, user_id)
+                        if row["category"] == candidate.category
+                        and needle.casefold() in str(row["content"]).casefold()
+                    ]
                     if len(matches) != 1:
                         stats["rejected"] += 1
                         continue
@@ -720,7 +887,7 @@ class UserMemoryRepository:
                     keyed = None
                 existing = exact or keyed or replacement
                 if existing:
-                    old_bytes = _utf8_len(str(existing["content"]))
+                    old_bytes = int(existing["content_bytes"] or 0)
                     projected = (
                         self._usage_in_conn(conn, tenant_id, user_id)
                         - old_bytes
@@ -731,19 +898,20 @@ class UserMemoryRepository:
                         continue
                     conn.execute(
                         """UPDATE user_memory_entries
-                           SET content=?, content_hash=?, memory_key=COALESCE(?, memory_key),
+                           SET content=?, content_bytes=?, content_hash=?, memory_key=COALESCE(?, memory_key),
                                last_seen=?, confidence=MAX(confidence, ?), importance=MAX(importance, ?),
                                pinned=MAX(pinned, ?), evidence_count=evidence_count+1,
                                source_session_id=?, source_run_id=? WHERE id=?""",
                         (
-                            content,
+                            self.cipher.encrypt(content),
+                            _utf8_len(content),
                             digest,
                             candidate.memory_key,
                             now,
                             candidate.confidence,
                             candidate.importance,
                             int(candidate.pinned),
-                            session_id,
+                            hashlib.sha256(session_id.encode("utf-8")).hexdigest(),
                             run_id,
                             existing["id"],
                         ),
@@ -756,38 +924,53 @@ class UserMemoryRepository:
                     continue
                 conn.execute(
                     """INSERT INTO user_memory_entries
-                       (id, tenant_id, user_id, category, content, content_hash, entry_kind,
+                       (id, tenant_id, user_id, category, content, content_bytes, content_hash, entry_kind,
                         confidence, importance, pinned, evidence_count, first_seen, last_seen,
                         source_session_id, source_run_id, memory_key)
-                       VALUES (?, ?, ?, ?, ?, ?, 'detail', ?, ?, ?, 1, ?, ?, ?, ?, ?)""",
+                       VALUES (?, ?, ?, ?, ?, ?, ?, 'detail', ?, ?, ?, 1, ?, ?, ?, ?, ?)""",
                     (
-                        str(uuid.uuid4()), tenant_id, user_id, candidate.category, content, digest,
+                        str(uuid.uuid4()), tenant_id, user_id, candidate.category,
+                        self.cipher.encrypt(content), _utf8_len(content), digest,
                         candidate.confidence, candidate.importance,
-                        int(candidate.pinned), now, now, session_id, run_id, candidate.memory_key,
+                        int(candidate.pinned), now, now,
+                        hashlib.sha256(session_id.encode("utf-8")).hexdigest(),
+                        run_id, candidate.memory_key,
                     ),
                 )
                 stats["added"] += 1
         return stats
 
     def find_matches(self, tenant_id: str, user_id: str, needle: str) -> list[dict[str, Any]]:
-        with self._connect() as conn:
-            rows = conn.execute(
-                """SELECT id, category, content, pinned FROM user_memory_entries
-                   WHERE tenant_id=? AND user_id=? AND instr(lower(content), lower(?)) > 0
-                   ORDER BY pinned DESC, last_seen DESC LIMIT 10""",
-                (tenant_id, user_id, needle.strip()),
-            ).fetchall()
-        return [dict(row) for row in rows]
+        normalized = needle.strip().casefold()
+        return [
+            row for row in self.list_entries(tenant_id, user_id)
+            if normalized in str(row["content"]).casefold()
+        ][:10]
+
+    def _decrypted_rows(
+        self, conn: sqlite3.Connection, tenant_id: str, user_id: str
+    ) -> list[dict[str, Any]]:
+        rows = conn.execute(
+            "SELECT * FROM user_memory_entries WHERE tenant_id=? AND user_id=?",
+            (tenant_id, user_id),
+        ).fetchall()
+        result: list[dict[str, Any]] = []
+        for row in rows:
+            item = dict(row)
+            try:
+                item["content"] = self.cipher.decrypt(str(item["content"]))
+            except ValueError:
+                continue
+            result.append(item)
+        return result
 
     def forget_unique(self, tenant_id: str, user_id: str, needle: str) -> tuple[bool, list[dict[str, Any]]]:
         with self._locked_connection(tenant_id, user_id) as conn:
-            rows = conn.execute(
-                """SELECT id, category, content, pinned FROM user_memory_entries
-                   WHERE tenant_id=? AND user_id=? AND instr(lower(content), lower(?)) > 0
-                   ORDER BY pinned DESC, last_seen DESC LIMIT 10""",
-                (tenant_id, user_id, needle.strip()),
-            ).fetchall()
-            matches = [dict(row) for row in rows]
+            normalized = needle.strip().casefold()
+            matches = [
+                row for row in self._decrypted_rows(conn, tenant_id, user_id)
+                if normalized in str(row["content"]).casefold()
+            ][:10]
             if len(matches) != 1:
                 return False, matches
             conn.execute("DELETE FROM user_memory_entries WHERE id=?", (matches[0]["id"],))
@@ -827,8 +1010,60 @@ class UserMemoryRepository:
                    DO UPDATE SET generation=user_memory_state.generation+1""",
                 (tenant_id, user_id),
             )
-        self.reclaim_space()
+        self.reclaim_space(secure=True)
         return True
+
+    def clear_scope(
+        self,
+        tenant_id: str,
+        user_id: str,
+        *,
+        cleared_at: float | None = None,
+    ) -> None:
+        with self._locked_connection(tenant_id, user_id) as conn:
+            marker = f"backend-clear:{cleared_at:.6f}" if cleared_at is not None else None
+            if marker and conn.execute(
+                """SELECT 1 FROM user_memory_migrations
+                   WHERE tenant_id=? AND user_id=? AND migration=?""",
+                (tenant_id, user_id, marker),
+            ).fetchone():
+                return
+            if cleared_at is None:
+                conn.execute(
+                    "DELETE FROM user_memory_entries WHERE tenant_id=? AND user_id=?",
+                    (tenant_id, user_id),
+                )
+                conn.execute(
+                    "DELETE FROM user_memory_jobs WHERE tenant_id=? AND user_id=?",
+                    (tenant_id, user_id),
+                )
+            else:
+                conn.execute(
+                    """DELETE FROM user_memory_entries
+                       WHERE tenant_id=? AND user_id=? AND last_seen<=?""",
+                    (tenant_id, user_id, cleared_at),
+                )
+                conn.execute(
+                    """DELETE FROM user_memory_jobs
+                       WHERE tenant_id=? AND user_id=? AND created_at<=?""",
+                    (tenant_id, user_id, cleared_at),
+                )
+            conn.execute(
+                "DELETE FROM user_memory_clear_confirmations WHERE tenant_id=? AND user_id=?",
+                (tenant_id, user_id),
+            )
+            conn.execute(
+                """INSERT INTO user_memory_state (tenant_id, user_id, generation) VALUES (?, ?, 1)
+                   ON CONFLICT(tenant_id, user_id)
+                   DO UPDATE SET generation=user_memory_state.generation+1""",
+                (tenant_id, user_id),
+            )
+            if marker:
+                conn.execute(
+                    "INSERT OR IGNORE INTO user_memory_migrations VALUES (?, ?, ?, ?)",
+                    (tenant_id, user_id, marker, time.time()),
+                )
+        self.reclaim_space(secure=True)
 
     def compression_candidates(
         self,
@@ -857,8 +1092,13 @@ class UserMemoryRepository:
         selected: list[dict[str, Any]] = []
         reclaimable = 0
         for row in rows:
-            selected.append(dict(row))
-            reclaimable += _utf8_len(row["content"])
+            item = dict(row)
+            try:
+                item["content"] = self.cipher.decrypt(str(item["content"]))
+            except ValueError:
+                continue
+            selected.append(item)
+            reclaimable += _utf8_len(item["content"])
             if used - reclaimable <= desired_bytes:
                 break
         counts: dict[str, int] = defaultdict(int)
@@ -911,11 +1151,12 @@ class UserMemoryRepository:
             for summary in result.summaries:
                 conn.execute(
                     """INSERT INTO user_memory_entries
-                       (id, tenant_id, user_id, category, content, content_hash, entry_kind,
+                       (id, tenant_id, user_id, category, content, content_bytes, content_hash, entry_kind,
                         confidence, importance, pinned, evidence_count, first_seen, last_seen)
-                       VALUES (?, ?, ?, ?, ?, ?, 'summary', 1.0, 4, 0, ?, ?, ?)""",
+                       VALUES (?, ?, ?, ?, ?, ?, ?, 'summary', 1.0, 4, 0, ?, ?, ?)""",
                     (
-                        str(uuid.uuid4()), tenant_id, user_id, summary.category, summary.content,
+                        str(uuid.uuid4()), tenant_id, user_id, summary.category,
+                        self.cipher.encrypt(summary.content), _utf8_len(summary.content),
                         _content_hash(summary.content), len(summary.source_ids), now, now,
                     ),
                 )
@@ -964,10 +1205,10 @@ class UserMemoryRepository:
             )
         return stats["added"]
 
-    def reclaim_space(self) -> None:
+    def reclaim_space(self, *, secure: bool = False) -> None:
         try:
             with self._connect() as conn:
-                conn.execute("PRAGMA wal_checkpoint(PASSIVE)")
+                conn.execute("PRAGMA wal_checkpoint(TRUNCATE)" if secure else "PRAGMA wal_checkpoint(PASSIVE)")
                 conn.execute("PRAGMA incremental_vacuum(32)")
         except sqlite3.Error:
             logger.debug("User memory incremental vacuum failed", exc_info=True)

@@ -14,7 +14,7 @@ from app.core.config import Settings, get_settings
 from app.core.database import get_db
 from app.core.response import error_response, success_response
 from app.platform.audit.models import AuditLog
-from app.platform.identity.deps import RequiredUser
+from app.platform.identity.deps import AdminUser, RequiredUser
 from app.platform.identity.models import User
 
 from .access_scope import AgentAccessScopeService
@@ -23,6 +23,7 @@ from .automation_service import AgentAutomationService
 from .catalog import ToolCatalogService
 from .event_service import AgentDomainEventService
 from .llm_proxy import forward_chat_completion, list_active_text_models
+from .memory_policy import AgentMemoryPolicyService
 from .models import (
     AgentConfirmation,
     AgentDomainEvent,
@@ -41,6 +42,8 @@ from .schemas import (
     AgentChatRequest,
     AgentConfirmationExecuteResponse,
     AgentConfirmationResolveRequest,
+    AgentMemoryTenantPolicyOut,
+    AgentMemoryTenantPolicyUpdate,
     AgentSessionDetail,
     AgentSessionItem,
     AgentSessionPage,
@@ -61,6 +64,39 @@ from .schemas import (
 from .service import AgentService
 
 router = APIRouter()
+
+
+@router.get(
+    "/memory/tenant-policy",
+    summary="获取租户 Agent 记忆治理策略",
+    response_model=AgentMemoryTenantPolicyOut,
+)
+async def get_agent_memory_tenant_policy(
+    db: AsyncSession = Depends(get_db),
+    current_user: AdminUser = None,
+    settings: Settings = Depends(get_settings),
+):
+    return await AgentMemoryPolicyService(settings).tenant_policy(
+        db, tenant_id=current_user.tenant_key or "default"
+    )
+
+
+@router.put(
+    "/memory/tenant-policy",
+    summary="更新租户 Agent 记忆治理策略",
+    response_model=AgentMemoryTenantPolicyOut,
+)
+async def update_agent_memory_tenant_policy(
+    payload: AgentMemoryTenantPolicyUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: AdminUser = None,
+    settings: Settings = Depends(get_settings),
+):
+    result = await AgentMemoryPolicyService(settings).update_tenant_policy(
+        db, user=current_user, mode=payload.mode
+    )
+    await db.commit()
+    return result
 
 
 def _changed_definition_fields(
@@ -852,8 +888,7 @@ async def get_control_plane_trace(
             await db.execute(
                 select(AgentMessage)
                 .where(
-                    AgentMessage.message_metadata["trace_id"].astext
-                    == str(trace_id),
+                    AgentMessage.message_metadata["trace_id"].astext == str(trace_id),
                     AgentMessage.is_deleted.is_(False),
                 )
                 .order_by(AgentMessage.created_at.asc())
@@ -943,9 +978,7 @@ async def get_control_plane_trace(
     ]
     timeline.extend(
         {
-            "type": "inbound_message"
-            if item.role == "user"
-            else "assistant_response",
+            "type": "inbound_message" if item.role == "user" else "assistant_response",
             "id": str(item.id),
             "occurred_at": item.created_at.isoformat(),
             "status": "recorded",
@@ -1013,9 +1046,7 @@ async def get_control_plane_trace(
             "id": str(item.id),
             "occurred_at": item.created_at.isoformat(),
             "status": (
-                "recorded"
-                if item.status_code and item.status_code < 400
-                else "failed"
+                "recorded" if item.status_code and item.status_code < 400 else "failed"
             ),
             "summary": item.action,
             "operation": (item.extra or {}).get("operation"),

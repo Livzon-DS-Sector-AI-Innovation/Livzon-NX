@@ -2,7 +2,16 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Boolean, DateTime, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -20,6 +29,77 @@ class AgentSession(BaseModel):
     )
     context: Mapped[dict[str, Any]] = mapped_column(
         JSONB, default=dict, server_default="{}"
+    )
+
+
+class AgentMemoryTenantPolicy(BaseModel):
+    __tablename__ = "agent_memory_tenant_policies"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", name="uq_core_agent_memory_tenant_policy"),
+        CheckConstraint(
+            "mode IN ('auto', 'explicit_only', 'disabled')",
+            name="ck_core_agent_memory_tenant_policy_mode",
+        ),
+        {"schema": "core", "comment": "租户级 Agent 个人记忆上限策略"},
+    )
+
+    tenant_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    mode: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="auto", server_default="auto"
+    )
+    policy_version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
+
+
+class AgentMemoryUserPreference(BaseModel):
+    __tablename__ = "agent_memory_user_preferences"
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id", "user_id", name="uq_core_agent_memory_user_preference"
+        ),
+        CheckConstraint(
+            "mode IN ('auto', 'explicit_only', 'paused')",
+            name="ck_core_agent_memory_user_preference_mode",
+        ),
+        CheckConstraint(
+            "mode_before_pause IS NULL OR "
+            "mode_before_pause IN ('auto', 'explicit_only')",
+            name="ck_core_agent_memory_user_preference_prior_mode",
+        ),
+        {"schema": "core", "comment": "用户个人记忆模式与删除标记"},
+    )
+
+    tenant_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(nullable=False, index=True)
+    mode: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="auto", server_default="auto"
+    )
+    mode_before_pause: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    preference_version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
+    notice_sent_version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    last_cleared_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+
+class AgentMemoryClearConfirmation(BaseModel):
+    __tablename__ = "agent_memory_clear_confirmations"
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id", "user_id", name="uq_core_agent_memory_clear_confirmation"
+        ),
+        {"schema": "core", "comment": "用户清空长期记忆的短期确认"},
+    )
+
+    tenant_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(nullable=False, index=True)
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
     )
 
 

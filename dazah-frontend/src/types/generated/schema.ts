@@ -514,6 +514,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/agent/memory/tenant-policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 获取租户 Agent 记忆治理策略 */
+        get: operations["get_agent_memory_tenant_policy_api_v1_agent_memory_tenant_policy_get"];
+        /** 更新租户 Agent 记忆治理策略 */
+        put: operations["update_agent_memory_tenant_policy_api_v1_agent_memory_tenant_policy_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/agent/operations/health": {
         parameters: {
             query?: never;
@@ -15665,6 +15683,53 @@ export interface components {
             choice: "allow" | "reject";
             subject: components["schemas"]["AgentTrustedSubject"];
         };
+        /** AgentMemoryPolicyEnvelope */
+        AgentMemoryPolicyEnvelope: {
+            /**
+             * Effective Mode
+             * @enum {string}
+             */
+            effective_mode: "auto" | "explicit_only" | "disabled";
+            /** Last Cleared At */
+            last_cleared_at?: string | null;
+            /**
+             * Notice Required
+             * @default false
+             */
+            notice_required: boolean;
+            /** Policy Version */
+            policy_version: number;
+        };
+        /** AgentMemoryTenantPolicyOut */
+        AgentMemoryTenantPolicyOut: {
+            /**
+             * Effective Mode
+             * @enum {string}
+             */
+            effective_mode: "auto" | "explicit_only" | "disabled";
+            /**
+             * Global Mode
+             * @enum {string}
+             */
+            global_mode: "auto" | "explicit_only" | "disabled";
+            /** Policy Version */
+            policy_version: number;
+            /** Tenant Id */
+            tenant_id: string;
+            /**
+             * Tenant Mode
+             * @enum {string}
+             */
+            tenant_mode: "auto" | "explicit_only" | "disabled";
+        };
+        /** AgentMemoryTenantPolicyUpdate */
+        AgentMemoryTenantPolicyUpdate: {
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "auto" | "explicit_only" | "disabled";
+        };
         /** AgentMessageOut */
         AgentMessageOut: {
             /** Content */
@@ -22288,6 +22353,11 @@ export interface components {
             /** External Message Id */
             external_message_id: string;
             /**
+             * Memory Notice Delivered
+             * @default false
+             */
+            memory_notice_delivered: boolean;
+            /**
              * Run Id
              * Format: uuid
              */
@@ -22355,6 +22425,7 @@ export interface components {
              * @default false
              */
             duplicate: boolean;
+            memory_policy?: components["schemas"]["AgentMemoryPolicyEnvelope"] | null;
             /** Messages */
             messages?: {
                 [key: string]: string;
@@ -35005,6 +35076,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_agent_memory_tenant_policy_api_v1_agent_memory_tenant_policy_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentMemoryTenantPolicyOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_agent_memory_tenant_policy_api_v1_agent_memory_tenant_policy_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentMemoryTenantPolicyUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentMemoryTenantPolicyOut"];
                 };
             };
             /** @description Validation Error */

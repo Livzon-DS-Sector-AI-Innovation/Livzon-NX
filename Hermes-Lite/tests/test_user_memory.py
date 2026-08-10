@@ -6,10 +6,12 @@ import json
 import sqlite3
 import time
 import uuid
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from cryptography.fernet import Fernet
 
 from services import dazah_agent_service as agent_service
 from services.memory_service import (
@@ -38,8 +40,9 @@ def _request(
     platform: str = "feishu",
     chat_type: str = "p2p",
     message: str = "hello",
+    memory_mode: str | None = "auto",
 ):
-    return agent_service.AgentBackendV2Request(
+    payload = agent_service.AgentBackendV2Request(
         protocol_version="2.0",
         run_id=uuid.uuid4(),
         trace_id=uuid.uuid4(),
@@ -48,6 +51,21 @@ def _request(
         source={"platform": platform, "chat_type": chat_type},
         message=message,
     )
+    if memory_mode is not None:
+        payload.memory_policy = agent_service.AgentMemoryPolicyEnvelope(
+            effective_mode=memory_mode,
+            policy_version=1,
+        )
+    return payload
+
+
+def test_missing_trusted_policy_fails_closed_when_enforced(monkeypatch) -> None:
+    payload = _request(memory_mode=None)
+
+    monkeypatch.setenv("HERMES_USER_MEMORY_REQUIRE_POLICY", "true")
+
+    assert agent_service._effective_memory_mode(payload) == "disabled"
+    assert agent_service._personal_memory_allowed(payload) is False
 
 
 def test_memory_isolated_by_tenant_and_user_and_shared_by_channel(tmp_path: Path) -> None:
@@ -265,7 +283,7 @@ def test_legacy_memory_store_load_is_also_user_scoped(
     assert "用户 A 的偏好" not in (other.format_for_system_prompt("user") or "")
 
 
-def test_memory_commands_are_private_and_clear_requires_confirmation(
+def test_v2_memory_commands_fail_closed_outside_backend_governance(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     repo = _repo(tmp_path)
@@ -277,14 +295,15 @@ def test_memory_commands_are_private_and_clear_requires_confirmation(
         session_id="s", run_id="r",
     )
 
-    assert "喜欢简洁回答" in agent_service._memory_command_response(private, "/memory")
+    assert "未经过 Dazah 后端治理链路" in agent_service._memory_command_response(private, "/memory")
     assert "群聊不读取" in agent_service._memory_command_response(group, "/memory")
-    assert "5 分钟" in agent_service._memory_command_response(private, "/memory clear")
-    assert agent_service._memory_command_response(private, "/memory clear confirm") == "你的长期记忆已清空。"
-    assert repo.list_entries("tenant-a", "user-a") == []
+    assert "不会直接读取、修改或清空" in agent_service._memory_command_response(
+        private, "/memory clear confirm"
+    )
+    assert len(repo.list_entries("tenant-a", "user-a")) == 1
 
 
-def test_natural_language_view_and_forget_are_deterministic(
+def test_natural_language_memory_command_also_fails_closed_in_v2(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     repo = _repo(tmp_path)
@@ -302,9 +321,9 @@ def test_natural_language_view_and_forget_are_deterministic(
         agent_service._try_basic_command_response(payload.model_copy(update={"message": "请忘记表格"}))
     )
 
-    assert view is not None and "偏好使用表格" in view.message
-    assert forgotten is not None and "已删除" in forgotten.message
-    assert repo.list_entries("tenant-a", "user-a") == []
+    assert view is not None and "未经过 Dazah 后端治理链路" in view.message
+    assert forgotten is not None and "未经过 Dazah 后端治理链路" in forgotten.message
+    assert len(repo.list_entries("tenant-a", "user-a")) == 1
 
 
 def test_review_turn_is_idempotent_and_validates_llm_output(tmp_path: Path) -> None:
@@ -453,7 +472,7 @@ def test_persistent_queue_is_bounded_and_group_is_skipped(
 
     agent_service._schedule_memory_review(_request(chat_type="group"), "group reply", [])
     assert repo.job_counts() == {}
-    private = _request(chat_type="p2p")
+    private = _request(chat_type="p2p", message="我喜欢简洁回答")
     agent_service._schedule_memory_review(private, "private reply", [])
     assert repo.job_counts() == {"pending": 1}
     assert not repo.enqueue_job(
@@ -666,7 +685,7 @@ def test_explicit_remember_reports_failure_instead_of_false_success(
     assert repo.job_counts() == {}
 
 
-def test_generic_save_request_still_uses_background_review(
+def test_generic_save_request_does_not_enter_memory_queue(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     repo = _repo(tmp_path)
@@ -676,4 +695,150 @@ def test_generic_save_request_still_uses_background_review(
     result = asyncio.run(agent_service._finalize_user_memory(payload, "文件已保存。", []))
 
     assert result == "文件已保存。"
-    assert repo.job_counts() == {"pending": 1}
+    assert repo.job_counts() == {}
+
+
+def test_memory_content_and_queue_payload_are_encrypted_at_rest(tmp_path: Path) -> None:
+    repo = _repo(tmp_path)
+    secret_text = "偏好使用蓝色表格"
+    repo.upsert_candidates(
+        "t",
+        "u",
+        [_candidate(secret_text, explicit=True)],
+        session_id="session-sensitive-ref",
+        run_id="r1",
+    )
+    assert repo.enqueue_job(
+        "t",
+        "u",
+        "r2",
+        session_id="session-sensitive-ref",
+        user_message="我喜欢蓝色表格",
+        assistant_message="以后将使用蓝色表格",
+        tool_evidence=[],
+    )
+
+    persisted = b"".join(
+        path.read_bytes() for path in tmp_path.glob("memory.sqlite3*") if path.is_file()
+    )
+    assert secret_text.encode("utf-8") not in persisted
+    assert "我喜欢蓝色表格".encode("utf-8") not in persisted
+    assert "session-sensitive-ref".encode("utf-8") not in persisted
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "我的身份证号是110101199001011234",
+        "我的手机号是13800138000",
+        "我的邮箱是person@example.com",
+        "记住我的工资是12000元",
+        "我有高血压病史",
+        "保存我的银行卡号6222021234567890",
+        "我受到了纪律处分",
+        "我的密码是 correct-horse-battery-staple",
+        "我的联系方式是公司座机010-12345678",
+        "我的家庭住址是上海市浦东新区世纪大道100号",
+        "我确诊糖尿病并正在服用二甲双胍",
+        "我的声纹可以用于身份认证",
+        "我的年薪是30万元",
+    ],
+)
+def test_high_sensitivity_memory_is_always_rejected(tmp_path: Path, content: str) -> None:
+    repo = _repo(tmp_path)
+    stats = repo.upsert_candidates(
+        "t",
+        "u",
+        [_candidate(content, explicit=True, pinned=True)],
+        session_id="s",
+        run_id="r",
+    )
+
+    assert stats["rejected"] == 1
+    assert repo.list_entries("t", "u") == []
+
+
+def test_explicit_only_skips_background_extraction(tmp_path: Path, monkeypatch) -> None:
+    repo = _repo(tmp_path)
+    monkeypatch.setattr(agent_service, "user_memory_repository", repo)
+    payload = _request(
+        message="我喜欢简洁回答",
+        memory_mode="explicit_only",
+    )
+
+    agent_service._schedule_memory_review(payload, "好的", [])
+
+    assert repo.job_counts() == {}
+
+
+def test_paused_memory_rejects_explicit_save(tmp_path: Path, monkeypatch) -> None:
+    repo = _repo(tmp_path)
+    monkeypatch.setattr(agent_service, "user_memory_repository", repo)
+    payload = _request(message="请记住我喜欢表格", memory_mode="disabled")
+
+    result = asyncio.run(agent_service._finalize_user_memory(payload, "好的", []))
+
+    assert "已暂停或被管理员禁用" in result
+    assert repo.list_entries("tenant-a", "user-a") == []
+
+
+def test_clear_marker_removes_restored_older_memory(tmp_path: Path, monkeypatch) -> None:
+    repo = _repo(tmp_path)
+    monkeypatch.setattr(agent_service, "user_memory_repository", repo)
+    repo.upsert_candidates(
+        "tenant-a",
+        "user-a",
+        [_candidate("恢复备份中的旧偏好", explicit=True)],
+        session_id="s",
+        run_id="r",
+    )
+    payload = _request(memory_mode="auto")
+    payload.memory_policy.last_cleared_at = datetime.now(UTC) + timedelta(seconds=1)
+
+    assert agent_service._personal_memory_context(payload) == ""
+    assert repo.list_entries("tenant-a", "user-a") == []
+
+
+def test_expired_encrypted_job_is_purged(tmp_path: Path, monkeypatch) -> None:
+    repo = _repo(tmp_path)
+    base = time.time()
+    monkeypatch.setattr("services.memory_service.time.time", lambda: base)
+    assert repo.enqueue_job(
+        "t",
+        "u",
+        "r",
+        session_id="s",
+        user_message="我喜欢简洁回答",
+        assistant_message="好的",
+        tool_evidence=[],
+    )
+
+    monkeypatch.setattr(
+        "services.memory_service.time.time",
+        lambda: base + 24 * 60 * 60 + 1,
+    )
+    assert repo.claim_job() is None
+    assert repo.job_counts() == {}
+
+
+def test_memory_keyring_rotates_existing_ciphertext(tmp_path: Path, monkeypatch) -> None:
+    first_key = Fernet.generate_key().decode("ascii")
+    second_key = Fernet.generate_key().decode("ascii")
+    db_path = tmp_path / "memory.sqlite3"
+    monkeypatch.setenv("HERMES_USER_MEMORY_KEYS", first_key)
+    first = UserMemoryRepository(db_path=db_path)
+    first.upsert_candidates(
+        "t",
+        "u",
+        [_candidate("喜欢简洁回答", explicit=True)],
+        session_id="s",
+        run_id="r",
+    )
+
+    monkeypatch.setenv("HERMES_USER_MEMORY_KEYS", f"{second_key},{first_key}")
+    rotating = UserMemoryRepository(db_path=db_path)
+    assert "喜欢简洁回答" in rotating.format_for_prompt("t", "u")
+
+    monkeypatch.setenv("HERMES_USER_MEMORY_KEYS", second_key)
+    reloaded = UserMemoryRepository(db_path=db_path)
+    assert "喜欢简洁回答" in reloaded.format_for_prompt("t", "u")

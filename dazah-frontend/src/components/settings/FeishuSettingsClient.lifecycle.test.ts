@@ -92,6 +92,7 @@ vi.mock('antd', () => {
     Card: Component,
     Col: Component,
     Descriptions,
+    Divider: Component,
     Drawer: Component,
     Empty: Component,
     Form,

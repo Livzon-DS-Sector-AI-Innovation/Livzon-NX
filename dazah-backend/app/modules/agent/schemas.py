@@ -25,6 +25,30 @@ AgentBackendEventType = Literal[
     "ping",
 ]
 AGENT_BACKEND_PROTOCOL_VERSION: Literal["2.0"] = "2.0"
+AgentMemoryEffectiveMode = Literal["auto", "explicit_only", "disabled"]
+AgentMemoryTenantMode = Literal["auto", "explicit_only", "disabled"]
+AgentMemoryUserMode = Literal["auto", "explicit_only", "paused"]
+
+
+class AgentMemoryPolicyEnvelope(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    effective_mode: AgentMemoryEffectiveMode
+    policy_version: int = Field(ge=1)
+    notice_required: bool = False
+    last_cleared_at: datetime | None = None
+
+
+class AgentMemoryTenantPolicyUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    mode: AgentMemoryTenantMode
+
+
+class AgentMemoryTenantPolicyOut(BaseModel):
+    tenant_id: str
+    global_mode: AgentMemoryTenantMode
+    tenant_mode: AgentMemoryTenantMode
+    effective_mode: AgentMemoryTenantMode
+    policy_version: int
 
 
 class AgentTrustedSubject(BaseModel):
@@ -78,6 +102,7 @@ class AgentBackendV2Request(BaseModel):
         default_factory=list, max_length=100
     )
     client_capabilities: list[str] = Field(default_factory=list)
+    memory_policy: AgentMemoryPolicyEnvelope | None = None
 
 
 class AgentBackendV2Event(BaseModel):
@@ -137,6 +162,7 @@ class FeishuConversationPrepareResponse(BaseModel):
     attachment_catalog: list[dict[str, Any]] = Field(default_factory=list)
     duplicate: bool = False
     response_text: str | None = None
+    memory_policy: AgentMemoryPolicyEnvelope | None = None
 
 
 class FeishuConversationCompleteRequest(BaseModel):
@@ -147,6 +173,7 @@ class FeishuConversationCompleteRequest(BaseModel):
     run_id: uuid.UUID
     assistant_message: str = Field(min_length=1, max_length=100_000)
     tool_trace: list[dict[str, Any]] = Field(default_factory=list, max_length=100)
+    memory_notice_delivered: bool = False
 
 
 class FeishuConversationCompleteResponse(BaseModel):

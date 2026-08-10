@@ -25,6 +25,7 @@ desktop.ini
 !/docs/gitea-ci.md
 !/docs/module-development-ci.md
 !/docs/dazah-enterprise-agent-gateway-tool-registry-implementation-plan-2026-07-30.md
+!/docs/hermes-memory-governance.md
 !/docs/tasks/
 /docs/tasks/*
 !/docs/tasks/dazah-enterprise-agent-gateway-tool-registry-tasks-2026-07-30.md
