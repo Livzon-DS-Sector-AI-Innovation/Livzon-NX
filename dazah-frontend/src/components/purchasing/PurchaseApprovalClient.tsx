@@ -33,11 +33,15 @@ import type {
 } from '@/types/purchasing'
 import {
   approvalRoleLabels,
+  approvalRoleHints,
+  approvalRoleRequiredApprovals,
   approvalViewLabels,
   approvalViews,
   formatMoney,
+  purchaseCategoryLabels,
   purchaseStatusColors,
   purchaseStatusLabels,
+  usesMaterialFields,
 } from './purchaseRequestConstants'
 
 type PurchaseApprovalClientProps = {
@@ -88,6 +92,9 @@ export function PurchaseApprovalClient({
 
   const roleLabel = approvalRoleLabels[approvalRole]
   const isPendingView = approvalView === 'pending'
+  const materialFields = usesMaterialFields(category)
+  const requiredApprovals = approvalRoleRequiredApprovals[approvalRole] ?? 1
+  const isCoSigningRole = requiredApprovals > 1
 
   const loadRecords = async (
     nextPage = page,
@@ -126,7 +133,7 @@ export function PurchaseApprovalClient({
     setReviewResult(result)
     form.resetFields()
     form.setFieldsValue({
-      approver_name: roleLabel,
+      approver_name: isCoSigningRole ? '' : roleLabel,
       opinion: result === 'approved' ? '同意' : '',
     })
   }
@@ -151,7 +158,16 @@ export function PurchaseApprovalClient({
         message.error(response.message || '审批失败')
         return
       }
-      message.success(reviewResult === 'approved' ? '审批已通过' : '审批已驳回')
+      const responseStatus = response.data?.status as string | undefined
+      if (
+        reviewResult === 'approved' &&
+        isCoSigningRole &&
+        responseStatus === 'pending_equipment_power'
+      ) {
+        message.success('已记录一名设备动力部会签，等待另一名审批人')
+      } else {
+        message.success(reviewResult === 'approved' ? '审批已通过' : '审批已驳回')
+      }
       setReviewRecord(null)
       await loadRecords(page)
     } catch {
@@ -237,8 +253,44 @@ export function PurchaseApprovalClient({
 
   const detailItemColumns: TableProps<NonNullable<PurchaseRequestResponse['items']>[number]>['columns'] = [
     { title: '序号', dataIndex: 'sequence', key: 'sequence', width: 70 },
-    { title: '商品名称', dataIndex: 'product_name', key: 'product_name', width: 160 },
-    { title: '规格', dataIndex: 'specification', key: 'specification', width: 120 },
+    ...(category === 'urgent'
+      ? [
+          {
+            title: '申请类型',
+            dataIndex: 'item_category',
+            key: 'item_category',
+            width: 130,
+            render: (value: PurchaseRequestCategory) => purchaseCategoryLabels[value] ?? value,
+          },
+          {
+            title: '物料编码/商品名称',
+            key: 'material_code_compatibility',
+            width: 180,
+            render: (_: unknown, item: NonNullable<PurchaseRequestResponse['items']>[number]) => item.material_code || item.product_name,
+          },
+          {
+            title: '物料说明/商品名称',
+            key: 'material_description_compatibility',
+            width: 190,
+            render: (_: unknown, item: NonNullable<PurchaseRequestResponse['items']>[number]) => item.material_description || item.product_name,
+          },
+          {
+            title: '规则型号/规格型号',
+            key: 'rule_model_compatibility',
+            width: 170,
+            render: (_: unknown, item: NonNullable<PurchaseRequestResponse['items']>[number]) => item.rule_model || item.specification,
+          },
+        ]
+      : materialFields
+        ? [
+            { title: '物料编码', dataIndex: 'material_code', key: 'material_code', width: 150 },
+            { title: '物料说明', dataIndex: 'material_description', key: 'material_description', width: 180 },
+            { title: '规则型号', dataIndex: 'rule_model', key: 'rule_model', width: 150 },
+          ]
+        : [
+            { title: '商品名称', dataIndex: 'product_name', key: 'product_name', width: 160 },
+            { title: '规格', dataIndex: 'specification', key: 'specification', width: 120 },
+          ]),
     { title: '用途', dataIndex: 'purpose', key: 'purpose', width: 160 },
     { title: '材质', dataIndex: 'material', key: 'material', width: 100 },
     { title: '品牌', dataIndex: 'brand', key: 'brand', width: 100 },
@@ -366,6 +418,11 @@ export function PurchaseApprovalClient({
               <Descriptions.Item label="合计">
                 {formatMoney(detailRecord.total_amount)}
               </Descriptions.Item>
+              <Descriptions.Item label="附件说明" span={3}>
+                <span className="whitespace-pre-wrap">
+                  {detailRecord.attachment_note || '无'}
+                </span>
+              </Descriptions.Item>
             </Descriptions>
             <Table
               columns={detailItemColumns}
@@ -397,6 +454,11 @@ export function PurchaseApprovalClient({
         onCancel={() => setReviewRecord(null)}
       >
         <Form form={form} layout="vertical">
+          {isCoSigningRole && (
+            <div className="mb-4 rounded-[8px] border border-[var(--color-hairline)] bg-[var(--color-surface-soft)] px-3 py-2 text-[13px] leading-5 text-[var(--color-steel)]">
+              {approvalRoleHints[approvalRole]}
+            </div>
+          )}
           <Form.Item
             name="approver_name"
             label="审批人姓名"

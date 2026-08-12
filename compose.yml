@@ -1,0 +1,268 @@
+name: dazah
+
+# Production orchestration. The deployment host keeps a single root .env file.
+# Application and infrastructure images must be loaded before startup; Compose
+# is intentionally forbidden from pulling them from the network.
+
+x-logging: &default-logging
+  driver: local
+  options:
+    max-size: "20m"
+    max-file: "5"
+
+x-app-security: &app-security
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+
+x-hermes-environment: &hermes-environment
+  APP_ENV: production
+  HERMES_HOME: /data/hermes
+  HERMES_AGENT_TOKEN: ${HERMES_AGENT_TOKEN:?set HERMES_AGENT_TOKEN in .env}
+  HERMES_INTERNAL_TOKEN: ${HERMES_INTERNAL_TOKEN:?set HERMES_INTERNAL_TOKEN in .env}
+  HERMES_USER_MEMORY_KEYS: ${HERMES_USER_MEMORY_KEYS:?set HERMES_USER_MEMORY_KEYS in .env}
+  HERMES_USER_MEMORY_REQUIRE_POLICY: ${HERMES_USER_MEMORY_REQUIRE_POLICY:-true}
+  HERMES_FEISHU_CREDENTIAL_KEY: ${HERMES_FEISHU_CREDENTIAL_KEY:?set HERMES_FEISHU_CREDENTIAL_KEY in .env}
+  LARK_CLI_PATH: /usr/local/bin/lark-cli
+  LARK_CLI_TIMEOUT_SECONDS: ${LARK_CLI_TIMEOUT_SECONDS:-90}
+  HERMES_FEISHU_TMPFS: /run/hermes-feishu
+  HERMES_GATEWAY_LOCK_DIR: /run/hermes-feishu/gateway-locks
+  AGENT_LLM_PROXY_TOKEN: ${AGENT_LLM_PROXY_TOKEN:?set AGENT_LLM_PROXY_TOKEN in .env}
+  DAZAH_API_KEY: ${AGENT_LLM_PROXY_TOKEN:?set AGENT_LLM_PROXY_TOKEN in .env}
+  DAZAH_API_BASE_URL: http://app:8000/api/v1
+  DAZAH_AGENT_TOOL_TOKEN: ${DAZAH_AGENT_TOOL_TOKEN:?set DAZAH_AGENT_TOOL_TOKEN in .env}
+  DAZAH_LLM_BASE_URL: http://app:8000/api/v1/agent/llm
+  DAZAH_LLM_MODEL: ${DAZAH_LLM_MODEL:-dazah-active-text}
+  HERMES_DAZAH_CHAT_TIMEOUT_SECONDS: ${HERMES_DAZAH_CHAT_TIMEOUT_SECONDS:-180}
+  HERMES_DAZAH_MAX_TOOL_ITERATIONS: ${HERMES_DAZAH_MAX_TOOL_ITERATIONS:-30}
+  TAVILY_API_KEY: ${TAVILY_API_KEY:-}
+  PYTHONUNBUFFERED: "1"
+
+services:
+  db:
+    image: ${POSTGRES_IMAGE:-postgres:17}
+    pull_policy: never
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    cpus: ${POSTGRES_CPU_LIMIT:-1.0}
+    mem_limit: ${POSTGRES_MEMORY_LIMIT:-2g}
+    pids_limit: 256
+    logging: *default-logging
+
+  redis:
+    image: ${REDIS_IMAGE:-redis:8-alpine}
+    pull_policy: never
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    cpus: ${REDIS_CPU_LIMIT:-0.5}
+    mem_limit: ${REDIS_MEMORY_LIMIT:-768m}
+    pids_limit: 128
+    logging: *default-logging
+
+  minio:
+    image: ${MINIO_IMAGE:?set MINIO_IMAGE to a pinned image in .env}
+    pull_policy: never
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:?set MINIO_ACCESS_KEY in .env}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:?set MINIO_SECRET_KEY in .env}
+    volumes:
+      - minio_data:/data
+    networks:
+      - backend
+    ports:
+      - "${MINIO_CONSOLE_BIND_HOST:-127.0.0.1}:${MINIO_CONSOLE_PORT:-9001}:9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    cpus: ${MINIO_CPU_LIMIT:-0.75}
+    mem_limit: ${MINIO_MEMORY_LIMIT:-1g}
+    pids_limit: 256
+    logging: *default-logging
+
+  migrate:
+    image: dazah/backend:${DAZAH_VERSION:?set DAZAH_VERSION in .env}
+    pull_policy: never
+    env_file:
+      - ${DAZAH_ENV_FILE:-.env}
+    environment:
+      APP_ENV: production
+      DEBUG: "false"
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL in .env}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+    command: [".venv/bin/alembic", "upgrade", "head"]
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - backend
+    restart: "no"
+    logging: *default-logging
+
+  edbo-service:
+    image: dazah/edbo:${DAZAH_VERSION:?set DAZAH_VERSION in .env}
+    pull_policy: never
+    restart: unless-stopped
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).read()"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    <<: *app-security
+    cpus: ${EDBO_CPU_LIMIT:-2.0}
+    mem_limit: ${EDBO_MEMORY_LIMIT:-3g}
+    pids_limit: 512
+    logging: *default-logging
+
+  app:
+    image: dazah/backend:${DAZAH_VERSION:?set DAZAH_VERSION in .env}
+    pull_policy: never
+    restart: unless-stopped
+    env_file:
+      - ${DAZAH_ENV_FILE:-.env}
+    environment:
+      APP_ENV: production
+      DEBUG: "false"
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL in .env}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      MINIO_ENABLED: "true"
+      MINIO_ENDPOINT: minio:9000
+      EDBO_SERVICE_URL: http://edbo-service:8000
+      HERMES_AGENT_V2_URL: http://hermes-lite:8100/v2/agent/runs
+      HERMES_INTERNAL_URL: http://hermes-lite:8100
+      AGENT_TOOL_TOKEN: ${DAZAH_AGENT_TOOL_TOKEN:?set DAZAH_AGENT_TOOL_TOKEN in .env}
+      AGENT_INTERNAL_API_BASE_URL: http://app:8000/api/v1
+    volumes:
+      - backend_uploads:/app/uploads
+      - backend_storage:/app/storage
+    tmpfs:
+      - /tmp:mode=1777,size=256m
+    networks:
+      - backend
+    ports:
+      - "${BACKEND_BIND_HOST:-127.0.0.1}:${BACKEND_PORT:-8000}:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      edbo-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", ".venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).read()"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+    <<: *app-security
+    cpus: ${BACKEND_CPU_LIMIT:-2.5}
+    mem_limit: ${BACKEND_MEMORY_LIMIT:-4g}
+    pids_limit: 512
+    logging: *default-logging
+
+  hermes-lite:
+    image: dazah/hermes-lite:${DAZAH_VERSION:?set DAZAH_VERSION in .env}
+    pull_policy: never
+    restart: unless-stopped
+    init: true
+    read_only: true
+    stop_grace_period: 30s
+    environment: *hermes-environment
+    volumes:
+      - hermes_data:/data/hermes
+    tmpfs:
+      - /run/hermes-feishu:mode=0700,uid=1000,gid=1000,size=32m
+      - /tmp:mode=1777,size=128m
+    networks:
+      - backend
+    ports:
+      - "${HERMES_BIND_HOST:-127.0.0.1}:${HERMES_PORT:-8100}:8100"
+    depends_on:
+      app:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8100/health', timeout=3).read()"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    <<: *app-security
+    cpus: ${HERMES_CPU_LIMIT:-1.0}
+    mem_limit: ${HERMES_MEMORY_LIMIT:-1g}
+    pids_limit: 256
+    logging: *default-logging
+
+  frontend:
+    image: dazah/frontend:${DAZAH_VERSION:?set DAZAH_VERSION in .env}
+    pull_policy: never
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      API_BASE_URL: http://app:8000
+      LOCAL_LOGIN_MODE: ${LOCAL_LOGIN_MODE:-disabled}
+    networks:
+      - backend
+    ports:
+      - "${FRONTEND_BIND_HOST:-0.0.0.0}:${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      app:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "const s=require('net').createConnection(3000,'127.0.0.1',()=>{s.end();process.exit(0)});s.setTimeout(3000,()=>process.exit(1));s.on('error',()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+    <<: *app-security
+    cpus: ${FRONTEND_CPU_LIMIT:-1.0}
+    mem_limit: ${FRONTEND_MEMORY_LIMIT:-1g}
+    pids_limit: 256
+    logging: *default-logging
+
+networks:
+  backend:
+    name: dazah_backend
+
+volumes:
+  postgres_data:
+    name: dazah_postgres_data
+  redis_data:
+    name: dazah_redis_data
+  minio_data:
+    name: dazah_minio_data
+  backend_uploads:
+    name: dazah_backend_uploads
+  backend_storage:
+    name: dazah_backend_storage
+  hermes_data:
+    name: dazah_hermes_data

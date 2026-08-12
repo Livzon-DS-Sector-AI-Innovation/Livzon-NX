@@ -7,6 +7,10 @@ import pytest
 from fastapi import HTTPException
 
 from app.modules.agent.service import AgentService
+from app.modules.procurement.agent_tools import (
+    PurchaseRequestCreateInput,
+    PurchaseRequestUpdateInput,
+)
 
 
 @pytest.fixture
@@ -208,7 +212,14 @@ def test_normalize_contract_body_builds_sample_and_preserves_explicit_values(
         ("原辅料", "raw-auxiliary"),
         ("化学试剂", "chemical-glass"),
         ("电器", "electrical"),
-        ("劳保用品", "labor-protection"),
+        ("广告", "advertising-printing"),
+        ("消防器材", "fire"),
+        ("印刷品", "advertising-printing"),
+        ("广告/印刷", "advertising-printing"),
+        ("包装材料", "packaging"),
+        ("劳保特防", "labor-special"),
+        ("劳保杂品", "labor-miscellaneous"),
+        ("劳保用品", "劳保用品"),
         ("custom", "custom"),
     ],
 )
@@ -224,6 +235,7 @@ def test_normalize_purchase_request_body_supports_single_and_multiple_items(
             "category": "电脑",
             "dept": "信息部",
             "apply_date": "2026-07-30",
+            "attachment_description": "产品技术参数表一份",
             "name": "笔记本",
             "spec": "16G",
             "note": "开发",
@@ -236,9 +248,13 @@ def test_normalize_purchase_request_body_supports_single_and_multiple_items(
     assert single["category"] == "computer"
     assert single["request_department"] == "信息部"
     assert single["request_date"] == "2026-07-30"
+    assert single["attachment_note"] == "产品技术参数表一份"
     assert single["items"][0] == {
         "product_name": "笔记本",
         "specification": "16G",
+        "material_code": "",
+        "material_description": "",
+        "rule_model": "",
         "purpose": "开发",
         "material": "",
         "brand": "",
@@ -262,6 +278,108 @@ def test_normalize_purchase_request_body_supports_single_and_multiple_items(
 
     empty = service._normalize_purchase_request_body({}, {})
     assert empty["items"] == []
+
+
+def test_normalize_purchase_request_material_fields(service: AgentService) -> None:
+    normalized = service._normalize_purchase_request_body(
+        {
+            "category": "消防器材",
+            "request_department": "安全环保部",
+            "attachment_note": "消防技术附件",
+            "items": [
+                {
+                    "code": "FIRE-001",
+                    "description": "灭火器",
+                    "rule": "4kg",
+                    "use": "消防设施补充",
+                    "quantity": 2,
+                    "price": 50,
+                }
+            ],
+        },
+        {},
+    )
+
+    assert normalized["category"] == "fire"
+    assert normalized["attachment_note"] == "消防技术附件"
+    assert normalized["items"] == [
+        {
+            "product_name": None,
+            "specification": "",
+            "material_code": "FIRE-001",
+            "material_description": "灭火器",
+            "rule_model": "4kg",
+            "purpose": "消防设施补充",
+            "material": "",
+            "brand": "",
+            "quantity": 2,
+            "unit": "",
+            "unit_price": 50,
+            "remarks": "",
+        }
+    ]
+
+
+def test_purchase_tool_schema_exposes_new_request_fields() -> None:
+    payload = PurchaseRequestCreateInput.model_validate(
+        {
+            "category": "fire",
+            "request_department": "安全环保部",
+            "request_date": "2026-08-12",
+            "attachment_note": "消防技术附件",
+            "items": [
+                {
+                    "material_code": "FIRE-001",
+                    "material_description": "灭火器",
+                    "rule_model": "4kg",
+                    "quantity": 1,
+                    "unit_price": 50,
+                }
+            ],
+        }
+    )
+    update = PurchaseRequestUpdateInput.model_validate(
+        {"request_id": str(uuid.uuid4()), "attachment_note": "补充说明"}
+    )
+
+    assert payload.attachment_note == "消防技术附件"
+    assert payload.items[0].material_code == "FIRE-001"
+    assert payload.items[0].material_description == "灭火器"
+    assert payload.items[0].rule_model == "4kg"
+    assert update.attachment_note == "补充说明"
+
+
+def test_normalize_urgent_purchase_request_item_categories(
+    service: AgentService,
+) -> None:
+    normalized = service._normalize_purchase_request_body(
+        {
+            "category": "加急单",
+            "request_department": "采购部",
+            "items": [
+                {
+                    "category": "消防",
+                    "code": "FIRE-001",
+                    "description": "灭火器",
+                    "quantity": 1,
+                    "price": 50,
+                },
+                {
+                    "item_category": "办公用品",
+                    "name": "标签纸",
+                    "quantity": 2,
+                    "price": 5,
+                },
+            ],
+        },
+        {},
+    )
+
+    assert normalized["category"] == "urgent"
+    assert [item["item_category"] for item in normalized["items"]] == [
+        "fire",
+        "office",
+    ]
 
 
 def test_misc_normalizers_and_local_db_guard() -> None:

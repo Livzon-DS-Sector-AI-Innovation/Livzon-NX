@@ -257,11 +257,23 @@ async def lark_cli(
             ensure_run_active()
         if risk in {"medium", "high"}:
             action = " ".join(safe_args[:2])
-            if risk == "medium" and has_active_grant(
-                user_id=user_id,
-                app_id=app_id,
-                resource=fingerprint,
-                action=action,
+            automation_actions = set(context.get("_automation_authorized_actions") or [])
+            automation_resource = str(
+                context.get("_automation_authorized_resource") or ""
+            )
+            automation_authorized = (
+                context.get("_automation_authorized") is True
+                and action in automation_actions
+                and fingerprint == automation_resource
+            )
+            if risk == "medium" and (
+                automation_authorized
+                or has_active_grant(
+                    user_id=user_id,
+                    app_id=app_id,
+                    resource=fingerprint,
+                    action=action,
+                )
             ):
                 risk = "low"
             else:

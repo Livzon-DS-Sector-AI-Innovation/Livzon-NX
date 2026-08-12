@@ -43,9 +43,11 @@ import {
   formatMoney,
   purchaseStatusColors,
   purchaseStatusLabels,
+  usesMaterialFields,
 } from './purchaseRequestConstants'
+import { UrgentPurchaseRequestFormClient } from './UrgentPurchaseRequestFormClient'
 
-type PurchaseRequestFormClientProps = {
+export type PurchaseRequestFormClientProps = {
   category: PurchaseRequestCategory
   categoryLabel: string
   initialRequests: PurchaseRequestResponse[]
@@ -55,6 +57,7 @@ type PurchaseRequestFormClientProps = {
 type PurchaseRequestFormValues = {
   request_department: string
   request_date: Dayjs
+  attachment_note: string
   items: PurchaseRequestItemInput[]
 }
 
@@ -69,6 +72,9 @@ function normalizeItems(items: PurchaseRequestResponse['items']): PurchaseReques
   const normalized = (items ?? []).map((item) => ({
     product_name: item.product_name,
     specification: item.specification,
+    material_code: item.material_code,
+    material_description: item.material_description,
+    rule_model: item.rule_model,
     purpose: item.purpose,
     material: item.material,
     brand: item.brand,
@@ -88,10 +94,14 @@ function buildPayload(
     category,
     request_department: values.request_department,
     request_date: values.request_date.format('YYYY-MM-DD'),
+    attachment_note: values.attachment_note?.trim() ?? '',
     items: values.items.map((item) => ({
       ...item,
       product_name: item.product_name?.trim(),
       specification: item.specification?.trim() ?? '',
+      material_code: item.material_code?.trim() ?? '',
+      material_description: item.material_description?.trim() ?? '',
+      rule_model: item.rule_model?.trim() ?? '',
       purpose: item.purpose?.trim() ?? '',
       material: item.material?.trim() ?? '',
       brand: item.brand?.trim() ?? '',
@@ -101,7 +111,7 @@ function buildPayload(
   }
 }
 
-export function PurchaseRequestFormClient({
+function StandardPurchaseRequestFormClient({
   category,
   categoryLabel,
   initialRequests,
@@ -117,7 +127,11 @@ export function PurchaseRequestFormClient({
   const [submittingId, setSubmittingId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [detailRecord, setDetailRecord] = useState<PurchaseRequestResponse | null>(null)
+  const [attachmentNoteOpen, setAttachmentNoteOpen] = useState(false)
+  const [attachmentNoteDraft, setAttachmentNoteDraft] = useState('')
   const watchedItems = Form.useWatch('items', form) ?? []
+  const watchedAttachmentNote = Form.useWatch('attachment_note', form) ?? ''
+  const materialFields = usesMaterialFields(category)
 
   const totalAmount = useMemo(
     () =>
@@ -151,6 +165,7 @@ export function PurchaseRequestFormClient({
     form.resetFields()
     form.setFieldsValue({
       request_date: dayjs(),
+      attachment_note: '',
       items: [{ ...defaultPurchaseRequestItem }],
     })
   }
@@ -163,6 +178,7 @@ export function PurchaseRequestFormClient({
         ? await updatePurchaseRequest(editingId, {
             request_department: payload.request_department,
             request_date: payload.request_date,
+            attachment_note: payload.attachment_note,
             items: payload.items,
           })
         : await createPurchaseRequest(payload)
@@ -186,6 +202,7 @@ export function PurchaseRequestFormClient({
     form.setFieldsValue({
       request_department: record.request_department,
       request_date: dayjs(record.request_date),
+      attachment_note: record.attachment_note ?? '',
       items: normalizeItems(record.items),
     })
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -291,8 +308,21 @@ export function PurchaseRequestFormClient({
 
   const detailItemColumns: TableProps<NonNullable<PurchaseRequestResponse['items']>[number]>['columns'] = [
     { title: '序号', dataIndex: 'sequence', key: 'sequence', width: 70 },
-    { title: '商品名称', dataIndex: 'product_name', key: 'product_name', width: 160 },
-    { title: '规格', dataIndex: 'specification', key: 'specification', width: 120 },
+    ...(materialFields
+      ? [
+          { title: '物料编码', dataIndex: 'material_code', key: 'material_code', width: 150 },
+          {
+            title: '物料说明',
+            dataIndex: 'material_description',
+            key: 'material_description',
+            width: 180,
+          },
+          { title: '规则型号', dataIndex: 'rule_model', key: 'rule_model', width: 150 },
+        ]
+      : [
+          { title: '商品名称', dataIndex: 'product_name', key: 'product_name', width: 160 },
+          { title: '规格', dataIndex: 'specification', key: 'specification', width: 120 },
+        ]),
     { title: '用途', dataIndex: 'purpose', key: 'purpose', width: 160 },
     { title: '材质', dataIndex: 'material', key: 'material', width: 100 },
     { title: '品牌', dataIndex: 'brand', key: 'brand', width: 100 },
@@ -359,10 +389,14 @@ export function PurchaseRequestFormClient({
         layout="vertical"
         initialValues={{
           request_date: dayjs(),
+          attachment_note: '',
           items: [{ ...defaultPurchaseRequestItem }],
         }}
         onFinish={handleFinish}
       >
+        <Form.Item name="attachment_note" hidden>
+          <Input />
+        </Form.Item>
         <section className="rounded-[12px] border border-[var(--color-hairline)] bg-[var(--color-canvas)]">
           <div className="grid gap-4 border-b border-[var(--color-hairline)] bg-[var(--color-surface-soft)] px-4 py-4 md:grid-cols-3">
             <Form.Item
@@ -386,6 +420,16 @@ export function PurchaseRequestFormClient({
                 分类：<span className="font-semibold">{categoryLabel}</span>
               </div>
             </div>
+            <div className="flex items-end md:col-span-3">
+              <Button
+                onClick={() => {
+                  setAttachmentNoteDraft(watchedAttachmentNote)
+                  setAttachmentNoteOpen(true)
+                }}
+              >
+                附件说明{watchedAttachmentNote.trim() ? '（已填写）' : ''}
+              </Button>
+            </div>
           </div>
 
           <div className="p-4">
@@ -402,30 +446,79 @@ export function PurchaseRequestFormClient({
                     width: 64,
                     render: (_, __, index) => index + 1,
                   },
-                  {
-                    title: '商品名称',
-                    key: 'product_name',
-                    width: 160,
-                    render: (_, row) => (
-                      <Form.Item
-                        name={[row.name, 'product_name']}
-                        rules={[{ required: true, message: '请输入商品名称' }]}
-                        className="mb-0"
-                      >
-                        <Input />
-                      </Form.Item>
-                    ),
-                  },
-                  {
-                    title: '规格',
-                    key: 'specification',
-                    width: 130,
-                    render: (_, row) => (
-                      <Form.Item name={[row.name, 'specification']} className="mb-0">
-                        <Input />
-                      </Form.Item>
-                    ),
-                  },
+                  ...(materialFields
+                    ? [
+                        {
+                          title: '物料编码',
+                          key: 'material_code',
+                          width: 150,
+                          render: (_: unknown, row: EditableItemRow) => (
+                            <Form.Item
+                              name={[row.name, 'material_code']}
+                              rules={[{ required: true, message: '请输入物料编码' }]}
+                              className="mb-0"
+                            >
+                              <Input />
+                            </Form.Item>
+                          ),
+                        },
+                        {
+                          title: '物料说明',
+                          key: 'material_description',
+                          width: 180,
+                          render: (_: unknown, row: EditableItemRow) => (
+                            <Form.Item
+                              name={[row.name, 'material_description']}
+                              rules={[{ required: true, message: '请输入物料说明' }]}
+                              className="mb-0"
+                            >
+                              <Input />
+                            </Form.Item>
+                          ),
+                        },
+                        {
+                          title: '规则型号',
+                          key: 'rule_model',
+                          width: 150,
+                          render: (_: unknown, row: EditableItemRow) => (
+                            <Form.Item
+                              name={[row.name, 'rule_model']}
+                              className="mb-0"
+                            >
+                              <Input />
+                            </Form.Item>
+                          ),
+                        },
+                      ]
+                    : [
+                        {
+                          title: '商品名称',
+                          key: 'product_name',
+                          width: 160,
+                          render: (_: unknown, row: EditableItemRow) => (
+                            <Form.Item
+                              name={[row.name, 'product_name']}
+                              rules={[{ required: true, message: '请输入商品名称' }]}
+                              className="mb-0"
+                            >
+                              <Input />
+                            </Form.Item>
+                          ),
+                        },
+                        {
+                          title: '规格',
+                          key: 'specification',
+                          width: 130,
+                          render: (_: unknown, row: EditableItemRow) => (
+                            <Form.Item
+                              name={[row.name, 'specification']}
+                              className="mb-0"
+                            >
+                              <Input />
+                            </Form.Item>
+                          ),
+                        },
+                      ]),
                   {
                     title: '用途',
                     key: 'purpose',
@@ -542,16 +635,16 @@ export function PurchaseRequestFormClient({
                       rowKey="key"
                       pagination={false}
                       bordered
-                      scroll={{ x: 1370 }}
+                      scroll={{ x: materialFields ? 1570 : 1370 }}
                       summary={() => (
                         <Table.Summary.Row>
-                          <Table.Summary.Cell index={0} colSpan={9}>
+                          <Table.Summary.Cell index={0} colSpan={materialFields ? 10 : 9}>
                             <span className="font-semibold">合计</span>
                           </Table.Summary.Cell>
-                          <Table.Summary.Cell index={9}>
+                          <Table.Summary.Cell index={materialFields ? 10 : 9}>
                             <span className="font-semibold">{formatMoney(totalAmount)}</span>
                           </Table.Summary.Cell>
-                          <Table.Summary.Cell index={10} colSpan={2} />
+                          <Table.Summary.Cell index={materialFields ? 11 : 10} colSpan={2} />
                         </Table.Summary.Row>
                       )}
                     />
@@ -625,6 +718,11 @@ export function PurchaseRequestFormClient({
               <Descriptions.Item label="合计">
                 {formatMoney(detailRecord.total_amount)}
               </Descriptions.Item>
+              <Descriptions.Item label="附件说明" span={3}>
+                <span className="whitespace-pre-wrap">
+                  {detailRecord.attachment_note || '无'}
+                </span>
+              </Descriptions.Item>
             </Descriptions>
             <Table
               columns={detailItemColumns}
@@ -644,6 +742,34 @@ export function PurchaseRequestFormClient({
           </div>
         )}
       </Modal>
+
+      <Modal
+        title="附件说明"
+        open={attachmentNoteOpen}
+        okText="保存说明"
+        cancelText="取消"
+        onOk={() => {
+          form.setFieldValue('attachment_note', attachmentNoteDraft.trim())
+          setAttachmentNoteOpen(false)
+        }}
+        onCancel={() => setAttachmentNoteOpen(false)}
+      >
+        <Input.TextArea
+          value={attachmentNoteDraft}
+          onChange={(event) => setAttachmentNoteDraft(event.target.value)}
+          placeholder="请输入附件内容、份数或其他说明"
+          rows={6}
+          maxLength={4000}
+          showCount
+        />
+      </Modal>
     </div>
   )
+}
+
+export function PurchaseRequestFormClient(props: PurchaseRequestFormClientProps) {
+  if (props.category === 'urgent') {
+    return <UrgentPurchaseRequestFormClient {...props} />
+  }
+  return <StandardPurchaseRequestFormClient {...props} />
 }

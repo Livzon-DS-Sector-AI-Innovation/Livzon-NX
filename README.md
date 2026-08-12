@@ -13,16 +13,18 @@ by each subproject's `AGENTS.md`.
 
 ## Daily Development
 
-Start backend services and the frontend dev server:
+Start the complete root development stack (backend, frontend, Hermes-Lite,
+EDBO, PostgreSQL, Redis, and MinIO):
 
 ```powershell
+Copy-Item .env.local.example .env.local
 .\scripts\dev.ps1
 ```
 
-Start Hermes-Lite as well:
+Reuse the existing development images without rebuilding:
 
 ```powershell
-.\scripts\dev.ps1 -WithHermes
+.\scripts\dev.ps1 -NoBuild
 ```
 
 Useful local URLs:
@@ -57,3 +59,40 @@ the API contract changed.
   variables for backend API access.
 - Do not introduce a global Feishu configuration store; each business module
   owns its own Feishu configuration source.
+
+## Root Docker Images
+
+The root Dockerfiles expose one target per application service while preserving
+the platform's separate-container architecture:
+
+| Environment | Dockerfile | Runtime environment file |
+| --- | --- | --- |
+| Production | `Dockerfile` | `.env` |
+| Development | `Dockerfile.dev` | `.env.local` |
+
+Available targets are `backend`, `edbo`, `frontend`, and `hermes`.
+
+Start the complete development stack from the workspace root:
+
+```powershell
+Copy-Item .env.local.example .env.local
+docker compose --env-file .env.local -f compose.dev.yml up -d --build
+```
+
+Environment files are runtime inputs and are intentionally excluded from the
+Docker build context. Never copy production credentials into an image. Use
+`.env.example` and `.env.local.example` as templates.
+
+Production uses the root `compose.yml` and a single root `.env`. The application
+images and dependency images must be built or pulled on a connected workstation,
+exported with `docker save`, uploaded, and loaded on the Linux host before:
+
+```bash
+docker compose --env-file .env -f compose.yml config --quiet
+docker compose --env-file .env -f compose.yml up -d
+```
+
+Production services use `pull_policy: never`, so deployment does not depend on
+the server reaching an image registry. The root Compose runs Alembic migrations
+to `head` before starting the backend. The subproject Compose files are retained
+for historical compatibility but are not workspace deployment entry points.

@@ -1,19 +1,24 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { EditOutlined, EyeOutlined, ReloadOutlined } from '@ant-design/icons'
+import { EditOutlined, EyeOutlined, PlayCircleOutlined, ReloadOutlined } from '@ant-design/icons'
 import {
   App,
   Button,
+  Checkbox,
+  DatePicker,
   Descriptions,
   Drawer,
   Form,
   Input,
+  InputNumber,
   Modal,
+  Select,
   Space,
   Table,
   Tabs,
   Tag,
+  Timeline,
   Typography,
 } from 'antd'
 import type { TableColumnsType } from 'antd'
@@ -25,8 +30,15 @@ import {
 } from '@/actions/livzon-task'
 import {
   fetchLivzonTasks,
+  fetchAgentInteractions,
+  fetchLivzonTaskRun,
+  fetchLivzonTaskRuns,
   fetchLivzonTaskVersions,
+  submitAgentInteraction,
+  type AgentInteractionArtifact,
   type LivzonTaskItem,
+  type LivzonTaskRun,
+  type LivzonTaskRunDetail,
   type LivzonTaskVersion,
 } from '@/lib/api/agent'
 
@@ -34,6 +46,7 @@ const { Text, Paragraph } = Typography
 const { TextArea } = Input
 
 type TaskKind = 'automation' | 'scheduled'
+type ActiveTab = TaskKind | 'interactions'
 
 type EditValues = {
   name: string
@@ -48,6 +61,18 @@ type ScheduleSummary = {
   time: string
   repetitions: string
   valid: boolean
+}
+
+type AutomationStep = {
+  key: string
+  name?: string
+  type?: string
+  operation?: string
+  next?: string | null
+  if_true?: string
+  if_false?: string
+  template_id?: string
+  mode?: string
 }
 
 const statusMeta: Record<string, { color: string; label: string }> = {
@@ -200,13 +225,81 @@ function ScheduleDescription({ cron, timezone }: { cron?: string; timezone?: str
   )
 }
 
+function scheduleDescription(schedule: Record<string, unknown>) {
+  const kind = String(schedule.kind || (schedule.cron ? 'cron' : 'cron'))
+  if (kind === 'once') return `单次执行 · ${formatTime(String(schedule.run_at || ''))}`
+  if (kind === 'interval') {
+    const units: Record<string, string> = { minutes: '分钟', hours: '小时', days: '天' }
+    return `每 ${String(schedule.every || '-')} ${units[String(schedule.unit)] || String(schedule.unit || '')}执行`
+  }
+  return null
+}
+
+function definitionSteps(version: LivzonTaskVersion | null): AutomationStep[] {
+  const steps = version?.definition.steps
+  return Array.isArray(steps)
+    ? steps.filter((step): step is AutomationStep => typeof step === 'object' && step !== null && 'key' in step)
+    : []
+}
+
+const stepTypeLabels: Record<string, string> = {
+  tool: '业务操作',
+  condition: '条件判断',
+  transform: '数据转换',
+  analysis: '受限分析',
+  notify: '消息通知',
+  wait: '定时等待',
+  event_wait: '事件等待',
+  collect: '表单/表格采集',
+  manual_task: '人工任务',
+  end: '结束',
+}
+
+function StepFlow({ steps }: { steps: AutomationStep[] }) {
+  if (!steps.length) return <Text type="secondary">暂无步骤</Text>
+  return (
+    <Timeline
+      items={steps.map((step) => ({
+        children: (
+          <div className="pb-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-medium">{step.name || step.key}</span>
+              <Tag>{stepTypeLabels[step.type || ''] || step.type || '步骤'}</Tag>
+            </div>
+            {step.operation && <div className="mt-1 font-mono text-xs text-[var(--color-text-secondary)]">{step.operation}</div>}
+            {step.type === 'condition' && (
+              <div className="mt-1 text-xs text-[var(--color-text-secondary)]">
+                条件成立 → {step.if_true || '结束'}；不成立 → {step.if_false || '结束'}
+              </div>
+            )}
+            {step.type === 'collect' && (
+              <div className="mt-1 text-xs text-[var(--color-text-secondary)]">
+                {step.mode === 'table_link' ? '打开飞书表格填写' : '使用飞书卡片或 Web 表单填写'}
+              </div>
+            )}
+            {step.type !== 'condition' && step.next && (
+              <div className="mt-1 text-xs text-[var(--color-text-tertiary)]">下一步：{step.next}</div>
+            )}
+          </div>
+        ),
+      }))}
+    />
+  )
+}
+
 export default function LivzonTaskClient() {
   const { message, modal } = App.useApp()
   const [items, setItems] = useState<LivzonTaskItem[]>([])
   const [loading, setLoading] = useState(false)
-  const [activeKind, setActiveKind] = useState<TaskKind>('automation')
+  const [activeKind, setActiveKind] = useState<ActiveTab>('automation')
+  const [interactions, setInteractions] = useState<AgentInteractionArtifact[]>([])
+  const [interactionItem, setInteractionItem] = useState<AgentInteractionArtifact | null>(null)
+  const [interactionSaving, setInteractionSaving] = useState(false)
+  const [interactionForm] = Form.useForm<Record<string, unknown>>()
   const [detailItem, setDetailItem] = useState<LivzonTaskItem | null>(null)
   const [detailVersion, setDetailVersion] = useState<LivzonTaskVersion | null>(null)
+  const [detailRuns, setDetailRuns] = useState<LivzonTaskRun[]>([])
+  const [detailRun, setDetailRun] = useState<LivzonTaskRunDetail | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [editingItem, setEditingItem] = useState<LivzonTaskItem | null>(null)
   const [editingKind, setEditingKind] = useState<TaskKind>('automation')
@@ -218,8 +311,12 @@ export default function LivzonTaskClient() {
   const loadTasks = useCallback(async () => {
     setLoading(true)
     try {
-      const result = await fetchLivzonTasks()
+      const [result, interactionPage] = await Promise.all([
+        fetchLivzonTasks(),
+        fetchAgentInteractions(),
+      ])
       setItems(result.items)
+      setInteractions(interactionPage.items)
     } catch (error) {
       message.error(error instanceof Error ? error.message : '加载 Livzon Task 失败')
     } finally {
@@ -290,10 +387,13 @@ export default function LivzonTaskClient() {
   const handleToggle = async (item: LivzonTaskItem) => {
     setActionLoadingId(item.id)
     try {
+      const confirmingDraft = item.status === 'draft'
       await confirmToolExecution(
-        'agent.set_automation_enabled',
-        { automation_id: item.id, enabled: !isEnabled(item) },
-        isEnabled(item) ? 'Livzon Task 已禁用' : 'Livzon Task 已启用',
+        confirmingDraft ? 'agent.confirm_automation' : 'agent.set_automation_enabled',
+        confirmingDraft
+          ? { automation_id: item.id }
+          : { automation_id: item.id, enabled: !isEnabled(item) },
+        isEnabled(item) ? 'Livzon Task 已禁用' : 'Livzon Task 已确认并启用',
       )
     } catch (error) {
       message.error(error instanceof Error ? error.message : '操作失败')
@@ -302,13 +402,58 @@ export default function LivzonTaskClient() {
     }
   }
 
+  const handleDryRun = async (item: LivzonTaskItem) => {
+    try {
+      const response = await requestLivzonTaskTool({
+        operation: 'agent.simulate_automation',
+        body: { automation_id: item.id, count: 5 },
+        params: {},
+        reason: '用户在 Livzon Task 页面预览试运行，不执行写入或消息发送',
+      })
+      const data = (response.data || {}) as {
+        dry_run_plan?: Array<{ step_key: string; type: string; operation?: string; suppressed?: boolean }>
+      }
+      modal.info({
+        title: `${item.name} · 试运行预览`,
+        width: 600,
+        content: (
+          <div className="mt-4 space-y-3">
+            <div className="rounded-lg bg-[var(--color-bg-secondary)] p-3 text-xs text-[var(--color-text-secondary)]">
+              本次只展示将执行的步骤；写表、消息发送和信息采集均被禁止。
+            </div>
+            {(data.dry_run_plan || []).map((step, index) => (
+              <div key={step.step_key} className="flex items-start gap-3 border-b border-[var(--color-border-secondary)] pb-2">
+                <Tag>{index + 1}</Tag>
+                <div>
+                  <div className="font-medium">{step.step_key} · {stepTypeLabels[step.type] || step.type}</div>
+                  {step.operation && <div className="font-mono text-xs">{step.operation}</div>}
+                  {step.suppressed && <div className="text-xs text-amber-600">试运行中已阻止外部写入或投递</div>}
+                </div>
+              </div>
+            ))}
+          </div>
+        ),
+      })
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '试运行预览失败')
+    }
+  }
+
   const handleDetail = async (item: LivzonTaskItem) => {
     setDetailItem(item)
     setDetailVersion(null)
+    setDetailRuns([])
+    setDetailRun(null)
     setDetailLoading(true)
     try {
-      const versions = await fetchLivzonTaskVersions(item.id)
+      const [versions, runPage] = await Promise.all([
+        fetchLivzonTaskVersions(item.id),
+        fetchLivzonTaskRuns(),
+      ])
       setDetailVersion(latestVersion(versions) || null)
+      const runs = runPage.items.filter((run) => run.automation_id === item.id).slice(0, 10)
+      setDetailRuns(runs)
+      if (runs[0]) setDetailRun(await fetchLivzonTaskRun(runs[0].id))
     } catch (error) {
       message.error(error instanceof Error ? error.message : '加载详情失败')
     } finally {
@@ -415,6 +560,17 @@ export default function LivzonTaskClient() {
       render: (_, record) => {
         const schedule = record.triggers.find((trigger) => trigger.trigger_type === 'schedule')
         if (schedule) {
+          const summary = scheduleDescription(schedule.schedule)
+          if (summary) {
+            return (
+              <div className="text-xs leading-5">
+                <div className="font-medium">{summary}</div>
+                <div className="text-[var(--color-text-secondary)]">
+                  {schedule.timezone === 'Asia/Shanghai' ? '北京时间' : schedule.timezone} · 下次 {formatTime(schedule.next_fire_at)}
+                </div>
+              </div>
+            )
+          }
           return <ScheduleDescription cron={String(schedule.schedule.cron || '')} timezone={schedule.timezone} />
         }
         return <Text type="secondary">{record.triggers.map((item) => item.trigger_type).join('、') || '手动'}</Text>
@@ -442,18 +598,27 @@ export default function LivzonTaskClient() {
       title: '操作',
       key: 'actions',
       fixed: 'right',
-      width: 220,
+      width: 290,
       render: (_, record) => (
         <Space size={4}>
           <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => void handleDetail(record)}>
             详情
           </Button>
+          <Button type="link" size="small" icon={<PlayCircleOutlined />} onClick={() => void handleDryRun(record)}>
+            试运行
+          </Button>
           <Button
             type="link"
             size="small"
             icon={<EditOutlined />}
-            disabled={record.status === 'archived'}
-            onClick={() => void handleEdit(record, activeKind)}
+            disabled={
+              record.status === 'archived'
+              || (activeKind === 'scheduled' && !record.triggers.some((trigger) => Boolean(trigger.schedule.cron)))
+            }
+            title={activeKind === 'scheduled' && !record.triggers.some((trigger) => Boolean(trigger.schedule.cron))
+              ? '单次和间隔计划请通过 Livzon 助手生成新版本'
+              : undefined}
+            onClick={() => void handleEdit(record, taskKindOf(record))}
           >
             修改
           </Button>
@@ -484,6 +649,57 @@ export default function LivzonTaskClient() {
     />
   )
 
+  const handleInteractionSubmit = async () => {
+    if (!interactionItem) return
+    setInteractionSaving(true)
+    try {
+      const raw = await interactionForm.validateFields()
+      const values = Object.fromEntries(
+        Object.entries(raw).map(([key, value]) => [
+          key,
+          value && typeof value === 'object' && 'format' in value
+            ? (value as { format: (pattern: string) => string }).format('YYYY-MM-DD')
+            : value,
+        ]),
+      )
+      await submitAgentInteraction(interactionItem, values)
+      message.success(interactionItem.type === 'table_link' ? '已完成校验，流程将继续' : '填写成功，已写入目标表')
+      setInteractionItem(null)
+      interactionForm.resetFields()
+      await loadTasks()
+    } catch (error) {
+      if (error instanceof Error) message.error(error.message)
+    } finally {
+      setInteractionSaving(false)
+    }
+  }
+
+  const interactionTable = (
+    <Table
+      rowKey="request_id"
+      loading={loading}
+      dataSource={interactions}
+      columns={[
+        { title: '请求', dataIndex: 'title', render: (value, record) => (
+          <div><div className="font-medium">{value}</div><div className="text-xs text-[var(--color-text-tertiary)]">{record.summary || '暂无说明'}</div></div>
+        ) },
+        { title: '方式', dataIndex: 'type', width: 140, render: (value) => value === 'form' ? '卡片 / Web 表单' : '飞书表格链接' },
+        { title: '状态', dataIndex: 'status', width: 100, render: (value) => <Tag>{value}</Tag> },
+        { title: '过期时间', dataIndex: 'expires_at', width: 180, render: formatTime },
+        { title: '操作', width: 120, render: (_, record) => (
+          <Button type="link" disabled={record.status !== 'pending'} onClick={() => {
+            interactionForm.resetFields()
+            setInteractionItem(record)
+          }}>
+            {record.type === 'table_link' ? '打开并完成' : '填写'}
+          </Button>
+        ) },
+      ]}
+      pagination={{ pageSize: 10 }}
+      locale={{ emptyText: '暂无待填写请求' }}
+    />
+  )
+
   return (
     <section aria-label="Livzon Task 管理">
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
@@ -500,10 +716,11 @@ export default function LivzonTaskClient() {
 
       <Tabs
         activeKey={activeKind}
-        onChange={(key) => setActiveKind(key as TaskKind)}
+        onChange={(key) => setActiveKind(key as ActiveTab)}
         items={[
           { key: 'automation', label: `自动化流程 ${automations.length}`, children: table(automations) },
           { key: 'scheduled', label: `定时任务 ${scheduled.length}`, children: table(scheduled) },
+          { key: 'interactions', label: `填写请求 ${interactions.length}`, children: interactionTable },
         ]}
       />
 
@@ -527,25 +744,90 @@ export default function LivzonTaskClient() {
                 .filter((trigger) => trigger.trigger_type === 'schedule')
                 .map((trigger) => (
                   <Descriptions.Item key={trigger.id} label="执行计划">
-                    <ScheduleDescription
-                      cron={String(trigger.schedule.cron || '')}
-                      timezone={trigger.timezone}
-                    />
+                    {scheduleDescription(trigger.schedule) || (
+                      <ScheduleDescription
+                        cron={String(trigger.schedule.cron || '')}
+                        timezone={trigger.timezone}
+                      />
+                    )}
+                    <div className="mt-1 text-xs text-[var(--color-text-secondary)]">
+                      下次执行：{formatTime(trigger.next_fire_at)}
+                    </div>
                   </Descriptions.Item>
                 ))}
             </Descriptions>
             <div>
-              <div className="mb-2 text-sm font-medium">触发配置</div>
-              <pre className="max-h-64 overflow-auto rounded-lg bg-[var(--color-bg-secondary)] p-3 text-xs leading-5">
-                {JSON.stringify(detailItem.triggers, null, 2)}
-              </pre>
+              <div className="mb-3 text-sm font-medium">执行步骤与分支</div>
+              <StepFlow steps={definitionSteps(detailVersion)} />
             </div>
             <div>
-              <div className="mb-2 text-sm font-medium">流程定义</div>
-              <pre className="max-h-80 overflow-auto rounded-lg bg-[var(--color-bg-secondary)] p-3 text-xs leading-5">
-                {JSON.stringify(detailVersion?.definition || {}, null, 2)}
-              </pre>
+              <div className="mb-3 text-sm font-medium">最近运行</div>
+              {detailRuns.length ? (
+                <Timeline
+                  items={(detailRun?.steps.length ? detailRun.steps : detailRuns).map((entry) => ({
+                    color: entry.status === 'succeeded' ? 'green' : entry.status === 'failed' ? 'red' : 'blue',
+                    children: (
+                      <div className="pb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{'step_key' in entry ? entry.step_key : '自动化运行'}</span>
+                          <Tag color={entry.status === 'failed' ? 'error' : entry.status === 'succeeded' ? 'success' : 'processing'}>
+                            {entry.status}
+                          </Tag>
+                        </div>
+                        {'operation' in entry && entry.operation && <div className="font-mono text-xs">{entry.operation}</div>}
+                        {entry.error_message && <div className="mt-1 text-xs text-red-600">{entry.error_code}: {entry.error_message}</div>}
+                        <div className="text-xs text-[var(--color-text-tertiary)]">
+                          {formatTime(entry.started_at || ('created_at' in entry ? entry.created_at : undefined))}
+                        </div>
+                      </div>
+                    ),
+                  }))}
+                />
+              ) : <Text type="secondary">尚无运行记录</Text>}
             </div>
+          </div>
+        )}
+      </Drawer>
+
+      <Drawer
+        title={interactionItem?.title || '填写请求'}
+        width={560}
+        open={Boolean(interactionItem)}
+        onClose={() => setInteractionItem(null)}
+        extra={(
+          <Button type="primary" loading={interactionSaving} onClick={() => void handleInteractionSubmit()}>
+            {interactionItem?.type === 'table_link' ? '已完成，校验并继续' : '提交并写入飞书表格'}
+          </Button>
+        )}
+      >
+        {interactionItem && (
+          <div className="space-y-4">
+            <Paragraph type="secondary">{interactionItem.summary}</Paragraph>
+            {interactionItem.table_resource?.url && (
+              <Button href={interactionItem.table_resource.url} target="_blank">
+                打开{interactionItem.table_resource.name || '飞书目标表'}
+              </Button>
+            )}
+            {interactionItem.type === 'form' && (
+              <Form form={interactionForm} layout="vertical">
+                {interactionItem.form_schema.map((field) => (
+                  <Form.Item
+                    key={field.key}
+                    name={field.key}
+                    label={field.label}
+                    valuePropName={field.type === 'boolean' ? 'checked' : 'value'}
+                    rules={[{ required: field.required, message: `请填写${field.label}` }]}
+                  >
+                    {field.type === 'number' ? <InputNumber className="w-full" />
+                      : field.type === 'date' ? <DatePicker className="w-full" />
+                        : field.type === 'single_select' ? <Select options={(field.options || []).map((value) => ({ value, label: value }))} />
+                          : field.type === 'multi_select' ? <Select mode="multiple" options={(field.options || []).map((value) => ({ value, label: value }))} />
+                            : field.type === 'boolean' ? <Checkbox>是</Checkbox>
+                              : <Input />}
+                  </Form.Item>
+                ))}
+              </Form>
+            )}
           </div>
         )}
       </Drawer>

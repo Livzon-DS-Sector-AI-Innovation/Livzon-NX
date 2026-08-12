@@ -1,3 +1,4 @@
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
 from app.modules.agent.agent_tools import (
@@ -49,6 +50,35 @@ def test_direct_scheduled_task_forces_schedule_trigger() -> None:
     assert request.triggers[0].trigger_type.value == "schedule"
     assert request.triggers[0].schedule == {"cron": "0 9 * * 1-5"}
     assert request.triggers[0].timezone == "Asia/Shanghai"
+
+
+def test_direct_scheduled_task_accepts_once_and_interval_schedules() -> None:
+    tomorrow = (datetime.now(UTC) + timedelta(days=1)).isoformat()
+    once = _direct_automation_request(
+        DirectScheduledTaskCreateInput(
+            name="单次通知",
+            requirement="明天下午三点提醒我",
+            actions=[_action()],
+            schedule={"kind": "once", "run_at": tomorrow},
+        ),
+        scheduled=True,
+    )
+    interval = _direct_automation_request(
+        DirectScheduledTaskCreateInput(
+            name="定期通知",
+            requirement="每两小时提醒我",
+            actions=[_action()],
+            schedule={"kind": "interval", "every": 2, "unit": "hours"},
+        ),
+        scheduled=True,
+    )
+
+    assert once.triggers[0].schedule["kind"] == "once"
+    assert interval.triggers[0].schedule == {
+        "kind": "interval",
+        "every": 2,
+        "unit": "hours",
+    }
 
 
 def test_scheduled_data_delivery_keeps_requirement_and_runtime_query_result() -> None:
@@ -119,6 +149,17 @@ def test_legacy_workflow_tools_are_not_registered() -> None:
     assert tool_registry.get("agent.create_scheduled_task") is not None
     assert tool_registry.get("agent.create_workflow") is None
     assert tool_registry.get("agent.run_workflow") is None
+
+
+def test_draft_creation_does_not_require_confirmation_but_activation_does() -> None:
+    ensure_agent_tools_registered()
+
+    draft = tool_registry.require("agent.create_scheduled_task")
+    confirm = tool_registry.require("agent.confirm_automation")
+
+    assert draft.write is True
+    assert draft.confirmation_required is False
+    assert confirm.confirmation_required is True
 
 
 def test_confirmation_ttl_uses_configured_setting() -> None:

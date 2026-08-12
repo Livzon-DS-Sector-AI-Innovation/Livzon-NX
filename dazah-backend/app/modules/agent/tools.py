@@ -7,6 +7,7 @@ from typing import Any, Literal, TypeVar, cast, get_type_hints
 
 from fastapi import HTTPException, status
 from pydantic import BaseModel, TypeAdapter, ValidationError
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.correlation import normalize_correlation_id
@@ -14,7 +15,7 @@ from app.platform.audit.models import AuditLog
 from app.platform.identity.models import User
 from app.shared.module_registry import MODULES_BY_CODE
 
-from .models import AgentConfirmation
+from .models import AgentAutomationGrant, AgentConfirmation
 from .repository import AgentRepository
 from .schemas import AgentToolExecuteRequest, AgentToolExecuteResponse
 
@@ -43,6 +44,7 @@ class AgentToolSpec:
     input_model: type[BaseModel]
     handler: ToolHandler
     write: bool = False
+    confirmation_required: bool = False
     risk_level: RiskLevel = "medium"
     required_roles: tuple[str, ...] = ()
     workflow_allowed: bool = True
@@ -71,6 +73,7 @@ class AgentToolSpec:
             "input_schema": self.input_schema or self.input_model.model_json_schema(),
             "risk_level": self.risk_level,
             "write": self.write,
+            "confirmation_required": self.confirmation_required,
             "method": self.method,
             "path": self.path,
             "required_roles": list(self.required_roles),
@@ -148,6 +151,7 @@ def agent_tool(
     summary: str,
     input_model: type[BaseModel] = EmptyToolInput,
     write: bool = False,
+    confirmation_required: bool | None = None,
     risk_level: RiskLevel = "medium",
     required_roles: tuple[str, ...] | list[str] = (),
     workflow_allowed: bool | None = None,
@@ -189,6 +193,9 @@ def agent_tool(
             input_model=input_model,
             handler=cast(ToolHandler, func),
             write=write,
+            confirmation_required=(
+                write if confirmation_required is None else confirmation_required
+            ),
             risk_level=risk_level,
             required_roles=tuple(required_roles),
             workflow_allowed=(
@@ -309,7 +316,13 @@ class ToolExecutor:
                 for_workflow=request.subject.source == "automation",
             )
 
-            if spec.write:
+            automation_authorized = (
+                request.subject.source == "automation"
+                and await self._is_automation_write_authorized(
+                    db, spec=spec, request=request, user_id=user_id
+                )
+            )
+            if spec.write and spec.confirmation_required and not automation_authorized:
                 confirmation = await self._create_confirmation(
                     db,
                     spec=spec,
@@ -392,6 +405,7 @@ class ToolExecutor:
                 error_message=str(exc.detail),
             )
             raise
+
         except Exception as exc:
             await self.repo.finish_tool_call(
                 db,
@@ -410,6 +424,39 @@ class ToolExecutor:
                 error_message=str(exc),
             )
             raise
+
+    @staticmethod
+    async def _is_automation_write_authorized(
+        db: AsyncSession,
+        *,
+        spec: AgentToolSpec,
+        request: AgentToolExecuteRequest,
+        user_id: uuid.UUID,
+    ) -> bool:
+        if spec.human_decision_required or not spec.workflow_allowed:
+            return False
+        context = request.execution_context
+        try:
+            grant_id = uuid.UUID(str(context.get("automation_grant_id")))
+            automation_id = uuid.UUID(str(context.get("workflow_id")))
+            version_id = uuid.UUID(str(context.get("automation_version_id")))
+        except (TypeError, ValueError, AttributeError):
+            return False
+        result = await db.execute(
+            select(AgentAutomationGrant).where(
+                AgentAutomationGrant.id == grant_id,
+                AgentAutomationGrant.automation_id == automation_id,
+                AgentAutomationGrant.version_id == version_id,
+                AgentAutomationGrant.owner_user_id == user_id,
+                AgentAutomationGrant.status == "active",
+                AgentAutomationGrant.is_deleted.is_(False),
+            )
+        )
+        grant = result.scalar_one_or_none()
+        if grant is None:
+            return False
+        operations = grant.authorization_scope.get("operations") or []
+        return spec.name in operations
 
     async def execute_confirmed(
         self,

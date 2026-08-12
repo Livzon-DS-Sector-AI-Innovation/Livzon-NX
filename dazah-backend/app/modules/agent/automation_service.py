@@ -25,9 +25,11 @@ from app.modules.agent.automation_schema import (
 )
 from app.modules.agent.models import (
     AgentAutomation,
+    AgentAutomationGrant,
     AgentAutomationRun,
     AgentAutomationTrigger,
     AgentAutomationVersion,
+    AgentFeishuResourceTemplate,
     AgentRunEvent,
     AgentStepRun,
     AgentWorkflow,
@@ -39,6 +41,7 @@ from app.modules.agent.schemas import (
     AgentAutomationPage,
     AgentAutomationRunOut,
     AgentAutomationRunPage,
+    AgentAutomationTriggerCreate,
     AgentAutomationTriggerOut,
     AgentAutomationUpdate,
     AgentAutomationVersionOut,
@@ -110,10 +113,52 @@ class AgentAutomationService:
         *,
         user: User,
         definition: AutomationDefinitionV1,
+        triggers: list[AgentAutomationTriggerCreate] | None = None,
     ) -> dict[str, Any]:
         report, policy_snapshot, capability_versions = await self._compile_for_user(
             db, user=user, definition=definition
         )
+        trigger_previews: list[dict[str, Any]] = []
+        for trigger in triggers or []:
+            if trigger.trigger_type != "schedule":
+                continue
+            normalized = normalize_schedule_config(
+                trigger_type="schedule", schedule=trigger.schedule
+            )
+            trigger_previews.append(
+                {
+                    "schedule": normalized,
+                    "timezone": trigger.timezone,
+                    "future_fire_at": preview_next_fires(
+                        schedule=normalized,
+                        timezone=trigger.timezone,
+                        count=5,
+                    ),
+                }
+            )
+        template_ids = {
+            uuid.UUID(step.template_id)
+            for step in report.definition.steps
+            if step.type == "collect"
+        }
+        template_checks: list[dict[str, Any]] = []
+        for template_id in sorted(template_ids, key=str):
+            template = await db.get(AgentFeishuResourceTemplate, template_id)
+            template_checks.append(
+                {
+                    "template_id": str(template_id),
+                    "valid": bool(
+                        template
+                        and not template.is_deleted
+                        and template.status == "active"
+                        and (
+                            user.role == "admin"
+                            or template.owner_user_id in {None, user.id}
+                        )
+                    ),
+                    "status": template.status if template else "missing",
+                }
+            )
         return {
             "valid": report.valid,
             "required_operations": report.required_operations,
@@ -121,6 +166,23 @@ class AgentAutomationService:
             "issues": [item.model_dump(mode="json") for item in report.issues],
             "policy_snapshot": policy_snapshot,
             "capability_versions": capability_versions,
+            "control_flow": [
+                {
+                    "step_key": step.key,
+                    "type": step.type,
+                    "next": getattr(step, "next", None),
+                    "if_true": getattr(step, "if_true", None),
+                    "if_false": getattr(step, "if_false", None),
+                }
+                for step in report.definition.steps
+            ],
+            "schedule_previews": trigger_previews,
+            "feishu_template_checks": template_checks,
+            "authorization_scope": {
+                "operations": report.required_operations,
+                "templates": [str(item) for item in template_ids],
+                "schema_version": report.definition.schema_version,
+            },
         }
 
     async def list_capability_impacts(
@@ -211,6 +273,8 @@ class AgentAutomationService:
         automation.name = report.definition.name
         automation.description = report.definition.description
         automation.active_version_id = created.id
+        automation.status = AutomationStatus.DRAFT
+        await self._revoke_grants(db, automation_id=automation.id, actor_id=user.id)
         if request.scope_type is not None:
             automation.scope_type = request.scope_type
             automation.scope_ref = self._normalize_scope_ref(
@@ -234,6 +298,49 @@ class AgentAutomationService:
             db, user=user, automation_id=automation_id
         )
         await self._revalidate_active_version(db, user=user, automation=automation)
+        version = await self._active_version(db, automation)
+        await self._revoke_grants(db, automation_id=automation.id, actor_id=user.id)
+        definition = AutomationDefinitionV1.model_validate(version.definition)
+        triggers = await self.repo.list_automation_triggers(
+            db, automation_ids=[automation.id]
+        )
+        collect_steps = [step for step in definition.steps if step.type == "collect"]
+        notify_steps = [step for step in definition.steps if step.type == "notify"]
+        grant = AgentAutomationGrant(
+            automation_id=automation.id,
+            version_id=version.id,
+            owner_user_id=user.id,
+            status="active",
+            authorization_scope={
+                "operations": [
+                    step.operation
+                    for step in definition.steps
+                    if hasattr(step, "operation")
+                ],
+                "schema_version": definition.schema_version,
+                "schedules": [
+                    {
+                        "schedule": trigger.schedule,
+                        "timezone": trigger.timezone,
+                    }
+                    for trigger in triggers
+                    if trigger.trigger_type == "schedule"
+                ],
+                "feishu_templates": [step.template_id for step in collect_steps],
+                "writable_fields": {
+                    step.template_id: [field.key for field in step.fields]
+                    for step in collect_steps
+                },
+                "recipients": [
+                    [rule.model_dump(mode="json") for rule in step.recipients]
+                    for step in [*notify_steps, *collect_steps]
+                ],
+            },
+            authorized_at=datetime.now(UTC),
+        )
+        grant.created_by = user.id
+        grant.updated_by = user.id
+        db.add(grant)
         automation.status = AutomationStatus.ENABLED
         automation.updated_by = user.id
         await db.flush()
@@ -252,6 +359,12 @@ class AgentAutomationService:
         )
         if enabled:
             await self._revalidate_active_version(db, user=user, automation=automation)
+            grant = await self._active_grant(db, automation=automation)
+            if grant is None:
+                raise HTTPException(
+                    status.HTTP_409_CONFLICT,
+                    "自动化当前版本尚未确认，请重新确认后启用",
+                )
             automation.status = AutomationStatus.ENABLED
         elif automation.status != AutomationStatus.ARCHIVED:
             automation.status = AutomationStatus.PAUSED
@@ -266,6 +379,7 @@ class AgentAutomationService:
             db, user=user, automation_id=automation_id
         )
         automation.status = AutomationStatus.ARCHIVED
+        await self._revoke_grants(db, automation_id=automation.id, actor_id=user.id)
         automation.updated_by = user.id
         await db.flush()
         return await self.get_automation_out(db, user=user, automation_id=automation.id)
@@ -287,6 +401,7 @@ class AgentAutomationService:
             db, automation_ids=[automation.id]
         )
         scheduled = [item for item in triggers if item.trigger_type == "schedule"]
+        ensure_agent_tools_registered()
         return {
             "automation_id": str(automation.id),
             "version": version.version,
@@ -305,6 +420,23 @@ class AgentAutomationService:
                     ),
                 }
                 for item in scheduled
+            ],
+            "dry_run_plan": [
+                {
+                    "step_key": step.key,
+                    "type": step.type,
+                    "operation": getattr(step, "operation", None),
+                    "input_summary": redact_sensitive(getattr(step, "input", {}) or {}),
+                    "suppressed": (
+                        step.type in {"notify", "collect"}
+                        or bool(
+                            tool_registry.get(getattr(step, "operation", ""))
+                            and tool_registry.require(step.operation).write
+                        )
+                    ),
+                    "simulation": "would_execute",
+                }
+                for step in definition.steps
             ],
         }
 
@@ -559,6 +691,7 @@ class AgentAutomationService:
                 "module": spec.module,
                 "workflow_allowed": spec.workflow_allowed,
                 "human_decision_required": spec.human_decision_required,
+                "risk_level": spec.risk_level,
                 "capability_version": spec.capability_version,
             }
             for spec in tool_registry.list()
@@ -624,6 +757,38 @@ class AgentAutomationService:
         if version is None:
             raise HTTPException(status.HTTP_409_CONFLICT, "自动化当前版本不存在")
         return version
+
+    @staticmethod
+    async def _active_grant(
+        db: AsyncSession, *, automation: AgentAutomation
+    ) -> AgentAutomationGrant | None:
+        if automation.active_version_id is None:
+            return None
+        result = await db.execute(
+            select(AgentAutomationGrant).where(
+                AgentAutomationGrant.automation_id == automation.id,
+                AgentAutomationGrant.version_id == automation.active_version_id,
+                AgentAutomationGrant.status == "active",
+                AgentAutomationGrant.is_deleted.is_(False),
+            )
+        )
+        return result.scalar_one_or_none()
+
+    @staticmethod
+    async def _revoke_grants(
+        db: AsyncSession, *, automation_id: uuid.UUID, actor_id: uuid.UUID
+    ) -> None:
+        result = await db.execute(
+            select(AgentAutomationGrant).where(
+                AgentAutomationGrant.automation_id == automation_id,
+                AgentAutomationGrant.status == "active",
+                AgentAutomationGrant.is_deleted.is_(False),
+            )
+        )
+        for grant in result.scalars():
+            grant.status = "revoked"
+            grant.revoked_at = datetime.now(UTC)
+            grant.updated_by = actor_id
 
     async def _require_owner(
         self, db: AsyncSession, *, user: User, automation_id: uuid.UUID

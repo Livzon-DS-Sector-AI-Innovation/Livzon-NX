@@ -20,6 +20,7 @@ import {
   formatMoney,
   purchaseCategories,
   purchaseCategoryLabels,
+  usesMaterialFields,
 } from './purchaseRequestConstants'
 
 type PurchaseOrderClientProps = {
@@ -65,6 +66,12 @@ export function PurchaseOrderClient({
   const selectedCategoryLabel = selectedCategory
     ? purchaseCategoryLabels[selectedCategory]
     : '全部类别'
+  const isUrgent = selectedCategory === 'urgent'
+  const selectedMaterialFields = selectedCategory
+    ? isUrgent
+      ? null
+      : usesMaterialFields(selectedCategory)
+    : null
 
   const yearOptions = useMemo(() => {
     const currentYear = new Date().getFullYear()
@@ -141,20 +148,104 @@ export function PurchaseOrderClient({
       width: 150,
       ellipsis: true,
     },
-    {
-      title: '商品名称',
-      dataIndex: 'product_name',
-      key: 'product_name',
-      width: 170,
-      ellipsis: true,
-    },
-    {
-      title: '规格',
-      dataIndex: 'specification',
-      key: 'specification',
-      width: 130,
-      ellipsis: true,
-    },
+    ...(isUrgent
+      ? [
+          {
+            title: '申请类型',
+            dataIndex: 'item_category',
+            key: 'item_category',
+            width: 130,
+            render: (value: PurchaseRequestCategory) => purchaseCategoryLabels[value] ?? value,
+          },
+          {
+            title: '物料编码/商品名称',
+            key: 'material_code_compatibility',
+            width: 180,
+            ellipsis: true,
+            render: (_value: unknown, record: PurchaseOrderLineResponse) => record.material_code || record.product_name,
+          },
+          {
+            title: '物料说明/商品名称',
+            key: 'material_description_compatibility',
+            width: 190,
+            ellipsis: true,
+            render: (_value: unknown, record: PurchaseOrderLineResponse) => record.material_description || record.product_name,
+          },
+          {
+            title: '规则型号/规格型号',
+            key: 'rule_model_compatibility',
+            width: 170,
+            ellipsis: true,
+            render: (_value: unknown, record: PurchaseOrderLineResponse) => record.rule_model || record.specification,
+          },
+        ]
+      : selectedMaterialFields === true
+      ? [
+          {
+            title: '物料编码',
+            dataIndex: 'material_code',
+            key: 'material_code',
+            width: 150,
+            ellipsis: true,
+          },
+          {
+            title: '物料说明',
+            dataIndex: 'material_description',
+            key: 'material_description',
+            width: 180,
+            ellipsis: true,
+          },
+          {
+            title: '规则型号',
+            dataIndex: 'rule_model',
+            key: 'rule_model',
+            width: 150,
+            ellipsis: true,
+          },
+        ]
+      : selectedMaterialFields === false
+        ? [
+            {
+              title: '商品名称',
+              dataIndex: 'product_name',
+              key: 'product_name',
+              width: 170,
+              ellipsis: true,
+            },
+            {
+              title: '规格',
+              dataIndex: 'specification',
+              key: 'specification',
+              width: 130,
+              ellipsis: true,
+            },
+          ]
+        : [
+            {
+              title: '物料编码/商品名称',
+              key: 'material_code_compatibility',
+              width: 180,
+              ellipsis: true,
+              render: (_value: unknown, record: PurchaseOrderLineResponse) =>
+                record.material_code || record.product_name,
+            },
+            {
+              title: '物料说明/商品名称',
+              key: 'material_description_compatibility',
+              width: 190,
+              ellipsis: true,
+              render: (_value: unknown, record: PurchaseOrderLineResponse) =>
+                record.material_description || record.product_name,
+            },
+            {
+              title: '规则型号/规格型号',
+              key: 'rule_model_compatibility',
+              width: 170,
+              ellipsis: true,
+              render: (_value: unknown, record: PurchaseOrderLineResponse) =>
+                record.rule_model || record.specification,
+            },
+          ]),
     {
       title: '用途',
       dataIndex: 'purpose',
