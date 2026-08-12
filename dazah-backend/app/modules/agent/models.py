@@ -750,7 +750,9 @@ class AgentInteractionRequest(BaseModel):
     status: Mapped[str] = mapped_column(
         String(32), nullable=False, default="pending", server_default="pending"
     )
-    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
     title: Mapped[str] = mapped_column(String(300), nullable=False)
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     form_schema: Mapped[list[dict[str, Any]]] = mapped_column(

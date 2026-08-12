@@ -132,7 +132,7 @@ export function buildUrgentPurchasePayload(
   }
 }
 
-function itemDetailColumns(isUrgent: boolean, category: PurchaseRequestCategory) {
+export function itemDetailColumns(isUrgent: boolean, category: PurchaseRequestCategory) {
   if (isUrgent) {
     return [
       { title: '序号', dataIndex: 'sequence', key: 'sequence', width: 70 },
