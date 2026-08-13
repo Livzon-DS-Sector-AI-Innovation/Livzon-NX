@@ -22,7 +22,7 @@ SHARED_CONTRACTS = {
     "dazah-backend/openapi.json",
     "dazah-frontend/src/types/generated/schema.ts",
 }
-SHARED_PREFIXES = (".ci/", ".github/", ".gitea/", "scripts/")
+SHARED_PREFIXES = (".ci/", ".github/", "scripts/")
 
 
 def _git(*args: str) -> bytes:

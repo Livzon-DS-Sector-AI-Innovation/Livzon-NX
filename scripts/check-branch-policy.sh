@@ -32,7 +32,7 @@ case "$target_branch" in
     esac
     ;;
   *)
-    fail "merge-gate workflows may target dev or main only."
+    fail "CI workflows may target dev or main only."
     ;;
 esac
 

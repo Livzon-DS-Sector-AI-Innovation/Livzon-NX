@@ -22,7 +22,6 @@ desktop.ini
 /scripts/
 !/docs/
 /docs/*
-!/docs/gitea-ci.md
 !/docs/module-development-ci.md
 !/docs/dazah-enterprise-agent-gateway-tool-registry-implementation-plan-2026-07-30.md
 !/docs/hermes-memory-governance.md
