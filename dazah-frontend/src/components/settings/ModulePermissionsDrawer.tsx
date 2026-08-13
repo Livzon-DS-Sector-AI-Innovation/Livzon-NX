@@ -37,7 +37,7 @@ import type {
 
 const { Text, Title } = Typography
 
-const permissionOptions: Array<{
+export const permissionOptions: Array<{
   value: ModulePermissionKey
   label: string
   description: string
@@ -62,12 +62,9 @@ const permissionOptions: Array<{
     label: '自动化',
     description: '允许把模块能力加入定时任务或流程',
   },
-  {
-    value: 'module.admin',
-    label: '模块治理',
-    description: '管理模块授权与治理状态',
-  },
 ]
+
+const defaultModulePermissions = permissionOptions.map((option) => option.value)
 
 type EditableModuleGrant = {
   permissions: ModulePermissionKey[]
@@ -92,7 +89,7 @@ function syncStatusTag(status?: string | null) {
   return <Tag color="warning">尚未同步</Tag>
 }
 
-function initialEditableState(
+export function initialEditableState(
   result: UserModulePermissionsOut
 ): Record<string, EditableModuleGrant> {
   const grants = new Map(
@@ -104,7 +101,13 @@ function initialEditableState(
       return [
         module.module_code,
         {
-          permissions: (grant?.permissions || []) as ModulePermissionKey[],
+          permissions: grant
+            ? permissionOptions
+                .map((option) => option.value)
+                .filter((permission) =>
+                  (grant.permissions || []).includes(permission)
+                )
+            : [...defaultModulePermissions],
           dataScopeText: JSON.stringify(grant?.data_scope || {}, null, 2),
         },
       ]
@@ -308,7 +311,7 @@ export default function ModulePermissionsDrawer({
               {user?.name || '用户'}的模块权限
             </Title>
             <Text className="mt-1 block text-[13px] text-[var(--color-steel)]">
-              授权事实由身份服务保存，Livzon 范围是可重建的派生快照。
+              未配置的模块默认开启全部可配置权限，保存后同步到 Livzon 范围。
             </Text>
           </div>
           <Space wrap>

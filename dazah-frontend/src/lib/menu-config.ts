@@ -369,7 +369,19 @@ export const moduleMenus: ModuleMenu[] = [
           { key: "request-raw-auxiliary", label: "原辅料", path: "/purchasing/request/raw-auxiliary" },
           { key: "request-chemical-glass", label: "化玻", path: "/purchasing/request/chemical-glass" },
           { key: "request-electrical", label: "电器", path: "/purchasing/request/electrical" },
-          { key: "request-labor-protection", label: "劳保", path: "/purchasing/request/labor-protection" },
+          { key: "request-advertising-printing", label: "广告/印刷", path: "/purchasing/request/advertising-printing" },
+          { key: "request-fire", label: "消防", path: "/purchasing/request/fire" },
+          { key: "request-packaging", label: "包材", path: "/purchasing/request/packaging" },
+          {
+            key: "request-labor",
+            label: "劳保",
+            path: "",
+            children: [
+              { key: "request-labor-special", label: "特防", path: "/purchasing/request/labor-special" },
+              { key: "request-labor-miscellaneous", label: "杂品", path: "/purchasing/request/labor-miscellaneous" },
+            ],
+          },
+          { key: "request-urgent", label: "加急单", path: "/purchasing/request/urgent" },
         ],
       },
       {
@@ -382,8 +394,11 @@ export const moduleMenus: ModuleMenu[] = [
             label: "五金材料",
             path: "",
             children: [
+              { key: "approval-hardware-hardware-warehouse", label: "五金库", path: "/purchasing/approval/hardware/hardware-warehouse" },
               { key: "approval-hardware-department-head", label: "部门负责人", path: "/purchasing/approval/hardware/department-head" },
               { key: "approval-hardware-responsible-leader", label: "分管领导", path: "/purchasing/approval/hardware/responsible-leader" },
+              { key: "approval-hardware-supervising-leader", label: "主管领导", path: "/purchasing/approval/hardware/supervising-leader" },
+              { key: "approval-hardware-general-manager", label: "总经理", path: "/purchasing/approval/hardware/general-manager" },
             ],
           },
           {
@@ -393,6 +408,7 @@ export const moduleMenus: ModuleMenu[] = [
             children: [
               { key: "approval-computer-department-head", label: "部门负责人", path: "/purchasing/approval/computer/department-head" },
               { key: "approval-computer-responsible-leader", label: "分管领导", path: "/purchasing/approval/computer/responsible-leader" },
+              { key: "approval-computer-supervising-leader", label: "主管领导", path: "/purchasing/approval/computer/supervising-leader" },
             ],
           },
           {
@@ -402,6 +418,7 @@ export const moduleMenus: ModuleMenu[] = [
             children: [
               { key: "approval-office-department-head", label: "部门负责人", path: "/purchasing/approval/office/department-head" },
               { key: "approval-office-responsible-leader", label: "分管领导", path: "/purchasing/approval/office/responsible-leader" },
+              { key: "approval-office-supervising-leader", label: "主管领导", path: "/purchasing/approval/office/supervising-leader" },
             ],
           },
           {
@@ -411,6 +428,7 @@ export const moduleMenus: ModuleMenu[] = [
             children: [
               { key: "approval-raw-auxiliary-department-head", label: "部门负责人", path: "/purchasing/approval/raw-auxiliary/department-head" },
               { key: "approval-raw-auxiliary-responsible-leader", label: "分管领导", path: "/purchasing/approval/raw-auxiliary/responsible-leader" },
+              { key: "approval-raw-auxiliary-supervising-leader", label: "主管领导", path: "/purchasing/approval/raw-auxiliary/supervising-leader" },
             ],
           },
           {
@@ -420,6 +438,7 @@ export const moduleMenus: ModuleMenu[] = [
             children: [
               { key: "approval-chemical-glass-department-head", label: "部门负责人", path: "/purchasing/approval/chemical-glass/department-head" },
               { key: "approval-chemical-glass-responsible-leader", label: "分管领导", path: "/purchasing/approval/chemical-glass/responsible-leader" },
+              { key: "approval-chemical-glass-supervising-leader", label: "主管领导", path: "/purchasing/approval/chemical-glass/supervising-leader" },
             ],
           },
           {
@@ -427,17 +446,81 @@ export const moduleMenus: ModuleMenu[] = [
             label: "电器",
             path: "",
             children: [
+              { key: "approval-electrical-hardware-warehouse", label: "五金库", path: "/purchasing/approval/electrical/hardware-warehouse" },
+              { key: "approval-electrical-equipment-power", label: "设备动力部会签", path: "/purchasing/approval/electrical/equipment-power" },
               { key: "approval-electrical-department-head", label: "部门负责人", path: "/purchasing/approval/electrical/department-head" },
               { key: "approval-electrical-responsible-leader", label: "分管领导", path: "/purchasing/approval/electrical/responsible-leader" },
+              { key: "approval-electrical-supervising-leader", label: "主管领导", path: "/purchasing/approval/electrical/supervising-leader" },
             ],
           },
           {
-            key: "approval-labor-protection",
+            key: "approval-advertising-printing",
+            label: "广告/印刷",
+            path: "",
+            children: [
+              { key: "approval-advertising-printing-department-head", label: "部门负责人", path: "/purchasing/approval/advertising-printing/department-head" },
+              { key: "approval-advertising-printing-responsible-leader", label: "分管领导", path: "/purchasing/approval/advertising-printing/responsible-leader" },
+              { key: "approval-advertising-printing-supervising-leader", label: "主管领导", path: "/purchasing/approval/advertising-printing/supervising-leader" },
+            ],
+          },
+          {
+            key: "approval-fire",
+            label: "消防",
+            path: "",
+            children: [
+              { key: "approval-fire-department-head", label: "部门负责人", path: "/purchasing/approval/fire/department-head" },
+              { key: "approval-fire-responsible-leader", label: "分管领导", path: "/purchasing/approval/fire/responsible-leader" },
+              { key: "approval-fire-supervising-leader", label: "主管领导", path: "/purchasing/approval/fire/supervising-leader" },
+            ],
+          },
+          {
+            key: "approval-packaging",
+            label: "包材",
+            path: "",
+            children: [
+              { key: "approval-packaging-department-head", label: "部门负责人", path: "/purchasing/approval/packaging/department-head" },
+              { key: "approval-packaging-responsible-leader", label: "分管领导", path: "/purchasing/approval/packaging/responsible-leader" },
+              { key: "approval-packaging-supervising-leader", label: "主管领导", path: "/purchasing/approval/packaging/supervising-leader" },
+            ],
+          },
+          {
+            key: "approval-labor",
             label: "劳保",
             path: "",
             children: [
-              { key: "approval-labor-protection-department-head", label: "部门负责人", path: "/purchasing/approval/labor-protection/department-head" },
-              { key: "approval-labor-protection-responsible-leader", label: "分管领导", path: "/purchasing/approval/labor-protection/responsible-leader" },
+              {
+                key: "approval-labor-special",
+                label: "特防",
+                path: "",
+                children: [
+                  { key: "approval-labor-special-safety-officer", label: "安全员", path: "/purchasing/approval/labor-special/safety-officer" },
+                  { key: "approval-labor-special-department-head", label: "部门负责人", path: "/purchasing/approval/labor-special/department-head" },
+                  { key: "approval-labor-special-responsible-leader", label: "分管领导", path: "/purchasing/approval/labor-special/responsible-leader" },
+                ],
+              },
+              {
+                key: "approval-labor-miscellaneous",
+                label: "杂品",
+                path: "",
+                children: [
+                  { key: "approval-labor-miscellaneous-department-head", label: "部门负责人", path: "/purchasing/approval/labor-miscellaneous/department-head" },
+                  { key: "approval-labor-miscellaneous-responsible-leader", label: "分管领导", path: "/purchasing/approval/labor-miscellaneous/responsible-leader" },
+                  { key: "approval-labor-miscellaneous-supervising-leader", label: "主管领导", path: "/purchasing/approval/labor-miscellaneous/supervising-leader" },
+                ],
+              },
+            ],
+          },
+          {
+            key: "approval-urgent",
+            label: "加急单",
+            path: "",
+            children: [
+              { key: "approval-urgent-hardware-warehouse", label: "五金库", path: "/purchasing/approval/urgent/hardware-warehouse" },
+              { key: "approval-urgent-department-head", label: "部门负责人", path: "/purchasing/approval/urgent/department-head" },
+              { key: "approval-urgent-responsible-leader", label: "分管领导", path: "/purchasing/approval/urgent/responsible-leader" },
+              { key: "approval-urgent-supervising-leader", label: "主管领导", path: "/purchasing/approval/urgent/supervising-leader" },
+              { key: "approval-urgent-finance-director", label: "财务总监", path: "/purchasing/approval/urgent/finance-director" },
+              { key: "approval-urgent-general-manager", label: "总经理", path: "/purchasing/approval/urgent/general-manager" },
             ],
           },
         ],

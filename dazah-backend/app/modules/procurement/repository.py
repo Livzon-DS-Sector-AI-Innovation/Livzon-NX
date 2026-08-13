@@ -296,6 +296,17 @@ class PurchaseRequestRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_for_update(self, request_id: UUID) -> PurchaseRequest | None:
+        result = await self.session.execute(
+            select(PurchaseRequest)
+            .where(
+                PurchaseRequest.id == request_id,
+                PurchaseRequest.is_deleted.is_(False),
+            )
+            .with_for_update()
+        )
+        return result.scalar_one_or_none()
+
     async def list_items(self, request_id: UUID) -> list[PurchaseRequestItem]:
         result = await self.session.execute(
             select(PurchaseRequestItem)

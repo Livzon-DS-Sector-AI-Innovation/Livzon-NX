@@ -17,6 +17,7 @@ class AutomationErrorCode(StrEnum):
     UNKNOWN_OPERATION = "automation.unknown_operation"
     OPERATION_NOT_WORKFLOW_ALLOWED = "automation.operation_not_workflow_allowed"
     HUMAN_DECISION_REQUIRED = "automation.human_decision_required"
+    HIGH_RISK_UNATTENDED = "automation.high_risk_unattended"
     PERMISSION_DENIED = "automation.permission_denied"
     STALE_ACCESS_SCOPE = "automation.stale_access_scope"
 
@@ -152,6 +153,7 @@ class RecipientRule(StrictModel):
 class StepBase(StrictModel):
     key: str = Field(min_length=1, max_length=80, pattern=r"^[A-Za-z][A-Za-z0-9_-]*$")
     name: str | None = Field(default=None, max_length=200)
+    next: str | None = Field(default=None, max_length=80)
 
 
 class ToolStep(StepBase):
@@ -169,11 +171,42 @@ class ConditionStep(StepBase):
 
 
 class TransformOperation(StrictModel):
-    op: Literal["select", "rename", "aggregate", "template"]
+    op: Literal[
+        "select",
+        "rename",
+        "filter",
+        "sort",
+        "limit",
+        "aggregate",
+        "group_by",
+        "template",
+    ]
     source: str | None = None
     target: str | None = None
     fields: list[str] = Field(default_factory=list)
     template: str | None = Field(default=None, max_length=4000)
+    field: str | None = None
+    operator: (
+        Literal["eq", "ne", "gt", "gte", "lt", "lte", "contains", "exists"] | None
+    ) = None
+    value: ScalarValue | list[ScalarValue] = None
+    descending: bool = False
+    limit: int | None = Field(default=None, ge=1, le=1000)
+    group_by: list[str] = Field(default_factory=list, max_length=10)
+
+    @model_validator(mode="after")
+    def validate_operation(self) -> TransformOperation:
+        if self.op in {"filter", "sort"} and not self.field:
+            raise ValueError(f"{self.op} transform requires field")
+        if self.op == "filter" and not self.operator:
+            raise ValueError("filter transform requires operator")
+        if self.op == "limit" and self.limit is None:
+            raise ValueError("limit transform requires limit")
+        if self.op == "template" and self.template is None:
+            raise ValueError("template transform requires template")
+        if self.op == "group_by" and not self.group_by:
+            raise ValueError("group_by transform requires group_by")
+        return self
 
 
 class TransformStep(StepBase):
@@ -214,12 +247,15 @@ class EventWaitStep(StepBase):
         pattern=r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+\.v[0-9]+$",
     )
     timeout_seconds: int | None = Field(default=None, ge=1, le=2_592_000)
+    on_timeout: str | None = Field(default=None, max_length=80)
 
 
 class ManualTaskStep(StepBase):
     type: Literal["manual_task"]
     title: str = Field(min_length=1, max_length=300)
     detail: str | None = Field(default=None, max_length=2000)
+    timeout_seconds: int | None = Field(default=None, ge=1, le=2_592_000)
+    on_timeout: str | None = Field(default=None, max_length=80)
 
 
 class WaitStep(StepBase):
@@ -232,6 +268,47 @@ class WaitStep(StepBase):
         if (self.duration_seconds is None) == (self.until is None):
             raise ValueError(
                 "wait step must define exactly one of duration_seconds or until"
+            )
+        return self
+
+
+class AnalysisStep(StepBase):
+    type: Literal["analysis"]
+    instruction: str = Field(min_length=1, max_length=8000)
+    inputs: dict[str, ValueReference] = Field(default_factory=dict, max_length=50)
+    output_schema: dict[str, Any] = Field(default_factory=dict)
+    timeout_seconds: int = Field(default=60, ge=1, le=300)
+    max_output_chars: int = Field(default=8000, ge=100, le=32_000)
+    failure_policy: Literal["fail", "continue_empty"] = "fail"
+
+
+class CollectField(StrictModel):
+    key: str = Field(min_length=1, max_length=80, pattern=r"^[A-Za-z][A-Za-z0-9_-]*$")
+    label: str = Field(min_length=1, max_length=120)
+    type: Literal["text", "number", "date", "single_select", "multi_select", "boolean"]
+    required: bool = False
+    options: list[str] = Field(default_factory=list, max_length=100)
+
+
+class CollectStep(StepBase):
+    type: Literal["collect"]
+    mode: Literal["card_form", "table_link"]
+    template_id: str = Field(min_length=1, max_length=80)
+    recipients: list[RecipientRule] = Field(min_length=1, max_length=200)
+    fields: list[CollectField] = Field(default_factory=list, max_length=50)
+    prefill: dict[str, ScalarValue | ValueReference] = Field(default_factory=dict)
+    timeout_seconds: int = Field(default=86_400, ge=60, le=2_592_000)
+    on_timeout: str | None = Field(default=None, max_length=80)
+
+    @model_validator(mode="after")
+    def validate_collection_mode(self) -> CollectStep:
+        if self.mode == "card_form" and not self.fields:
+            raise ValueError("card_form collection requires fields")
+        if self.mode == "table_link" and not any(
+            field.required for field in self.fields
+        ):
+            raise ValueError(
+                "table_link collection requires at least one required field"
             )
         return self
 
@@ -250,13 +327,15 @@ AutomationStep = Annotated[
     | EventWaitStep
     | ManualTaskStep
     | WaitStep
+    | AnalysisStep
+    | CollectStep
     | EndStep,
     Field(discriminator="type"),
 ]
 
 
 class AutomationDefinitionV1(StrictModel):
-    schema_version: Literal["1.0"] = "1.0"
+    schema_version: Literal["1.0", "1.1"] = "1.0"
     name: str = Field(min_length=1, max_length=200)
     description: str | None = Field(default=None, max_length=4000)
     timezone: str = Field(default="Asia/Shanghai", pattern=r"^[A-Za-z_]+/[A-Za-z_]+$")
@@ -282,8 +361,62 @@ class AutomationDefinitionV1(StrictModel):
                 for target in (step.if_true, step.if_false):
                     if target is not None and target not in step_keys:
                         raise ValueError(f"condition target does not exist: {target}")
+            for target in (
+                step.next,
+                getattr(step, "on_timeout", None),
+            ):
+                if target is not None and target not in step_keys:
+                    raise ValueError(f"step target does not exist: {target}")
+        if self.schema_version == "1.1":
+            self._validate_v11_graph()
         _reject_unsafe_values(self.model_dump(mode="json", by_alias=True))
         return self
+
+    def _validate_v11_graph(self) -> None:
+        by_key = {step.key: step for step in self.steps}
+        for step in self.steps:
+            if isinstance(step, EndStep):
+                if step.next is not None:
+                    raise ValueError("end step cannot define next")
+                continue
+            if isinstance(step, ConditionStep):
+                if step.if_true is None or step.if_false is None:
+                    raise ValueError("v1.1 condition requires if_true and if_false")
+                continue
+            if step.next is None:
+                raise ValueError(f"v1.1 step {step.key} requires next")
+
+        visiting: set[str] = set()
+        visited: set[str] = set()
+
+        def targets(step: AutomationStep) -> list[str]:
+            result: list[str] = []
+            if isinstance(step, ConditionStep):
+                result.extend([step.if_true or "", step.if_false or ""])
+            elif step.next:
+                result.append(step.next)
+            timeout_target = getattr(step, "on_timeout", None)
+            if timeout_target:
+                result.append(timeout_target)
+            return [item for item in result if item]
+
+        def visit(key: str) -> None:
+            if key in visiting:
+                raise ValueError(f"automation graph contains cycle at {key}")
+            if key in visited:
+                return
+            visiting.add(key)
+            for target in targets(by_key[key]):
+                visit(target)
+            visiting.remove(key)
+            visited.add(key)
+
+        visit(self.steps[0].key)
+        unreachable = sorted(set(by_key) - visited)
+        if unreachable:
+            raise ValueError(
+                f"automation graph contains unreachable steps: {', '.join(unreachable)}"
+            )
 
 
 class AutomationCompileIssue(StrictModel):
@@ -333,6 +466,15 @@ def compile_automation_definition(
                 AutomationCompileIssue(
                     code=AutomationErrorCode.HUMAN_DECISION_REQUIRED,
                     message="需要人工责任判断的能力不能进入无人值守流程",
+                    step_key=step.key,
+                    operation=step.operation,
+                )
+            )
+        elif capability.get("risk_level") == "high":
+            issues.append(
+                AutomationCompileIssue(
+                    code=AutomationErrorCode.HIGH_RISK_UNATTENDED,
+                    message=f"高风险操作不能进入无人值守自动化: {step.operation}",
                     step_key=step.key,
                     operation=step.operation,
                 )

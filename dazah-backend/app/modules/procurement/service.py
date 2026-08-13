@@ -11,6 +11,7 @@ from uuid import UUID, uuid4
 
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.page import PageMargins
 from openpyxl.worksheet.properties import PageSetupProperties
 from pypdf import PdfReader
@@ -35,6 +36,8 @@ from app.modules.procurement.repository import (
     SupplierRepository,
 )
 from app.modules.procurement.schemas import (
+    MATERIAL_FIELD_PURCHASE_CATEGORIES,
+    NORMAL_PURCHASE_CATEGORIES,
     ContractGenerateRequest,
     InvoiceLineItem,
     InvoiceRecognitionResult,
@@ -43,7 +46,9 @@ from app.modules.procurement.schemas import (
     PurchaseApprovalRole,
     PurchaseApprovalView,
     PurchaseOrderLineResponse,
+    PurchaseRequestCategory,
     PurchaseRequestCreate,
+    PurchaseRequestItemInput,
     PurchaseRequestResponse,
     PurchaseRequestStatus,
     PurchaseRequestUpdate,
@@ -56,10 +61,60 @@ NUMBER_PATTERN = r"[0-9]+(?:\.[0-9]+)?"
 MONEY_QUANT = Decimal("0.01")
 
 APPROVAL_ROLE_TO_PENDING_STATUS = {
+    PurchaseApprovalRole.hardware_warehouse: (
+        PurchaseRequestStatus.pending_hardware_warehouse
+    ),
+    PurchaseApprovalRole.equipment_power: PurchaseRequestStatus.pending_equipment_power,
+    PurchaseApprovalRole.safety_officer: PurchaseRequestStatus.pending_safety_officer,
     PurchaseApprovalRole.department_head: PurchaseRequestStatus.pending_department_head,
     PurchaseApprovalRole.responsible_leader: (
         PurchaseRequestStatus.pending_responsible_leader
     ),
+    PurchaseApprovalRole.supervising_leader: (
+        PurchaseRequestStatus.pending_supervising_leader
+    ),
+    PurchaseApprovalRole.finance_director: (
+        PurchaseRequestStatus.pending_finance_director
+    ),
+    PurchaseApprovalRole.general_manager: (
+        PurchaseRequestStatus.pending_general_manager
+    ),
+}
+
+DEFAULT_PURCHASE_APPROVAL_WORKFLOW = (
+    PurchaseApprovalRole.department_head,
+    PurchaseApprovalRole.responsible_leader,
+    PurchaseApprovalRole.supervising_leader,
+)
+
+PURCHASE_APPROVAL_WORKFLOWS = {
+    "hardware": (
+        PurchaseApprovalRole.hardware_warehouse,
+        PurchaseApprovalRole.department_head,
+        PurchaseApprovalRole.responsible_leader,
+        PurchaseApprovalRole.supervising_leader,
+        PurchaseApprovalRole.general_manager,
+    ),
+    "electrical": (
+        PurchaseApprovalRole.hardware_warehouse,
+        PurchaseApprovalRole.equipment_power,
+        PurchaseApprovalRole.department_head,
+        PurchaseApprovalRole.responsible_leader,
+        PurchaseApprovalRole.supervising_leader,
+    ),
+    "labor-special": (
+        PurchaseApprovalRole.safety_officer,
+        PurchaseApprovalRole.department_head,
+        PurchaseApprovalRole.responsible_leader,
+    ),
+    "urgent": (
+        PurchaseApprovalRole.department_head,
+        PurchaseApprovalRole.responsible_leader,
+    ),
+}
+
+PURCHASE_APPROVAL_REQUIRED_COUNTS = {
+    PurchaseApprovalRole.equipment_power: 2,
 }
 
 PURCHASE_CATEGORY_LABELS = {
@@ -69,13 +124,68 @@ PURCHASE_CATEGORY_LABELS = {
     "raw-auxiliary": "原辅料",
     "chemical-glass": "化玻",
     "electrical": "电器",
-    "labor-protection": "劳保",
+    "advertising-printing": "广告/印刷",
+    "fire": "消防",
+    "packaging": "包材",
+    "labor-special": "特防",
+    "labor-miscellaneous": "杂品",
+    "urgent": "加急单",
+}
+
+MATERIAL_FIELD_PURCHASE_CATEGORY_VALUES = {
+    category.value for category in MATERIAL_FIELD_PURCHASE_CATEGORIES
 }
 
 PURCHASE_ORDER_EXPORT_HEADERS = [
     "序号",
     "商品名称",
     "规格型号",
+    "用途",
+    "材质",
+    "品牌",
+    "数量",
+    "单位",
+    "单价（元）",
+    "总额（元）",
+    "备注",
+]
+
+PURCHASE_ORDER_EXPORT_MATERIAL_HEADERS = [
+    "序号",
+    "物料编码",
+    "物料说明",
+    "规则型号",
+    "用途",
+    "材质",
+    "品牌",
+    "数量",
+    "单位",
+    "单价（元）",
+    "总额（元）",
+    "备注",
+]
+
+PURCHASE_ORDER_EXPORT_COMPATIBILITY_HEADERS = [
+    "序号",
+    "物料编码/商品名称",
+    "物料说明/商品名称",
+    "规则型号/规格型号",
+    "用途",
+    "材质",
+    "品牌",
+    "数量",
+    "单位",
+    "单价（元）",
+    "总额（元）",
+    "备注",
+]
+
+PURCHASE_ORDER_EXPORT_URGENT_HEADERS = [
+    "序号",
+    "申请类型",
+    "物料编码/商品名称",
+    "物料说明/商品名称",
+    "规则型号/规格型号",
     "用途",
     "材质",
     "品牌",
@@ -98,6 +208,37 @@ PURCHASE_ORDER_EXPORT_COLUMN_WIDTHS = {
     "I": 13,
     "J": 11.58,
     "K": 29.75,
+}
+
+PURCHASE_ORDER_EXPORT_MATERIAL_COLUMN_WIDTHS = {
+    "A": 12,
+    "B": 18,
+    "C": 22,
+    "D": 18,
+    "E": 17.83,
+    "F": 10,
+    "G": 10,
+    "H": 8,
+    "I": 10.25,
+    "J": 13,
+    "K": 13,
+    "L": 29.75,
+}
+
+PURCHASE_ORDER_EXPORT_URGENT_COLUMN_WIDTHS = {
+    "A": 12,
+    "B": 16,
+    "C": 18,
+    "D": 22,
+    "E": 18,
+    "F": 17.83,
+    "G": 10,
+    "H": 10,
+    "I": 8,
+    "J": 10,
+    "K": 10.25,
+    "L": 13,
+    "M": 29.75,
 }
 
 SUPPORTED_SUPPLIER_TABLE_EXTENSIONS = {".xlsx", ".xlsm", ".csv", ".tsv"}
@@ -269,12 +410,16 @@ async def create_purchase_request(
     data: PurchaseRequestCreate,
 ) -> PurchaseRequestResponse:
     repository = PurchaseRequestRepository(db)
-    items, total_amount = _build_purchase_request_items(data.items)
+    items, total_amount = _build_purchase_request_items(
+        data.items,
+        category=data.category.value,
+    )
     now = datetime.now(UTC)
     request = PurchaseRequest(
         category=data.category.value,
         request_department=data.request_department,
         request_date=data.request_date,
+        attachment_note=data.attachment_note,
         status=PurchaseRequestStatus.draft.value,
         total_amount=total_amount,
         status_updated_at=now,
@@ -302,8 +447,13 @@ async def update_purchase_request(
         request.request_department = data.request_department
     if data.request_date is not None:
         request.request_date = data.request_date
+    if data.attachment_note is not None:
+        request.attachment_note = data.attachment_note
     if data.items is not None:
-        items, total_amount = _build_purchase_request_items(data.items)
+        items, total_amount = _build_purchase_request_items(
+            data.items,
+            category=request.category,
+        )
         await repository.replace_items(request_id, items)
         request.total_amount = total_amount
     await db.flush()
@@ -406,11 +556,21 @@ async def export_purchase_order_lines_xlsx(
     )
     lines = [_build_purchase_order_line(request, item) for request, item in rows]
     category_label = PURCHASE_CATEGORY_LABELS.get(category or "", "全部类别")
+    material_field_mode: bool | None | str = (
+        "urgent"
+        if category == PurchaseRequestCategory.urgent.value
+        else (
+            category in MATERIAL_FIELD_PURCHASE_CATEGORY_VALUES
+            if category is not None
+            else None
+        )
+    )
     workbook = _build_purchase_order_workbook(
         lines,
         year=year,
         month=month,
         category_label=category_label,
+        material_field_mode=material_field_mode,
     )
     output = BytesIO()
     workbook.save(output)
@@ -534,7 +694,8 @@ async def submit_purchase_request(
         raise ValueError("采购申请至少需要一条明细")
 
     now = datetime.now(UTC)
-    request.status = PurchaseRequestStatus.pending_department_head.value
+    first_role = get_purchase_approval_workflow(request.category)[0]
+    request.status = APPROVAL_ROLE_TO_PENDING_STATUS[first_role].value
     request.rejected_step = None
     request.status_updated_at = now
     await db.flush()
@@ -567,54 +728,133 @@ async def _review_purchase_request(
     data: PurchaseApprovalRequest,
 ) -> PurchaseRequestResponse:
     repository = PurchaseRequestRepository(db)
-    request = await repository.get(request_id)
+    request = await repository.get_for_update(request_id)
     if not request:
         raise ValueError("采购申请不存在")
+
+    workflow = get_purchase_approval_workflow(request.category)
+    try:
+        workflow_index = workflow.index(data.approval_role)
+    except ValueError as exc:
+        raise ValueError("该采购类型不包含此审批步骤") from exc
 
     expected_status = APPROVAL_ROLE_TO_PENDING_STATUS[data.approval_role].value
     if request.status != expected_status:
         raise ValueError("当前采购申请不在该审批步骤")
 
+    approvals = await repository.list_approvals(request_id)
     now = datetime.now(UTC)
-    await repository.add_approval(
-        PurchaseRequestApproval(
-            purchase_request_id=str(request_id),
-            approval_role=data.approval_role.value,
-            result=data.result.value,
-            opinion=data.opinion,
-            approver_name=data.approver_name,
-            approval_time=now,
-        )
+    approval = PurchaseRequestApproval(
+        purchase_request_id=str(request_id),
+        approval_role=data.approval_role.value,
+        result=data.result.value,
+        opinion=data.opinion,
+        approver_name=data.approver_name,
+        approval_time=now,
     )
+    await repository.add_approval(approval)
 
     if data.result == PurchaseApprovalResult.rejected:
         request.status = PurchaseRequestStatus.rejected.value
         request.rejected_step = data.approval_role.value
-    elif data.approval_role == PurchaseApprovalRole.department_head:
-        request.status = PurchaseRequestStatus.pending_responsible_leader.value
-        request.rejected_step = None
     else:
-        request.status = PurchaseRequestStatus.approved.value
-        request.rejected_step = None
+        approvals.append(approval)
+        required_count = PURCHASE_APPROVAL_REQUIRED_COUNTS.get(
+            data.approval_role,
+            1,
+        )
+        approved_count = _count_current_round_approvals(
+            approvals,
+            approval_role=data.approval_role,
+        )
+        if approved_count < required_count:
+            request.status = expected_status
+            request.rejected_step = None
+        elif workflow_index + 1 < len(workflow):
+            next_role = workflow[workflow_index + 1]
+            request.status = APPROVAL_ROLE_TO_PENDING_STATUS[next_role].value
+            request.rejected_step = None
+        else:
+            request.status = PurchaseRequestStatus.approved.value
+            request.rejected_step = None
     request.status_updated_at = now
     await db.flush()
     return await _get_purchase_request_response(repository, request_id)
 
 
+def get_purchase_approval_workflow(
+    category: str | PurchaseRequestCategory,
+) -> tuple[PurchaseApprovalRole, ...]:
+    category_value = (
+        category.value if isinstance(category, PurchaseRequestCategory) else category
+    )
+    return PURCHASE_APPROVAL_WORKFLOWS.get(
+        category_value,
+        DEFAULT_PURCHASE_APPROVAL_WORKFLOW,
+    )
+
+
+def _count_current_round_approvals(
+    approvals: list[PurchaseRequestApproval],
+    *,
+    approval_role: PurchaseApprovalRole,
+) -> int:
+    rejected_times = [
+        approval.approval_time
+        for approval in approvals
+        if approval.result == PurchaseApprovalResult.rejected.value
+    ]
+    latest_rejection = max(rejected_times) if rejected_times else None
+    return sum(
+        approval.approval_role == approval_role.value
+        and approval.result == PurchaseApprovalResult.approved.value
+        and (
+            latest_rejection is None
+            or approval.approval_time > latest_rejection
+        )
+        for approval in approvals
+    )
+
+
 def _build_purchase_request_items(
-    item_inputs: list,
+    item_inputs: list[PurchaseRequestItemInput],
+    *,
+    category: str | PurchaseRequestCategory,
 ) -> tuple[list[PurchaseRequestItem], Decimal]:
+    category_value = (
+        category.value if isinstance(category, PurchaseRequestCategory) else category
+    )
     items: list[PurchaseRequestItem] = []
     total_amount = Decimal("0")
     for index, item in enumerate(item_inputs, start=1):
+        item_category = _resolve_item_category(
+            item.item_category,
+            request_category=category_value,
+            index=index,
+        )
+        item_uses_material_fields = (
+            item_category in MATERIAL_FIELD_PURCHASE_CATEGORY_VALUES
+        )
+        if item_uses_material_fields:
+            if not item.material_code.strip():
+                raise ValueError(f"第{index}条明细缺少物料编码")
+            if not item.material_description.strip():
+                raise ValueError(f"第{index}条明细缺少物料说明")
+        elif not item.product_name.strip():
+            raise ValueError(f"第{index}条明细缺少商品名称")
+
         line_amount = _calculate_line_amount(item.quantity, item.unit_price)
         total_amount += line_amount
         items.append(
             PurchaseRequestItem(
                 purchase_request_id="",
                 sequence=index,
+                item_category=item_category,
                 product_name=item.product_name,
                 specification=item.specification,
+                material_code=item.material_code,
+                material_description=item.material_description,
+                rule_model=item.rule_model,
                 purpose=item.purpose,
                 material=item.material,
                 brand=item.brand,
@@ -626,6 +866,25 @@ def _build_purchase_request_items(
             )
         )
     return items, total_amount.quantize(MONEY_QUANT, rounding=ROUND_HALF_UP)
+
+
+def _resolve_item_category(
+    item_category: PurchaseRequestCategory | None,
+    *,
+    request_category: str,
+    index: int,
+) -> str:
+    resolved = item_category.value if item_category else None
+    if request_category == PurchaseRequestCategory.urgent.value:
+        if not resolved:
+            raise ValueError(f"第{index}条明细缺少申请类型")
+        if item_category not in NORMAL_PURCHASE_CATEGORIES:
+            raise ValueError(f"第{index}条明细申请类型无效")
+        return resolved
+
+    if resolved and resolved != request_category:
+        raise ValueError(f"第{index}条明细申请类型与采购分类不一致")
+    return request_category
 
 
 def _calculate_line_amount(quantity: Decimal, unit_price: Decimal) -> Decimal:
@@ -653,8 +912,12 @@ def _build_purchase_order_line(
             "request_date": request.request_date,
             "item_id": item.id,
             "item_sequence": item.sequence,
+            "item_category": item.item_category or request.category,
             "product_name": item.product_name,
             "specification": item.specification,
+            "material_code": item.material_code,
+            "material_description": item.material_description,
+            "rule_model": item.rule_model,
             "purpose": item.purpose,
             "material": item.material,
             "brand": item.brand,
@@ -673,22 +936,31 @@ def _build_purchase_order_workbook(
     year: int,
     month: int,
     category_label: str,
+    material_field_mode: bool | None | str,
 ) -> Workbook:
     workbook = Workbook()
     worksheet = workbook.active
     worksheet.title = "Sheet1"
-    _apply_purchase_order_sheet_setup(worksheet)
+    headers = _get_purchase_order_export_headers(material_field_mode)
+    column_count = len(headers)
+    amount_column = headers.index("总额（元）") + 1
+    _apply_purchase_order_sheet_setup(
+        worksheet,
+        _get_purchase_order_export_column_widths(material_field_mode),
+    )
 
     worksheet.row_dimensions[1].height = 9
     _write_merged_title(
         worksheet,
         2,
         "丽珠集团（宁夏）制药有限公司",
+        column_count,
     )
     _write_merged_title(
         worksheet,
         3,
         f"{year}年{month:02d}月份{category_label}申购单汇总",
+        column_count,
     )
 
     row_index = 4
@@ -696,14 +968,21 @@ def _build_purchase_order_workbook(
     for department, department_lines in _group_purchase_order_lines_by_department(
         lines
     ):
-        _write_department_row(worksheet, row_index, department)
+        _write_department_row(worksheet, row_index, department, column_count)
         row_index += 1
-        _write_purchase_order_header_row(worksheet, row_index)
+        _write_purchase_order_header_row(worksheet, row_index, headers)
         row_index += 1
 
         first_detail_row = row_index
         for index, line in enumerate(department_lines, start=1):
-            _write_purchase_order_detail_row(worksheet, row_index, index, line)
+            _write_purchase_order_detail_row(
+                worksheet,
+                row_index,
+                index,
+                line,
+                material_field_mode,
+                amount_column,
+            )
             row_index += 1
 
         total_row = row_index
@@ -712,26 +991,89 @@ def _build_purchase_order_workbook(
             worksheet,
             total_row,
             "合计",
-            f"=SUM(J{first_detail_row}:J{row_index - 1})",
+            f"=SUM({get_column_letter(amount_column)}{first_detail_row}:"
+            f"{get_column_letter(amount_column)}{row_index - 1})",
+            column_count,
+            amount_column,
         )
         row_index += 1
 
     total_formula = (
-        f"=SUM({','.join(f'J{row}' for row in total_rows)})"
+        "=SUM("
+        f"{','.join(f'{get_column_letter(amount_column)}{row}' for row in total_rows)}"
+        ")"
         if total_rows
         else "0"
     )
-    _write_purchase_order_total_row(worksheet, row_index, "总计", total_formula)
+    _write_purchase_order_total_row(
+        worksheet,
+        row_index,
+        "总计",
+        total_formula,
+        column_count,
+        amount_column,
+    )
     row_index += 1
-    _write_signature_row(worksheet, row_index)
-    worksheet.print_area = f"A1:K{row_index}"
+    _write_signature_row(worksheet, row_index, column_count)
+    worksheet.print_area = f"A1:{get_column_letter(column_count)}{row_index}"
     return workbook
 
 
 def _build_purchase_order_row_values(
     index: int,
     line: PurchaseOrderLineResponse,
+    material_field_mode: bool | None | str,
 ) -> list[str | int | Decimal]:
+    if material_field_mode is True:
+        return [
+            index,
+            line.material_code,
+            line.material_description,
+            line.rule_model,
+            line.purpose,
+            line.material,
+            line.brand,
+            line.quantity,
+            line.unit,
+            line.unit_price,
+            line.total_amount,
+            line.remarks,
+        ]
+    if material_field_mode is None:
+        return [
+            index,
+            line.material_code or line.product_name,
+            line.material_description or line.product_name,
+            line.rule_model or line.specification,
+            line.purpose,
+            line.material,
+            line.brand,
+            line.quantity,
+            line.unit,
+            line.unit_price,
+            line.total_amount,
+            line.remarks,
+        ]
+    if material_field_mode == "urgent":
+        item_category_label = PURCHASE_CATEGORY_LABELS.get(
+            line.item_category or "",
+            line.item_category or "",
+        )
+        return [
+            index,
+            item_category_label,
+            line.material_code or line.product_name,
+            line.material_description or line.product_name,
+            line.rule_model or line.specification,
+            line.purpose,
+            line.material,
+            line.brand,
+            line.quantity,
+            line.unit,
+            line.unit_price,
+            line.total_amount,
+            line.remarks,
+        ]
     return [
         index,
         line.product_name,
@@ -765,8 +1107,33 @@ def _group_purchase_order_lines_by_department(
     return list(groups.items())
 
 
-def _apply_purchase_order_sheet_setup(worksheet) -> None:
-    for column_letter, width in PURCHASE_ORDER_EXPORT_COLUMN_WIDTHS.items():
+def _get_purchase_order_export_headers(
+    material_field_mode: bool | None | str,
+) -> list[str]:
+    if material_field_mode is True:
+        return PURCHASE_ORDER_EXPORT_MATERIAL_HEADERS
+    if material_field_mode is None:
+        return PURCHASE_ORDER_EXPORT_COMPATIBILITY_HEADERS
+    if material_field_mode == "urgent":
+        return PURCHASE_ORDER_EXPORT_URGENT_HEADERS
+    return PURCHASE_ORDER_EXPORT_HEADERS
+
+
+def _get_purchase_order_export_column_widths(
+    material_field_mode: bool | None | str,
+) -> dict[str, float]:
+    if material_field_mode == "urgent":
+        return PURCHASE_ORDER_EXPORT_URGENT_COLUMN_WIDTHS
+    if material_field_mode is True or material_field_mode is None:
+        return PURCHASE_ORDER_EXPORT_MATERIAL_COLUMN_WIDTHS
+    return PURCHASE_ORDER_EXPORT_COLUMN_WIDTHS
+
+
+def _apply_purchase_order_sheet_setup(
+    worksheet,
+    column_widths: dict[str, float],
+) -> None:
+    for column_letter, width in column_widths.items():
         worksheet.column_dimensions[column_letter].width = width
     worksheet.page_setup.orientation = "landscape"
     worksheet.page_setup.paperSize = worksheet.PAPERSIZE_A4
@@ -783,12 +1150,17 @@ def _apply_purchase_order_sheet_setup(worksheet) -> None:
     )
 
 
-def _write_merged_title(worksheet, row_index: int, value: str) -> None:
+def _write_merged_title(
+    worksheet,
+    row_index: int,
+    value: str,
+    column_count: int,
+) -> None:
     worksheet.merge_cells(
         start_row=row_index,
         start_column=1,
         end_row=row_index,
-        end_column=11,
+        end_column=column_count,
     )
     worksheet.row_dimensions[row_index].height = 27
     cell = worksheet.cell(row_index, 1, value)
@@ -796,12 +1168,17 @@ def _write_merged_title(worksheet, row_index: int, value: str) -> None:
     cell.alignment = Alignment(horizontal="center", vertical="center")
 
 
-def _write_department_row(worksheet, row_index: int, department: str) -> None:
+def _write_department_row(
+    worksheet,
+    row_index: int,
+    department: str,
+    column_count: int,
+) -> None:
     worksheet.row_dimensions[row_index].height = 32.15
     worksheet.cell(row_index, 1, f"申购部门：{department}")
     fill = PatternFill("solid", fgColor="D9E1F4")
     border = _purchase_order_border(top=True, bottom=True)
-    for cell in worksheet[row_index][0:11]:
+    for cell in worksheet[row_index][0:column_count]:
         cell.font = Font(name="宋体", size=12, bold=True)
         cell.alignment = Alignment(
             horizontal="left",
@@ -812,9 +1189,13 @@ def _write_department_row(worksheet, row_index: int, department: str) -> None:
         cell.border = border
 
 
-def _write_purchase_order_header_row(worksheet, row_index: int) -> None:
+def _write_purchase_order_header_row(
+    worksheet,
+    row_index: int,
+    headers: list[str],
+) -> None:
     worksheet.row_dimensions[row_index].height = 32.15
-    for column_index, header in enumerate(PURCHASE_ORDER_EXPORT_HEADERS, start=1):
+    for column_index, header in enumerate(headers, start=1):
         cell = worksheet.cell(row_index, column_index, header)
         cell.font = Font(name="宋体", size=12, bold=True)
         cell.alignment = Alignment(
@@ -830,10 +1211,12 @@ def _write_purchase_order_detail_row(
     row_index: int,
     index: int,
     line: PurchaseOrderLineResponse,
+    material_field_mode: bool | None | str,
+    amount_column: int,
 ) -> None:
     worksheet.row_dimensions[row_index].height = 32.15
     for column_index, value in enumerate(
-        _build_purchase_order_row_values(index, line),
+        _build_purchase_order_row_values(index, line, material_field_mode),
         start=1,
     ):
         cell = worksheet.cell(row_index, column_index, value)
@@ -844,14 +1227,19 @@ def _write_purchase_order_detail_row(
             wrap_text=True,
         )
         cell.border = _purchase_order_border()
-    for column_index in (2, 3, 4, 5, 6, 11):
+    text_columns = (
+        (2, 3, 4, 5, 6, 11)
+        if material_field_mode is False
+        else (2, 3, 4, 5, 6, 7, 12)
+    )
+    for column_index in text_columns:
         worksheet.cell(row_index, column_index).alignment = Alignment(
             horizontal="left",
             vertical="center",
             wrap_text=True,
         )
-    worksheet.cell(row_index, 9).number_format = "0.00"
-    worksheet.cell(row_index, 10).number_format = "0.00"
+    worksheet.cell(row_index, amount_column - 1).number_format = "0.00"
+    worksheet.cell(row_index, amount_column).number_format = "0.00"
 
 
 def _write_purchase_order_total_row(
@@ -859,24 +1247,30 @@ def _write_purchase_order_total_row(
     row_index: int,
     label: str,
     total_formula: str,
+    column_count: int,
+    amount_column: int,
 ) -> None:
     worksheet.row_dimensions[row_index].height = 32.15
     worksheet.cell(row_index, 1, label)
-    worksheet.cell(row_index, 10, total_formula)
-    for cell in worksheet[row_index][0:11]:
+    worksheet.cell(row_index, amount_column, total_formula)
+    for cell in worksheet[row_index][0:column_count]:
         cell.font = Font(name="宋体", size=12, bold=(label == "合计"))
         cell.alignment = Alignment(horizontal="center", vertical="center")
         cell.border = _purchase_order_border(top=True, bottom=True)
-    worksheet.cell(row_index, 10).font = Font(name="宋体", size=12, bold=True)
-    worksheet.cell(row_index, 10).number_format = "0.00"
+    worksheet.cell(row_index, amount_column).font = Font(
+        name="宋体",
+        size=12,
+        bold=True,
+    )
+    worksheet.cell(row_index, amount_column).number_format = "0.00"
 
 
-def _write_signature_row(worksheet, row_index: int) -> None:
+def _write_signature_row(worksheet, row_index: int, column_count: int) -> None:
     worksheet.merge_cells(
         start_row=row_index,
         start_column=1,
         end_row=row_index,
-        end_column=11,
+        end_column=column_count,
     )
     worksheet.row_dimensions[row_index].height = 32.15
     cell = worksheet.cell(
@@ -909,10 +1303,17 @@ async def _get_purchase_request_response(
         raise ValueError("采购申请不存在")
     items = await repository.list_items(request_id)
     approvals = await repository.list_approvals(request_id)
+    serialized_items = [
+        {
+            **item.__dict__,
+            "item_category": item.item_category or request.category,
+        }
+        for item in items
+    ]
     return PurchaseRequestResponse.model_validate(
         {
             **request.__dict__,
-            "items": items,
+            "items": serialized_items,
             "approvals": approvals,
         }
     )

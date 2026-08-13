@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
 import inspect
 import json
 import logging
@@ -86,10 +87,7 @@ def _identity_denial_message(response: httpx.Response) -> str:
     if "not active" in normalized:
         return "绑定的 Dazah 用户已停用或删除。请管理员恢复账号，或将飞书身份重新绑定到有效用户。"
     if "group is not admitted" in normalized:
-        return (
-            "当前飞书群尚未加入 Livzon Agent 群聊白名单。请管理员在“飞书接入”中添加本群，"
-            "保存配置后重试。"
-        )
+        return "当前飞书群尚未加入 Livzon Agent 群聊白名单。请管理员在“飞书接入”中添加本群，保存配置后重试。"
     return (
         "飞书身份尚未获得助手准入。请管理员在“系统设置 → Livzon Agent”中核对“飞书接入”"
         "的 App、租户和群聊白名单，并在“身份与准入”检查目录绑定。"
@@ -105,7 +103,9 @@ async def _resolve_trusted_subject(
     if not base_url or not token:
         raise RuntimeError("Dazah external identity resolver is not configured")
     private_chat_types = {"dm", "p2p", "private", "direct"}
-    is_confirmation_action = _parse_confirmation_action(envelope.text) is not None
+    is_confirmation_action = (
+        _parse_confirmation_action(envelope.text) is not None or _parse_interaction_action(envelope.text) is not None
+    )
     payload = {
         "tenant_id": str(config.get("tenant_id") or "default"),
         "app_fingerprint": str(config["app_id"]),
@@ -121,8 +121,7 @@ async def _resolve_trusted_subject(
         # must not be rejected by an incorrectly inferred group allowlist.
         "chat_id": (
             envelope.chat_id
-            if not is_confirmation_action
-            and envelope.chat_type.strip().lower() not in private_chat_types
+            if not is_confirmation_action and envelope.chat_type.strip().lower() not in private_chat_types
             else None
         ),
     }
@@ -290,6 +289,101 @@ def _parse_confirmation_action(text: str) -> tuple[str, str, str] | None:
     return None
 
 
+def _parse_interaction_action(text: str) -> dict[str, Any] | None:
+    normalized = text.strip()
+    if not normalized.startswith("/card "):
+        return None
+    try:
+        action = json.loads(normalized[normalized.index("{") :])
+    except (ValueError, json.JSONDecodeError):
+        return None
+    callback_value = action.get("value")
+    metadata = {
+        **action,
+        **(callback_value if isinstance(callback_value, dict) else {}),
+    }
+    request_id = metadata.get("interaction_request_id")
+    version = metadata.get("interaction_version")
+    if not isinstance(request_id, str) or not request_id:
+        return None
+    if not isinstance(version, int) or version < 1:
+        return None
+    values = action.get("form_value") or action.get("form_values")
+    if not isinstance(values, dict):
+        values = metadata.get("interaction_values")
+    if not isinstance(values, dict):
+        reserved = {
+            "interaction_request_id",
+            "interaction_version",
+            "interaction_idempotency_key",
+            "resource_domain",
+            "type",
+            "value",
+            "form_value",
+            "form_values",
+            "name",
+            "tag",
+            "timezone",
+        }
+        values = {key: value for key, value in metadata.items() if key not in reserved}
+    return {
+        "request_id": request_id,
+        "version": version,
+        "idempotency_key": str(
+            metadata.get("interaction_idempotency_key") or hashlib.sha256(normalized.encode()).hexdigest()
+        ),
+        "values": values,
+    }
+
+
+async def _submit_interaction_action(
+    config: dict[str, Any],
+    *,
+    action: dict[str, Any],
+    subject: dict[str, Any],
+) -> dict[str, Any]:
+    base_url = str(config.get("dazah_api_base_url") or "").rstrip("/")
+    token = str(config.get("internal_token") or "")
+    if not base_url or not token:
+        raise RuntimeError("Dazah interaction API is not configured")
+    async with httpx.AsyncClient(timeout=30) as client:
+        response = await client.post(
+            f"{base_url}/agent/internal/feishu/interaction-requests/{action['request_id']}/submissions",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "subject": subject,
+                "submission": {
+                    "request_version": action["version"],
+                    "idempotency_key": action["idempotency_key"],
+                    "values": action["values"],
+                },
+            },
+        )
+    response.raise_for_status()
+    data = response.json()
+    return data if isinstance(data, dict) else {"data": data}
+
+
+async def _process_interaction_submission(
+    gateway: DazahFeishuGateway,
+    envelope: DazahInboundEnvelope,
+    config: dict[str, Any],
+    *,
+    action: dict[str, Any],
+    subject: dict[str, Any],
+) -> None:
+    try:
+        await _submit_interaction_action(config, action=action, subject=subject)
+        await _send_confirmation_feedback(gateway, envelope, "填写内容已校验并写入目标飞书表格。")
+    except (ValueError, RuntimeError, httpx.HTTPError) as exc:
+        await _send_confirmation_feedback(
+            gateway,
+            envelope,
+            "填写提交失败，内容已保留，请稍后重试或在 Web 查看失败原因。",
+        )
+        logging.getLogger(__name__).warning("Feishu interaction submission failed: %s", type(exc).__name__)
+
+
 def _delivery_result(result: Any) -> tuple[bool, str | None, str]:
     if isinstance(result, bool):
         return result, None, "" if result else "native send returned false"
@@ -309,8 +403,7 @@ def _confirmation_error_feedback(exc: Exception) -> str:
     if isinstance(exc, PermissionError):
         return "确认处理失败：仅原请求人可操作。"
     if isinstance(exc, ValueError) and any(
-        marker in str(exc).lower()
-        for marker in ("already", "pending", "expired", "handled")
+        marker in str(exc).lower() for marker in ("already", "pending", "expired", "handled")
     ):
         return "该确认已处理或已过期，未重复执行。"
     return "确认处理失败，请稍后重试或联系管理员查看 Trace。"
@@ -382,9 +475,7 @@ def _inbound_receipt_key(envelope: DazahInboundEnvelope) -> str:
 def _agent_backend_v2_stream_url(agent_url: str) -> str:
     normalized = agent_url.rstrip("/")
     if not normalized.endswith("/v2/agent/runs"):
-        raise RuntimeError(
-            "agent_url must target AgentBackend V2 (/v2/agent/runs)"
-        )
+        raise RuntimeError("agent_url must target AgentBackend V2 (/v2/agent/runs)")
     return f"{normalized}/stream"
 
 
@@ -577,8 +668,7 @@ async def _consume_agent_stream(
             if attempt + 1 < final_edit_attempts:
                 await asyncio.sleep(0.25 * (2**attempt))
         logging.getLogger(__name__).warning(
-            "Final Feishu stream edit failed after %d attempts; "
-            "suppressing a second message bubble: %s",
+            "Final Feishu stream edit failed after %d attempts; suppressing a second message bubble: %s",
             max(1, final_edit_attempts),
             last_error or "native edit returned false",
         )
@@ -660,13 +750,12 @@ async def _main() -> None:
         )
     )
     gateway = DazahFeishuGateway(adapter)
+
     async def handle_message(event: Any) -> str | None:
         envelope = DazahInboundEnvelope.from_event(event)
         receipt_key = _inbound_receipt_key(envelope)
         if not claim_inbound_message(receipt_key):
-            logging.getLogger(__name__).warning(
-                "Suppressed duplicate Feishu inbound message"
-            )
+            logging.getLogger(__name__).warning("Suppressed duplicate Feishu inbound message")
             cleanup_cached_attachments(envelope.attachments)
             return None
         try:
@@ -680,6 +769,19 @@ async def _main() -> None:
             confirmation_owner = _trusted_confirmation_owner(subject)
 
             text = envelope.text.strip()
+            interaction_action = _parse_interaction_action(text)
+            if interaction_action is not None:
+                asyncio.create_task(
+                    _process_interaction_submission(
+                        gateway,
+                        envelope,
+                        config_data,
+                        action=interaction_action,
+                        subject=subject,
+                    ),
+                    name=f"feishu-interaction-{interaction_action['request_id']}",
+                )
+                return "填写请求已收到，正在校验并写入目标飞书表格。"
             confirmation_action = _parse_confirmation_action(text)
             if confirmation_action is not None:
                 confirmation_id, choice, resource_domain = confirmation_action
@@ -729,15 +831,10 @@ async def _main() -> None:
                     run_id=run_id,
                 )
             except (httpx.HTTPError, RuntimeError):
-                logging.getLogger(__name__).exception(
-                    "Failed to prepare persistent Feishu conversation"
-                )
+                logging.getLogger(__name__).exception("Failed to prepare persistent Feishu conversation")
                 return "Livzon 助手暂时无法恢复会话，请稍后重试。"
             if conversation.get("duplicate"):
-                return str(
-                    conversation.get("response_text")
-                    or "该消息已被 Livzon 助手接收，正在处理中。"
-                )
+                return str(conversation.get("response_text") or "该消息已被 Livzon 助手接收，正在处理中。")
             if conversation.get("response_text"):
                 return str(conversation["response_text"])
             persistent_session_id = str(conversation["session_id"])
@@ -745,12 +842,9 @@ async def _main() -> None:
             attachment_catalog = list(conversation.get("attachment_catalog") or [])
             if envelope.reply_to_text and (
                 not persistent_messages
-                or persistent_messages[-1]
-                != {"role": "assistant", "content": envelope.reply_to_text}
+                or persistent_messages[-1] != {"role": "assistant", "content": envelope.reply_to_text}
             ):
-                persistent_messages.append(
-                    {"role": "assistant", "content": envelope.reply_to_text}
-                )
+                persistent_messages.append({"role": "assistant", "content": envelope.reply_to_text})
             payload = envelope.to_agent_backend_v2_request(
                 subject=subject,
                 trace_id=trace_id,
@@ -759,9 +853,7 @@ async def _main() -> None:
                 attachment_catalog=attachment_catalog,
                 persistent_session_id=persistent_session_id,
                 memory_policy=(
-                    conversation.get("memory_policy")
-                    if isinstance(conversation.get("memory_policy"), dict)
-                    else None
+                    conversation.get("memory_policy") if isinstance(conversation.get("memory_policy"), dict) else None
                 ),
             )
             headers = {}
@@ -784,6 +876,7 @@ async def _main() -> None:
                         json=payload,
                     ) as response:
                         response.raise_for_status()
+
                         async def persist_response(
                             assistant_message: str,
                             delivered: bool,
@@ -806,9 +899,7 @@ async def _main() -> None:
                                     ),
                                 )
                             except httpx.HTTPError:
-                                logging.getLogger(__name__).exception(
-                                    "Failed to persist Feishu conversation result"
-                                )
+                                logging.getLogger(__name__).exception("Failed to persist Feishu conversation result")
 
                         return await _consume_agent_stream(
                             _iter_sse_events(

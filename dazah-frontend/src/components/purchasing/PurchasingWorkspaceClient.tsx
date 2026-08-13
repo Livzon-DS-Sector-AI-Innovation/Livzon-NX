@@ -17,6 +17,8 @@ import {
 import type { ReactNode } from 'react'
 import type { PurchaseRequestCategory } from '@/types/purchasing'
 import {
+  approvalRoleLabels,
+  purchaseApprovalWorkflows,
   purchaseCategories,
   purchaseCategoryLabels,
 } from './purchaseRequestConstants'
@@ -40,12 +42,12 @@ const commonActions: WorkspaceAction[] = [
     description: '按物料类别填写申购部门、申请日期和明细。',
     href: '#request-categories',
     icon: <FormOutlined />,
-    tag: '七类申请',
+    tag: '十二类申请',
   },
   {
     title: '采购审批',
-    description: '进入部门负责人或分管领导审批待处理申请。',
-    href: '/purchasing/approval/hardware/department-head',
+    description: '按采购类型进入对应审批节点，处理待审批申请。',
+    href: '/purchasing/approval/hardware/hardware-warehouse',
     icon: <AuditOutlined />,
     tag: '流程处理',
   },
@@ -96,7 +98,12 @@ const categoryDescriptions: Record<PurchaseRequestCategory, string> = {
   'raw-auxiliary': '原辅料申购',
   'chemical-glass': '化玻申购',
   electrical: '电器申购',
-  'labor-protection': '劳保申购',
+  'advertising-printing': '广告/印刷申购',
+  fire: '消防申购',
+  packaging: '包材申购',
+  'labor-special': '特防申购',
+  'labor-miscellaneous': '杂品申购',
+  urgent: '加急采购申请',
 }
 
 const processSteps: ProcessStep[] = [
@@ -105,12 +112,8 @@ const processSteps: ProcessStep[] = [
     description: '按类别录入申购部门和明细。',
   },
   {
-    title: '部门负责人审批',
-    description: '确认部门需求和申请内容。',
-  },
-  {
-    title: '分管领导审批',
-    description: '完成最终审批流转。',
+    title: '按类别审批',
+    description: '不同采购类型进入对应的仓库、安全、部门和领导节点。',
   },
   {
     title: '订单汇总',
@@ -120,6 +123,17 @@ const processSteps: ProcessStep[] = [
     title: '发票/合同处理',
     description: '衔接票据识别和合同生成。',
   },
+]
+
+const approvalWorkflowSummaryCategories: Array<{
+  label: string
+  category: PurchaseRequestCategory
+}> = [
+  { label: '五金材料', category: 'hardware' },
+  { label: '电器', category: 'electrical' },
+  { label: '特防', category: 'labor-special' },
+  { label: '加急单', category: 'urgent' },
+  { label: '其他采购类型', category: 'office' },
 ]
 
 export function PurchasingWorkspaceClient() {
@@ -252,6 +266,16 @@ export function PurchasingWorkspaceClient() {
                 </li>
               ))}
             </ol>
+            <div className="mx-4 mb-4 space-y-2 border-t border-[var(--color-hairline)] pt-4">
+              {approvalWorkflowSummaryCategories.map(({ label, category }) => (
+                <div key={category} className="text-[12px] leading-5 text-[var(--color-steel)]">
+                  <span className="font-medium text-[var(--color-charcoal)]">{label}：</span>
+                  {purchaseApprovalWorkflows[category]
+                    .map((role) => approvalRoleLabels[role])
+                    .join(' → ')}
+                </div>
+              ))}
+            </div>
           </section>
 
           <section className="rounded-[12px] border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-4">

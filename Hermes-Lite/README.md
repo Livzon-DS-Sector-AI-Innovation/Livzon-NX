@@ -379,14 +379,14 @@ Hermes-Lite 只注册一个 `dazah_tool`。模型先调用 `search`，按需调�
 | `agent.get_current_time` | 获取当前北京时间、UTC 时间和 cron 时区 |
 | `agent.get_my_access_scope` | 查询当前用户的 Livzon 有效模块、可调用工具和可编排工具 |
 | `agent.create_automation` | 直接创建不含时间触发的自动化流程，由后端生成定义并返回待确认项 |
-| `agent.create_scheduled_task` | 直接创建含 Cron 时间触发的定时任务，由后端生成定义并返回待确认项 |
+| `agent.create_scheduled_task` | 创建 Cron、单次或间隔定时任务草案，由后端生成定义并返回结构化预览 |
 | `agent.list_automations` | 查询本人、共享或管理员脱敏平台范围的自动化 |
 | `agent.get_automation` | 查看自动化摘要和触发器 |
 | `agent.list_automation_audit` | 查看自动化版本、修改摘要和变更字段 |
 | `agent.update_automation` | 更新自动化定义，返回待确认项 |
 | `agent.set_automation_enabled` | 启用或暂停自动化，返回待确认项 |
 | `agent.archive_automation` | 归档自动化，返回待确认项 |
-| `agent.simulate_automation` | 预览 cron、时区、并发策略与未来执行时间，不执行业务动作 |
+| `agent.simulate_automation` | 预览计划、时区、并发策略与未来执行时间，不执行业务动作 |
 | `agent.list_scheduled_triggers` | 查询已配置的计划触发器 |
 | `agent.list_automation_runs` | 查询自动化运行记录 |
 | `agent.get_automation_run` | 查看运行、步骤和结构化时间线 |
@@ -401,6 +401,7 @@ Livzon Task 规则由 Dazah 后端 `ToolRegistry` 和 `ToolExecutor` 控制：
 - 对话层只保留“自动化流程”和“定时任务”两类，不再暴露旧工作流操作。
 - 不含时间语义时调用 `agent.create_automation`；出现日期、星期、时刻、间隔或重复语义时调用 `agent.create_scheduled_task`。
 - 创建定时任务时，`requirement` 必须保留用户完整原始需求；需要通过飞书发送查询数据、汇总、统计、清单、报表或记录时，`actions` 必须先执行对应查询，再执行 `identity.deliver_feishu_message`。
+- 单次计划使用 `once`，分钟/小时/天间隔使用 `interval`，其他周期使用五段 `cron`；创建结果始终是草案，核对后再通过 `agent.confirm_automation` 生成版本授权并启用。
 - 后端会在每次定时运行时把前序查询结果合并到飞书正文；仅发送固定寒暄或“请查收”的数据任务会被拒绝创建。
 - 后端负责生成、编译和校验节点定义，LLM 不拼装底层 `notify`、`condition` 或触发器结构。
 - 审批、驳回、批准、重启等人工责任判断操作不得被加入自动化。

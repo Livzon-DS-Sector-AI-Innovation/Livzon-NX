@@ -843,9 +843,7 @@ class AgentService:
             user_id=current_user.id if current_user else None,
         )
         if memory_policy.notice_required:
-            await self.memory_policy_service.mark_notice_sent(
-                db, user=current_user
-            )
+            await self.memory_policy_service.mark_notice_sent(db, user=current_user)
 
         pending_confirmations = [
             self._confirmation_out(item)
@@ -1439,9 +1437,7 @@ class AgentService:
             user_id=current_user.id,
         )
         if request.memory_notice_delivered:
-            await self.memory_policy_service.mark_notice_sent(
-                db, user=current_user
-            )
+            await self.memory_policy_service.mark_notice_sent(db, user=current_user)
         await db.flush()
         return FeishuConversationCompleteResponse(
             session_id=session.id,
@@ -3276,6 +3272,12 @@ class AgentService:
                     "item_name",
                     "specification",
                     "spec",
+                    "material_code",
+                    "code",
+                    "material_description",
+                    "description",
+                    "rule_model",
+                    "model",
                     "purpose",
                     "note",
                     "quantity",
@@ -3284,6 +3286,8 @@ class AgentService:
                     "price",
                     "remarks",
                     "remark",
+                    "item_category",
+                    "purchase_category",
                 )
                 if key in source
             }
@@ -3303,6 +3307,12 @@ class AgentService:
                 or source.get("date")
                 or source.get("apply_date")
                 or datetime.now(UTC).date().isoformat()
+            ),
+            "attachment_note": (
+                source.get("attachment_note")
+                or source.get("attachment_description")
+                or source.get("attachment")
+                or ""
             ),
             "items": [
                 self._normalize_purchase_request_item(item)
@@ -3339,15 +3349,34 @@ class AgentService:
             "电气": "electrical",
             "电器": "electrical",
             "电气材料": "electrical",
-            "劳保": "labor-protection",
-            "劳动防护": "labor-protection",
-            "劳保用品": "labor-protection",
+            "广告": "advertising-printing",
+            "广告用品": "advertising-printing",
+            "广告/印刷": "advertising-printing",
+            "广告印刷": "advertising-printing",
+            "消防": "fire",
+            "消防器材": "fire",
+            "印刷": "advertising-printing",
+            "印刷品": "advertising-printing",
+            "包材": "packaging",
+            "包装材料": "packaging",
+            "特防": "labor-special",
+            "劳保特防": "labor-special",
+            "杂品": "labor-miscellaneous",
+            "劳保杂品": "labor-miscellaneous",
+            "加急": "urgent",
+            "加急单": "urgent",
+            "紧急采购": "urgent",
         }
         return aliases.get(raw, raw)
 
     @staticmethod
     def _normalize_purchase_request_item(item: dict[str, Any]) -> dict[str, Any]:
-        return {
+        raw_item_category = (
+            item.get("item_category")
+            or item.get("purchase_category")
+            or item.get("category")
+        )
+        normalized = {
             "product_name": (
                 item.get("product_name")
                 or item.get("name")
@@ -3357,6 +3386,16 @@ class AgentService:
             "specification": (
                 item.get("specification") or item.get("spec") or item.get("model") or ""
             ),
+            "material_code": item.get("material_code") or item.get("code") or "",
+            "material_description": (
+                item.get("material_description")
+                or item.get("description")
+                or item.get("material_name")
+                or ""
+            ),
+            "rule_model": (
+                item.get("rule_model") or item.get("rule") or item.get("model") or ""
+            ),
             "purpose": item.get("purpose") or item.get("use") or item.get("note") or "",
             "material": item.get("material") or "",
             "brand": item.get("brand") or "",
@@ -3365,6 +3404,11 @@ class AgentService:
             "unit_price": item.get("unit_price") or item.get("price"),
             "remarks": item.get("remarks") or item.get("remark") or "",
         }
+        if raw_item_category is not None:
+            normalized["item_category"] = AgentService._normalize_purchase_category(
+                raw_item_category
+            )
+        return normalized
 
     @staticmethod
     def _require_local_db(db: AsyncSession | None) -> None:

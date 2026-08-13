@@ -36,8 +36,10 @@ from services.feishu_runtime import (
     load_gateway_settings,
     platform_sync_loop,
     restore_credentials,
+    resource_fingerprint,
     resolve_confirmation,
     revoke_grant,
+    run_cli,
     runtime_metrics,
     save_gateway_settings,
     stage_credentials,
@@ -60,6 +62,7 @@ from tools.dazah_platform import (
     reset_dazah_thread_request_context,
     unregister_dazah_task_context,
 )
+from tools.lark_cli import lark_cli as execute_lark_cli
 
 logger = logging.getLogger(__name__)
 AGENT_BACKEND_PROTOCOL_VERSION = "2.0"
@@ -157,7 +160,7 @@ def _build_user_memory_repository() -> UserMemoryRepository:
     try:
         from hermes_cli.config import load_config
 
-        config = (load_config().get("memory") or {})
+        config = load_config().get("memory") or {}
     except Exception:
         config = {}
     try:
@@ -208,6 +211,37 @@ class UserMemoryControlRequest(BaseModel):
     cleared_at: datetime | None = None
 
 
+class AutomationAnalysisRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    run_id: uuid.UUID
+    step_key: str = Field(pattern=r"^[A-Za-z][A-Za-z0-9_-]*$", max_length=80)
+    instruction: str = Field(min_length=1, max_length=8000)
+    inputs: dict[str, Any] = Field(default_factory=dict)
+    output_schema: dict[str, Any] = Field(default_factory=dict)
+    max_output_chars: int = Field(default=8000, ge=100, le=32_000)
+
+
+class AutomationBitableInspectRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    base_token: str = Field(min_length=1, max_length=255)
+    table_id: str = Field(min_length=1, max_length=255)
+
+
+class AutomationSheetReadRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    base_token: str = Field(min_length=1, max_length=255)
+    table_id: str = Field(min_length=1, max_length=255)
+    range: str = Field(min_length=2, max_length=255)
+
+
+class AutomationBitableWriteRequest(AutomationBitableInspectRequest):
+    run_id: uuid.UUID
+    step_key: str = Field(pattern=r"^[A-Za-z][A-Za-z0-9_-]*$", max_length=80)
+    user_id: str = Field(min_length=1, max_length=64)
+    resource_url: str = Field(min_length=1, max_length=2000)
+    fields: dict[str, Any] = Field(min_length=1, max_length=100)
+
+
 def _require_internal_token(authorization: str | None) -> str:
     expected = os.getenv("HERMES_INTERNAL_TOKEN", "")
     if not expected:
@@ -218,18 +252,107 @@ def _require_internal_token(authorization: str | None) -> str:
     return expected
 
 
+def _run_automation_analysis(payload: AutomationAnalysisRequest) -> dict[str, Any]:
+    agent = AIAgent(
+        base_url=os.getenv("DAZAH_LLM_BASE_URL", "http://127.0.0.1:8000/api/v1/agent/llm"),
+        api_key=os.getenv("AGENT_LLM_PROXY_TOKEN", ""),
+        provider="dazah",
+        model=os.getenv("DAZAH_LLM_MODEL", "dazah-active-text"),
+        api_mode="chat_completions",
+        enabled_toolsets=[],
+        disabled_toolsets=["memory"],
+        skip_memory=True,
+        quiet_mode=True,
+        platform="dazah",
+        max_iterations=1,
+        thread_id=f"automation:{payload.run_id}:{payload.step_key}",
+    )
+    result = agent.run_conversation(
+        json.dumps(payload.inputs, ensure_ascii=False, default=str),
+        system_message=(
+            "你是无人值守自动化中的受限分析节点。只能分析本次输入，不得调用工具、"
+            "不得读取记忆、不得推测缺失数据。严格返回一个 JSON object，不要添加 Markdown。\n"
+            f"任务：{payload.instruction}\n"
+            f"输出 JSON Schema：{json.dumps(payload.output_schema, ensure_ascii=False)}"
+        ),
+        conversation_history=[],
+        persist_user_message=None,
+    )
+    raw = str(result.get("final_response") or "")[: payload.max_output_chars]
+    output = _parse_json_object(raw)
+    _validate_json_schema(output, payload.output_schema)
+    return output
+
+
+def _parse_json_object(raw: str) -> dict[str, Any]:
+    normalized = raw.strip()
+    if normalized.startswith("```"):
+        normalized = re.sub(r"^```(?:json)?\s*|\s*```$", "", normalized)
+    try:
+        value = json.loads(normalized)
+    except json.JSONDecodeError as exc:
+        raise ValueError("analysis output is not valid JSON") from exc
+    if not isinstance(value, dict):
+        raise ValueError("analysis output must be a JSON object")
+    return value
+
+
+def _validate_json_schema(value: Any, schema: dict[str, Any], path: str = "output") -> None:
+    if not schema:
+        return
+    schema_type = schema.get("type")
+    expected_types: dict[str, type[Any] | tuple[type[Any], ...]] = {
+        "object": dict,
+        "array": list,
+        "string": str,
+        "number": (int, float),
+        "integer": int,
+        "boolean": bool,
+        "null": type(None),
+    }
+    expected = expected_types.get(str(schema_type))
+    if expected is not None and (
+        not isinstance(value, expected) or schema_type in {"number", "integer"} and isinstance(value, bool)
+    ):
+        raise ValueError(f"{path} does not match schema type {schema_type}")
+    if "enum" in schema and value not in schema["enum"]:
+        raise ValueError(f"{path} is not in the allowed enum")
+    if isinstance(value, str):
+        if isinstance(schema.get("maxLength"), int) and len(value) > schema["maxLength"]:
+            raise ValueError(f"{path} exceeds maxLength")
+        if isinstance(schema.get("minLength"), int) and len(value) < schema["minLength"]:
+            raise ValueError(f"{path} is shorter than minLength")
+    if isinstance(value, int | float) and not isinstance(value, bool):
+        if "minimum" in schema and value < schema["minimum"]:
+            raise ValueError(f"{path} is below minimum")
+        if "maximum" in schema and value > schema["maximum"]:
+            raise ValueError(f"{path} exceeds maximum")
+    if isinstance(value, dict):
+        required = schema.get("required") or []
+        missing = [key for key in required if key not in value]
+        if missing:
+            raise ValueError(f"{path} is missing required fields: {', '.join(missing)}")
+        properties = schema.get("properties") or {}
+        if schema.get("additionalProperties") is False:
+            unknown = sorted(set(value) - set(properties))
+            if unknown:
+                raise ValueError(f"{path} has unknown fields: {', '.join(unknown)}")
+        for key, child_schema in properties.items():
+            if key in value and isinstance(child_schema, dict):
+                _validate_json_schema(value[key], child_schema, f"{path}.{key}")
+    if isinstance(value, list) and isinstance(schema.get("items"), dict):
+        if isinstance(schema.get("maxItems"), int) and len(value) > schema["maxItems"]:
+            raise ValueError(f"{path} exceeds maxItems")
+        for index, item in enumerate(value):
+            _validate_json_schema(item, schema["items"], f"{path}[{index}]")
+
+
 @app.on_event("startup")
 async def _restore_feishu_runtime() -> None:
     if (
-        (
-            os.getenv("APP_ENV", "development").strip().lower() == "production"
-            or os.getenv("HERMES_USER_MEMORY_REQUIRE_POLICY", "false")
-            .strip()
-            .lower()
-            in {"1", "true", "yes"}
-        )
-        and user_memory_repository.cipher.ephemeral
-    ):
+        os.getenv("APP_ENV", "development").strip().lower() == "production"
+        or os.getenv("HERMES_USER_MEMORY_REQUIRE_POLICY", "false").strip().lower() in {"1", "true", "yes"}
+    ) and user_memory_repository.cipher.ephemeral:
         raise RuntimeError("HERMES_USER_MEMORY_KEYS is required in production")
     try:
         await restore_credentials()
@@ -239,8 +362,7 @@ async def _restore_feishu_runtime() -> None:
     app.state.feishu_gateway_task = asyncio.create_task(_feishu_gateway_supervisor())
     if not _memory_worker_tasks:
         _memory_worker_tasks.extend(
-            asyncio.create_task(_memory_review_worker(index), name=f"memory-worker-{index}")
-            for index in range(2)
+            asyncio.create_task(_memory_review_worker(index), name=f"memory-worker-{index}") for index in range(2)
         )
 
 
@@ -263,22 +385,15 @@ async def control_user_memory(
                 }
                 for item in items
             ],
-            "used_bytes": user_memory_repository.usage_bytes(
-                payload.tenant_id, payload.user_id
-            ),
+            "used_bytes": user_memory_repository.usage_bytes(payload.tenant_id, payload.user_id),
         }
     if payload.action == "forget":
         if not payload.argument or not payload.argument.strip():
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "argument is required")
-        removed, matches = user_memory_repository.forget_unique(
-            payload.tenant_id, payload.user_id, payload.argument
-        )
+        removed, matches = user_memory_repository.forget_unique(payload.tenant_id, payload.user_id, payload.argument)
         return {
             "removed": removed,
-            "items": [
-                {"id": item["id"], "category": item["category"]}
-                for item in matches
-            ],
+            "items": [{"id": item["id"], "category": item["category"]} for item in matches],
         }
     user_memory_repository.clear_scope(
         payload.tenant_id,
@@ -401,9 +516,7 @@ async def _restart_feishu_gateway(timeout_seconds: float = 60) -> dict[str, Any]
         raise HTTPException(status.HTTP_409_CONFLICT, "飞书 Gateway 正在重启")
 
     async with lock:
-        previous_reconnects = int(
-            getattr(app.state, "feishu_gateway_reconnects", 0)
-        )
+        previous_reconnects = int(getattr(app.state, "feishu_gateway_reconnects", 0))
         process = getattr(app.state, "feishu_gateway_process", None)
         app.state.feishu_gateway_status = "restarting"
         app.state.feishu_gateway_upstream = None
@@ -423,8 +536,7 @@ async def _restart_feishu_gateway(timeout_seconds: float = 60) -> dict[str, Any]
                 reconnects > previous_reconnects
                 and current_process is not None
                 and current_process.returncode is None
-                and getattr(app.state, "feishu_gateway_status", "inactive")
-                == "connected"
+                and getattr(app.state, "feishu_gateway_status", "inactive") == "connected"
             ):
                 return {
                     "status": "connected",
@@ -526,6 +638,182 @@ async def post_feishu_delivery(
         return enqueue_delivery(**payload.model_dump())
     except ValueError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+
+
+@app.post("/internal/automation/analyze")
+async def analyze_automation_step(
+    payload: AutomationAnalysisRequest,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    _require_internal_token(authorization)
+    try:
+        output = await asyncio.to_thread(_run_automation_analysis, payload)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+    except Exception as exc:
+        logger.exception(
+            "Automation analysis failed for run=%s step=%s",
+            payload.run_id,
+            payload.step_key,
+        )
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Hermes automation analysis failed") from exc
+    return {"output": output}
+
+
+@app.post("/internal/automation/bitable/inspect")
+async def inspect_automation_bitable(
+    payload: AutomationBitableInspectRequest,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    _require_internal_token(authorization)
+    result = await run_cli(
+        [
+            "base",
+            "+field-list",
+            "--base-token",
+            payload.base_token,
+            "--table-id",
+            payload.table_id,
+            "--format",
+            "json",
+            "--as",
+            "bot",
+        ]
+    )
+    if result.returncode != 0:
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            "飞书多维表格字段读取失败，请检查应用权限和资源授权",
+        )
+    try:
+        fields = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "飞书多维表格字段响应无效") from exc
+    return {"fields": fields}
+
+
+@app.post("/internal/automation/bitable/read")
+async def read_automation_bitable_records(
+    payload: AutomationBitableInspectRequest,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    _require_internal_token(authorization)
+    result = await run_cli(
+        [
+            "base",
+            "+record-list",
+            "--base-token",
+            payload.base_token,
+            "--table-id",
+            payload.table_id,
+            "--limit",
+            "10",
+            "--format",
+            "json",
+            "--as",
+            "bot",
+        ]
+    )
+    if result.returncode != 0:
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            "飞书多维表格记录回读失败，请检查应用权限和资源授权",
+        )
+    try:
+        records = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY, "飞书多维表格记录响应无效"
+        ) from exc
+    return {"records": records}
+
+
+@app.post("/internal/automation/sheet/read")
+async def read_automation_sheet_cells(
+    payload: AutomationSheetReadRequest,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    _require_internal_token(authorization)
+    result = await run_cli(
+        [
+            "sheets",
+            "+cells-get",
+            "--spreadsheet-token",
+            payload.base_token,
+            "--sheet-id",
+            payload.table_id,
+            "--range",
+            payload.range,
+            "--format",
+            "json",
+            "--as",
+            "bot",
+        ]
+    )
+    if result.returncode != 0:
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            "飞书电子表格范围回读失败，请检查应用权限、工作表和范围配置",
+        )
+    try:
+        cells = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY, "飞书电子表格范围响应无效"
+        ) from exc
+    return {"cells": cells}
+
+
+@app.post("/internal/automation/bitable/records")
+async def write_automation_bitable_record(
+    payload: AutomationBitableWriteRequest,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    _require_internal_token(authorization)
+    task_id = uuid.uuid4().hex
+    context = {
+        "user_id": payload.user_id,
+        "trace_id": str(payload.run_id),
+        "run_id": str(payload.run_id),
+        "current_user_message": "执行已确认自动化版本的多维表格记录写入",
+        "_single_base_record_create": True,
+        "_automation_authorized": True,
+        "_automation_authorized_actions": ["base +record-upsert"],
+        "_automation_authorized_resource": resource_fingerprint(payload.resource_url),
+    }
+    register_dazah_task_context(task_id, context)
+    try:
+        raw = await execute_lark_cli(
+            args=[
+                "base",
+                "+record-upsert",
+                "--base-token",
+                payload.base_token,
+                "--table-id",
+                payload.table_id,
+                "--json",
+                json.dumps(payload.fields, ensure_ascii=False, default=str),
+                "--format",
+                "json",
+                "--as",
+                "bot",
+            ],
+            resource=payload.resource_url,
+            module="agent",
+            verification_mode="creation_receipt",
+            task_id=task_id,
+        )
+        result = json.loads(raw)
+    except (ValueError, json.JSONDecodeError) as exc:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "飞书多维表格写入响应无效") from exc
+    finally:
+        unregister_dazah_task_context(task_id)
+    if not result.get("ok"):
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            str(result.get("error") or "飞书多维表格写入失败")[:500],
+        )
+    return {"result": result}
 
 
 @app.get("/internal/feishu/deliveries/{delivery_id}")
@@ -671,12 +959,15 @@ def _system_prompt(progressive_skills: list[dict[str, Any]] | None = None) -> st
         "创建不含时间的流程只能调用 agent.create_automation；创建含时间的任务只能调用 agent.create_scheduled_task。"
         "这两个工具由后端生成和校验流程定义，不得自行拼装 notify、condition、trigger 等底层节点。"
         "创建定时任务时必须把用户本轮完整原始需求逐字放入 body.requirement，不得概括或省略。"
+        "明确只执行一次时使用 body.schedule={kind:'once',run_at:'含时区的ISO时间'}；"
+        "按分钟、小时或天间隔时使用 kind='interval'、every 和 unit；其余周期计划使用五段 cron。"
+        "创建工具只生成草案和结构化预览，不会直接启用；核对后必须另行调用 agent.confirm_automation。"
         "若定时飞书消息需要发送查询、汇总、统计、清单、报表或记录，actions 中必须先放对应的查询工具，"
         "再放 identity.deliver_feishu_message；不得只发送固定寒暄或‘请查收’。后端会在每次运行时把查询结果"
         "自动合并进飞书正文，因此不得在创建时伪造查询结果。"
         "修改、启停、查看或归档 Livzon Task 时使用 agent.* 自动化工具；创建、修改、启停和归档"
         "都是写操作，必须等待后端 confirmation，不能在确认前声称任务已启用或已修改。"
-        "用户询问定时任务的未来执行时间时，调用 agent.simulate_automation；该工具只预览 cron、时区和策略，不执行业务动作。"
+        "用户询问定时任务的未来执行时间时，调用 agent.simulate_automation；该工具只预览计划、时区和策略，不执行业务动作。"
         "用户询问自己收到的自动化飞书消息或发送状态时，调用 agent.list_push_deliveries 或 agent.get_push_delivery。"
         "用户要求按 correlation ID 追踪采购到货、仓储入库等跨模块链路时，调用 agent.list_domain_events；"
         "用户询问谁修改了自动化、版本变化或修改历史时，调用 agent.list_automation_audit；"
@@ -808,9 +1099,7 @@ def _write_confirmation_routing_instruction(
         r"(?:给|向)(?:我|本人)(?:发送|推送)",
         r"(?:发送|推送)(?:给|至|到)(?:我|本人)",
     )
-    if current_user_id and any(
-        re.search(pattern, normalized) for pattern in self_recipient_patterns
-    ):
+    if current_user_id and any(re.search(pattern, normalized) for pattern in self_recipient_patterns):
         self_recipient_instruction = (
             "用户已明确指定收件人为当前会话用户本人。必须使用可信主体的本地用户 UUID，"
             f"即 body.recipient_user_ids=[{json.dumps(current_user_id)}]；"
@@ -826,8 +1115,7 @@ def _write_confirmation_routing_instruction(
         "不得用中文近义词搜索后因空结果声称工具不可用。"
         "收件人和消息内容可从本轮需求、会话上下文或本轮查询结果确定时，必须立即调用 "
         "identity.deliver_feishu_message 创建后端真实 pending confirmation；"
-        "只有缺少无法推断的收件人或消息内容时，才只追问缺失字段。"
-        + self_recipient_instruction
+        "只有缺少无法推断的收件人或消息内容时，才只追问缺失字段。" + self_recipient_instruction
     )
 
 
@@ -875,10 +1163,7 @@ def _explicit_self_delivery_body(
     title = _quoted_message_field(payload.message, "标题") or markdown[:200]
     message_form = (
         "text"
-        if any(
-            marker in payload.message
-            for marker in ("文本消息", "文字消息", "纯文本消息", "纯文本")
-        )
+        if any(marker in payload.message for marker in ("文本消息", "文字消息", "纯文本消息", "纯文本"))
         else "card"
     )
     return {
@@ -1051,9 +1336,7 @@ def _extract_csv_text(path: Path) -> str | None:
             break
         if len(row) > _TABULAR_MAX_COLUMNS:
             truncated = True
-        parts.append(
-            "\t".join(_tabular_cell_text(value) for value in row[:_TABULAR_MAX_COLUMNS])
-        )
+        parts.append("\t".join(_tabular_cell_text(value) for value in row[:_TABULAR_MAX_COLUMNS]))
     return _bounded_tabular_text(parts, truncated=truncated)
 
 
@@ -1146,9 +1429,7 @@ def _user_message_with_attachments(
                     f"\n<document filename={json.dumps(filename, ensure_ascii=False)}{identity}>\n{str(content)}\n</document>"
                 )
             elif local_path:
-                text_parts.append(
-                    f"\n文档附件无法提取文本内容：{filename}（可能是扫描件、加密文件或不受支持的格式）"
-                )
+                text_parts.append(f"\n文档附件无法提取文本内容：{filename}（可能是扫描件、加密文件或不受支持的格式）")
             else:
                 text_parts.append(f"\n文档附件不可读取：{filename}")
         elif kind == "image":
@@ -1191,9 +1472,7 @@ def _attachment_catalog_instruction(payload: AgentBackendV2Request) -> str:
         kind = str(item.get("kind") or "document")
         version = int(item.get("version") or 1)
         if attachment_id:
-            items.append(
-                f"- attachment_id={attachment_id}; filename={filename}; kind={kind}; version={version}"
-            )
+            items.append(f"- attachment_id={attachment_id}; filename={filename}; kind={kind}; version={version}")
     if not items:
         return ""
     return (
@@ -1201,8 +1480,7 @@ def _attachment_catalog_instruction(payload: AgentBackendV2Request) -> str:
         "以下附件由 Dazah 后端按当前可信用户和会话鉴权。需要读取附件时调用 "
         "agent.read_attachment；需要新增、修改或删除 XLSX/CSV 行时调用 "
         "agent.mutate_tabular_attachment；删除整个附件调用 agent.delete_attachment。"
-        "不得声称附件已丢失，也不得根据文件名猜测内容。\n"
-        + "\n".join(items)
+        "不得声称附件已丢失，也不得根据文件名猜测内容。\n" + "\n".join(items)
     )
 
 
@@ -1442,10 +1720,7 @@ def _is_direct_feishu_resource_request(payload: AgentBackendV2Request) -> bool:
         bool(re.search(r"\btbl[a-zA-Z0-9]+\b", message))
         or normalized.endswith(("表", "数据表", "文档", "文件", "节点", "工作表"))
         or (
-            any(
-                word in normalized
-                for word in ("记录", "字段", "数据表", "文档", "工作表", "节点", "单元格")
-            )
+            any(word in normalized for word in ("记录", "字段", "数据表", "文档", "工作表", "节点", "单元格"))
             and any(word in normalized for word in action_words)
         )
         or (
@@ -1541,14 +1816,9 @@ def _is_single_base_record_create(payload: AgentBackendV2Request) -> bool:
     if any(marker in current for marker in ("批量", "多行", "多条", "全部")):
         return False
     recent_context = "\n".join(
-        str(item.get("content") or "")
-        for item in payload.messages[-16:]
-        if isinstance(item, dict)
+        str(item.get("content") or "") for item in payload.messages[-16:] if isinstance(item, dict)
     ).lower()
-    return any(
-        marker in recent_context
-        for marker in ("多维表格", "base token", "/base/", "bitable")
-    )
+    return any(marker in recent_context for marker in ("多维表格", "base token", "/base/", "bitable"))
 
 
 def _single_base_record_create_instruction(payload: AgentBackendV2Request) -> str:
@@ -1657,10 +1927,7 @@ def _native_resource_conversation_history(
         if not (
             item.get("role") == "assistant"
             and isinstance(item.get("content"), str)
-            and any(
-                marker in item["content"].lower()
-                for marker in _STALE_NATIVE_FILE_FAILURE_MARKERS
-            )
+            and any(marker in item["content"].lower() for marker in _STALE_NATIVE_FILE_FAILURE_MARKERS)
         )
     ]
     filtered.append(
@@ -1731,17 +1998,12 @@ async def _execute_deterministic_operation(
     module = operation.partition(".")[0]
     await dazah_tool("search", query=operation, module=module, limit=5)
     await dazah_tool("describe", operation=operation)
-    return _tool_response_data(
-        await dazah_tool("execute", operation=operation, params=params)
-    )
+    return _tool_response_data(await dazah_tool("execute", operation=operation, params=params))
 
 
 def _format_task_status(result: dict[str, Any]) -> str:
     if result.get("ok") is False:
-        return str(
-            result.get("repair_hint")
-            or "任务进度查询失败。请稍后重试，并向管理员提供当前 Trace ID。"
-        )
+        return str(result.get("repair_hint") or "任务进度查询失败。请稍后重试，并向管理员提供当前 Trace ID。")
     data = result.get("data") if isinstance(result.get("data"), dict) else {}
     items = data.get("items") if isinstance(data, dict) else None
     if not isinstance(items, list) or not items:
@@ -1785,10 +2047,7 @@ def _effective_memory_mode(payload: AgentBackendV2Request) -> str:
 
 
 def _personal_memory_allowed(payload: AgentBackendV2Request) -> bool:
-    return (
-        _personal_memory_channel_allowed(payload)
-        and _effective_memory_mode(payload) != "disabled"
-    )
+    return _personal_memory_channel_allowed(payload) and _effective_memory_mode(payload) != "disabled"
 
 
 def _apply_memory_deletion_marker(payload: AgentBackendV2Request) -> None:
@@ -1862,10 +2121,7 @@ def _trusted_memory_tool_evidence(tool_trace: list[dict[str, Any]]) -> list[dict
         status_value = str(item.get("status") or "").lower()
         verified = bool(
             item.get("ok") is True
-            and (
-                item.get("executed") is True
-                or status_value in {"completed", "success", "succeeded"}
-            )
+            and (item.get("executed") is True or status_value in {"completed", "success", "succeeded"})
         )
         evidence.append(
             {
@@ -1920,9 +2176,7 @@ async def _memory_review_worker(worker_index: int) -> None:
                 attempts=int(job["attempts"]),
                 error_code=type(exc).__name__,
             )
-            scope_hash = hashlib.sha256(
-                f"{job['tenant_id']}:{job['user_id']}".encode("utf-8")
-            ).hexdigest()[:12]
+            scope_hash = hashlib.sha256(f"{job['tenant_id']}:{job['user_id']}".encode("utf-8")).hexdigest()[:12]
             logger.exception(
                 "User memory worker failed worker=%s scope=%s run=%s",
                 worker_index,
@@ -1965,11 +2219,14 @@ def _schedule_memory_review(
 def _explicit_memory_save_requested(payload: AgentBackendV2Request) -> bool:
     if not _personal_memory_channel_allowed(payload):
         return False
-    return re.search(
-        r"(?:记住|记一下|保存到(?:长期)?记忆|长期记忆)",
-        _current_user_message(payload),
-        flags=re.IGNORECASE,
-    ) is not None
+    return (
+        re.search(
+            r"(?:记住|记一下|保存到(?:长期)?记忆|长期记忆)",
+            _current_user_message(payload),
+            flags=re.IGNORECASE,
+        )
+        is not None
+    )
 
 
 async def _finalize_user_memory(
@@ -2133,24 +2390,18 @@ def _verified_agent_message(
             flags=re.IGNORECASE,
         )
     )
-    if claimed_business_operations and any(
-        marker in message for marker in ("数据来源", "查询结果", "Dazah 平台")
-    ):
+    if claimed_business_operations and any(marker in message for marker in ("数据来源", "查询结果", "Dazah 平台")):
         verified_operations = {
             str(item.get("operation"))
             for item in tool_trace
-            if isinstance(item, dict)
-            and item.get("operation")
-            and item.get("ok") is True
+            if isinstance(item, dict) and item.get("operation") and item.get("ok") is True
         }
         if not claimed_business_operations.issubset(verified_operations):
             return (
-                "没有取得 Dazah 平台本轮真实工具查询结果，本次不展示任何业务记录。"
-                "请稍后重试并向管理员提供 Trace ID。"
+                "没有取得 Dazah 平台本轮真实工具查询结果，本次不展示任何业务记录。请稍后重试并向管理员提供 Trace ID。"
             )
     pending_claimed = (
-        "待确认项" in message
-        and any(marker in message for marker in ("已生成", "生成完成", "等待确认"))
+        "待确认项" in message and any(marker in message for marker in ("已生成", "生成完成", "等待确认"))
     ) or ("确认卡片" in message and "点击" in message)
     if pending_claimed:
         return "未生成真实待确认项，本次没有可执行的确认卡片，也未执行任何写入。请重新提交操作。"
@@ -2201,11 +2452,7 @@ def _normalize_pending_confirmation_message(message: str) -> str:
         for line in normalized.splitlines()
         if not (
             re.fullmatch(r"\s*(?:已生成待确认项|待确认项已生成)[。.!！]?\s*", line)
-            or (
-                "待确认项" in line
-                and "卡片" in line
-                and ("点击" in line or "确认执行" in line)
-            )
+            or ("待确认项" in line and "卡片" in line and ("点击" in line or "确认执行" in line))
         )
     ).strip()
     instruction = "待确认项已生成，请在下方确认执行卡片中点击“确认执行”。"
@@ -2306,9 +2553,7 @@ def _run_agent_conversation(
     )
     request_context = dict(payload.context)
     request_context["current_user_message"] = current_message
-    request_context["_single_base_record_create"] = _is_single_base_record_create(
-        payload
-    )
+    request_context["_single_base_record_create"] = _is_single_base_record_create(payload)
     if cancellation_event is not None:
         request_context["_cancellation_event"] = cancellation_event
     recent_resource_url = _recent_feishu_resource_url(payload)
@@ -2424,9 +2669,7 @@ def _run_agent_conversation(
         # decisions must use only executions observed by the trusted gateway for
         # this runtime task, never a trace supplied by the model or session.
         result["tool_trace"] = current_dazah_task_tool_trace(runtime_task_id)
-        result["current_pending_confirmations"] = current_dazah_task_confirmations(
-            runtime_task_id
-        )
+        result["current_pending_confirmations"] = current_dazah_task_confirmations(runtime_task_id)
         final_attempted = (
             _has_native_resource_write_attempt(result["tool_trace"])
             if native_write_request
@@ -2434,8 +2677,7 @@ def _run_agent_conversation(
         )
         if _is_direct_feishu_resource_request(payload) and not final_attempted:
             result["final_response"] = (
-                "本轮未产生与用户请求匹配的飞书原生工具调用，网关已停止执行；"
-                "未生成待确认项，也未执行任何写入。"
+                "本轮未产生与用户请求匹配的飞书原生工具调用，网关已停止执行；未生成待确认项，也未执行任何写入。"
             )
         return agent, result
     finally:
@@ -2552,9 +2794,7 @@ async def run_agent_v2(
             result.get("final_response") or "我没有生成有效回复，请稍后重试。",
             confirmations,
             tool_trace,
-            enforce_write_confirmation=not _is_direct_feishu_resource_request(
-                payload
-            ),
+            enforce_write_confirmation=not _is_direct_feishu_resource_request(payload),
         )
         message = await _finalize_user_memory(payload, message, tool_trace)
         return AgentBackendV2Result(
@@ -2706,9 +2946,7 @@ async def stream_agent_v2(
                 result.get("final_response") or "我没有生成有效回复，请稍后重试。",
                 confirmations,
                 tool_trace,
-                enforce_write_confirmation=not _is_direct_feishu_resource_request(
-                    payload
-                ),
+                enforce_write_confirmation=not _is_direct_feishu_resource_request(payload),
             )
             for item in tool_trace:
                 if isinstance(item, dict):

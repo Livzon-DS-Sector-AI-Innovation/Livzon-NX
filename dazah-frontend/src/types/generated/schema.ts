@@ -446,6 +446,93 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/agent/feishu-resource-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Feishu Resource Templates */
+        get: operations["list_feishu_resource_templates_api_v1_agent_feishu_resource_templates_get"];
+        put?: never;
+        /** Create Feishu Resource Template */
+        post: operations["create_feishu_resource_template_api_v1_agent_feishu_resource_templates_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agent/feishu-resource-templates/{template_id}/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Validate Feishu Resource Template */
+        post: operations["validate_feishu_resource_template_api_v1_agent_feishu_resource_templates__template_id__validate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agent/interaction-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Interaction Requests */
+        get: operations["list_interaction_requests_api_v1_agent_interaction_requests_get"];
+        put?: never;
+        /** Create Interaction Request */
+        post: operations["create_interaction_request_api_v1_agent_interaction_requests_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agent/interaction-requests/{request_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Interaction Request */
+        get: operations["get_interaction_request_api_v1_agent_interaction_requests__request_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agent/interaction-requests/{request_id}/submissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit Interaction Request */
+        post: operations["submit_interaction_request_api_v1_agent_interaction_requests__request_id__submissions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/agent/internal/feishu/conversations/prepare": {
         parameters: {
             query?: never;
@@ -474,6 +561,23 @@ export interface paths {
         put?: never;
         /** Complete Internal Feishu Conversation */
         post: operations["complete_internal_feishu_conversation_api_v1_agent_internal_feishu_conversations__session_id__complete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agent/internal/feishu/interaction-requests/{request_id}/submissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit Internal Feishu Interaction Request */
+        post: operations["submit_internal_feishu_interaction_request_api_v1_agent_internal_feishu_interaction_requests__request_id__submissions_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4960,7 +5064,7 @@ export interface paths {
         put?: never;
         /**
          * 提交采购申请
-         * @description 将采购申请提交到部门负责人审批。
+         * @description 将采购申请提交到该采购类型配置的首个审批节点。
          */
         post: operations["submit_purchase_request_record_api_v1_procurement_purchase_requests__request_id__submit_post"];
         delete?: never;
@@ -22522,6 +22626,43 @@ export interface components {
              */
             status: "connected";
         };
+        /** FeishuResourceTemplateCreate */
+        FeishuResourceTemplateCreate: {
+            /** Base Token */
+            base_token: string;
+            /** Field Schema */
+            field_schema?: components["schemas"]["InteractionFormField"][];
+            /** Name */
+            name: string;
+            /**
+             * Record Mode
+             * @default append
+             * @constant
+             */
+            record_mode: "append";
+            /**
+             * Resource Type
+             * @default bitable
+             * @enum {string}
+             */
+            resource_type: "bitable" | "sheet";
+            /** Resource Url */
+            resource_url: string;
+            /** Sheet Range */
+            sheet_range?: string | null;
+            /** Table Id */
+            table_id: string;
+            /** View Id */
+            view_id?: string | null;
+            /**
+             * View Type
+             * @default grid
+             * @enum {string}
+             */
+            view_type: "grid" | "form";
+            /** Writable Fields */
+            writable_fields?: string[];
+        };
         /** FermentationCreate */
         FermentationCreate: {
             /** Attachment */
@@ -23705,6 +23846,82 @@ export interface components {
             standard_deviation?: number | null;
             /** Upper Control Limit */
             upper_control_limit?: number | null;
+        };
+        /** InteractionFormField */
+        InteractionFormField: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Options */
+            options?: string[];
+            /**
+             * Required
+             * @default false
+             */
+            required: boolean;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "text" | "number" | "date" | "single_select" | "multi_select" | "boolean";
+        };
+        /** InteractionRequestCreate */
+        InteractionRequestCreate: {
+            /** Automation Id */
+            automation_id?: string | null;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Form Schema */
+            form_schema?: components["schemas"]["InteractionFormField"][];
+            /** Idempotency Key */
+            idempotency_key: string;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "card_form" | "table_link";
+            /** Prefill */
+            prefill?: {
+                [key: string]: unknown;
+            };
+            /**
+             * Recipient User Id
+             * Format: uuid
+             */
+            recipient_user_id: string;
+            /** Run Id */
+            run_id?: string | null;
+            /** Step Key */
+            step_key?: string | null;
+            /** Summary */
+            summary?: string | null;
+            /**
+             * Template Id
+             * Format: uuid
+             */
+            template_id: string;
+            /** Title */
+            title: string;
+        };
+        /** InteractionSubmissionCreate */
+        InteractionSubmissionCreate: {
+            /** Idempotency Key */
+            idempotency_key: string;
+            /** Request Version */
+            request_version: number;
+            /** Values */
+            values?: {
+                [key: string]: unknown;
+            };
+        };
+        /** InternalFeishuInteractionSubmission */
+        InternalFeishuInteractionSubmission: {
+            subject: components["schemas"]["AgentTrustedSubject"];
+            submission: components["schemas"]["InteractionSubmissionCreate"];
         };
         /** InvoiceLineItem */
         InvoiceLineItem: {
@@ -27921,7 +28138,7 @@ export interface components {
          * PurchaseApprovalRole
          * @enum {string}
          */
-        PurchaseApprovalRole: "department_head" | "responsible_leader";
+        PurchaseApprovalRole: "hardware_warehouse" | "equipment_power" | "safety_officer" | "department_head" | "responsible_leader" | "supervising_leader" | "finance_director" | "general_manager";
         /**
          * PurchaseApprovalView
          * @enum {string}
@@ -27942,6 +28159,8 @@ export interface components {
              * @description 采购分类名称
              */
             category_label: string;
+            /** @description 明细实际采购类型 */
+            item_category?: components["schemas"]["PurchaseRequestCategory"] | null;
             /**
              * Item Id
              * Format: uuid
@@ -27960,8 +28179,21 @@ export interface components {
              */
             material: string;
             /**
+             * Material Code
+             * @description 物料编码
+             * @default
+             */
+            material_code: string;
+            /**
+             * Material Description
+             * @description 物料说明
+             * @default
+             */
+            material_description: string;
+            /**
              * Product Name
              * @description 商品名称
+             * @default
              */
             product_name: string;
             /**
@@ -27998,6 +28230,12 @@ export interface components {
              * @description 采购申请 ID
              */
             request_id: string;
+            /**
+             * Rule Model
+             * @description 规则型号
+             * @default
+             */
+            rule_model: string;
             /**
              * Specification
              * @description 规格
@@ -28066,9 +28304,15 @@ export interface components {
          * PurchaseRequestCategory
          * @enum {string}
          */
-        PurchaseRequestCategory: "hardware" | "computer" | "office" | "raw-auxiliary" | "chemical-glass" | "electrical" | "labor-protection";
+        PurchaseRequestCategory: "hardware" | "computer" | "office" | "raw-auxiliary" | "chemical-glass" | "electrical" | "advertising-printing" | "fire" | "packaging" | "labor-special" | "labor-miscellaneous" | "urgent";
         /** PurchaseRequestCreate */
         PurchaseRequestCreate: {
+            /**
+             * Attachment Note
+             * @description 附件说明
+             * @default
+             */
+            attachment_note: string;
             /** @description 采购分类 */
             category: components["schemas"]["PurchaseRequestCategory"];
             /**
@@ -28096,6 +28340,8 @@ export interface components {
              * @default
              */
             brand: string;
+            /** @description 明细采购类型，加急单必填 */
+            item_category?: components["schemas"]["PurchaseRequestCategory"] | null;
             /**
              * Material
              * @description 材质
@@ -28103,8 +28349,21 @@ export interface components {
              */
             material: string;
             /**
+             * Material Code
+             * @description 物料编码
+             * @default
+             */
+            material_code: string;
+            /**
+             * Material Description
+             * @description 物料说明
+             * @default
+             */
+            material_description: string;
+            /**
              * Product Name
              * @description 商品名称
+             * @default
              */
             product_name: string;
             /**
@@ -28124,6 +28383,12 @@ export interface components {
              * @default
              */
             remarks: string;
+            /**
+             * Rule Model
+             * @description 规则型号
+             * @default
+             */
+            rule_model: string;
             /**
              * Specification
              * @description 规格
@@ -28156,6 +28421,8 @@ export interface components {
              * @description 明细 ID
              */
             id: string;
+            /** @description 明细采购类型，加急单必填 */
+            item_category?: components["schemas"]["PurchaseRequestCategory"] | null;
             /**
              * Material
              * @description 材质
@@ -28163,8 +28430,21 @@ export interface components {
              */
             material: string;
             /**
+             * Material Code
+             * @description 物料编码
+             * @default
+             */
+            material_code: string;
+            /**
+             * Material Description
+             * @description 物料说明
+             * @default
+             */
+            material_description: string;
+            /**
              * Product Name
              * @description 商品名称
+             * @default
              */
             product_name: string;
             /**
@@ -28184,6 +28464,12 @@ export interface components {
              * @default
              */
             remarks: string;
+            /**
+             * Rule Model
+             * @description 规则型号
+             * @default
+             */
+            rule_model: string;
             /**
              * Sequence
              * @description 序号
@@ -28240,6 +28526,12 @@ export interface components {
              * @description 审批记录
              */
             approvals?: components["schemas"]["PurchaseApprovalRecordResponse"][];
+            /**
+             * Attachment Note
+             * @description 附件说明
+             * @default
+             */
+            attachment_note: string;
             /** @description 采购分类 */
             category: components["schemas"]["PurchaseRequestCategory"];
             /**
@@ -28293,9 +28585,14 @@ export interface components {
          * PurchaseRequestStatus
          * @enum {string}
          */
-        PurchaseRequestStatus: "draft" | "pending_department_head" | "pending_responsible_leader" | "approved" | "rejected";
+        PurchaseRequestStatus: "draft" | "pending_hardware_warehouse" | "pending_equipment_power" | "pending_safety_officer" | "pending_department_head" | "pending_responsible_leader" | "pending_supervising_leader" | "pending_finance_director" | "pending_general_manager" | "approved" | "rejected";
         /** PurchaseRequestUpdate */
         PurchaseRequestUpdate: {
+            /**
+             * Attachment Note
+             * @description 附件说明
+             */
+            attachment_note?: string | null;
             /**
              * Items
              * @description 申请明细
@@ -34955,6 +35252,244 @@ export interface operations {
             };
         };
     };
+    list_feishu_resource_templates_api_v1_agent_feishu_resource_templates_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_feishu_resource_template_api_v1_agent_feishu_resource_templates_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeishuResourceTemplateCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    validate_feishu_resource_template_api_v1_agent_feishu_resource_templates__template_id__validate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_interaction_requests_api_v1_agent_interaction_requests_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_interaction_request_api_v1_agent_interaction_requests_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InteractionRequestCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_interaction_request_api_v1_agent_interaction_requests__request_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_interaction_request_api_v1_agent_interaction_requests__request_id__submissions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InteractionSubmissionCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     prepare_internal_feishu_conversation_api_v1_agent_internal_feishu_conversations_prepare_post: {
         parameters: {
             query?: never;
@@ -35014,6 +35549,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FeishuConversationCompleteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_internal_feishu_interaction_request_api_v1_agent_internal_feishu_interaction_requests__request_id__submissions_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InternalFeishuInteractionSubmission"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

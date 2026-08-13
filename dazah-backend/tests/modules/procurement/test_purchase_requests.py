@@ -16,6 +16,7 @@ from app.modules.procurement.schemas import (
     PurchaseRequestCreate,
     PurchaseRequestItemInput,
     PurchaseRequestStatus,
+    PurchaseRequestUpdate,
 )
 
 
@@ -55,11 +56,14 @@ class FakePurchaseRequestRepository:
     async def get(self, request_id):
         return self.requests.get(request_id)
 
+    async def get_for_update(self, request_id):
+        return self.requests.get(request_id)
+
     async def list_items(self, request_id):
         return self.items.get(request_id, [])
 
     async def list_approvals(self, request_id):
-        return self.approvals.get(request_id, [])
+        return list(self.approvals.get(request_id, []))
 
     async def list_requests(
         self,
@@ -184,10 +188,14 @@ def _create_payload() -> PurchaseRequestCreate:
         category=PurchaseRequestCategory.hardware,
         request_department="102一车间",
         request_date=date(2026, 6, 28),
+        attachment_note="附件：技术参数表一份",
         items=[
             PurchaseRequestItemInput(
                 product_name="碳鼓",
                 specification="M1005",
+                material_code="MAT-1005",
+                material_description="打印机碳鼓",
+                rule_model="M1005",
                 purpose="更换打印机碳鼓",
                 material="",
                 brand="惠普",
@@ -215,38 +223,59 @@ def _create_payload_for(
     return payload
 
 
+def _create_approval_payload(
+    category: PurchaseRequestCategory,
+) -> PurchaseRequestCreate:
+    payload = _create_payload_for(category=category)
+    if category is PurchaseRequestCategory.urgent:
+        payload.items[0].item_category = PurchaseRequestCategory.office
+    return payload
+
+
+async def _approve_role(
+    request_id: uuid.UUID,
+    approval_role: PurchaseApprovalRole,
+    *,
+    approver_name: str | None = None,
+) -> None:
+    await procurement_service.approve_purchase_request(
+        FakeDb(),
+        request_id,
+        PurchaseApprovalRequest(
+            approval_role=approval_role,
+            approver_name=approver_name or approval_role.value,
+            opinion="同意",
+            result=PurchaseApprovalResult.approved,
+        ),
+    )
+
+
 async def _approve_request(request_id: uuid.UUID) -> None:
     await procurement_service.submit_purchase_request(FakeDb(), request_id)
-    await procurement_service.approve_purchase_request(
-        FakeDb(),
-        request_id,
-        PurchaseApprovalRequest(
-            approval_role=PurchaseApprovalRole.department_head,
-            approver_name="部门负责人",
-            opinion="同意",
-            result=PurchaseApprovalResult.approved,
-        ),
-    )
-    await procurement_service.approve_purchase_request(
-        FakeDb(),
-        request_id,
-        PurchaseApprovalRequest(
-            approval_role=PurchaseApprovalRole.responsible_leader,
-            approver_name="分管领导",
-            opinion="同意",
-            result=PurchaseApprovalResult.approved,
-        ),
-    )
+    request = FakePurchaseRequestRepository.requests[request_id]
+    workflow = procurement_service.get_purchase_approval_workflow(request.category)
+    for approval_role in workflow:
+        required_count = procurement_service.PURCHASE_APPROVAL_REQUIRED_COUNTS.get(
+            approval_role,
+            1,
+        )
+        for index in range(required_count):
+            await _approve_role(
+                request_id,
+                approval_role,
+                approver_name=f"{approval_role.value}-{index + 1}",
+            )
 
 
 @pytest.mark.anyio
-async def test_purchase_request_amount_and_two_step_approval_flow() -> None:
+async def test_purchase_request_amount_and_hardware_approval_flow() -> None:
     created = await procurement_service.create_purchase_request(
         FakeDb(),
         _create_payload(),
     )
 
     assert created.request_date == date(2026, 6, 28)
+    assert created.attachment_note == "附件：技术参数表一份"
     assert created.status == PurchaseRequestStatus.draft
     assert created.total_amount == Decimal("120.01")
     assert created.items[0].total_amount == Decimal("120.01")
@@ -255,38 +284,273 @@ async def test_purchase_request_amount_and_two_step_approval_flow() -> None:
         FakeDb(),
         created.id,
     )
-    assert submitted.status == PurchaseRequestStatus.pending_department_head
+    assert submitted.status == PurchaseRequestStatus.pending_hardware_warehouse
 
-    department_approved = await procurement_service.approve_purchase_request(
+    await _approve_role(
+        created.id,
+        PurchaseApprovalRole.hardware_warehouse,
+        approver_name="五金库",
+    )
+    request = FakePurchaseRequestRepository.requests[created.id]
+    assert request.status == PurchaseRequestStatus.pending_department_head.value
+
+    await _approve_role(created.id, PurchaseApprovalRole.department_head)
+    assert request.status == PurchaseRequestStatus.pending_responsible_leader.value
+    await _approve_role(created.id, PurchaseApprovalRole.responsible_leader)
+    assert request.status == PurchaseRequestStatus.pending_supervising_leader.value
+    await _approve_role(created.id, PurchaseApprovalRole.supervising_leader)
+    assert request.status == PurchaseRequestStatus.pending_general_manager.value
+    approved = await procurement_service.approve_purchase_request(
         FakeDb(),
         created.id,
         PurchaseApprovalRequest(
-            approval_role=PurchaseApprovalRole.department_head,
-            approver_name="部门负责人",
+            approval_role=PurchaseApprovalRole.general_manager,
+            approver_name="总经理",
+            opinion="同意",
+            result=PurchaseApprovalResult.approved,
+        ),
+    )
+    assert approved.status == PurchaseRequestStatus.approved
+    assert len(approved.approvals) == 5
+
+
+@pytest.mark.parametrize(
+    ("category", "expected_workflow"),
+    [
+        (
+            PurchaseRequestCategory.hardware,
+            (
+                PurchaseApprovalRole.hardware_warehouse,
+                PurchaseApprovalRole.department_head,
+                PurchaseApprovalRole.responsible_leader,
+                PurchaseApprovalRole.supervising_leader,
+                PurchaseApprovalRole.general_manager,
+            ),
+        ),
+        (
+            PurchaseRequestCategory.electrical,
+            (
+                PurchaseApprovalRole.hardware_warehouse,
+                PurchaseApprovalRole.equipment_power,
+                PurchaseApprovalRole.department_head,
+                PurchaseApprovalRole.responsible_leader,
+                PurchaseApprovalRole.supervising_leader,
+            ),
+        ),
+        (
+            PurchaseRequestCategory.labor_special,
+            (
+                PurchaseApprovalRole.safety_officer,
+                PurchaseApprovalRole.department_head,
+                PurchaseApprovalRole.responsible_leader,
+            ),
+        ),
+        (
+            PurchaseRequestCategory.urgent,
+            (
+                PurchaseApprovalRole.department_head,
+                PurchaseApprovalRole.responsible_leader,
+            ),
+        ),
+        (
+            PurchaseRequestCategory.office,
+            (
+                PurchaseApprovalRole.department_head,
+                PurchaseApprovalRole.responsible_leader,
+                PurchaseApprovalRole.supervising_leader,
+            ),
+        ),
+    ],
+)
+@pytest.mark.anyio
+async def test_purchase_request_workflow_by_category(
+    category: PurchaseRequestCategory,
+    expected_workflow: tuple[PurchaseApprovalRole, ...],
+) -> None:
+    assert procurement_service.get_purchase_approval_workflow(category) == (
+        expected_workflow
+    )
+
+    created = await procurement_service.create_purchase_request(
+        FakeDb(),
+        _create_approval_payload(category),
+    )
+    submitted = await procurement_service.submit_purchase_request(
+        FakeDb(),
+        created.id,
+    )
+    assert submitted.status == procurement_service.APPROVAL_ROLE_TO_PENDING_STATUS[
+        expected_workflow[0]
+    ]
+
+    for index, approval_role in enumerate(expected_workflow):
+        required_count = procurement_service.PURCHASE_APPROVAL_REQUIRED_COUNTS.get(
+            approval_role,
+            1,
+        )
+        for approval_index in range(required_count):
+            await _approve_role(
+                created.id,
+                approval_role,
+                approver_name=f"{approval_role.value}-{approval_index + 1}",
+            )
+
+        request = FakePurchaseRequestRepository.requests[created.id]
+        if index + 1 < len(expected_workflow):
+            assert request.status == (
+                procurement_service.APPROVAL_ROLE_TO_PENDING_STATUS[
+                    expected_workflow[index + 1]
+                ].value
+            )
+        else:
+            assert request.status == PurchaseRequestStatus.approved.value
+
+    assert len(FakePurchaseRequestRepository.approvals[created.id]) == sum(
+        procurement_service.PURCHASE_APPROVAL_REQUIRED_COUNTS.get(role, 1)
+        for role in expected_workflow
+    )
+
+
+@pytest.mark.anyio
+async def test_purchase_request_rejects_approval_role_outside_category_workflow(
+) -> None:
+    created = await procurement_service.create_purchase_request(
+        FakeDb(),
+        _create_payload(),
+    )
+    await procurement_service.submit_purchase_request(FakeDb(), created.id)
+
+    with pytest.raises(ValueError, match="不包含此审批步骤"):
+        await procurement_service.approve_purchase_request(
+            FakeDb(),
+            created.id,
+            PurchaseApprovalRequest(
+                approval_role=PurchaseApprovalRole.safety_officer,
+                approver_name="安全员",
+                opinion="同意",
+                result=PurchaseApprovalResult.approved,
+            ),
+        )
+
+    assert (
+        FakePurchaseRequestRepository.requests[created.id].status
+        == PurchaseRequestStatus.pending_hardware_warehouse.value
+    )
+    assert FakePurchaseRequestRepository.approvals[created.id] == []
+
+
+@pytest.mark.anyio
+async def test_electrical_co_signing_requires_two_current_round_approvals() -> None:
+    created = await procurement_service.create_purchase_request(
+        FakeDb(),
+        _create_approval_payload(PurchaseRequestCategory.electrical),
+    )
+    await procurement_service.submit_purchase_request(FakeDb(), created.id)
+    await _approve_role(created.id, PurchaseApprovalRole.hardware_warehouse)
+
+    first_approval = await procurement_service.approve_purchase_request(
+        FakeDb(),
+        created.id,
+        PurchaseApprovalRequest(
+            approval_role=PurchaseApprovalRole.equipment_power,
+            approver_name="何学斌",
+            opinion="同意",
+            result=PurchaseApprovalResult.approved,
+        ),
+    )
+    assert first_approval.status == PurchaseRequestStatus.pending_equipment_power
+    pending, pending_total = await procurement_service.list_purchase_requests(
+        FakeDb(),
+        category=PurchaseRequestCategory.electrical.value,
+        approval_role=PurchaseApprovalRole.equipment_power,
+        approval_view=PurchaseApprovalView.pending,
+    )
+    assert pending_total == 1
+    assert pending[0].id == created.id
+
+    second_approval = await procurement_service.approve_purchase_request(
+        FakeDb(),
+        created.id,
+        PurchaseApprovalRequest(
+            approval_role=PurchaseApprovalRole.equipment_power,
+            approver_name="安伟",
+            opinion="同意",
+            result=PurchaseApprovalResult.approved,
+        ),
+    )
+    assert second_approval.status == PurchaseRequestStatus.pending_department_head
+    assert [approval.approver_name for approval in second_approval.approvals] == [
+        "hardware_warehouse",
+        "何学斌",
+        "安伟",
+    ]
+
+
+@pytest.mark.anyio
+async def test_electrical_co_signing_rejection_and_resubmission_isolates_history(
+) -> None:
+    created = await procurement_service.create_purchase_request(
+        FakeDb(),
+        _create_approval_payload(PurchaseRequestCategory.electrical),
+    )
+    await procurement_service.submit_purchase_request(FakeDb(), created.id)
+    await _approve_role(created.id, PurchaseApprovalRole.hardware_warehouse)
+    await _approve_role(
+        created.id,
+        PurchaseApprovalRole.equipment_power,
+        approver_name="何学斌",
+    )
+
+    rejected = await procurement_service.reject_purchase_request(
+        FakeDb(),
+        created.id,
+        PurchaseApprovalRequest(
+            approval_role=PurchaseApprovalRole.equipment_power,
+            approver_name="安伟",
+            opinion="参数需要补充",
+            result=PurchaseApprovalResult.rejected,
+        ),
+    )
+    assert rejected.status == PurchaseRequestStatus.rejected
+    assert rejected.rejected_step == PurchaseApprovalRole.equipment_power
+
+    resubmitted = await procurement_service.submit_purchase_request(
+        FakeDb(),
+        created.id,
+    )
+    assert resubmitted.status == PurchaseRequestStatus.pending_hardware_warehouse
+    await _approve_role(created.id, PurchaseApprovalRole.hardware_warehouse)
+
+    first_new_round_approval = await procurement_service.approve_purchase_request(
+        FakeDb(),
+        created.id,
+        PurchaseApprovalRequest(
+            approval_role=PurchaseApprovalRole.equipment_power,
+            approver_name="安伟",
             opinion="同意",
             result=PurchaseApprovalResult.approved,
         ),
     )
     assert (
-        department_approved.status
-        == PurchaseRequestStatus.pending_responsible_leader
-    )
-    assert department_approved.approvals[0].approval_role == (
-        PurchaseApprovalRole.department_head
+        first_new_round_approval.status
+        == PurchaseRequestStatus.pending_equipment_power
     )
 
-    leader_approved = await procurement_service.approve_purchase_request(
+    second_new_round_approval = await procurement_service.approve_purchase_request(
         FakeDb(),
         created.id,
         PurchaseApprovalRequest(
-            approval_role=PurchaseApprovalRole.responsible_leader,
-            approver_name="分管领导",
+            approval_role=PurchaseApprovalRole.equipment_power,
+            approver_name="何学斌",
             opinion="同意",
             result=PurchaseApprovalResult.approved,
         ),
     )
-    assert leader_approved.status == PurchaseRequestStatus.approved
-    assert len(leader_approved.approvals) == 2
+    assert (
+        second_new_round_approval.status
+        == PurchaseRequestStatus.pending_department_head
+    )
+    assert len(second_new_round_approval.approvals) == 6
 
 
 @pytest.mark.anyio
@@ -296,6 +560,7 @@ async def test_purchase_request_reject_persists_approval_record() -> None:
         _create_payload(),
     )
     await procurement_service.submit_purchase_request(FakeDb(), created.id)
+    await _approve_role(created.id, PurchaseApprovalRole.hardware_warehouse)
 
     rejected = await procurement_service.reject_purchase_request(
         FakeDb(),
@@ -310,8 +575,8 @@ async def test_purchase_request_reject_persists_approval_record() -> None:
 
     assert rejected.status == PurchaseRequestStatus.rejected
     assert rejected.rejected_step == PurchaseApprovalRole.department_head
-    assert rejected.approvals[0].result == PurchaseApprovalResult.rejected
-    assert rejected.approvals[0].opinion == "用途不清"
+    assert rejected.approvals[-1].result == PurchaseApprovalResult.rejected
+    assert rejected.approvals[-1].opinion == "用途不清"
 
 
 @pytest.mark.anyio
@@ -321,6 +586,7 @@ async def test_purchase_request_role_approval_views() -> None:
         _create_payload(),
     )
     await procurement_service.submit_purchase_request(FakeDb(), created.id)
+    await _approve_role(created.id, PurchaseApprovalRole.hardware_warehouse)
     await procurement_service.approve_purchase_request(
         FakeDb(),
         created.id,
@@ -366,6 +632,7 @@ async def test_purchase_request_role_rejected_view() -> None:
         _create_payload(),
     )
     await procurement_service.submit_purchase_request(FakeDb(), created.id)
+    await _approve_role(created.id, PurchaseApprovalRole.hardware_warehouse)
     await procurement_service.reject_purchase_request(
         FakeDb(),
         created.id,
@@ -509,17 +776,19 @@ async def test_purchase_order_xlsx_export_uses_reference_layout() -> None:
     merged_ranges = {str(cell_range) for cell_range in worksheet.merged_cells.ranges}
 
     assert worksheet.title == "Sheet1"
-    assert "A2:K2" in merged_ranges
-    assert "A3:K3" in merged_ranges
+    assert "A2:L2" in merged_ranges
+    assert "A3:L3" in merged_ranges
     assert worksheet["A2"].value == "丽珠集团（宁夏）制药有限公司"
     assert worksheet["A3"].value == "2026年06月份五金材料申购单汇总"
     assert worksheet["A4"].value == "申购部门：102一车间"
-    assert [worksheet.cell(5, column).value for column in range(1, 12)] == (
-        procurement_service.PURCHASE_ORDER_EXPORT_HEADERS
+    assert [worksheet.cell(5, column).value for column in range(1, 13)] == (
+        procurement_service.PURCHASE_ORDER_EXPORT_MATERIAL_HEADERS
     )
-    assert [worksheet.cell(6, column).value for column in range(1, 12)] == [
+
+    assert [worksheet.cell(6, column).value for column in range(1, 13)] == [
         1,
-        "碳鼓",
+        "MAT-1005",
+        "打印机碳鼓",
         "M1005",
         "更换打印机碳鼓",
         None,
@@ -531,16 +800,180 @@ async def test_purchase_order_xlsx_export_uses_reference_layout() -> None:
         "申购人：郭娇",
     ]
     assert worksheet["A7"].value == "合计"
-    assert worksheet["J7"].value == "=SUM(J6:J6)"
+    assert worksheet["K7"].value == "=SUM(K6:K6)"
     assert worksheet["A8"].value == "申购部门：103车间"
     assert worksheet["A12"].value == "总计"
-    assert worksheet["J12"].value == "=SUM(J7,J11)"
+    assert worksheet["K12"].value == "=SUM(K7,K11)"
     assert worksheet["A13"].value.startswith(" 总经理：")
-    assert "A13:K13" in merged_ranges
-    assert worksheet.column_dimensions["A"].width == 18
-    assert worksheet.column_dimensions["B"].width == 19.33
+    assert "A13:L13" in merged_ranges
+    assert worksheet.column_dimensions["A"].width == 12
+    assert worksheet.column_dimensions["B"].width == 18
     assert worksheet["A4"].fill.fgColor.rgb == "00D9E1F4"
     assert worksheet["A4"].alignment.wrap_text is not True
     assert worksheet["A5"].border.left.style == "thin"
-    assert worksheet["K6"].alignment.wrap_text is True
+    assert worksheet["L6"].alignment.wrap_text is True
     assert worksheet.page_setup.orientation == "landscape"
+
+
+@pytest.mark.anyio
+async def test_mixed_category_order_xlsx_uses_compatibility_columns() -> None:
+    hardware = await procurement_service.create_purchase_request(
+        FakeDb(),
+        _create_payload_for(
+            category=PurchaseRequestCategory.hardware,
+            product_name="碳鼓",
+        ),
+    )
+    office_payload = _create_payload_for(
+        category=PurchaseRequestCategory.office,
+        product_name="办公椅",
+    )
+    office_payload.items[0].material_code = ""
+    office_payload.items[0].material_description = ""
+    office_payload.items[0].rule_model = ""
+    office = await procurement_service.create_purchase_request(FakeDb(), office_payload)
+    await _approve_request(hardware.id)
+    await _approve_request(office.id)
+
+    xlsx_bytes = await procurement_service.export_purchase_order_lines_xlsx(
+        FakeDb(),
+        year=2026,
+        month=6,
+    )
+
+    worksheet = load_workbook(BytesIO(xlsx_bytes), data_only=False).active
+    assert [worksheet.cell(5, column).value for column in range(1, 13)] == (
+        procurement_service.PURCHASE_ORDER_EXPORT_COMPATIBILITY_HEADERS
+    )
+    assert [worksheet.cell(6, column).value for column in range(2, 5)] == [
+        "MAT-1005",
+        "打印机碳鼓",
+        "M1005",
+    ]
+    assert [worksheet.cell(7, column).value for column in range(2, 5)] == [
+        "办公椅",
+        "办公椅",
+        "M1005",
+    ]
+
+
+@pytest.mark.anyio
+async def test_material_field_category_requires_material_code_and_description() -> None:
+    missing_code = _create_payload()
+    missing_code.items[0].material_code = ""
+    with pytest.raises(ValueError, match="缺少物料编码"):
+        await procurement_service.create_purchase_request(FakeDb(), missing_code)
+
+    missing_description = _create_payload()
+    missing_description.items[0].material_description = ""
+    with pytest.raises(ValueError, match="缺少物料说明"):
+        await procurement_service.create_purchase_request(
+            FakeDb(),
+            missing_description,
+        )
+
+
+@pytest.mark.anyio
+async def test_urgent_request_supports_mixed_categories_and_item_validation() -> None:
+    payload = PurchaseRequestCreate(
+        category=PurchaseRequestCategory.urgent,
+        request_department="采购部",
+        request_date=date(2026, 8, 12),
+        attachment_note="加急技术附件",
+        items=[
+            PurchaseRequestItemInput(
+                item_category=PurchaseRequestCategory.hardware,
+                material_code="HW-001",
+                material_description="不锈钢螺栓",
+                quantity=Decimal("2"),
+                unit="包",
+                unit_price=Decimal("10"),
+            ),
+            PurchaseRequestItemInput(
+                item_category=PurchaseRequestCategory.office,
+                product_name="标签纸",
+                specification="A4",
+                quantity=Decimal("3"),
+                unit="包",
+                unit_price=Decimal("5.50"),
+            ),
+        ],
+    )
+
+    created = await procurement_service.create_purchase_request(FakeDb(), payload)
+
+    assert created.category == PurchaseRequestCategory.urgent
+    assert created.attachment_note == "加急技术附件"
+    assert [item.item_category for item in created.items] == [
+        PurchaseRequestCategory.hardware,
+        PurchaseRequestCategory.office,
+    ]
+    assert created.total_amount == Decimal("36.50")
+
+    missing_category = payload.model_copy(deep=True)
+    missing_category.items[0].item_category = None
+    with pytest.raises(ValueError, match="缺少申请类型"):
+        await procurement_service.create_purchase_request(FakeDb(), missing_category)
+
+    urgent_item_category = payload.model_copy(deep=True)
+    urgent_item_category.items[0].item_category = PurchaseRequestCategory.urgent
+    with pytest.raises(ValueError, match="申请类型无效"):
+        await procurement_service.create_purchase_request(
+            FakeDb(),
+            urgent_item_category,
+        )
+
+
+@pytest.mark.anyio
+async def test_urgent_order_export_includes_item_category_and_compatibility_columns(
+) -> None:
+    payload = PurchaseRequestCreate(
+        category=PurchaseRequestCategory.urgent,
+        request_department="采购部",
+        request_date=date(2026, 8, 12),
+        items=[
+            PurchaseRequestItemInput(
+                item_category=PurchaseRequestCategory.fire,
+                material_code="FIRE-001",
+                material_description="灭火器",
+                quantity=Decimal("1"),
+                unit="具",
+                unit_price=Decimal("50"),
+            )
+        ],
+    )
+    created = await procurement_service.create_purchase_request(FakeDb(), payload)
+    await _approve_request(created.id)
+
+    xlsx_bytes = await procurement_service.export_purchase_order_lines_xlsx(
+        FakeDb(),
+        category=PurchaseRequestCategory.urgent.value,
+        year=2026,
+        month=8,
+    )
+    worksheet = load_workbook(BytesIO(xlsx_bytes), data_only=False).active
+
+    assert [worksheet.cell(5, column).value for column in range(1, 14)] == (
+        procurement_service.PURCHASE_ORDER_EXPORT_URGENT_HEADERS
+    )
+    assert worksheet.cell(6, 2).value == "消防"
+    assert worksheet.cell(6, 3).value == "FIRE-001"
+
+
+@pytest.mark.anyio
+async def test_legacy_category_attachment_update() -> None:
+    payload = _create_payload_for(category=PurchaseRequestCategory.office)
+    payload.items[0].product_name = ""
+    with pytest.raises(ValueError, match="缺少商品名称"):
+        await procurement_service.create_purchase_request(FakeDb(), payload)
+
+    created = await procurement_service.create_purchase_request(
+        FakeDb(),
+        _create_payload_for(category=PurchaseRequestCategory.office),
+    )
+    updated = await procurement_service.update_purchase_request(
+        FakeDb(),
+        created.id,
+        PurchaseRequestUpdate(attachment_note="更新后的附件说明"),
+    )
+    assert updated.attachment_note == "更新后的附件说明"

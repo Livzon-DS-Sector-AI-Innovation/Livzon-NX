@@ -1,7 +1,9 @@
 import { notFound } from 'next/navigation'
 import {
   PurchaseApprovalClient,
+  approvalRoleToStep,
   approvalStepToRole,
+  purchaseApprovalWorkflows,
   purchaseCategoryLabels,
 } from '@/components/purchasing'
 import { fetchPurchaseRequests } from '@/lib/api/purchasing'
@@ -17,8 +19,11 @@ interface PurchaseApprovalPageProps {
 }
 
 export function generateStaticParams() {
-  return Object.keys(purchaseCategoryLabels).flatMap((category) =>
-    Object.keys(approvalStepToRole).map((step) => ({ category, step }))
+  return Object.entries(purchaseApprovalWorkflows).flatMap(([category, roles]) =>
+    roles.map((role) => ({
+      category,
+      step: approvalRoleToStep[role],
+    }))
   )
 }
 
@@ -28,8 +33,13 @@ export default async function PurchaseApprovalPage({
   const { category, step } = await params
   const categoryLabel = purchaseCategoryLabels[category as PurchaseRequestCategory]
   const approvalRole = approvalStepToRole[step as keyof typeof approvalStepToRole]
+  const workflow = purchaseApprovalWorkflows[category as PurchaseRequestCategory]
 
-  if (!categoryLabel || !approvalRole) {
+  const roleIsInWorkflow = approvalRole
+    ? workflow?.some((role) => role === approvalRole)
+    : false
+
+  if (!categoryLabel || !approvalRole || !roleIsInWorkflow) {
     notFound()
   }
 

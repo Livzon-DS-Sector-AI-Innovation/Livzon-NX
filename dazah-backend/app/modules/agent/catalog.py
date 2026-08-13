@@ -111,9 +111,7 @@ class ToolCatalogService:
         if row is None:
             await self.synchronize(db)
             row = await db.scalar(
-                select(AgentToolCatalog).where(
-                    AgentToolCatalog.operation == operation
-                )
+                select(AgentToolCatalog).where(AgentToolCatalog.operation == operation)
             )
         if row is None or row.status != "active" or not row.admin_enabled:
             raise HTTPException(

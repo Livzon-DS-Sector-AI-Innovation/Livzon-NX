@@ -37,6 +37,7 @@ desktop.ini
 /scripts/*
 !/scripts/ci.sh
 !/scripts/check-branch-policy.sh
+!/scripts/dev.ps1
 !/scripts/check-coverage-floor.py
 !/scripts/check-diff-coverage.py
 !/scripts/check-agent-v2-residuals.py
@@ -91,6 +92,7 @@ desktop.ini
 **/.env
 **/.env.*
 !**/.env.example
+!**/.env.local.example
 *.log
 *.pid
 

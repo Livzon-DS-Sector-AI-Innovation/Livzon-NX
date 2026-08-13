@@ -24,7 +24,7 @@ const pendingPurchaseRequest = {
   request_department: '工程设备部',
   request_date: '2026-07-29',
   total_amount: '1280.00',
-  status: 'pending_department_head',
+  status: 'pending_hardware_warehouse',
   items: [],
   approvals: [],
 }

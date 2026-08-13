@@ -9,32 +9,44 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+import httpx
 from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.correlation import normalize_correlation_id
 from app.core.redaction import redact_sensitive
 from app.modules.agent.access_scope import AgentAccessScopeService
+from app.modules.agent.automation_runtime import apply_transforms, evaluate_condition
 from app.modules.agent.automation_schedule import next_fire_at
 from app.modules.agent.automation_schema import (
+    AnalysisStep,
     AutomationDefinitionV1,
     AutomationRunStatus,
     AutomationStatus,
+    CollectStep,
     ConcurrencyPolicy,
+    ConditionStep,
     EndStep,
     EventWaitStep,
     ManualTaskStep,
     NotifyStep,
     ToolStep,
+    TransformStep,
+    WaitStep,
 )
 from app.modules.agent.automation_service import AgentAutomationService
+from app.modules.agent.interaction_schemas import InteractionRequestCreate
+from app.modules.agent.interaction_service import AgentInteractionService
 from app.modules.agent.models import (
     AgentAutomation,
+    AgentAutomationGrant,
     AgentAutomationRun,
     AgentAutomationTrigger,
     AgentAutomationVersion,
     AgentDomainEvent,
+    AgentInteractionRequest,
     AgentRunEvent,
     AgentStepRun,
 )
@@ -58,6 +70,12 @@ class AutomationWorkItem:
     trigger_id: uuid.UUID | None = None
     run_id: uuid.UUID | None = None
     scheduled_for: datetime | None = None
+
+
+class AutomationNodeError(RuntimeError):
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
 
 
 class AgentAutomationRunner:
@@ -113,6 +131,8 @@ class AgentAutomationRunner:
                 timezone=trigger.timezone,
                 after=now if now > scheduled_for else scheduled_for,
             )
+            if trigger.schedule.get("kind") == "once" and trigger.next_fire_at is None:
+                trigger.status = "completed"
             trigger.updated_by = trigger.updated_by or trigger.created_by
             claimed.append(
                 AutomationWorkItem(
@@ -149,6 +169,34 @@ class AgentAutomationRunner:
             )
             for item in retry_result.scalars()
         )
+        resume_result = await session.execute(
+            select(AgentAutomationRun)
+            .join(
+                AgentAutomation,
+                AgentAutomation.id == AgentAutomationRun.automation_id,
+            )
+            .where(
+                AgentAutomationRun.is_deleted.is_(False),
+                AgentAutomationRun.status == AutomationRunStatus.WAITING.value,
+                AgentAutomationRun.resume_at.is_not(None),
+                AgentAutomationRun.resume_at <= now,
+                AgentAutomation.is_deleted.is_(False),
+                AgentAutomation.status == AutomationStatus.ENABLED.value,
+            )
+            .order_by(AgentAutomationRun.resume_at.asc())
+            .limit(self.batch_size)
+            .with_for_update(skip_locked=True)
+        )
+        for run in resume_result.scalars():
+            run.status = AutomationRunStatus.QUEUED.value
+            run.retry_at = now
+            claimed.append(
+                AutomationWorkItem(
+                    kind="run",
+                    automation_id=run.automation_id,
+                    run_id=run.id,
+                )
+            )
         await session.flush()
         return claimed
 
@@ -360,6 +408,27 @@ class AgentAutomationRunner:
         ).scalar_one_or_none()
         if automation is None or version is None or owner is None:
             return
+        grant_result = await session.execute(
+            select(AgentAutomationGrant).where(
+                AgentAutomationGrant.automation_id == automation.id,
+                AgentAutomationGrant.version_id == version.id,
+                AgentAutomationGrant.owner_user_id == owner.id,
+                AgentAutomationGrant.status == "active",
+                AgentAutomationGrant.is_deleted.is_(False),
+            )
+        )
+        grant = grant_result.scalar_one_or_none()
+        if grant is None:
+            automation.status = AutomationStatus.SUSPENDED_POLICY.value
+            await self._finish_run(
+                session,
+                automation=automation,
+                run=run,
+                status_value=AutomationRunStatus.SKIPPED_POLICY.value,
+                error_code="automation.authorization_missing",
+                error_message="自动化当前版本授权已失效",
+            )
+            return
         try:
             await self.access_scope_service.get_current_scope(session, user=owner)
         except HTTPException as exc:
@@ -411,20 +480,84 @@ class AgentAutomationRunner:
                 return
         run.status = AutomationRunStatus.RUNNING.value
         run.retry_at = None
+        run.resume_at = None
         run.started_at = run.started_at or datetime.now(UTC)
         run.updated_by = owner.id
         await self._event(session, run, "run_started", {"retry_count": run.retry_count})
         outputs = self._resumed_outputs(run)
         try:
-            for step in definition.steps:
-                if step.key in outputs:
-                    continue
+            by_key = {step.key: step for step in definition.steps}
+            order = [step.key for step in definition.steps]
+            current_key = run.current_step_key or order[0]
+            while current_key:
+                step = by_key[current_key]
+                run.current_step_key = step.key
+                timed_out = False
                 if isinstance(step, ToolStep):
                     completed = await self._execute_tool_step(
-                        session, run=run, owner=owner, step=step, outputs=outputs
+                        session,
+                        run=run,
+                        owner=owner,
+                        grant=grant,
+                        step=step,
+                        outputs=outputs,
                     )
                     if not completed:
                         return
+                elif isinstance(step, ConditionStep):
+                    context = self._runtime_context(outputs)
+                    matched = evaluate_condition(step.expression, context)
+                    outputs[step.key] = {"matched": matched}
+                    await self._step(
+                        session,
+                        run=run,
+                        step_key=step.key,
+                        operation=None,
+                        status_value="succeeded",
+                        output_summary=outputs[step.key],
+                    )
+                    current_key = step.if_true if matched else step.if_false
+                    run.current_step_key = current_key
+                    state = dict(run.execution_state or {})
+                    branches = dict(state.get("branches") or {})
+                    branches[step.key] = {
+                        "matched": matched,
+                        "selected": current_key,
+                    }
+                    run.execution_state = {
+                        **state,
+                        "branches": branches,
+                        "next_step_key": current_key,
+                    }
+                    run.output_summary = redact_sensitive({"steps": outputs})
+                    continue
+                elif isinstance(step, TransformStep):
+                    result = apply_transforms(
+                        step.operations, self._runtime_context(outputs)
+                    )
+                    outputs[step.key] = result
+                    await self._step(
+                        session,
+                        run=run,
+                        step_key=step.key,
+                        operation=None,
+                        status_value="succeeded",
+                        output_summary=(
+                            result if isinstance(result, dict) else {"value": result}
+                        ),
+                    )
+                elif isinstance(step, AnalysisStep):
+                    outputs[step.key] = await self._execute_analysis_step(
+                        run=run, step=step, outputs=outputs
+                    )
+                    await self._step(
+                        session,
+                        run=run,
+                        step_key=step.key,
+                        operation=None,
+                        status_value="succeeded",
+                        output_summary=outputs[step.key],
+                    )
                 elif isinstance(step, EndStep):
                     await self._finish_run(
                         session,
@@ -433,9 +566,10 @@ class AgentAutomationRunner:
                         status_value=step.status,
                         error_code=None,
                         error_message=None,
-                        output_summary={"message": step.message}
-                        if step.message
-                        else {},
+                        output_summary={
+                            "steps": outputs,
+                            **({"message": step.message} if step.message else {}),
+                        },
                     )
                     return
                 elif isinstance(step, NotifyStep):
@@ -463,27 +597,48 @@ class AgentAutomationRunner:
                         session, run, "notify_step_completed", {"step_key": step.key}
                     )
                 elif isinstance(step, EventWaitStep):
-                    received = await self._wait_for_event(
+                    received, timed_out = await self._wait_for_event(
                         session, run=run, step=step, outputs=outputs
                     )
                     if not received:
                         return
                 elif isinstance(step, ManualTaskStep):
-                    completed = await self._wait_for_manual_task(
+                    completed, timed_out = await self._wait_for_manual_task(
+                        session, run=run, step=step, outputs=outputs
+                    )
+                    if not completed:
+                        return
+                elif isinstance(step, CollectStep):
+                    completed, timed_out = await self._wait_for_collection(
+                        session,
+                        automation=automation,
+                        run=run,
+                        owner=owner,
+                        step=step,
+                        outputs=outputs,
+                    )
+                    if not completed:
+                        return
+                elif isinstance(step, WaitStep):
+                    completed = await self._wait_for_delay(
                         session, run=run, step=step, outputs=outputs
                     )
                     if not completed:
                         return
                 else:
-                    outputs[step.key] = {"status": "succeeded", "type": step.type}
-                    await self._step(
-                        session,
-                        run=run,
-                        step_key=step.key,
-                        operation=None,
-                        status_value="succeeded",
-                        output_summary=outputs[step.key],
-                    )
+                    raise RuntimeError(f"不支持的自动化节点: {step.type}")
+                run.output_summary = redact_sensitive({"steps": outputs})
+                current_key = self._next_step_key(
+                    definition=definition,
+                    order=order,
+                    step=step,
+                    timed_out=timed_out,
+                )
+                run.current_step_key = current_key
+                run.execution_state = {
+                    **dict(run.execution_state or {}),
+                    "next_step_key": current_key,
+                }
             await self._finish_run(
                 session,
                 automation=automation,
@@ -507,6 +662,7 @@ class AgentAutomationRunner:
         *,
         run: AgentAutomationRun,
         owner: User,
+        grant: AgentAutomationGrant,
         step: ToolStep,
         outputs: dict[str, Any],
     ) -> bool:
@@ -533,6 +689,8 @@ class AgentAutomationRunner:
             trace_id=run.correlation_id,
             execution_context={
                 "workflow_id": str(run.automation_id),
+                "automation_version_id": str(run.version_id),
+                "automation_grant_id": str(grant.id),
             },
             reason=f"自动化运行 {run.id} 步骤 {step.key}",
         )
@@ -563,6 +721,82 @@ class AgentAutomationRunner:
         return True
 
     @staticmethod
+    def _runtime_context(outputs: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "trigger": outputs.get("trigger", {}),
+            "steps": {key: value for key, value in outputs.items() if key != "trigger"},
+        }
+
+    @staticmethod
+    def _next_step_key(
+        *,
+        definition: AutomationDefinitionV1,
+        order: list[str],
+        step: Any,
+        timed_out: bool = False,
+    ) -> str | None:
+        if timed_out and getattr(step, "on_timeout", None):
+            return str(step.on_timeout)
+        if definition.schema_version == "1.1":
+            return step.next
+        index = order.index(step.key)
+        return order[index + 1] if index + 1 < len(order) else None
+
+    async def _execute_analysis_step(
+        self,
+        *,
+        run: AgentAutomationRun,
+        step: AnalysisStep,
+        outputs: dict[str, Any],
+    ) -> dict[str, Any]:
+        context = self._runtime_context(outputs)
+        inputs = {
+            key: _lookup_plain_reference(value.ref, context)
+            for key, value in step.inputs.items()
+        }
+        settings = get_settings()
+        base_url = settings.HERMES_INTERNAL_URL.rstrip("/")
+        if not base_url:
+            if step.failure_policy == "continue_empty":
+                return {}
+            raise AutomationNodeError(
+                "automation.analysis_unavailable", "Hermes 自动化分析接口未配置"
+            )
+        try:
+            async with httpx.AsyncClient(timeout=step.timeout_seconds) as client:
+                response = await client.post(
+                    f"{base_url}/internal/automation/analyze",
+                    headers={
+                        "Authorization": f"Bearer {settings.HERMES_INTERNAL_TOKEN}"
+                    },
+                    json={
+                        "run_id": str(run.id),
+                        "step_key": step.key,
+                        "instruction": step.instruction,
+                        "inputs": inputs,
+                        "output_schema": step.output_schema,
+                        "max_output_chars": step.max_output_chars,
+                    },
+                )
+                response.raise_for_status()
+                payload = response.json()
+        except (httpx.HTTPError, ValueError) as exc:
+            if step.failure_policy == "continue_empty":
+                return {}
+            raise AutomationNodeError(
+                "automation.analysis_failed", "Hermes 自动化分析失败"
+            ) from exc
+        result = payload.get("output") if isinstance(payload, dict) else None
+        if not isinstance(result, dict):
+            if step.failure_policy == "continue_empty":
+                return {}
+            raise AutomationNodeError(
+                "automation.analysis_invalid_output",
+                "Hermes 自动化分析返回无效结构",
+            )
+        return result
+
+    @staticmethod
     def _resumed_outputs(run: AgentAutomationRun) -> dict[str, Any]:
         persisted = (run.output_summary or {}).get("steps", {})
         outputs = dict(persisted) if isinstance(persisted, dict) else {}
@@ -578,7 +812,7 @@ class AgentAutomationRunner:
         run: AgentAutomationRun,
         step: EventWaitStep,
         outputs: dict[str, Any],
-    ) -> bool:
+    ) -> tuple[bool, bool]:
         result = await session.execute(
             select(AgentStepRun)
             .where(
@@ -604,6 +838,19 @@ class AgentAutomationRunner:
         )
         event = event_result.scalar_one_or_none()
         if event is None:
+            if step.timeout_seconds is not None and datetime.now(
+                UTC
+            ) >= waiting_since + timedelta(seconds=step.timeout_seconds):
+                if step_run is not None:
+                    step_run.status = "timed_out"
+                    step_run.finished_at = datetime.now(UTC)
+                outputs[step.key] = {"status": "timed_out"}
+                await self._event(
+                    session, run, "event_wait_timed_out", {"step_key": step.key}
+                )
+                if step.on_timeout is None:
+                    raise RuntimeError(f"等待事件超时: {step.event_type}")
+                return True, True
             if step_run is None:
                 await self._step(
                     session,
@@ -613,6 +860,11 @@ class AgentAutomationRunner:
                     status_value="waiting_event",
                 )
             run.status = AutomationRunStatus.WAITING.value
+            run.resume_at = (
+                waiting_since + timedelta(seconds=step.timeout_seconds)
+                if step.timeout_seconds is not None
+                else None
+            )
             run.output_summary = redact_sensitive({"steps": outputs})
             await self._event(
                 session,
@@ -620,7 +872,7 @@ class AgentAutomationRunner:
                 "run_waiting_event",
                 {"step_key": step.key, "event_type": step.event_type},
             )
-            return False
+            return False, False
         outputs[step.key] = {
             "event_type": event.event_type,
             "event_version": event.event_version,
@@ -647,7 +899,7 @@ class AgentAutomationRunner:
             "event_wait_completed",
             {"step_key": step.key, "event_type": event.event_type},
         )
-        return True
+        return True, False
 
     async def _wait_for_manual_task(
         self,
@@ -656,7 +908,7 @@ class AgentAutomationRunner:
         run: AgentAutomationRun,
         step: ManualTaskStep,
         outputs: dict[str, Any],
-    ) -> bool:
+    ) -> tuple[bool, bool]:
         result = await session.execute(
             select(AgentStepRun)
             .where(AgentStepRun.run_id == run.id, AgentStepRun.step_key == step.key)
@@ -666,7 +918,20 @@ class AgentAutomationRunner:
         task = result.scalar_one_or_none()
         if task is not None and task.status == "succeeded":
             outputs[step.key] = dict(task.output_summary or {"status": "completed"})
-            return True
+            return True, False
+        if (
+            task is not None
+            and step.timeout_seconds is not None
+            and task.started_at is not None
+            and datetime.now(UTC)
+            >= task.started_at + timedelta(seconds=step.timeout_seconds)
+        ):
+            task.status = "timed_out"
+            task.finished_at = datetime.now(UTC)
+            outputs[step.key] = {"status": "timed_out"}
+            if step.on_timeout is None:
+                raise RuntimeError("人工待办超时")
+            return True, True
         if task is None:
             await self._step(
                 session,
@@ -677,6 +942,12 @@ class AgentAutomationRunner:
                 input_summary={"title": step.title, "detail": step.detail},
             )
         run.status = AutomationRunStatus.WAITING.value
+        run.resume_at = (
+            (task.started_at if task is not None else datetime.now(UTC))
+            + timedelta(seconds=step.timeout_seconds)
+            if step.timeout_seconds is not None
+            else None
+        )
         run.output_summary = redact_sensitive({"steps": outputs})
         await self._event(
             session,
@@ -684,7 +955,186 @@ class AgentAutomationRunner:
             "manual_task_created",
             {"step_key": step.key, "title": step.title},
         )
-        return False
+        return False, False
+
+    async def _wait_for_delay(
+        self,
+        session: AsyncSession,
+        *,
+        run: AgentAutomationRun,
+        step: WaitStep,
+        outputs: dict[str, Any],
+    ) -> bool:
+        result = await session.execute(
+            select(AgentStepRun)
+            .where(
+                AgentStepRun.run_id == run.id,
+                AgentStepRun.step_key == step.key,
+                AgentStepRun.status == "waiting_delay",
+            )
+            .order_by(AgentStepRun.attempt.desc())
+            .limit(1)
+        )
+        step_run = result.scalar_one_or_none()
+        if step_run is None:
+            now = datetime.now(UTC)
+            resume_at = (
+                now + timedelta(seconds=step.duration_seconds)
+                if step.duration_seconds is not None
+                else datetime.fromisoformat(str(step.until).replace("Z", "+00:00"))
+            )
+            if resume_at.tzinfo is None:
+                raise ValueError("wait until 必须包含时区")
+            await self._step(
+                session,
+                run=run,
+                step_key=step.key,
+                operation=None,
+                status_value="waiting_delay",
+                input_summary={"resume_at": resume_at.isoformat()},
+            )
+            run.status = AutomationRunStatus.WAITING.value
+            run.resume_at = resume_at.astimezone(UTC)
+            run.output_summary = redact_sensitive({"steps": outputs})
+            await self._event(
+                session,
+                run,
+                "run_waiting_delay",
+                {"step_key": step.key, "resume_at": resume_at.isoformat()},
+            )
+            return False
+        resume_at_value = step_run.input_summary.get("resume_at")
+        resume_at = datetime.fromisoformat(str(resume_at_value).replace("Z", "+00:00"))
+        if datetime.now(UTC) < resume_at:
+            run.status = AutomationRunStatus.WAITING.value
+            run.resume_at = resume_at
+            return False
+        step_run.status = "succeeded"
+        step_run.output_summary = {"resumed_at": datetime.now(UTC).isoformat()}
+        step_run.finished_at = datetime.now(UTC)
+        outputs[step.key] = dict(step_run.output_summary)
+        return True
+
+    async def _wait_for_collection(
+        self,
+        session: AsyncSession,
+        *,
+        automation: AgentAutomation,
+        run: AgentAutomationRun,
+        owner: User,
+        step: CollectStep,
+        outputs: dict[str, Any],
+    ) -> tuple[bool, bool]:
+        result = await session.execute(
+            select(AgentInteractionRequest).where(
+                AgentInteractionRequest.run_id == run.id,
+                AgentInteractionRequest.step_key == step.key,
+                AgentInteractionRequest.is_deleted.is_(False),
+            )
+        )
+        requests = list(result.scalars())
+        if requests:
+            if all(item.status == "completed" for item in requests):
+                outputs[step.key] = {
+                    "status": "completed",
+                    "request_ids": [str(item.id) for item in requests],
+                }
+                waiting = await session.execute(
+                    select(AgentStepRun)
+                    .where(
+                        AgentStepRun.run_id == run.id,
+                        AgentStepRun.step_key == step.key,
+                        AgentStepRun.status == "waiting_collection",
+                    )
+                    .order_by(AgentStepRun.attempt.desc())
+                    .limit(1)
+                )
+                step_run = waiting.scalar_one_or_none()
+                if step_run is not None:
+                    step_run.status = "succeeded"
+                    step_run.output_summary = outputs[step.key]
+                    step_run.finished_at = datetime.now(UTC)
+                return True, False
+            expired = datetime.now(UTC) >= min(item.expires_at for item in requests)
+            failed = any(item.status in {"failed", "expired"} for item in requests)
+            if expired or failed:
+                for item in requests:
+                    if item.status == "pending":
+                        item.status = "expired"
+                outputs[step.key] = {"status": "timed_out" if expired else "failed"}
+                if failed:
+                    automation.status = AutomationStatus.SUSPENDED_POLICY.value
+                if step.on_timeout is None:
+                    raise RuntimeError("飞书填写请求超时或失败")
+                return True, True
+            run.status = AutomationRunStatus.WAITING.value
+            run.resume_at = min(item.expires_at for item in requests)
+            return False, False
+
+        recipients = await self.push_delivery_service.resolve_recipients(
+            session,
+            rules=step.recipients,
+            owner=owner,
+            outputs=outputs,
+        )
+        if not recipients:
+            raise RuntimeError("飞书填写请求没有有效收件人")
+        step_run = await self._step(
+            session,
+            run=run,
+            step_key=step.key,
+            operation=None,
+            status_value="waiting_collection",
+        )
+        expires_at = datetime.now(UTC) + timedelta(seconds=step.timeout_seconds)
+        interaction_service = AgentInteractionService()
+        created: list[AgentInteractionRequest] = []
+        for recipient, rule in recipients:
+            artifact = await interaction_service.create_request(
+                session,
+                user=owner,
+                request=InteractionRequestCreate(
+                    template_id=uuid.UUID(step.template_id),
+                    recipient_user_id=recipient.id,
+                    mode=step.mode,
+                    title=step.name or automation.name,
+                    summary=step.name or "请完成自动化所需信息填写。",
+                    form_schema=[
+                        field.model_dump(mode="json") for field in step.fields
+                    ],
+                    prefill=_resolve_references(step.prefill, outputs),
+                    expires_at=expires_at,
+                    idempotency_key=f"interaction:{run.id}:{step.key}:{recipient.id}",
+                    automation_id=automation.id,
+                    run_id=run.id,
+                    step_key=step.key,
+                ),
+                trusted_automation=True,
+            )
+            item = await session.get(AgentInteractionRequest, artifact.request_id)
+            if item is None:
+                raise RuntimeError("填写请求创建失败")
+            created.append(item)
+            await self.push_delivery_service.dispatch_interaction(
+                session,
+                automation=automation,
+                run=run,
+                owner=owner,
+                request=item,
+                recipient=recipient,
+                rule=rule,
+                step_run_id=step_run.id,
+            )
+        run.status = AutomationRunStatus.WAITING.value
+        run.resume_at = expires_at
+        run.output_summary = redact_sensitive({"steps": outputs})
+        await self._event(
+            session,
+            run,
+            "collection_requests_created",
+            {"step_key": step.key, "request_count": len(created)},
+        )
+        return False, False
 
     async def _retry_or_fail(
         self,
@@ -725,7 +1175,7 @@ class AgentAutomationRunner:
             automation=automation,
             run=run,
             status_value=AutomationRunStatus.FAILED.value,
-            error_code="automation.execution_failed",
+            error_code=getattr(error, "code", "automation.execution_failed"),
             error_message=str(error),
         )
 
@@ -881,3 +1331,12 @@ def _resolve_references(value: Any, outputs: dict[str, Any]) -> Any:
         ),
         value,
     )
+
+
+def _lookup_plain_reference(value: str, context: dict[str, Any]) -> Any:
+    cursor: Any = context
+    for part in value.split("."):
+        if not isinstance(cursor, dict) or part not in cursor:
+            raise ValueError(f"找不到分析输入引用: {value}")
+        cursor = cursor[part]
+    return cursor

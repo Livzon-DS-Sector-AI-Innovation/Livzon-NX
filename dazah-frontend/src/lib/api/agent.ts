@@ -76,6 +76,71 @@ export interface LivzonTaskVersion {
   created_at?: string | null
 }
 
+export interface LivzonTaskRun {
+  id: string
+  automation_id: string
+  status: string
+  error_code?: string | null
+  error_message?: string | null
+  started_at?: string | null
+  finished_at?: string | null
+  created_at?: string | null
+}
+
+export interface LivzonTaskStepRun {
+  id: string
+  step_key: string
+  operation?: string | null
+  attempt: number
+  status: string
+  error_code?: string | null
+  error_message?: string | null
+  started_at?: string | null
+  finished_at?: string | null
+}
+
+export interface LivzonTaskRunPage {
+  items: LivzonTaskRun[]
+  page: number
+  page_size: number
+  total: number
+}
+
+export interface LivzonTaskRunDetail {
+  run: LivzonTaskRun
+  steps: LivzonTaskStepRun[]
+}
+
+export interface AgentInteractionField {
+  key: string
+  label: string
+  type: "text" | "number" | "date" | "single_select" | "multi_select" | "boolean"
+  required?: boolean
+  options?: string[]
+}
+
+export interface AgentInteractionArtifact {
+  type: "form" | "table_link"
+  request_id: string
+  version: number
+  title: string
+  summary?: string | null
+  status: string
+  actions: Array<{ type: string; label: string; url?: string }>
+  form_schema: AgentInteractionField[]
+  table_resource?: { name?: string; url?: string; resource_type?: string }
+  expires_at: string
+  automation_id?: string | null
+  run_id?: string | null
+}
+
+export interface AgentInteractionPage {
+  items: AgentInteractionArtifact[]
+  page: number
+  page_size: number
+  total: number
+}
+
 export interface AgentChatData {
   session_id: string
   message: AgentMessage
@@ -383,4 +448,42 @@ export async function fetchLivzonTaskVersions(
     credentials: "include",
   })
   return readEnvelope<LivzonTaskVersion[]>(response)
+}
+
+export async function fetchLivzonTaskRuns(): Promise<LivzonTaskRunPage> {
+  const response = await fetch("/api/v1/agent/automation-runs?scope=mine&page=1&page_size=100", {
+    credentials: "include",
+  })
+  return readEnvelope<LivzonTaskRunPage>(response)
+}
+
+export async function fetchLivzonTaskRun(runId: string): Promise<LivzonTaskRunDetail> {
+  const response = await fetch(`/api/v1/agent/automation-runs/${runId}`, {
+    credentials: "include",
+  })
+  return readEnvelope<LivzonTaskRunDetail>(response)
+}
+
+export async function fetchAgentInteractions(): Promise<AgentInteractionPage> {
+  const response = await fetch("/api/v1/agent/interaction-requests?page=1&page_size=100", {
+    credentials: "include",
+  })
+  return readEnvelope<AgentInteractionPage>(response)
+}
+
+export async function submitAgentInteraction(
+  artifact: AgentInteractionArtifact,
+  values: Record<string, unknown>,
+): Promise<AgentInteractionArtifact> {
+  const response = await fetch(`/api/v1/agent/interaction-requests/${artifact.request_id}/submissions`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      request_version: artifact.version,
+      idempotency_key: crypto.randomUUID(),
+      values,
+    }),
+  })
+  return readEnvelope<AgentInteractionArtifact>(response)
 }

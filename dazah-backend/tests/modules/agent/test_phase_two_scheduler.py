@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import uuid
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
@@ -14,6 +15,7 @@ from app.modules.agent.automation_service import AgentAutomationService
 from app.modules.agent.models import (
     AgentAccessScopeSnapshot,
     AgentAutomation,
+    AgentAutomationGrant,
     AgentAutomationRun,
     AgentAutomationTrigger,
     AgentAutomationVersion,
@@ -188,6 +190,61 @@ async def test_enabled_automation_can_run_immediately_after_confirmation(
 
 
 @pytest.mark.anyio
+async def test_v11_wait_run_resumes_from_persisted_cursor(
+    db_session: AsyncSession,
+) -> None:
+    admin = _user(role="admin")
+    owner = _user()
+    db_session.add_all([admin, owner])
+    await db_session.flush()
+    await _grant_automation(db_session, admin=admin, owner=owner)
+    service = AgentAutomationService()
+    draft = await service.create_draft(
+        db_session,
+        user=owner,
+        request=AgentAutomationDraftCreate.model_validate(
+            {
+                "definition": {
+                    "schema_version": "1.1",
+                    "name": "等待恢复",
+                    "steps": [
+                        {
+                            "key": "prepare",
+                            "type": "transform",
+                            "operations": [{"op": "template", "template": "准备恢复"}],
+                            "next": "pause",
+                        },
+                        {
+                            "key": "pause",
+                            "type": "wait",
+                            "duration_seconds": 1,
+                            "next": "done",
+                        },
+                        {"key": "done", "type": "end", "status": "succeeded"},
+                    ],
+                },
+                "triggers": [{"trigger_type": "manual"}],
+            }
+        ),
+    )
+    await service.confirm_automation(db_session, user=owner, automation_id=draft.id)
+    runner = AgentAutomationRunner()
+
+    run = await runner.execute_manual(db_session, automation_id=draft.id)
+
+    assert run.status == "waiting"
+    assert run.current_step_key == "pause"
+    assert run.resume_at is not None
+    await asyncio.sleep(1.05)
+    claimed = await runner.claim_due_work(db_session)
+    resume_item = next(item for item in claimed if item.run_id == run.id)
+    await runner.execute_work(db_session, resume_item)
+
+    assert run.status == "succeeded"
+    assert run.output_summary["steps"]["prepare"] == "准备恢复"
+
+
+@pytest.mark.anyio
 async def test_executed_confirmation_is_refetched_before_serialization(
     db_session: AsyncSession,
 ) -> None:
@@ -305,6 +362,11 @@ async def test_two_scheduler_instances_do_not_claim_one_trigger_window(
             await cleanup_session.execute(
                 delete(AgentAutomationTrigger).where(
                     AgentAutomationTrigger.automation_id == automation_id
+                )
+            )
+            await cleanup_session.execute(
+                delete(AgentAutomationGrant).where(
+                    AgentAutomationGrant.automation_id == automation_id
                 )
             )
             await cleanup_session.execute(

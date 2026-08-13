@@ -366,6 +366,35 @@ class AgentAutomationVersion(BaseModel):
     updated_by: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
 
 
+class AgentAutomationGrant(BaseModel):
+    __tablename__ = "agent_automation_grants"
+    __table_args__ = (
+        Index(
+            "ix_core_agent_automation_grants_active",
+            "automation_id",
+            "version_id",
+            "status",
+        ),
+        {"schema": "core", "comment": "Version-scoped unattended automation grants"},
+    )
+
+    automation_id: Mapped[uuid.UUID] = mapped_column(nullable=False, index=True)
+    version_id: Mapped[uuid.UUID] = mapped_column(nullable=False, index=True)
+    owner_user_id: Mapped[uuid.UUID] = mapped_column(nullable=False, index=True)
+    status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="active", server_default="active"
+    )
+    authorization_scope: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default="{}"
+    )
+    authorized_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default="now()"
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_by: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
+
+
 class AgentAutomationTrigger(BaseModel):
     __tablename__ = "agent_automation_triggers"
     __table_args__ = (
@@ -438,6 +467,15 @@ class AgentAutomationRun(BaseModel):
         JSONB, nullable=False, default=dict, server_default="{}"
     )
     output_summary: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default="{}"
+    )
+    current_step_key: Mapped[str | None] = mapped_column(
+        String(80), nullable=True, index=True
+    )
+    resume_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
+    execution_state: Mapped[dict[str, Any]] = mapped_column(
         JSONB, nullable=False, default=dict, server_default="{}"
     )
     error_code: Mapped[str | None] = mapped_column(
@@ -643,6 +681,126 @@ class AgentPushDelivery(BaseModel):
     card_action_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_by: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
+
+
+class AgentFeishuResourceTemplate(BaseModel):
+    __tablename__ = "agent_feishu_resource_templates"
+    __table_args__ = (
+        Index(
+            "ix_core_agent_feishu_templates_owner_status",
+            "owner_user_id",
+            "status",
+        ),
+        {"schema": "core", "comment": "Bound Feishu resources for automation"},
+    )
+
+    owner_user_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True, index=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    resource_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    resource_url: Mapped[str] = mapped_column(Text, nullable=False)
+    resource_ref: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default="{}"
+    )
+    view_type: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="grid", server_default="grid"
+    )
+    field_schema: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default="[]"
+    )
+    writable_fields: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default="[]"
+    )
+    record_mode: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="append", server_default="append"
+    )
+    status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="pending", server_default="pending"
+    )
+    validation_summary: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default="{}"
+    )
+    validated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_by: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
+
+
+class AgentInteractionRequest(BaseModel):
+    __tablename__ = "agent_interaction_requests"
+    __table_args__ = (
+        UniqueConstraint(
+            "idempotency_key", name="uq_core_agent_interactions_idempotency"
+        ),
+        Index(
+            "ix_core_agent_interactions_owner_status",
+            "owner_user_id",
+            "status",
+        ),
+        {"schema": "core", "comment": "Channel-neutral form and table interactions"},
+    )
+
+    automation_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True, index=True)
+    run_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True, index=True)
+    step_key: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    owner_user_id: Mapped[uuid.UUID] = mapped_column(nullable=False, index=True)
+    recipient_user_id: Mapped[uuid.UUID] = mapped_column(nullable=False, index=True)
+    template_id: Mapped[uuid.UUID] = mapped_column(nullable=False, index=True)
+    mode: Mapped[str] = mapped_column(String(32), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="pending", server_default="pending"
+    )
+    version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
+    title: Mapped[str] = mapped_column(String(300), nullable=False)
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    form_schema: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default="[]"
+    )
+    prefill: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default="{}"
+    )
+    idempotency_key: Mapped[str] = mapped_column(String(240), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    external_message_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    result_summary: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default="{}"
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_by: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
+
+
+class AgentInteractionSubmission(BaseModel):
+    __tablename__ = "agent_interaction_submissions"
+    __table_args__ = (
+        UniqueConstraint(
+            "request_id",
+            "idempotency_key",
+            name="uq_core_agent_submissions_request_idempotency",
+        ),
+        Index("ix_core_agent_submissions_request", "request_id", "created_at"),
+        {"schema": "core", "comment": "Idempotent interaction form submissions"},
+    )
+
+    request_id: Mapped[uuid.UUID] = mapped_column(nullable=False, index=True)
+    request_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    submitted_by: Mapped[uuid.UUID] = mapped_column(nullable=False, index=True)
+    idempotency_key: Mapped[str] = mapped_column(String(240), nullable=False)
+    values: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default="{}"
+    )
+    status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="processing", server_default="processing"
+    )
+    write_receipt: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default="{}"
+    )
+    error_code: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
     updated_by: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
 

@@ -22,6 +22,13 @@ from .audit_service import AgentAuditService
 from .automation_service import AgentAutomationService
 from .catalog import ToolCatalogService
 from .event_service import AgentDomainEventService
+from .interaction_schemas import (
+    FeishuResourceTemplateCreate,
+    InteractionRequestCreate,
+    InteractionSubmissionCreate,
+    InternalFeishuInteractionSubmission,
+)
+from .interaction_service import AgentInteractionService
 from .llm_proxy import forward_chat_completion, list_active_text_models
 from .memory_policy import AgentMemoryPolicyService
 from .models import (
@@ -253,6 +260,119 @@ async def get_push_delivery(
         resource_id=delivery_id,
     )
     return success_response(data=result)
+
+
+@router.post("/feishu-resource-templates", status_code=status.HTTP_201_CREATED)
+async def create_feishu_resource_template(
+    payload: FeishuResourceTemplateCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+):
+    result = await AgentInteractionService().create_template(
+        db, user=current_user, request=payload
+    )
+    await db.commit()
+    return success_response(data=result.model_dump(mode="json"))
+
+
+@router.get("/feishu-resource-templates")
+async def list_feishu_resource_templates(
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+):
+    result = await AgentInteractionService().list_templates(db, user=current_user)
+    return success_response(data=[item.model_dump(mode="json") for item in result])
+
+
+@router.post("/feishu-resource-templates/{template_id}/validate")
+async def validate_feishu_resource_template(
+    template_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+):
+    result = await AgentInteractionService().validate_template(
+        db, user=current_user, template_id=template_id
+    )
+    await db.commit()
+    return success_response(data=result.model_dump(mode="json"))
+
+
+@router.post("/interaction-requests", status_code=status.HTTP_201_CREATED)
+async def create_interaction_request(
+    payload: InteractionRequestCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+):
+    result = await AgentInteractionService().create_request(
+        db, user=current_user, request=payload
+    )
+    await db.commit()
+    return success_response(data=result.model_dump(mode="json"))
+
+
+@router.get("/interaction-requests")
+async def list_interaction_requests(
+    page: int = 1,
+    page_size: int = 20,
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+):
+    result = await AgentInteractionService().list_requests(
+        db,
+        user=current_user,
+        page=max(1, page),
+        page_size=min(max(1, page_size), 100),
+    )
+    return success_response(data=result.model_dump(mode="json"))
+
+
+@router.get("/interaction-requests/{request_id}")
+async def get_interaction_request(
+    request_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+):
+    result = await AgentInteractionService().get_request(
+        db, user=current_user, request_id=request_id
+    )
+    return success_response(data=result.model_dump(mode="json"))
+
+
+@router.post("/interaction-requests/{request_id}/submissions")
+async def submit_interaction_request(
+    request_id: uuid.UUID,
+    payload: InteractionSubmissionCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+):
+    result = await AgentInteractionService().submit(
+        db,
+        user=current_user,
+        request_id=request_id,
+        request=payload,
+    )
+    await db.commit()
+    return success_response(data=result.model_dump(mode="json"))
+
+
+@router.post("/internal/feishu/interaction-requests/{request_id}/submissions")
+async def submit_internal_feishu_interaction_request(
+    request_id: uuid.UUID,
+    payload: InternalFeishuInteractionSubmission,
+    db: AsyncSession = Depends(get_db),
+    authorization: str | None = Header(default=None),
+    settings: Settings = Depends(get_settings),
+):
+    require_service_token(settings.HERMES_INTERNAL_TOKEN, authorization)
+    user = await _require_feishu_subject_user(db, subject=payload.subject)
+    result = await AgentInteractionService().submit(
+        db,
+        user=user,
+        request_id=request_id,
+        request=payload.submission,
+    )
+    await db.commit()
+    return success_response(data=result.model_dump(mode="json"))
 
 
 def require_service_token(expected: str, authorization: str | None) -> None:
