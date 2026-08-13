@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 
 
@@ -20,6 +21,7 @@ EXCLUDED_DIRECTORIES = {
     "dist",
     "node_modules",
     "out",
+    ".pnpm-store",
     "temp",
     "tmp",
     "venv",
@@ -27,16 +29,18 @@ EXCLUDED_DIRECTORIES = {
 IMPORT_LINE = "@AGENTS.md"
 
 
-def _is_excluded(path: Path, root: Path) -> bool:
-    return any(part in EXCLUDED_DIRECTORIES for part in path.relative_to(root).parts)
-
-
 def _instruction_files(root: Path, filename: str) -> list[Path]:
-    return sorted(
-        path
-        for path in root.rglob(filename)
-        if not _is_excluded(path, root)
-    )
+    matches: list[Path] = []
+    for current, directories, files in os.walk(root, topdown=True):
+        current_path = Path(current)
+        directories[:] = [
+            directory
+            for directory in directories
+            if directory not in EXCLUDED_DIRECTORIES
+        ]
+        if filename in files:
+            matches.append(current_path / filename)
+    return sorted(matches)
 
 
 def _imports_agents(claude_file: Path) -> bool:
