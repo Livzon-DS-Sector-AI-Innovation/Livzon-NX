@@ -123,7 +123,9 @@ class AgentAutomationService:
             if trigger.trigger_type != "schedule":
                 continue
             normalized = normalize_schedule_config(
-                trigger_type="schedule", schedule=trigger.schedule
+                trigger_type="schedule",
+                schedule=trigger.schedule,
+                timezone=trigger.timezone,
             )
             trigger_previews.append(
                 {
