@@ -1,6 +1,14 @@
 import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vitest/config'
 
+const coverageThresholds = {
+  // Vitest thresholds are percentage points, not ratios.
+  lines: 4.7,
+  functions: 4.8,
+  branches: 3.6,
+  statements: 4.5,
+} as const
+
 export default defineConfig({
   resolve: {
     alias: {
@@ -18,12 +26,10 @@ export default defineConfig({
       ],
       reporter: ['text-summary', 'json-summary', 'cobertura'],
       thresholds: {
-        // Initial full-src baseline. Keep these floors monotonic while changed
-        // executable lines are held to the stricter PR gate.
-        lines: 0.15,
-        functions: 0.14,
-        branches: 0.17,
-        statements: 0.15,
+        // Floors are rounded down from the current full-src baseline. Keep
+        // them monotonic while changed executable lines remain under the
+        // stricter PR gate.
+        ...coverageThresholds,
       },
     },
   },

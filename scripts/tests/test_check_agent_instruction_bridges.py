@@ -55,7 +55,7 @@ def test_orphaned_bridge_fails(tmp_path: Path) -> None:
 
 
 def test_ignored_runtime_directories_are_skipped(tmp_path: Path) -> None:
-    for directory in ("node_modules", "temp", "build"):
+    for directory in ("node_modules", ".pnpm-store", "temp", "build"):
         dependency = tmp_path / directory / "package"
         dependency.mkdir(parents=True)
         (dependency / "AGENTS.md").write_text(
