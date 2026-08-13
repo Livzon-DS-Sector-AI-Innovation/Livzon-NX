@@ -1,14 +1,16 @@
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, status
 from pydantic import BaseModel, Field, model_validator
 
+from app.modules.agent.attachment_service import AgentAttachmentService
 from app.modules.agent.automation_schema import AutomationDefinitionV1
 from app.modules.agent.automation_service import AgentAutomationService
 from app.modules.agent.event_service import AgentDomainEventService
+from app.modules.agent.interaction_service import AgentInteractionService
 from app.modules.agent.manual_task_service import AgentManualTaskService
 from app.modules.agent.operations_service import AgentOperationsService
 from app.modules.agent.push_delivery_service import PushDeliveryService
@@ -26,8 +28,33 @@ class AutomationIdInput(BaseModel):
     automation_id: UUID
 
 
+class AttachmentRefInput(BaseModel):
+    attachment_ref: str = Field(
+        min_length=1,
+        max_length=255,
+        description="附件 ID 或当前会话中完整文件名",
+    )
+
+
+class AttachmentReadInput(AttachmentRefInput):
+    offset: int = Field(default=0, ge=0)
+    limit: int = Field(default=20_000, ge=1, le=20_000)
+
+
+class TabularAttachmentMutationInput(AttachmentRefInput):
+    action: Literal["append_row", "update_row", "delete_row"]
+    sheet_name: str | None = Field(default=None, max_length=128)
+    row_number: int | None = Field(
+        default=None,
+        ge=1,
+        description="XLSX/CSV 的 1 基物理行号；新增行时省略",
+    )
+    values: list[Any] = Field(default_factory=list, max_length=100)
+
+
 class AutomationPreviewInput(BaseModel):
     definition: AutomationDefinitionV1
+    triggers: list[AgentAutomationTriggerCreate] = Field(default_factory=list)
 
 
 class AutomationUpdateInput(AgentAutomationUpdate):
@@ -73,10 +100,18 @@ class DirectScheduledTaskCreateInput(DirectAutomationCreateInput):
         max_length=4000,
         description="用户提出的完整定时任务需求，不得概括、改写或省略",
     )
-    cron: str = Field(
+    cron: str | None = Field(
+        default=None,
         min_length=9,
         max_length=100,
-        description="五段 Cron：分钟 小时 日 月 星期",
+        description="兼容字段：五段 Cron。新调用优先使用 schedule。",
+    )
+    schedule: dict[str, Any] | None = Field(
+        default=None,
+        description=(
+            "统一计划：{kind: cron, cron: ...}、{kind: once, run_at: ...} "
+            "或 {kind: interval, every: ..., unit: minutes|hours|days}"
+        ),
     )
     timezone: str = Field(default="Asia/Shanghai", min_length=1, max_length=64)
 
@@ -84,6 +119,10 @@ class DirectScheduledTaskCreateInput(DirectAutomationCreateInput):
     def require_runtime_query_for_data_delivery(
         self,
     ) -> "DirectScheduledTaskCreateInput":
+        if self.schedule is None and self.cron is None:
+            raise ValueError("必须提供 schedule 或 cron")
+        if self.schedule is not None and self.cron is not None:
+            raise ValueError("schedule 与 cron 只能提供一个")
         query_indexes: list[int] = []
         for index, action in enumerate(self.actions):
             verb = action.operation.partition(".")[2]
@@ -144,6 +183,19 @@ class ManualTaskCompleteInput(BaseModel):
     run_id: UUID
 
 
+class FeishuResourceTemplateIdInput(BaseModel):
+    template_id: UUID
+
+
+class InteractionRequestIdInput(BaseModel):
+    request_id: UUID
+
+
+class InteractionRequestListInput(BaseModel):
+    page: int = Field(default=1, ge=1)
+    page_size: int = Field(default=20, ge=1, le=100)
+
+
 def _required_user(context: ToolContext) -> User:
     if context.user is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Login required")
@@ -153,6 +205,106 @@ def _required_user(context: ToolContext) -> User:
 def _automation_service(context: ToolContext) -> AgentAutomationService:
     _required_user(context)
     return AgentAutomationService()
+
+
+@agent_tool(
+    name="agent.list_attachments",
+    summary="列出当前会话曾上传且仍可用的持久附件",
+    workflow_allowed=False,
+    idempotent=True,
+    output_hint="返回附件 ID、文件名、类型、大小和当前版本，不返回对象存储路径。",
+)
+async def list_attachments(context: ToolContext, _: BaseModel) -> list[dict[str, Any]]:
+    user = _required_user(context)
+    if context.session_id is None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "当前没有有效会话")
+    items = await AgentAttachmentService().list_for_session(
+        context.db,
+        session_id=context.session_id,
+        user_id=user.id,
+    )
+    return [
+        {
+            "attachment_id": str(item.id),
+            "filename": item.filename,
+            "content_type": item.content_type,
+            "size": item.size,
+            "kind": item.kind,
+            "version": item.version,
+        }
+        for item in items
+    ]
+
+
+@agent_tool(
+    name="agent.read_attachment",
+    summary="按附件 ID 或文件名读取当前会话上传文件的已解析数据",
+    input_model=AttachmentReadInput,
+    workflow_allowed=False,
+    idempotent=True,
+    sensitivity="sensitive",
+    output_hint="分页返回附件解析文本；如有 next_offset，继续读取下一段。",
+)
+async def read_attachment(
+    context: ToolContext, data: AttachmentReadInput
+) -> dict[str, Any]:
+    user = _required_user(context)
+    return await AgentAttachmentService().read(
+        context.db,
+        session_id=context.session_id,
+        user_id=user.id,
+        attachment_ref=data.attachment_ref,
+        offset=data.offset,
+        limit=data.limit,
+    )
+
+
+@agent_tool(
+    name="agent.mutate_tabular_attachment",
+    summary="新增、修改或删除当前会话 XLSX/CSV 附件中的数据行",
+    input_model=TabularAttachmentMutationInput,
+    write=True,
+    risk_level="medium",
+    workflow_allowed=False,
+    sensitivity="sensitive",
+    output_hint="写操作需用户确认；成功后返回附件新版本、哈希、工作表和行号。",
+)
+async def mutate_tabular_attachment(
+    context: ToolContext, data: TabularAttachmentMutationInput
+) -> dict[str, Any]:
+    user = _required_user(context)
+    return await AgentAttachmentService().mutate_tabular(
+        context.db,
+        session_id=context.session_id,
+        user_id=user.id,
+        attachment_ref=data.attachment_ref,
+        action=data.action,
+        sheet_name=data.sheet_name,
+        row_number=data.row_number,
+        values=data.values,
+    )
+
+
+@agent_tool(
+    name="agent.delete_attachment",
+    summary="删除当前会话上传的整个持久附件",
+    input_model=AttachmentRefInput,
+    write=True,
+    risk_level="high",
+    workflow_allowed=False,
+    sensitivity="sensitive",
+    output_hint="高风险操作，确认后删除对象内容并将附件标记为已删除。",
+)
+async def delete_attachment(
+    context: ToolContext, data: AttachmentRefInput
+) -> dict[str, Any]:
+    user = _required_user(context)
+    return await AgentAttachmentService().delete(
+        context.db,
+        session_id=context.session_id,
+        user_id=user.id,
+        attachment_ref=data.attachment_ref,
+    )
 
 
 @agent_tool(
@@ -180,6 +332,7 @@ async def get_my_access_scope(context: ToolContext, _: BaseModel) -> dict[str, A
     summary="创建 Livzon 自动化草案",
     input_model=AgentAutomationDraftCreate,
     write=True,
+    confirmation_required=False,
     risk_level="medium",
     workflow_allowed=False,
     method="POST",
@@ -208,6 +361,7 @@ def _direct_automation_request(
 ) -> AgentAutomationDraftCreate:
     timezone = getattr(data, "timezone", "Asia/Shanghai")
     cron = getattr(data, "cron", None)
+    schedule = getattr(data, "schedule", None)
     previous_result_keys: list[str] = []
     steps: list[dict[str, Any]] = []
     for index, action in enumerate(data.actions, start=1):
@@ -249,7 +403,7 @@ def _direct_automation_request(
     triggers = [
         AgentAutomationTriggerCreate(
             trigger_type="schedule" if scheduled else "manual",
-            schedule={"cron": cron} if scheduled else {},
+            schedule=(schedule or {"cron": cron}) if scheduled else {},
             timezone=timezone,
         )
     ]
@@ -279,11 +433,6 @@ async def _create_direct_automation(
         user=user,
         request=_direct_automation_request(data, scheduled=scheduled),
     )
-    automation = await service.confirm_automation(
-        context.db,
-        user=user,
-        automation_id=automation.id,
-    )
     return {
         "task_type": "scheduled_task" if scheduled else "automation",
         "automation": automation.model_dump(mode="json"),
@@ -297,9 +446,10 @@ async def _create_direct_automation(
 
 @agent_tool(
     name="agent.create_automation",
-    summary="直接创建并启用不含时间触发的自动化流程",
+    summary="创建不含时间触发的自动化草案",
     input_model=DirectAutomationCreateInput,
     write=True,
+    confirmation_required=False,
     risk_level="medium",
     workflow_allowed=False,
     method="POST",
@@ -314,14 +464,15 @@ async def create_automation(
 
 @agent_tool(
     name="agent.create_scheduled_task",
-    summary="直接创建并启用包含 Cron 时间触发的定时任务",
+    summary="创建包含 Cron、单次或间隔计划的定时任务草案",
     input_model=DirectScheduledTaskCreateInput,
     write=True,
+    confirmation_required=False,
     risk_level="medium",
     workflow_allowed=False,
     method="POST",
     path="/agent/scheduled-tasks/direct",
-    output_hint="只用于包含明确执行时间的任务；后端强制创建 schedule 触发器。",
+    output_hint="始终返回待核对草案；用户需另行确认后才会启用。",
 )
 async def create_scheduled_task(
     context: ToolContext, data: DirectScheduledTaskCreateInput
@@ -341,7 +492,10 @@ async def preview_automation(
     context: ToolContext, data: AutomationPreviewInput
 ) -> dict[str, Any]:
     return await _automation_service(context).preview(
-        context.db, user=_required_user(context), definition=data.definition
+        context.db,
+        user=_required_user(context),
+        definition=data.definition,
+        triggers=data.triggers,
     )
 
 
@@ -515,13 +669,22 @@ async def list_automation_audit(
 async def update_automation(
     context: ToolContext, data: AutomationUpdateInput
 ) -> dict[str, Any]:
-    automation = await _automation_service(context).update_automation(
+    service = _automation_service(context)
+    user = _required_user(context)
+    automation = await service.update_automation(
         context.db,
-        user=_required_user(context),
+        user=user,
         automation_id=data.automation_id,
         request=AgentAutomationUpdate.model_validate(
             data.model_dump(exclude={"automation_id"})
         ),
+    )
+    # The ToolExecutor confirmation for this write is also the authorization
+    # decision for the immutable version it creates; do not prompt a second time.
+    automation = await service.confirm_automation(
+        context.db,
+        user=user,
+        automation_id=automation.id,
     )
     return {"automation": automation.model_dump(mode="json")}
 
@@ -664,6 +827,56 @@ async def get_automation_run(
 
 
 @agent_tool(
+    name="agent.retry_automation_run",
+    summary="重试失败的 Livzon 自动化运行",
+    input_model=AutomationRunIdInput,
+    write=True,
+    risk_level="medium",
+    workflow_allowed=False,
+    method="POST",
+    path="/agent/automation-runs/{run_id}/retry",
+    output_hint=(
+        "仅允许重试当前用户有权访问且状态为 failed 的运行，并创建新的运行记录。"
+    ),
+)
+async def retry_automation_run(
+    context: ToolContext, data: AutomationRunIdInput
+) -> dict[str, Any]:
+    service = _automation_service(context)
+    failed_run = await service.get_run(
+        context.db,
+        user=_required_user(context),
+        run_id=data.run_id,
+    )
+    if failed_run.get("status") != "failed":
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "仅失败的自动化运行可以重试",
+        )
+    automation_id = UUID(str(failed_run["automation_id"]))
+    await service._require_owner(
+        context.db,
+        user=_required_user(context),
+        automation_id=automation_id,
+    )
+    from app.modules.agent.automation_runner import AgentAutomationRunner
+
+    retried = await AgentAutomationRunner().execute_manual(
+        context.db,
+        automation_id=automation_id,
+    )
+    result = await service.get_run(
+        context.db,
+        user=_required_user(context),
+        run_id=retried.id,
+    )
+    return {
+        "run": result,
+        "retried_from_run_id": str(data.run_id),
+    }
+
+
+@agent_tool(
     name="agent.get_current_time",
     summary="获取当前精确时间",
     method="GET",
@@ -739,6 +952,82 @@ async def get_push_delivery(
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
     except PermissionError as exc:
         raise HTTPException(status.HTTP_403_FORBIDDEN, str(exc)) from exc
+
+
+@agent_tool(
+    name="agent.list_feishu_resource_templates",
+    summary="查询当前用户可用的飞书表格与表单模板",
+    workflow_allowed=False,
+    method="GET",
+    path="/agent/feishu-resource-templates",
+)
+async def list_feishu_resource_templates(
+    context: ToolContext, _: BaseModel
+) -> list[dict[str, Any]]:
+    result = await AgentInteractionService().list_templates(
+        context.db, user=_required_user(context)
+    )
+    return [item.model_dump(mode="json") for item in result]
+
+
+@agent_tool(
+    name="agent.validate_feishu_resource_template",
+    summary="验证飞书表格模板的权限、字段和可写范围",
+    input_model=FeishuResourceTemplateIdInput,
+    write=True,
+    risk_level="medium",
+    workflow_allowed=False,
+    method="POST",
+    path="/agent/feishu-resource-templates/{template_id}/validate",
+)
+async def validate_feishu_resource_template(
+    context: ToolContext, data: FeishuResourceTemplateIdInput
+) -> dict[str, Any]:
+    result = await AgentInteractionService().validate_template(
+        context.db,
+        user=_required_user(context),
+        template_id=data.template_id,
+    )
+    return result.model_dump(mode="json")
+
+
+@agent_tool(
+    name="agent.list_interaction_requests",
+    summary="查询当前用户的飞书表格或表单填写请求",
+    input_model=InteractionRequestListInput,
+    workflow_allowed=False,
+    method="GET",
+    path="/agent/interaction-requests",
+)
+async def list_interaction_requests(
+    context: ToolContext, data: InteractionRequestListInput
+) -> dict[str, Any]:
+    result = await AgentInteractionService().list_requests(
+        context.db,
+        user=_required_user(context),
+        page=data.page,
+        page_size=data.page_size,
+    )
+    return result.model_dump(mode="json")
+
+
+@agent_tool(
+    name="agent.get_interaction_request",
+    summary="查看单个飞书表格或表单填写请求",
+    input_model=InteractionRequestIdInput,
+    workflow_allowed=False,
+    method="GET",
+    path="/agent/interaction-requests/{request_id}",
+)
+async def get_interaction_request(
+    context: ToolContext, data: InteractionRequestIdInput
+) -> dict[str, Any]:
+    result = await AgentInteractionService().get_request(
+        context.db,
+        user=_required_user(context),
+        request_id=data.request_id,
+    )
+    return result.model_dump(mode="json")
 
 
 @agent_tool(

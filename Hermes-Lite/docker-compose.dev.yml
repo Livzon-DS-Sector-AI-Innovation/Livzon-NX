@@ -17,8 +17,6 @@ services:
       HERMES_GATEWAY_LOCK_DIR: /run/hermes-feishu/gateway-locks
       # Prefer low-overhead native events; polling can be enabled per environment when needed.
       WATCHFILES_FORCE_POLLING: "${WATCHFILES_FORCE_POLLING:-false}"
-    ports:
-      - "${HERMES_PORT:-8100}:8100"
     volumes:
       - .:/app
       - hermes_data:/data/hermes

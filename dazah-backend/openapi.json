@@ -1694,6 +1694,115 @@
         "title": "AgentConfirmationResolveRequest",
         "type": "object"
       },
+      "AgentMemoryPolicyEnvelope": {
+        "additionalProperties": false,
+        "properties": {
+          "effective_mode": {
+            "enum": [
+              "auto",
+              "explicit_only",
+              "disabled"
+            ],
+            "title": "Effective Mode",
+            "type": "string"
+          },
+          "last_cleared_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Cleared At"
+          },
+          "notice_required": {
+            "default": false,
+            "title": "Notice Required",
+            "type": "boolean"
+          },
+          "policy_version": {
+            "minimum": 1.0,
+            "title": "Policy Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "effective_mode",
+          "policy_version"
+        ],
+        "title": "AgentMemoryPolicyEnvelope",
+        "type": "object"
+      },
+      "AgentMemoryTenantPolicyOut": {
+        "properties": {
+          "effective_mode": {
+            "enum": [
+              "auto",
+              "explicit_only",
+              "disabled"
+            ],
+            "title": "Effective Mode",
+            "type": "string"
+          },
+          "global_mode": {
+            "enum": [
+              "auto",
+              "explicit_only",
+              "disabled"
+            ],
+            "title": "Global Mode",
+            "type": "string"
+          },
+          "policy_version": {
+            "title": "Policy Version",
+            "type": "integer"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "tenant_mode": {
+            "enum": [
+              "auto",
+              "explicit_only",
+              "disabled"
+            ],
+            "title": "Tenant Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tenant_id",
+          "global_mode",
+          "tenant_mode",
+          "effective_mode",
+          "policy_version"
+        ],
+        "title": "AgentMemoryTenantPolicyOut",
+        "type": "object"
+      },
+      "AgentMemoryTenantPolicyUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "enum": [
+              "auto",
+              "explicit_only",
+              "disabled"
+            ],
+            "title": "Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "title": "AgentMemoryTenantPolicyUpdate",
+        "type": "object"
+      },
       "AgentMessageOut": {
         "properties": {
           "content": {
@@ -2250,6 +2359,11 @@
           },
           "subject": {
             "$ref": "#/components/schemas/AgentTrustedSubject"
+          },
+          "trace_id": {
+            "format": "uuid",
+            "title": "Trace Id",
+            "type": "string"
           }
         },
         "required": [
@@ -18176,6 +18290,19 @@
             "title": "Content Type",
             "type": "string"
           },
+          "data_base64": {
+            "anyOf": [
+              {
+                "maxLength": 14680064,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data Base64"
+          },
           "filename": {
             "maxLength": 255,
             "minLength": 1,
@@ -18191,6 +18318,19 @@
             ],
             "title": "Kind",
             "type": "string"
+          },
+          "size": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 10485760.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size"
           }
         },
         "required": [
@@ -18215,6 +18355,11 @@
             "minLength": 1,
             "title": "External Message Id",
             "type": "string"
+          },
+          "memory_notice_delivered": {
+            "default": false,
+            "title": "Memory Notice Delivered",
+            "type": "boolean"
           },
           "run_id": {
             "format": "uuid",
@@ -18334,10 +18479,28 @@
       },
       "FeishuConversationPrepareResponse": {
         "properties": {
+          "attachment_catalog": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Attachment Catalog",
+            "type": "array"
+          },
           "duplicate": {
             "default": false,
             "title": "Duplicate",
             "type": "boolean"
+          },
+          "memory_policy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AgentMemoryPolicyEnvelope"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "messages": {
             "items": {
@@ -18483,6 +18646,178 @@
           "message"
         ],
         "title": "FeishuDiagnosticStep",
+        "type": "object"
+      },
+      "FeishuGatewayRestartApiResponse": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/FeishuGatewayRestartResult"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "FeishuGatewayRestartApiResponse",
+        "type": "object"
+      },
+      "FeishuGatewayRestartResult": {
+        "properties": {
+          "config_version": {
+            "minimum": 0.0,
+            "title": "Config Version",
+            "type": "integer"
+          },
+          "credential_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credential Version"
+          },
+          "gateway_reconnects": {
+            "minimum": 1.0,
+            "title": "Gateway Reconnects",
+            "type": "integer"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "previous_reconnects": {
+            "minimum": 0.0,
+            "title": "Previous Reconnects",
+            "type": "integer"
+          },
+          "status": {
+            "const": "connected",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "message",
+          "previous_reconnects",
+          "gateway_reconnects",
+          "config_version"
+        ],
+        "title": "FeishuGatewayRestartResult",
+        "type": "object"
+      },
+      "FeishuResourceTemplateCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "base_token": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Base Token",
+            "type": "string"
+          },
+          "field_schema": {
+            "items": {
+              "$ref": "#/components/schemas/InteractionFormField"
+            },
+            "maxItems": 100,
+            "title": "Field Schema",
+            "type": "array"
+          },
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "record_mode": {
+            "const": "append",
+            "default": "append",
+            "title": "Record Mode",
+            "type": "string"
+          },
+          "resource_type": {
+            "default": "bitable",
+            "enum": [
+              "bitable",
+              "sheet"
+            ],
+            "title": "Resource Type",
+            "type": "string"
+          },
+          "resource_url": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Resource Url",
+            "type": "string"
+          },
+          "sheet_range": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "minLength": 2,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sheet Range"
+          },
+          "table_id": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Table Id",
+            "type": "string"
+          },
+          "view_id": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "View Id"
+          },
+          "view_type": {
+            "default": "grid",
+            "enum": [
+              "grid",
+              "form"
+            ],
+            "title": "View Type",
+            "type": "string"
+          },
+          "writable_fields": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Writable Fields",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "resource_url",
+          "base_token",
+          "table_id"
+        ],
+        "title": "FeishuResourceTemplateCreate",
         "type": "object"
       },
       "FermentationCreate": {
@@ -20662,6 +20997,30 @@
             "title": "Risk",
             "type": "string"
           },
+          "run_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "trace_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trace Id"
+          },
           "user_id": {
             "anyOf": [
               {
@@ -21736,6 +22095,212 @@
           }
         },
         "title": "InspectionTrendSummary",
+        "type": "object"
+      },
+      "InteractionFormField": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "maxLength": 80,
+            "minLength": 1,
+            "pattern": "^[A-Za-z][A-Za-z0-9_-]*$",
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          },
+          "options": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Options",
+            "type": "array"
+          },
+          "required": {
+            "default": false,
+            "title": "Required",
+            "type": "boolean"
+          },
+          "type": {
+            "enum": [
+              "text",
+              "number",
+              "date",
+              "single_select",
+              "multi_select",
+              "boolean"
+            ],
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "type"
+        ],
+        "title": "InteractionFormField",
+        "type": "object"
+      },
+      "InteractionRequestCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "automation_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Automation Id"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "form_schema": {
+            "items": {
+              "$ref": "#/components/schemas/InteractionFormField"
+            },
+            "maxItems": 50,
+            "title": "Form Schema",
+            "type": "array"
+          },
+          "idempotency_key": {
+            "maxLength": 240,
+            "minLength": 1,
+            "title": "Idempotency Key",
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "card_form",
+              "table_link"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "prefill": {
+            "additionalProperties": true,
+            "title": "Prefill",
+            "type": "object"
+          },
+          "recipient_user_id": {
+            "format": "uuid",
+            "title": "Recipient User Id",
+            "type": "string"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "step_key": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step Key"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "template_id": {
+            "format": "uuid",
+            "title": "Template Id",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "template_id",
+          "recipient_user_id",
+          "mode",
+          "title",
+          "expires_at",
+          "idempotency_key"
+        ],
+        "title": "InteractionRequestCreate",
+        "type": "object"
+      },
+      "InteractionSubmissionCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "idempotency_key": {
+            "maxLength": 240,
+            "minLength": 1,
+            "title": "Idempotency Key",
+            "type": "string"
+          },
+          "request_version": {
+            "minimum": 1.0,
+            "title": "Request Version",
+            "type": "integer"
+          },
+          "values": {
+            "additionalProperties": true,
+            "maxProperties": 100,
+            "title": "Values",
+            "type": "object"
+          }
+        },
+        "required": [
+          "request_version",
+          "idempotency_key"
+        ],
+        "title": "InteractionSubmissionCreate",
+        "type": "object"
+      },
+      "InternalFeishuInteractionSubmission": {
+        "additionalProperties": false,
+        "properties": {
+          "subject": {
+            "$ref": "#/components/schemas/AgentTrustedSubject"
+          },
+          "submission": {
+            "$ref": "#/components/schemas/InteractionSubmissionCreate"
+          }
+        },
+        "required": [
+          "subject",
+          "submission"
+        ],
+        "title": "InternalFeishuInteractionSubmission",
         "type": "object"
       },
       "InvoiceLineItem": {
@@ -31653,8 +32218,14 @@
       },
       "PurchaseApprovalRole": {
         "enum": [
+          "hardware_warehouse",
+          "equipment_power",
+          "safety_officer",
           "department_head",
-          "responsible_leader"
+          "responsible_leader",
+          "supervising_leader",
+          "finance_director",
+          "general_manager"
         ],
         "title": "PurchaseApprovalRole",
         "type": "string"
@@ -31685,6 +32256,17 @@
             "title": "Category Label",
             "type": "string"
           },
+          "item_category": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PurchaseRequestCategory"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "明细实际采购类型"
+          },
           "item_id": {
             "description": "申请明细 ID",
             "format": "uuid",
@@ -31702,7 +32284,20 @@
             "title": "Material",
             "type": "string"
           },
+          "material_code": {
+            "default": "",
+            "description": "物料编码",
+            "title": "Material Code",
+            "type": "string"
+          },
+          "material_description": {
+            "default": "",
+            "description": "物料说明",
+            "title": "Material Description",
+            "type": "string"
+          },
           "product_name": {
+            "default": "",
             "description": "商品名称",
             "title": "Product Name",
             "type": "string"
@@ -31742,6 +32337,12 @@
             "title": "Request Id",
             "type": "string"
           },
+          "rule_model": {
+            "default": "",
+            "description": "规则型号",
+            "title": "Rule Model",
+            "type": "string"
+          },
           "specification": {
             "default": "",
             "description": "规格",
@@ -31775,7 +32376,6 @@
           "request_date",
           "item_id",
           "item_sequence",
-          "product_name",
           "quantity",
           "unit_price",
           "total_amount"
@@ -31867,13 +32467,24 @@
           "raw-auxiliary",
           "chemical-glass",
           "electrical",
-          "labor-protection"
+          "advertising-printing",
+          "fire",
+          "packaging",
+          "labor-special",
+          "labor-miscellaneous",
+          "urgent"
         ],
         "title": "PurchaseRequestCategory",
         "type": "string"
       },
       "PurchaseRequestCreate": {
         "properties": {
+          "attachment_note": {
+            "default": "",
+            "description": "附件说明",
+            "title": "Attachment Note",
+            "type": "string"
+          },
           "category": {
             "$ref": "#/components/schemas/PurchaseRequestCategory",
             "description": "采购分类"
@@ -31919,6 +32530,17 @@
             "title": "Brand",
             "type": "string"
           },
+          "item_category": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PurchaseRequestCategory"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "明细采购类型，加急单必填"
+          },
           "material": {
             "default": "",
             "description": "材质",
@@ -31926,10 +32548,24 @@
             "title": "Material",
             "type": "string"
           },
+          "material_code": {
+            "default": "",
+            "description": "物料编码",
+            "maxLength": 64,
+            "title": "Material Code",
+            "type": "string"
+          },
+          "material_description": {
+            "default": "",
+            "description": "物料说明",
+            "maxLength": 255,
+            "title": "Material Description",
+            "type": "string"
+          },
           "product_name": {
+            "default": "",
             "description": "商品名称",
             "maxLength": 255,
-            "minLength": 1,
             "title": "Product Name",
             "type": "string"
           },
@@ -31958,6 +32594,13 @@
             "default": "",
             "description": "备注",
             "title": "Remarks",
+            "type": "string"
+          },
+          "rule_model": {
+            "default": "",
+            "description": "规则型号",
+            "maxLength": 255,
+            "title": "Rule Model",
             "type": "string"
           },
           "specification": {
@@ -31990,7 +32633,6 @@
           }
         },
         "required": [
-          "product_name",
           "quantity",
           "unit_price"
         ],
@@ -32012,6 +32654,17 @@
             "title": "Id",
             "type": "string"
           },
+          "item_category": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PurchaseRequestCategory"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "明细采购类型，加急单必填"
+          },
           "material": {
             "default": "",
             "description": "材质",
@@ -32019,10 +32672,24 @@
             "title": "Material",
             "type": "string"
           },
+          "material_code": {
+            "default": "",
+            "description": "物料编码",
+            "maxLength": 64,
+            "title": "Material Code",
+            "type": "string"
+          },
+          "material_description": {
+            "default": "",
+            "description": "物料说明",
+            "maxLength": 255,
+            "title": "Material Description",
+            "type": "string"
+          },
           "product_name": {
+            "default": "",
             "description": "商品名称",
             "maxLength": 255,
-            "minLength": 1,
             "title": "Product Name",
             "type": "string"
           },
@@ -32043,6 +32710,13 @@
             "default": "",
             "description": "备注",
             "title": "Remarks",
+            "type": "string"
+          },
+          "rule_model": {
+            "default": "",
+            "description": "规则型号",
+            "maxLength": 255,
+            "title": "Rule Model",
             "type": "string"
           },
           "sequence": {
@@ -32078,7 +32752,6 @@
           }
         },
         "required": [
-          "product_name",
           "quantity",
           "unit_price",
           "id",
@@ -32137,6 +32810,12 @@
             },
             "title": "Approvals",
             "type": "array"
+          },
+          "attachment_note": {
+            "default": "",
+            "description": "附件说明",
+            "title": "Attachment Note",
+            "type": "string"
           },
           "category": {
             "$ref": "#/components/schemas/PurchaseRequestCategory",
@@ -32242,8 +32921,14 @@
       "PurchaseRequestStatus": {
         "enum": [
           "draft",
+          "pending_hardware_warehouse",
+          "pending_equipment_power",
+          "pending_safety_officer",
           "pending_department_head",
           "pending_responsible_leader",
+          "pending_supervising_leader",
+          "pending_finance_director",
+          "pending_general_manager",
           "approved",
           "rejected"
         ],
@@ -32252,6 +32937,18 @@
       },
       "PurchaseRequestUpdate": {
         "properties": {
+          "attachment_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "附件说明",
+            "title": "Attachment Note"
+          },
           "items": {
             "anyOf": [
               {
@@ -33768,6 +34465,30 @@
             "minLength": 1,
             "title": "Resource Fingerprint",
             "type": "string"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "trace_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trace Id"
           }
         },
         "required": [
@@ -50084,6 +50805,411 @@
         ]
       }
     },
+    "/api/v1/agent/feishu-resource-templates": {
+      "get": {
+        "operationId": "list_feishu_resource_templates_api_v1_agent_feishu_resource_templates_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Feishu Resource Templates",
+        "tags": [
+          "中枢 Agent"
+        ]
+      },
+      "post": {
+        "operationId": "create_feishu_resource_template_api_v1_agent_feishu_resource_templates_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeishuResourceTemplateCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Feishu Resource Template",
+        "tags": [
+          "中枢 Agent"
+        ]
+      }
+    },
+    "/api/v1/agent/feishu-resource-templates/{template_id}/validate": {
+      "post": {
+        "operationId": "validate_feishu_resource_template_api_v1_agent_feishu_resource_templates__template_id__validate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "template_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Template Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Validate Feishu Resource Template",
+        "tags": [
+          "中枢 Agent"
+        ]
+      }
+    },
+    "/api/v1/agent/interaction-requests": {
+      "get": {
+        "operationId": "list_interaction_requests_api_v1_agent_interaction_requests_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Interaction Requests",
+        "tags": [
+          "中枢 Agent"
+        ]
+      },
+      "post": {
+        "operationId": "create_interaction_request_api_v1_agent_interaction_requests_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InteractionRequestCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Interaction Request",
+        "tags": [
+          "中枢 Agent"
+        ]
+      }
+    },
+    "/api/v1/agent/interaction-requests/{request_id}": {
+      "get": {
+        "operationId": "get_interaction_request_api_v1_agent_interaction_requests__request_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Request Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Interaction Request",
+        "tags": [
+          "中枢 Agent"
+        ]
+      }
+    },
+    "/api/v1/agent/interaction-requests/{request_id}/submissions": {
+      "post": {
+        "operationId": "submit_interaction_request_api_v1_agent_interaction_requests__request_id__submissions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Request Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InteractionSubmissionCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Submit Interaction Request",
+        "tags": [
+          "中枢 Agent"
+        ]
+      }
+    },
     "/api/v1/agent/internal/feishu/conversations/prepare": {
       "post": {
         "operationId": "prepare_internal_feishu_conversation_api_v1_agent_internal_feishu_conversations_prepare_post",
@@ -50212,6 +51338,73 @@
         ]
       }
     },
+    "/api/v1/agent/internal/feishu/interaction-requests/{request_id}/submissions": {
+      "post": {
+        "operationId": "submit_internal_feishu_interaction_request_api_v1_agent_internal_feishu_interaction_requests__request_id__submissions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Request Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InternalFeishuInteractionSubmission"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Submit Internal Feishu Interaction Request",
+        "tags": [
+          "中枢 Agent"
+        ]
+      }
+    },
     "/api/v1/agent/llm/chat/completions": {
       "post": {
         "operationId": "agent_llm_chat_completions_api_v1_agent_llm_chat_completions_post",
@@ -50301,6 +51494,112 @@
           }
         },
         "summary": "Agent Llm Models",
+        "tags": [
+          "中枢 Agent"
+        ]
+      }
+    },
+    "/api/v1/agent/memory/tenant-policy": {
+      "get": {
+        "operationId": "get_agent_memory_tenant_policy_api_v1_agent_memory_tenant_policy_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentMemoryTenantPolicyOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "获取租户 Agent 记忆治理策略",
+        "tags": [
+          "中枢 Agent"
+        ]
+      },
+      "put": {
+        "operationId": "update_agent_memory_tenant_policy_api_v1_agent_memory_tenant_policy_put",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentMemoryTenantPolicyUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentMemoryTenantPolicyOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "更新租户 Agent 记忆治理策略",
         "tags": [
           "中枢 Agent"
         ]
@@ -51529,6 +52828,25 @@
             "schema": {
               "format": "uuid",
               "title": "Subject User Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "subject_tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Subject Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "trace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Trace Id",
               "type": "string"
             }
           },
@@ -69445,6 +70763,57 @@
         ]
       }
     },
+    "/api/v1/identity/feishu-config/gateway/restart": {
+      "post": {
+        "description": "重建飞书 Gateway 子进程连接，不重启 Hermes 服务或部署镜像。",
+        "operationId": "restart_livzon_feishu_gateway_api_v1_identity_feishu_config_gateway_restart_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeishuGatewayRestartApiResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "重启 Hermes Feishu Gateway",
+        "tags": [
+          "Livzon 助手飞书设置",
+          "Livzon 助手飞书设置"
+        ]
+      }
+    },
     "/api/v1/identity/feishu-config/test": {
       "post": {
         "description": "通过实际飞书 API 调用诊断 Livzon 助手通讯录权限。",
@@ -72402,7 +73771,7 @@
     },
     "/api/v1/procurement/purchase-requests/{request_id}/submit": {
       "post": {
-        "description": "将采购申请提交到部门负责人审批。",
+        "description": "将采购申请提交到该采购类型配置的首个审批节点。",
         "operationId": "submit_purchase_request_record_api_v1_procurement_purchase_requests__request_id__submit_post",
         "parameters": [
           {

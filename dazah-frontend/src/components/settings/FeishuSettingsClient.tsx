@@ -21,6 +21,7 @@ import {
   Card,
   Col,
   Descriptions,
+  Divider,
   Drawer,
   Empty,
   Form,
@@ -54,6 +55,7 @@ import {
   getLivzonFeishuConfig,
   getLivzonFeishuGatewayStatus,
   revokeFeishuAuthorization,
+  restartLivzonFeishuGateway,
   saveLivzonFeishuConfig,
   setAgentToolEnabled,
   syncLivzonFeishuDirectory,
@@ -70,10 +72,21 @@ import {
   type FeishuConfig,
   type FeishuConfigUpsert,
   type FeishuGatewayStatus,
+  type FeishuGatewayRestartResult,
 } from '@/actions/settings'
 import { getUsers, type UserManagementItem } from '@/actions/users'
+import MemoryGovernanceClient from './MemoryGovernanceClient'
 
 const { Text, Title } = Typography
+
+export const agentManagementTabKeys = [
+  'overview',
+  'feishu',
+  'identity',
+  'tools',
+  'authorizations',
+  'trace',
+] as const
 
 type CredentialsFormValues = Pick<
   FeishuConfigUpsert,
@@ -97,6 +110,7 @@ const statusLabels: Record<string, string> = {
   connected: '已连接',
   inactive: '未启用',
   starting: '连接中',
+  restarting: '重启中',
   retry: '等待重试',
   sent: '已发送',
   delivered: '已送达',
@@ -111,6 +125,8 @@ const traceEventLabels: Record<string, string> = {
   confirmation: '业务确认',
   domain_event: '业务事件',
   delivery: '消息投递',
+  capability_search: '能力发现',
+  audit_receipt: '审计收据',
 }
 
 const channelLabels: Record<string, string> = {
@@ -123,7 +139,7 @@ function statusTag(status: string) {
     ? 'green'
     : status === 'failed' || status === 'revoked'
       ? 'red'
-      : status === 'pending' || status === 'starting'
+      : status === 'pending' || status === 'starting' || status === 'restarting'
         ? 'orange'
         : 'default'
   return <Tag color={color}>{statusLabels[status] || status}</Tag>
@@ -231,15 +247,18 @@ function FeishuAccess({
   config,
   status,
   onSaved,
+  onRestarted,
 }: {
   config: FeishuConfig | null
   status: FeishuGatewayStatus | null
   onSaved: (value: FeishuConfig) => void
+  onRestarted: (value: FeishuGatewayRestartResult) => void
 }) {
   const { message, modal } = App.useApp()
   const [form] = Form.useForm<CredentialsFormValues>()
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
+  const [restarting, setRestarting] = useState(false)
   const [diagnostic, setDiagnostic] = useState<Awaited<ReturnType<typeof testLivzonFeishuConfig>> | null>(null)
   const [operationFeedback, setOperationFeedback] = useState<{
     type: 'success' | 'error'
@@ -329,6 +348,45 @@ function FeishuAccess({
     }
   }
 
+  const restartGateway = () => {
+    modal.confirm({
+      title: '确认重启 Hermes 飞书 Gateway',
+      icon: <ExclamationCircleOutlined />,
+      content: (
+        <Space direction="vertical" size={4}>
+          <Text>该操作只重建飞书消息连接，不会重启整个 Hermes 服务，也不会拉取或发布新镜像。</Text>
+          <Text type="secondary">重连期间飞书消息可能短暂延迟；待投递记录和审计数据不会被清空。</Text>
+        </Space>
+      ),
+      okText: '确认重启',
+      okButtonProps: { danger: true },
+      async onOk() {
+        setRestarting(true)
+        setOperationFeedback(null)
+        try {
+          const result = await restartLivzonFeishuGateway()
+          onRestarted(result)
+          setOperationFeedback({
+            type: 'success',
+            title: '飞书 Gateway 重启成功',
+            description: `连接已恢复，重连次数由 ${result.previous_reconnects} 增至 ${result.gateway_reconnects}，当前配置版本 ${result.config_version}。`,
+          })
+          message.success('飞书 Gateway 已重新建立连接')
+        } catch (error) {
+          const detail = error instanceof Error ? error.message : '未知错误'
+          setOperationFeedback({
+            type: 'error',
+            title: '飞书 Gateway 重启失败',
+            description: detail,
+          })
+          message.error({ content: `重启失败：${detail}`, duration: 6 })
+        } finally {
+          setRestarting(false)
+        }
+      },
+    })
+  }
+
   return (
     <Row gutter={[16, 16]}>
       <Col xs={24} xl={14}>
@@ -377,6 +435,15 @@ function FeishuAccess({
             <Space>
               <Button type="primary" loading={saving} onClick={() => void save()}>保存配置</Button>
               <Button icon={<ApiOutlined />} loading={testing} onClick={() => void test()}>运行诊断</Button>
+              <Button
+                danger
+                icon={<ReloadOutlined />}
+                loading={restarting}
+                disabled={!config?.is_active || !status?.gateway_enabled}
+                onClick={restartGateway}
+              >
+                重启飞书网关
+              </Button>
             </Space>
             {operationFeedback && (
               <Alert
@@ -399,7 +466,15 @@ function FeishuAccess({
               dataSource={diagnostic.steps}
               renderItem={(step) => (
                 <List.Item>
-                  <List.Item.Meta title={step.name} description={step.suggestion || step.message} />
+                  <List.Item.Meta
+                    title={step.name}
+                    description={(
+                      <Space orientation="vertical" size={0}>
+                        <Text type="secondary">{step.message}</Text>
+                        {step.suggestion && <Text type="secondary">建议：{step.suggestion}</Text>}
+                      </Space>
+                    )}
+                  />
                   {statusTag(step.status)}
                 </List.Item>
               )}
@@ -426,6 +501,9 @@ function IdentityAdmission({ tenantId, appId }: { tenantId: string; appId: strin
   const [syncing, setSyncing] = useState(false)
   const [syncFeedback, setSyncFeedback] = useState<{ status: 'ok' | 'warning'; message: string } | null>(null)
   const [loading, setLoading] = useState(false)
+  const feishuUsers = users.filter((user) =>
+    Boolean(user.feishu_user_id || user.feishu_open_id || user.feishu_union_id),
+  )
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -535,30 +613,40 @@ function IdentityAdmission({ tenantId, appId }: { tenantId: string; appId: strin
           form={form}
           layout="vertical"
           onFinish={async (values) => {
-            await createExternalIdentityBinding(values)
+            const selectedUser = feishuUsers.find((user) => user.id === values.local_user_id)
+            if (!selectedUser) {
+              message.error('该用户尚未同步飞书身份，请先同步飞书目录')
+              return
+            }
+            await createExternalIdentityBinding({
+              ...values,
+              external_user_id: selectedUser.feishu_user_id || undefined,
+              external_open_id: selectedUser.feishu_open_id || undefined,
+              external_union_id: selectedUser.feishu_union_id || undefined,
+            })
             message.success('身份绑定已创建')
-            form.resetFields(['external_user_id', 'external_open_id', 'external_union_id', 'local_user_id'])
+            form.resetFields(['local_user_id'])
             await load()
           }}
         >
           <Row gutter={16}>
-            <Col xs={24} md={8}>
-              <Form.Item name="local_user_id" label="本地用户" rules={[{ required: true }]}>
+            <Col xs={24} md={12}>
+              <Form.Item
+                name="local_user_id"
+                label="飞书用户"
+                extra="用户标识从已同步的飞书通讯录自动读取，无需手工填写 Open ID 或 Union ID。"
+                rules={[{ required: true, message: '请选择飞书用户' }]}
+              >
                 <Select
                   showSearch
                   optionFilterProp="label"
-                  options={users.map((user) => ({ value: user.id, label: `${user.name}（${user.username}）` }))}
+                  placeholder="选择已同步的飞书用户"
+                  notFoundContent="暂无已同步的飞书用户，请先同步飞书目录"
+                  options={feishuUsers.map((user) => ({
+                    value: user.id,
+                    label: `${user.name}（${user.department || '未设置部门'}）`,
+                  }))}
                 />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={8}>
-              <Form.Item name="external_open_id" label="飞书 Open ID">
-                <Input placeholder="ou_xxx" />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={8}>
-              <Form.Item name="external_union_id" label="飞书 Union ID">
-                <Input placeholder="on_xxx" />
               </Form.Item>
             </Col>
           </Row>
@@ -736,6 +824,8 @@ function ToolGovernance() {
 
   return (
     <Card title="企业能力目录与策略">
+      <MemoryGovernanceClient />
+      <Divider />
       <Space className="mb-4" wrap>
         <Input.Search placeholder="搜索 operation 或摘要" allowClear style={{ width: 280 }} onSearch={(value) => { setPage(1); setKeyword(value) }} />
         <Select aria-label="模块" allowClear placeholder="模块" style={{ width: 140 }} options={moduleOptions.map((value) => ({ value }))} onChange={(value) => { setPage(1); setModule(value) }} />
@@ -911,13 +1001,6 @@ function TraceDelivery({
   return (
     <Space direction="vertical" size={16} className="w-full">
       <Card title="调用链路查询">
-        <Alert
-          className="mb-4"
-          type="info"
-          showIcon
-          title="调用链路（Trace）用于定位故障"
-          description="它用同一个链路编号串联消息、工具调用、业务确认、系统事件和飞书投递，帮助管理员判断失败发生在哪一环节。"
-        />
         <Space.Compact className="mb-4 w-full max-w-[720px]">
           <Input value={traceId} onChange={(event) => onTraceIdChange(event.target.value)} placeholder="输入调用链路编号或运行编号" />
           <Button
@@ -937,6 +1020,8 @@ function TraceDelivery({
               <Descriptions.Item label="确认">{trace.counts.confirmations}</Descriptions.Item>
               <Descriptions.Item label="领域事件">{trace.counts.domain_events}</Descriptions.Item>
               <Descriptions.Item label="投递">{trace.counts.deliveries}</Descriptions.Item>
+              <Descriptions.Item label="能力发现">{trace.counts.capability_searches}</Descriptions.Item>
+              <Descriptions.Item label="审计收据">{trace.counts.audit_receipts}</Descriptions.Item>
             </Descriptions>
             <Button
               className="mb-4"
@@ -966,13 +1051,6 @@ function TraceDelivery({
         ) : <Empty description="输入链路编号查询完整调用过程" />}
       </Card>
       <Card title="飞书投递队列">
-        <Alert
-          className="mb-4"
-          type="info"
-          showIcon
-          title="此处仅显示自动任务的飞书主动投递"
-          description="普通飞书对话不进入该队列。尚未执行自动通知时，队列为空属于正常情况。"
-        />
         <Select
           allowClear
           placeholder="投递状态"
@@ -1046,7 +1124,14 @@ export default function FeishuSettingsClient() {
     {
       key: 'feishu',
       label: <Space><LinkOutlined />飞书接入</Space>,
-      children: <FeishuAccess config={config} status={status} onSaved={(value) => { setConfig(value); void loadOverview() }} />,
+      children: (
+        <FeishuAccess
+          config={config}
+          status={status}
+          onSaved={(value) => { setConfig(value); void loadOverview() }}
+          onRestarted={() => { void loadOverview() }}
+        />
+      ),
     },
     {
       key: 'identity',

@@ -6,7 +6,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from fastapi.responses import JSONResponse, StreamingResponse
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -14,7 +14,7 @@ from app.core.config import Settings, get_settings
 from app.core.database import get_db
 from app.core.response import error_response, success_response
 from app.platform.audit.models import AuditLog
-from app.platform.identity.deps import RequiredUser
+from app.platform.identity.deps import AdminUser, RequiredUser
 from app.platform.identity.models import User
 
 from .access_scope import AgentAccessScopeService
@@ -22,7 +22,15 @@ from .audit_service import AgentAuditService
 from .automation_service import AgentAutomationService
 from .catalog import ToolCatalogService
 from .event_service import AgentDomainEventService
+from .interaction_schemas import (
+    FeishuResourceTemplateCreate,
+    InteractionRequestCreate,
+    InteractionSubmissionCreate,
+    InternalFeishuInteractionSubmission,
+)
+from .interaction_service import AgentInteractionService
 from .llm_proxy import forward_chat_completion, list_active_text_models
+from .memory_policy import AgentMemoryPolicyService
 from .models import (
     AgentConfirmation,
     AgentDomainEvent,
@@ -41,6 +49,8 @@ from .schemas import (
     AgentChatRequest,
     AgentConfirmationExecuteResponse,
     AgentConfirmationResolveRequest,
+    AgentMemoryTenantPolicyOut,
+    AgentMemoryTenantPolicyUpdate,
     AgentSessionDetail,
     AgentSessionItem,
     AgentSessionPage,
@@ -61,6 +71,39 @@ from .schemas import (
 from .service import AgentService
 
 router = APIRouter()
+
+
+@router.get(
+    "/memory/tenant-policy",
+    summary="获取租户 Agent 记忆治理策略",
+    response_model=AgentMemoryTenantPolicyOut,
+)
+async def get_agent_memory_tenant_policy(
+    db: AsyncSession = Depends(get_db),
+    current_user: AdminUser = None,
+    settings: Settings = Depends(get_settings),
+):
+    return await AgentMemoryPolicyService(settings).tenant_policy(
+        db, tenant_id=current_user.tenant_key or "default"
+    )
+
+
+@router.put(
+    "/memory/tenant-policy",
+    summary="更新租户 Agent 记忆治理策略",
+    response_model=AgentMemoryTenantPolicyOut,
+)
+async def update_agent_memory_tenant_policy(
+    payload: AgentMemoryTenantPolicyUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: AdminUser = None,
+    settings: Settings = Depends(get_settings),
+):
+    result = await AgentMemoryPolicyService(settings).update_tenant_policy(
+        db, user=current_user, mode=payload.mode
+    )
+    await db.commit()
+    return result
 
 
 def _changed_definition_fields(
@@ -217,6 +260,119 @@ async def get_push_delivery(
         resource_id=delivery_id,
     )
     return success_response(data=result)
+
+
+@router.post("/feishu-resource-templates", status_code=status.HTTP_201_CREATED)
+async def create_feishu_resource_template(
+    payload: FeishuResourceTemplateCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+):
+    result = await AgentInteractionService().create_template(
+        db, user=current_user, request=payload
+    )
+    await db.commit()
+    return success_response(data=result.model_dump(mode="json"))
+
+
+@router.get("/feishu-resource-templates")
+async def list_feishu_resource_templates(
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+):
+    result = await AgentInteractionService().list_templates(db, user=current_user)
+    return success_response(data=[item.model_dump(mode="json") for item in result])
+
+
+@router.post("/feishu-resource-templates/{template_id}/validate")
+async def validate_feishu_resource_template(
+    template_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+):
+    result = await AgentInteractionService().validate_template(
+        db, user=current_user, template_id=template_id
+    )
+    await db.commit()
+    return success_response(data=result.model_dump(mode="json"))
+
+
+@router.post("/interaction-requests", status_code=status.HTTP_201_CREATED)
+async def create_interaction_request(
+    payload: InteractionRequestCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+):
+    result = await AgentInteractionService().create_request(
+        db, user=current_user, request=payload
+    )
+    await db.commit()
+    return success_response(data=result.model_dump(mode="json"))
+
+
+@router.get("/interaction-requests")
+async def list_interaction_requests(
+    page: int = 1,
+    page_size: int = 20,
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+):
+    result = await AgentInteractionService().list_requests(
+        db,
+        user=current_user,
+        page=max(1, page),
+        page_size=min(max(1, page_size), 100),
+    )
+    return success_response(data=result.model_dump(mode="json"))
+
+
+@router.get("/interaction-requests/{request_id}")
+async def get_interaction_request(
+    request_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+):
+    result = await AgentInteractionService().get_request(
+        db, user=current_user, request_id=request_id
+    )
+    return success_response(data=result.model_dump(mode="json"))
+
+
+@router.post("/interaction-requests/{request_id}/submissions")
+async def submit_interaction_request(
+    request_id: uuid.UUID,
+    payload: InteractionSubmissionCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: RequiredUser = None,
+):
+    result = await AgentInteractionService().submit(
+        db,
+        user=current_user,
+        request_id=request_id,
+        request=payload,
+    )
+    await db.commit()
+    return success_response(data=result.model_dump(mode="json"))
+
+
+@router.post("/internal/feishu/interaction-requests/{request_id}/submissions")
+async def submit_internal_feishu_interaction_request(
+    request_id: uuid.UUID,
+    payload: InternalFeishuInteractionSubmission,
+    db: AsyncSession = Depends(get_db),
+    authorization: str | None = Header(default=None),
+    settings: Settings = Depends(get_settings),
+):
+    require_service_token(settings.HERMES_INTERNAL_TOKEN, authorization)
+    user = await _require_feishu_subject_user(db, subject=payload.subject)
+    result = await AgentInteractionService().submit(
+        db,
+        user=user,
+        request_id=request_id,
+        request=payload.submission,
+    )
+    await db.commit()
+    return success_response(data=result.model_dump(mode="json"))
 
 
 def require_service_token(expected: str, authorization: str | None) -> None:
@@ -852,8 +1008,7 @@ async def get_control_plane_trace(
             await db.execute(
                 select(AgentMessage)
                 .where(
-                    AgentMessage.message_metadata["trace_id"].astext
-                    == str(trace_id),
+                    AgentMessage.message_metadata["trace_id"].astext == str(trace_id),
                     AgentMessage.is_deleted.is_(False),
                 )
                 .order_by(AgentMessage.created_at.asc())
@@ -905,6 +1060,30 @@ async def get_control_plane_trace(
         .scalars()
         .all()
     )
+    audit_receipts = list(
+        (
+            await db.execute(
+                select(AuditLog)
+                .where(
+                    AuditLog.resource_type.in_(
+                        (
+                            "agent_capability_search",
+                            "agent_capability_description",
+                            "feishu_resource",
+                            "feishu_resource_change",
+                        )
+                    ),
+                    or_(
+                        AuditLog.request_id == str(trace_id),
+                        AuditLog.extra["trace_id"].as_string() == str(trace_id),
+                    ),
+                )
+                .order_by(AuditLog.created_at.asc())
+            )
+        )
+        .scalars()
+        .all()
+    )
     timeline: list[dict[str, Any]] = [
         {
             "type": "tool_call",
@@ -919,9 +1098,7 @@ async def get_control_plane_trace(
     ]
     timeline.extend(
         {
-            "type": "inbound_message"
-            if item.role == "user"
-            else "assistant_response",
+            "type": "inbound_message" if item.role == "user" else "assistant_response",
             "id": str(item.id),
             "occurred_at": item.created_at.isoformat(),
             "status": "recorded",
@@ -978,6 +1155,26 @@ async def get_control_plane_trace(
         }
         for item in deliveries
     )
+    timeline.extend(
+        {
+            "type": (
+                "capability_search"
+                if item.resource_type
+                in {"agent_capability_search", "agent_capability_description"}
+                else "audit_receipt"
+            ),
+            "id": str(item.id),
+            "occurred_at": item.created_at.isoformat(),
+            "status": (
+                "recorded" if item.status_code and item.status_code < 400 else "failed"
+            ),
+            "summary": item.action,
+            "operation": (item.extra or {}).get("operation"),
+            "error_code": None,
+            "receipt_id": item.request_id,
+        }
+        for item in audit_receipts
+    )
     timeline.sort(key=lambda item: item["occurred_at"])
     return success_response(
         data={
@@ -989,6 +1186,15 @@ async def get_control_plane_trace(
                 "confirmations": len(confirmations),
                 "domain_events": len(domain_events),
                 "deliveries": len(deliveries),
+                "capability_searches": sum(
+                    item.resource_type
+                    in {"agent_capability_search", "agent_capability_description"}
+                    for item in audit_receipts
+                ),
+                "audit_receipts": sum(
+                    item.resource_type in {"feishu_resource", "feishu_resource_change"}
+                    for item in audit_receipts
+                ),
             },
         }
     )
@@ -1112,6 +1318,22 @@ async def search_tools(
 ):
     require_service_token(settings.AGENT_TOOL_TOKEN, authorization)
     result = await ToolCatalogService().search(db, payload)
+    db.add(
+        AuditLog(
+            request_id=str(payload.trace_id),
+            user_id=payload.subject.user_id,
+            method="POST",
+            path="/api/v1/agent/tools/search",
+            status_code=200,
+            resource_type="agent_capability_search",
+            action="search_agent_tools",
+            extra={
+                "trace_id": str(payload.trace_id),
+                "module": payload.module,
+                "result_count": len(result),
+            },
+        )
+    )
     return success_response(data=[item.model_dump(mode="json") for item in result])
 
 
@@ -1119,6 +1341,8 @@ async def search_tools(
 async def describe_tool(
     operation: str,
     subject_user_id: uuid.UUID,
+    subject_tenant_id: str,
+    trace_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     authorization: str | None = Header(default=None),
     settings: Settings = Depends(get_settings),
@@ -1128,6 +1352,19 @@ async def describe_tool(
         db,
         operation=operation,
         user_id=subject_user_id,
+        tenant_id=subject_tenant_id,
+    )
+    db.add(
+        AuditLog(
+            request_id=str(trace_id),
+            user_id=subject_user_id,
+            method="GET",
+            path=f"/api/v1/agent/tools/{operation}",
+            status_code=200,
+            resource_type="agent_capability_description",
+            action="describe_agent_tool",
+            extra={"trace_id": str(trace_id), "operation": operation},
+        )
     )
     return success_response(data=result.model_dump(mode="json"))
 

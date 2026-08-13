@@ -8,9 +8,16 @@ export { PurchaseRequestFormClient } from './PurchaseRequestFormClient'
 export { PurchasingWorkspaceClient } from './PurchasingWorkspaceClient'
 export { SupplierManagementClient } from './SupplierManagementClient'
 export {
+  approvalRoleHints,
+  approvalRoleRequiredApprovals,
+  approvalRoleToStep,
   approvalViewLabels,
   approvalViews,
   approvalStepToRole,
+  materialFieldPurchaseCategories,
+  normalPurchaseCategories,
+  purchaseApprovalWorkflows,
   purchaseCategories,
   purchaseCategoryLabels,
+  usesMaterialFields,
 } from './purchaseRequestConstants'

@@ -19,6 +19,12 @@ services:
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
       DATABASE_URL: ${APP_DATABASE_URL:-postgresql+asyncpg://postgres:postgres@db:5432/dazah}
       REDIS_URL: ${APP_REDIS_URL:-redis://redis:6379/0}
+      MINIO_ENABLED: "true"
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-minio:9000}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+      MINIO_BUCKET_PREFIX: ${MINIO_BUCKET_PREFIX:-dazah}
+      MINIO_SECURE: ${MINIO_SECURE:-false}
       AUDIT_RETENTION_DAYS: ${AUDIT_RETENTION_DAYS:-7}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       EDBO_SERVICE_URL: http://edbo-service:8000
@@ -28,12 +34,14 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      minio:
+        condition: service_healthy
     volumes:
       - ./app:/app/app
       - ./alembic:/app/alembic
       - ./alembic.ini:/app/alembic.ini:ro
     command: >
-      sh -c "uv run alembic upgrade head &&
+      sh -c ".venv/bin/alembic upgrade head &&
       .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /app/app"
     restart: unless-stopped
     cpus: "${APP_CPU_LIMIT:-2.5}"

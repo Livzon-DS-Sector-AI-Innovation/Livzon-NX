@@ -5,6 +5,7 @@ import contextvars
 import json
 import os
 import threading
+import uuid
 from typing import Any, Literal
 
 import httpx
@@ -19,6 +20,7 @@ _dazah_thread_request_context = threading.local()
 _MISSING_THREAD_CONTEXT = object()
 _task_request_contexts: dict[str, dict[str, Any]] = {}
 _task_tool_traces: dict[str, list[dict[str, Any]]] = {}
+_task_confirmations: dict[str, list[dict[str, Any]]] = {}
 _task_request_contexts_lock = threading.Lock()
 _FORCED_OPERATION_FALLBACKS = frozenset({"identity.deliver_feishu_message"})
 
@@ -27,18 +29,42 @@ def register_dazah_task_context(task_id: str, context: dict[str, Any]) -> None:
     with _task_request_contexts_lock:
         _task_request_contexts[task_id] = dict(context)
         _task_tool_traces[task_id] = []
+        _task_confirmations[task_id] = []
 
 
 def unregister_dazah_task_context(task_id: str) -> None:
     with _task_request_contexts_lock:
         _task_request_contexts.pop(task_id, None)
         _task_tool_traces.pop(task_id, None)
+        _task_confirmations.pop(task_id, None)
 
 
 def current_dazah_task_tool_trace(task_id: str) -> list[dict[str, Any]]:
     """Return only tool executions recorded for the registered runtime task."""
     with _task_request_contexts_lock:
         return [dict(item) for item in _task_tool_traces.get(task_id, [])]
+
+
+def current_dazah_task_confirmations(task_id: str) -> list[dict[str, Any]]:
+    """Return confirmations created by tools during this runtime task only."""
+    with _task_request_contexts_lock:
+        return [dict(item) for item in _task_confirmations.get(task_id, [])]
+
+
+def record_dazah_task_confirmation(
+    task_id: str | None,
+    confirmation: dict[str, Any],
+) -> None:
+    if not task_id or confirmation.get("status") != "pending":
+        return
+    confirmation_id = str(confirmation.get("id") or "")
+    if not confirmation_id:
+        return
+    with _task_request_contexts_lock:
+        items = _task_confirmations.get(task_id)
+        if items is None or any(str(item.get("id")) == confirmation_id for item in items):
+            return
+        items.append(dict(confirmation))
 
 
 def _record_dazah_task_tool_trace(
@@ -51,6 +77,11 @@ def _record_dazah_task_tool_trace(
         trace = _task_tool_traces.get(task_id)
         if trace is not None:
             trace.append(dict(item))
+
+
+def record_dazah_task_tool_trace(task_id: str | None, item: dict[str, Any]) -> None:
+    """Record a trusted tool attempt for gateway postcondition checks."""
+    _record_dazah_task_tool_trace(task_id, item)
 
 
 def _execute_trace_item(
@@ -178,6 +209,7 @@ async def dazah_tool(
         return json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False)
 
     context = current_dazah_request_context(task_id)
+    trace_id = str(context.get("trace_id") or uuid.uuid4())
     if action == "execute" and not operation:
         forced_operation = str(context.get("forced_operation") or "").strip()
         if forced_operation in _FORCED_OPERATION_FALLBACKS:
@@ -197,6 +229,7 @@ async def dazah_tool(
                         "module": module,
                         "limit": limit,
                         "subject": subject,
+                        "trace_id": trace_id,
                     },
                     headers=headers,
                 )
@@ -208,7 +241,11 @@ async def dazah_tool(
                     )
                 response = await client.get(
                     f"{_base_url()}/agent/tools/{operation}",
-                    params={"subject_user_id": subject["user_id"]},
+                    params={
+                        "subject_user_id": subject["user_id"],
+                        "subject_tenant_id": subject["tenant_id"],
+                        "trace_id": trace_id,
+                    },
                     headers=headers,
                 )
             else:
@@ -225,7 +262,7 @@ async def dazah_tool(
                         "body": body,
                         "subject": subject,
                         "session_id": context.get("platform_session_id"),
-                        "trace_id": context.get("trace_id"),
+                        "trace_id": trace_id,
                         "reason": reason,
                     },
                     headers=headers,
@@ -240,16 +277,19 @@ async def dazah_tool(
                         status_code=response.status_code,
                     ),
                 )
-            return json.dumps(
-                {
+            error_payload = {
                     "ok": False,
                     "action": action,
                     "operation": operation,
                     "status_code": response.status_code,
                     "error": response.text[:1000],
-                },
-                ensure_ascii=False,
-            )
+                }
+            if response.status_code == 403:
+                error_payload["repair_hint"] = (
+                    "当前 Dazah 身份没有此能力的模块 Scope 或数据权限。"
+                    "请管理员在用户模块权限中授权对应模块，并同步 Livzon Agent 访问范围后重试。"
+                )
+            return json.dumps(error_payload, ensure_ascii=False)
         response_payload = response.json()
         if action == "execute" and operation and isinstance(response_payload, dict):
             _record_dazah_task_tool_trace(
@@ -260,6 +300,13 @@ async def dazah_tool(
                     status_code=response.status_code,
                 ),
             )
+            response_data = response_payload.get("data")
+            confirmation_source = (
+                response_data if isinstance(response_data, dict) else response_payload
+            )
+            confirmation = confirmation_source.get("confirmation")
+            if isinstance(confirmation, dict):
+                record_dazah_task_confirmation(task_id, confirmation)
         return json.dumps(response_payload, ensure_ascii=False)
     except httpx.HTTPError as exc:
         if action == "execute" and operation:

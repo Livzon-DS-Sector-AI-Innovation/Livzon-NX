@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.correlation import normalize_correlation_id
 
 from .models import (
+    AgentAttachment,
     AgentAutomation,
     AgentAutomationRun,
     AgentAutomationTrigger,
@@ -25,6 +26,91 @@ from .models import (
 
 
 class AgentRepository:
+    async def create_attachment(
+        self,
+        db: AsyncSession,
+        *,
+        attachment_id: uuid.UUID,
+        session_id: uuid.UUID,
+        message_id: uuid.UUID | None,
+        user_id: uuid.UUID,
+        filename: str,
+        content_type: str,
+        size: int,
+        kind: str,
+        object_key: str,
+        sha256: str,
+        extracted_text: str | None,
+    ) -> AgentAttachment:
+        attachment = AgentAttachment(
+            id=attachment_id,
+            session_id=session_id,
+            message_id=message_id,
+            user_id=user_id,
+            filename=filename,
+            content_type=content_type,
+            size=size,
+            kind=kind,
+            object_key=object_key,
+            sha256=sha256,
+            extracted_text=extracted_text,
+            created_by=user_id,
+            updated_by=user_id,
+        )
+        db.add(attachment)
+        await db.flush()
+        return attachment
+
+    async def list_session_attachments(
+        self,
+        db: AsyncSession,
+        *,
+        session_id: uuid.UUID,
+        user_id: uuid.UUID,
+        limit: int = 50,
+    ) -> list[AgentAttachment]:
+        result = await db.execute(
+            select(AgentAttachment)
+            .where(
+                AgentAttachment.session_id == session_id,
+                AgentAttachment.user_id == user_id,
+                AgentAttachment.is_deleted.is_(False),
+            )
+            .order_by(AgentAttachment.updated_at.desc(), AgentAttachment.id.desc())
+            .limit(limit)
+        )
+        return list(result.scalars())
+
+    async def get_session_attachment(
+        self,
+        db: AsyncSession,
+        *,
+        session_id: uuid.UUID,
+        user_id: uuid.UUID,
+        attachment_ref: str,
+    ) -> AgentAttachment | None:
+        attachment_id: uuid.UUID | None
+        try:
+            attachment_id = uuid.UUID(attachment_ref)
+        except ValueError:
+            attachment_id = None
+        filters = [
+            AgentAttachment.session_id == session_id,
+            AgentAttachment.user_id == user_id,
+            AgentAttachment.is_deleted.is_(False),
+        ]
+        if attachment_id is not None:
+            filters.append(AgentAttachment.id == attachment_id)
+        else:
+            filters.append(AgentAttachment.filename == attachment_ref)
+        result = await db.execute(
+            select(AgentAttachment)
+            .where(*filters)
+            .order_by(AgentAttachment.updated_at.desc(), AgentAttachment.id.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
     async def create_automation(
         self,
         db: AsyncSession,
@@ -506,7 +592,9 @@ class AgentRepository:
         context = request_payload.get("context") or {}
         call = AgentToolCall(
             session_id=session_id,
-            correlation_id=normalize_correlation_id(context.get("correlation_id")),
+            correlation_id=normalize_correlation_id(
+                request_payload.get("trace_id") or context.get("correlation_id")
+            ),
             operation=operation,
             request_payload=request_payload,
         )
@@ -553,6 +641,56 @@ class AgentRepository:
         confirmation.created_by = user_id
         confirmation.updated_by = user_id
         db.add(confirmation)
+        await db.flush()
+        return confirmation
+
+    async def mirror_external_confirmation(
+        self,
+        db: AsyncSession,
+        *,
+        confirmation_id: uuid.UUID,
+        session_id: uuid.UUID | None,
+        user_id: uuid.UUID,
+        operation: str,
+        summary: str,
+        risk_level: str,
+        request_payload: dict[str, Any],
+        expires_at: datetime,
+    ) -> AgentConfirmation:
+        existing = await self.get_confirmation(db, confirmation_id)
+        if existing is not None:
+            return existing
+        confirmation = AgentConfirmation(
+            id=confirmation_id,
+            session_id=session_id,
+            user_id=user_id,
+            operation=operation,
+            summary=summary,
+            risk_level=risk_level,
+            request_payload=request_payload,
+            expires_at=expires_at,
+            created_by=user_id,
+            updated_by=user_id,
+        )
+        db.add(confirmation)
+        await db.flush()
+        return confirmation
+
+    async def finish_external_confirmation(
+        self,
+        db: AsyncSession,
+        confirmation: AgentConfirmation,
+        *,
+        status: str,
+        result_payload: dict[str, Any],
+        user_id: uuid.UUID,
+    ) -> AgentConfirmation:
+        confirmation.status = status
+        confirmation.result_payload = result_payload
+        confirmation.executed_at = (
+            datetime.now(UTC) if status in {"executed", "failed"} else None
+        )
+        confirmation.updated_by = user_id
         await db.flush()
         return confirmation
 

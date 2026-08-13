@@ -15,6 +15,7 @@ from app.modules.agent.automation_schema import NotifyStep, RecipientRule
 from app.modules.agent.models import (
     AgentAutomation,
     AgentAutomationRun,
+    AgentInteractionRequest,
     AgentPushDelivery,
     AgentPushTemplateVersion,
     AgentRunEvent,
@@ -51,15 +52,12 @@ class PushDeliveryService:
             .join(
                 FeishuConfig,
                 and_(
-                    FeishuConfig.tenant_id
-                    == ExternalIdentityBinding.tenant_id,
-                    FeishuConfig.app_id
-                    == ExternalIdentityBinding.app_fingerprint,
+                    FeishuConfig.tenant_id == ExternalIdentityBinding.tenant_id,
+                    FeishuConfig.app_id == ExternalIdentityBinding.app_fingerprint,
                 ),
             )
             .where(
-                ExternalIdentityBinding.local_user_id
-                == delivery.recipient_user_id,
+                ExternalIdentityBinding.local_user_id == delivery.recipient_user_id,
                 ExternalIdentityBinding.platform == "feishu",
                 ExternalIdentityBinding.status == "active",
                 ExternalIdentityBinding.is_deleted.is_(False),
@@ -83,26 +81,8 @@ class PushDeliveryService:
             },
         }
         if actions:
-            card["body"]["elements"].append(
-                {
-                    "tag": "action",
-                    "actions": [
-                        {
-                            "tag": "button",
-                            "text": {
-                                "tag": "plain_text",
-                                "content": str(action.get("label") or "查看"),
-                            },
-                            "type": "primary",
-                            "value": {
-                                **action,
-                                "resource_domain": "dazah_business",
-                                "trace_id": str(delivery.run_id),
-                            },
-                        }
-                        for action in actions
-                    ],
-                }
+            card["body"]["elements"].extend(
+                _card_action_elements(actions, run_id=delivery.run_id)
             )
         async with httpx.AsyncClient(timeout=30) as client:
             response = await client.post(
@@ -349,6 +329,90 @@ class PushDeliveryService:
             },
         )
         return {"template": step.template, "deliveries": results}
+
+    async def dispatch_interaction(
+        self,
+        db: AsyncSession,
+        *,
+        automation: AgentAutomation,
+        run: AgentAutomationRun,
+        owner: User,
+        request: AgentInteractionRequest,
+        recipient: User,
+        rule: RecipientRule,
+        step_run_id: UUID,
+    ) -> dict[str, Any]:
+        template_key = f"interaction:{request.id}"
+        template = AgentPushTemplateVersion(
+            template_key=template_key,
+            version=1,
+            title_template=request.title,
+            markdown_template=request.summary or "请完成以下信息填写。",
+            actions=(
+                [
+                    {
+                        "type": "interaction_form",
+                        "label": "提交",
+                        "interaction_request_id": str(request.id),
+                        "interaction_version": request.version,
+                        "fields": request.form_schema,
+                    }
+                ]
+                if request.mode == "card_form"
+                else [
+                    {
+                        "type": "open_url",
+                        "label": "打开飞书表格",
+                        "url": request.result_summary.get("table_resource_url"),
+                    },
+                    {
+                        "type": "interaction_complete",
+                        "label": "已完成填写",
+                        "interaction_request_id": str(request.id),
+                        "interaction_version": request.version,
+                    },
+                ]
+            ),
+        )
+        template.created_by = owner.id
+        template.updated_by = owner.id
+        db.add(template)
+        await db.flush()
+        variables = {"summary": request.summary or "请完成以下信息填写。"}
+        delivery = await self._get_or_create_delivery(
+            db,
+            automation=automation,
+            run=run,
+            step_run_id=step_run_id,
+            template=template,
+            recipient=recipient,
+            rule=rule,
+            variables=variables,
+            aggregation_key=None,
+            incident_key=None,
+        )
+        if delivery.status in {"pending", "sending"}:
+            await self._send_delivery(
+                db, delivery=delivery, template=template, variables=variables
+            )
+        request.external_message_id = delivery.external_message_id
+        return {
+            "request_id": str(request.id),
+            "delivery_id": str(delivery.id),
+            "status": delivery.status,
+        }
+
+    async def resolve_recipients(
+        self,
+        db: AsyncSession,
+        *,
+        rules: list[RecipientRule],
+        owner: User,
+        outputs: dict[str, Any],
+    ) -> list[tuple[User, RecipientRule]]:
+        return await self._resolve_recipients(
+            db, rules=rules, owner=owner, outputs=outputs
+        )
 
     async def _template(
         self, db: AsyncSession, *, template_key: str, owner: User
@@ -637,6 +701,9 @@ class PushDeliveryService:
         delivery.status = "failed"
         run = await db.get(AgentAutomationRun, delivery.run_id)
         if run is not None:
+            automation = await db.get(AgentAutomation, run.automation_id)
+            if automation is not None:
+                automation.status = "suspended_policy"
             await self._event(
                 db,
                 run=run,
@@ -749,3 +816,100 @@ def _display(value: Any) -> str:
     if isinstance(value, (dict, list)):
         return json.dumps(redact_sensitive(value), ensure_ascii=False, sort_keys=True)
     return str(value)
+
+
+def _card_action_elements(
+    actions: list[dict[str, Any]], *, run_id: UUID
+) -> list[dict[str, Any]]:
+    elements: list[dict[str, Any]] = []
+    buttons: list[dict[str, Any]] = []
+    for action in actions:
+        action_type = str(action.get("type") or "callback")
+        if action_type == "interaction_form":
+            fields = [
+                _card_form_field(field)
+                for field in action.get("fields") or []
+                if isinstance(field, dict)
+            ]
+            fields.append(
+                {
+                    "tag": "button",
+                    "name": "submit_interaction",
+                    "text": {
+                        "tag": "plain_text",
+                        "content": str(action.get("label") or "提交"),
+                    },
+                    "type": "primary",
+                    "action_type": "form_submit",
+                    "value": {
+                        "interaction_request_id": action.get("interaction_request_id"),
+                        "interaction_version": action.get("interaction_version"),
+                        "resource_domain": "dazah_interaction",
+                        "trace_id": str(run_id),
+                    },
+                }
+            )
+            elements.append(
+                {"tag": "form", "name": "livzon_interaction", "elements": fields}
+            )
+            continue
+        button: dict[str, Any] = {
+            "tag": "button",
+            "text": {
+                "tag": "plain_text",
+                "content": str(action.get("label") or "查看"),
+            },
+            "type": "primary",
+        }
+        if action_type == "open_url" and action.get("url"):
+            button["behaviors"] = [
+                {"type": "open_url", "default_url": str(action["url"])}
+            ]
+        else:
+            button["value"] = {
+                **action,
+                "interaction_idempotency_key": (
+                    f"interaction:{action.get('interaction_request_id')}:{run_id}"
+                ),
+                "interaction_values": {},
+                "resource_domain": "dazah_business",
+                "trace_id": str(run_id),
+            }
+        buttons.append(button)
+    if buttons:
+        elements.append({"tag": "action", "actions": buttons})
+    return elements
+
+
+def _card_form_field(field: dict[str, Any]) -> dict[str, Any]:
+    field_type = str(field.get("type") or "text")
+    base = {
+        "name": str(field.get("key") or "field"),
+        "label": {"tag": "plain_text", "content": str(field.get("label") or "字段")},
+        "required": bool(field.get("required")),
+    }
+    if field_type in {"single_select", "multi_select", "boolean"}:
+        options = field.get("options") or (
+            ["是", "否"] if field_type == "boolean" else []
+        )
+        return {
+            **base,
+            "tag": "multi_select_static"
+            if field_type == "multi_select"
+            else "select_static",
+            "options": [
+                {
+                    "text": {"tag": "plain_text", "content": str(option)},
+                    "value": str(option),
+                }
+                for option in options
+            ],
+        }
+    if field_type == "date":
+        return {**base, "tag": "date_picker"}
+    return {
+        **base,
+        "tag": "input",
+        "input_type": "number" if field_type == "number" else "text",
+        "placeholder": {"tag": "plain_text", "content": "请填写"},
+    }

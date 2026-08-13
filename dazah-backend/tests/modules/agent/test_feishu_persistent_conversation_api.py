@@ -113,12 +113,33 @@ async def test_feishu_conversation_route_persists_history_and_is_idempotent(
             assert replay.json()["duplicate"] is True
             assert replay.json()["response_text"] == "发现 2 条未关闭偏差"
 
+            reset_payload = {
+                **prepare_payload,
+                "external_message_id": f"om_{uuid.uuid4().hex}",
+                "message": "/restart",
+                "trace_id": str(uuid.uuid4()),
+                "run_id": str(uuid.uuid4()),
+            }
+            reset_payload["source"] = {
+                **prepare_payload["source"],
+                "message_id": reset_payload["external_message_id"],
+            }
+            reset = await client.post(
+                "/api/v1/agent/internal/feishu/conversations/prepare",
+                headers={"Authorization": "Bearer internal-test"},
+                json=reset_payload,
+            )
+            assert reset.status_code == 200
+            assert reset.json()["session_id"] != session_id
+            assert reset.json()["messages"] == []
+
         detail = await AgentService(settings=object()).get_session_detail(
             db_session,
             session_id=uuid.UUID(session_id),
             current_user=user,
         )
         assert detail.session.channel == "feishu"
+        assert detail.session.status == "archived"
         assert [item.content for item in detail.messages] == [
             "查询未关闭偏差",
             "发现 2 条未关闭偏差",

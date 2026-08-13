@@ -1,14 +1,18 @@
 import uuid
 from pathlib import Path
 
+import pytest
 from pypdf import PdfWriter
 from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
+from services import dazah_agent_service
 
 from services.dazah_agent_service import (
     AgentBackendSource,
     AgentBackendV2Request,
     AgentTrustedSubject,
     DazahAIAgent,
+    _attachment_catalog_instruction,
+    _try_basic_command_response,
     _user_message_with_attachments,
 )
 
@@ -34,6 +38,82 @@ def test_dazah_proxy_keeps_multimodal_message_parts() -> None:
     assert agent._model_supports_vision() is True
 
 
+@pytest.mark.asyncio
+async def test_help_command_returns_without_model_execution() -> None:
+    response = await _try_basic_command_response(_payload(message="/help"))
+
+    assert response is not None
+    assert "`/new`" in response.message
+    assert "`/restart`" in response.message
+    assert "`/memory status`" in response.message
+    assert "`/memory clear confirm`" in response.message
+    assert "群聊不读取或修改个人记忆" in response.message
+    assert response.tool_trace == []
+
+
+@pytest.mark.asyncio
+async def test_restrat_typo_is_not_a_command() -> None:
+    response = await _try_basic_command_response(_payload(message="/restrat"))
+
+    assert response is None
+
+
+@pytest.mark.asyncio
+async def test_status_command_reports_current_channel() -> None:
+    response = await _try_basic_command_response(_payload(message="/status"))
+
+    assert response is not None
+    assert "渠道：Web" in response.message
+
+
+@pytest.mark.asyncio
+async def test_tasks_command_returns_recent_progress(monkeypatch) -> None:
+    async def fake_execute(operation, *, params):
+        assert operation == "agent.list_automation_runs"
+        assert params["scope"] == "mine"
+        return {
+            "data": {
+                "items": [
+                    {"id": str(uuid.uuid4()), "status": "failed", "error_code": "tool.timeout"}
+                ]
+            }
+        }
+
+    monkeypatch.setattr(dazah_agent_service, "_execute_deterministic_operation", fake_execute)
+
+    response = await _try_basic_command_response(_payload(message="/tasks"))
+
+    assert response is not None
+    assert "最近任务进度" in response.message
+    assert "tool.timeout" in response.message
+    assert "/retry" in response.message
+
+
+@pytest.mark.asyncio
+async def test_retry_command_returns_real_confirmation(monkeypatch) -> None:
+    run_id = str(uuid.uuid4())
+    confirmation = {
+        "id": str(uuid.uuid4()),
+        "operation": "agent.retry_automation_run",
+        "summary": "重试失败运行",
+        "risk_level": "medium",
+        "status": "pending",
+        "expires_at": "2026-08-06T08:00:00Z",
+    }
+
+    async def fake_execute(operation, *, params):
+        assert operation == "agent.retry_automation_run"
+        assert params == {"run_id": run_id}
+        return {"requires_confirmation": True, "confirmation": confirmation}
+
+    monkeypatch.setattr(dazah_agent_service, "_execute_deterministic_operation", fake_execute)
+
+    response = await _try_basic_command_response(_payload(message=f"/retry {run_id}"))
+
+    assert response is not None
+    assert response.pending_confirmations == [confirmation]
+
+
 def test_document_attachment_is_added_as_user_content() -> None:
     payload = _payload(
         message="请总结",
@@ -53,6 +133,28 @@ def test_document_attachment_is_added_as_user_content() -> None:
     assert isinstance(content, str)
     assert "记录.txt" in content
     assert "批次状态正常" in content
+
+
+def test_persistent_attachment_catalog_routes_follow_up_operations() -> None:
+    attachment_id = str(uuid.uuid4())
+    payload = _payload(
+        message="继续修改销售数据.xlsx",
+        attachment_catalog=[
+            {
+                "attachment_id": attachment_id,
+                "filename": "销售数据.xlsx",
+                "kind": "document",
+                "version": 2,
+            }
+        ],
+    )
+
+    instruction = _attachment_catalog_instruction(payload)
+
+    assert attachment_id in instruction
+    assert "agent.read_attachment" in instruction
+    assert "agent.mutate_tabular_attachment" in instruction
+    assert "agent.delete_attachment" in instruction
 
 
 def test_gateway_cached_pdf_text_is_extracted_without_exposing_path(

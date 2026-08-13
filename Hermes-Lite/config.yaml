@@ -46,11 +46,15 @@ custom_providers:
 
 # ── 记忆系统 ─────────────────────────────────
 memory:
-  memory_enabled: true        # 启用 MEMORY.md 引擎级记忆（内部，用户不可见）
-  user_profile_enabled: true  # 启用 per-user 用户画像（前端可见）
+  memory_enabled: true        # 上游 CLI 记忆；Dazah Agent 使用下方租户隔离的 SQLite 用户记忆
+  user_profile_enabled: true  # 上游 CLI 用户画像；Dazah Agent 不读取共享 USER.md
   memory_char_limit: 2200     # MEMORY.md 字符上限（严格控制，防止泄露面过大）
   user_char_limit: 1375       # USER.md 字符上限（前端展示，适度限制）
   nudge_interval: 0           # 禁用 memory nudge（Hermes-Lite 是 Web 产品，不向用户暴露 self-improvement 提示）
+  user_memory_limit_bytes: 32768          # 每个 tenant_id + user_id 的有效记忆硬上限
+  user_memory_compression_trigger: 0.80   # 达到 80% 后触发分层摘要
+  user_memory_compression_target: 0.60    # 自动压缩的目标占用
+  user_memory_injection_bytes: 6144       # 单次注入 Agent 上下文的最大 UTF-8 字节数
 
 skills:
   creation_nudge_interval: 0  # 禁用 skill nudge（Hermes-Lite 用户无需 skill 管理提示）

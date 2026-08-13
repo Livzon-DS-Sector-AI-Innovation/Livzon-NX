@@ -111,9 +111,7 @@ class ToolCatalogService:
         if row is None:
             await self.synchronize(db)
             row = await db.scalar(
-                select(AgentToolCatalog).where(
-                    AgentToolCatalog.operation == operation
-                )
+                select(AgentToolCatalog).where(AgentToolCatalog.operation == operation)
             )
         if row is None or row.status != "active" or not row.admin_enabled:
             raise HTTPException(
@@ -202,12 +200,19 @@ class ToolCatalogService:
         self,
         db: AsyncSession,
         user_id: uuid.UUID,
+        *,
+        tenant_id: str,
     ) -> User:
         user = await db.get(User, user_id)
         if user is None or user.is_deleted or user.status != "active":
             raise HTTPException(
                 status.HTTP_403_FORBIDDEN,
                 "Trusted Agent subject is not an active local user",
+            )
+        if (user.tenant_key or "default") != tenant_id:
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                "Trusted Agent subject tenant does not match the local user",
             )
         return user
 
@@ -217,7 +222,11 @@ class ToolCatalogService:
         request: AgentToolSearchRequest,
     ) -> list[AgentToolCatalogEntry]:
         await self.synchronize(db)
-        user = await self._trusted_user(db, request.subject.user_id)
+        user = await self._trusted_user(
+            db,
+            request.subject.user_id,
+            tenant_id=request.subject.tenant_id,
+        )
         query = request.query.strip().casefold()
         rows = list(
             (
@@ -259,6 +268,7 @@ class ToolCatalogService:
         *,
         operation: str,
         user_id: uuid.UUID,
+        tenant_id: str,
     ) -> AgentToolCatalogEntry:
         await self.synchronize(db)
         row = await db.scalar(
@@ -269,7 +279,7 @@ class ToolCatalogService:
         )
         if row is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Agent tool was not found")
-        user = await self._trusted_user(db, user_id)
+        user = await self._trusted_user(db, user_id, tenant_id=tenant_id)
         await self.access_scope.require_tool_access(
             db,
             user=user,

@@ -18,6 +18,7 @@ test.describe('Livzon Agent 治理台', () => {
     await expect(page.getByRole('tab', { name: '能力目录与策略' })).toBeVisible()
     await expect(page.getByRole('tab', { name: '授权与确认' })).toBeVisible()
     await expect(page.getByRole('tab', { name: '调用链路与投递诊断' })).toBeVisible()
+    await expect(page.getByRole('tab', { name: '记忆治理' })).toHaveCount(0)
     await expect(page.getByText('外部验收状态')).toHaveCount(0)
   })
 
@@ -33,7 +34,9 @@ test.describe('Livzon Agent 治理台', () => {
       '00000000-0000-0000-0000-000000000099',
     )
     await expect(page.getByText('飞书入站消息（正文已隐藏）')).toBeVisible()
-    await expect(page.getByText('普通飞书对话不进入该队列')).toBeVisible()
+    await expect(page.getByText(/能力发现 · search_agent_tools/)).toBeVisible()
+    await expect(page.getByText(/审计收据 · docs \+update/)).toBeVisible()
+    await expect(page.getByText('普通飞书对话不进入该队列')).toHaveCount(0)
   })
 
   test('飞书接入页不会展示 Secret 明文', async ({ page }) => {
@@ -50,6 +53,7 @@ test.describe('Livzon Agent 治理台', () => {
   test('保存配置明确展示接口成功结果', async ({ page }) => {
     await openAgentGovernance(page)
     await page.getByRole('tab', { name: '飞书接入' }).click()
+    await expect(page.getByLabel('应用编号（App ID）')).toHaveValue('cli_e2e')
     await page.getByRole('button', { name: '保存配置' }).click()
     await page.getByRole('button', { name: '确认保存' }).click()
 
@@ -62,6 +66,29 @@ test.describe('Livzon Agent 治理台', () => {
     await expect(page.getByText('配置版本 2 已写入，飞书网关已启用。')).toBeVisible()
   })
 
+  test('连通性诊断同时展示实际结果和处理建议', async ({ page }) => {
+    await openAgentGovernance(page)
+    await page.getByRole('tab', { name: '飞书接入' }).click()
+    await expect(page.getByLabel('应用编号（App ID）')).toHaveValue('cli_e2e')
+    await page.getByRole('button', { name: '运行诊断' }).click()
+
+    await expect(page.getByText('配置的同步根部门 0 不在当前通讯录权限范围内。')).toBeVisible()
+    await expect(page.getByText('建议：请将同步根部门改为已授权部门。')).toBeVisible()
+  })
+
+  test('管理员确认后可以重启飞书 Gateway 并看到恢复结果', async ({ page }) => {
+    await openAgentGovernance(page)
+    await page.getByRole('tab', { name: '飞书接入' }).click()
+
+    await expect(page.getByText('重启与重新部署是不同操作')).toHaveCount(0)
+    await page.getByRole('button', { name: '重启飞书网关' }).click()
+    await expect(page.getByText('该操作只重建飞书消息连接')).toBeVisible()
+    await page.getByRole('button', { name: '确认重启' }).click()
+
+    await expect(page.getByText('飞书 Gateway 重启成功')).toBeVisible()
+    await expect(page.getByText(/重连次数由 1 增至 2/)).toBeVisible()
+  })
+
   test('六个治理区域的读取接口均能渲染', async ({ page }) => {
     await openAgentGovernance(page)
 
@@ -71,6 +98,8 @@ test.describe('Livzon Agent 治理台', () => {
     await expect(page.getByText('身份冲突工作台（0）')).toBeVisible()
 
     await page.getByRole('tab', { name: '能力目录与策略' }).click()
+    await expect(page.getByText('记忆策略', { exact: true })).toBeVisible()
+    await expect(page.getByLabel('租户记忆上限')).toBeVisible()
     await expect(page.getByText('quality.get_deviation')).toBeVisible()
     await page.getByRole('combobox', { name: '模块' }).click()
     const moduleDropdown = page.locator('.ant-select-dropdown:visible')
@@ -98,6 +127,7 @@ test.describe('Livzon Agent 治理台', () => {
 
     await page.getByRole('tab', { name: '调用链路与投递诊断' }).click()
     await expect(page.getByText('调用链路查询')).toBeVisible()
+    await expect(page.getByText('调用链路（Trace）用于定位故障')).toHaveCount(0)
   })
 
   test('调用链路查询展示跨渠道事件并导出脱敏诊断', async ({ page }) => {

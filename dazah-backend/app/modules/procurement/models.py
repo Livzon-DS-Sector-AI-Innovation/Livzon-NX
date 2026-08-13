@@ -312,6 +312,13 @@ class PurchaseRequest(BaseModel):
         nullable=False,
         comment="申请日期",
     )
+    attachment_note: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="",
+        server_default="",
+        comment="附件说明",
+    )
     status: Mapped[str] = mapped_column(
         String(64),
         nullable=False,
@@ -360,6 +367,13 @@ class PurchaseRequestItem(BaseModel):
         nullable=False,
         comment="序号",
     )
+    item_category: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="明细实际采购类型",
+    )
     product_name: Mapped[str] = mapped_column(
         String(255),
         nullable=False,
@@ -371,6 +385,27 @@ class PurchaseRequestItem(BaseModel):
         default="",
         server_default="",
         comment="规格",
+    )
+    material_code: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="物料编码",
+    )
+    material_description: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="物料说明",
+    )
+    rule_model: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="规则型号",
     )
     purpose: Mapped[str] = mapped_column(
         String(255),

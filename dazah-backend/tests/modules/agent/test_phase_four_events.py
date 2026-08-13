@@ -171,9 +171,11 @@ async def test_versioned_event_envelope_is_idempotent_and_queues_event_trigger(
     wait_step = definition.steps[0]
     assert isinstance(wait_step, EventWaitStep)
     outputs: dict[str, object] = {}
-    assert not await runner._wait_for_event(
+    received, timed_out = await runner._wait_for_event(
         db_session, run=wait_run, step=wait_step, outputs=outputs
     )
+    assert not received
+    assert not timed_out
 
     resumed = await publish_purchase_arrival(
         db_session,
@@ -186,9 +188,11 @@ async def test_versioned_event_envelope_is_idempotent_and_queues_event_trigger(
         correlation_id=correlation_id,
     )
     assert wait_run.status == "queued"
-    assert await runner._wait_for_event(
+    received, timed_out = await runner._wait_for_event(
         db_session, run=wait_run, step=wait_step, outputs=outputs
     )
+    assert received
+    assert not timed_out
     assert outputs["wait_arrival"]["subject_id"] == resumed.subject_id
 
     manual_step = ManualTaskStep.model_validate(
@@ -207,13 +211,17 @@ async def test_versioned_event_envelope_is_idempotent_and_queues_event_trigger(
     db_session.add(manual_run)
     await db_session.flush()
     manual_outputs: dict[str, object] = {}
-    assert not await runner._wait_for_manual_task(
+    completed, timed_out = await runner._wait_for_manual_task(
         db_session, run=manual_run, step=manual_step, outputs=manual_outputs
     )
+    assert not completed
+    assert not timed_out
     assert manual_run.status == "waiting"
     await AgentManualTaskService().complete(
         db_session, user=owner, run_id=manual_run.id
     )
-    assert await runner._wait_for_manual_task(
+    completed, timed_out = await runner._wait_for_manual_task(
         db_session, run=manual_run, step=manual_step, outputs=manual_outputs
     )
+    assert completed
+    assert not timed_out

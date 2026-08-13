@@ -42,7 +42,12 @@ async def handle_feishu_direct_message(
     """Run a Feishu message through a channel-isolated Livzon chat boundary."""
     peer_id = conversation_peer_id or sender_open_id
     normalized = text.strip()
-    if normalized in {"/new", "/新建会话"}:
+    if normalized.lower() in {
+        "/new",
+        "/restart",
+        "/reset",
+        "/新建会话",
+    }:
         await AgentRepository().archive_active_channel_sessions(
             db,
             user_id=user.id,

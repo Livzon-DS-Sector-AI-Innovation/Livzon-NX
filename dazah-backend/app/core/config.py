@@ -50,6 +50,7 @@ class Settings(BaseSettings):
 
     # Database
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/dazah"
+    TEST_DATABASE_URL: str | None = None
 
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
@@ -169,7 +170,9 @@ class Settings(BaseSettings):
     DAILY_SYNC_CRON: str = "0 2 * * *"
     CRAWLER_HEADLESS: bool = True
     CRAWLER_BROWSERS_PATH: str = ""  # 空字符串 = Playwright 默认路径
-    CDE_GUIDELINE_URL: str = "https://www.cde.org.cn/zdyz/listpage/9cd8db3b7530c6fa0c86485e563f93c7"
+    CDE_GUIDELINE_URL: str = (
+        "https://www.cde.org.cn/zdyz/listpage/9cd8db3b7530c6fa0c86485e563f93c7"
+    )
 
     # Storage
     STORAGE_ROOT: str = "./storage"
@@ -187,6 +190,8 @@ class Settings(BaseSettings):
     HERMES_AGENT_TOKEN: str = ""
     HERMES_INTERNAL_URL: str = ""
     HERMES_INTERNAL_TOKEN: str = ""
+    AGENT_USER_MEMORY_MODE: Literal["auto", "explicit_only", "disabled"] = "auto"
+    AGENT_USER_MEMORY_NOTICE_VERSION: int = 1
     LIVZON_FEISHU_ALLOWED_GROUPS: str = ""
     AGENT_TOOL_TOKEN: str = ""
     AGENT_LLM_PROXY_TOKEN: str = ""
@@ -202,8 +207,7 @@ class Settings(BaseSettings):
         normalized = value.rstrip("/")
         if normalized and not normalized.endswith("/v2/agent/runs"):
             raise ValueError(
-                "HERMES_AGENT_V2_URL must target AgentBackend V2 "
-                "(/v2/agent/runs)"
+                "HERMES_AGENT_V2_URL must target AgentBackend V2 (/v2/agent/runs)"
             )
         return normalized
 
@@ -215,9 +219,9 @@ class Settings(BaseSettings):
         return self.APP_ENV == "production"
 
     @property
-    def effective_local_login_mode(self) -> Literal[
-        "disabled", "admin_only", "enabled"
-    ]:
+    def effective_local_login_mode(
+        self,
+    ) -> Literal["disabled", "admin_only", "enabled"]:
         if self.LOCAL_LOGIN_MODE is not None:
             return self.LOCAL_LOGIN_MODE
         return "disabled" if self.is_production else "enabled"

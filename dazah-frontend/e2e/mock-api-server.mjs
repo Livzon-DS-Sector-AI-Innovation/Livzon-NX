@@ -24,7 +24,7 @@ const pendingPurchaseRequest = {
   request_department: '工程设备部',
   request_date: '2026-07-29',
   total_amount: '1280.00',
-  status: 'pending_department_head',
+  status: 'pending_hardware_warehouse',
   items: [],
   approvals: [],
 }
@@ -149,6 +149,12 @@ const server = createServer(async (request, response) => {
   }
 
   if (request.url?.startsWith('/api/v1/identity/me')) {
+    if (authorization.includes('invalid-session')) {
+      response.statusCode = 401
+      response.end(JSON.stringify({ code: 401, message: 'authentication required', data: null }))
+      return
+    }
+
     const user = authorization.includes('restricted')
       ? { ...currentUser, module_codes: [] }
       : currentUser
@@ -255,6 +261,24 @@ const server = createServer(async (request, response) => {
   }
 
   if (
+    request.url === '/api/v1/identity/feishu-config/gateway/restart' &&
+    request.method === 'POST'
+  ) {
+    response.end(JSON.stringify({
+      code: 200,
+      data: {
+        status: 'connected',
+        message: 'Hermes 飞书 Gateway 已重新建立连接',
+        previous_reconnects: 1,
+        gateway_reconnects: 2,
+        credential_version: 2,
+        config_version: 2,
+      },
+    }))
+    return
+  }
+
+  if (
     request.url === '/api/v1/identity/feishu-config' &&
     ['GET', 'PUT'].includes(request.method || '')
   ) {
@@ -269,11 +293,17 @@ const server = createServer(async (request, response) => {
     response.end(JSON.stringify({
       code: 200,
       data: {
-        status: 'success',
-        message: '飞书接入诊断通过',
+        status: 'warning',
+        message: '飞书接入可用，但同步部门配置需要调整',
         steps: [
-          { name: '应用凭证', status: 'success', message: '凭证有效' },
-          { name: 'Gateway', status: 'success', message: '连接正常' },
+          { name: '应用凭证', status: 'ok', message: '凭证有效' },
+          {
+            name: '诊断目标部门',
+            status: 'warning',
+            message: '配置的同步根部门 0 不在当前通讯录权限范围内。',
+            suggestion: '请将同步根部门改为已授权部门。',
+            code: 40004,
+          },
         ],
       },
     }))
@@ -405,15 +435,43 @@ const server = createServer(async (request, response) => {
       code: 200,
       data: {
         trace_id: '00000000-0000-0000-0000-000000000099',
-        counts: { messages: 2, tool_calls: 1, confirmations: 0, domain_events: 0, deliveries: 0 },
-        timeline: [{
-          type: 'inbound_message',
-          id: 'event-1',
-          occurred_at: '2026-07-31T09:00:00Z',
-          status: 'recorded',
-          summary: '飞书入站消息（正文已隐藏）',
-          error_code: null,
-        }],
+        counts: {
+          messages: 2,
+          tool_calls: 1,
+          confirmations: 0,
+          domain_events: 0,
+          deliveries: 0,
+          capability_searches: 1,
+          audit_receipts: 1,
+        },
+        timeline: [
+          {
+            type: 'inbound_message',
+            id: 'event-1',
+            occurred_at: '2026-07-31T09:00:00Z',
+            status: 'recorded',
+            summary: '飞书入站消息（正文已隐藏）',
+            error_code: null,
+          },
+          {
+            type: 'capability_search',
+            id: 'capability-search-e2e',
+            occurred_at: new Date().toISOString(),
+            status: 'recorded',
+            summary: 'search_agent_tools',
+            operation: null,
+            error_code: null,
+          },
+          {
+            type: 'audit_receipt',
+            id: 'audit-receipt-e2e',
+            occurred_at: new Date().toISOString(),
+            status: 'recorded',
+            summary: 'docs +update',
+            operation: 'docs +update',
+            error_code: null,
+          },
+        ],
       },
     }))
     return

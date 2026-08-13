@@ -120,20 +120,57 @@ class PurchaseRequestCategory(StrEnum):
     raw_auxiliary = "raw-auxiliary"
     chemical_glass = "chemical-glass"
     electrical = "electrical"
-    labor_protection = "labor-protection"
+    advertising_printing = "advertising-printing"
+    fire = "fire"
+    packaging = "packaging"
+    labor_special = "labor-special"
+    labor_miscellaneous = "labor-miscellaneous"
+    urgent = "urgent"
+
+
+MATERIAL_FIELD_PURCHASE_CATEGORIES = frozenset(
+    {
+        PurchaseRequestCategory.hardware,
+        PurchaseRequestCategory.electrical,
+        PurchaseRequestCategory.chemical_glass,
+        PurchaseRequestCategory.raw_auxiliary,
+        PurchaseRequestCategory.packaging,
+        PurchaseRequestCategory.labor_special,
+        PurchaseRequestCategory.labor_miscellaneous,
+        PurchaseRequestCategory.fire,
+    }
+)
+
+NORMAL_PURCHASE_CATEGORIES = frozenset(
+    category
+    for category in PurchaseRequestCategory
+    if category is not PurchaseRequestCategory.urgent
+)
 
 
 class PurchaseRequestStatus(StrEnum):
     draft = "draft"
+    pending_hardware_warehouse = "pending_hardware_warehouse"
+    pending_equipment_power = "pending_equipment_power"
+    pending_safety_officer = "pending_safety_officer"
     pending_department_head = "pending_department_head"
     pending_responsible_leader = "pending_responsible_leader"
+    pending_supervising_leader = "pending_supervising_leader"
+    pending_finance_director = "pending_finance_director"
+    pending_general_manager = "pending_general_manager"
     approved = "approved"
     rejected = "rejected"
 
 
 class PurchaseApprovalRole(StrEnum):
+    hardware_warehouse = "hardware_warehouse"
+    equipment_power = "equipment_power"
+    safety_officer = "safety_officer"
     department_head = "department_head"
     responsible_leader = "responsible_leader"
+    supervising_leader = "supervising_leader"
+    finance_director = "finance_director"
+    general_manager = "general_manager"
 
 
 class PurchaseApprovalResult(StrEnum):
@@ -148,8 +185,19 @@ class PurchaseApprovalView(StrEnum):
 
 
 class PurchaseRequestItemInput(BaseModel):
-    product_name: str = Field(..., min_length=1, max_length=255, description="商品名称")
+    item_category: PurchaseRequestCategory | None = Field(
+        None,
+        description="明细采购类型，加急单必填",
+    )
+    product_name: str = Field("", max_length=255, description="商品名称")
     specification: str = Field("", max_length=255, description="规格")
+    material_code: str = Field("", max_length=64, description="物料编码")
+    material_description: str = Field(
+        "",
+        max_length=255,
+        description="物料说明",
+    )
+    rule_model: str = Field("", max_length=255, description="规则型号")
     purpose: str = Field("", max_length=255, description="用途")
     material: str = Field("", max_length=255, description="材质")
     brand: str = Field("", max_length=255, description="品牌")
@@ -183,6 +231,7 @@ class PurchaseRequestCreate(BaseModel):
         description="申购部门",
     )
     request_date: date = Field(..., description="申请日期")
+    attachment_note: str = Field("", description="附件说明")
     items: list[PurchaseRequestItemInput] = Field(
         ...,
         min_length=1,
@@ -198,6 +247,7 @@ class PurchaseRequestUpdate(BaseModel):
         description="申购部门",
     )
     request_date: date | None = Field(None, description="申请日期")
+    attachment_note: str | None = Field(None, description="附件说明")
     items: list[PurchaseRequestItemInput] | None = Field(
         None,
         min_length=1,
@@ -223,6 +273,7 @@ class PurchaseRequestResponse(BaseModel):
     category: PurchaseRequestCategory = Field(..., description="采购分类")
     request_department: str = Field(..., description="申购部门")
     request_date: date = Field(..., description="申请日期")
+    attachment_note: str = Field("", description="附件说明")
     status: PurchaseRequestStatus = Field(..., description="流程状态")
     total_amount: Decimal = Field(..., description="合计金额")
     rejected_step: PurchaseApprovalRole | None = Field(None, description="驳回步骤")
@@ -261,8 +312,15 @@ class PurchaseOrderLineResponse(BaseModel):
     request_date: date = Field(..., description="申请日期")
     item_id: UUID = Field(..., description="申请明细 ID")
     item_sequence: int = Field(..., description="明细序号")
-    product_name: str = Field(..., description="商品名称")
+    item_category: PurchaseRequestCategory | None = Field(
+        None,
+        description="明细实际采购类型",
+    )
+    product_name: str = Field("", description="商品名称")
     specification: str = Field("", description="规格")
+    material_code: str = Field("", description="物料编码")
+    material_description: str = Field("", description="物料说明")
+    rule_model: str = Field("", description="规则型号")
     purpose: str = Field("", description="用途")
     material: str = Field("", description="材质")
     brand: str = Field("", description="品牌")
@@ -401,7 +459,10 @@ class ContractRecordResponse(BaseModel):
     filename: str = Field(..., description="合同文件名")
     content_type: str = Field(..., description="文件 MIME 类型")
     file_size: int = Field(..., description="文件大小（字节）")
-    payload: dict[str, Any] = Field(default_factory=dict, description="合同生成请求快照")
+    payload: dict[str, Any] = Field(
+        default_factory=dict,
+        description="合同生成请求快照",
+    )
     created_at: datetime | None = Field(None, description="生成时间")
     updated_at: datetime | None = Field(None, description="更新时间")
 

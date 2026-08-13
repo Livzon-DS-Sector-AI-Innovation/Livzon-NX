@@ -25,6 +25,30 @@ AgentBackendEventType = Literal[
     "ping",
 ]
 AGENT_BACKEND_PROTOCOL_VERSION: Literal["2.0"] = "2.0"
+AgentMemoryEffectiveMode = Literal["auto", "explicit_only", "disabled"]
+AgentMemoryTenantMode = Literal["auto", "explicit_only", "disabled"]
+AgentMemoryUserMode = Literal["auto", "explicit_only", "paused"]
+
+
+class AgentMemoryPolicyEnvelope(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    effective_mode: AgentMemoryEffectiveMode
+    policy_version: int = Field(ge=1)
+    notice_required: bool = False
+    last_cleared_at: datetime | None = None
+
+
+class AgentMemoryTenantPolicyUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    mode: AgentMemoryTenantMode
+
+
+class AgentMemoryTenantPolicyOut(BaseModel):
+    tenant_id: str
+    global_mode: AgentMemoryTenantMode
+    tenant_mode: AgentMemoryTenantMode
+    effective_mode: AgentMemoryTenantMode
+    policy_version: int
 
 
 class AgentTrustedSubject(BaseModel):
@@ -51,6 +75,7 @@ class AgentBackendSource(BaseModel):
 
 class AgentBackendAttachment(BaseModel):
     model_config = ConfigDict(extra="forbid")
+    attachment_id: uuid.UUID | None = None
     filename: str = Field(min_length=1, max_length=255)
     content_type: str = Field(min_length=1, max_length=120)
     size: int = Field(gt=0, le=10 * 1024 * 1024)
@@ -73,7 +98,11 @@ class AgentBackendV2Request(BaseModel):
     attachments: list[AgentBackendAttachment] = Field(
         default_factory=list, max_length=5
     )
+    attachment_catalog: list[dict[str, Any]] = Field(
+        default_factory=list, max_length=100
+    )
     client_capabilities: list[str] = Field(default_factory=list)
+    memory_policy: AgentMemoryPolicyEnvelope | None = None
 
 
 class AgentBackendV2Event(BaseModel):
@@ -107,6 +136,10 @@ class FeishuConversationAttachment(BaseModel):
     filename: str = Field(min_length=1, max_length=255)
     content_type: str = Field(min_length=1, max_length=120)
     kind: Literal["image", "audio", "video", "document"]
+    size: int | None = Field(default=None, gt=0, le=10 * 1024 * 1024)
+    data_base64: str | None = Field(
+        default=None, min_length=1, max_length=14 * 1024 * 1024
+    )
 
 
 class FeishuConversationPrepareRequest(BaseModel):
@@ -126,8 +159,10 @@ class FeishuConversationPrepareRequest(BaseModel):
 class FeishuConversationPrepareResponse(BaseModel):
     session_id: uuid.UUID
     messages: list[dict[str, str]] = Field(default_factory=list)
+    attachment_catalog: list[dict[str, Any]] = Field(default_factory=list)
     duplicate: bool = False
     response_text: str | None = None
+    memory_policy: AgentMemoryPolicyEnvelope | None = None
 
 
 class FeishuConversationCompleteRequest(BaseModel):
@@ -138,6 +173,7 @@ class FeishuConversationCompleteRequest(BaseModel):
     run_id: uuid.UUID
     assistant_message: str = Field(min_length=1, max_length=100_000)
     tool_trace: list[dict[str, Any]] = Field(default_factory=list, max_length=100)
+    memory_notice_delivered: bool = False
 
 
 class FeishuConversationCompleteResponse(BaseModel):
@@ -304,6 +340,7 @@ class AgentToolSearchRequest(BaseModel):
     module: str | None = Field(default=None, max_length=64)
     limit: int = Field(default=12, ge=1, le=50)
     subject: AgentTrustedSubject
+    trace_id: uuid.UUID = Field(default_factory=uuid.uuid4)
 
 
 class AgentToolCatalogEntry(BaseModel):

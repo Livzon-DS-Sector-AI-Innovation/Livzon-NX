@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-import { streamAgentMessage } from "./agent"
+import {
+  fetchAgentInteractions,
+  fetchLivzonTaskRun,
+  streamAgentMessage,
+  submitAgentInteraction,
+} from "./agent"
 
 function v2Event(
   type: string,
@@ -152,5 +157,77 @@ describe("streamAgentMessage AgentBackend V2 protocol", () => {
     await expect(
       streamAgentMessage({ message: "测试" }, {}),
     ).rejects.toThrow("无效的 V2 流事件")
+  })
+})
+
+describe("Livzon Task interaction API", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it("loads channel-neutral interaction artifacts", async () => {
+    const artifact = {
+      type: "form",
+      request_id: "request-1",
+      version: 1,
+      title: "库存确认",
+      status: "pending",
+      actions: [],
+      form_schema: [],
+      expires_at: "2026-08-11T00:00:00Z",
+    }
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      success: true,
+      data: { items: [artifact], page: 1, page_size: 100, total: 1 },
+    })))
+    vi.stubGlobal("fetch", fetchMock)
+
+    const result = await fetchAgentInteractions()
+
+    expect(result.items[0]).toEqual(artifact)
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/agent/interaction-requests?page=1&page_size=100",
+      { credentials: "include" },
+    )
+  })
+
+  it("submits the request version and idempotency key", async () => {
+    vi.stubGlobal("crypto", { randomUUID: () => "submission-1" })
+    const artifact = {
+      type: "form" as const,
+      request_id: "request-1",
+      version: 3,
+      title: "库存确认",
+      status: "pending",
+      actions: [],
+      form_schema: [],
+      expires_at: "2026-08-11T00:00:00Z",
+    }
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      success: true,
+      data: { ...artifact, status: "completed" },
+    })))
+    vi.stubGlobal("fetch", fetchMock)
+
+    await submitAgentInteraction(artifact, { quantity: 10 })
+
+    const request = fetchMock.mock.calls[0][1] as RequestInit
+    expect(JSON.parse(String(request.body))).toEqual({
+      request_version: 3,
+      idempotency_key: "submission-1",
+      values: { quantity: 10 },
+    })
+  })
+
+  it("loads a run with step timeline data", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      success: true,
+      data: { run: { id: "run-1", automation_id: "a-1", status: "waiting" }, steps: [] },
+    })))
+    vi.stubGlobal("fetch", fetchMock)
+
+    const detail = await fetchLivzonTaskRun("run-1")
+
+    expect(detail.run.status).toBe("waiting")
   })
 })

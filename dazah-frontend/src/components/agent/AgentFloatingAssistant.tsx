@@ -32,6 +32,7 @@ import {
   type AgentAttachmentInput,
   type AgentChatData,
   type AgentConfirmation,
+  type AgentConfirmationExecuteData,
   type AgentMessage,
   type AgentSessionItem,
 } from "@/lib/api/agent"
@@ -375,13 +376,20 @@ function shortenedText(value: unknown, limit = 140) {
   return text.length > limit ? `${text.slice(0, limit)}…` : text
 }
 
-function confirmationNarrative(confirmation: AgentConfirmation) {
+export function confirmationNarrative(confirmation: AgentConfirmation) {
   const payload = businessPayloadOf(confirmation)
   const recipientCount = Array.isArray(payload.recipient_user_ids)
     ? payload.recipient_user_ids.length
     : 0
   const title = shortenedText(payload.title, 60)
   const content = shortenedText(payload.markdown || payload.text)
+
+  if (payload.resource_domain === "feishu_native") {
+    const resource = shortenedText(payload.resource, 80) || "飞书资源"
+    const reason = shortenedText(payload.reason, 120)
+    const impactCount = typeof payload.impact_count === "number" ? payload.impact_count : 1
+    return `确认后将对${resource}执行“${confirmation.operation}”，预计影响 ${impactCount} 项${reason ? `；风险说明：${reason}` : ""}。操作使用应用 Bot 身份并保留审计记录。`
+  }
 
   if (confirmation.operation === "identity.deliver_feishu_message") {
     return `将向 ${recipientCount || 1} 位已同步飞书用户发送通知${title ? `《${title}》` : ""}${content ? `，内容：${content}` : ""}。`
@@ -394,6 +402,29 @@ function confirmationNarrative(confirmation: AgentConfirmation) {
   }
   if (confirmation.operation === "agent.update_automation") return "确认后将保存该自动化流程的修改，并记录新版本。"
   return "确认后系统将执行上述操作，并保留完整审计记录。"
+}
+
+export function confirmationExecutionFeedback(
+  confirmation: AgentConfirmation,
+  result: AgentConfirmationExecuteData["result"],
+) {
+  const resultData = isRecord(result.data) ? result.data : {}
+  const verification = isRecord(resultData.verification)
+    ? resultData.verification
+    : isRecord(result.meta?.verification)
+      ? result.meta.verification
+      : null
+  if (
+    resultData.status === "completed_unverified"
+    || resultData.status === "verification_failed"
+    || verification?.verified === false
+  ) {
+    return `回读验证未通过，系统未确认“${confirmation.summary}”已经落地。请先核对目标当前状态，避免重复写入。`
+  }
+  if (result.ok === false) {
+    return `执行失败：${confirmation.summary}。请检查权限、目标状态或稍后重试。`
+  }
+  return null
 }
 
 export function AgentFloatingAssistant() {
@@ -790,13 +821,18 @@ export function AgentFloatingAssistant() {
       for (const nextConfirmation of nextConfirmations) {
         upsertConfirmation(nextConfirmation)
       }
+      const executionFeedback = confirmationExecutionFeedback(
+        result.confirmation,
+        result.result,
+      )
       addMessage({
         role: "assistant",
-        content: artifact
+        content: executionFeedback
+          ?? (artifact
           ? `已生成合同：${artifact.filename}，已开始下载。`
           : nextPendingConfirmation
             ? `已执行：${result.confirmation.summary}。自动化流程已暂停，等待确认：${nextPendingConfirmation.summary}`
-            : `已执行：${result.confirmation.summary}`,
+            : `已执行：${result.confirmation.summary}`),
         metadata: { result: result.result },
       })
     } catch (err) {

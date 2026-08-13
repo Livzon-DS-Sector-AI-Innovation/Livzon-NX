@@ -222,7 +222,7 @@ jobs:
         run: pnpm build
 
       - name: Run stable critical Playwright tests
-        run: pnpm exec playwright test e2e/purchasing --grep-invert @flaky
+        run: pnpm test:e2e:critical --grep-invert @flaky
 
       - name: Upload stable E2E report
         if: ${{ always() }}

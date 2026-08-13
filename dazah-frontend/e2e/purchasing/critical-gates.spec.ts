@@ -17,7 +17,7 @@ test.describe('采购高风险操作门禁', () => {
   })
 
   test('驳回必须确认、填写原因，并显示后端失败', async ({ page }) => {
-    await page.goto('/purchasing/approval/hardware/department-head')
+    await page.goto('/purchasing/approval/hardware/hardware-warehouse')
 
     await expect(page.getByText('工程设备部')).toBeVisible()
     const rejectButton = page.getByRole('button', { name: '驳回' })

@@ -15,6 +15,7 @@ import pytest
 
 class _SettingsWithDatabaseUrl(Protocol):
     DATABASE_URL: str
+    TEST_DATABASE_URL: str | None
 
 
 _SAFE_DATABASE_NAME_MARKERS = ("test", "testing", "pytest")
@@ -22,7 +23,11 @@ _SAFE_DATABASE_NAME_MARKERS = ("test", "testing", "pytest")
 
 def get_pytest_database_url(settings: _SettingsWithDatabaseUrl) -> str:
     """Return the database URL pytest is allowed to use."""
-    database_url = os.getenv("TEST_DATABASE_URL") or settings.DATABASE_URL
+    database_url = (
+        os.getenv("TEST_DATABASE_URL")
+        or settings.TEST_DATABASE_URL
+        or settings.DATABASE_URL
+    )
     _assert_safe_pytest_database_url(database_url)
     return database_url
 

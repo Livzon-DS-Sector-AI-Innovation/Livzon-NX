@@ -12,11 +12,11 @@ from app.modules.procurement.contract_generator import (
     get_contract_template_metadata,
 )
 from app.modules.procurement.schemas import (
+    ContractCategory,
+    ContractGenerateRequest,
     ContractRecordApiResponse,
     ContractRecordListResponse,
     ContractRecordResponse,
-    ContractCategory,
-    ContractGenerateRequest,
     ContractTemplateMetadata,
     InvoiceRecognitionRecordDeleteRequest,
     InvoiceRecognitionRecordDeleteResponse,
@@ -50,8 +50,8 @@ from app.modules.procurement.service import (
     get_contract_record_file,
     get_purchase_request,
     import_supplier_table_file,
-    list_invoice_recognition_records,
     list_contract_records,
+    list_invoice_recognition_records,
     list_purchase_order_lines,
     list_purchase_requests,
     list_suppliers,
@@ -438,7 +438,7 @@ async def update_purchase_request_record(
 @router.post(
     "/purchase-requests/{request_id}/submit",
     summary="提交采购申请",
-    description="将采购申请提交到部门负责人审批。",
+    description="将采购申请提交到该采购类型配置的首个审批节点。",
     response_model=PurchaseRequestApiResponse,
 )
 async def submit_purchase_request_record(
