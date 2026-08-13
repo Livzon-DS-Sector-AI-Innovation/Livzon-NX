@@ -51,7 +51,7 @@ flowchart LR
 以增加验证代价换取不漏跑门禁。
 
 纯 `docs/` 或 Markdown、MDX、reStructuredText 变更只运行 Change Scope、
-Source Security 和 CI Gate。`.github` Workflow、根配置、`.ci`、`.gitea`、
+Source Security 和 CI Gate。`.github` Workflow、根配置、`.ci`、
 共享脚本与 OpenAPI 契约属于 shared change，会触发全部相关模块。
 
 Change Scope 同时检查每个 `AGENTS.md` 都有同目录 `CLAUDE.md` 导入桥接，并

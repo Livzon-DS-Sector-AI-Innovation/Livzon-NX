@@ -20,9 +20,9 @@ feature/*、fix/*、refactor/*、test/* 等
 
 - 开发分支只能通过 PR 合并到 `dev`。
 - `main` 只接受来自 `dev` 的 PR。
-- Gitea 的 `merge-gate` 是唯一稳定的 Required Status Check；它汇总分支策略、
+- GitHub 的 `CI Gate` 是唯一稳定的 Required Status Check；它汇总分支策略、
   测试影响、前后端质量、集成、构建、容器、关键 E2E 和 Hermes 检查。
-- 任一子检查失败、取消或跳过，`merge-gate` 都失败。
+- 任一子检查失败、取消或跳过，`CI Gate` 都失败。
 
 ## 变更与测试映射
 
@@ -79,8 +79,8 @@ feature/*、fix/*、refactor/*、test/* 等
    bash Hermes-Lite/scripts/ci.sh
    ```
 
-6. PR 中填写 `.gitea/PULL_REQUEST_TEMPLATE.md` 的测试证据。
-7. Owners 审查业务正确性、测试断言和规则匹配，`merge-gate` 成功后合并。
+6. PR 描述中填写测试证据。
+7. Owners 审查业务正确性、测试断言和规则匹配，`CI Gate` 成功后合并。
 
 ## 规则调整与例外
 
@@ -91,7 +91,7 @@ feature/*、fix/*、refactor/*、test/* 等
 - 新增业务模块时，必须在同一 PR 中增加模块测试目录；现有通用规则通常无需修改。
 - 只有新增新的代码根目录、测试框架或交付物时，才扩展底层规则与 CI Job。
 
-## Gitea 分支保护
+## GitHub 分支保护
 
 管理员先让工作流成功运行一次，然后为 `dev` 和 `main` 配置：
 
@@ -99,8 +99,5 @@ feature/*、fix/*、refactor/*、test/* 等
 - 必须通过 PR，至少一名审批人；
 - 启用 Code Owner 审批和新提交撤销旧批准；
 - PR 必须基于最新目标分支；
-- Required Status Check 只绑定实际已上报的 `merge-gate` context；
+- Required Status Check 只绑定实际已上报的 `CI Gate` context；
 - 管理员同样遵守保护规则，不允许 Force merge 绕过。
-
-Gitea 使用 Status check glob 时，应从一次真实运行中复制 context，推荐配置精确
-匹配或 `* / merge-gate` 对应的实际格式，不要凭文档猜测 context 前缀。
