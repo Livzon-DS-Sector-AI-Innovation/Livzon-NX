@@ -49,6 +49,7 @@ import {
   usesMaterialFields,
 } from './purchaseRequestConstants'
 import type { PurchaseRequestFormClientProps } from './PurchaseRequestFormClient'
+import { MaterialCodeAutocomplete } from './MaterialCodeAutocomplete'
 
 type UrgentGroup = {
   category: PurchaseRequestCategory
@@ -158,7 +159,7 @@ export function itemDetailColumns(isUrgent: boolean, category: PurchaseRequestCa
           item.material_description || item.product_name,
       },
       {
-        title: '规则型号/规格型号',
+        title: '规格型号',
         key: 'rule_model_compatibility',
         width: 170,
         render: (_: unknown, item: PurchaseRequestItemResponse) =>
@@ -173,7 +174,7 @@ export function itemDetailColumns(isUrgent: boolean, category: PurchaseRequestCa
       ? [
           { title: '物料编码', dataIndex: 'material_code', key: 'material_code', width: 150 },
           { title: '物料说明', dataIndex: 'material_description', key: 'material_description', width: 180 },
-          { title: '规则型号', dataIndex: 'rule_model', key: 'rule_model', width: 150 },
+          { title: '规格型号', dataIndex: 'rule_model', key: 'rule_model', width: 150 },
         ]
       : [
           { title: '商品名称', dataIndex: 'product_name', key: 'product_name', width: 160 },
@@ -423,13 +424,55 @@ export function UrgentPurchaseRequestFormClient({
                           {(itemFields, { add: addItem, remove: removeItem }) => {
                             const editableRows = itemFields.map((field) => ({ key: field.key, name: field.name }))
                             const path = (rowName: number, key: string) => [groupField.name, 'items', rowName, key]
+                            type LinkedFieldPath =
+                              | ['groups', number, 'items', number, 'material_description']
+                              | ['groups', number, 'items', number, 'rule_model']
+                            const rootPath = (
+                              rowName: number,
+                              key: 'material_description' | 'rule_model',
+                            ): LinkedFieldPath =>
+                              ['groups', groupField.name, 'items', rowName, key] as LinkedFieldPath
                             const columns: TableProps<EditableItemRow>['columns'] = [
                               { title: '序号', key: 'sequence', width: 64, render: (_, __, index) => index + 1 },
                               ...(materialFields
                                 ? [
-                                    { title: '物料编码', key: 'material_code', width: 150, render: (_: unknown, row: EditableItemRow) => <Form.Item name={path(row.name, 'material_code')} rules={[{ required: true, message: '请输入物料编码' }]} className="mb-0"><Input /></Form.Item> },
+                                    {
+                                      title: '物料编码',
+                                      key: 'material_code',
+                                      width: 150,
+                                      render: (_: unknown, row: EditableItemRow) => (
+                                        <Form.Item
+                                          name={path(row.name, 'material_code')}
+                                          rules={[{ required: true, message: '请输入物料编码' }]}
+                                          className="mb-0"
+                                        >
+                                          <MaterialCodeAutocomplete
+                                            onUserChange={() => {
+                                              form.setFieldValue(
+                                                rootPath(row.name, 'material_description'),
+                                                '',
+                                              )
+                                              form.setFieldValue(
+                                                rootPath(row.name, 'rule_model'),
+                                                '',
+                                              )
+                                            }}
+                                            onSelectMaterial={(option) => {
+                                              form.setFieldValue(
+                                                rootPath(row.name, 'material_description'),
+                                                option.material_description,
+                                              )
+                                              form.setFieldValue(
+                                                rootPath(row.name, 'rule_model'),
+                                                option.rule_model,
+                                              )
+                                            }}
+                                          />
+                                        </Form.Item>
+                                      ),
+                                    },
                                     { title: '物料说明', key: 'material_description', width: 180, render: (_: unknown, row: EditableItemRow) => <Form.Item name={path(row.name, 'material_description')} rules={[{ required: true, message: '请输入物料说明' }]} className="mb-0"><Input /></Form.Item> },
-                                    { title: '规则型号', key: 'rule_model', width: 150, render: (_: unknown, row: EditableItemRow) => <Form.Item name={path(row.name, 'rule_model')} className="mb-0"><Input /></Form.Item> },
+                                    { title: '规格型号', key: 'rule_model', width: 150, render: (_: unknown, row: EditableItemRow) => <Form.Item name={path(row.name, 'rule_model')} className="mb-0"><Input /></Form.Item> },
                                   ]
                                 : [
                                     { title: '商品名称', key: 'product_name', width: 160, render: (_: unknown, row: EditableItemRow) => <Form.Item name={path(row.name, 'product_name')} rules={[{ required: true, message: '请输入商品名称' }]} className="mb-0"><Input /></Form.Item> },

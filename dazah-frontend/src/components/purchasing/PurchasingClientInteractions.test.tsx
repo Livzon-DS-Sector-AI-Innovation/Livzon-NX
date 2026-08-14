@@ -92,6 +92,13 @@ vi.mock('antd', async () => {
   )
 
   const InputNumber = (props: AnyProps) => <input type="number" {...props} />
+  const AutoComplete = ({ value, onChange, ...props }: AnyProps) => (
+    <input
+      {...props}
+      value={value ?? ''}
+      onChange={(event) => onChange?.(event.target.value)}
+    />
+  )
   const DatePicker = ({ value, onChange, ...props }: AnyProps) => (
     <input
       {...props}
@@ -226,6 +233,7 @@ vi.mock('antd', async () => {
 
   return {
     App,
+    AutoComplete,
     Button,
     DatePicker,
     Descriptions,

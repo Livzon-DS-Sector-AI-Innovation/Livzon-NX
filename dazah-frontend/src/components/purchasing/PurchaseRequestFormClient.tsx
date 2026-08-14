@@ -46,6 +46,7 @@ import {
   usesMaterialFields,
 } from './purchaseRequestConstants'
 import { UrgentPurchaseRequestFormClient } from './UrgentPurchaseRequestFormClient'
+import { MaterialCodeAutocomplete } from './MaterialCodeAutocomplete'
 
 export type PurchaseRequestFormClientProps = {
   category: PurchaseRequestCategory
@@ -317,7 +318,7 @@ function StandardPurchaseRequestFormClient({
             key: 'material_description',
             width: 180,
           },
-          { title: '规则型号', dataIndex: 'rule_model', key: 'rule_model', width: 150 },
+          { title: '规格型号', dataIndex: 'rule_model', key: 'rule_model', width: 150 },
         ]
       : [
           { title: '商品名称', dataIndex: 'product_name', key: 'product_name', width: 160 },
@@ -458,7 +459,22 @@ function StandardPurchaseRequestFormClient({
                               rules={[{ required: true, message: '请输入物料编码' }]}
                               className="mb-0"
                             >
-                              <Input />
+                              <MaterialCodeAutocomplete
+                                onUserChange={() => {
+                                  form.setFieldValue(['items', row.name, 'material_description'], '')
+                                  form.setFieldValue(['items', row.name, 'rule_model'], '')
+                                }}
+                                onSelectMaterial={(option) => {
+                                  form.setFieldValue(
+                                    ['items', row.name, 'material_description'],
+                                    option.material_description,
+                                  )
+                                  form.setFieldValue(
+                                    ['items', row.name, 'rule_model'],
+                                    option.rule_model,
+                                  )
+                                }}
+                              />
                             </Form.Item>
                           ),
                         },
@@ -477,7 +493,7 @@ function StandardPurchaseRequestFormClient({
                           ),
                         },
                         {
-                          title: '规则型号',
+                          title: '规格型号',
                           key: 'rule_model',
                           width: 150,
                           render: (_: unknown, row: EditableItemRow) => (

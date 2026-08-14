@@ -11,6 +11,13 @@ from app.core.response import paginated_response, success_response
 from app.modules.procurement.contract_generator import (
     get_contract_template_metadata,
 )
+from app.modules.procurement.material_source import (
+    MaterialSourceError,
+    get_material_source_config,
+    list_material_options,
+    save_material_source_config,
+    test_material_source_config,
+)
 from app.modules.procurement.schemas import (
     ContractCategory,
     ContractGenerateRequest,
@@ -24,6 +31,12 @@ from app.modules.procurement.schemas import (
     InvoiceRecognitionRecordListResponse,
     InvoiceRecognitionRecordResponse,
     InvoiceRecognitionResponse,
+    MaterialOptionListResponse,
+    MaterialSourceConfigApiResponse,
+    MaterialSourceConfigResponse,
+    MaterialSourceConfigUpsert,
+    MaterialSourceProbeApiResponse,
+    MaterialSourceProbeResponse,
     PurchaseApprovalRequest,
     PurchaseApprovalRole,
     PurchaseApprovalView,
@@ -60,6 +73,8 @@ from app.modules.procurement.service import (
     submit_purchase_request,
     update_purchase_request,
 )
+from app.platform.audit.service import record_audit_log
+from app.platform.identity.deps import AdminUser
 from app.shared.module_api import create_module_router
 from app.shared.module_registry import MODULES_BY_CODE
 
@@ -68,6 +83,127 @@ router = create_module_router(MODULES_BY_CODE["procurement"])
 settings = get_settings()
 MAX_INVOICE_PDF_UPLOAD_BYTES = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
 INVOICE_UPLOAD_CHUNK_SIZE = 1024 * 1024
+
+
+def _material_source_error(exc: MaterialSourceError) -> HTTPException:
+    return HTTPException(status_code=exc.status_code, detail=exc.public_message)
+
+
+def _masked_identifier(value: str | None) -> str | None:
+    if not value:
+        return None
+    if len(value) <= 8:
+        return "****"
+    return f"{value[:4]}...{value[-4:]}"
+
+
+@router.get(
+    "/material-source-config",
+    summary="获取采购物料数据源配置",
+    description="仅系统管理员可查看采购物料联想使用的飞书多维表格配置。",
+    response_model=MaterialSourceConfigApiResponse,
+)
+async def get_material_source_config_record(
+    _admin: AdminUser,
+    db: AsyncSession = Depends(get_db),
+):
+    config = await get_material_source_config(db)
+    data = (
+        MaterialSourceConfigResponse.model_validate(config).model_dump(mode="json")
+        if config is not None
+        else None
+    )
+    return success_response(data=data)
+
+
+@router.post(
+    "/material-source-config/test",
+    summary="测试采购物料数据源",
+    description="测试飞书多维表格链接、访问权限和物料字段映射。",
+    response_model=MaterialSourceProbeApiResponse,
+)
+async def test_material_source_config_record(
+    _admin: AdminUser,
+    payload: MaterialSourceConfigUpsert | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        probe = await test_material_source_config(db, payload)
+    except MaterialSourceError as exc:
+        raise _material_source_error(exc) from exc
+    return success_response(
+        data=MaterialSourceProbeResponse.model_validate(
+            probe.as_dict()
+        ).model_dump(mode="json")
+    )
+
+
+@router.put(
+    "/material-source-config",
+    summary="保存采购物料数据源配置",
+    description="仅系统管理员可保存配置；保存前会测试飞书访问和必需字段。",
+    response_model=MaterialSourceConfigApiResponse,
+)
+async def save_material_source_config_record(
+    payload: MaterialSourceConfigUpsert,
+    admin: AdminUser,
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        config = await save_material_source_config(
+            db,
+            payload,
+            user_id=admin.id,
+        )
+    except MaterialSourceError as exc:
+        raise _material_source_error(exc) from exc
+
+    await record_audit_log(
+        db,
+        action="procurement_material_source_config_updated",
+        user_id=admin.id,
+        resource_type="procurement_material_source_config",
+        resource_id=config.id,
+        new_value={
+            "table_id": _masked_identifier(config.table_id),
+            "view_id": _masked_identifier(config.view_id),
+            "field_mapping": {
+                "material_code": config.material_code_field,
+                "material_description": config.material_description_field,
+                "rule_model": config.rule_model_field,
+            },
+            "last_test_status": config.last_test_status,
+        },
+    )
+    return success_response(
+        data=MaterialSourceConfigResponse.model_validate(config).model_dump(
+            mode="json"
+        ),
+        message="采购物料数据源配置已保存",
+    )
+
+
+@router.get(
+    "/material-options",
+    summary="联想采购物料编码",
+    description="按物料编码关键词实时查询飞书多维表格，最多返回 20 条且保留重复记录。",
+    response_model=MaterialOptionListResponse,
+)
+async def list_material_option_records(
+    keyword: str = Query(
+        ...,
+        min_length=1,
+        max_length=64,
+        description="物料编码关键词",
+    ),
+    limit: int = Query(default=20, ge=1, le=20, description="返回数量上限"),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        options = await list_material_options(db, keyword=keyword, limit=limit)
+    except MaterialSourceError as exc:
+        raise _material_source_error(exc) from exc
+    return success_response(data=options)
 
 
 @router.post(

@@ -7,6 +7,9 @@ import type {
   ContractGenerateRequest,
   InvoiceRecognitionRecordDeleteResponse,
   InvoiceRecognitionResponse,
+  MaterialSourceConfigApiResponse,
+  MaterialSourceConfigUpsert,
+  MaterialSourceProbeApiResponse,
   PurchaseApprovalRequest,
   PurchaseRequestApiResponse,
   PurchaseRequestCreate,
@@ -245,6 +248,35 @@ export async function generateProcurementContract(
     base64: Buffer.from(arrayBuffer).toString('base64'),
     recordId: response.headers.get('x-contract-record-id') || undefined,
   }
+}
+
+export async function testProcurementMaterialSource(
+  payload: MaterialSourceConfigUpsert,
+): Promise<MaterialSourceProbeApiResponse> {
+  return procurementJsonFetch<MaterialSourceProbeApiResponse>(
+    '/api/v1/procurement/material-source-config/test',
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    },
+    '物料数据源测试失败',
+  )
+}
+
+export async function saveProcurementMaterialSource(
+  payload: MaterialSourceConfigUpsert,
+): Promise<MaterialSourceConfigApiResponse> {
+  const response = await procurementJsonFetch<MaterialSourceConfigApiResponse>(
+    '/api/v1/procurement/material-source-config',
+    {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    },
+    '物料数据源保存失败',
+  )
+  revalidatePath('/purchasing')
+  revalidatePath('/purchasing/settings')
+  return response
 }
 
 function parseDownloadFilename(contentDisposition: string | null) {

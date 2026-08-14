@@ -9,11 +9,54 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.procurement.models import (
     ContractRecord,
     InvoiceRecognitionRecord,
+    MaterialSourceConfig,
     PurchaseRequest,
     PurchaseRequestApproval,
     PurchaseRequestItem,
     Supplier,
 )
+
+
+class MaterialSourceConfigRepository:
+    """Persistence operations for the single procurement material source."""
+
+    CONFIG_KEY = "material-master"
+
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def get(self) -> MaterialSourceConfig | None:
+        result = await self.session.execute(
+            select(MaterialSourceConfig).where(
+                MaterialSourceConfig.config_key == self.CONFIG_KEY,
+                MaterialSourceConfig.is_deleted.is_(False),
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def save(
+        self,
+        config: MaterialSourceConfig,
+    ) -> MaterialSourceConfig:
+        existing = await self.get()
+        if existing is None:
+            self.session.add(config)
+        else:
+            existing.source_url = config.source_url
+            existing.app_token = config.app_token
+            existing.table_id = config.table_id
+            existing.view_id = config.view_id
+            existing.material_code_field = config.material_code_field
+            existing.material_code_field_type = config.material_code_field_type
+            existing.material_description_field = config.material_description_field
+            existing.rule_model_field = config.rule_model_field
+            existing.last_test_status = config.last_test_status
+            existing.last_test_error = config.last_test_error
+            existing.last_tested_at = config.last_tested_at
+            existing.updated_by = config.updated_by
+            config = existing
+        await self.session.flush()
+        return config
 
 
 class InvoiceRecognitionRepository:

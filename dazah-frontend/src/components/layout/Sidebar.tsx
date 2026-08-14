@@ -156,6 +156,16 @@ interface SidebarProps {
   modules: ModuleMenu[]
 }
 
+export function filterMenuItemsByRole(items: SubMenuItem[], isAdmin: boolean): SubMenuItem[] {
+  return items.flatMap((item) => {
+    if (item.adminOnly && !isAdmin) return []
+    if (!item.children || item.children.length === 0) return [item]
+
+    const children = filterMenuItemsByRole(item.children, isAdmin)
+    return children.length > 0 ? [{ ...item, children }] : []
+  })
+}
+
 export function Sidebar({ user, modules }: SidebarProps) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -169,8 +179,8 @@ export function Sidebar({ user, modules }: SidebarProps) {
   )
 
   const moduleChildren = useMemo(
-    () => currentModule?.children || [],
-    [currentModule],
+    () => filterMenuItemsByRole(currentModule?.children || [], user.role === "admin"),
+    [currentModule, user.role],
   )
 
   const { mainItems, bottomItems } = useMemo(

@@ -4,6 +4,8 @@ import type {
   InvoiceRecognitionRecordListResponse,
   ContractRecordApiResponse,
   ContractRecordListResponse,
+  MaterialOptionListResponse,
+  MaterialSourceConfigApiResponse,
   PurchaseOrderListResponse,
   PurchaseRequestApiResponse,
   PurchaseRequestListResponse,
@@ -20,6 +22,8 @@ type SupplierQuery =
   operations['list_supplier_records_api_v1_procurement_suppliers_get']['parameters']['query']
 type ContractRecordQuery =
   operations['list_contract_generation_records_api_v1_procurement_contracts_get']['parameters']['query']
+type MaterialOptionQuery =
+  operations['list_material_option_records_api_v1_procurement_material_options_get']['parameters']['query']
 
 function getServerApiBaseUrls() {
   return getBackendFallbackUrls()
@@ -98,6 +102,23 @@ export async function fetchPurchaseRequests(
 ): Promise<PurchaseRequestListResponse> {
   const path = `/api/v1/procurement/purchase-requests${buildQueryString(query)}`
   return fetchApiWithServerFallback<PurchaseRequestListResponse>(path, requestHeaders)
+}
+
+export async function fetchMaterialOptions(
+  query: MaterialOptionQuery,
+  requestHeaders?: HeadersInit,
+): Promise<MaterialOptionListResponse> {
+  const path = `/api/v1/procurement/material-options${buildQueryString(query)}`
+  return fetchApiWithServerFallback<MaterialOptionListResponse>(path, requestHeaders)
+}
+
+export async function fetchMaterialSourceConfig(
+  requestHeaders?: HeadersInit,
+): Promise<MaterialSourceConfigApiResponse> {
+  return fetchApiWithServerFallback<MaterialSourceConfigApiResponse>(
+    '/api/v1/procurement/material-source-config',
+    requestHeaders,
+  )
 }
 
 export async function fetchPurchaseOrders(
