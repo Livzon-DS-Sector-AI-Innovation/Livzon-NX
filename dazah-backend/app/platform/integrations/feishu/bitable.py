@@ -1,14 +1,21 @@
 """Feishu Bitable (多维表格) CRUD operations."""
 
 import logging
-from datetime import date, datetime, timezone
-from uuid import UUID
+from datetime import UTC, date, datetime
+from typing import Any, TypedDict
 
 from app.core.config import get_settings
 from app.platform.integrations.feishu.client import FeishuClient
 
 _settings = get_settings()
 logger = logging.getLogger(__name__)
+
+
+class BitableRecordPage(TypedDict):
+    items: list[dict[str, Any]]
+    has_more: bool
+    page_token: str | None
+    total: int | None
 
 
 def _to_ms_timestamp(value: date | datetime | str | None) -> int | str:
@@ -22,9 +29,9 @@ def _to_ms_timestamp(value: date | datetime | str | None) -> int | str:
             return value
     if isinstance(value, (date, datetime)):
         if isinstance(value, date) and not isinstance(value, datetime):
-            dt = datetime(value.year, value.month, value.day, tzinfo=timezone.utc)
+            dt = datetime(value.year, value.month, value.day, tzinfo=UTC)
         else:
-            dt = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+            dt = value if value.tzinfo else value.replace(tzinfo=UTC)
         return int(dt.timestamp() * 1000)
     return value
 
@@ -129,23 +136,90 @@ class BitableClient:
         table_id: str,
         *,
         filter_str: str | None = None,
+        filter_info: dict[str, object] | None = None,
+        view_id: str | None = None,
+        field_names: list[str] | None = None,
         page_size: int = 500,
+        page_token: str | None = None,
         automatic_fields: bool = False,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """Search records with optional filter."""
+        page = await self.search_records_page(
+            table_id,
+            filter_str=filter_str,
+            filter_info=filter_info,
+            view_id=view_id,
+            field_names=field_names,
+            page_size=page_size,
+            page_token=page_token,
+            automatic_fields=automatic_fields,
+        )
+        return page["items"]
+
+    async def search_records_page(
+        self,
+        table_id: str,
+        *,
+        filter_str: str | None = None,
+        filter_info: dict[str, object] | None = None,
+        view_id: str | None = None,
+        field_names: list[str] | None = None,
+        page_size: int = 500,
+        page_token: str | None = None,
+        automatic_fields: bool = False,
+    ) -> BitableRecordPage:
+        """Search one record page and preserve Feishu pagination metadata."""
         if not self.app_token or not table_id:
             raise RuntimeError("Bitable app_token or table_id not configured")
-        payload: dict = {"page_size": page_size}
-        if automatic_fields:
-            payload["automatic_fields"] = True
-        if filter_str:
-            payload["filter"] = filter_str
-        data = await self.client.request(
-            "POST",
-            self._path(table_id, "/records/search"),
-            json=payload,
-        )
-        return data.get("items", [])
+        if filter_str is not None and filter_info is not None:
+            raise ValueError("filter_str and filter_info are mutually exclusive")
+        if filter_str is not None:
+            # Formula filters are supported by the legacy list-records API.
+            # The modern POST /records/search API requires filter_info below.
+            params: dict[str, object] = {
+                "page_size": page_size,
+                "filter": filter_str,
+            }
+            if view_id:
+                params["view_id"] = view_id
+            if page_token:
+                params["page_token"] = page_token
+            data = await self.client.request(
+                "GET",
+                self._path(table_id, "/records"),
+                params=params,
+            )
+        else:
+            payload: dict[str, object] = {}
+            if automatic_fields:
+                payload["automatic_fields"] = True
+            if filter_info is not None:
+                payload["filter"] = filter_info
+            if view_id:
+                payload["view_id"] = view_id
+            if field_names:
+                payload["field_names"] = field_names
+            params = {"page_size": page_size}
+            if page_token:
+                params["page_token"] = page_token
+            data = await self.client.request(
+                "POST",
+                self._path(table_id, "/records/search"),
+                json=payload,
+                params=params,
+            )
+        raw_items = data.get("items") or []
+        items = raw_items if isinstance(raw_items, list) else []
+        raw_page_token = data.get("page_token")
+        raw_total = data.get("total")
+        return {
+            "items": [item for item in items if isinstance(item, dict)],
+            "has_more": bool(data.get("has_more")),
+            "page_token": (
+                str(raw_page_token) if raw_page_token is not None else None
+            ),
+            "total": int(raw_total) if isinstance(raw_total, (int, float)) else None,
+        }
 
 
 class FeishuBitableSync:
@@ -173,7 +247,11 @@ class FeishuBitableSync:
         }
         try:
             record = await self.bitable.create_record(self.department_table, fields)
-            logger.info("Department synced to Feishu: %s, record_id=%s", dept.get("name"), record.get("record_id"))
+            logger.info(
+                "Department synced to Feishu: %s, record_id=%s",
+                dept.get("name"),
+                record.get("record_id"),
+            )
         except Exception as e:
             logger.error("Failed to sync department to Feishu: %s", e)
             raise
@@ -256,7 +334,11 @@ class FeishuBitableSync:
         fields = self._build_employee_fields(emp)
         try:
             record = await self.bitable.create_record(self.employee_table, fields)
-            logger.info("Employee synced to Feishu: %s, record_id=%s", emp.get("name"), record.get("record_id"))
+            logger.info(
+                "Employee synced to Feishu: %s, record_id=%s",
+                emp.get("name"),
+                record.get("record_id"),
+            )
         except Exception as e:
             logger.error("Failed to sync employee to Feishu: %s", e)
             raise
@@ -315,7 +397,11 @@ class FeishuBitableSync:
         }
         try:
             rec = await self.bitable.create_record(self.offboarding_table, fields)
-            logger.info("Offboarding synced to Feishu: %s, record_id=%s", employee.get("name"), rec.get("record_id"))
+            logger.info(
+                "Offboarding synced to Feishu: %s, record_id=%s",
+                employee.get("name"),
+                rec.get("record_id"),
+            )
         except Exception as e:
             logger.error("Failed to sync offboarding to Feishu: %s", e)
             raise
@@ -354,7 +440,11 @@ class FeishuBitableSync:
         }
         try:
             record = await self.bitable.create_record(self.approval_table, fields)
-            logger.info("Approval record synced to Feishu: %s, record_id=%s", emp.get("name"), record.get("record_id"))
+            logger.info(
+                "Approval record synced to Feishu: %s, record_id=%s",
+                emp.get("name"),
+                record.get("record_id"),
+            )
         except Exception as e:
             logger.error("Failed to sync approval record to Feishu: %s", e)
             raise
@@ -364,7 +454,7 @@ class FeishuBitableSync:
             return None
         items = await self.bitable.search_records(
             self.approval_table,
-            filter_str=f'CurrentValue.[文本] contains "{employee_number}"',
+            filter_str=f'CurrentValue.[文本].contains("{employee_number}")',
         )
         if not items:
             return None

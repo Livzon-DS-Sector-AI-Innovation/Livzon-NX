@@ -6,7 +6,17 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import Boolean, Date, DateTime, Index, Integer, Numeric, String, Text
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -405,7 +415,7 @@ class PurchaseRequestItem(BaseModel):
         nullable=False,
         default="",
         server_default="",
-        comment="规则型号",
+        comment="规格型号",
     )
     purpose: Mapped[str] = mapped_column(
         String(255),
@@ -456,6 +466,89 @@ class PurchaseRequestItem(BaseModel):
         default="",
         server_default="",
         comment="备注",
+    )
+
+
+class MaterialSourceConfig(BaseModel):
+    """采购物料编码联想使用的飞书多维表格配置。"""
+
+    __tablename__ = "material_source_configs"
+    __table_args__ = (
+        UniqueConstraint(
+            "config_key",
+            name="uq_procurement_material_source_config_key",
+        ),
+        Index(
+            "ix_procurement_material_source_config_active",
+            "config_key",
+            "is_deleted",
+        ),
+        {"schema": "procurement"},
+    )
+
+    config_key: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        default="material-master",
+        server_default="material-master",
+        comment="配置业务键",
+    )
+    source_url: Mapped[str] = mapped_column(
+        String(1024),
+        nullable=False,
+        comment="飞书多维表格原始链接",
+    )
+    app_token: Mapped[str] = mapped_column(
+        String(128),
+        nullable=False,
+        comment="解析后的多维表格 app_token",
+    )
+    table_id: Mapped[str] = mapped_column(
+        String(128),
+        nullable=False,
+        comment="解析后的多维表格 table_id",
+    )
+    view_id: Mapped[str | None] = mapped_column(
+        String(128),
+        nullable=True,
+        comment="解析后的多维表格 view_id",
+    )
+    material_code_field: Mapped[str] = mapped_column(
+        String(128),
+        nullable=False,
+        comment="物料编码实际字段名",
+    )
+    material_code_field_type: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        comment="飞书物料编码字段类型",
+    )
+    material_description_field: Mapped[str] = mapped_column(
+        String(128),
+        nullable=False,
+        comment="物料说明实际字段名",
+    )
+    rule_model_field: Mapped[str] = mapped_column(
+        String(128),
+        nullable=False,
+        comment="规格型号实际字段名",
+    )
+    last_test_status: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="not_tested",
+        server_default="not_tested",
+        comment="最近测试状态",
+    )
+    last_test_error: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        comment="最近测试错误（不含第三方原始响应）",
+    )
+    last_tested_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="最近测试时间",
     )
 
 

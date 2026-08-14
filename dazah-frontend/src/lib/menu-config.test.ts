@@ -70,4 +70,16 @@ describe('procurement menu structure', () => {
       '/purchasing/approval/labor-special/safety-officer'
     )
   })
+
+  it('exposes procurement settings only as an admin menu item', () => {
+    const settings = moduleMenus
+      .find((menu) => menu.key === 'purchasing')
+      ?.children.find((item) => item.key === 'settings')
+
+    expect(settings).toMatchObject({
+      label: '采购设置',
+      path: '/purchasing/settings',
+      adminOnly: true,
+    })
+  })
 })

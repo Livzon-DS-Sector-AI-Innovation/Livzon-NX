@@ -13,6 +13,7 @@ export interface SubMenuItem {
   children?: SubMenuItem[]   // 嵌套子菜单 → Ant Design SubMenu
   disabled?: boolean         // 灰显占位，功能未开发
   placement?: "bottom"       // 置底显示，例如模块设置入口
+  adminOnly?: boolean         // 仅系统管理员可见
   feishuPageKey?: string      // 可绑定飞书只读数据表的稳定页面标识
 }
 
@@ -540,6 +541,7 @@ export const moduleMenus: ModuleMenu[] = [
           { key: "contract-generation-raw-materials", label: "原材料", path: "/purchasing/contract-generation/raw-materials" },
         ],
       },
+      { key: "settings", label: "采购设置", path: "/purchasing/settings", placement: "bottom", adminOnly: true },
     ],
   },
 ]

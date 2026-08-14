@@ -24248,6 +24248,405 @@
         "title": "MaterialConsumeRequest",
         "type": "object"
       },
+      "MaterialOptionListResponse": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "description": "响应状态码",
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/MaterialOptionResponse"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "default": "success",
+            "description": "响应消息",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "MaterialOptionListResponse",
+        "type": "object"
+      },
+      "MaterialOptionResponse": {
+        "properties": {
+          "material_code": {
+            "description": "物料编码",
+            "title": "Material Code",
+            "type": "string"
+          },
+          "material_description": {
+            "description": "物料说明",
+            "title": "Material Description",
+            "type": "string"
+          },
+          "record_id": {
+            "description": "飞书记录 ID",
+            "title": "Record Id",
+            "type": "string"
+          },
+          "rule_model": {
+            "description": "规格型号",
+            "title": "Rule Model",
+            "type": "string"
+          }
+        },
+        "required": [
+          "record_id",
+          "material_code",
+          "material_description",
+          "rule_model"
+        ],
+        "title": "MaterialOptionResponse",
+        "type": "object"
+      },
+      "MaterialSourceConfigApiResponse": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "description": "响应状态码",
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MaterialSourceConfigResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "default": "success",
+            "description": "响应消息",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "title": "MaterialSourceConfigApiResponse",
+        "type": "object"
+      },
+      "MaterialSourceConfigResponse": {
+        "properties": {
+          "app_token": {
+            "description": "多维表格 app_token",
+            "title": "App Token",
+            "type": "string"
+          },
+          "id": {
+            "description": "物料数据源配置 ID",
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "last_test_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "最近测试错误",
+            "title": "Last Test Error"
+          },
+          "last_test_status": {
+            "description": "最近测试状态",
+            "title": "Last Test Status",
+            "type": "string"
+          },
+          "last_tested_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "最近测试时间",
+            "title": "Last Tested At"
+          },
+          "material_code_field": {
+            "description": "物料编码字段",
+            "title": "Material Code Field",
+            "type": "string"
+          },
+          "material_description_field": {
+            "description": "物料说明字段",
+            "title": "Material Description Field",
+            "type": "string"
+          },
+          "rule_model_field": {
+            "description": "规格型号字段",
+            "title": "Rule Model Field",
+            "type": "string"
+          },
+          "source_url": {
+            "description": "飞书多维表格链接",
+            "title": "Source Url",
+            "type": "string"
+          },
+          "table_id": {
+            "description": "多维表格 table_id",
+            "title": "Table Id",
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "配置更新时间",
+            "title": "Updated At"
+          },
+          "view_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "多维表格 view_id",
+            "title": "View Id"
+          }
+        },
+        "required": [
+          "id",
+          "source_url",
+          "app_token",
+          "table_id",
+          "material_code_field",
+          "material_description_field",
+          "rule_model_field",
+          "last_test_status"
+        ],
+        "title": "MaterialSourceConfigResponse",
+        "type": "object"
+      },
+      "MaterialSourceConfigUpsert": {
+        "properties": {
+          "material_code_field": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "物料编码实际字段名，不填则自动识别",
+            "title": "Material Code Field"
+          },
+          "material_description_field": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "物料说明实际字段名，不填则自动识别",
+            "title": "Material Description Field"
+          },
+          "rule_model_field": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "规格型号实际字段名，不填则自动识别",
+            "title": "Rule Model Field"
+          },
+          "source_url": {
+            "description": "飞书多维表格链接",
+            "maxLength": 1024,
+            "minLength": 1,
+            "title": "Source Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_url"
+        ],
+        "title": "MaterialSourceConfigUpsert",
+        "type": "object"
+      },
+      "MaterialSourceProbeApiResponse": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "description": "响应状态码",
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/MaterialSourceProbeResponse"
+          },
+          "message": {
+            "default": "success",
+            "description": "响应消息",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "MaterialSourceProbeApiResponse",
+        "type": "object"
+      },
+      "MaterialSourceProbeResponse": {
+        "properties": {
+          "app_token": {
+            "description": "解析后的多维表格 app_token",
+            "title": "App Token",
+            "type": "string"
+          },
+          "available_fields": {
+            "description": "多维表格字段名",
+            "items": {
+              "type": "string"
+            },
+            "title": "Available Fields",
+            "type": "array"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "测试错误",
+            "title": "Error Message"
+          },
+          "material_code_field": {
+            "description": "识别到的物料编码字段",
+            "title": "Material Code Field",
+            "type": "string"
+          },
+          "material_description_field": {
+            "description": "识别到的物料说明字段",
+            "title": "Material Description Field",
+            "type": "string"
+          },
+          "rule_model_field": {
+            "description": "识别到的规格型号字段",
+            "title": "Rule Model Field",
+            "type": "string"
+          },
+          "source_url": {
+            "description": "飞书多维表格链接",
+            "title": "Source Url",
+            "type": "string"
+          },
+          "status": {
+            "description": "测试状态",
+            "title": "Status",
+            "type": "string"
+          },
+          "table_id": {
+            "description": "解析后的多维表格 table_id",
+            "title": "Table Id",
+            "type": "string"
+          },
+          "tested_at": {
+            "description": "测试时间",
+            "format": "date-time",
+            "title": "Tested At",
+            "type": "string"
+          },
+          "view_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "解析后的多维表格 view_id",
+            "title": "View Id"
+          }
+        },
+        "required": [
+          "source_url",
+          "app_token",
+          "table_id",
+          "material_code_field",
+          "material_description_field",
+          "rule_model_field",
+          "status",
+          "tested_at"
+        ],
+        "title": "MaterialSourceProbeResponse",
+        "type": "object"
+      },
       "ModulePermissionDefinitionOut": {
         "properties": {
           "description": {
@@ -32339,7 +32738,7 @@
           },
           "rule_model": {
             "default": "",
-            "description": "规则型号",
+            "description": "规格型号",
             "title": "Rule Model",
             "type": "string"
           },
@@ -32598,7 +32997,7 @@
           },
           "rule_model": {
             "default": "",
-            "description": "规则型号",
+            "description": "规格型号",
             "maxLength": 255,
             "title": "Rule Model",
             "type": "string"
@@ -32714,7 +33113,7 @@
           },
           "rule_model": {
             "default": "",
-            "description": "规则型号",
+            "description": "规格型号",
             "maxLength": 255,
             "title": "Rule Model",
             "type": "string"
@@ -73068,6 +73467,258 @@
           }
         },
         "summary": "识别采购发票 PDF",
+        "tags": [
+          "采购管理"
+        ]
+      }
+    },
+    "/api/v1/procurement/material-options": {
+      "get": {
+        "description": "按物料编码关键词实时查询飞书多维表格，最多返回 20 条且保留重复记录。",
+        "operationId": "list_material_option_records_api_v1_procurement_material_options_get",
+        "parameters": [
+          {
+            "description": "物料编码关键词",
+            "in": "query",
+            "name": "keyword",
+            "required": true,
+            "schema": {
+              "description": "物料编码关键词",
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Keyword",
+              "type": "string"
+            }
+          },
+          {
+            "description": "返回数量上限",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "description": "返回数量上限",
+              "maximum": 20,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaterialOptionListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "联想采购物料编码",
+        "tags": [
+          "采购管理"
+        ]
+      }
+    },
+    "/api/v1/procurement/material-source-config": {
+      "get": {
+        "description": "仅系统管理员可查看采购物料联想使用的飞书多维表格配置。",
+        "operationId": "get_material_source_config_record_api_v1_procurement_material_source_config_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaterialSourceConfigApiResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "获取采购物料数据源配置",
+        "tags": [
+          "采购管理"
+        ]
+      },
+      "put": {
+        "description": "仅系统管理员可保存配置；保存前会测试飞书访问和必需字段。",
+        "operationId": "save_material_source_config_record_api_v1_procurement_material_source_config_put",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MaterialSourceConfigUpsert"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaterialSourceConfigApiResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "保存采购物料数据源配置",
+        "tags": [
+          "采购管理"
+        ]
+      }
+    },
+    "/api/v1/procurement/material-source-config/test": {
+      "post": {
+        "description": "测试飞书多维表格链接、访问权限和物料字段映射。",
+        "operationId": "test_material_source_config_record_api_v1_procurement_material_source_config_test_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/MaterialSourceConfigUpsert"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaterialSourceProbeApiResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "测试采购物料数据源",
         "tags": [
           "采购管理"
         ]

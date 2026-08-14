@@ -197,7 +197,7 @@ class PurchaseRequestItemInput(BaseModel):
         max_length=255,
         description="物料说明",
     )
-    rule_model: str = Field("", max_length=255, description="规则型号")
+    rule_model: str = Field("", max_length=255, description="规格型号")
     purpose: str = Field("", max_length=255, description="用途")
     material: str = Field("", max_length=255, description="材质")
     brand: str = Field("", max_length=255, description="品牌")
@@ -320,7 +320,7 @@ class PurchaseOrderLineResponse(BaseModel):
     specification: str = Field("", description="规格")
     material_code: str = Field("", description="物料编码")
     material_description: str = Field("", description="物料说明")
-    rule_model: str = Field("", description="规则型号")
+    rule_model: str = Field("", description="规格型号")
     purpose: str = Field("", description="用途")
     material: str = Field("", description="材质")
     brand: str = Field("", description="品牌")
@@ -471,6 +471,92 @@ class ContractRecordListResponse(BaseModel):
     code: int = Field(200, description="响应状态码")
     message: str = Field("success", description="响应消息")
     data: list[ContractRecordResponse]
+    meta: dict[str, Any] | None = None
+
+
+class MaterialSourceConfigUpsert(BaseModel):
+    source_url: str = Field(
+        ...,
+        min_length=1,
+        max_length=1024,
+        description="飞书多维表格链接",
+    )
+    material_code_field: str | None = Field(
+        None,
+        max_length=128,
+        description="物料编码实际字段名，不填则自动识别",
+    )
+    material_description_field: str | None = Field(
+        None,
+        max_length=128,
+        description="物料说明实际字段名，不填则自动识别",
+    )
+    rule_model_field: str | None = Field(
+        None,
+        max_length=128,
+        description="规格型号实际字段名，不填则自动识别",
+    )
+
+
+class MaterialSourceConfigResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID = Field(..., description="物料数据源配置 ID")
+    source_url: str = Field(..., description="飞书多维表格链接")
+    app_token: str = Field(..., description="多维表格 app_token")
+    table_id: str = Field(..., description="多维表格 table_id")
+    view_id: str | None = Field(None, description="多维表格 view_id")
+    material_code_field: str = Field(..., description="物料编码字段")
+    material_description_field: str = Field(..., description="物料说明字段")
+    rule_model_field: str = Field(..., description="规格型号字段")
+    last_test_status: str = Field(..., description="最近测试状态")
+    last_test_error: str | None = Field(None, description="最近测试错误")
+    last_tested_at: datetime | None = Field(None, description="最近测试时间")
+    updated_at: datetime | None = Field(None, description="配置更新时间")
+
+
+class MaterialSourceConfigApiResponse(BaseModel):
+    code: int = Field(200, description="响应状态码")
+    message: str = Field("success", description="响应消息")
+    data: MaterialSourceConfigResponse | None = None
+    meta: dict[str, Any] | None = None
+
+
+class MaterialSourceProbeResponse(BaseModel):
+    source_url: str = Field(..., description="飞书多维表格链接")
+    app_token: str = Field(..., description="解析后的多维表格 app_token")
+    table_id: str = Field(..., description="解析后的多维表格 table_id")
+    view_id: str | None = Field(None, description="解析后的多维表格 view_id")
+    material_code_field: str = Field(..., description="识别到的物料编码字段")
+    material_description_field: str = Field(..., description="识别到的物料说明字段")
+    rule_model_field: str = Field(..., description="识别到的规格型号字段")
+    available_fields: list[str] = Field(
+        default_factory=list,
+        description="多维表格字段名",
+    )
+    status: str = Field(..., description="测试状态")
+    error_message: str | None = Field(None, description="测试错误")
+    tested_at: datetime = Field(..., description="测试时间")
+
+
+class MaterialSourceProbeApiResponse(BaseModel):
+    code: int = Field(200, description="响应状态码")
+    message: str = Field("success", description="响应消息")
+    data: MaterialSourceProbeResponse
+    meta: dict[str, Any] | None = None
+
+
+class MaterialOptionResponse(BaseModel):
+    record_id: str = Field(..., description="飞书记录 ID")
+    material_code: str = Field(..., description="物料编码")
+    material_description: str = Field(..., description="物料说明")
+    rule_model: str = Field(..., description="规格型号")
+
+
+class MaterialOptionListResponse(BaseModel):
+    code: int = Field(200, description="响应状态码")
+    message: str = Field("success", description="响应消息")
+    data: list[MaterialOptionResponse]
     meta: dict[str, Any] | None = None
 
 

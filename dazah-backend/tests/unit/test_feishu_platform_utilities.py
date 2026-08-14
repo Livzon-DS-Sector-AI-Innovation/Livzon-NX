@@ -163,9 +163,31 @@ async def test_bitable_client_crud_and_pagination() -> None:
     assert await client.list_fields("table") == [{"field_id": "1"}]
     assert await client.search_records(
         "table",
-        filter_str="filter",
+        filter_info={
+            "conjunction": "and",
+            "conditions": [
+                {
+                    "field_name": "物料编码",
+                    "operator": "contains",
+                    "value": ["MAT"],
+                }
+            ],
+        },
         automatic_fields=True,
+        view_id="view",
     ) == [{"record_id": "1"}]
+    assert client.client.request.call_args.kwargs["json"]["filter"] == {
+        "conjunction": "and",
+        "conditions": [
+            {
+                "field_name": "物料编码",
+                "operator": "contains",
+                "value": ["MAT"],
+            }
+        ],
+    }
+    assert client.client.request.call_args.kwargs["json"]["view_id"] == "view"
+    assert client.client.request.call_args.kwargs["params"] == {"page_size": 500}
     assert client._path("table", "/records").endswith("/table/records")
 
 
@@ -185,6 +207,65 @@ async def test_bitable_client_requires_configuration() -> None:
         await client.list_fields("")
     with pytest.raises(RuntimeError, match="table_id"):
         await client.search_records("")
+
+
+@pytest.mark.asyncio
+async def test_bitable_client_uses_legacy_endpoint_for_formula_filters() -> None:
+    client = BitableClient(app_token="app-token")
+    client.client = AsyncMock()
+    client.client.request.return_value = {"items": [{"record_id": "record"}]}
+
+    assert await client.search_records(
+        "table",
+        filter_str='CurrentValue.[物料编码].contains("MAT")',
+        view_id="view",
+        page_size=20,
+    ) == [{"record_id": "record"}]
+    client.client.request.assert_awaited_once_with(
+        "GET",
+        "/bitable/v1/apps/app-token/tables/table/records",
+        params={
+            "page_size": 20,
+            "filter": 'CurrentValue.[物料编码].contains("MAT")',
+            "view_id": "view",
+        },
+    )
+
+
+@pytest.mark.asyncio
+async def test_bitable_search_page_preserves_pagination_metadata() -> None:
+    client = BitableClient(app_token="app-token")
+    client.client = AsyncMock()
+    client.client.request.return_value = {
+        "items": [{"record_id": "record"}, "invalid"],
+        "has_more": True,
+        "page_token": "next-page",
+        "total": 600,
+    }
+
+    page = await client.search_records_page(
+        "table",
+        view_id="view",
+        field_names=["物料编码", "物料说明"],
+        page_size=500,
+        page_token="current-page",
+    )
+
+    assert page == {
+        "items": [{"record_id": "record"}],
+        "has_more": True,
+        "page_token": "next-page",
+        "total": 600,
+    }
+    client.client.request.assert_awaited_once_with(
+        "POST",
+        "/bitable/v1/apps/app-token/tables/table/records/search",
+        json={
+            "view_id": "view",
+            "field_names": ["物料编码", "物料说明"],
+        },
+        params={"page_size": 500, "page_token": "current-page"},
+    )
 
 
 @pytest.mark.asyncio

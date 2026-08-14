@@ -4934,6 +4934,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/procurement/material-options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 联想采购物料编码
+         * @description 按物料编码关键词实时查询飞书多维表格，最多返回 20 条且保留重复记录。
+         */
+        get: operations["list_material_option_records_api_v1_procurement_material_options_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/procurement/material-source-config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 获取采购物料数据源配置
+         * @description 仅系统管理员可查看采购物料联想使用的飞书多维表格配置。
+         */
+        get: operations["get_material_source_config_record_api_v1_procurement_material_source_config_get"];
+        /**
+         * 保存采购物料数据源配置
+         * @description 仅系统管理员可保存配置；保存前会测试飞书访问和必需字段。
+         */
+        put: operations["save_material_source_config_record_api_v1_procurement_material_source_config_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/procurement/material-source-config/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 测试采购物料数据源
+         * @description 测试飞书多维表格链接、访问权限和物料字段映射。
+         */
+        post: operations["test_material_source_config_record_api_v1_procurement_material_source_config_test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/procurement/purchase-orders": {
         parameters: {
             query?: never;
@@ -24755,6 +24819,236 @@ export interface components {
              */
             items: components["schemas"]["MaterialConsumeItem"][];
         };
+        /** MaterialOptionListResponse */
+        MaterialOptionListResponse: {
+            /**
+             * Code
+             * @description 响应状态码
+             * @default 200
+             */
+            code: number;
+            /** Data */
+            data: components["schemas"]["MaterialOptionResponse"][];
+            /**
+             * Message
+             * @description 响应消息
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** MaterialOptionResponse */
+        MaterialOptionResponse: {
+            /**
+             * Material Code
+             * @description 物料编码
+             */
+            material_code: string;
+            /**
+             * Material Description
+             * @description 物料说明
+             */
+            material_description: string;
+            /**
+             * Record Id
+             * @description 飞书记录 ID
+             */
+            record_id: string;
+            /**
+             * Rule Model
+             * @description 规格型号
+             */
+            rule_model: string;
+        };
+        /** MaterialSourceConfigApiResponse */
+        MaterialSourceConfigApiResponse: {
+            /**
+             * Code
+             * @description 响应状态码
+             * @default 200
+             */
+            code: number;
+            data?: components["schemas"]["MaterialSourceConfigResponse"] | null;
+            /**
+             * Message
+             * @description 响应消息
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** MaterialSourceConfigResponse */
+        MaterialSourceConfigResponse: {
+            /**
+             * App Token
+             * @description 多维表格 app_token
+             */
+            app_token: string;
+            /**
+             * Id
+             * Format: uuid
+             * @description 物料数据源配置 ID
+             */
+            id: string;
+            /**
+             * Last Test Error
+             * @description 最近测试错误
+             */
+            last_test_error?: string | null;
+            /**
+             * Last Test Status
+             * @description 最近测试状态
+             */
+            last_test_status: string;
+            /**
+             * Last Tested At
+             * @description 最近测试时间
+             */
+            last_tested_at?: string | null;
+            /**
+             * Material Code Field
+             * @description 物料编码字段
+             */
+            material_code_field: string;
+            /**
+             * Material Description Field
+             * @description 物料说明字段
+             */
+            material_description_field: string;
+            /**
+             * Rule Model Field
+             * @description 规格型号字段
+             */
+            rule_model_field: string;
+            /**
+             * Source Url
+             * @description 飞书多维表格链接
+             */
+            source_url: string;
+            /**
+             * Table Id
+             * @description 多维表格 table_id
+             */
+            table_id: string;
+            /**
+             * Updated At
+             * @description 配置更新时间
+             */
+            updated_at?: string | null;
+            /**
+             * View Id
+             * @description 多维表格 view_id
+             */
+            view_id?: string | null;
+        };
+        /** MaterialSourceConfigUpsert */
+        MaterialSourceConfigUpsert: {
+            /**
+             * Material Code Field
+             * @description 物料编码实际字段名，不填则自动识别
+             */
+            material_code_field?: string | null;
+            /**
+             * Material Description Field
+             * @description 物料说明实际字段名，不填则自动识别
+             */
+            material_description_field?: string | null;
+            /**
+             * Rule Model Field
+             * @description 规格型号实际字段名，不填则自动识别
+             */
+            rule_model_field?: string | null;
+            /**
+             * Source Url
+             * @description 飞书多维表格链接
+             */
+            source_url: string;
+        };
+        /** MaterialSourceProbeApiResponse */
+        MaterialSourceProbeApiResponse: {
+            /**
+             * Code
+             * @description 响应状态码
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["MaterialSourceProbeResponse"];
+            /**
+             * Message
+             * @description 响应消息
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** MaterialSourceProbeResponse */
+        MaterialSourceProbeResponse: {
+            /**
+             * App Token
+             * @description 解析后的多维表格 app_token
+             */
+            app_token: string;
+            /**
+             * Available Fields
+             * @description 多维表格字段名
+             */
+            available_fields?: string[];
+            /**
+             * Error Message
+             * @description 测试错误
+             */
+            error_message?: string | null;
+            /**
+             * Material Code Field
+             * @description 识别到的物料编码字段
+             */
+            material_code_field: string;
+            /**
+             * Material Description Field
+             * @description 识别到的物料说明字段
+             */
+            material_description_field: string;
+            /**
+             * Rule Model Field
+             * @description 识别到的规格型号字段
+             */
+            rule_model_field: string;
+            /**
+             * Source Url
+             * @description 飞书多维表格链接
+             */
+            source_url: string;
+            /**
+             * Status
+             * @description 测试状态
+             */
+            status: string;
+            /**
+             * Table Id
+             * @description 解析后的多维表格 table_id
+             */
+            table_id: string;
+            /**
+             * Tested At
+             * Format: date-time
+             * @description 测试时间
+             */
+            tested_at: string;
+            /**
+             * View Id
+             * @description 解析后的多维表格 view_id
+             */
+            view_id?: string | null;
+        };
         /** ModulePermissionDefinitionOut */
         ModulePermissionDefinitionOut: {
             /** Description */
@@ -28232,7 +28526,7 @@ export interface components {
             request_id: string;
             /**
              * Rule Model
-             * @description 规则型号
+             * @description 规格型号
              * @default
              */
             rule_model: string;
@@ -28385,7 +28679,7 @@ export interface components {
             remarks: string;
             /**
              * Rule Model
-             * @description 规则型号
+             * @description 规格型号
              * @default
              */
             rule_model: string;
@@ -28466,7 +28760,7 @@ export interface components {
             remarks: string;
             /**
              * Rule Model
-             * @description 规则型号
+             * @description 规格型号
              * @default
              */
             rule_model: string;
@@ -47030,6 +47324,143 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InvoiceRecognitionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_material_option_records_api_v1_procurement_material_options_get: {
+        parameters: {
+            query: {
+                /** @description 物料编码关键词 */
+                keyword: string;
+                /** @description 返回数量上限 */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaterialOptionListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_material_source_config_record_api_v1_procurement_material_source_config_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaterialSourceConfigApiResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_material_source_config_record_api_v1_procurement_material_source_config_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MaterialSourceConfigUpsert"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaterialSourceConfigApiResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    test_material_source_config_record_api_v1_procurement_material_source_config_test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["MaterialSourceConfigUpsert"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaterialSourceProbeApiResponse"];
                 };
             };
             /** @description Validation Error */
