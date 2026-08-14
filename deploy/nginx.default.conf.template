@@ -1,0 +1,99 @@
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    '' close;
+}
+
+# nginx 1.27 open-source supports periodically resolving upstream members when
+# they are stored in a shared zone. This prevents Compose container recreation
+# from leaving workers pinned to an obsolete Docker IP.
+resolver 127.0.0.11 valid=5s ipv6=off;
+
+upstream app_upstream {
+    zone app_upstream 64k;
+    server app:8000 resolve;
+}
+
+upstream frontend_upstream {
+    zone frontend_upstream 64k;
+    server frontend:3000 resolve;
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name __PUBLIC_HOST__;
+
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+        default_type text/plain;
+        try_files $uri =404;
+    }
+
+    location / {
+        return 308 https://__PUBLIC_HOST__$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    server_name __PUBLIC_HOST__;
+
+    ssl_certificate /etc/letsencrypt/live/__PUBLIC_HOST__/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/__PUBLIC_HOST__/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
+    ssl_session_tickets off;
+
+    client_max_body_size 100m;
+
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-Host $host;
+
+    add_header X-Frame-Options DENY always;
+    add_header X-Content-Type-Options nosniff always;
+    add_header Referrer-Policy same-origin always;
+    add_header Permissions-Policy "geolocation=(), microphone=(), camera=(), payment=()" always;
+
+    location /api/ {
+        proxy_pass http://app_upstream;
+        proxy_http_version 1.1;
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+    }
+
+    location /uploads/ {
+        proxy_pass http://app_upstream;
+        proxy_http_version 1.1;
+    }
+
+    location /mcp/ {
+        proxy_pass http://app_upstream;
+        proxy_http_version 1.1;
+        proxy_read_timeout 3600s;
+    }
+
+    location = /health {
+        proxy_pass http://app_upstream;
+        proxy_http_version 1.1;
+    }
+
+    location / {
+        proxy_pass http://frontend_upstream;
+        proxy_http_version 1.1;
+        # Keep the public host visible to Next.js Server Actions.
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+    }
+}

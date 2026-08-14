@@ -11,6 +11,9 @@
 **/__pycache__
 **/*.py[cod]
 **/.pytest_cache
+/dazah-backend/.pytest-tmp-all
+/dazah-backend/.pytest-tmp-contract
+**/.pytest-tmp*/
 **/.ruff_cache
 **/.mypy_cache
 **/coverage
@@ -21,4 +24,6 @@
 **/*.log
 **/storage
 **/uploads
+/.deploy-tmp/
+/.deploy-cache/
 release

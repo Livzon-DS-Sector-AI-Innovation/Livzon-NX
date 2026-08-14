@@ -32,11 +32,14 @@ desktop.ini
 !/docs/runbooks/
 /docs/runbooks/*
 !/docs/runbooks/hermes-native-feishu-gateway-phase0-runbook.md
+!/docs/runbooks/production-offline-deployment.md
 !/scripts/
 /scripts/*
 !/scripts/ci.sh
 !/scripts/check-branch-policy.sh
 !/scripts/dev.ps1
+!/scripts/deploy-production.ps1
+!/scripts/deploy-production-remote.sh
 !/scripts/check-coverage-floor.py
 !/scripts/check-diff-coverage.py
 !/scripts/check-agent-v2-residuals.py
@@ -47,6 +50,7 @@ desktop.ini
 /scripts/tests/*
 !/scripts/tests/test_check_agent_instruction_bridges.py
 !/scripts/tests/test_check_test_impact.py
+!/scripts/tests/test_production_proxy_deployment.py
 !/scripts/wait-for-database.sh
 
 # Python
@@ -86,6 +90,11 @@ desktop.ini
 **/*.rej
 **/*.tmp
 **/*.temp
+
+# Deployment artifacts
+/release/
+/.deploy-tmp/
+/.deploy-cache/
 
 # Local environment and logs
 **/.env
