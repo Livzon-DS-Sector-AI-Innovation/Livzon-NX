@@ -5,6 +5,8 @@ import {
   approvalRoleRequiredApprovals,
   approvalRoleToStep,
   approvalStepToRole,
+  calculateGroupsTotal,
+  calculateItemsTotal,
   defaultPurchaseRequestItem,
   normalPurchaseCategories,
   purchaseApprovalWorkflows,
@@ -41,6 +43,17 @@ describe('purchase request category fields', () => {
     })
   })
 
+  it('calculates each group subtotal and the total across groups', () => {
+    expect(calculateItemsTotal([
+      { quantity: '23.0000', unit_price: '123.0000' },
+      { quantity: 2, unit_price: 5 },
+    ])).toBe(2839)
+    expect(calculateGroupsTotal([
+      { items: [{ quantity: 23, unit_price: 123 }] },
+      { items: [{ quantity: '2', unit_price: '5.00' }] },
+    ])).toBe(2839)
+  })
+
   it('defines the category-specific approval workflows and labels', () => {
     expect(purchaseApprovalWorkflows).toEqual({
       hardware: [
@@ -63,8 +76,12 @@ describe('purchase request category fields', () => {
         'responsible_leader',
       ],
       urgent: [
+        'hardware_warehouse',
         'department_head',
         'responsible_leader',
+        'supervising_leader',
+        'finance_director',
+        'general_manager',
       ],
       computer: ['department_head', 'responsible_leader', 'supervising_leader'],
       office: ['department_head', 'responsible_leader', 'supervising_leader'],

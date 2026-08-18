@@ -63,6 +63,21 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     await bootstrap_local_users()
 
+    from app.core.database import async_session_factory
+    from app.modules.procurement.material_source import reset_interrupted_syncs
+
+    try:
+        async with async_session_factory() as session:
+            await reset_interrupted_syncs(session)
+    except Exception:
+        logger.exception(
+            "Failed to reset interrupted procurement material sync status"
+        )
+
+    from app.modules.procurement.api import clear_stale_material_sync_lock
+
+    await clear_stale_material_sync_lock()
+
     from app.modules.warehouse.feishu_events import register_feishu_event_handlers
 
     register_feishu_event_handlers()

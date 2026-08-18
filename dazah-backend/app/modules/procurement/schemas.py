@@ -148,6 +148,46 @@ NORMAL_PURCHASE_CATEGORIES = frozenset(
 )
 
 
+class PurchaseRequestImportSummary(BaseModel):
+    request_id: UUID = Field(..., description="生成的采购申请草稿 ID")
+    sheet_name: str = Field("", description="来源工作表")
+    category: PurchaseRequestCategory = Field(..., description="采购分类")
+    category_label: str = Field("", description="采购分类名称")
+    category_source: str = Field(
+        "sheet_name",
+        description="采购类型来源：column=表内采购类型列，sheet_name=工作表名称，inferred=按明细字段自动推断",
+    )
+    request_department: str = Field("", description="申购部门")
+    request_date: date = Field(..., description="申请日期")
+    items_count: int = Field(..., description="导入明细条数")
+
+
+class PurchaseRequestImportError(BaseModel):
+    sheet_name: str = Field("", description="来源工作表")
+    row: int | None = Field(None, description="文件行号；None 表示整个工作表级错误")
+    message: str = Field(..., description="错误说明")
+
+
+class PurchaseRequestImportResult(BaseModel):
+    file_name: str = Field("", description="导入文件名")
+    total_sheets: int = Field(0, description="文件工作表数（CSV 为 1）")
+    imported_requests: list[PurchaseRequestImportSummary] = Field(
+        default_factory=list,
+        description="成功生成的采购申请草稿",
+    )
+    failed_rows: list[PurchaseRequestImportError] = Field(
+        default_factory=list,
+        description="失败的行或工作表",
+    )
+
+
+class PurchaseRequestImportResponse(BaseModel):
+    code: int = Field(200, description="响应状态码")
+    message: str = Field("success", description="响应消息")
+    data: PurchaseRequestImportResult
+    meta: dict[str, Any] | None = None
+
+
 class PurchaseRequestStatus(StrEnum):
     draft = "draft"
     pending_hardware_warehouse = "pending_hardware_warehouse"
@@ -232,6 +272,11 @@ class PurchaseRequestCreate(BaseModel):
     )
     request_date: date = Field(..., description="申请日期")
     attachment_note: str = Field("", description="附件说明")
+    import_duplicate_key: str | None = Field(
+        None,
+        max_length=64,
+        description="导入幂等键（内部使用，防止同一表格重复导入）",
+    )
     items: list[PurchaseRequestItemInput] = Field(
         ...,
         min_length=1,
@@ -301,6 +346,18 @@ class PurchaseRequestListResponse(BaseModel):
     code: int = Field(200, description="响应状态码")
     message: str = Field("success", description="响应消息")
     data: list[PurchaseRequestResponse]
+    meta: dict[str, Any] | None = None
+
+
+class PurchaseRequestDeleteResult(BaseModel):
+    success_count: int = Field(0, description="成功删除数量")
+    fail_count: int = Field(0, description="删除失败数量")
+
+
+class PurchaseRequestDeleteResponse(BaseModel):
+    code: int = Field(200, description="响应状态码")
+    message: str = Field("success", description="响应消息")
+    data: PurchaseRequestDeleteResult | None = None
     meta: dict[str, Any] | None = None
 
 
@@ -496,6 +553,31 @@ class MaterialSourceConfigUpsert(BaseModel):
         max_length=128,
         description="规格型号实际字段名，不填则自动识别",
     )
+    material_unit_field: str | None = Field(
+        None,
+        max_length=128,
+        description="主要单位实际字段名，不填则自动识别，识别不到留空",
+    )
+    material_template_field: str | None = Field(
+        None,
+        max_length=128,
+        description="物料模板实际字段名，不填则自动识别，识别不到留空",
+    )
+    material_category_field: str | None = Field(
+        None,
+        max_length=128,
+        description="物料大类实际字段名，不填则自动识别，识别不到留空",
+    )
+    material_subcategory_field: str | None = Field(
+        None,
+        max_length=128,
+        description="物料小类实际字段名，不填则自动识别，识别不到留空",
+    )
+    material_cost_category_field: str | None = Field(
+        None,
+        max_length=128,
+        description="物料成本大类实际字段名，不填则自动识别，识别不到留空",
+    )
 
 
 class MaterialSourceConfigResponse(BaseModel):
@@ -509,9 +591,46 @@ class MaterialSourceConfigResponse(BaseModel):
     material_code_field: str = Field(..., description="物料编码字段")
     material_description_field: str = Field(..., description="物料说明字段")
     rule_model_field: str = Field(..., description="规格型号字段")
+    material_unit_field: str | None = Field(None, description="主要单位字段")
+    material_template_field: str | None = Field(None, description="物料模板字段")
+    material_category_field: str | None = Field(None, description="物料大类字段")
+    material_subcategory_field: str | None = Field(
+        None,
+        description="物料小类字段",
+    )
+    material_cost_category_field: str | None = Field(
+        None,
+        description="物料成本大类字段",
+    )
     last_test_status: str = Field(..., description="最近测试状态")
     last_test_error: str | None = Field(None, description="最近测试错误")
     last_tested_at: datetime | None = Field(None, description="最近测试时间")
+    sync_status: str = Field("not_synced", description="最近同步状态")
+    sync_error: str | None = Field(None, description="最近同步错误")
+    last_synced_at: datetime | None = Field(None, description="最近成功同步时间")
+    last_sync_record_count: int = Field(0, description="最近成功同步记录数")
+    sync_total_records: int | None = Field(
+        None,
+        description="本次同步飞书侧预计记录数（同步进行中）",
+    )
+    sync_fetched_count: int | None = Field(
+        None,
+        description="本次同步已拉取记录数（同步进行中）",
+    )
+    sync_phase: str = Field("idle", description="同步阶段")
+    sync_persisted_count: int = Field(0, description="本次同步已持久化记录数")
+    sync_heartbeat_at: datetime | None = Field(None, description="同步最近心跳时间")
+    last_successful_modified_time: int | None = Field(
+        None,
+        description="最近成功同步观察到的飞书最大修改时间",
+    )
+    sync_phase: str = Field("idle", description="同步阶段")
+    sync_persisted_count: int = Field(0, description="本次同步已持久化记录数")
+    sync_heartbeat_at: datetime | None = Field(None, description="同步最近心跳时间")
+    last_successful_modified_time: int | None = Field(
+        None,
+        description="最近成功同步观察到的飞书最大修改时间",
+    )
     updated_at: datetime | None = Field(None, description="配置更新时间")
 
 
@@ -530,6 +649,26 @@ class MaterialSourceProbeResponse(BaseModel):
     material_code_field: str = Field(..., description="识别到的物料编码字段")
     material_description_field: str = Field(..., description="识别到的物料说明字段")
     rule_model_field: str = Field(..., description="识别到的规格型号字段")
+    material_unit_field: str | None = Field(
+        None,
+        description="识别到的主要单位字段，识别不到为 null",
+    )
+    material_template_field: str | None = Field(
+        None,
+        description="识别到的物料模板字段，识别不到为 null",
+    )
+    material_category_field: str | None = Field(
+        None,
+        description="识别到的物料大类字段，识别不到为 null",
+    )
+    material_subcategory_field: str | None = Field(
+        None,
+        description="识别到的物料小类字段，识别不到为 null",
+    )
+    material_cost_category_field: str | None = Field(
+        None,
+        description="识别到的物料成本大类字段，识别不到为 null",
+    )
     available_fields: list[str] = Field(
         default_factory=list,
         description="多维表格字段名",
@@ -551,12 +690,83 @@ class MaterialOptionResponse(BaseModel):
     material_code: str = Field(..., description="物料编码")
     material_description: str = Field(..., description="物料说明")
     rule_model: str = Field(..., description="规格型号")
+    material_unit: str = Field("", description="主要单位")
+    material_template: str = Field("", description="物料模板")
+    material_category: str = Field("", description="物料大类")
+    material_subcategory: str = Field("", description="物料小类")
+    material_cost_category: str = Field("", description="物料成本大类")
 
 
 class MaterialOptionListResponse(BaseModel):
     code: int = Field(200, description="响应状态码")
     message: str = Field("success", description="响应消息")
     data: list[MaterialOptionResponse]
+    meta: dict[str, Any] | None = None
+
+
+class MaterialCatalogRecordResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID = Field(..., description="物料编码库记录 ID")
+    feishu_record_id: str = Field(..., description="飞书记录 ID")
+    material_code: str = Field("", description="物料编码")
+    material_description: str = Field("", description="物料说明")
+    rule_model: str = Field("", description="规格型号")
+    material_unit: str = Field("", description="主要单位")
+    material_template: str = Field("", description="物料模板")
+    material_category: str = Field("", description="物料大类")
+    material_subcategory: str = Field("", description="物料小类")
+    material_cost_category: str = Field("", description="物料成本大类")
+    feishu_created_time: int | None = Field(None, description="飞书创建时间")
+    feishu_last_modified_time: int | None = Field(
+        None,
+        description="飞书最近修改时间",
+    )
+    last_synced_at: datetime | None = Field(None, description="最近同步时间")
+
+
+class MaterialCatalogListMeta(BaseModel):
+    page: int = Field(..., description="当前页码")
+    page_size: int = Field(..., description="每页数量")
+    total: int = Field(..., description="符合条件的记录总数")
+    sync_status: str = Field("not_synced", description="最近同步状态")
+    sync_error: str | None = Field(None, description="最近同步错误")
+    last_synced_at: datetime | None = Field(None, description="最近成功同步时间")
+    last_sync_record_count: int = Field(0, description="最近成功同步记录数")
+    sync_total_records: int | None = Field(
+        None,
+        description="本次同步飞书侧预计记录数（同步进行中）",
+    )
+    sync_fetched_count: int | None = Field(
+        None,
+        description="本次同步已拉取记录数（同步进行中）",
+    )
+    sync_phase: str = Field("idle", description="同步阶段")
+    sync_persisted_count: int = Field(0, description="本次同步已持久化记录数")
+    sync_heartbeat_at: datetime | None = Field(None, description="同步最近心跳时间")
+    last_successful_modified_time: int | None = Field(
+        None,
+        description="最近成功同步观察到的飞书最大修改时间",
+    )
+
+
+class MaterialCatalogListResponse(BaseModel):
+    code: int = Field(200, description="响应状态码")
+    message: str = Field("success", description="响应消息")
+    data: list[MaterialCatalogRecordResponse]
+    meta: MaterialCatalogListMeta
+
+
+class MaterialSourceSyncResult(BaseModel):
+    config: MaterialSourceConfigResponse = Field(..., description="同步后的数据源配置")
+    synced_count: int = Field(..., description="本次同步记录数")
+    deactivated_count: int = Field(..., description="本次停用的旧记录数")
+
+
+class MaterialSourceSyncApiResponse(BaseModel):
+    code: int = Field(200, description="响应状态码")
+    message: str = Field("success", description="响应消息")
+    data: MaterialSourceSyncResult
     meta: dict[str, Any] | None = None
 
 

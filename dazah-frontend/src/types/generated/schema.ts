@@ -4934,6 +4934,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/procurement/material-catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 查询物料编码库
+         * @description 查询采购设置同步到本地的物料编码库，支持关键词和字段筛选。
+         */
+        get: operations["list_material_catalog_records_api_v1_procurement_material_catalog_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/procurement/material-options": {
         parameters: {
             query?: never;
@@ -4972,6 +4992,26 @@ export interface paths {
          */
         put: operations["save_material_source_config_record_api_v1_procurement_material_source_config_put"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/procurement/material-source-config/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 同步采购物料数据源
+         * @description 仅系统管理员可将已保存的飞书多维表格数据同步到物料编码库本地镜像。同步在后台执行，接口立即返回当前配置状态，前端轮询同步结果。
+         */
+        post: operations["sync_material_source_record_api_v1_procurement_material_source_config_sync_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5062,6 +5102,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/procurement/purchase-requests/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 导入采购申请表格
+         * @description 上传 xlsx、xls 或 csv 表格文件：每个工作表生成一份采购申请草稿，按表头别名识别明细字段与采购类型，逐行校验，返回成功导入的申请与失败的行/工作表明细。
+         */
+        post: operations["import_purchase_request_records_api_v1_procurement_purchase_requests_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/procurement/purchase-requests/{request_id}": {
         parameters: {
             query?: never;
@@ -5077,7 +5137,11 @@ export interface paths {
          */
         put: operations["update_purchase_request_record_api_v1_procurement_purchase_requests__request_id__put"];
         post?: never;
-        delete?: never;
+        /**
+         * 删除采购申请
+         * @description 仅草稿状态的采购申请允许删除；软删除申请及其明细、审批记录。
+         */
+        delete: operations["delete_purchase_request_record_api_v1_procurement_purchase_requests__request_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -17017,6 +17081,14 @@ export interface components {
             /** Template */
             template?: string | null;
         };
+        /** Body_import_purchase_request_records_api_v1_procurement_purchase_requests_import_post */
+        Body_import_purchase_request_records_api_v1_procurement_purchase_requests_import_post: {
+            /**
+             * File
+             * @description 采购申请表格文件
+             */
+            file: string;
+        };
         /** Body_import_supplier_records_api_v1_procurement_suppliers_import_post */
         Body_import_supplier_records_api_v1_procurement_suppliers_import_post: {
             /**
@@ -24791,6 +24863,173 @@ export interface components {
              */
             output_qty?: number | null;
         };
+        /** MaterialCatalogListMeta */
+        MaterialCatalogListMeta: {
+            /**
+             * Last Successful Modified Time
+             * @description 最近成功同步观察到的飞书最大修改时间
+             */
+            last_successful_modified_time?: number | null;
+            /**
+             * Last Sync Record Count
+             * @description 最近成功同步记录数
+             * @default 0
+             */
+            last_sync_record_count: number;
+            /**
+             * Last Synced At
+             * @description 最近成功同步时间
+             */
+            last_synced_at?: string | null;
+            /**
+             * Page
+             * @description 当前页码
+             */
+            page: number;
+            /**
+             * Page Size
+             * @description 每页数量
+             */
+            page_size: number;
+            /**
+             * Sync Error
+             * @description 最近同步错误
+             */
+            sync_error?: string | null;
+            /**
+             * Sync Fetched Count
+             * @description 本次同步已拉取记录数（同步进行中）
+             */
+            sync_fetched_count?: number | null;
+            /**
+             * Sync Heartbeat At
+             * @description 同步最近心跳时间
+             */
+            sync_heartbeat_at?: string | null;
+            /**
+             * Sync Persisted Count
+             * @description 本次同步已持久化记录数
+             * @default 0
+             */
+            sync_persisted_count: number;
+            /**
+             * Sync Phase
+             * @description 同步阶段
+             * @default idle
+             */
+            sync_phase: string;
+            /**
+             * Sync Status
+             * @description 最近同步状态
+             * @default not_synced
+             */
+            sync_status: string;
+            /**
+             * Sync Total Records
+             * @description 本次同步飞书侧预计记录数（同步进行中）
+             */
+            sync_total_records?: number | null;
+            /**
+             * Total
+             * @description 符合条件的记录总数
+             */
+            total: number;
+        };
+        /** MaterialCatalogListResponse */
+        MaterialCatalogListResponse: {
+            /**
+             * Code
+             * @description 响应状态码
+             * @default 200
+             */
+            code: number;
+            /** Data */
+            data: components["schemas"]["MaterialCatalogRecordResponse"][];
+            /**
+             * Message
+             * @description 响应消息
+             * @default success
+             */
+            message: string;
+            meta: components["schemas"]["MaterialCatalogListMeta"];
+        };
+        /** MaterialCatalogRecordResponse */
+        MaterialCatalogRecordResponse: {
+            /**
+             * Feishu Created Time
+             * @description 飞书创建时间
+             */
+            feishu_created_time?: number | null;
+            /**
+             * Feishu Last Modified Time
+             * @description 飞书最近修改时间
+             */
+            feishu_last_modified_time?: number | null;
+            /**
+             * Feishu Record Id
+             * @description 飞书记录 ID
+             */
+            feishu_record_id: string;
+            /**
+             * Id
+             * Format: uuid
+             * @description 物料编码库记录 ID
+             */
+            id: string;
+            /**
+             * Last Synced At
+             * @description 最近同步时间
+             */
+            last_synced_at?: string | null;
+            /**
+             * Material Category
+             * @description 物料大类
+             * @default
+             */
+            material_category: string;
+            /**
+             * Material Code
+             * @description 物料编码
+             * @default
+             */
+            material_code: string;
+            /**
+             * Material Cost Category
+             * @description 物料成本大类
+             * @default
+             */
+            material_cost_category: string;
+            /**
+             * Material Description
+             * @description 物料说明
+             * @default
+             */
+            material_description: string;
+            /**
+             * Material Subcategory
+             * @description 物料小类
+             * @default
+             */
+            material_subcategory: string;
+            /**
+             * Material Template
+             * @description 物料模板
+             * @default
+             */
+            material_template: string;
+            /**
+             * Material Unit
+             * @description 主要单位
+             * @default
+             */
+            material_unit: string;
+            /**
+             * Rule Model
+             * @description 规格型号
+             * @default
+             */
+            rule_model: string;
+        };
         /**
          * MaterialConsumeItem
          * @description 单条领料项
@@ -24843,15 +25082,45 @@ export interface components {
         /** MaterialOptionResponse */
         MaterialOptionResponse: {
             /**
+             * Material Category
+             * @description 物料大类
+             * @default
+             */
+            material_category: string;
+            /**
              * Material Code
              * @description 物料编码
              */
             material_code: string;
             /**
+             * Material Cost Category
+             * @description 物料成本大类
+             * @default
+             */
+            material_cost_category: string;
+            /**
              * Material Description
              * @description 物料说明
              */
             material_description: string;
+            /**
+             * Material Subcategory
+             * @description 物料小类
+             * @default
+             */
+            material_subcategory: string;
+            /**
+             * Material Template
+             * @description 物料模板
+             * @default
+             */
+            material_template: string;
+            /**
+             * Material Unit
+             * @description 主要单位
+             * @default
+             */
+            material_unit: string;
             /**
              * Record Id
              * @description 飞书记录 ID
@@ -24897,6 +25166,22 @@ export interface components {
              */
             id: string;
             /**
+             * Last Successful Modified Time
+             * @description 最近成功同步观察到的飞书最大修改时间
+             */
+            last_successful_modified_time?: number | null;
+            /**
+             * Last Sync Record Count
+             * @description 最近成功同步记录数
+             * @default 0
+             */
+            last_sync_record_count: number;
+            /**
+             * Last Synced At
+             * @description 最近成功同步时间
+             */
+            last_synced_at?: string | null;
+            /**
              * Last Test Error
              * @description 最近测试错误
              */
@@ -24912,15 +25197,40 @@ export interface components {
              */
             last_tested_at?: string | null;
             /**
+             * Material Category Field
+             * @description 物料大类字段
+             */
+            material_category_field?: string | null;
+            /**
              * Material Code Field
              * @description 物料编码字段
              */
             material_code_field: string;
             /**
+             * Material Cost Category Field
+             * @description 物料成本大类字段
+             */
+            material_cost_category_field?: string | null;
+            /**
              * Material Description Field
              * @description 物料说明字段
              */
             material_description_field: string;
+            /**
+             * Material Subcategory Field
+             * @description 物料小类字段
+             */
+            material_subcategory_field?: string | null;
+            /**
+             * Material Template Field
+             * @description 物料模板字段
+             */
+            material_template_field?: string | null;
+            /**
+             * Material Unit Field
+             * @description 主要单位字段
+             */
+            material_unit_field?: string | null;
             /**
              * Rule Model Field
              * @description 规格型号字段
@@ -24931,6 +25241,44 @@ export interface components {
              * @description 飞书多维表格链接
              */
             source_url: string;
+            /**
+             * Sync Error
+             * @description 最近同步错误
+             */
+            sync_error?: string | null;
+            /**
+             * Sync Fetched Count
+             * @description 本次同步已拉取记录数（同步进行中）
+             */
+            sync_fetched_count?: number | null;
+            /**
+             * Sync Heartbeat At
+             * @description 同步最近心跳时间
+             */
+            sync_heartbeat_at?: string | null;
+            /**
+             * Sync Persisted Count
+             * @description 本次同步已持久化记录数
+             * @default 0
+             */
+            sync_persisted_count: number;
+            /**
+             * Sync Phase
+             * @description 同步阶段
+             * @default idle
+             */
+            sync_phase: string;
+            /**
+             * Sync Status
+             * @description 最近同步状态
+             * @default not_synced
+             */
+            sync_status: string;
+            /**
+             * Sync Total Records
+             * @description 本次同步飞书侧预计记录数（同步进行中）
+             */
+            sync_total_records?: number | null;
             /**
              * Table Id
              * @description 多维表格 table_id
@@ -24950,15 +25298,40 @@ export interface components {
         /** MaterialSourceConfigUpsert */
         MaterialSourceConfigUpsert: {
             /**
+             * Material Category Field
+             * @description 物料大类实际字段名，不填则自动识别，识别不到留空
+             */
+            material_category_field?: string | null;
+            /**
              * Material Code Field
              * @description 物料编码实际字段名，不填则自动识别
              */
             material_code_field?: string | null;
             /**
+             * Material Cost Category Field
+             * @description 物料成本大类实际字段名，不填则自动识别，识别不到留空
+             */
+            material_cost_category_field?: string | null;
+            /**
              * Material Description Field
              * @description 物料说明实际字段名，不填则自动识别
              */
             material_description_field?: string | null;
+            /**
+             * Material Subcategory Field
+             * @description 物料小类实际字段名，不填则自动识别，识别不到留空
+             */
+            material_subcategory_field?: string | null;
+            /**
+             * Material Template Field
+             * @description 物料模板实际字段名，不填则自动识别，识别不到留空
+             */
+            material_template_field?: string | null;
+            /**
+             * Material Unit Field
+             * @description 主要单位实际字段名，不填则自动识别，识别不到留空
+             */
+            material_unit_field?: string | null;
             /**
              * Rule Model Field
              * @description 规格型号实际字段名，不填则自动识别
@@ -25008,15 +25381,40 @@ export interface components {
              */
             error_message?: string | null;
             /**
+             * Material Category Field
+             * @description 识别到的物料大类字段，识别不到为 null
+             */
+            material_category_field?: string | null;
+            /**
              * Material Code Field
              * @description 识别到的物料编码字段
              */
             material_code_field: string;
             /**
+             * Material Cost Category Field
+             * @description 识别到的物料成本大类字段，识别不到为 null
+             */
+            material_cost_category_field?: string | null;
+            /**
              * Material Description Field
              * @description 识别到的物料说明字段
              */
             material_description_field: string;
+            /**
+             * Material Subcategory Field
+             * @description 识别到的物料小类字段，识别不到为 null
+             */
+            material_subcategory_field?: string | null;
+            /**
+             * Material Template Field
+             * @description 识别到的物料模板字段，识别不到为 null
+             */
+            material_template_field?: string | null;
+            /**
+             * Material Unit Field
+             * @description 识别到的主要单位字段，识别不到为 null
+             */
+            material_unit_field?: string | null;
             /**
              * Rule Model Field
              * @description 识别到的规格型号字段
@@ -25048,6 +25446,41 @@ export interface components {
              * @description 解析后的多维表格 view_id
              */
             view_id?: string | null;
+        };
+        /** MaterialSourceSyncApiResponse */
+        MaterialSourceSyncApiResponse: {
+            /**
+             * Code
+             * @description 响应状态码
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["MaterialSourceSyncResult"];
+            /**
+             * Message
+             * @description 响应消息
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** MaterialSourceSyncResult */
+        MaterialSourceSyncResult: {
+            /** @description 同步后的数据源配置 */
+            config: components["schemas"]["MaterialSourceConfigResponse"];
+            /**
+             * Deactivated Count
+             * @description 本次停用的旧记录数
+             */
+            deactivated_count: number;
+            /**
+             * Synced Count
+             * @description 本次同步记录数
+             */
+            synced_count: number;
         };
         /** ModulePermissionDefinitionOut */
         ModulePermissionDefinitionOut: {
@@ -28610,6 +29043,11 @@ export interface components {
             /** @description 采购分类 */
             category: components["schemas"]["PurchaseRequestCategory"];
             /**
+             * Import Duplicate Key
+             * @description 导入幂等键（内部使用，防止同一表格重复导入）
+             */
+            import_duplicate_key?: string | null;
+            /**
              * Items
              * @description 申请明细
              */
@@ -28625,6 +29063,151 @@ export interface components {
              * @description 申购部门
              */
             request_department: string;
+        };
+        /** PurchaseRequestDeleteResponse */
+        PurchaseRequestDeleteResponse: {
+            /**
+             * Code
+             * @description 响应状态码
+             * @default 200
+             */
+            code: number;
+            data?: components["schemas"]["PurchaseRequestDeleteResult"] | null;
+            /**
+             * Message
+             * @description 响应消息
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** PurchaseRequestDeleteResult */
+        PurchaseRequestDeleteResult: {
+            /**
+             * Fail Count
+             * @description 删除失败数量
+             * @default 0
+             */
+            fail_count: number;
+            /**
+             * Success Count
+             * @description 成功删除数量
+             * @default 0
+             */
+            success_count: number;
+        };
+        /** PurchaseRequestImportError */
+        PurchaseRequestImportError: {
+            /**
+             * Message
+             * @description 错误说明
+             */
+            message: string;
+            /**
+             * Row
+             * @description 文件行号；None 表示整个工作表级错误
+             */
+            row?: number | null;
+            /**
+             * Sheet Name
+             * @description 来源工作表
+             * @default
+             */
+            sheet_name: string;
+        };
+        /** PurchaseRequestImportResponse */
+        PurchaseRequestImportResponse: {
+            /**
+             * Code
+             * @description 响应状态码
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["PurchaseRequestImportResult"];
+            /**
+             * Message
+             * @description 响应消息
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** PurchaseRequestImportResult */
+        PurchaseRequestImportResult: {
+            /**
+             * Failed Rows
+             * @description 失败的行或工作表
+             */
+            failed_rows?: components["schemas"]["PurchaseRequestImportError"][];
+            /**
+             * File Name
+             * @description 导入文件名
+             * @default
+             */
+            file_name: string;
+            /**
+             * Imported Requests
+             * @description 成功生成的采购申请草稿
+             */
+            imported_requests?: components["schemas"]["PurchaseRequestImportSummary"][];
+            /**
+             * Total Sheets
+             * @description 文件工作表数（CSV 为 1）
+             * @default 0
+             */
+            total_sheets: number;
+        };
+        /** PurchaseRequestImportSummary */
+        PurchaseRequestImportSummary: {
+            /** @description 采购分类 */
+            category: components["schemas"]["PurchaseRequestCategory"];
+            /**
+             * Category Label
+             * @description 采购分类名称
+             * @default
+             */
+            category_label: string;
+            /**
+             * Category Source
+             * @description 采购类型来源：column=表内采购类型列，sheet_name=工作表名称，inferred=按明细字段自动推断
+             * @default sheet_name
+             */
+            category_source: string;
+            /**
+             * Items Count
+             * @description 导入明细条数
+             */
+            items_count: number;
+            /**
+             * Request Date
+             * Format: date
+             * @description 申请日期
+             */
+            request_date: string;
+            /**
+             * Request Department
+             * @description 申购部门
+             * @default
+             */
+            request_department: string;
+            /**
+             * Request Id
+             * Format: uuid
+             * @description 生成的采购申请草稿 ID
+             */
+            request_id: string;
+            /**
+             * Sheet Name
+             * @description 来源工作表
+             * @default
+             */
+            sheet_name: string;
         };
         /** PurchaseRequestItemInput */
         PurchaseRequestItemInput: {
@@ -47337,6 +47920,50 @@ export interface operations {
             };
         };
     };
+    list_material_catalog_records_api_v1_procurement_material_catalog_get: {
+        parameters: {
+            query?: {
+                /** @description 搜索关键词 */
+                keyword?: string | null;
+                /** @description 物料编码 */
+                material_code?: string | null;
+                /** @description 物料说明 */
+                material_description?: string | null;
+                /** @description 规格型号 */
+                rule_model?: string | null;
+                /** @description 页码 */
+                page?: number;
+                /** @description 每页数量 */
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaterialCatalogListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_material_option_records_api_v1_procurement_material_options_get: {
         parameters: {
             query: {
@@ -47426,6 +48053,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MaterialSourceConfigApiResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sync_material_source_record_api_v1_procurement_material_source_config_sync_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaterialSourceSyncApiResponse"];
                 };
             };
             /** @description Validation Error */
@@ -47635,6 +48293,41 @@ export interface operations {
             };
         };
     };
+    import_purchase_request_records_api_v1_procurement_purchase_requests_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_import_purchase_request_records_api_v1_procurement_purchase_requests_import_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PurchaseRequestImportResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_purchase_request_record_api_v1_procurement_purchase_requests__request_id__get: {
         parameters: {
             query?: never;
@@ -47692,6 +48385,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PurchaseRequestApiResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_purchase_request_record_api_v1_procurement_purchase_requests__request_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PurchaseRequestDeleteResponse"];
                 };
             };
             /** @description Validation Error */

@@ -28,6 +28,7 @@ import {
 } from '@ant-design/icons'
 import {
   createPurchaseRequest,
+  deletePurchaseRequest,
   submitPurchaseRequest,
   updatePurchaseRequest,
 } from '@/actions/purchasing'
@@ -47,12 +48,19 @@ import {
 } from './purchaseRequestConstants'
 import { UrgentPurchaseRequestFormClient } from './UrgentPurchaseRequestFormClient'
 import { MaterialCodeAutocomplete } from './MaterialCodeAutocomplete'
+import { PurchaseRequestImportButton } from './PurchaseRequestImportButton'
+import {
+  getPurchaseDetailColumnWidth,
+  PurchaseDetailAutoInput,
+  purchaseDetailInputSizing,
+} from './PurchaseDetailAutoInput'
 
 export type PurchaseRequestFormClientProps = {
   category: PurchaseRequestCategory
   categoryLabel: string
   initialRequests: PurchaseRequestResponse[]
   initialTotal: number
+  initialLoadFailed?: boolean
 }
 
 type PurchaseRequestFormValues = {
@@ -68,6 +76,7 @@ type EditableItemRow = {
 }
 
 const DEFAULT_PAGE_SIZE = 20
+const EMPTY_PURCHASE_REQUEST_ITEMS: PurchaseRequestItemInput[] = []
 
 function normalizeItems(items: PurchaseRequestResponse['items']): PurchaseRequestItemInput[] {
   const normalized = (items ?? []).map((item) => ({
@@ -126,11 +135,12 @@ function StandardPurchaseRequestFormClient({
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [submittingId, setSubmittingId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [detailRecord, setDetailRecord] = useState<PurchaseRequestResponse | null>(null)
   const [attachmentNoteOpen, setAttachmentNoteOpen] = useState(false)
   const [attachmentNoteDraft, setAttachmentNoteDraft] = useState('')
-  const watchedItems = Form.useWatch('items', form) ?? []
+  const watchedItems = Form.useWatch('items', form) ?? EMPTY_PURCHASE_REQUEST_ITEMS
   const watchedAttachmentNote = Form.useWatch('attachment_note', form) ?? ''
   const materialFields = usesMaterialFields(category)
 
@@ -226,6 +236,26 @@ function StandardPurchaseRequestFormClient({
     }
   }
 
+  const handleDeleteFlow = async (record: PurchaseRequestResponse) => {
+    setDeletingId(record.id)
+    try {
+      const response = await deletePurchaseRequest(record.id)
+      if (response.code !== 200) {
+        message.error(response.message || '采购申请删除失败')
+        return
+      }
+      message.success('采购申请已删除')
+      if (editingId === record.id) {
+        resetForm()
+      }
+      await loadRecords(page)
+    } catch {
+      message.error('采购申请删除失败，请稍后重试')
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
   const recordColumns: TableProps<PurchaseRequestResponse>['columns'] = [
     {
       title: '申请日期',
@@ -260,7 +290,7 @@ function StandardPurchaseRequestFormClient({
     {
       title: '操作',
       key: 'actions',
-      width: 260,
+      width: 320,
       fixed: 'right',
       render: (_, record) => {
         const editable = record.status === 'draft' || record.status === 'rejected'
@@ -298,6 +328,26 @@ function StandardPurchaseRequestFormClient({
                   loading={submittingId === record.id}
                 >
                   提交
+                </Button>
+              </Popconfirm>
+            )}
+            {record.status === 'draft' && (
+              <Popconfirm
+                title="确认删除该采购申请草稿？"
+                description="删除后不可恢复"
+                okText="删除"
+                cancelText="取消"
+                okButtonProps={{ danger: true }}
+                onConfirm={() => handleDeleteFlow(record)}
+              >
+                <Button
+                  type="link"
+                  size="small"
+                  danger
+                  icon={<DeleteOutlined />}
+                  loading={deletingId === record.id}
+                >
+                  删除
                 </Button>
               </Popconfirm>
             )}
@@ -378,11 +428,14 @@ function StandardPurchaseRequestFormClient({
 
   return (
     <div className="space-y-4">
-      <div>
-        <p className="mb-2 text-[13px] text-[var(--color-stone)]">采购管理 / 采购申请</p>
-        <h1 className="mb-2 text-[22px] font-semibold text-[var(--color-charcoal)]">
-          {categoryLabel}采购申请
-        </h1>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="mb-2 text-[13px] text-[var(--color-stone)]">采购管理 / 采购申请</p>
+          <h1 className="mb-2 text-[22px] font-semibold text-[var(--color-charcoal)]">
+            {categoryLabel}采购申请
+          </h1>
+        </div>
+        <PurchaseRequestImportButton onImported={() => void loadRecords(page)} />
       </div>
 
       <Form
@@ -452,7 +505,11 @@ function StandardPurchaseRequestFormClient({
                         {
                           title: '物料编码',
                           key: 'material_code',
-                          width: 150,
+                          width: getPurchaseDetailColumnWidth(
+                            watchedItems,
+                            'material_code',
+                            purchaseDetailInputSizing.materialCode,
+                          ),
                           render: (_: unknown, row: EditableItemRow) => (
                             <Form.Item
                               name={[row.name, 'material_code']}
@@ -481,27 +538,35 @@ function StandardPurchaseRequestFormClient({
                         {
                           title: '物料说明',
                           key: 'material_description',
-                          width: 180,
+                          width: getPurchaseDetailColumnWidth(
+                            watchedItems,
+                            'material_description',
+                            purchaseDetailInputSizing.materialDescription,
+                          ),
                           render: (_: unknown, row: EditableItemRow) => (
                             <Form.Item
                               name={[row.name, 'material_description']}
                               rules={[{ required: true, message: '请输入物料说明' }]}
                               className="mb-0"
                             >
-                              <Input />
+                              <PurchaseDetailAutoInput {...purchaseDetailInputSizing.materialDescription} />
                             </Form.Item>
                           ),
                         },
                         {
                           title: '规格型号',
                           key: 'rule_model',
-                          width: 150,
+                          width: getPurchaseDetailColumnWidth(
+                            watchedItems,
+                            'rule_model',
+                            purchaseDetailInputSizing.ruleModel,
+                          ),
                           render: (_: unknown, row: EditableItemRow) => (
                             <Form.Item
                               name={[row.name, 'rule_model']}
                               className="mb-0"
                             >
-                              <Input />
+                              <PurchaseDetailAutoInput {...purchaseDetailInputSizing.ruleModel} />
                             </Form.Item>
                           ),
                         },
@@ -510,27 +575,35 @@ function StandardPurchaseRequestFormClient({
                         {
                           title: '商品名称',
                           key: 'product_name',
-                          width: 160,
+                          width: getPurchaseDetailColumnWidth(
+                            watchedItems,
+                            'product_name',
+                            purchaseDetailInputSizing.productName,
+                          ),
                           render: (_: unknown, row: EditableItemRow) => (
                             <Form.Item
                               name={[row.name, 'product_name']}
                               rules={[{ required: true, message: '请输入商品名称' }]}
                               className="mb-0"
                             >
-                              <Input />
+                              <PurchaseDetailAutoInput {...purchaseDetailInputSizing.productName} />
                             </Form.Item>
                           ),
                         },
                         {
                           title: '规格',
                           key: 'specification',
-                          width: 130,
+                          width: getPurchaseDetailColumnWidth(
+                            watchedItems,
+                            'specification',
+                            purchaseDetailInputSizing.specification,
+                          ),
                           render: (_: unknown, row: EditableItemRow) => (
                             <Form.Item
                               name={[row.name, 'specification']}
                               className="mb-0"
                             >
-                              <Input />
+                              <PurchaseDetailAutoInput {...purchaseDetailInputSizing.specification} />
                             </Form.Item>
                           ),
                         },
@@ -538,30 +611,42 @@ function StandardPurchaseRequestFormClient({
                   {
                     title: '用途',
                     key: 'purpose',
-                    width: 160,
+                    width: getPurchaseDetailColumnWidth(
+                      watchedItems,
+                      'purpose',
+                      purchaseDetailInputSizing.purpose,
+                    ),
                     render: (_, row) => (
                       <Form.Item name={[row.name, 'purpose']} className="mb-0">
-                        <Input />
+                        <PurchaseDetailAutoInput {...purchaseDetailInputSizing.purpose} />
                       </Form.Item>
                     ),
                   },
                   {
                     title: '材质',
                     key: 'material',
-                    width: 110,
+                    width: getPurchaseDetailColumnWidth(
+                      watchedItems,
+                      'material',
+                      purchaseDetailInputSizing.material,
+                    ),
                     render: (_, row) => (
                       <Form.Item name={[row.name, 'material']} className="mb-0">
-                        <Input />
+                        <PurchaseDetailAutoInput {...purchaseDetailInputSizing.material} />
                       </Form.Item>
                     ),
                   },
                   {
                     title: '品牌',
                     key: 'brand',
-                    width: 110,
+                    width: getPurchaseDetailColumnWidth(
+                      watchedItems,
+                      'brand',
+                      purchaseDetailInputSizing.brand,
+                    ),
                     render: (_, row) => (
                       <Form.Item name={[row.name, 'brand']} className="mb-0">
-                        <Input />
+                        <PurchaseDetailAutoInput {...purchaseDetailInputSizing.brand} />
                       </Form.Item>
                     ),
                   },
@@ -582,10 +667,14 @@ function StandardPurchaseRequestFormClient({
                   {
                     title: '单位',
                     key: 'unit',
-                    width: 90,
+                    width: getPurchaseDetailColumnWidth(
+                      watchedItems,
+                      'unit',
+                      purchaseDetailInputSizing.unit,
+                    ),
                     render: (_, row) => (
                       <Form.Item name={[row.name, 'unit']} className="mb-0">
-                        <Input />
+                        <PurchaseDetailAutoInput {...purchaseDetailInputSizing.unit} />
                       </Form.Item>
                     ),
                   },
@@ -619,10 +708,14 @@ function StandardPurchaseRequestFormClient({
                   {
                     title: '备注',
                     key: 'remarks',
-                    width: 180,
+                    width: getPurchaseDetailColumnWidth(
+                      watchedItems,
+                      'remarks',
+                      purchaseDetailInputSizing.remarks,
+                    ),
                     render: (_, row) => (
                       <Form.Item name={[row.name, 'remarks']} className="mb-0">
-                        <Input />
+                        <PurchaseDetailAutoInput {...purchaseDetailInputSizing.remarks} />
                       </Form.Item>
                     ),
                   },

@@ -84,6 +84,39 @@ def test_production_accepts_a_configured_sso_administrator() -> None:
     settings.check()
 
 
+def test_module_access_mode_defaults_to_all() -> None:
+    development = Settings.model_construct(
+        APP_ENV="development",
+        MODULE_ACCESS_MODE=None,
+    )
+    production = Settings.model_construct(
+        APP_ENV="production",
+        MODULE_ACCESS_MODE=None,
+    )
+    test = Settings.model_construct(
+        APP_ENV="test",
+        MODULE_ACCESS_MODE=None,
+    )
+
+    assert development.effective_module_access_mode == "all"
+    assert production.effective_module_access_mode == "all"
+    assert test.effective_module_access_mode == "all"
+
+
+def test_module_access_mode_accepts_explicit_override() -> None:
+    development = Settings.model_construct(
+        APP_ENV="development",
+        MODULE_ACCESS_MODE="roles",
+    )
+    production = Settings.model_construct(
+        APP_ENV="production",
+        MODULE_ACCESS_MODE="all",
+    )
+
+    assert development.effective_module_access_mode == "roles"
+    assert production.effective_module_access_mode == "all"
+
+
 @pytest.mark.anyio
 async def test_current_user_is_none_without_token() -> None:
     user = await deps.get_current_user(

@@ -229,6 +229,34 @@ async def test_bitable_client_uses_legacy_endpoint_for_formula_filters() -> None
             "filter": 'CurrentValue.[物料编码].contains("MAT")',
             "view_id": "view",
         },
+        timeout=None,
+    )
+
+
+@pytest.mark.asyncio
+async def test_bitable_search_page_accepts_override_timeout() -> None:
+    client = BitableClient(app_token="app-token")
+    client.client = AsyncMock()
+    client.client.request.return_value = {"items": [], "has_more": False}
+
+    await client.search_records_page(
+        "table",
+        view_id="view",
+        field_names=["物料编码"],
+        page_size=500,
+        page_token="current-page",
+        timeout=60.0,
+    )
+
+    client.client.request.assert_awaited_once_with(
+        "POST",
+        "/bitable/v1/apps/app-token/tables/table/records/search",
+        json={
+            "view_id": "view",
+            "field_names": ["物料编码"],
+        },
+        params={"page_size": 500, "page_token": "current-page"},
+        timeout=60.0,
     )
 
 
@@ -265,6 +293,7 @@ async def test_bitable_search_page_preserves_pagination_metadata() -> None:
             "field_names": ["物料编码", "物料说明"],
         },
         params={"page_size": 500, "page_token": "current-page"},
+        timeout=None,
     )
 
 

@@ -32,7 +32,7 @@ class FeishuClient(IntegrationClient):
         *,
         json: dict | None = None,
         params: dict | None = None,
-        timeout: float = 15.0,
+        timeout: float | None = None,
     ) -> dict:
         token = await FeishuAuth.get_tenant_access_token(self.app_id, self.app_secret)
         headers = {
@@ -47,7 +47,7 @@ class FeishuClient(IntegrationClient):
                 headers=headers,
                 json=json,
                 params=params,
-                timeout=timeout,
+                timeout=timeout if timeout is not None else 15.0,
             )
             resp.raise_for_status()
             data = resp.json()

@@ -30,15 +30,28 @@ vi.mock('@/components/purchasing', () => ({
     hardware_warehouse: 'hardware-warehouse',
     department_head: 'department-head',
     responsible_leader: 'responsible-leader',
+    supervising_leader: 'supervising-leader',
+    finance_director: 'finance-director',
+    general_manager: 'general-manager',
   },
   approvalStepToRole: {
     'hardware-warehouse': 'hardware_warehouse',
     'department-head': 'department_head',
     'responsible-leader': 'responsible_leader',
+    'supervising-leader': 'supervising_leader',
+    'finance-director': 'finance_director',
+    'general-manager': 'general_manager',
   },
   purchaseApprovalWorkflows: {
     hardware: ['hardware_warehouse', 'department_head'],
-    urgent: ['department_head', 'responsible_leader'],
+    urgent: [
+      'hardware_warehouse',
+      'department_head',
+      'responsible_leader',
+      'supervising_leader',
+      'finance_director',
+      'general_manager',
+    ],
   },
   purchaseCategoryLabels: {
     hardware: '五金材料',
@@ -69,8 +82,12 @@ describe('purchasing server pages', () => {
     expect(generateStaticParams()).toEqual([
       { category: 'hardware', step: 'hardware-warehouse' },
       { category: 'hardware', step: 'department-head' },
+      { category: 'urgent', step: 'hardware-warehouse' },
       { category: 'urgent', step: 'department-head' },
       { category: 'urgent', step: 'responsible-leader' },
+      { category: 'urgent', step: 'supervising-leader' },
+      { category: 'urgent', step: 'finance-director' },
+      { category: 'urgent', step: 'general-manager' },
     ])
   })
 
@@ -93,7 +110,7 @@ describe('purchasing server pages', () => {
 
   it('rejects an approval step outside the category workflow', async () => {
     await expect(ApprovalPage({
-      params: Promise.resolve({ category: 'urgent', step: 'hardware-warehouse' }),
+      params: Promise.resolve({ category: 'hardware', step: 'responsible-leader' }),
     })).rejects.toThrow('NOT_FOUND')
   })
 
@@ -107,6 +124,6 @@ describe('purchasing server pages', () => {
 
     pageApi.fetchPurchaseRequests.mockRejectedValueOnce(new Error('network'))
     const fallback = await UrgentPurchaseRequestPage()
-    expect(fallback.props).toMatchObject({ category: 'urgent', categoryLabel: '加急单', initialTotal: 0 })
+    expect(fallback.props).toMatchObject({ category: 'urgent', categoryLabel: '加急单', initialTotal: 0, initialLoadFailed: true })
   })
 })

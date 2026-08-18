@@ -56,6 +56,15 @@ class FakePurchaseRequestRepository:
     async def get(self, request_id):
         return self.requests.get(request_id)
 
+    async def find_by_import_duplicate_key(self, duplicate_key):
+        for request in self.requests.values():
+            if (
+                request.import_duplicate_key == duplicate_key
+                and not request.is_deleted
+            ):
+                return request
+        return None
+
     async def get_for_update(self, request_id):
         return self.requests.get(request_id)
 
@@ -171,6 +180,15 @@ class FakePurchaseRequestRepository:
             approval
         )
         return approval
+
+    async def delete(self, request_id):
+        request = self.requests.get(request_id)
+        if request is None:
+            return False
+        request.is_deleted = True
+        self.items.pop(request_id, None)
+        self.approvals.pop(request_id, None)
+        return True
 
 
 @pytest.fixture(autouse=True)
@@ -348,8 +366,12 @@ async def test_purchase_request_amount_and_hardware_approval_flow() -> None:
         (
             PurchaseRequestCategory.urgent,
             (
+                PurchaseApprovalRole.hardware_warehouse,
                 PurchaseApprovalRole.department_head,
                 PurchaseApprovalRole.responsible_leader,
+                PurchaseApprovalRole.supervising_leader,
+                PurchaseApprovalRole.finance_director,
+                PurchaseApprovalRole.general_manager,
             ),
         ),
         (
@@ -977,3 +999,57 @@ async def test_legacy_category_attachment_update() -> None:
         PurchaseRequestUpdate(attachment_note="更新后的附件说明"),
     )
     assert updated.attachment_note == "更新后的附件说明"
+
+
+@pytest.mark.anyio
+async def test_delete_purchase_request_removes_draft() -> None:
+    created = await procurement_service.create_purchase_request(
+        FakeDb(),
+        _create_payload(),
+    )
+    request_id = created.id
+
+    deleted = await procurement_service.delete_purchase_request(FakeDb(), request_id)
+
+    assert deleted is True
+    assert FakePurchaseRequestRepository.requests[request_id].is_deleted is True
+    assert FakePurchaseRequestRepository.items.get(request_id) is None
+    assert FakePurchaseRequestRepository.approvals.get(request_id) is None
+
+
+@pytest.mark.anyio
+async def test_delete_purchase_request_rejects_non_draft() -> None:
+    created = await procurement_service.create_purchase_request(
+        FakeDb(),
+        _create_payload(),
+    )
+    FakePurchaseRequestRepository.requests[
+        created.id
+    ].status = PurchaseRequestStatus.pending_department_head.value
+
+    with pytest.raises(ValueError, match="仅草稿状态的采购申请可以删除"):
+        await procurement_service.delete_purchase_request(FakeDb(), created.id)
+
+
+@pytest.mark.anyio
+async def test_delete_purchase_request_missing_raises_error() -> None:
+    with pytest.raises(ValueError, match="采购申请不存在"):
+        await procurement_service.delete_purchase_request(
+            FakeDb(),
+            uuid.uuid4(),
+        )
+
+
+@pytest.mark.anyio
+async def test_submit_purchase_request_rejects_total_amount_mismatch() -> None:
+    created = await procurement_service.create_purchase_request(
+        FakeDb(),
+        _create_payload(),
+    )
+    FakePurchaseRequestRepository.items[created.id][0].total_amount = Decimal("999.99")
+
+    with pytest.raises(ValueError, match="与数量×单价.*不一致"):
+        await procurement_service.submit_purchase_request(FakeDb(), created.id)
+
+    request = FakePurchaseRequestRepository.requests[created.id]
+    assert request.status == PurchaseRequestStatus.draft

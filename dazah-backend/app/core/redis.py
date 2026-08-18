@@ -32,5 +32,10 @@ async def acquire_lock(key: str, timeout: int = 10) -> bool:
     return bool(await redis_client.set(f"lock:{key}", "1", ex=timeout, nx=True))
 
 
+async def renew_lock(key: str, timeout: int = 10) -> None:
+    """续期已持有锁的 TTL，供长时间运行的后台任务保持互斥。"""
+    await redis_client.expire(f"lock:{key}", timeout)
+
+
 async def release_lock(key: str) -> None:
     await redis_client.delete(f"lock:{key}")

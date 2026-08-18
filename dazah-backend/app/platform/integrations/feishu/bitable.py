@@ -142,6 +142,7 @@ class BitableClient:
         page_size: int = 500,
         page_token: str | None = None,
         automatic_fields: bool = False,
+        timeout: float | None = None,
     ) -> list[dict[str, Any]]:
         """Search records with optional filter."""
         page = await self.search_records_page(
@@ -153,6 +154,7 @@ class BitableClient:
             page_size=page_size,
             page_token=page_token,
             automatic_fields=automatic_fields,
+            timeout=timeout,
         )
         return page["items"]
 
@@ -167,8 +169,13 @@ class BitableClient:
         page_size: int = 500,
         page_token: str | None = None,
         automatic_fields: bool = False,
+        timeout: float | None = None,
     ) -> BitableRecordPage:
-        """Search one record page and preserve Feishu pagination metadata."""
+        """Search one record page and preserve Feishu pagination metadata.
+
+        timeout 为 None 时沿用 FeishuClient 默认超时（15 秒）；大批量同步
+        可传更长超时，避免慢但正常的页面被掐断后重复重试。
+        """
         if not self.app_token or not table_id:
             raise RuntimeError("Bitable app_token or table_id not configured")
         if filter_str is not None and filter_info is not None:
@@ -188,6 +195,7 @@ class BitableClient:
                 "GET",
                 self._path(table_id, "/records"),
                 params=params,
+                timeout=timeout,
             )
         else:
             payload: dict[str, object] = {}
@@ -207,6 +215,7 @@ class BitableClient:
                 self._path(table_id, "/records/search"),
                 json=payload,
                 params=params,
+                timeout=timeout,
             )
         raw_items = data.get("items") or []
         items = raw_items if isinstance(raw_items, list) else []

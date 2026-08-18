@@ -4358,6 +4358,21 @@
         "title": "Body_generate_supplementary_reply_api_v1_registration_supplementary_replies_generate_post",
         "type": "object"
       },
+      "Body_import_purchase_request_records_api_v1_procurement_purchase_requests_import_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "description": "采购申请表格文件",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_import_purchase_request_records_api_v1_procurement_purchase_requests_import_post",
+        "type": "object"
+      },
       "Body_import_supplier_records_api_v1_procurement_suppliers_import_post": {
         "properties": {
           "file": {
@@ -24206,6 +24221,268 @@
         "title": "MaterialBalanceUpdate",
         "type": "object"
       },
+      "MaterialCatalogListMeta": {
+        "properties": {
+          "last_successful_modified_time": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "最近成功同步观察到的飞书最大修改时间",
+            "title": "Last Successful Modified Time"
+          },
+          "last_sync_record_count": {
+            "default": 0,
+            "description": "最近成功同步记录数",
+            "title": "Last Sync Record Count",
+            "type": "integer"
+          },
+          "last_synced_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "最近成功同步时间",
+            "title": "Last Synced At"
+          },
+          "page": {
+            "description": "当前页码",
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "description": "每页数量",
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "sync_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "最近同步错误",
+            "title": "Sync Error"
+          },
+          "sync_fetched_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "本次同步已拉取记录数（同步进行中）",
+            "title": "Sync Fetched Count"
+          },
+          "sync_heartbeat_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "同步最近心跳时间",
+            "title": "Sync Heartbeat At"
+          },
+          "sync_persisted_count": {
+            "default": 0,
+            "description": "本次同步已持久化记录数",
+            "title": "Sync Persisted Count",
+            "type": "integer"
+          },
+          "sync_phase": {
+            "default": "idle",
+            "description": "同步阶段",
+            "title": "Sync Phase",
+            "type": "string"
+          },
+          "sync_status": {
+            "default": "not_synced",
+            "description": "最近同步状态",
+            "title": "Sync Status",
+            "type": "string"
+          },
+          "sync_total_records": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "本次同步飞书侧预计记录数（同步进行中）",
+            "title": "Sync Total Records"
+          },
+          "total": {
+            "description": "符合条件的记录总数",
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "page",
+          "page_size",
+          "total"
+        ],
+        "title": "MaterialCatalogListMeta",
+        "type": "object"
+      },
+      "MaterialCatalogListResponse": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "description": "响应状态码",
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/MaterialCatalogRecordResponse"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "default": "success",
+            "description": "响应消息",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/MaterialCatalogListMeta"
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ],
+        "title": "MaterialCatalogListResponse",
+        "type": "object"
+      },
+      "MaterialCatalogRecordResponse": {
+        "properties": {
+          "feishu_created_time": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "飞书创建时间",
+            "title": "Feishu Created Time"
+          },
+          "feishu_last_modified_time": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "飞书最近修改时间",
+            "title": "Feishu Last Modified Time"
+          },
+          "feishu_record_id": {
+            "description": "飞书记录 ID",
+            "title": "Feishu Record Id",
+            "type": "string"
+          },
+          "id": {
+            "description": "物料编码库记录 ID",
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "last_synced_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "最近同步时间",
+            "title": "Last Synced At"
+          },
+          "material_category": {
+            "default": "",
+            "description": "物料大类",
+            "title": "Material Category",
+            "type": "string"
+          },
+          "material_code": {
+            "default": "",
+            "description": "物料编码",
+            "title": "Material Code",
+            "type": "string"
+          },
+          "material_cost_category": {
+            "default": "",
+            "description": "物料成本大类",
+            "title": "Material Cost Category",
+            "type": "string"
+          },
+          "material_description": {
+            "default": "",
+            "description": "物料说明",
+            "title": "Material Description",
+            "type": "string"
+          },
+          "material_subcategory": {
+            "default": "",
+            "description": "物料小类",
+            "title": "Material Subcategory",
+            "type": "string"
+          },
+          "material_template": {
+            "default": "",
+            "description": "物料模板",
+            "title": "Material Template",
+            "type": "string"
+          },
+          "material_unit": {
+            "default": "",
+            "description": "主要单位",
+            "title": "Material Unit",
+            "type": "string"
+          },
+          "rule_model": {
+            "default": "",
+            "description": "规格型号",
+            "title": "Rule Model",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "feishu_record_id"
+        ],
+        "title": "MaterialCatalogRecordResponse",
+        "type": "object"
+      },
       "MaterialConsumeItem": {
         "description": "单条领料项",
         "properties": {
@@ -24290,14 +24567,44 @@
       },
       "MaterialOptionResponse": {
         "properties": {
+          "material_category": {
+            "default": "",
+            "description": "物料大类",
+            "title": "Material Category",
+            "type": "string"
+          },
           "material_code": {
             "description": "物料编码",
             "title": "Material Code",
             "type": "string"
           },
+          "material_cost_category": {
+            "default": "",
+            "description": "物料成本大类",
+            "title": "Material Cost Category",
+            "type": "string"
+          },
           "material_description": {
             "description": "物料说明",
             "title": "Material Description",
+            "type": "string"
+          },
+          "material_subcategory": {
+            "default": "",
+            "description": "物料小类",
+            "title": "Material Subcategory",
+            "type": "string"
+          },
+          "material_template": {
+            "default": "",
+            "description": "物料模板",
+            "title": "Material Template",
+            "type": "string"
+          },
+          "material_unit": {
+            "default": "",
+            "description": "主要单位",
+            "title": "Material Unit",
             "type": "string"
           },
           "record_id": {
@@ -24373,6 +24680,37 @@
             "title": "Id",
             "type": "string"
           },
+          "last_successful_modified_time": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "最近成功同步观察到的飞书最大修改时间",
+            "title": "Last Successful Modified Time"
+          },
+          "last_sync_record_count": {
+            "default": 0,
+            "description": "最近成功同步记录数",
+            "title": "Last Sync Record Count",
+            "type": "integer"
+          },
+          "last_synced_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "最近成功同步时间",
+            "title": "Last Synced At"
+          },
           "last_test_error": {
             "anyOf": [
               {
@@ -24403,15 +24741,75 @@
             "description": "最近测试时间",
             "title": "Last Tested At"
           },
+          "material_category_field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "物料大类字段",
+            "title": "Material Category Field"
+          },
           "material_code_field": {
             "description": "物料编码字段",
             "title": "Material Code Field",
             "type": "string"
           },
+          "material_cost_category_field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "物料成本大类字段",
+            "title": "Material Cost Category Field"
+          },
           "material_description_field": {
             "description": "物料说明字段",
             "title": "Material Description Field",
             "type": "string"
+          },
+          "material_subcategory_field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "物料小类字段",
+            "title": "Material Subcategory Field"
+          },
+          "material_template_field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "物料模板字段",
+            "title": "Material Template Field"
+          },
+          "material_unit_field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "主要单位字段",
+            "title": "Material Unit Field"
           },
           "rule_model_field": {
             "description": "规格型号字段",
@@ -24422,6 +24820,73 @@
             "description": "飞书多维表格链接",
             "title": "Source Url",
             "type": "string"
+          },
+          "sync_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "最近同步错误",
+            "title": "Sync Error"
+          },
+          "sync_fetched_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "本次同步已拉取记录数（同步进行中）",
+            "title": "Sync Fetched Count"
+          },
+          "sync_heartbeat_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "同步最近心跳时间",
+            "title": "Sync Heartbeat At"
+          },
+          "sync_persisted_count": {
+            "default": 0,
+            "description": "本次同步已持久化记录数",
+            "title": "Sync Persisted Count",
+            "type": "integer"
+          },
+          "sync_phase": {
+            "default": "idle",
+            "description": "同步阶段",
+            "title": "Sync Phase",
+            "type": "string"
+          },
+          "sync_status": {
+            "default": "not_synced",
+            "description": "最近同步状态",
+            "title": "Sync Status",
+            "type": "string"
+          },
+          "sync_total_records": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "本次同步飞书侧预计记录数（同步进行中）",
+            "title": "Sync Total Records"
           },
           "table_id": {
             "description": "多维表格 table_id",
@@ -24469,6 +24934,19 @@
       },
       "MaterialSourceConfigUpsert": {
         "properties": {
+          "material_category_field": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "物料大类实际字段名，不填则自动识别，识别不到留空",
+            "title": "Material Category Field"
+          },
           "material_code_field": {
             "anyOf": [
               {
@@ -24482,6 +24960,19 @@
             "description": "物料编码实际字段名，不填则自动识别",
             "title": "Material Code Field"
           },
+          "material_cost_category_field": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "物料成本大类实际字段名，不填则自动识别，识别不到留空",
+            "title": "Material Cost Category Field"
+          },
           "material_description_field": {
             "anyOf": [
               {
@@ -24494,6 +24985,45 @@
             ],
             "description": "物料说明实际字段名，不填则自动识别",
             "title": "Material Description Field"
+          },
+          "material_subcategory_field": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "物料小类实际字段名，不填则自动识别，识别不到留空",
+            "title": "Material Subcategory Field"
+          },
+          "material_template_field": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "物料模板实际字段名，不填则自动识别，识别不到留空",
+            "title": "Material Template Field"
+          },
+          "material_unit_field": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "主要单位实际字段名，不填则自动识别，识别不到留空",
+            "title": "Material Unit Field"
           },
           "rule_model_field": {
             "anyOf": [
@@ -24585,15 +25115,75 @@
             "description": "测试错误",
             "title": "Error Message"
           },
+          "material_category_field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "识别到的物料大类字段，识别不到为 null",
+            "title": "Material Category Field"
+          },
           "material_code_field": {
             "description": "识别到的物料编码字段",
             "title": "Material Code Field",
             "type": "string"
           },
+          "material_cost_category_field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "识别到的物料成本大类字段，识别不到为 null",
+            "title": "Material Cost Category Field"
+          },
           "material_description_field": {
             "description": "识别到的物料说明字段",
             "title": "Material Description Field",
             "type": "string"
+          },
+          "material_subcategory_field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "识别到的物料小类字段，识别不到为 null",
+            "title": "Material Subcategory Field"
+          },
+          "material_template_field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "识别到的物料模板字段，识别不到为 null",
+            "title": "Material Template Field"
+          },
+          "material_unit_field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "识别到的主要单位字段，识别不到为 null",
+            "title": "Material Unit Field"
           },
           "rule_model_field": {
             "description": "识别到的规格型号字段",
@@ -24645,6 +25235,67 @@
           "tested_at"
         ],
         "title": "MaterialSourceProbeResponse",
+        "type": "object"
+      },
+      "MaterialSourceSyncApiResponse": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "description": "响应状态码",
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/MaterialSourceSyncResult"
+          },
+          "message": {
+            "default": "success",
+            "description": "响应消息",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "MaterialSourceSyncApiResponse",
+        "type": "object"
+      },
+      "MaterialSourceSyncResult": {
+        "properties": {
+          "config": {
+            "$ref": "#/components/schemas/MaterialSourceConfigResponse",
+            "description": "同步后的数据源配置"
+          },
+          "deactivated_count": {
+            "description": "本次停用的旧记录数",
+            "title": "Deactivated Count",
+            "type": "integer"
+          },
+          "synced_count": {
+            "description": "本次同步记录数",
+            "title": "Synced Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "config",
+          "synced_count",
+          "deactivated_count"
+        ],
+        "title": "MaterialSourceSyncResult",
         "type": "object"
       },
       "ModulePermissionDefinitionOut": {
@@ -32888,6 +33539,19 @@
             "$ref": "#/components/schemas/PurchaseRequestCategory",
             "description": "采购分类"
           },
+          "import_duplicate_key": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "导入幂等键（内部使用，防止同一表格重复导入）",
+            "title": "Import Duplicate Key"
+          },
           "items": {
             "description": "申请明细",
             "items": {
@@ -32918,6 +33582,223 @@
           "items"
         ],
         "title": "PurchaseRequestCreate",
+        "type": "object"
+      },
+      "PurchaseRequestDeleteResponse": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "description": "响应状态码",
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PurchaseRequestDeleteResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "default": "success",
+            "description": "响应消息",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "title": "PurchaseRequestDeleteResponse",
+        "type": "object"
+      },
+      "PurchaseRequestDeleteResult": {
+        "properties": {
+          "fail_count": {
+            "default": 0,
+            "description": "删除失败数量",
+            "title": "Fail Count",
+            "type": "integer"
+          },
+          "success_count": {
+            "default": 0,
+            "description": "成功删除数量",
+            "title": "Success Count",
+            "type": "integer"
+          }
+        },
+        "title": "PurchaseRequestDeleteResult",
+        "type": "object"
+      },
+      "PurchaseRequestImportError": {
+        "properties": {
+          "message": {
+            "description": "错误说明",
+            "title": "Message",
+            "type": "string"
+          },
+          "row": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "文件行号；None 表示整个工作表级错误",
+            "title": "Row"
+          },
+          "sheet_name": {
+            "default": "",
+            "description": "来源工作表",
+            "title": "Sheet Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "title": "PurchaseRequestImportError",
+        "type": "object"
+      },
+      "PurchaseRequestImportResponse": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "description": "响应状态码",
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/PurchaseRequestImportResult"
+          },
+          "message": {
+            "default": "success",
+            "description": "响应消息",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "PurchaseRequestImportResponse",
+        "type": "object"
+      },
+      "PurchaseRequestImportResult": {
+        "properties": {
+          "failed_rows": {
+            "description": "失败的行或工作表",
+            "items": {
+              "$ref": "#/components/schemas/PurchaseRequestImportError"
+            },
+            "title": "Failed Rows",
+            "type": "array"
+          },
+          "file_name": {
+            "default": "",
+            "description": "导入文件名",
+            "title": "File Name",
+            "type": "string"
+          },
+          "imported_requests": {
+            "description": "成功生成的采购申请草稿",
+            "items": {
+              "$ref": "#/components/schemas/PurchaseRequestImportSummary"
+            },
+            "title": "Imported Requests",
+            "type": "array"
+          },
+          "total_sheets": {
+            "default": 0,
+            "description": "文件工作表数（CSV 为 1）",
+            "title": "Total Sheets",
+            "type": "integer"
+          }
+        },
+        "title": "PurchaseRequestImportResult",
+        "type": "object"
+      },
+      "PurchaseRequestImportSummary": {
+        "properties": {
+          "category": {
+            "$ref": "#/components/schemas/PurchaseRequestCategory",
+            "description": "采购分类"
+          },
+          "category_label": {
+            "default": "",
+            "description": "采购分类名称",
+            "title": "Category Label",
+            "type": "string"
+          },
+          "category_source": {
+            "default": "sheet_name",
+            "description": "采购类型来源：column=表内采购类型列，sheet_name=工作表名称，inferred=按明细字段自动推断",
+            "title": "Category Source",
+            "type": "string"
+          },
+          "items_count": {
+            "description": "导入明细条数",
+            "title": "Items Count",
+            "type": "integer"
+          },
+          "request_date": {
+            "description": "申请日期",
+            "format": "date",
+            "title": "Request Date",
+            "type": "string"
+          },
+          "request_department": {
+            "default": "",
+            "description": "申购部门",
+            "title": "Request Department",
+            "type": "string"
+          },
+          "request_id": {
+            "description": "生成的采购申请草稿 ID",
+            "format": "uuid",
+            "title": "Request Id",
+            "type": "string"
+          },
+          "sheet_name": {
+            "default": "",
+            "description": "来源工作表",
+            "title": "Sheet Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id",
+          "category",
+          "request_date",
+          "items_count"
+        ],
+        "title": "PurchaseRequestImportSummary",
         "type": "object"
       },
       "PurchaseRequestItemInput": {
@@ -73472,6 +74353,159 @@
         ]
       }
     },
+    "/api/v1/procurement/material-catalog": {
+      "get": {
+        "description": "查询采购设置同步到本地的物料编码库，支持关键词和字段筛选。",
+        "operationId": "list_material_catalog_records_api_v1_procurement_material_catalog_get",
+        "parameters": [
+          {
+            "description": "搜索关键词",
+            "in": "query",
+            "name": "keyword",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "搜索关键词",
+              "title": "Keyword"
+            }
+          },
+          {
+            "description": "物料编码",
+            "in": "query",
+            "name": "material_code",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 255,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "物料编码",
+              "title": "Material Code"
+            }
+          },
+          {
+            "description": "物料说明",
+            "in": "query",
+            "name": "material_description",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 255,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "物料说明",
+              "title": "Material Description"
+            }
+          },
+          {
+            "description": "规格型号",
+            "in": "query",
+            "name": "rule_model",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 255,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "规格型号",
+              "title": "Rule Model"
+            }
+          },
+          {
+            "description": "页码",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "description": "页码",
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "每页数量",
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "description": "每页数量",
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaterialCatalogListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "查询物料编码库",
+        "tags": [
+          "采购管理"
+        ]
+      }
+    },
     "/api/v1/procurement/material-options": {
       "get": {
         "description": "按物料编码关键词实时查询飞书多维表格，最多返回 20 条且保留重复记录。",
@@ -73652,6 +74686,56 @@
           }
         },
         "summary": "保存采购物料数据源配置",
+        "tags": [
+          "采购管理"
+        ]
+      }
+    },
+    "/api/v1/procurement/material-source-config/sync": {
+      "post": {
+        "description": "仅系统管理员可将已保存的飞书多维表格数据同步到物料编码库本地镜像。同步在后台执行，接口立即返回当前配置状态，前端轮询同步结果。",
+        "operationId": "sync_material_source_record_api_v1_procurement_material_source_config_sync_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaterialSourceSyncApiResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "同步采购物料数据源",
         "tags": [
           "采购管理"
         ]
@@ -74155,7 +75239,125 @@
         ]
       }
     },
+    "/api/v1/procurement/purchase-requests/import": {
+      "post": {
+        "description": "上传 xlsx、xls 或 csv 表格文件：每个工作表生成一份采购申请草稿，按表头别名识别明细字段与采购类型，逐行校验，返回成功导入的申请与失败的行/工作表明细。",
+        "operationId": "import_purchase_request_records_api_v1_procurement_purchase_requests_import_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_import_purchase_request_records_api_v1_procurement_purchase_requests_import_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseRequestImportResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "导入采购申请表格",
+        "tags": [
+          "采购管理"
+        ]
+      }
+    },
     "/api/v1/procurement/purchase-requests/{request_id}": {
+      "delete": {
+        "description": "仅草稿状态的采购申请允许删除；软删除申请及其明细、审批记录。",
+        "operationId": "delete_purchase_request_record_api_v1_procurement_purchase_requests__request_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Request Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseRequestDeleteResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "删除采购申请",
+        "tags": [
+          "采购管理"
+        ]
+      },
       "get": {
         "operationId": "get_purchase_request_record_api_v1_procurement_purchase_requests__request_id__get",
         "parameters": [

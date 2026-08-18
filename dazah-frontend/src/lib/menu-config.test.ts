@@ -82,4 +82,16 @@ describe('procurement menu structure', () => {
       adminOnly: true,
     })
   })
+
+  it('exposes the material code library to procurement users', () => {
+    const materialLibrary = moduleMenus
+      .find((menu) => menu.key === 'purchasing')
+      ?.children.find((item) => item.key === 'material-library')
+
+    expect(materialLibrary).toMatchObject({
+      label: '物料编码库',
+      path: '/purchasing/material-library',
+    })
+    expect(materialLibrary?.adminOnly).toBeUndefined()
+  })
 })

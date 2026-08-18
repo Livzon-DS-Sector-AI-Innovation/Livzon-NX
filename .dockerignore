@@ -12,7 +12,9 @@
 **/*.py[cod]
 **/.pytest_cache
 /dazah-backend/.pytest-tmp-all
+/dazah-backend/.pytest-tmp-all/**
 /dazah-backend/.pytest-tmp-contract
+/dazah-backend/.pytest-tmp-contract/**
 **/.pytest-tmp*/
 **/.ruff_cache
 **/.mypy_cache

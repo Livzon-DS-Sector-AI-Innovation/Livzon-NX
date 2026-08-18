@@ -1,21 +1,39 @@
+import asyncio
+import logging
+from datetime import UTC, datetime
 from urllib.parse import quote
 from uuid import UUID
 
-from fastapi import Depends, File, Form, HTTPException, Query, Response, UploadFile
+from fastapi import (
+    BackgroundTasks,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Response,
+    UploadFile,
+)
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.database import get_db
+from app.core.database import async_session_factory, get_db
+from app.core.redis import acquire_lock, release_lock, renew_lock
 from app.core.response import paginated_response, success_response
 from app.modules.procurement.contract_generator import (
     get_contract_template_metadata,
 )
 from app.modules.procurement.material_source import (
+    MaterialSourceConflictError,
     MaterialSourceError,
+    MaterialSourceNotConfiguredError,
     get_material_source_config,
+    list_material_catalog,
     list_material_options,
+    mark_sync_failed,
     save_material_source_config,
+    sync_material_source,
     test_material_source_config,
 )
 from app.modules.procurement.schemas import (
@@ -31,12 +49,17 @@ from app.modules.procurement.schemas import (
     InvoiceRecognitionRecordListResponse,
     InvoiceRecognitionRecordResponse,
     InvoiceRecognitionResponse,
+    MaterialCatalogListMeta,
+    MaterialCatalogListResponse,
+    MaterialCatalogRecordResponse,
     MaterialOptionListResponse,
     MaterialSourceConfigApiResponse,
     MaterialSourceConfigResponse,
     MaterialSourceConfigUpsert,
     MaterialSourceProbeApiResponse,
     MaterialSourceProbeResponse,
+    MaterialSourceSyncApiResponse,
+    MaterialSourceSyncResult,
     PurchaseApprovalRequest,
     PurchaseApprovalRole,
     PurchaseApprovalView,
@@ -44,6 +67,9 @@ from app.modules.procurement.schemas import (
     PurchaseRequestApiResponse,
     PurchaseRequestCategory,
     PurchaseRequestCreate,
+    PurchaseRequestDeleteResponse,
+    PurchaseRequestDeleteResult,
+    PurchaseRequestImportResponse,
     PurchaseRequestListResponse,
     PurchaseRequestStatus,
     PurchaseRequestUpdate,
@@ -62,6 +88,7 @@ from app.modules.procurement.service import (
     get_contract_record,
     get_contract_record_file,
     get_purchase_request,
+    import_purchase_request_table_file,
     import_supplier_table_file,
     list_contract_records,
     list_invoice_recognition_records,
@@ -72,6 +99,7 @@ from app.modules.procurement.service import (
     reject_purchase_request,
     submit_purchase_request,
     update_purchase_request,
+    delete_purchase_request,
 )
 from app.platform.audit.service import record_audit_log
 from app.platform.identity.deps import AdminUser
@@ -79,6 +107,8 @@ from app.shared.module_api import create_module_router
 from app.shared.module_registry import MODULES_BY_CODE
 
 router = create_module_router(MODULES_BY_CODE["procurement"])
+
+logger = logging.getLogger(__name__)
 
 settings = get_settings()
 MAX_INVOICE_PDF_UPLOAD_BYTES = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
@@ -132,9 +162,9 @@ async def test_material_source_config_record(
     except MaterialSourceError as exc:
         raise _material_source_error(exc) from exc
     return success_response(
-        data=MaterialSourceProbeResponse.model_validate(
-            probe.as_dict()
-        ).model_dump(mode="json")
+        data=MaterialSourceProbeResponse.model_validate(probe.as_dict()).model_dump(
+            mode="json"
+        )
     )
 
 
@@ -180,6 +210,247 @@ async def save_material_source_config_record(
             mode="json"
         ),
         message="采购物料数据源配置已保存",
+    )
+
+
+MATERIAL_SYNC_LOCK_TTL_SECONDS = 1800
+MATERIAL_SYNC_LOCK_RENEW_INTERVAL_SECONDS = 60.0
+
+
+def _material_sync_lock_key(config_id: UUID) -> str:
+    return f"procurement:material-source-sync:{config_id}"
+
+
+async def _lock_heartbeat(lock_key: str) -> None:
+    """后台同步期间定期续期 Redis 锁，防止慢同步超过锁 TTL 后被并发触发。"""
+    try:
+        while True:
+            await asyncio.sleep(MATERIAL_SYNC_LOCK_RENEW_INTERVAL_SECONDS)
+            await renew_lock(lock_key, MATERIAL_SYNC_LOCK_TTL_SECONDS)
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        logger.warning(
+            "Material sync lock renewal failed: %s",
+            type(exc).__name__,
+        )
+
+
+async def clear_stale_material_sync_lock() -> None:
+    """应用启动时释放残留的物料同步锁。
+
+    后台任务随进程被杀后，Redis 锁会残留至 TTL 过期；数据库状态由
+    reset_interrupted_syncs 重置，这里一并清掉锁，避免误报“正在进行中”。
+    """
+    try:
+        async with async_session_factory() as session:
+            config = await get_material_source_config(session)
+        if config is None:
+            return
+        await release_lock(_material_sync_lock_key(config.id))
+    except Exception as exc:
+        logger.warning(
+            "Failed to clear stale material sync lock: %s",
+            type(exc).__name__,
+        )
+
+
+async def _run_material_source_sync(config_id: UUID, user_id: UUID) -> None:
+    """后台执行物料同步：独立会话、记录审计、失败落库、释放同步锁。
+
+    同步状态由 sync_material_source 写入，后台任务的生命周期与请求解耦，
+    请求侧不会因同步耗时超时。
+    """
+    lock_key = _material_sync_lock_key(config_id)
+    heartbeat_task = asyncio.create_task(_lock_heartbeat(lock_key))
+    try:
+        async with async_session_factory() as session:
+            try:
+                result = await sync_material_source(session, user_id=user_id)
+            except MaterialSourceError as exc:
+                logger.error(
+                    "Material source sync failed: %s (%s)",
+                    exc.public_message,
+                    type(exc).__name__,
+                )
+                return
+            except Exception:
+                logger.exception("Material source sync crashed")
+                await mark_sync_failed(
+                    session,
+                    config_id,
+                    "物料数据同步过程中发生内部错误，请稍后重试",
+                )
+                return
+            try:
+                await record_audit_log(
+                    session,
+                    action="procurement_material_source_synced",
+                    user_id=user_id,
+                    resource_type="procurement_material_source_config",
+                    resource_id=config_id,
+                    new_value={
+                        "synced_count": result.synced_count,
+                        "deactivated_count": result.deactivated_count,
+                        "sync_status": result.config.sync_status,
+                    },
+                )
+                await session.commit()
+            except Exception:
+                logger.exception("Material source sync audit failed")
+                await session.rollback()
+    finally:
+        heartbeat_task.cancel()
+        try:
+            await heartbeat_task
+        except asyncio.CancelledError:
+            pass
+        try:
+            await release_lock(lock_key)
+        except Exception as exc:
+            logger.warning(
+                "Material source sync lock release failed: %s",
+                type(exc).__name__,
+            )
+
+
+@router.post(
+    "/material-source-config/sync",
+    summary="同步采购物料数据源",
+    description=(
+        "仅系统管理员可将已保存的飞书多维表格数据同步到物料编码库本地镜像。"
+        "同步在后台执行，接口立即返回当前配置状态，前端轮询同步结果。"
+    ),
+    response_model=MaterialSourceSyncApiResponse,
+)
+async def sync_material_source_record(
+    admin: AdminUser,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+):
+    config = await get_material_source_config(db)
+    if config is None:
+        raise _material_source_error(
+            MaterialSourceNotConfiguredError("物料数据源尚未配置")
+        )
+
+    lock_key = _material_sync_lock_key(config.id)
+    lock_acquired: bool | None
+    try:
+        lock_acquired = await acquire_lock(
+            lock_key,
+            timeout=MATERIAL_SYNC_LOCK_TTL_SECONDS,
+        )
+    except Exception as exc:
+        logger.warning(
+            "Redis unavailable for material sync lock: %s",
+            type(exc).__name__,
+        )
+        lock_acquired = None
+    if lock_acquired is False and config.sync_status != "syncing":
+        # 进程被杀/容器重启后 Redis 锁可能残留至 TTL 过期，而数据库状态
+        # 已由启动清理重置；此时锁是陈旧的，释放后重试一次再判定冲突。
+        logger.warning("Material sync lock appears stale, releasing and retrying")
+        try:
+            await release_lock(lock_key)
+        except Exception as exc:
+            logger.warning(
+                "Material sync stale lock release failed: %s",
+                type(exc).__name__,
+            )
+        try:
+            lock_acquired = await acquire_lock(
+                lock_key,
+                timeout=MATERIAL_SYNC_LOCK_TTL_SECONDS,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Redis unavailable for material sync lock: %s",
+                type(exc).__name__,
+            )
+            lock_acquired = None
+    if lock_acquired is False:
+        raise _material_source_error(
+            MaterialSourceConflictError("物料数据同步正在进行中，请稍后重试")
+        )
+    if lock_acquired is None:
+        raise _material_source_error(
+            MaterialSourceConflictError("同步依赖的 Redis 当前不可用，请稍后重试")
+        )
+
+    config.sync_status = "syncing"
+    config.sync_phase = "fetching"
+    config.sync_error = None
+    config.sync_total_records = None
+    config.sync_fetched_count = 0
+    config.sync_persisted_count = 0
+    config.sync_heartbeat_at = datetime.now(UTC)
+    await db.commit()
+    background_tasks.add_task(
+        _run_material_source_sync,
+        config_id=config.id,
+        user_id=admin.id,
+    )
+    data = MaterialSourceSyncResult(
+        config=MaterialSourceConfigResponse.model_validate(config),
+        synced_count=0,
+        deactivated_count=0,
+    )
+    return success_response(
+        data=data.model_dump(mode="json"),
+        message="采购物料数据同步已启动",
+    )
+
+
+@router.get(
+    "/material-catalog",
+    summary="查询物料编码库",
+    description="查询采购设置同步到本地的物料编码库，支持关键词和字段筛选。",
+    response_model=MaterialCatalogListResponse,
+)
+async def list_material_catalog_records(
+    keyword: str | None = Query(None, max_length=100, description="搜索关键词"),
+    material_code: str | None = Query(None, max_length=255, description="物料编码"),
+    material_description: str | None = Query(
+        None,
+        max_length=255,
+        description="物料说明",
+    ),
+    rule_model: str | None = Query(None, max_length=255, description="规格型号"),
+    page: int = Query(default=1, ge=1, description="页码"),
+    page_size: int = Query(default=20, ge=1, le=100, description="每页数量"),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        records, total, config = await list_material_catalog(
+            db,
+            keyword=keyword,
+            material_code=material_code,
+            material_description=material_description,
+            rule_model=rule_model,
+            page=page,
+            page_size=page_size,
+        )
+    except MaterialSourceError as exc:
+        raise _material_source_error(exc) from exc
+
+    meta = MaterialCatalogListMeta(
+        page=page,
+        page_size=page_size,
+        total=total,
+        sync_status=config.sync_status,
+        sync_error=config.sync_error,
+        last_synced_at=config.last_synced_at,
+        last_sync_record_count=config.last_sync_record_count,
+        sync_total_records=config.sync_total_records,
+        sync_fetched_count=config.sync_fetched_count,
+    )
+    return success_response(
+        data=[
+            MaterialCatalogRecordResponse.model_validate(record).model_dump(mode="json")
+            for record in records
+        ],
+        meta=meta.model_dump(mode="json"),
     )
 
 
@@ -312,8 +583,7 @@ async def list_supplier_records(
     "/suppliers/import",
     summary="导入供应商清单表格",
     description=(
-        "上传 xlsx、xlsm、csv 或 tsv 表格文件，"
-        "按文件表头读取字段并替换当前供应商清单。"
+        "上传 xlsx、xlsm、csv 或 tsv 表格文件，按文件表头读取字段并替换当前供应商清单。"
     ),
     response_model=SupplierImportResponse,
 )
@@ -534,6 +804,43 @@ async def create_purchase_request_record(
     )
 
 
+@router.post(
+    "/purchase-requests/import",
+    summary="导入采购申请表格",
+    description=(
+        "上传 xlsx、xls 或 csv 表格文件：每个工作表生成一份采购申请草稿，"
+        "按表头别名识别明细字段与采购类型，逐行校验，"
+        "返回成功导入的申请与失败的行/工作表明细。"
+    ),
+    response_model=PurchaseRequestImportResponse,
+)
+async def import_purchase_request_records(
+    file: UploadFile = File(..., description="采购申请表格文件"),
+    db: AsyncSession = Depends(get_db),
+):
+    filename = file.filename or ""
+    if not filename.lower().endswith((".xlsx", ".xls", ".csv")):
+        raise HTTPException(
+            status_code=400,
+            detail="请上传 xlsx、xls 或 csv 文件",
+        )
+
+    file_bytes = await _read_upload_file_with_limit(file, file_label="表格文件")
+    try:
+        result = await import_purchase_request_table_file(
+            db,
+            file_bytes,
+            file_name=filename,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return success_response(
+        data=result.model_dump(mode="json"),
+        message="采购申请表格导入完成",
+    )
+
+
 @router.get(
     "/purchase-requests/{request_id}",
     summary="获取采购申请详情",
@@ -568,6 +875,29 @@ async def update_purchase_request_record(
     return success_response(
         data=request.model_dump(mode="json"),
         message="采购申请已更新",
+    )
+
+
+@router.delete(
+    "/purchase-requests/{request_id}",
+    summary="删除采购申请",
+    description="仅草稿状态的采购申请允许删除；软删除申请及其明细、审批记录。",
+    response_model=PurchaseRequestDeleteResponse,
+)
+async def delete_purchase_request_record(
+    request_id: UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        deleted = await delete_purchase_request(db, request_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return success_response(
+        data=PurchaseRequestDeleteResult(
+            success_count=1 if deleted else 0,
+            fail_count=0 if deleted else 1,
+        ).model_dump(mode="json"),
+        message="采购申请已删除",
     )
 
 
