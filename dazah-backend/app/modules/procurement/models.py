@@ -5,17 +5,21 @@ from __future__ import annotations
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
+from uuid import UUID
 
 from sqlalchemy import (
     Boolean,
     Date,
     DateTime,
+    ForeignKey,
     Index,
     Integer,
     Numeric,
     String,
     Text,
     UniqueConstraint,
+    Uuid,
+    func,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
@@ -353,6 +357,12 @@ class PurchaseRequest(BaseModel):
         nullable=True,
         comment="状态更新时间",
     )
+    import_duplicate_key: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+        index=True,
+        comment="导入幂等键（文件内容哈希+工作表名），防止同一表格重复导入",
+    )
 
 
 class PurchaseRequestItem(BaseModel):
@@ -533,6 +543,31 @@ class MaterialSourceConfig(BaseModel):
         nullable=False,
         comment="规格型号实际字段名",
     )
+    material_unit_field: Mapped[str | None] = mapped_column(
+        String(128),
+        nullable=True,
+        comment="主要单位实际字段名",
+    )
+    material_template_field: Mapped[str | None] = mapped_column(
+        String(128),
+        nullable=True,
+        comment="物料模板实际字段名",
+    )
+    material_category_field: Mapped[str | None] = mapped_column(
+        String(128),
+        nullable=True,
+        comment="物料大类实际字段名",
+    )
+    material_subcategory_field: Mapped[str | None] = mapped_column(
+        String(128),
+        nullable=True,
+        comment="物料小类实际字段名",
+    )
+    material_cost_category_field: Mapped[str | None] = mapped_column(
+        String(128),
+        nullable=True,
+        comment="物料成本大类实际字段名",
+    )
     last_test_status: Mapped[str] = mapped_column(
         String(32),
         nullable=False,
@@ -549,6 +584,182 @@ class MaterialSourceConfig(BaseModel):
         DateTime(timezone=True),
         nullable=True,
         comment="最近测试时间",
+    )
+    sync_status: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="not_synced",
+        server_default="not_synced",
+        comment="最近同步状态",
+    )
+    sync_error: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        comment="最近同步错误（不含第三方原始响应）",
+    )
+    last_synced_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="最近成功同步时间",
+    )
+    last_sync_record_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+        comment="最近成功同步记录数",
+    )
+    sync_total_records: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        comment="本次同步飞书侧预计记录数（同步进行中）",
+    )
+    sync_fetched_count: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        comment="本次同步已拉取记录数（同步进行中）",
+    )
+    sync_phase: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="idle",
+        server_default="idle",
+        comment="同步阶段",
+    )
+    sync_persisted_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+        comment="本次同步已持久化记录数",
+    )
+    sync_heartbeat_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="同步最近心跳时间",
+    )
+    last_successful_modified_time: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        comment="最近成功同步观察到的飞书最大修改时间；未启用可靠过滤前仅作水位记录",
+    )
+
+
+class MaterialCatalogRecord(BaseModel):
+    """采购物料编码库的飞书本地镜像记录。"""
+
+    __tablename__ = "material_catalog_records"
+    __table_args__ = (
+        UniqueConstraint(
+            "source_config_id",
+            "feishu_record_id",
+            name="uq_procurement_material_catalog_source_record",
+        ),
+        Index(
+            "ix_procurement_material_catalog_source_active",
+            "source_config_id",
+            "is_deleted",
+        ),
+        Index(
+            "ix_procurement_material_catalog_code",
+            "source_config_id",
+            "material_code",
+        ),
+        Index(
+            "ix_procurement_material_catalog_description",
+            "source_config_id",
+            "material_description",
+        ),
+        Index(
+            "ix_procurement_material_catalog_rule_model",
+            "source_config_id",
+            "rule_model",
+        ),
+        {"schema": "procurement"},
+    )
+
+    source_config_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("procurement.material_source_configs.id"),
+        nullable=False,
+        comment="物料数据源配置 ID",
+    )
+    feishu_record_id: Mapped[str] = mapped_column(
+        String(128),
+        nullable=False,
+        comment="飞书记录 ID",
+    )
+    material_code: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="物料编码",
+    )
+    material_description: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="物料说明",
+    )
+    rule_model: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="规格型号",
+    )
+    material_unit: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="主要单位",
+    )
+    material_template: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="物料模板",
+    )
+    material_category: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="物料大类",
+    )
+    material_subcategory: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="物料小类",
+    )
+    material_cost_category: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="物料成本大类",
+    )
+    feishu_created_time: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        comment="飞书创建时间",
+    )
+    feishu_last_modified_time: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        comment="飞书最近修改时间",
+    )
+    last_synced_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        comment="最近同步时间",
     )
 
 

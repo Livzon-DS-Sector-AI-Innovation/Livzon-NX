@@ -17,7 +17,9 @@ export default async function UrgentPurchaseRequestPage() {
       page_size: DEFAULT_PAGE_SIZE,
     },
     await getAuthHeaders()
-  ).catch(() => ({
+  ).catch(() => null)
+  const initialLoadFailed = response === null
+  const initialResponse = response ?? {
     code: 200,
     message: 'success',
     data: [],
@@ -26,14 +28,15 @@ export default async function UrgentPurchaseRequestPage() {
       page_size: DEFAULT_PAGE_SIZE,
       total: 0,
     },
-  }))
+  }
 
   return (
     <PurchaseRequestFormClient
       category="urgent"
       categoryLabel={purchaseCategoryLabels.urgent}
-      initialRequests={response.data}
-      initialTotal={Number(response.meta?.total ?? response.data.length)}
+      initialRequests={initialResponse.data}
+      initialTotal={Number(initialResponse.meta?.total ?? initialResponse.data.length)}
+      initialLoadFailed={initialLoadFailed}
     />
   )
 }

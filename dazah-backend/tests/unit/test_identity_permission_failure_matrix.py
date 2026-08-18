@@ -114,24 +114,38 @@ async def test_required_user_and_admin_matrix() -> None:
 
 
 @pytest.mark.asyncio
-async def test_module_view_fails_closed_and_allows_grant_or_admin() -> None:
+async def test_module_view_supports_all_mode_and_role_grants() -> None:
     dependency = deps.require_module_view("energy")
     regular = _user()
+    all_mode = SimpleNamespace(effective_module_access_mode="all")
+    assert (
+        await dependency(
+            current_user=regular,
+            db=SimpleNamespace(),
+            settings=all_mode,
+        )
+        is regular
+    )
+
+    role_mode = SimpleNamespace(effective_module_access_mode="roles")
     result = SimpleNamespace(scalar_one_or_none=lambda: None)
     session = SimpleNamespace(execute=AsyncMock(return_value=result))
     with pytest.raises(HTTPException) as missing:
-        await dependency(current_user=regular, db=session)
+        await dependency(current_user=regular, db=session, settings=role_mode)
     assert missing.value.status_code == 403
 
     result.scalar_one_or_none = lambda: ["module.agent.read"]
     with pytest.raises(HTTPException) as insufficient:
-        await dependency(current_user=regular, db=session)
+        await dependency(current_user=regular, db=session, settings=role_mode)
     assert insufficient.value.status_code == 403
 
     result.scalar_one_or_none = lambda: ["module.view"]
-    assert await dependency(current_user=regular, db=session) is regular
+    assert (
+        await dependency(current_user=regular, db=session, settings=role_mode)
+        is regular
+    )
     admin = _user(role="admin")
-    assert await dependency(current_user=admin, db=session) is admin
+    assert await dependency(current_user=admin, db=session, settings=role_mode) is admin
 
 
 @pytest.mark.asyncio

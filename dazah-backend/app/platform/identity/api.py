@@ -240,6 +240,7 @@ async def logout(
 async def get_me(
     current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
+    settings: Settings = Depends(get_settings),
 ) -> JSONResponse:
     """Return the current platform user."""
     if current_user is None:
@@ -247,7 +248,9 @@ async def get_me(
     from app.platform.identity.permission_repository import PermissionGrantRepository
 
     response = UserResponse.model_validate(current_user)
-    if current_user.role == "admin":
+    if settings.effective_module_access_mode == "all":
+        response.module_codes = sorted(MODULES_BY_CODE)
+    elif current_user.role == "admin":
         response.module_codes = sorted(MODULES_BY_CODE)
     else:
         grants = await PermissionGrantRepository().list_grants(

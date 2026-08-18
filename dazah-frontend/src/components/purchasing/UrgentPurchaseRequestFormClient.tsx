@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import dayjs from 'dayjs'
 import type { Dayjs } from 'dayjs'
 import {
+  Alert,
   App,
   Button,
   DatePicker,
@@ -18,7 +19,7 @@ import {
   Table,
   Tag,
 } from 'antd'
-import type { TableProps } from 'antd'
+import type { FormInstance, TableProps } from 'antd'
 import {
   DeleteOutlined,
   EditOutlined,
@@ -29,6 +30,7 @@ import {
 } from '@ant-design/icons'
 import {
   createPurchaseRequest,
+  deletePurchaseRequest,
   submitPurchaseRequest,
   updatePurchaseRequest,
 } from '@/actions/purchasing'
@@ -39,7 +41,8 @@ import type {
   PurchaseRequestResponse,
 } from '@/types/purchasing'
 import {
-  calculateLineAmount,
+  calculateGroupsTotal,
+  calculateItemsTotal,
   defaultPurchaseRequestItem,
   formatMoney,
   normalPurchaseCategories,
@@ -50,6 +53,12 @@ import {
 } from './purchaseRequestConstants'
 import type { PurchaseRequestFormClientProps } from './PurchaseRequestFormClient'
 import { MaterialCodeAutocomplete } from './MaterialCodeAutocomplete'
+import { PurchaseRequestImportButton } from './PurchaseRequestImportButton'
+import {
+  getPurchaseDetailColumnWidth,
+  PurchaseDetailAutoInput,
+  purchaseDetailInputSizing,
+} from './PurchaseDetailAutoInput'
 
 type UrgentGroup = {
   category: PurchaseRequestCategory
@@ -68,9 +77,69 @@ type EditableItemRow = {
   name: number
 }
 
+type PurchaseItemPath = ['groups', number, 'items', number]
+
 type PurchaseRequestItemResponse = NonNullable<PurchaseRequestResponse['items']>[number]
 
 const DEFAULT_PAGE_SIZE = 20
+
+function readUrgentGroups(form: FormInstance<UrgentFormValues>) {
+  return (form.getFieldValue('groups') as UrgentGroup[] | undefined) ?? []
+}
+
+function PurchaseLineAmount({
+  form,
+  path,
+}: {
+  form: FormInstance<UrgentFormValues>
+  path: PurchaseItemPath
+}) {
+  return (
+    <Form.Item noStyle shouldUpdate>
+      {() => {
+        const item = form.getFieldValue(path) as PurchaseRequestItemInput | undefined
+        return (
+          <span className="font-medium text-[var(--color-charcoal)]">
+            {formatMoney(calculateItemsTotal(item ? [item] : []))}
+          </span>
+        )
+      }}
+    </Form.Item>
+  )
+}
+
+function PurchaseGroupSubtotal({
+  form,
+  groupIndex,
+}: {
+  form: FormInstance<UrgentFormValues>
+  groupIndex: number
+}) {
+  return (
+    <Form.Item noStyle shouldUpdate>
+      {() => {
+        const groups = readUrgentGroups(form)
+        return (
+          <span className="font-semibold">
+            {formatMoney(calculateItemsTotal(groups[groupIndex]?.items))}
+          </span>
+        )
+      }}
+    </Form.Item>
+  )
+}
+
+function PurchaseRequestTotal({ form }: { form: FormInstance<UrgentFormValues> }) {
+  return (
+    <Form.Item noStyle shouldUpdate>
+      {() => (
+        <div className="flex justify-end border-t border-[var(--color-hairline-soft)] pt-3 text-[16px] font-semibold">
+          合计：{formatMoney(calculateGroupsTotal(readUrgentGroups(form)))}
+        </div>
+      )}
+    </Form.Item>
+  )
+}
 
 function normalizeItem(item: PurchaseRequestItemResponse): PurchaseRequestItemInput {
   return {
@@ -124,7 +193,7 @@ export function buildUrgentPurchasePayload(
 ) {
   return {
     category,
-    request_department: values.request_department,
+    request_department: values.request_department?.trim() ?? '',
     request_date: values.request_date.format('YYYY-MM-DD'),
     attachment_note: values.attachment_note?.trim() ?? '',
     items: values.groups.flatMap((group) =>
@@ -188,15 +257,18 @@ export function UrgentPurchaseRequestFormClient({
   categoryLabel,
   initialRequests,
   initialTotal,
+  initialLoadFailed = false,
 }: PurchaseRequestFormClientProps) {
   const { message } = App.useApp()
   const [form] = Form.useForm<UrgentFormValues>()
   const [records, setRecords] = useState(initialRequests)
   const [total, setTotal] = useState(initialTotal)
+  const [loadError, setLoadError] = useState(initialLoadFailed)
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [submittingId, setSubmittingId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [detailRecord, setDetailRecord] = useState<PurchaseRequestResponse | null>(null)
   const [attachmentNoteOpen, setAttachmentNoteOpen] = useState(false)
@@ -206,21 +278,6 @@ export function UrgentPurchaseRequestFormClient({
   const watchedGroupsValue = Form.useWatch('groups', form)
   const watchedGroups = useMemo(() => watchedGroupsValue ?? [], [watchedGroupsValue])
   const watchedAttachmentNote = Form.useWatch('attachment_note', form) ?? ''
-
-  const totalAmount = useMemo(
-    () =>
-      watchedGroups.reduce(
-        (sum, group) =>
-          sum +
-          (group?.items ?? []).reduce(
-            (groupSum, item) =>
-              groupSum + calculateLineAmount(item?.quantity, item?.unit_price),
-            0
-          ),
-        0
-      ),
-    [watchedGroups]
-  )
 
   const loadRecords = async (nextPage = page) => {
     setLoading(true)
@@ -233,7 +290,9 @@ export function UrgentPurchaseRequestFormClient({
       setRecords(response.data ?? [])
       setTotal(Number(response.meta?.total ?? response.data?.length ?? 0))
       setPage(nextPage)
+      setLoadError(false)
     } catch {
+      setLoadError(true)
       message.error('采购申请列表加载失败')
     } finally {
       setLoading(false)
@@ -301,12 +360,32 @@ export function UrgentPurchaseRequestFormClient({
         message.error(response.message || '采购申请提交失败')
         return
       }
-      message.success('已提交至部门负责人审批')
+      message.success('已提交至五金库审批')
       await loadRecords(page)
     } catch {
       message.error('采购申请提交失败，请稍后重试')
     } finally {
       setSubmittingId(null)
+    }
+  }
+
+  const handleDeleteFlow = async (record: PurchaseRequestResponse) => {
+    setDeletingId(record.id)
+    try {
+      const response = await deletePurchaseRequest(record.id)
+      if (response.code !== 200) {
+        message.error(response.message || '采购申请删除失败')
+        return
+      }
+      message.success('采购申请已删除')
+      if (editingId === record.id) {
+        resetForm()
+      }
+      await loadRecords(page)
+    } catch {
+      message.error('采购申请删除失败，请稍后重试')
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -326,7 +405,7 @@ export function UrgentPurchaseRequestFormClient({
     {
       title: '操作',
       key: 'actions',
-      width: 260,
+      width: 320,
       fixed: 'right',
       render: (_, record) => {
         const editable = record.status === 'draft' || record.status === 'rejected'
@@ -336,12 +415,24 @@ export function UrgentPurchaseRequestFormClient({
             {editable && <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>编辑</Button>}
             {editable && (
               <Popconfirm
-                title="确认提交到部门负责人审批？"
+                title="确认提交到五金库审批？"
                 okText="提交"
                 cancelText="取消"
                 onConfirm={() => handleSubmitFlow(record)}
               >
                 <Button type="link" size="small" icon={<SendOutlined />} loading={submittingId === record.id}>提交</Button>
+              </Popconfirm>
+            )}
+            {record.status === 'draft' && (
+              <Popconfirm
+                title="确认删除该采购申请草稿？"
+                description="删除后不可恢复"
+                okText="删除"
+                cancelText="取消"
+                okButtonProps={{ danger: true }}
+                onConfirm={() => handleDeleteFlow(record)}
+              >
+                <Button type="link" size="small" danger icon={<DeleteOutlined />} loading={deletingId === record.id}>删除</Button>
               </Popconfirm>
             )}
           </Space>
@@ -364,9 +455,12 @@ export function UrgentPurchaseRequestFormClient({
 
   return (
     <div className="space-y-4">
-      <div>
-        <p className="mb-2 text-[13px] text-[var(--color-stone)]">采购管理 / 采购申请</p>
-        <h1 className="mb-2 text-[22px] font-semibold text-[var(--color-charcoal)]">{categoryLabel}采购申请</h1>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="mb-2 text-[13px] text-[var(--color-stone)]">采购管理 / 采购申请</p>
+          <h1 className="mb-2 text-[22px] font-semibold text-[var(--color-charcoal)]">{categoryLabel}采购申请</h1>
+        </div>
+        <PurchaseRequestImportButton onImported={() => void loadRecords(page)} />
       </div>
 
       <Form
@@ -423,7 +517,18 @@ export function UrgentPurchaseRequestFormClient({
                         <Form.List name={[groupField.name, 'items']}>
                           {(itemFields, { add: addItem, remove: removeItem }) => {
                             const editableRows = itemFields.map((field) => ({ key: field.key, name: field.name }))
-                            const path = (rowName: number, key: string) => [groupField.name, 'items', rowName, key]
+                            const groupItems = watchedGroups[groupIndex]?.items ?? []
+                            const itemColumnWidth = (
+                              field: string,
+                              sizing: { minWidth: number; maxWidth: number },
+                            ) => getPurchaseDetailColumnWidth(groupItems, field, sizing)
+                            const path = (rowName: number, key: string) => [rowName, key]
+                            const itemValuePath = (rowName: number): PurchaseItemPath => [
+                              'groups',
+                              groupField.name,
+                              'items',
+                              rowName,
+                            ]
                             type LinkedFieldPath =
                               | ['groups', number, 'items', number, 'material_description']
                               | ['groups', number, 'items', number, 'rule_model']
@@ -439,7 +544,10 @@ export function UrgentPurchaseRequestFormClient({
                                     {
                                       title: '物料编码',
                                       key: 'material_code',
-                                      width: 150,
+                                      width: itemColumnWidth(
+                                        'material_code',
+                                        purchaseDetailInputSizing.materialCode,
+                                      ),
                                       render: (_: unknown, row: EditableItemRow) => (
                                         <Form.Item
                                           name={path(row.name, 'material_code')}
@@ -471,27 +579,45 @@ export function UrgentPurchaseRequestFormClient({
                                         </Form.Item>
                                       ),
                                     },
-                                    { title: '物料说明', key: 'material_description', width: 180, render: (_: unknown, row: EditableItemRow) => <Form.Item name={path(row.name, 'material_description')} rules={[{ required: true, message: '请输入物料说明' }]} className="mb-0"><Input /></Form.Item> },
-                                    { title: '规格型号', key: 'rule_model', width: 150, render: (_: unknown, row: EditableItemRow) => <Form.Item name={path(row.name, 'rule_model')} className="mb-0"><Input /></Form.Item> },
+                                    { title: '物料说明', key: 'material_description', width: itemColumnWidth('material_description', purchaseDetailInputSizing.materialDescription), render: (_: unknown, row: EditableItemRow) => <Form.Item name={path(row.name, 'material_description')} rules={[{ required: true, message: '请输入物料说明' }]} className="mb-0"><PurchaseDetailAutoInput {...purchaseDetailInputSizing.materialDescription} /></Form.Item> },
+                                    { title: '规格型号', key: 'rule_model', width: itemColumnWidth('rule_model', purchaseDetailInputSizing.ruleModel), render: (_: unknown, row: EditableItemRow) => <Form.Item name={path(row.name, 'rule_model')} className="mb-0"><PurchaseDetailAutoInput {...purchaseDetailInputSizing.ruleModel} /></Form.Item> },
                                   ]
                                 : [
-                                    { title: '商品名称', key: 'product_name', width: 160, render: (_: unknown, row: EditableItemRow) => <Form.Item name={path(row.name, 'product_name')} rules={[{ required: true, message: '请输入商品名称' }]} className="mb-0"><Input /></Form.Item> },
-                                    { title: '规格', key: 'specification', width: 130, render: (_: unknown, row: EditableItemRow) => <Form.Item name={path(row.name, 'specification')} className="mb-0"><Input /></Form.Item> },
+                                    { title: '商品名称', key: 'product_name', width: itemColumnWidth('product_name', purchaseDetailInputSizing.productName), render: (_: unknown, row: EditableItemRow) => <Form.Item name={path(row.name, 'product_name')} rules={[{ required: true, message: '请输入商品名称' }]} className="mb-0"><PurchaseDetailAutoInput {...purchaseDetailInputSizing.productName} /></Form.Item> },
+                                    { title: '规格', key: 'specification', width: itemColumnWidth('specification', purchaseDetailInputSizing.specification), render: (_: unknown, row: EditableItemRow) => <Form.Item name={path(row.name, 'specification')} className="mb-0"><PurchaseDetailAutoInput {...purchaseDetailInputSizing.specification} /></Form.Item> },
                                   ]),
-                              { title: '用途', key: 'purpose', width: 160, render: (_, row) => <Form.Item name={path(row.name, 'purpose')} className="mb-0"><Input /></Form.Item> },
-                              { title: '材质', key: 'material', width: 110, render: (_, row) => <Form.Item name={path(row.name, 'material')} className="mb-0"><Input /></Form.Item> },
-                              { title: '品牌', key: 'brand', width: 110, render: (_, row) => <Form.Item name={path(row.name, 'brand')} className="mb-0"><Input /></Form.Item> },
+                              { title: '用途', key: 'purpose', width: itemColumnWidth('purpose', purchaseDetailInputSizing.purpose), render: (_, row) => <Form.Item name={path(row.name, 'purpose')} className="mb-0"><PurchaseDetailAutoInput {...purchaseDetailInputSizing.purpose} /></Form.Item> },
+                              { title: '材质', key: 'material', width: itemColumnWidth('material', purchaseDetailInputSizing.material), render: (_, row) => <Form.Item name={path(row.name, 'material')} className="mb-0"><PurchaseDetailAutoInput {...purchaseDetailInputSizing.material} /></Form.Item> },
+                              { title: '品牌', key: 'brand', width: itemColumnWidth('brand', purchaseDetailInputSizing.brand), render: (_, row) => <Form.Item name={path(row.name, 'brand')} className="mb-0"><PurchaseDetailAutoInput {...purchaseDetailInputSizing.brand} /></Form.Item> },
                               { title: '数量', key: 'quantity', width: 110, render: (_, row) => <Form.Item name={path(row.name, 'quantity')} rules={[{ required: true, message: '请输入数量' }]} className="mb-0"><InputNumber className="w-full" min={0} precision={4} /></Form.Item> },
-                              { title: '单位', key: 'unit', width: 90, render: (_, row) => <Form.Item name={path(row.name, 'unit')} className="mb-0"><Input /></Form.Item> },
+                              { title: '单位', key: 'unit', width: itemColumnWidth('unit', purchaseDetailInputSizing.unit), render: (_, row) => <Form.Item name={path(row.name, 'unit')} className="mb-0"><PurchaseDetailAutoInput {...purchaseDetailInputSizing.unit} /></Form.Item> },
                               { title: '单价（元）', key: 'unit_price', width: 120, render: (_, row) => <Form.Item name={path(row.name, 'unit_price')} rules={[{ required: true, message: '请输入单价' }]} className="mb-0"><InputNumber className="w-full" min={0} precision={4} /></Form.Item> },
-                              { title: '总额（元）', key: 'total_amount', width: 120, render: (_, row) => <span className="font-medium text-[var(--color-charcoal)]">{formatMoney(calculateLineAmount(watchedGroups[groupIndex]?.items?.[row.name]?.quantity, watchedGroups[groupIndex]?.items?.[row.name]?.unit_price))}</span> },
-                              { title: '备注', key: 'remarks', width: 180, render: (_, row) => <Form.Item name={path(row.name, 'remarks')} className="mb-0"><Input /></Form.Item> },
+                              { title: '总额（元）', key: 'total_amount', width: 120, render: (_, row) => <PurchaseLineAmount form={form} path={itemValuePath(row.name)} /> },
+                              { title: '备注', key: 'remarks', width: itemColumnWidth('remarks', purchaseDetailInputSizing.remarks), render: (_, row) => <Form.Item name={path(row.name, 'remarks')} className="mb-0"><PurchaseDetailAutoInput {...purchaseDetailInputSizing.remarks} /></Form.Item> },
                               { title: '', key: 'actions', width: 70, fixed: 'right', render: (_, row) => <Button danger type="text" icon={<DeleteOutlined />} disabled={itemFields.length <= 1} onClick={() => removeItem(row.name)} /> },
                             ]
                             const fixedColumns = materialFields ? 10 : 9
                             return (
                               <div className="space-y-3">
-                                <Table columns={columns} dataSource={editableRows} rowKey="key" pagination={false} bordered scroll={{ x: materialFields ? 1570 : 1370 }} summary={() => <Table.Summary.Row><Table.Summary.Cell index={0} colSpan={fixedColumns}><span className="font-semibold">分组小计</span></Table.Summary.Cell><Table.Summary.Cell index={fixedColumns}><span className="font-semibold">{formatMoney((watchedGroups[groupIndex]?.items ?? []).reduce((sum, item) => sum + calculateLineAmount(item?.quantity, item?.unit_price), 0))}</span></Table.Summary.Cell><Table.Summary.Cell index={fixedColumns + 1} colSpan={2} /></Table.Summary.Row>} />
+                                <Table
+                                  columns={columns}
+                                  dataSource={editableRows}
+                                  rowKey="key"
+                                  pagination={false}
+                                  bordered
+                                  scroll={{ x: materialFields ? 1570 : 1370 }}
+                                  summary={() => (
+                                    <Table.Summary.Row>
+                                      <Table.Summary.Cell index={0} colSpan={fixedColumns}>
+                                        <span className="font-semibold">分组小计</span>
+                                      </Table.Summary.Cell>
+                                      <Table.Summary.Cell index={fixedColumns}>
+                                        <PurchaseGroupSubtotal form={form} groupIndex={groupIndex} />
+                                      </Table.Summary.Cell>
+                                      <Table.Summary.Cell index={fixedColumns + 1} colSpan={2} />
+                                    </Table.Summary.Row>
+                                  )}
+                                />
                                 <Button icon={<PlusOutlined />} onClick={() => addItem({ ...defaultPurchaseRequestItem })}>新增明细</Button>
                               </div>
                             )
@@ -526,7 +652,7 @@ export function UrgentPurchaseRequestFormClient({
                 </>
               )}
             </Form.List>
-            <div className="flex justify-end border-t border-[var(--color-hairline-soft)] pt-3 text-[16px] font-semibold">合计：{formatMoney(totalAmount)}</div>
+            <PurchaseRequestTotal form={form} />
           </div>
         </section>
 
@@ -538,6 +664,14 @@ export function UrgentPurchaseRequestFormClient({
 
       <section className="rounded-[12px] border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-6">
         <div className="mb-4 flex items-center justify-between gap-4"><h2 className="text-[18px] font-semibold text-[var(--color-charcoal)]">申请记录</h2><Button loading={loading} onClick={() => loadRecords(page)}>刷新</Button></div>
+        {loadError && <Alert
+          className="mb-4"
+          type="error"
+          showIcon
+          message="加急申请记录加载失败"
+          description="暂时无法获取已保存的申请记录，请重试。当前填写内容不会被清除。"
+          action={<Button size="small" onClick={() => void loadRecords(page)}>重试</Button>}
+        />}
         <Table columns={recordColumns} dataSource={records} rowKey="id" loading={loading} scroll={{ x: 900 }} pagination={{ current: page, pageSize: DEFAULT_PAGE_SIZE, total, showSizeChanger: false, showTotal: (value) => `共 ${value} 条`, onChange: (nextPage) => loadRecords(nextPage) }} />
       </section>
 

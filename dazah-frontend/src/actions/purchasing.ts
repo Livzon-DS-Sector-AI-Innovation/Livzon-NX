@@ -10,9 +10,12 @@ import type {
   MaterialSourceConfigApiResponse,
   MaterialSourceConfigUpsert,
   MaterialSourceProbeApiResponse,
+  MaterialSourceSyncApiResponse,
   PurchaseApprovalRequest,
   PurchaseRequestApiResponse,
   PurchaseRequestCreate,
+  PurchaseRequestDeleteResponse,
+  PurchaseRequestImportResponse,
   PurchaseRequestUpdate,
   SupplierImportResponse,
 } from '@/types/purchasing'
@@ -59,6 +62,34 @@ export async function importSupplierTable(
   )
   if (response.ok) {
     revalidatePath('/purchasing/supplier')
+  }
+  return result
+}
+
+export async function importPurchaseRequestTable(
+  formData: FormData
+): Promise<PurchaseRequestImportResponse> {
+  const token = await getServerToken()
+  const headers: HeadersInit = {}
+  if (token) {
+    headers.Authorization = `Bearer ${token}`
+  }
+
+  const response = await fetch(
+    `${API_BASE}/api/v1/procurement/purchase-requests/import`,
+    {
+      method: 'POST',
+      headers,
+      body: formData,
+      cache: 'no-store',
+    }
+  )
+  const result = await parseJsonResponse<PurchaseRequestImportResponse>(
+    response,
+    '采购申请导入失败'
+  )
+  if (response.ok) {
+    revalidatePath('/purchasing')
   }
   return result
 }
@@ -155,6 +186,20 @@ export async function submitPurchaseRequest(
       body: JSON.stringify({}),
     },
     '采购申请提交失败'
+  )
+  revalidatePath('/purchasing')
+  return response
+}
+
+export async function deletePurchaseRequest(
+  requestId: string
+): Promise<PurchaseRequestDeleteResponse> {
+  const response = await procurementJsonFetch<PurchaseRequestDeleteResponse>(
+    `/api/v1/procurement/purchase-requests/${requestId}`,
+    {
+      method: 'DELETE',
+    },
+    '采购申请删除失败'
   )
   revalidatePath('/purchasing')
   return response
@@ -275,6 +320,20 @@ export async function saveProcurementMaterialSource(
     '物料数据源保存失败',
   )
   revalidatePath('/purchasing')
+  revalidatePath('/purchasing/settings')
+  return response
+}
+
+export async function syncProcurementMaterialSource(): Promise<MaterialSourceSyncApiResponse> {
+  const response = await procurementJsonFetch<MaterialSourceSyncApiResponse>(
+    '/api/v1/procurement/material-source-config/sync',
+    {
+      method: 'POST',
+      body: JSON.stringify({}),
+    },
+    '采购物料数据同步失败',
+  )
+  revalidatePath('/purchasing/material-library')
   revalidatePath('/purchasing/settings')
   return response
 }

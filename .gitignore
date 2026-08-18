@@ -113,3 +113,7 @@ Hermes-Lite/sessions/
 Hermes-Lite/memory/
 Hermes-Lite/memories/
 Hermes-Lite/cache/
+
+# Local tooling directories
+**/.zcode/
+**/.dsh-install/

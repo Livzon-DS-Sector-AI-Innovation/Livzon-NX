@@ -112,6 +112,11 @@ class Settings(BaseSettings):
     # Use admin_only only for a time-boxed production recovery window.
     LOCAL_LOGIN_MODE: Literal["disabled", "admin_only", "enabled"] | None = None
 
+    # All authenticated users can access business modules in the current
+    # development and production deployment. Set this to ``roles`` only when
+    # grant-based module access is explicitly required.
+    MODULE_ACCESS_MODE: Literal["roles", "all"] | None = None
+
     # Local auth bootstrap (development or emergency administrator accounts)
     BOOTSTRAP_ADMIN_USERNAME: str = ""
     BOOTSTRAP_ADMIN_PASSWORD: str = ""
@@ -225,6 +230,12 @@ class Settings(BaseSettings):
         if self.LOCAL_LOGIN_MODE is not None:
             return self.LOCAL_LOGIN_MODE
         return "disabled" if self.is_production else "enabled"
+
+    @property
+    def effective_module_access_mode(self) -> Literal["roles", "all"]:
+        if self.MODULE_ACCESS_MODE is not None:
+            return self.MODULE_ACCESS_MODE
+        return "all"
 
     def check(self) -> None:
         """启动时校验关键配置，避免漏配导致运行时异常。"""

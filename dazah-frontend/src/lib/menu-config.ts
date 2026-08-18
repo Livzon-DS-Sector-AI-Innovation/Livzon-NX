@@ -369,7 +369,7 @@ export const moduleMenus: ModuleMenu[] = [
           { key: "request-office", label: "办公用品", path: "/purchasing/request/office" },
           { key: "request-raw-auxiliary", label: "原辅料", path: "/purchasing/request/raw-auxiliary" },
           { key: "request-chemical-glass", label: "化玻", path: "/purchasing/request/chemical-glass" },
-          { key: "request-electrical", label: "电器", path: "/purchasing/request/electrical" },
+          { key: "request-electrical", label: "电气", path: "/purchasing/request/electrical" },
           { key: "request-advertising-printing", label: "广告/印刷", path: "/purchasing/request/advertising-printing" },
           { key: "request-fire", label: "消防", path: "/purchasing/request/fire" },
           { key: "request-packaging", label: "包材", path: "/purchasing/request/packaging" },
@@ -385,6 +385,7 @@ export const moduleMenus: ModuleMenu[] = [
           { key: "request-urgent", label: "加急单", path: "/purchasing/request/urgent" },
         ],
       },
+      { key: "material-library", label: "物料编码库", path: "/purchasing/material-library" },
       {
         key: "approval",
         label: "采购审批",
@@ -444,7 +445,7 @@ export const moduleMenus: ModuleMenu[] = [
           },
           {
             key: "approval-electrical",
-            label: "电器",
+            label: "电气",
             path: "",
             children: [
               { key: "approval-electrical-hardware-warehouse", label: "五金库", path: "/purchasing/approval/electrical/hardware-warehouse" },

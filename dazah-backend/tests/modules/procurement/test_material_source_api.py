@@ -1,5 +1,7 @@
+import asyncio
 from datetime import UTC, datetime
 from types import SimpleNamespace
+from unittest.mock import ANY, AsyncMock
 from uuid import uuid4
 
 import pytest
@@ -30,6 +32,12 @@ def _config() -> SimpleNamespace:
         last_test_status="success",
         last_test_error=None,
         last_tested_at=datetime(2026, 8, 14, tzinfo=UTC),
+        sync_status="success",
+        sync_error=None,
+        last_synced_at=datetime(2026, 8, 14, tzinfo=UTC),
+        last_sync_record_count=2,
+        sync_total_records=None,
+        sync_fetched_count=0,
         updated_at=datetime(2026, 8, 14, tzinfo=UTC),
     )
 
@@ -148,6 +156,343 @@ async def test_admin_config_endpoints_map_material_source_errors(
     assert response.json()["message"] == "飞书多维表格请求超时"
 
 
+class _FakeSyncSession:
+    def __init__(self) -> None:
+        self.commit = AsyncMock()
+        self.rollback = AsyncMock()
+
+    async def __aenter__(self) -> "_FakeSyncSession":
+        return self
+
+    async def __aexit__(self, *_args) -> bool:
+        return False
+
+
+def _install_fake_sync_session(monkeypatch: pytest.MonkeyPatch) -> _FakeSyncSession:
+    fake = _FakeSyncSession()
+    monkeypatch.setattr(procurement_api, "async_session_factory", lambda: fake)
+    return fake
+
+
+@pytest.mark.anyio
+async def test_material_sync_lock_heartbeat_renews_lock_until_cancelled(
+    monkeypatch,
+) -> None:
+    renew = AsyncMock()
+    monkeypatch.setattr(procurement_api, "renew_lock", renew)
+    sleeps = 0
+
+    async def fake_sleep(_seconds):
+        nonlocal sleeps
+        sleeps += 1
+        if sleeps >= 3:
+            raise asyncio.CancelledError
+
+    monkeypatch.setattr(procurement_api.asyncio, "sleep", fake_sleep)
+
+    with pytest.raises(asyncio.CancelledError):
+        await procurement_api._lock_heartbeat("lock-key")
+
+    assert sleeps == 3
+    assert renew.await_count == 2
+    renew.assert_awaited_with(
+        "lock-key",
+        procurement_api.MATERIAL_SYNC_LOCK_TTL_SECONDS,
+    )
+
+
+@pytest.mark.anyio
+async def test_admin_can_sync_material_source_and_records_audit(
+    admin_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = _config()
+    result = SimpleNamespace(
+        config=_config(),
+        synced_count=24,
+        deactivated_count=3,
+    )
+
+    async def sync(_db, *, user_id):
+        assert user_id
+        return result
+
+    monkeypatch.setattr(
+        procurement_api,
+        "get_material_source_config",
+        lambda _db: _async_value(config),
+    )
+    monkeypatch.setattr(procurement_api, "sync_material_source", sync)
+    monkeypatch.setattr(
+        procurement_api,
+        "acquire_lock",
+        AsyncMock(return_value=True),
+    )
+    release = _async_mock()
+    monkeypatch.setattr(procurement_api, "release_lock", release)
+    audit = AsyncMock()
+    monkeypatch.setattr(procurement_api, "record_audit_log", audit)
+    fake_session = _install_fake_sync_session(monkeypatch)
+
+    response = await admin_client.post(
+        "/api/v1/procurement/material-source-config/sync",
+        json={},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["message"] == "采购物料数据同步已启动"
+    assert response.json()["data"]["synced_count"] == 0
+    assert response.json()["data"]["deactivated_count"] == 0
+    assert response.json()["data"]["config"]["sync_status"] == "syncing"
+    audit.assert_awaited_once_with(
+        fake_session,
+        action="procurement_material_source_synced",
+        user_id=ANY,
+        resource_type="procurement_material_source_config",
+        resource_id=config.id,
+        new_value={
+            "synced_count": 24,
+            "deactivated_count": 3,
+            "sync_status": "success",
+        },
+    )
+    fake_session.commit.assert_awaited_once()
+    release.assert_awaited_once()
+
+
+@pytest.mark.anyio
+async def test_sync_conflict_when_sync_already_running(
+    admin_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = _config()
+    config.sync_status = "syncing"
+    monkeypatch.setattr(
+        procurement_api,
+        "get_material_source_config",
+        lambda _db: _async_value(config),
+    )
+    monkeypatch.setattr(
+        procurement_api,
+        "acquire_lock",
+        AsyncMock(return_value=False),
+    )
+    sync = _async_mock()
+    monkeypatch.setattr(procurement_api, "sync_material_source", sync)
+
+    response = await admin_client.post(
+        "/api/v1/procurement/material-source-config/sync",
+        json={},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["message"] == "物料数据同步正在进行中，请稍后重试"
+    sync.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_sync_recovers_stale_lock_when_status_is_clear(
+    admin_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = _config()
+    monkeypatch.setattr(
+        procurement_api,
+        "get_material_source_config",
+        lambda _db: _async_value(config),
+    )
+    monkeypatch.setattr(
+        procurement_api,
+        "acquire_lock",
+        AsyncMock(side_effect=[False, True]),
+    )
+    release = _async_mock()
+    monkeypatch.setattr(procurement_api, "release_lock", release)
+
+    async def sync(_db, *, user_id):
+        return SimpleNamespace(
+            config=_config(),
+            synced_count=0,
+            deactivated_count=0,
+        )
+
+    monkeypatch.setattr(procurement_api, "sync_material_source", sync)
+    monkeypatch.setattr(procurement_api, "record_audit_log", _async_mock())
+    _install_fake_sync_session(monkeypatch)
+
+    response = await admin_client.post(
+        "/api/v1/procurement/material-source-config/sync",
+        json={},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["message"] == "采购物料数据同步已启动"
+    # 陈旧锁释放一次，后台任务结束后释放一次
+    assert release.await_count == 2
+
+
+@pytest.mark.anyio
+async def test_clear_stale_material_sync_lock_releases_residual_lock(
+    monkeypatch,
+) -> None:
+    config = _config()
+
+    class FakeSession:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+    monkeypatch.setattr(
+        procurement_api,
+        "async_session_factory",
+        lambda: FakeSession(),
+    )
+    monkeypatch.setattr(
+        procurement_api,
+        "get_material_source_config",
+        AsyncMock(return_value=config),
+    )
+    release = AsyncMock()
+    monkeypatch.setattr(procurement_api, "release_lock", release)
+
+    await procurement_api.clear_stale_material_sync_lock()
+
+    release.assert_awaited_once_with(
+        procurement_api._material_sync_lock_key(config.id)
+    )
+
+    monkeypatch.setattr(
+        procurement_api,
+        "get_material_source_config",
+        AsyncMock(return_value=None),
+    )
+    await procurement_api.clear_stale_material_sync_lock()
+    release.assert_awaited_once()
+
+
+@pytest.mark.anyio
+async def test_sync_conflict_when_redis_down_and_status_syncing(
+    admin_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = _config()
+    config.sync_status = "syncing"
+    monkeypatch.setattr(
+        procurement_api,
+        "get_material_source_config",
+        lambda _db: _async_value(config),
+    )
+
+    async def unavailable(*_args, **_kwargs):
+        raise ConnectionError("redis down")
+
+    monkeypatch.setattr(procurement_api, "acquire_lock", unavailable)
+    sync = _async_mock()
+    monkeypatch.setattr(procurement_api, "sync_material_source", sync)
+
+    response = await admin_client.post(
+        "/api/v1/procurement/material-source-config/sync",
+        json={},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["message"] == "同步依赖的 Redis 当前不可用，请稍后重试"
+    sync.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_sync_proceeds_when_redis_down_but_status_clear(
+    admin_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        procurement_api,
+        "get_material_source_config",
+        lambda _db: _async_value(_config()),
+    )
+
+    async def unavailable(*_args, **_kwargs):
+        raise ConnectionError("redis down")
+
+    monkeypatch.setattr(procurement_api, "acquire_lock", unavailable)
+    release = _async_mock()
+    monkeypatch.setattr(procurement_api, "release_lock", release)
+
+    async def sync(_db, *, user_id):
+        return SimpleNamespace(
+            config=_config(),
+            synced_count=0,
+            deactivated_count=0,
+        )
+
+    monkeypatch.setattr(procurement_api, "sync_material_source", sync)
+    monkeypatch.setattr(procurement_api, "record_audit_log", _async_mock())
+    _install_fake_sync_session(monkeypatch)
+
+    response = await admin_client.post(
+        "/api/v1/procurement/material-source-config/sync",
+        json={},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["message"] == "同步依赖的 Redis 当前不可用，请稍后重试"
+    release.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_authorized_user_can_list_material_catalog_with_filters(
+    admin_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def list_catalog(_db, **kwargs):
+        assert kwargs == {
+            "keyword": "MAT",
+            "material_code": "MAT-001",
+            "material_description": "第一条",
+            "rule_model": "A",
+            "page": 2,
+            "page_size": 20,
+        }
+        record = SimpleNamespace(
+            id=uuid4(),
+            feishu_record_id="rec-1",
+            material_code="MAT-001",
+            material_description="第一条",
+            rule_model="A",
+            feishu_created_time=None,
+            feishu_last_modified_time=None,
+            last_synced_at=datetime(2026, 8, 14, tzinfo=UTC),
+        )
+        return [record], 1, _config()
+
+    monkeypatch.setattr(procurement_api, "list_material_catalog", list_catalog)
+    response = await admin_client.get(
+        "/api/v1/procurement/material-catalog"
+        "?keyword=MAT&material_code=MAT-001&material_description=%E7%AC%AC%E4%B8%80%E6%9D%A1"
+        "&rule_model=A&page=2&page_size=20"
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"][0]["material_code"] == "MAT-001"
+    assert response.json()["meta"] == {
+        "page": 2,
+        "page_size": 20,
+        "total": 1,
+        "sync_status": "success",
+        "sync_error": None,
+        "last_synced_at": "2026-08-14T00:00:00Z",
+        "last_sync_record_count": 2,
+        "sync_total_records": None,
+        "sync_fetched_count": 0,
+        "sync_phase": "idle",
+        "sync_persisted_count": 0,
+        "sync_heartbeat_at": None,
+        "last_successful_modified_time": None,
+    }
+
+
 @pytest.mark.anyio
 async def test_regular_user_can_query_duplicate_material_options(
     client: AsyncClient,
@@ -206,9 +551,7 @@ async def test_regular_user_can_query_duplicate_material_options(
 
     monkeypatch.setattr(procurement_api, "list_material_options", list_options)
     try:
-        response = await client.get(
-            "/api/v1/procurement/material-options?keyword=MAT"
-        )
+        response = await client.get("/api/v1/procurement/material-options?keyword=MAT")
 
         assert response.status_code == 200
         assert [item["record_id"] for item in response.json()["data"]] == [
@@ -250,6 +593,23 @@ async def test_material_option_external_failures_have_stable_status(
         "飞书多维表格访问失败",
         "飞书多维表格请求超时",
     }
+
+
+@pytest.mark.anyio
+async def test_material_options_timeout_returns_504(
+    admin_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def list_options(*_args, **_kwargs):
+        raise MaterialSourceTimeoutError("飞书物料数据源请求超时")
+
+    monkeypatch.setattr(procurement_api, "list_material_options", list_options)
+    response = await admin_client.get(
+        "/api/v1/procurement/material-options?keyword=MAT"
+    )
+
+    assert response.status_code == 504
+    assert response.json()["message"] == "飞书物料数据源请求超时"
 
 
 class _AsyncMock:

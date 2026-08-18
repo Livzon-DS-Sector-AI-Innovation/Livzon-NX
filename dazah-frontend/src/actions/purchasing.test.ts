@@ -12,12 +12,22 @@ vi.mock('@/lib/server-api', () => ({
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }))
 
 import {
+  deletePurchaseRequest,
+  importPurchaseRequestTable,
   saveProcurementMaterialSource,
+  syncProcurementMaterialSource,
   testProcurementMaterialSource,
 } from './purchasing'
 
 const payload = {
   source_url: 'https://feishu.cn/base/app-token?table=table-id',
+}
+
+function jsonResponse(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json' },
+  })
 }
 
 describe('procurement material source actions', () => {
@@ -30,16 +40,10 @@ describe('procurement material source actions', () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ code: 200, message: 'success', data: { status: 'success' } }), {
-          status: 200,
-          headers: { 'content-type': 'application/json' },
-        }),
+        jsonResponse({ code: 200, message: 'success', data: { status: 'success' } }),
       )
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ code: 200, message: 'success', data: { id: 'config-1' } }), {
-          status: 200,
-          headers: { 'content-type': 'application/json' },
-        }),
+        jsonResponse({ code: 200, message: 'success', data: { id: 'config-1' } }),
       )
     vi.stubGlobal('fetch', fetchMock)
 
@@ -64,5 +68,76 @@ describe('procurement material source actions', () => {
       ['/purchasing'],
       ['/purchasing/settings'],
     ])
+  })
+
+  it('imports a purchase request table with an auth header and revalidates', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        code: 200,
+        message: 'success',
+        data: { file_name: '申请.xlsx', total_sheets: 1, imported_requests: [], failed_rows: [] },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const formData = new FormData()
+    formData.append('file', new File(['bytes'], '申请.xlsx'))
+    await expect(importPurchaseRequestTable(formData)).resolves.toMatchObject({ code: 200 })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://backend.test/api/v1/procurement/purchase-requests/import',
+      expect.objectContaining({
+        method: 'POST',
+        body: formData,
+        headers: expect.objectContaining({ Authorization: 'Bearer server-token' }),
+      }),
+    )
+    expect(mocks.revalidatePath).toHaveBeenCalledWith('/purchasing')
+  })
+
+  it('imports without an auth header when no server token exists', async () => {
+    mocks.getServerToken.mockResolvedValueOnce(null)
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({ code: 200, message: 'success', data: null }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(importPurchaseRequestTable(new FormData())).resolves.toMatchObject({ code: 200 })
+
+    const headers = fetchMock.mock.calls[0][1].headers as HeadersInit
+    expect(headers).not.toHaveProperty('Authorization')
+  })
+
+  it('deletes a request and syncs the material source with revalidation', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({ code: 200, message: 'success', data: { success_count: 1, fail_count: 0 } }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          code: 200,
+          message: 'success',
+          data: { synced_count: 12, deactivated_count: 0 },
+        }),
+      )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(deletePurchaseRequest('req-1')).resolves.toMatchObject({ code: 200 })
+    await expect(syncProcurementMaterialSource()).resolves.toMatchObject({ code: 200 })
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      'http://backend.test/api/v1/procurement/purchase-requests/req-1',
+      expect.objectContaining({ method: 'DELETE' }),
+    )
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      'http://backend.test/api/v1/procurement/material-source-config/sync',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({}) }),
+    )
+    expect(mocks.revalidatePath).toHaveBeenCalledWith('/purchasing')
+    expect(mocks.revalidatePath).toHaveBeenCalledWith('/purchasing/material-library')
+    expect(mocks.revalidatePath).toHaveBeenCalledWith('/purchasing/settings')
   })
 })

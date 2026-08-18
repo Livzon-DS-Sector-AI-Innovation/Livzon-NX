@@ -33,6 +33,10 @@ export type PurchaseRequestApiResponse =
   components['schemas']['PurchaseRequestApiResponse']
 export type PurchaseRequestCategory = components['schemas']['PurchaseRequestCategory']
 export type PurchaseRequestCreate = components['schemas']['PurchaseRequestCreate']
+export type PurchaseRequestDeleteResult =
+  components['schemas']['PurchaseRequestDeleteResult']
+export type PurchaseRequestDeleteResponse =
+  components['schemas']['PurchaseRequestDeleteResponse']
 export type PurchaseRequestItemInput =
   components['schemas']['PurchaseRequestItemInput']
 export type PurchaseRequestItemResponse =
@@ -42,13 +46,26 @@ export type PurchaseRequestListResponse =
 export type PurchaseRequestResponse = components['schemas']['PurchaseRequestResponse']
 export type PurchaseRequestStatus = components['schemas']['PurchaseRequestStatus']
 export type PurchaseRequestUpdate = components['schemas']['PurchaseRequestUpdate']
+export type PurchaseRequestImportError =
+  components['schemas']['PurchaseRequestImportError']
+export type PurchaseRequestImportResult =
+  components['schemas']['PurchaseRequestImportResult']
+export type PurchaseRequestImportResponse =
+  components['schemas']['PurchaseRequestImportResponse']
+export type PurchaseRequestImportSummary =
+  components['schemas']['PurchaseRequestImportSummary']
 export type MaterialOptionResponse = components['schemas']['MaterialOptionResponse']
 export type MaterialOptionListResponse = components['schemas']['MaterialOptionListResponse']
+export type MaterialCatalogRecordResponse = components['schemas']['MaterialCatalogRecordResponse']
+export type MaterialCatalogListResponse = components['schemas']['MaterialCatalogListResponse']
+export type MaterialCatalogListMeta = components['schemas']['MaterialCatalogListMeta']
 export type MaterialSourceConfigUpsert = components['schemas']['MaterialSourceConfigUpsert']
 export type MaterialSourceConfigResponse = components['schemas']['MaterialSourceConfigResponse']
 export type MaterialSourceConfigApiResponse = components['schemas']['MaterialSourceConfigApiResponse']
 export type MaterialSourceProbeResponse = components['schemas']['MaterialSourceProbeResponse']
 export type MaterialSourceProbeApiResponse = components['schemas']['MaterialSourceProbeApiResponse']
+export type MaterialSourceSyncResult = components['schemas']['MaterialSourceSyncResult']
+export type MaterialSourceSyncApiResponse = components['schemas']['MaterialSourceSyncApiResponse']
 export type SupplierImportResponse = components['schemas']['SupplierImportResponse']
 export type SupplierImportResult = components['schemas']['SupplierImportResult']
 export type SupplierListResponse = components['schemas']['app__modules__procurement__schemas__SupplierListResponse']

@@ -11,6 +11,7 @@ const actions = vi.hoisted(() => ({
   approvePurchaseRequest: vi.fn(),
   rejectPurchaseRequest: vi.fn(),
   createPurchaseRequest: vi.fn(),
+  deletePurchaseRequest: vi.fn(),
   submitPurchaseRequest: vi.fn(),
   updatePurchaseRequest: vi.fn(),
 }))
@@ -19,6 +20,7 @@ const api = vi.hoisted(() => ({
   fetchPurchaseRequests: vi.fn(),
   fetchPurchaseOrders: vi.fn(),
   exportPurchaseOrdersExcel: vi.fn(),
+  fetchMaterialOptions: vi.fn(),
 }))
 
 const ui = vi.hoisted(() => ({
@@ -56,8 +58,14 @@ vi.mock('antd', async () => {
     form.setFieldsValue = (values: AnyProps) => {
       form.values = { ...form.values, ...values }
     }
-    form.setFieldValue = (name: string, value: unknown) => {
-      form.values[name] = value
+    form.setFieldValue = (name: string | Array<string | number>, value: unknown) => {
+      const path = Array.isArray(name) ? name : [name]
+      let target = form.values
+      for (const key of path.slice(0, -1)) {
+        target[key] ??= {}
+        target = target[key]
+      }
+      target[path[path.length - 1]] = value
     }
     form.resetFields = () => {
       form.values = {
@@ -130,7 +138,17 @@ vi.mock('antd', async () => {
   )
 
   const Space = ({ children }: AnyProps) => <span>{children}</span>
+  const Upload = ({ children, ...props }: AnyProps) => (
+    <span {...props}>{children}</span>
+  )
   const Tag = ({ children }: AnyProps) => <span>{children}</span>
+  const Alert = ({ message, description, action, ...props }: AnyProps) => (
+    <div role="alert" {...props}>
+      <strong>{message}</strong>
+      <span>{description}</span>
+      {action}
+    </div>
+  )
 
   const Descriptions = ({ children }: AnyProps) => <dl>{children}</dl>
   Descriptions.Item = ({ label, children }: AnyProps) => (
@@ -178,7 +196,9 @@ vi.mock('antd', async () => {
     return [form]
   }
   Form.useWatch = (name: string, form: AnyProps) => form?.getFieldValue(name)
-  Form.Item = ({ children }: AnyProps) => <>{children}</>
+  Form.Item = ({ children }: AnyProps) => (
+    <>{typeof children === 'function' ? children() : children}</>
+  )
   Form.List = ({ name, children }: AnyProps) => {
     const activeForm = (globalThis as AnyProps).__dazahActiveForm as AnyProps | undefined
     const form = activeForm
@@ -233,6 +253,7 @@ vi.mock('antd', async () => {
 
   return {
     App,
+    Alert,
     AutoComplete,
     Button,
     DatePicker,
@@ -247,6 +268,7 @@ vi.mock('antd', async () => {
     Space,
     Table,
     Tag,
+    Upload,
   }
 })
 
@@ -255,6 +277,7 @@ import { PurchaseOrderClient } from './PurchaseOrderClient'
 import { PurchaseRequestFormClient } from './PurchaseRequestFormClient'
 import { PurchasingWorkspaceClient } from './PurchasingWorkspaceClient'
 import {
+  UrgentPurchaseRequestFormClient,
   buildUrgentPurchasePayload,
   itemDetailColumns,
   normalizeGroups,
@@ -354,6 +377,7 @@ beforeEach(() => {
   actions.approvePurchaseRequest.mockResolvedValue({ code: 200, message: 'success', data: {} })
   actions.rejectPurchaseRequest.mockResolvedValue({ code: 200, message: 'success', data: {} })
   actions.createPurchaseRequest.mockResolvedValue({ code: 200, message: 'success', data: request() })
+  actions.deletePurchaseRequest.mockResolvedValue({ code: 200, message: 'success', data: { success_count: 1, fail_count: 0 } })
   actions.submitPurchaseRequest.mockResolvedValue({ code: 200, message: 'success', data: request() })
   actions.updatePurchaseRequest.mockResolvedValue({ code: 200, message: 'success', data: request() })
   api.fetchPurchaseRequests.mockResolvedValue({ code: 200, message: 'success', data: [request()], meta: { total: 1 } })
@@ -402,7 +426,7 @@ describe('purchasing workspace and request forms', () => {
         }],
       }],
     })
-    expect(payload).toMatchObject({ category: 'urgent', attachment_note: '说明' })
+    expect(payload).toMatchObject({ category: 'urgent', request_department: '采购部', attachment_note: '说明' })
     expect(payload.items[0]).toMatchObject({ item_category: 'hardware', product_name: '标签纸', unit: '包' })
   })
 
@@ -529,6 +553,100 @@ describe('purchasing workspace and request forms', () => {
     expect(actions.submitPurchaseRequest).toHaveBeenCalled()
   })
 
+  it('auto-calculates urgent line totals, group subtotals, and the grand total', () => {
+    mount(
+      <PurchaseRequestFormClient
+        category="urgent"
+        categoryLabel="加急单"
+        initialRequests={[]}
+        initialTotal={0}
+      />,
+    )
+
+    act(() => buttonContaining('添加申请类型')?.click())
+    const picker = container.querySelector('select') as HTMLSelectElement
+    act(() => {
+      picker.value = 'hardware'
+      picker.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    act(() => Array.from(container.querySelectorAll('button')).find((button) => button.textContent === '添加')?.click())
+    act(() => buttonContaining('新增明细')?.click())
+
+    const activeForm = (globalThis as any).__dazahActiveForm
+    act(() => {
+      activeForm.values.groups[0].items[0].quantity = 2
+      activeForm.values.groups[0].items[0].unit_price = 5
+      activeForm.values.groups[0].items[1].quantity = 3
+      activeForm.values.groups[0].items[1].unit_price = 5
+    })
+    // 触发一次重渲染，让总额、分组小计、合计重新读取表单值
+    act(() => buttonContaining('附件说明')?.click())
+    act(() => buttonContaining('取消')?.click())
+
+    expect(container.textContent).toContain('¥10.00')
+    expect(container.textContent).toContain('¥15.00')
+    expect(container.textContent).toContain('分组小计')
+    expect(container.textContent).toContain('合计：¥25.00')
+  })
+
+  it('auto-fills urgent material description and rule model from the material code', async () => {
+    api.fetchMaterialOptions.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: [{
+        record_id: 'rec-1',
+        material_code: 'MAT-001',
+        material_description: '不锈钢管',
+        rule_model: 'DN50',
+        material_unit: '米',
+      }],
+    })
+
+    mount(
+      <PurchaseRequestFormClient
+        category="urgent"
+        categoryLabel="加急单"
+        initialRequests={[]}
+        initialTotal={0}
+      />,
+    )
+
+    act(() => buttonContaining('添加申请类型')?.click())
+    const picker = container.querySelector('select') as HTMLSelectElement
+    act(() => {
+      picker.value = 'hardware'
+      picker.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    act(() => Array.from(container.querySelectorAll('button')).find((button) => button.textContent === '添加')?.click())
+
+    const materialCodeInput = container.querySelector('input[placeholder="输入物料编码联想"]') as HTMLInputElement
+    const nativeValueSetter = Object.getOwnPropertyDescriptor(
+      window.HTMLInputElement.prototype,
+      'value',
+    )?.set
+    act(() => {
+      nativeValueSetter?.call(materialCodeInput, 'MAT-001')
+      materialCodeInput.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    // 等待联想防抖与远端匹配完成，物料说明和规格型号应自动填入
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 400))
+    })
+
+    // mock 的 Form.Item 不绑定值，物料编码经输入框受控状态保留，
+    // 自动填入的物料说明与规格型号写入表单后随保存 payload 提交
+    expect(materialCodeInput.value).toBe('MAT-001')
+    await act(async () => buttonContaining('保存申请')?.click())
+    await flush()
+    expect(actions.createPurchaseRequest).toHaveBeenCalledWith(expect.objectContaining({
+      category: 'urgent',
+      items: [expect.objectContaining({
+        material_description: '不锈钢管',
+        rule_model: 'DN50',
+      })],
+    }))
+  })
+
   it('reports urgent form, list, and submit errors', async () => {
     mount(
       <PurchaseRequestFormClient
@@ -594,6 +712,24 @@ describe('purchasing workspace and request forms', () => {
     )
     act(() => groupDelete?.click())
   })
+
+  it('shows retry feedback when the urgent request list failed initially', async () => {
+    mount(
+      <PurchaseRequestFormClient
+        category="urgent"
+        categoryLabel="加急单"
+        initialRequests={[]}
+        initialTotal={0}
+        initialLoadFailed
+      />,
+    )
+
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain('加急申请记录加载失败')
+    await act(async () => buttonContaining('重试')?.click())
+    await flush()
+    expect(api.fetchPurchaseRequests).toHaveBeenCalled()
+    expect(container.querySelector('[role="alert"]')).toBeNull()
+  })
 })
 
 describe('purchasing approval and order clients', () => {
@@ -613,7 +749,7 @@ describe('purchasing approval and order clients', () => {
     mount(
       <PurchaseApprovalClient
         category="electrical"
-        categoryLabel="电器"
+        categoryLabel="电气"
         approvalRole="equipment_power"
         initialRequests={[approvalRequest]}
         initialTotal={1}
@@ -734,5 +870,131 @@ describe('purchasing approval and order clients', () => {
     await act(async () => buttonContaining('刷新')?.click())
     await flush()
     expect(ui.message.error).toHaveBeenCalledWith('采购订单汇总加载失败')
+  })
+
+  it('deletes a draft request from the record list', async () => {
+    mount(
+      <PurchaseRequestFormClient
+        category="hardware"
+        categoryLabel="五金材料"
+        initialRequests={[request()]}
+        initialTotal={1}
+      />,
+    )
+
+    expect(container.textContent).toContain('删除')
+    await act(async () => {
+      Array.from(container.querySelectorAll<HTMLButtonElement>('button[data-confirm="true"]'))
+        .find((button) => button.textContent === '删除')
+        ?.click()
+    })
+    await flush()
+    expect(actions.deletePurchaseRequest).toHaveBeenCalledWith(request().id)
+    expect(ui.message.success).toHaveBeenCalledWith('采购申请已删除')
+    expect(api.fetchPurchaseRequests).toHaveBeenCalled()
+  })
+
+  it('hides the delete action for non-draft requests', () => {
+    mount(
+      <PurchaseRequestFormClient
+        category="hardware"
+        categoryLabel="五金材料"
+        initialRequests={[request({ status: 'pending_department_head' })]}
+        initialTotal={1}
+      />,
+    )
+
+    const deleteButtons = Array.from(container.querySelectorAll('button')).filter((button) =>
+      button.textContent?.includes('删除')
+    )
+    expect(deleteButtons).toHaveLength(0)
+  })
+
+  it('maps delete failure to an error message', async () => {
+    actions.deletePurchaseRequest.mockResolvedValueOnce({ code: 400, message: '仅草稿状态的采购申请可以删除', data: null })
+    mount(
+      <PurchaseRequestFormClient
+        category="hardware"
+        categoryLabel="五金材料"
+        initialRequests={[request()]}
+        initialTotal={1}
+      />,
+    )
+
+    await act(async () => {
+      Array.from(container.querySelectorAll<HTMLButtonElement>('button[data-confirm="true"]'))
+        .find((button) => button.textContent === '删除')
+        ?.click()
+    })
+    await flush()
+    expect(ui.message.error).toHaveBeenCalledWith('仅草稿状态的采购申请可以删除')
+  })
+
+  it('deletes a draft request from the urgent form and reloads the list', async () => {
+    mount(
+      <UrgentPurchaseRequestFormClient
+        category="urgent"
+        categoryLabel="加急单"
+        initialRequests={[request({ category: 'urgent' })]}
+        initialTotal={1}
+      />,
+    )
+
+    expect(container.textContent).toContain('加急单采购申请')
+    expect(container.textContent).toContain('删除')
+    await act(async () => {
+      Array.from(container.querySelectorAll<HTMLButtonElement>('button[data-confirm="true"]'))
+        .find((button) => button.textContent === '删除')
+        ?.click()
+    })
+    await flush()
+    expect(actions.deletePurchaseRequest).toHaveBeenCalledWith(request().id)
+    expect(ui.message.success).toHaveBeenCalledWith('采购申请已删除')
+    expect(api.fetchPurchaseRequests).toHaveBeenCalled()
+  })
+
+  it('resets the form when the record being edited is deleted', async () => {
+    mount(
+      <PurchaseRequestFormClient
+        category="hardware"
+        categoryLabel="五金材料"
+        initialRequests={[request()]}
+        initialTotal={1}
+      />,
+    )
+
+    await act(async () => {
+      buttonContaining('编辑')?.click()
+    })
+    expect(container.textContent).toContain('更新申请')
+
+    await act(async () => {
+      Array.from(container.querySelectorAll<HTMLButtonElement>('button[data-confirm="true"]'))
+        .find((button) => button.textContent === '删除')
+        ?.click()
+    })
+    await flush()
+    expect(ui.message.success).toHaveBeenCalledWith('采购申请已删除')
+    expect(container.textContent).not.toContain('更新申请')
+  })
+
+  it('maps a delete network failure to an error message', async () => {
+    actions.deletePurchaseRequest.mockRejectedValueOnce(new Error('network'))
+    mount(
+      <PurchaseRequestFormClient
+        category="hardware"
+        categoryLabel="五金材料"
+        initialRequests={[request()]}
+        initialTotal={1}
+      />,
+    )
+
+    await act(async () => {
+      Array.from(container.querySelectorAll<HTMLButtonElement>('button[data-confirm="true"]'))
+        .find((button) => button.textContent === '删除')
+        ?.click()
+    })
+    await flush()
+    expect(ui.message.error).toHaveBeenCalledWith('采购申请删除失败，请稍后重试')
   })
 })

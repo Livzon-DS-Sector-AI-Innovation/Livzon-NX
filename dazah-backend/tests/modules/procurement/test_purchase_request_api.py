@@ -308,3 +308,152 @@ async def test_approve_purchase_request_api_returns_400_for_invalid_workflow_ste
 
     assert response.status_code == 400
     assert response.json()["message"] == "该采购类型不包含此审批步骤"
+
+
+@pytest.mark.anyio
+async def test_import_purchase_requests_api_accepts_table_file(
+    authenticated_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.modules.procurement.schemas import (
+        PurchaseRequestImportResult,
+        PurchaseRequestImportSummary,
+    )
+
+    async def import_table(_db, _file_bytes, *, file_name):
+        assert file_name == "采购申请.xlsx"
+        return PurchaseRequestImportResult(
+            file_name=file_name,
+            total_sheets=2,
+            imported_requests=[
+                PurchaseRequestImportSummary(
+                    request_id=uuid4(),
+                    sheet_name="五金材料",
+                    category=PurchaseRequestCategory.hardware,
+                    category_label="五金材料",
+                    request_department="102一车间",
+                    request_date=date(2026, 8, 14),
+                    items_count=2,
+                )
+            ],
+            failed_rows=[],
+        )
+
+    monkeypatch.setattr(
+        procurement_api,
+        "import_purchase_request_table_file",
+        import_table,
+    )
+    response = await authenticated_client.post(
+        "/api/v1/procurement/purchase-requests/import",
+        files={
+            "file": (
+                "采购申请.xlsx",
+                b"xlsx-bytes",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["data"]["total_sheets"] == 2
+    assert body["data"]["imported_requests"][0]["category"] == "hardware"
+    assert body["data"]["imported_requests"][0]["items_count"] == 2
+    assert body["data"]["failed_rows"] == []
+
+
+@pytest.mark.anyio
+async def test_import_purchase_requests_api_rejects_unsupported_extension(
+    authenticated_client: AsyncClient,
+) -> None:
+    response = await authenticated_client.post(
+        "/api/v1/procurement/purchase-requests/import",
+        files={"file": ("采购申请.docx", b"docx-bytes", "application/octet-stream")},
+    )
+
+    assert response.status_code == 400
+    assert "请上传 xlsx、xls 或 csv 文件" in response.json()["message"]
+
+
+@pytest.mark.anyio
+async def test_import_purchase_requests_api_maps_service_error_to_400(
+    authenticated_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def import_table(_db, _file_bytes, *, file_name):
+        raise ValueError("上传文件为空")
+
+    monkeypatch.setattr(
+        procurement_api,
+        "import_purchase_request_table_file",
+        import_table,
+    )
+    response = await authenticated_client.post(
+        "/api/v1/procurement/purchase-requests/import",
+        files={"file": ("采购申请.xlsx", b"", "application/octet-stream")},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["message"] == "上传文件为空"
+
+
+
+@pytest.mark.anyio
+async def test_delete_purchase_request_api_deletes_draft(
+    authenticated_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request_id = uuid4()
+
+    async def delete_request(_db, delete_id):
+        assert delete_id == request_id
+        return True
+
+    monkeypatch.setattr(procurement_api, "delete_purchase_request", delete_request)
+    response = await authenticated_client.delete(
+        f"/api/v1/procurement/purchase-requests/{request_id}"
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["message"] == "采购申请已删除"
+    assert body["data"]["success_count"] == 1
+    assert body["data"]["fail_count"] == 0
+
+
+@pytest.mark.anyio
+async def test_delete_purchase_request_api_maps_status_error_to_400(
+    authenticated_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def delete_request(_db, _delete_id):
+        raise ValueError("仅草稿状态的采购申请可以删除")
+
+    monkeypatch.setattr(procurement_api, "delete_purchase_request", delete_request)
+    response = await authenticated_client.delete(
+        f"/api/v1/procurement/purchase-requests/{uuid4()}"
+    )
+
+    assert response.status_code == 400
+    assert response.json()["message"] == "仅草稿状态的采购申请可以删除"
+
+
+
+@pytest.mark.anyio
+async def test_submit_purchase_request_api_maps_total_amount_error_to_400(
+    authenticated_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def submit(_db, _request_id):
+        raise ValueError(
+            "第1条明细总额（0.00）与数量×单价（50.00）不一致，请修改后重新提交"
+        )
+
+    monkeypatch.setattr(procurement_api, "submit_purchase_request", submit)
+    response = await authenticated_client.post(
+        f"/api/v1/procurement/purchase-requests/{uuid4()}/submit"
+    )
+
+    assert response.status_code == 400
+    assert "总额（0.00）与数量×单价（50.00）不一致" in response.json()["message"]
