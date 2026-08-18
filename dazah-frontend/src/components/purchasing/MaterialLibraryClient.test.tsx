@@ -14,6 +14,8 @@ const messages = vi.hoisted(() => ({
   success: vi.fn(),
 }))
 
+const tableProps: Array<{ pagination?: Record<string, unknown> }> = []
+
 vi.mock('@/lib/api/purchasing', () => api)
 
 vi.mock('antd', () => {
@@ -79,9 +81,40 @@ vi.mock('antd', () => {
     Statistic: ({ title, value }: { title?: React.ReactNode; value?: React.ReactNode }) => (
       <div>{title}{value}</div>
     ),
-    Table: ({ dataSource }: { dataSource?: Array<{ id: string; material_code: string }> }) => (
-      <div>{dataSource?.map((record) => <div key={record.id}>{record.material_code}</div>)}</div>
-    ),
+    Table: ({
+      dataSource,
+      columns,
+      pagination,
+    }: {
+      dataSource?: Array<Record<string, unknown>>
+      columns?: Array<{
+        dataIndex?: string
+        key?: string
+        render?: (value: unknown, record: unknown, index: number) => React.ReactNode
+      }>
+      pagination?: Record<string, unknown>
+    }) => {
+      tableProps.push({ pagination })
+      return (
+        <div>
+          {dataSource?.map((record) => (
+            <div key={String(record.id)}>
+              {columns?.map((column) => (
+                <span key={String(column.key ?? column.dataIndex)}>
+                  {typeof column.render === 'function'
+                    ? column.render(
+                        column.dataIndex ? record[column.dataIndex] : undefined,
+                        record,
+                        0,
+                      )
+                    : String(record[column.dataIndex ?? ''] ?? '')}
+                </span>
+              ))}
+            </div>
+          ))}
+        </div>
+      )
+    },
     Tag: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
   }
 })
@@ -124,6 +157,7 @@ describe('MaterialLibraryClient', () => {
     ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
       true
     vi.clearAllMocks()
+    tableProps.length = 0
     container = document.createElement('div')
     document.body.append(container)
     root = createRoot(container)
@@ -282,5 +316,195 @@ describe('MaterialLibraryClient', () => {
 
     expect(messages.error).toHaveBeenCalledWith('物料编码库加载失败，请稍后重试')
     expect(container.textContent).toContain('MAT-001')
+  })
+
+  it('resets filters and reloads from the first page', async () => {
+    api.fetchMaterialCatalog.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: [initialRecord],
+      meta: initialMeta,
+    })
+
+    act(() => {
+      root.render(
+        <MaterialLibraryClient initialRecords={[initialRecord]} initialMeta={initialMeta} />,
+      )
+    })
+    const searchInput = container.querySelector(
+      'input[placeholder="搜索编码、说明或规格型号"]',
+    ) as HTMLInputElement
+    const descriptionInput = container.querySelector(
+      'input[placeholder="物料说明"]',
+    ) as HTMLInputElement
+    act(() => {
+      searchInput.value = 'MAT'
+      searchInput.dispatchEvent(new Event('input', { bubbles: true }))
+      descriptionInput.value = '不锈钢'
+      descriptionInput.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(async () => {
+      await Promise.resolve()
+    })
+    const resetButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === '重置',
+    )
+    await act(async () => {
+      resetButton?.click()
+      await Promise.resolve()
+    })
+
+    expect(searchInput.value).toBe('')
+    expect(descriptionInput.value).toBe('')
+    expect(api.fetchMaterialCatalog).toHaveBeenLastCalledWith({
+      keyword: undefined,
+      material_code: undefined,
+      material_description: undefined,
+      rule_model: undefined,
+      page: 1,
+      page_size: 20,
+    })
+  })
+
+  it('reports a failed background sync after polling', async () => {
+    vi.useFakeTimers()
+    try {
+      api.fetchMaterialSourceConfig.mockResolvedValue({
+        code: 200,
+        message: 'success',
+        data: {
+          sync_status: 'error',
+          sync_error: '飞书读取超时',
+          last_synced_at: null,
+          last_sync_record_count: null,
+          sync_total_records: null,
+          sync_fetched_count: null,
+        },
+      })
+      api.fetchMaterialCatalog.mockResolvedValue({
+        code: 200,
+        message: 'success',
+        data: [initialRecord],
+        meta: { ...initialMeta, sync_status: 'error', sync_error: '飞书读取超时' },
+      })
+
+      act(() => {
+        root.render(
+          <MaterialLibraryClient
+            initialRecords={[]}
+            initialMeta={{ ...initialMeta, total: 0, sync_status: 'syncing' }}
+          />,
+        )
+      })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3000)
+      })
+
+      expect(messages.error).toHaveBeenCalledWith('飞书读取超时')
+      expect(api.fetchMaterialCatalog).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('triggers search from the description and rule model inputs', async () => {
+    api.fetchMaterialCatalog.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: [initialRecord],
+      meta: initialMeta,
+    })
+
+    act(() => {
+      root.render(
+        <MaterialLibraryClient initialRecords={[initialRecord]} initialMeta={initialMeta} />,
+      )
+    })
+    const descriptionInput = container.querySelector(
+      'input[placeholder="物料说明"]',
+    ) as HTMLInputElement
+    const ruleModelInput = container.querySelector(
+      'input[placeholder="规格型号"]',
+    ) as HTMLInputElement
+    act(() => {
+      descriptionInput.value = '不锈钢'
+      descriptionInput.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    act(() => {
+      descriptionInput.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }),
+      )
+    })
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(api.fetchMaterialCatalog).toHaveBeenLastCalledWith(
+      expect.objectContaining({ material_description: '不锈钢', page: 1 }),
+    )
+
+    act(() => {
+      ruleModelInput.value = 'DN50'
+      ruleModelInput.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    act(() => {
+      ruleModelInput.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }),
+      )
+    })
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(api.fetchMaterialCatalog).toHaveBeenLastCalledWith(
+      expect.objectContaining({ rule_model: 'DN50', page: 1 }),
+    )
+  })
+
+  it('reloads when the table page changes', async () => {
+    api.fetchMaterialCatalog.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: [],
+      meta: initialMeta,
+    })
+
+    act(() => {
+      root.render(
+        <MaterialLibraryClient initialRecords={[]} initialMeta={initialMeta} />,
+      )
+    })
+    const pagination = tableProps.at(-1)?.pagination as
+      | { onChange?: (nextPage: number) => void }
+      | undefined
+    await act(async () => {
+      pagination?.onChange?.(2)
+      await Promise.resolve()
+    })
+
+    expect(api.fetchMaterialCatalog).toHaveBeenLastCalledWith(
+      expect.objectContaining({ page: 2, page_size: 20 }),
+    )
+  })
+
+  it('shows the sync error alert, the load-failed banner and a missing sync time', () => {
+    act(() => {
+      root.render(
+        <MaterialLibraryClient
+          initialRecords={[]}
+          initialMeta={{
+            ...initialMeta,
+            total: 0,
+            last_synced_at: null,
+            sync_status: 'error',
+            sync_error: '飞书读取超时',
+          }}
+          initialLoadFailed
+        />,
+      )
+    })
+
+    expect(container.textContent).toContain('物料编码库暂时无法加载')
+    expect(container.textContent).toContain('最近一次同步失败')
+    expect(container.textContent).toContain('飞书读取超时')
+    expect(container.textContent).toContain('—')
   })
 })

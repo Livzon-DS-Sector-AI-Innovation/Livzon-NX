@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const pageApi = vi.hoisted(() => ({
   fetchPurchaseRequests: vi.fn(),
+  fetchMaterialCatalog: vi.fn(),
   getAuthHeaders: vi.fn(),
 }))
 
@@ -13,6 +14,7 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('@/lib/api/purchasing', () => ({
   fetchPurchaseRequests: pageApi.fetchPurchaseRequests,
+  fetchMaterialCatalog: pageApi.fetchMaterialCatalog,
 }))
 
 vi.mock('@/lib/auth', () => ({
@@ -25,6 +27,11 @@ vi.mock('@/components/purchasing', () => ({
   ),
   PurchaseRequestFormClient: (props: Record<string, unknown>) => (
     <div data-page="urgent">{String(props.category)}:{String(props.categoryLabel)}:{String(props.initialTotal)}</div>
+  ),
+  MaterialLibraryClient: (props: Record<string, unknown>) => (
+    <div data-page="material-library">
+      failed:{String(Boolean(props.initialLoadFailed))}:records:{String((props.initialRecords as unknown[]).length)}
+    </div>
   ),
   approvalRoleToStep: {
     hardware_warehouse: 'hardware-warehouse',
@@ -63,12 +70,30 @@ import ApprovalPage, {
   generateStaticParams,
 } from '@/app/(dashboard)/purchasing/approval/[category]/[step]/page'
 import UrgentPurchaseRequestPage from '@/app/(dashboard)/purchasing/request/urgent/page'
+import MaterialLibraryPage from '@/app/(dashboard)/purchasing/material-library/page'
 
 const response = {
   code: 200,
   message: 'success',
   data: [],
   meta: { page: 1, page_size: 20, total: 0 },
+}
+
+const materialCatalogResponse = {
+  code: 200,
+  message: 'success',
+  data: [],
+  meta: {
+    page: 1,
+    page_size: 20,
+    total: 0,
+    sync_status: 'not_synced',
+    sync_error: null,
+    sync_phase: 'idle',
+    sync_persisted_count: 0,
+    last_synced_at: null,
+    last_sync_record_count: 0,
+  },
 }
 
 describe('purchasing server pages', () => {
@@ -125,5 +150,23 @@ describe('purchasing server pages', () => {
     pageApi.fetchPurchaseRequests.mockRejectedValueOnce(new Error('network'))
     const fallback = await UrgentPurchaseRequestPage()
     expect(fallback.props).toMatchObject({ category: 'urgent', categoryLabel: '加急单', initialTotal: 0, initialLoadFailed: true })
+  })
+
+  it('loads the material library page and falls back when the catalog API fails', async () => {
+    pageApi.fetchMaterialCatalog.mockResolvedValue(materialCatalogResponse)
+    const result = await MaterialLibraryPage()
+    expect(result.props).toMatchObject({ initialLoadFailed: false, initialRecords: [] })
+    expect(pageApi.fetchMaterialCatalog).toHaveBeenCalledWith(
+      { page: 1, page_size: 20 },
+      {},
+    )
+
+    pageApi.fetchMaterialCatalog.mockRejectedValueOnce(new Error('network'))
+    const fallback = await MaterialLibraryPage()
+    expect(fallback.props).toMatchObject({
+      initialLoadFailed: true,
+      initialRecords: [],
+      initialMeta: expect.objectContaining({ total: 0, sync_status: 'not_synced' }),
+    })
   })
 })

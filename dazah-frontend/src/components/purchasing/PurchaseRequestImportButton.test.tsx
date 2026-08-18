@@ -24,8 +24,15 @@ vi.mock('antd', async () => {
     uploadProps.push(props)
     return React.createElement('div', { 'data-testid': 'upload' }, children)
   }
-  const Modal = ({ open, children }: Record<string, any>) =>
-    open ? React.createElement('div', null, children) : null
+  const Modal = ({ open, onCancel, children }: Record<string, any>) =>
+    open
+      ? React.createElement(
+          'div',
+          null,
+          children,
+          React.createElement('button', { onClick: onCancel }, '关闭')
+        )
+      : null
   const Button = ({ children, onClick }: Record<string, any>) =>
     React.createElement('button', { onClick }, children)
   const Alert = ({ message, description }: Record<string, any>) =>
@@ -35,7 +42,7 @@ vi.mock('antd', async () => {
       String(message),
       description ? `：${String(description)}` : ''
     )
-  const Table = ({ dataSource }: Record<string, any>) =>
+  const Table = ({ columns = [], dataSource, rowKey }: Record<string, any>) =>
     React.createElement(
       'div',
       null,
@@ -43,12 +50,27 @@ vi.mock('antd', async () => {
       ...(dataSource ?? []).map((row: Record<string, any>, index: number) =>
         React.createElement(
           'div',
-          { key: index },
-          String(row.sheet_name ?? ''),
-          row.row != null ? `#${String(row.row)}` : '#整表',
-          '：',
-          String(row.message ?? row.category_label ?? row.request_department ?? ''),
-          row.category_source === 'inferred' ? '（按字段推断）' : ''
+          {
+            key:
+              typeof rowKey === 'function'
+                ? String(rowKey(row, index))
+                : typeof rowKey === 'string'
+                  ? String(row[rowKey])
+                  : index,
+          },
+          ...columns.map((column: Record<string, any>) =>
+            React.createElement(
+              'span',
+              { key: String(column.key ?? column.dataIndex ?? index) },
+              typeof column.render === 'function'
+                ? column.render(
+                    column.dataIndex ? row[column.dataIndex] : undefined,
+                    row,
+                    index
+                  )
+                : String(row[column.dataIndex] ?? '')
+            )
+          )
         )
       )
     )
@@ -187,5 +209,43 @@ describe('PurchaseRequestImportButton', () => {
 
     expect(container.textContent).toContain('没有成功导入任何采购申请')
     expect(container.textContent).toContain('无法识别采购类型')
+  })
+
+  it('surfaces unexpected import failures', async () => {
+    actions.importPurchaseRequestTable.mockRejectedValue(new Error('network'))
+
+    act(() => {
+      root.render(<PurchaseRequestImportButton />)
+    })
+
+    const file = new File(['xlsx-bytes'], '采购申请.xlsx', { type: 'application/octet-stream' })
+    await act(async () => {
+      await uploadProps[0].customRequest({ file, onSuccess: vi.fn() })
+    })
+
+    expect(ui.message.error).toHaveBeenCalledWith('采购申请导入失败，请稍后重试')
+  })
+
+  it('closes the result modal with the confirm button', async () => {
+    actions.importPurchaseRequestTable.mockResolvedValue(importResult())
+
+    act(() => {
+      root.render(<PurchaseRequestImportButton />)
+    })
+
+    const file = new File(['xlsx-bytes'], '采购申请.xlsx', { type: 'application/octet-stream' })
+    await act(async () => {
+      await uploadProps[0].customRequest({ file, onSuccess: vi.fn() })
+    })
+    expect(container.textContent).toContain('成功导入 1 份采购申请草稿')
+
+    await act(async () => {
+      const confirmButton = Array.from(container.querySelectorAll('button')).find(
+        (button) => button.textContent === '知道了',
+      )
+      confirmButton?.click()
+    })
+
+    expect(container.textContent).not.toContain('成功导入 1 份采购申请草稿')
   })
 })

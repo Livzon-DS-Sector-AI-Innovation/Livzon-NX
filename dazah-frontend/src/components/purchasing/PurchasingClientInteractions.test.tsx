@@ -277,6 +277,7 @@ import { PurchaseOrderClient } from './PurchaseOrderClient'
 import { PurchaseRequestFormClient } from './PurchaseRequestFormClient'
 import { PurchasingWorkspaceClient } from './PurchasingWorkspaceClient'
 import {
+  UrgentPurchaseRequestFormClient,
   buildUrgentPurchasePayload,
   itemDetailColumns,
   normalizeGroups,
@@ -927,5 +928,73 @@ describe('purchasing approval and order clients', () => {
     })
     await flush()
     expect(ui.message.error).toHaveBeenCalledWith('仅草稿状态的采购申请可以删除')
+  })
+
+  it('deletes a draft request from the urgent form and reloads the list', async () => {
+    mount(
+      <UrgentPurchaseRequestFormClient
+        category="urgent"
+        categoryLabel="加急单"
+        initialRequests={[request({ category: 'urgent' })]}
+        initialTotal={1}
+      />,
+    )
+
+    expect(container.textContent).toContain('加急单采购申请')
+    expect(container.textContent).toContain('删除')
+    await act(async () => {
+      Array.from(container.querySelectorAll<HTMLButtonElement>('button[data-confirm="true"]'))
+        .find((button) => button.textContent === '删除')
+        ?.click()
+    })
+    await flush()
+    expect(actions.deletePurchaseRequest).toHaveBeenCalledWith(request().id)
+    expect(ui.message.success).toHaveBeenCalledWith('采购申请已删除')
+    expect(api.fetchPurchaseRequests).toHaveBeenCalled()
+  })
+
+  it('resets the form when the record being edited is deleted', async () => {
+    mount(
+      <PurchaseRequestFormClient
+        category="hardware"
+        categoryLabel="五金材料"
+        initialRequests={[request()]}
+        initialTotal={1}
+      />,
+    )
+
+    await act(async () => {
+      buttonContaining('编辑')?.click()
+    })
+    expect(container.textContent).toContain('更新申请')
+
+    await act(async () => {
+      Array.from(container.querySelectorAll<HTMLButtonElement>('button[data-confirm="true"]'))
+        .find((button) => button.textContent === '删除')
+        ?.click()
+    })
+    await flush()
+    expect(ui.message.success).toHaveBeenCalledWith('采购申请已删除')
+    expect(container.textContent).not.toContain('更新申请')
+  })
+
+  it('maps a delete network failure to an error message', async () => {
+    actions.deletePurchaseRequest.mockRejectedValueOnce(new Error('network'))
+    mount(
+      <PurchaseRequestFormClient
+        category="hardware"
+        categoryLabel="五金材料"
+        initialRequests={[request()]}
+        initialTotal={1}
+      />,
+    )
+
+    await act(async () => {
+      Array.from(container.querySelectorAll<HTMLButtonElement>('button[data-confirm="true"]'))
+        .find((button) => button.textContent === '删除')
+        ?.click()
+    })
+    await flush()
+    expect(ui.message.error).toHaveBeenCalledWith('采购申请删除失败，请稍后重试')
   })
 })

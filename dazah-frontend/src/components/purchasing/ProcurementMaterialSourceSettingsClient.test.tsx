@@ -538,6 +538,67 @@ describe('ProcurementMaterialSourceSettingsClient', () => {
     expect(materialSourceApi.fetchMaterialSourceConfig).not.toHaveBeenCalled()
   })
 
+  it('reports a sync start failure thrown by the action', async () => {
+    actions.syncProcurementMaterialSource.mockRejectedValue(new Error('network'))
+
+    act(() => {
+      root.render(<ProcurementMaterialSourceSettingsClient initialConfig={initialConfig} />)
+    })
+    const syncButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === '同步物料数据',
+    )
+    await act(async () => {
+      syncButton?.click()
+      await Promise.resolve()
+    })
+
+    expect(messages.error).toHaveBeenCalledWith('采购物料数据同步启动失败，请稍后重试')
+  })
+
+  it('warns when syncing without a saved configuration', async () => {
+    act(() => {
+      root.render(<ProcurementMaterialSourceSettingsClient initialConfig={null} />)
+    })
+    const syncButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === '同步物料数据',
+    )
+    await act(async () => {
+      syncButton?.click()
+      await Promise.resolve()
+    })
+
+    expect(actions.syncProcurementMaterialSource).not.toHaveBeenCalled()
+    expect(messages.warning).toHaveBeenCalledWith('请先保存并测试物料数据源配置')
+  })
+
+  it('ignores a non-200 polling response while syncing', async () => {
+    vi.useFakeTimers()
+    try {
+      materialSourceApi.fetchMaterialSourceConfig.mockResolvedValue({
+        code: 503,
+        message: 'service unavailable',
+        data: null,
+      })
+
+      act(() => {
+        root.render(
+          <ProcurementMaterialSourceSettingsClient
+            initialConfig={{ ...initialConfig, sync_status: 'syncing' }}
+          />,
+        )
+      })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(MATERIAL_SYNC_POLL_INTERVAL_MS)
+      })
+
+      expect(materialSourceApi.fetchMaterialSourceConfig).toHaveBeenCalledOnce()
+      expect(messages.success).not.toHaveBeenCalled()
+      expect(messages.error).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('keeps polling after a transient poll failure', async () => {
     vi.useFakeTimers()
     try {

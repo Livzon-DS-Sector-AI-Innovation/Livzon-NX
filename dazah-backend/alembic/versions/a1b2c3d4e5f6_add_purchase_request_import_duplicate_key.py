@@ -16,7 +16,7 @@ down_revision: str | None = "e6d5c4b3a291"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-INDEX_NAME = "ix_procurement_purchase_request_import_duplicate_key"
+INDEX_NAME = "ix_procurement_purchase_requests_import_duplicate_key"
 
 
 def upgrade() -> None:

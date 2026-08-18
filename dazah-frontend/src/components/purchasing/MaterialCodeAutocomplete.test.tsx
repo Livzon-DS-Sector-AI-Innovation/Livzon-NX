@@ -505,4 +505,54 @@ describe('MaterialCodeAutocomplete', () => {
     })
     expect(api.fetchMaterialOptions).toHaveBeenCalledTimes(2)
   })
+
+  it('maps a 404 lookup failure to the not-configured status', async () => {
+    api.fetchMaterialOptions.mockRejectedValue(new Error('请求失败: 404 Not Found'))
+
+    act(() => {
+      root.render(<MaterialCodeAutocomplete />)
+    })
+    const input = container.querySelector('input') as HTMLInputElement
+    act(() => {
+      input.value = 'MAT-404'
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(async () => {
+      vi.advanceTimersByTime(180)
+      await Promise.resolve()
+    })
+
+    expect(container.textContent).toContain('物料数据源尚未配置，可继续手工输入')
+  })
+
+  it('evicts the oldest cache entry once the cache is full', async () => {
+    api.fetchMaterialOptions.mockResolvedValue({ code: 200, message: 'success', data: [] })
+
+    act(() => {
+      root.render(<MaterialCodeAutocomplete />)
+    })
+    const input = container.querySelector('input') as HTMLInputElement
+    for (let index = 0; index < 50; index += 1) {
+      act(() => {
+        input.value = `CACHE-${index}`
+        input.dispatchEvent(new Event('input', { bubbles: true }))
+      })
+      await act(async () => {
+        vi.advanceTimersByTime(180)
+        await Promise.resolve()
+      })
+    }
+    expect(api.fetchMaterialOptions).toHaveBeenCalledTimes(50)
+
+    // The oldest entry was evicted, so the same keyword is looked up again.
+    act(() => {
+      input.value = 'CACHE-0'
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(async () => {
+      vi.advanceTimersByTime(180)
+      await Promise.resolve()
+    })
+    expect(api.fetchMaterialOptions).toHaveBeenCalledTimes(51)
+  })
 })
