@@ -528,7 +528,7 @@ async def import_purchase_request_table_file(
         if not rows:
             continue
         duplicate_key = sha256(
-            file_bytes + f"|{sheet_name}".encode("utf-8")
+            file_bytes + f"|{sheet_name}".encode()
         ).hexdigest()
         existing = await PurchaseRequestRepository(db).find_by_import_duplicate_key(
             duplicate_key

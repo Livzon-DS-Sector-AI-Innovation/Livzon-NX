@@ -83,6 +83,7 @@ from app.modules.procurement.service import (
     batch_delete_invoice_recognition_records,
     create_purchase_request,
     delete_invoice_recognition_record,
+    delete_purchase_request,
     export_purchase_order_lines_xlsx,
     generate_and_store_contract,
     get_contract_record,
@@ -99,7 +100,6 @@ from app.modules.procurement.service import (
     reject_purchase_request,
     submit_purchase_request,
     update_purchase_request,
-    delete_purchase_request,
 )
 from app.platform.audit.service import record_audit_log
 from app.platform.identity.deps import AdminUser

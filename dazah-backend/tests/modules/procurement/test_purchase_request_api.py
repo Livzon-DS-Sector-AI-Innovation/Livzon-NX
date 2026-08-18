@@ -446,7 +446,9 @@ async def test_submit_purchase_request_api_maps_total_amount_error_to_400(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     async def submit(_db, _request_id):
-        raise ValueError("第1条明细总额（0.00）与数量×单价（50.00）不一致，请修改后重新提交")
+        raise ValueError(
+            "第1条明细总额（0.00）与数量×单价（50.00）不一致，请修改后重新提交"
+        )
 
     monkeypatch.setattr(procurement_api, "submit_purchase_request", submit)
     response = await authenticated_client.post(
