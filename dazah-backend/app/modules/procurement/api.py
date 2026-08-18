@@ -205,6 +205,9 @@ async def save_material_source_config_record(
             "last_test_status": config.last_test_status,
         },
     )
+    # save 内部 flush 后 updated_at 等 onupdate 列已过期，直接序列化会触发
+    # 异步 session 的同步懒加载（MissingGreenlet）；重新查询以获取完整属性。
+    config = await get_material_source_config(db)
     return success_response(
         data=MaterialSourceConfigResponse.model_validate(config).model_dump(
             mode="json"
@@ -391,6 +394,9 @@ async def sync_material_source_record(
         config_id=config.id,
         user_id=admin.id,
     )
+    # commit 后 updated_at 等 onupdate 列被标记过期，直接序列化会触发异步
+    # session 的同步懒加载（MissingGreenlet）；重新查询以获取完整属性。
+    config = await get_material_source_config(db)
     data = MaterialSourceSyncResult(
         config=MaterialSourceConfigResponse.model_validate(config),
         synced_count=0,

@@ -160,6 +160,7 @@ class _FakeSyncSession:
     def __init__(self) -> None:
         self.commit = AsyncMock()
         self.rollback = AsyncMock()
+        self.refresh = AsyncMock()
 
     async def __aenter__(self) -> "_FakeSyncSession":
         return self
@@ -632,3 +633,110 @@ def _async_mock() -> _AsyncMock:
 
 async def _async_value(value):
     return value
+
+
+async def test_sync_endpoint_serializes_real_orm_config_after_commit(
+    client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """真实 ORM 配置在 commit 后序列化不触发异步懒加载（回归 MissingGreenlet）。
+
+    测试配置由数据库生成 updated_at（onupdate），模拟生产数据特征；
+    SimpleNamespace mock 无法覆盖此场景。
+    """
+    from sqlalchemy import delete, select
+
+    from app.core.database import async_session_factory
+    from app.modules.procurement.models import (
+        MaterialCatalogRecord,
+        MaterialSourceConfig,
+    )
+    from app.platform.identity.deps import get_current_user
+
+    async with async_session_factory() as session:
+        async def _override_get_db():
+            try:
+                yield session
+            finally:
+                pass
+
+        app.dependency_overrides[get_db] = _override_get_db
+        app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(
+            role="admin",
+            status="active",
+            id=uuid4(),
+        )
+        try:
+            await session.execute(
+                delete(MaterialCatalogRecord).where(
+                    MaterialCatalogRecord.source_config_id.in_(
+                        select(MaterialSourceConfig.id).where(
+                            MaterialSourceConfig.config_key == "material-master"
+                        )
+                    )
+                )
+            )
+            await session.execute(
+                delete(MaterialSourceConfig).where(
+                    MaterialSourceConfig.config_key == "material-master"
+                )
+            )
+            await session.commit()
+
+            session.add(
+                MaterialSourceConfig(
+                    config_key="material-master",
+                    source_url="https://feishu.cn/base/appToken123456?table=tbl123456",
+                    app_token="appToken123456",
+                    table_id="tbl123456",
+                    material_code_field="物料编码",
+                    material_description_field="物料说明",
+                    rule_model_field="规格型号",
+                    last_test_status="success",
+                    sync_status="not_synced",
+                    sync_phase="idle",
+                    last_sync_record_count=0,
+                    sync_persisted_count=0,
+                )
+            )
+            await session.commit()
+
+            monkeypatch.setattr(
+                procurement_api,
+                "acquire_lock",
+                AsyncMock(return_value=True),
+            )
+            monkeypatch.setattr(procurement_api, "release_lock", AsyncMock())
+            monkeypatch.setattr(procurement_api, "record_audit_log", AsyncMock())
+            monkeypatch.setattr(
+                procurement_api,
+                "_run_material_source_sync",
+                AsyncMock(),
+            )
+
+            response = await client.post(
+                "/api/v1/procurement/material-source-config/sync",
+                json={},
+            )
+            assert response.status_code == 200
+            assert response.json()["message"] == "采购物料数据同步已启动"
+            assert response.json()["data"]["config"]["sync_status"] == "syncing"
+        finally:
+            await session.execute(
+                delete(MaterialCatalogRecord).where(
+                    MaterialCatalogRecord.source_config_id.in_(
+                        select(MaterialSourceConfig.id).where(
+                            MaterialSourceConfig.config_key == "material-master"
+                        )
+                    )
+                )
+            )
+            await session.execute(
+                delete(MaterialSourceConfig).where(
+                    MaterialSourceConfig.config_key == "material-master"
+                )
+            )
+            await session.commit()
+            app.dependency_overrides.pop(get_db, None)
+            app.dependency_overrides.pop(get_current_user, None)
+
