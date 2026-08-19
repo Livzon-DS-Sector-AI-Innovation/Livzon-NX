@@ -105,7 +105,7 @@ async def test_daily_read_mirror_finds_only_stale_resources(monkeypatch) -> None
         scalars=lambda: SimpleNamespace(all=lambda: resources)
     )
     session = SimpleNamespace(execute=AsyncMock(return_value=result))
-    generator = read_scheduler.ProductionFeishuReadDailySyncGenerator()
+    generator = read_scheduler.QualityFeishuReadDailySyncGenerator()
 
     class MorningDateTime:
         @classmethod
@@ -128,21 +128,7 @@ async def test_daily_read_mirror_finds_only_stale_resources(monkeypatch) -> None
 
 
 @pytest.mark.asyncio
-async def test_read_mirror_execute_skips_missing_credentials(monkeypatch) -> None:
-    production_session = object()
-    production_repo = SimpleNamespace(
-        get_active_feishu_config=AsyncMock(return_value=None)
-    )
-    monkeypatch.setattr(
-        read_scheduler,
-        "ProductionRepository",
-        lambda _session: production_repo,
-    )
-    await read_scheduler.ProductionFeishuReadDailySyncGenerator().execute_one(
-        production_session,
-        uuid4(),
-    )
-
+async def test_read_mirror_execute_skips_missing_credentials() -> None:
     quality_session = SimpleNamespace(scalar=AsyncMock(return_value=None))
     await read_scheduler.QualityFeishuReadDailySyncGenerator().execute_one(
         quality_session,

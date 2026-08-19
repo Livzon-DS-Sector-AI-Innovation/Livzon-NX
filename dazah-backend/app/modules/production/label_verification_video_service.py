@@ -10,8 +10,6 @@ from datetime import date, datetime
 import cv2
 import numpy as np
 
-from app.core.llm import llm_client
-
 logger = logging.getLogger(__name__)
 
 
@@ -247,6 +245,7 @@ class LabelVerificationVideoService:
         self,
         video_path: str,
         form_data: dict,
+        ai_service,
         initial_fps: float = 1.0,
         max_retry_fps: float = 0.3,
     ) -> dict:
@@ -283,11 +282,11 @@ class LabelVerificationVideoService:
             # 选择关键帧：第一帧、中间帧、最后帧，尽量覆盖不同内容
             selected_frames = self._select_key_frames(frames, max_count=12)
 
-            # 调用系统统一 LLM 视觉模型进行对比分析
+            # 调用 AI 进行对比分析
             prompt = self._build_detailed_prompt(form_data)
 
             try:
-                raw_response = await llm_client.chat_vision(
+                raw_response = await ai_service.chat_vision(
                     prompt, selected_frames
                 )
                 result = self._parse_ai_response(raw_response)

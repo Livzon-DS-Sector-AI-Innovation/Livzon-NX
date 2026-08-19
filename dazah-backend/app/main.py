@@ -144,7 +144,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         WarehouseFeishuDailySyncGenerator,
     )
     from app.platform.integrations.feishu.read_scheduler import (
-        ProductionFeishuReadDailySyncGenerator,
         QualityFeishuReadDailySyncGenerator,
     )
     from app.modules.agent.scheduled import (
@@ -160,8 +159,18 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     scheduler_registry.register_generator(EnergyWikiSyncGenerator())
     scheduler_registry.register_generator(WarehouseFeishuDailySyncGenerator())
     scheduler_registry.register_generator(WarehouseFeishuAnalysisGenerator())
-    scheduler_registry.register_generator(ProductionFeishuReadDailySyncGenerator())
     scheduler_registry.register_generator(QualityFeishuReadDailySyncGenerator())
+
+    # ── 生产模块飞书电子表格定时同步（MC/FA/DR）──
+    from app.modules.production.mc_feishu_sheets_sync import start_mc_sync_scheduler
+
+    start_mc_sync_scheduler()
+    from app.modules.production.fa_feishu_scheduler import start_fa_sync_scheduler
+
+    start_fa_sync_scheduler()
+    from app.modules.production.dr_feishu_sync import start_dr_sync_scheduler
+
+    start_dr_sync_scheduler()
 
     scheduler_engine_task = asyncio.create_task(scheduler_engine.run())
 
@@ -199,6 +208,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     from app.modules.warehouse.ws_client import stop_ws as stop_warehouse_ws
 
     await stop_warehouse_ws()
+
+    # ── 停止生产模块飞书同步调度器 ──
+    from app.modules.production.mc_feishu_sheets_sync import stop_mc_sync_scheduler
+
+    stop_mc_sync_scheduler()
+    from app.modules.production.fa_feishu_scheduler import stop_fa_sync_scheduler
+
+    stop_fa_sync_scheduler()
+    from app.modules.production.dr_feishu_sync import stop_dr_sync_scheduler
+
+    stop_dr_sync_scheduler()
 
     maintenance_plan_task.cancel()
     timeout_task.cancel()

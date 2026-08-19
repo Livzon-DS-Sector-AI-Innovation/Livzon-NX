@@ -1,7 +1,6 @@
 'use client'
 
-import { Suspense, useEffect, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useEffect, useState } from 'react'
 import {
   Table,
   Button,
@@ -30,7 +29,6 @@ import {
   CheckCircleOutlined,
   StopOutlined,
   DownloadOutlined,
-  ReloadOutlined,
 } from '@ant-design/icons'
 import { useProductionStore } from '@/stores/production'
 import {
@@ -39,21 +37,13 @@ import {
   updateBatch,
   updateBatchStatus,
   deleteBatch,
-  getProductionFeishuRecords,
 } from '@/actions/production'
 import type {
   Batch,
   BatchFormData,
   BatchStatus,
-  ProductionFeishuTablePreview,
 } from '@/types/production'
-import { ProductionFeishuPreviewTable } from '@/components/production'
 import { BatchStatus as BatchStatusEnum, BATCH_STATUS_OPTIONS } from '@/types/production'
-import {
-  BATCH_PRODUCTION_LINE_GROUPS,
-  STRAIN_BATCH_PRODUCT_NAMES,
-  getBatchProductionLineMeta,
-} from '@/lib/production-batch-lines'
 
 const { Text } = Typography
 
@@ -68,13 +58,6 @@ const getStatusLabel = (status: BatchStatus) => {
   const option = BATCH_STATUS_OPTIONS.find((o) => o.value === status)
   return option?.label || status
 }
-
-const BATCH_PRODUCTION_LINE_OPTIONS = BATCH_PRODUCTION_LINE_GROUPS.flatMap((group) =>
-  group.codes.map((code) => ({
-    value: code,
-    label: `${group.label} / ${code}`,
-  })),
-)
 
 // 导出批次数据为CSV
 const exportBatchesToCsv = (batches: Batch[]) => {
@@ -106,10 +89,8 @@ const exportBatchesToCsv = (batches: Batch[]) => {
   URL.revokeObjectURL(link.href)
 }
 
-function BatchesPageContent() {
+export default function BatchesPage() {
   const { message, modal } = App.useApp()
-  const router = useRouter()
-  const searchParams = useSearchParams()
   const [form] = Form.useForm()
   const [editForm] = Form.useForm()
   const [loading, setLoading] = useState(false)
@@ -117,21 +98,9 @@ function BatchesPageContent() {
   const [editingBatch, setEditingBatch] = useState<Batch | null>(null)
   const [searchText, setSearchText] = useState('')
   const [productNameSearch, setProductNameSearch] = useState('')
+  const [productionLineFilter, setProductionLineFilter] = useState<string | undefined>()
   const [statusFilter, setStatusFilter] = useState<BatchStatus | undefined>()
   const [exportLoading, setExportLoading] = useState(false)
-  const [feishuPreview, setFeishuPreview] = useState<ProductionFeishuTablePreview | null>(null)
-  const [feishuPreviewLoading, setFeishuPreviewLoading] = useState(false)
-  const currentProductionLine = searchParams.get('production_line') || undefined
-  const routeProductName = searchParams.get('product_name') || undefined
-  const isStrainProductionLine = currentProductionLine === '101-1'
-  const currentStrainProduct = isStrainProductionLine
-    ? searchParams.get('product_name') || undefined
-    : undefined
-  const productNameFilter = routeProductName || productNameSearch || undefined
-  const currentProductionLineMeta = getBatchProductionLineMeta(currentProductionLine)
-  const pageTitle = currentProductionLine
-    ? `批次管理 / ${currentProductionLineMeta?.groupLabel || '生产线'} / ${currentProductionLine}${currentStrainProduct ? ` / ${currentStrainProduct}` : ''}`
-    : routeProductName ? `批次管理 / 产品 / ${routeProductName}` : '批次管理'
 
   const {
     batches,
@@ -145,16 +114,13 @@ function BatchesPageContent() {
     removeBatch,
   } = useProductionStore()
 
-  const loadBatches = async (overrides: Partial<typeof batchQueryParams> = {}) => {
+  const loadBatches = async () => {
     setLoading(true)
     try {
       const response = await getBatches({
         ...batchQueryParams,
-        ...overrides,
         status: statusFilter,
         batch_no: searchText || undefined,
-        product_name: productNameFilter,
-        production_line: currentProductionLine,
       })
       if (response.code === 200) {
         setBatches(response.data)
@@ -169,74 +135,16 @@ function BatchesPageContent() {
 
   useEffect(() => {
     loadBatches()
-  }, [batchQueryParams.page, batchQueryParams.page_size, statusFilter, currentProductionLine, routeProductName])
-
-  const loadFeishuPreview = async () => {
-    if (!currentProductionLine) {
-      setFeishuPreview(null)
-      return
-    }
-
-    setFeishuPreviewLoading(true)
-    try {
-      const response = await getProductionFeishuRecords({ page_size: 8 })
-      if (response.code === 200) {
-        setFeishuPreview(response.data)
-      } else {
-        setFeishuPreview(null)
-      }
-    } catch {
-      setFeishuPreview(null)
-    } finally {
-      setFeishuPreviewLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    loadFeishuPreview()
-  }, [currentProductionLine])
+  }, [batchQueryParams.page, batchQueryParams.page_size, statusFilter])
 
   const handleSearch = () => {
     setBatchQueryParams({ page: 1 })
-    loadBatches({ page: 1 })
-  }
-
-  const updateProductionLineRoute = (productionLine?: string) => {
-    const params = new URLSearchParams(searchParams.toString())
-    if (productionLine) {
-      params.set('production_line', productionLine)
-    } else {
-      params.delete('production_line')
-    }
-    if (productionLine !== '101-1') {
-      params.delete('product_name')
-    }
-
-    const queryString = params.toString()
-    router.push(`/production/batches${queryString ? `?${queryString}` : ''}`)
-    setBatchQueryParams({ page: 1 })
-  }
-
-  const updateStrainProductRoute = (productName?: string) => {
-    const params = new URLSearchParams(searchParams.toString())
-    params.set('production_line', '101-1')
-    if (productName) {
-      params.set('product_name', productName)
-    } else {
-      params.delete('product_name')
-    }
-
-    const queryString = params.toString()
-    router.push(`/production/batches?${queryString}`)
-    setBatchQueryParams({ page: 1 })
+    loadBatches()
   }
 
   const handleAdd = () => {
     setEditingBatch(null)
     form.resetFields()
-    if (currentProductionLine) {
-      form.setFieldsValue({ production_line: currentProductionLine })
-    }
     setModalVisible(true)
   }
 
@@ -312,14 +220,8 @@ function BatchesPageContent() {
   const handleExport = async () => {
     setExportLoading(true)
     try {
-      const response = await getBatches({
-        page: 1,
-        page_size: 10000,
-        status: statusFilter,
-        batch_no: searchText || undefined,
-        product_name: productNameFilter,
-        production_line: currentProductionLine,
-      })
+      // 获取所有批次数据进行导出
+      const response = await getBatches({ page: 1, page_size: 10000 })
       if (response.code === 200 && response.data.length > 0) {
         exportBatchesToCsv(response.data)
         message.success(`已导出 ${response.data.length} 条批次数据`)
@@ -468,7 +370,7 @@ function BatchesPageContent() {
   return (
     <div className="p-6">
       <Card
-        title={pageTitle}
+        title="批次管理"
         extra={
           <Space>
             <Tooltip title="导出当前筛选结果的批次数据">
@@ -482,43 +384,6 @@ function BatchesPageContent() {
           </Space>
         }
       >
-        {isStrainProductionLine && (
-          <div className="mb-4 flex flex-wrap items-center gap-2 border-b border-[var(--color-hairline-soft)] pb-4">
-            <span className="mr-2 text-[13px] font-medium text-[var(--color-slate)]">
-              菌种产品
-            </span>
-            {STRAIN_BATCH_PRODUCT_NAMES.map((productName) => (
-              <Button
-                key={productName}
-                type={currentStrainProduct === productName ? 'primary' : 'default'}
-                onClick={() => updateStrainProductRoute(productName)}
-              >
-                {productName}
-              </Button>
-            ))}
-          </div>
-        )}
-
-        {(currentProductionLine && (feishuPreview || feishuPreviewLoading)) && (
-          <div className="mb-4 rounded-[8px] border border-[var(--color-hairline-soft)] p-4">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <Text strong>飞书多维表格数据</Text>
-              <Button
-                size="small"
-                icon={<ReloadOutlined />}
-                loading={feishuPreviewLoading}
-                onClick={loadFeishuPreview}
-              >
-                刷新
-              </Button>
-            </div>
-            <ProductionFeishuPreviewTable
-              preview={feishuPreview}
-              loading={feishuPreviewLoading}
-            />
-          </div>
-        )}
-
         <Row gutter={16} className="mb-4">
           <Col span={5}>
             <Input
@@ -532,8 +397,7 @@ function BatchesPageContent() {
           <Col span={4}>
             <Input
               placeholder="产品名称"
-              value={routeProductName || productNameSearch}
-              disabled={Boolean(routeProductName)}
+              value={productNameSearch}
               onChange={(e) => setProductNameSearch(e.target.value)}
               onPressEnter={handleSearch}
             />
@@ -542,10 +406,17 @@ function BatchesPageContent() {
             <Select
               placeholder="生产线"
               allowClear
-              value={currentProductionLine}
-              onChange={updateProductionLineRoute}
+              value={productionLineFilter}
+              onChange={(value) => {
+                setProductionLineFilter(value)
+                setBatchQueryParams({ page: 1 })
+              }}
               style={{ width: '100%' }}
-              options={BATCH_PRODUCTION_LINE_OPTIONS}
+              options={[
+                { value: 'A线', label: 'A线' },
+                { value: 'B线', label: 'B线' },
+                { value: 'C线', label: 'C线' },
+              ]}
             />
           </Col>
           <Col span={4}>
@@ -664,11 +535,9 @@ function BatchesPageContent() {
             <Col span={12}>
               <Form.Item name="production_line" label="生产线">
                 <Select placeholder="请选择生产线" allowClear>
-                  {BATCH_PRODUCTION_LINE_OPTIONS.map((option) => (
-                    <Select.Option key={option.value} value={option.value}>
-                      {option.label}
-                    </Select.Option>
-                  ))}
+                  <Select.Option value="A线">A线</Select.Option>
+                  <Select.Option value="B线">B线</Select.Option>
+                  <Select.Option value="C线">C线</Select.Option>
                 </Select>
               </Form.Item>
             </Col>
@@ -679,13 +548,5 @@ function BatchesPageContent() {
         </Form>
       </Modal>
     </div>
-  )
-}
-
-export default function BatchesPage() {
-  return (
-    <Suspense fallback={<div className="p-6"><Card loading /></div>}>
-      <BatchesPageContent />
-    </Suspense>
   )
 }

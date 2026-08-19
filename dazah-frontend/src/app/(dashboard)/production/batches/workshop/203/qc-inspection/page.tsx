@@ -1,0 +1,15 @@
+'use client'
+import { Result, Button } from 'antd'
+import { useRouter } from 'next/navigation'
+
+export default function Page() {
+  const router = useRouter()
+  return (
+    <Result
+      status="info"
+      title="203 车间 — 数据配置中"
+      subTitle="此工段的数据源尚未配置，请先对接飞书电子表格"
+    />
+  )
+}
+

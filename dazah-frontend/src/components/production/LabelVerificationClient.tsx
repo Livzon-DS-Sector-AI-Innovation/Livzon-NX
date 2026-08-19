@@ -13,13 +13,11 @@ const { Option } = Select
 interface LabelVerificationClientProps {
   initialVerifications: LabelVerification[]
   initialTotal: number
-  initialError?: string
 }
 
 export default function LabelVerificationClient({
   initialVerifications,
   initialTotal,
-  initialError,
 }: LabelVerificationClientProps) {
   const { message } = App.useApp()
 
@@ -360,13 +358,13 @@ export default function LabelVerificationClient({
         </Descriptions>
 
         {result.notes && (
-          <Alert type="info" message={result.notes} style={{ marginTop: 8 }} showIcon />
+          <Alert type="info" title={result.notes} style={{ marginTop: 8 }} showIcon />
         )}
 
         {result.confidence < 70 && (
           <Alert
             type="warning"
-            message="置信度较低，建议人工复核"
+            title="置信度较低，建议人工复核"
             description="AI 识别不够清晰，已自动降低帧率多次尝试，但仍建议人工确认结果。"
             style={{ marginTop: 8 }}
             showIcon
@@ -378,14 +376,6 @@ export default function LabelVerificationClient({
 
   return (
     <div className="space-y-4">
-      {initialError && (
-        <Alert
-          type="warning"
-          showIcon
-          message="标签复核数据暂时无法加载"
-          description={initialError}
-        />
-      )}
       {/* 统计卡片 */}
       {statistics && (
         <Row gutter={16}>

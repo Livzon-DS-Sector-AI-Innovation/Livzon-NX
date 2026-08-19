@@ -1,4 +1,3 @@
-import logging
 from datetime import date
 from uuid import UUID
 
@@ -17,7 +16,6 @@ from app.shared.module_registry import MODULES_BY_CODE
 from app.shared.schemas import PageParams
 
 router = create_module_router(MODULES_BY_CODE["quality"])
-logger = logging.getLogger(__name__)
 
 
 def get_label_verification_service(
@@ -184,7 +182,7 @@ async def analyze_label_verification_video(
     import os
     from app.core.config import get_settings
     from app.modules.production.label_verification_video_service import LabelVerificationVideoService
-    from app.core.llm import LLMOutputError, llm_client
+    from app.core.llm import llm_client, LLMOutputError
 
     settings = get_settings()
     video_path = os.path.join(settings.UPLOAD_DIR, file_key)
@@ -227,24 +225,37 @@ async def analyze_label_verification_video(
     if len(frames) > 1:
         images_to_analyze.append(frames[-1])
 
+    result = await llm_client.chat_vision(prompt, images_to_analyze)
+
+    # 解析 JSON 结果
+    import json
     try:
-        ai_result = await llm_client.chat_vision_json(prompt, images_to_analyze)
-    except LLMOutputError as e:
-        ai_result = {"raw_response": e.raw_response, "error": "JSON 解析失败"}
+        # 清理可能的 markdown 格式
+        cleaned = result.strip()
+        if cleaned.startswith("```"):
+            cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
+        if cleaned.endswith("```"):
+            cleaned = cleaned[:-3]
+        cleaned = cleaned.strip()
+
+        ai_result = json.loads(cleaned)
+    except json.JSONDecodeError:
+        ai_result = {"raw_response": result, "error": "JSON 解析失败"}
+
+        return {
+            "code": 200,
+            "message": "视频分析完成",
+            "data": {
+                "frames_extracted": len(frames),
+                "fps_used": fps,
+                "ai_result": ai_result,
+            },
+        }
+
     except Exception as e:
         logger.error(f"视频分析失败: {e}")
         from fastapi import HTTPException
         raise HTTPException(status_code=500, detail=f"视频分析失败: {str(e)}")
-
-    return {
-        "code": 200,
-        "message": "视频分析完成",
-        "data": {
-            "frames_extracted": len(frames),
-            "fps_used": fps,
-            "ai_result": ai_result,
-        },
-    }
 
 
 # ─── 自动对比接口 ───
@@ -285,6 +296,7 @@ async def auto_compare_video(
     from app.modules.production.label_verification_video_service import (
         LabelVerificationVideoService,
     )
+    from app.core.llm import llm_client
 
     settings = get_settings()
 
@@ -314,6 +326,13 @@ async def auto_compare_video(
         "total_weight": payload.total_weight,
     }
 
+    # 初始化 AI 服务（使用视觉模型）
+    ai_api_key = os.getenv("AI_API_KEY", "")
+    ai_base_url = os.getenv("AI_BASE_URL", "https://api.openai.com/v1")
+    ai_vision_model = os.getenv("AI_VISION_MODEL", "gpt-4o")
+
+    # 使用统一的 LLM 客户端（视觉模型）
+
     # 执行自动对比
     video_service = LabelVerificationVideoService(settings.UPLOAD_DIR)
 
@@ -321,7 +340,8 @@ async def auto_compare_video(
         result = await video_service.analyze_and_compare(
             video_path=video_path,
             form_data=form_data,
-        )
+            ai_service=ai_service,
+    )
     except Exception as e:
         logger.error(f"自动对比失败: {e}")
         from fastapi import HTTPException

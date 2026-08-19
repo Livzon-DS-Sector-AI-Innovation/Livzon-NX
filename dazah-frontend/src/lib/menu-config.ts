@@ -15,6 +15,10 @@ export interface SubMenuItem {
   placement?: "bottom"       // 置底显示，例如模块设置入口
   adminOnly?: boolean         // 仅系统管理员可见
   feishuPageKey?: string      // 可绑定飞书只读数据表的稳定页面标识
+  /** localStorage key 读取激活产品集合，用于动态菜单标签 */
+  labelStorageKey?: string
+  /** 产品 key → 显示名 映射，配合 labelStorageKey 使用 */
+  labelProducts?: { key: string; name: string }[]
 }
 
 export interface ModuleMenu {
@@ -39,39 +43,62 @@ export const moduleMenus: ModuleMenu[] = [
         label: "批次管理",
         path: "",
         children: [
+          { key: "workshop-101-1", label: "101一车间（菌种）", path: "/production/batches/workshop/101-1" },
+          { key: "workshop-101-2", label: "101二车间", path: "/production/batches/workshop/101-2" },
+          { key: "workshop-102-1", label: "102一车间", path: "/production/batches/workshop/102-1" },
+          { key: "workshop-102-2", label: "102二车间", path: "/production/batches/workshop/102-2" },
           {
-            key: "batches-products",
-            label: "按产品",
+            key: "workshop-103",
+            label: "103车间",
             path: "",
-            children: BATCH_PRODUCT_NAMES.map((productName) => ({
-              key: `batches-product-${productName}`,
-              label: productName,
-              path: getBatchProductPath(productName),
-            })),
+            children: [
+              { key: "ws103-phenylalanine", label: "苯丙氨酸", path: "/production/batches/workshop/103/phenylalanine" },
+              {
+                key: "ws103-lovastatin",
+                label: "洛伐他汀/美伐他汀",
+                path: "/production/batches/workshop/103/lovastatin",
+                // 产品 key → 显示名 映射，配合 labelStorageKey 使用
+                labelStorageKey: "workshop_103_lovastatin_active_products",
+                labelProducts: [
+                  { key: "lovastatin", name: "洛伐他汀" },
+                  { key: "mevastatin", name: "美伐他汀" },
+                ],
+              },
+            ],
           },
-          ...BATCH_PRODUCTION_LINE_GROUPS.map((group) => ({
-            key: `batches-${group.key}`,
-            label: group.label,
-            path: "",
-            children: group.codes.map((code) => ({
-              key: `batches-line-${code}`,
-              label: code,
-              path: getBatchProductionLinePath(code),
-            })),
-          })),
+          { key: "workshop-201-1", label: "201一车间", path: "/production/batches/workshop/201-1" },
+          { key: "workshop-201-2", label: "201二车间", path: "/production/batches/workshop/201-2" },
+          { key: "workshop-201-3", label: "201三车间", path: "/production/batches/workshop/201-3" },
+          { key: "workshop-202", label: "202车间", path: "/production/batches/workshop/202" },
+          { key: "workshop-203", label: "203车间", path: "/production/batches/workshop/203" },
+          { key: "workshop-203-3", label: "203三车间", path: "/production/batches/workshop/203-3" },
         ],
       },
-      { key: "workshop-203", label: "203 工序工作台", path: "/production/workshop-203" },
-      { key: "fermentation", label: "发酵与种子培养", path: "/production/fermentation", feishuPageKey: "production.fermentation" },
-      { key: "shift-log", label: "生产日志与交接", path: "/production/shift-log", feishuPageKey: "production.shift-log" },
-      { key: "plan", label: "生产计划", path: "/production/plan" },
+      {
+        key: "plan",
+        label: "生产计划",
+        path: "",
+        children: [
+          { key: "sales-plan", label: "产销计划", path: "/production/plan" },
+          { key: "scheduling", label: "排产计划", path: "/production/scheduling" },
+        ],
+      },
       { key: "process", label: "工艺规程（开发中）", path: "/production/process" },
-      { key: "records", label: "生产记录（开发中）", path: "/production/records", feishuPageKey: "production.records" },
+      { key: "records", label: "生产记录（开发中）", path: "/production/records" },
       { key: "balance", label: "物料平衡（开发中）", path: "/production/balance" },
+      {
+        key: "shift-log",
+        label: "生产日志",
+        path: "",
+        children: [
+          { key: "shift-log-deviation", label: "非密事件与运行偏差", path: "/production/shift-log/deviation" },
+          { key: "shift-log-quality", label: "中间体质控数据台账", path: "/production/shift-log/quality" },
+          { key: "shift-log-summary", label: "班次运行摘要", path: "/production/shift-log/summary" },
+          { key: "shift-log-handover", label: "班组交接确认", path: "/production/shift-log/handover" },
+        ],
+      },
       { key: "label-verification", label: "标签复核", path: "/production/label-verification" },
       { key: "pressure", label: "压差统计", path: "/production/pressure" },
-      { key: "feishu-data", label: "飞书数据", path: "/production/data", feishuPageKey: "production.data" },
-      { key: "feishu-config", label: "飞书配置", path: "/production/feishu-config", placement: "bottom" },
     ],
   },
   {
