@@ -172,7 +172,7 @@ class R4(R):
     remarks: str | None = None
 
 
-def mk(tbl, m, c, r, sf):
+def mk(tbl, m, c, resp_cls, sf):
     @router.get(f"/{tbl}", summary=f"{tbl}列表")
     async def _list(
         page: int = Query(1, ge=1),
@@ -191,27 +191,27 @@ def mk(tbl, m, c, r, sf):
             q.order_by(m.seq_no.asc()).offset((page - 1) * ps).limit(ps)
         )
         return paginated_response(
-            [r.model_validate(r) for r in rows.scalars().all()], page, ps, total
+            [resp_cls.model_validate(row) for row in rows.scalars().all()], page, ps, total  # noqa: E501
         )
 
     @router.post(f"/{tbl}", summary=f"创建{tbl}")
     async def _create(d: c, session: AsyncSession = Depends(get_db)):
-        r = m(**d.model_dump())
-        session.add(r)
+        obj = m(**d.model_dump())
+        session.add(obj)
         await session.flush()
         await session.commit()
-        await session.refresh(r)
-        return success_response(r.model_validate(r), message="创建成功")
+        await session.refresh(obj)
+        return success_response(resp_cls.model_validate(obj), message="创建成功")
 
     @router.put(f"/{tbl}/{{rid}}", summary=f"更新{tbl}")
     async def _update(rid: UUID, d: c, session: AsyncSession = Depends(get_db)):
-        r = await session.get(m, rid)
-        if not r or r.is_deleted:
+        obj = await session.get(m, rid)
+        if not obj or obj.is_deleted:
             return success_response(None, message="记录不存在", status_code=404)
         for k, v in d.model_dump(exclude_unset=True).items():
-            setattr(r, k, v)
+            setattr(obj, k, v)
         await session.flush()
-        return success_response(r.model_validate(r), message="更新成功")
+        return success_response(resp_cls.model_validate(obj), message="更新成功")
 
     @router.delete(f"/{tbl}/{{rid}}", summary=f"删除{tbl}")
     async def _delete(rid: UUID, session: AsyncSession = Depends(get_db)):

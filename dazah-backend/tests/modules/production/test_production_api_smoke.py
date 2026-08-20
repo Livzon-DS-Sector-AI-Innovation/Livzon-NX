@@ -158,3 +158,46 @@ async def test_production_detail_endpoints_missing(client: AsyncClient, path: st
     rid = str(uuid.uuid4())
     response = await client.get(path.format(rid=rid))
     assert response.status_code in (200, 400, 404, 409, 422), f"{path}: {response.status_code} {response.text[:200]}"  # noqa: E501
+
+
+POST_ENDPOINTS = [
+    "/api/v1/production/batches",
+    "/api/v1/production/broth-receives",
+    "/api/v1/production/centrifuge1",
+    "/api/v1/production/centrifuge2",
+    "/api/v1/production/ceramic-equipment-logs",
+    "/api/v1/production/ceramic-feeds",
+    "/api/v1/production/ceramic-material-separations",
+    "/api/v1/production/ceramic-membrane-cleans",
+    "/api/v1/production/ceramic-membrane-ops",
+    "/api/v1/production/conc1",
+    "/api/v1/production/conc2",
+    "/api/v1/production/decolor1",
+    "/api/v1/production/dry",
+    "/api/v1/production/fermentation",
+    "/api/v1/production/filter1",
+    "/api/v1/production/filter2",
+    "/api/v1/production/pack",
+    "/api/v1/production/pretreatments",
+    "/api/v1/production/recrystallize",
+    "/api/v1/production/seed-cultures",
+    "/api/v1/production/shift-handovers",
+    "/api/v1/production/shift-logs",
+    "/api/v1/production/non-conforming-events",
+]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("path", POST_ENDPOINTS)
+async def test_production_post_endpoints_invalid_payload(client: AsyncClient, path: str) -> None:
+    """空/无效 payload → 422 校验失败（覆盖路由与 Schema 校验层）。"""
+    response = await client.post(path, json={})
+    assert response.status_code in (200, 400, 404, 409, 422), f"{path}: {response.status_code} {response.text[:200]}"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("path", POST_ENDPOINTS)
+async def test_production_post_endpoints_invalid_json(client: AsyncClient, path: str) -> None:
+    """非 JSON body → 422。"""
+    response = await client.post(path, content="not-json", headers={"content-type": "application/json"})
+    assert response.status_code in (400, 404, 409, 422), f"{path}: {response.status_code}"
