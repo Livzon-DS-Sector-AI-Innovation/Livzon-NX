@@ -149,7 +149,7 @@ DETAIL_ENDPOINTS = [
 async def test_production_list_endpoints(client: AsyncClient, path: str) -> None:
     response = await client.get(path)
     # 空表列表接口返回 200；带参数的接口可能 422（缺参数）但不允许 500
-    assert response.status_code in (200, 400, 404, 409, 422), f"{path}: {response.status_code} {response.text[:200]}"  # noqa: E501
+    assert response.status_code in (200, 400, 422), f"{path}: {response.status_code} {response.text[:200]}"  # noqa: E501
 
 
 @pytest.mark.anyio
