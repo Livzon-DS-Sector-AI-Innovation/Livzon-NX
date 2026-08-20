@@ -19,15 +19,17 @@ import pytest
 
 from app.modules.production import (
     fermentation_service,
-    seed_culture_service,
-    shift_log_service,
-    shift_handover_service,
     nce_service,
     production_plan_service,
+    seed_culture_service,
+    shift_handover_service,
+    shift_log_service,
 )
 
 
-def _fermentation_service() -> tuple[fermentation_service.FermentationService, SimpleNamespace]:
+def _fermentation_service() -> tuple[
+    fermentation_service.FermentationService, SimpleNamespace
+]:
     service = fermentation_service.FermentationService(object())
     repo = SimpleNamespace(
         create=AsyncMock(return_value=SimpleNamespace(id=uuid.uuid4())),
@@ -125,7 +127,9 @@ async def test_shift_log_update_delete_raise_on_missing() -> None:
         await service.delete_record(uuid.uuid4())
 
 
-def _shift_handover_service() -> tuple[shift_handover_service.ShiftHandoverService, SimpleNamespace]:
+def _shift_handover_service() -> tuple[
+    shift_handover_service.ShiftHandoverService, SimpleNamespace
+]:
     service = shift_handover_service.ShiftHandoverService(object())
     repo = SimpleNamespace(
         confirm=AsyncMock(return_value=SimpleNamespace(id=uuid.uuid4())),
@@ -194,4 +198,4 @@ def _test_extract_number():
 def _test_extract_date():
     assert production_plan_service._extract_date("2026-07-01") == date(2026, 7, 1)
     assert production_plan_service._extract_date(None) is None
-    assert production_plan_service._extract_date("not-a-date") is None
+    assert production_plan_service._extract_date("not-a-date") is None  # noqa: E501

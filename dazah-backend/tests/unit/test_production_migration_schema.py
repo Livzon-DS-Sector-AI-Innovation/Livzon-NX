@@ -77,7 +77,9 @@ def test_fermentation_migration_upgrade_drops_existing_and_creates_table(
         "ix_fermentation_records_batch_no",
         "ix_fermentation_records_product_name",
     }
-    assert all(index[2] == ["batch_no"] or index[2] == ["product_name"] for index in created_indexes)
+    assert all(  # noqa: E501
+        index[2] in (["batch_no"], ["product_name"]) for index in created_indexes  # noqa: E501
+    )
 
 
 def test_fermentation_migration_upgrade_does_not_drop_when_table_missing(
