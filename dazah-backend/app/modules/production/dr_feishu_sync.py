@@ -400,7 +400,7 @@ async def run_dr_sync(session: AsyncSession) -> dict:
         .where(
             ProductionFeishuConfig.product_name == DR_PRODUCT_NAME,
             ProductionFeishuConfig.is_active,
-            not ProductionFeishuConfig.is_deleted,
+            ProductionFeishuConfig.is_deleted.is_(False),
         )
         .order_by(ProductionFeishuConfig.sync_target)
     )

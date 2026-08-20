@@ -177,7 +177,7 @@ async def chat_send(request: Request, session: AsyncSession = Depends(get_db)):
     # 1. 查历史消息
     result = await session.execute(
         select(AiAnalysis)
-        .where(AiAnalysis.session_id == sid, not AiAnalysis.is_deleted)
+        .where(AiAnalysis.session_id == sid, AiAnalysis.is_deleted.is_(False))
         .order_by(AiAnalysis.message_seq.asc())
     )
     history_rows = result.scalars().all()
@@ -291,7 +291,7 @@ async def chat_history(
     """获取指定会话的全部消息"""
     result = await session.execute(
         select(AiAnalysis)
-        .where(AiAnalysis.session_id == session_id, not AiAnalysis.is_deleted)
+        .where(AiAnalysis.session_id == session_id, AiAnalysis.is_deleted.is_(False))
         .order_by(AiAnalysis.message_seq.asc())
     )
     rows = result.scalars().all()

@@ -19,7 +19,7 @@ class SeedCultureRepository:
         batch_no: str | None = None,
         product_name: str | None = None,
     ):
-        query = select(SeedCulture).where(not SeedCulture.is_deleted)
+        query = select(SeedCulture).where(SeedCulture.is_deleted.is_(False))
 
         if batch_no:
             query = query.where(SeedCulture.batch_no.ilike(f"%{batch_no}%"))
@@ -40,7 +40,7 @@ class SeedCultureRepository:
 
     async def get_by_id(self, record_id: UUID) -> SeedCulture | None:
         query = select(SeedCulture).where(
-            SeedCulture.id == record_id, not SeedCulture.is_deleted
+            SeedCulture.id == record_id, SeedCulture.is_deleted.is_(False)
         )
         result = await self.session.execute(query)
         return result.scalar_one_or_none()

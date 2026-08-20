@@ -21,7 +21,7 @@ class NCERepository:
         date_from=None,
         date_to=None,
     ):
-        query = select(NonConformingEvent).where(not NonConformingEvent.is_deleted)
+        query = select(NonConformingEvent).where(NonConformingEvent.is_deleted.is_(False))
         if workshop:
             query = query.where(NonConformingEvent.workshop == workshop)
         if event_type:
@@ -41,7 +41,7 @@ class NCERepository:
 
     async def get_by_id(self, record_id: UUID) -> NonConformingEvent | None:
         query = select(NonConformingEvent).where(
-            NonConformingEvent.id == record_id, not NonConformingEvent.is_deleted
+            NonConformingEvent.id == record_id, NonConformingEvent.is_deleted.is_(False)
         )
         result = await self.session.execute(query)
         return result.scalar_one_or_none()

@@ -45,7 +45,7 @@ async def full_list(
     # 1. 发酵液
     fl_q = (
         select(FermentationLiquid)
-        .where(not FermentationLiquid.is_deleted)
+        .where(FermentationLiquid.is_deleted.is_(False))
         .order_by(FermentationLiquid.create_date.asc().nulls_last())
     )
     fl_rows = (await session.execute(fl_q)).scalars().all()
@@ -53,7 +53,7 @@ async def full_list(
 
     # 2. 提炼批次
     rb_q = select(RefiningBatch).where(
-        not RefiningBatch.is_deleted, RefiningBatch.workshop == workshop
+        RefiningBatch.is_deleted.is_(False), RefiningBatch.workshop == workshop
     )
     if month is not None:
         rb_q = rb_q.where(RefiningBatch.month == month)
@@ -68,7 +68,7 @@ async def full_list(
     st_q = (
         select(SubTankRecord)
         .where(
-            not SubTankRecord.is_deleted,
+            SubTankRecord.is_deleted.is_(False),
             SubTankRecord.parent_batch.in_(parent_batches),
         )
         .order_by(SubTankRecord.parent_batch, SubTankRecord.tank_no)
@@ -86,7 +86,7 @@ async def full_list(
         na_q = (
             select(SubTankSodiumStep)
             .where(
-                not SubTankSodiumStep.is_deleted,
+                SubTankSodiumStep.is_deleted.is_(False),
                 SubTankSodiumStep.sub_tank_id.in_(st_ids),
             )
             .order_by(SubTankSodiumStep.sub_tank_id, SubTankSodiumStep.seq_no)
@@ -102,7 +102,7 @@ async def full_list(
         ac_q = (
             select(SubTankAcidStep)
             .where(
-                not SubTankAcidStep.is_deleted,
+                SubTankAcidStep.is_deleted.is_(False),
                 SubTankAcidStep.sub_tank_id.in_(st_ids),
             )
             .order_by(SubTankAcidStep.sub_tank_id, SubTankAcidStep.seq_no)
@@ -149,7 +149,7 @@ async def list_fl(
 ):
     q = (
         select(FermentationLiquid)
-        .where(not FermentationLiquid.is_deleted)
+        .where(FermentationLiquid.is_deleted.is_(False))
         .order_by(FermentationLiquid.create_date.desc().nulls_last())
         .limit(page_size)
     )
@@ -208,7 +208,7 @@ async def delete_rb(record_id: UUID, session: AsyncSession = Depends(get_db)):
             await session.execute(
                 select(SubTankRecord).where(
                     SubTankRecord.parent_batch == rb.batch_no,
-                    not SubTankRecord.is_deleted,
+                    SubTankRecord.is_deleted.is_(False),
                 )
             )
         )
@@ -224,7 +224,7 @@ async def delete_rb(record_id: UUID, session: AsyncSession = Depends(get_db)):
                 (
                     await session.execute(
                         select(m).where(
-                            m.sub_tank_id.in_(st_ids), not m.is_deleted
+                            m.sub_tank_id.in_(st_ids), m.is_deleted.is_(False)
                         )
                     )
                 )

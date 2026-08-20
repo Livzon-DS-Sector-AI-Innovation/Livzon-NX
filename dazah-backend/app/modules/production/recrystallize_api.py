@@ -72,7 +72,7 @@ async def _list(
     session: AsyncSession = Depends(get_db),
 ):
     q = select(Recrystallize).where(
-        not Recrystallize.is_deleted, Recrystallize.workshop == workshop
+        Recrystallize.is_deleted.is_(False), Recrystallize.workshop == workshop
     )
     if s:
         q = q.where(Recrystallize.batch_no.ilike(f"%{s}%"))

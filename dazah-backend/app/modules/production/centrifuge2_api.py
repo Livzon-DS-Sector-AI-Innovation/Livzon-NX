@@ -62,7 +62,7 @@ async def _list(
     session: AsyncSession = Depends(get_db),
 ):
     q = select(Centrifuge2).where(
-        not Centrifuge2.is_deleted, Centrifuge2.workshop == workshop
+        Centrifuge2.is_deleted.is_(False), Centrifuge2.workshop == workshop
     )
     if s:
         q = q.where(Centrifuge2.batch_no.ilike(f"%{s}%"))

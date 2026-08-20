@@ -69,13 +69,13 @@ async def list_batches(
     # 查询条件
     q = (
         select(FaFermentationBatch)
-        .where(not FaFermentationBatch.is_deleted)
+        .where(FaFermentationBatch.is_deleted.is_(False))
         .order_by(FaFermentationBatch.放罐日期.desc().nulls_last())
     )
     count_q = (
         select(func.count())
         .select_from(FaFermentationBatch)
-        .where(not FaFermentationBatch.is_deleted)
+        .where(FaFermentationBatch.is_deleted.is_(False))
     )
 
     if tank_no:
@@ -97,7 +97,7 @@ async def list_batches(
             select(FaFermentationSubBatch)
             .where(
                 FaFermentationSubBatch.父发酵罐号.in_(tank_nos),
-                not FaFermentationSubBatch.is_deleted,
+                FaFermentationSubBatch.is_deleted.is_(False),
             )
             .order_by(FaFermentationSubBatch.子批后缀)
         )
@@ -133,11 +133,11 @@ async def list_flat(
 ):
     """返回平铺列表：每行=一个子批+主批所有字段，_is_first 标记 rowSpan 起始行"""
     # 按主批分页
-    b_q = select(FaFermentationBatch).where(not FaFermentationBatch.is_deleted)
+    b_q = select(FaFermentationBatch).where(FaFermentationBatch.is_deleted.is_(False))
     count_q = (
         select(func.count())
         .select_from(FaFermentationBatch)
-        .where(not FaFermentationBatch.is_deleted)
+        .where(FaFermentationBatch.is_deleted.is_(False))
     )
     if month is not None:
         b_q = b_q.where(
@@ -167,7 +167,7 @@ async def list_flat(
             select(FaFermentationSubBatch)
             .where(
                 FaFermentationSubBatch.父发酵罐号.in_(tank_nos),
-                not FaFermentationSubBatch.is_deleted,
+                FaFermentationSubBatch.is_deleted.is_(False),
             )
             .order_by(FaFermentationSubBatch.子批后缀)
         )
@@ -204,7 +204,7 @@ async def get_batch(
         await session.execute(
             select(FaFermentationBatch).where(
                 FaFermentationBatch.发酵罐号 == tank_no,
-                not FaFermentationBatch.is_deleted,
+                FaFermentationBatch.is_deleted.is_(False),
             )
         )
     ).scalar_one_or_none()
@@ -217,7 +217,7 @@ async def get_batch(
                 select(FaFermentationSubBatch)
                 .where(
                     FaFermentationSubBatch.父发酵罐号 == tank_no,
-                    not FaFermentationSubBatch.is_deleted,
+                    FaFermentationSubBatch.is_deleted.is_(False),
                 )
                 .order_by(FaFermentationSubBatch.子批后缀)
             )
@@ -244,7 +244,7 @@ async def update_sub_batch(
         await session.execute(
             select(FaFermentationSubBatch).where(
                 FaFermentationSubBatch.id == sub_id,
-                not FaFermentationSubBatch.is_deleted,
+                FaFermentationSubBatch.is_deleted.is_(False),
             )
         )
     ).scalar_one_or_none()

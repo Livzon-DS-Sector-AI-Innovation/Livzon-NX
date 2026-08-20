@@ -181,7 +181,7 @@ def mk(tbl, m, c, resp_cls, sf):
         workshop: str = Query("203"),
         session: AsyncSession = Depends(get_db),
     ):
-        q = select(m).where(not m.is_deleted, m.workshop == workshop)
+        q = select(m).where(m.is_deleted.is_(False), m.workshop == workshop)
         if s:
             q = q.where(getattr(m, sf).ilike(f"%{s}%"))
         total = (

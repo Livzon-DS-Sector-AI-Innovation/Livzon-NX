@@ -40,7 +40,7 @@ async def full_list_extraction_records(
     from sqlalchemy import extract
 
     main_q = select(ExtractionRecord).where(
-        not ExtractionRecord.is_deleted,
+        ExtractionRecord.is_deleted.is_(False),
         ExtractionRecord.workshop == workshop,
     )
     if month is not None:
@@ -56,7 +56,7 @@ async def full_list_extraction_records(
         inputs_q = (
             select(ExtractionInput)
             .where(
-                not ExtractionInput.is_deleted,
+                ExtractionInput.is_deleted.is_(False),
                 ExtractionInput.extraction_batch.in_(batch_nos),
             )
             .order_by(ExtractionInput.extraction_batch, ExtractionInput.seq_no)
@@ -88,7 +88,7 @@ async def list_extraction_records(
     session: AsyncSession = Depends(get_db),
 ):
     query = select(ExtractionRecord).where(
-        not ExtractionRecord.is_deleted,
+        ExtractionRecord.is_deleted.is_(False),
         ExtractionRecord.workshop == workshop,
     )
     if batch_no:
@@ -145,7 +145,7 @@ async def delete_extraction_record(
     inputs = await session.execute(
         select(ExtractionInput).where(
             ExtractionInput.extraction_batch == record.batch_no,
-            not ExtractionInput.is_deleted,
+            ExtractionInput.is_deleted.is_(False),
         )
     )
     for inp in inputs.scalars().all():
@@ -166,7 +166,7 @@ async def list_extraction_inputs(
     query = (
         select(ExtractionInput)
         .where(
-            not ExtractionInput.is_deleted,
+            ExtractionInput.is_deleted.is_(False),
             ExtractionInput.extraction_batch == batch_no,
         )
         .order_by(ExtractionInput.seq_no)
@@ -231,7 +231,7 @@ async def _recalc_extraction_totals(extraction_batch: str, session: AsyncSession
     """重新计算主表的投入汇总"""
     inputs_result = await session.execute(
         select(ExtractionInput).where(
-            not ExtractionInput.is_deleted,
+            ExtractionInput.is_deleted.is_(False),
             ExtractionInput.extraction_batch == extraction_batch,
         )
     )
@@ -249,7 +249,7 @@ async def _recalc_extraction_totals(extraction_batch: str, session: AsyncSession
     main_result = await session.execute(
         select(ExtractionRecord).where(
             ExtractionRecord.batch_no == extraction_batch,
-            not ExtractionRecord.is_deleted,
+            ExtractionRecord.is_deleted.is_(False),
         )
     )
     main = main_result.scalar_one_or_none()

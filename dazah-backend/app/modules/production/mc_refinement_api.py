@@ -40,7 +40,7 @@ async def full_list_mc_refinement_records(
     from sqlalchemy import extract
 
     main_q = select(McRefinementRecord).where(
-        not McRefinementRecord.is_deleted,
+        McRefinementRecord.is_deleted.is_(False),
         McRefinementRecord.workshop == workshop,
     )
     if month is not None:
@@ -55,7 +55,7 @@ async def full_list_mc_refinement_records(
         inputs_q = (
             select(McRefinementInput)
             .where(
-                not McRefinementInput.is_deleted,
+                McRefinementInput.is_deleted.is_(False),
                 McRefinementInput.refinement_batch.in_(batch_nos),
             )
             .order_by(
@@ -88,7 +88,7 @@ async def list_mc_refinement_records(
     session: AsyncSession = Depends(get_db),
 ):
     query = select(McRefinementRecord).where(
-        not McRefinementRecord.is_deleted,
+        McRefinementRecord.is_deleted.is_(False),
         McRefinementRecord.workshop == workshop,
     )
     if batch_no:
@@ -144,7 +144,7 @@ async def delete_mc_refinement_record(
     inputs = await session.execute(
         select(McRefinementInput).where(
             McRefinementInput.refinement_batch == record.batch_no,
-            not McRefinementInput.is_deleted,
+            McRefinementInput.is_deleted.is_(False),
         )
     )
     for inp in inputs.scalars().all():
@@ -163,7 +163,7 @@ async def list_mc_refinement_inputs(
     session: AsyncSession = Depends(get_db),
 ):
     query = select(McRefinementInput).where(
-        not McRefinementInput.is_deleted,
+        McRefinementInput.is_deleted.is_(False),
         McRefinementInput.refinement_batch == batch_no,
     )
     rows = await session.execute(query)
@@ -225,7 +225,7 @@ async def _recalc_refinement_totals(refinement_batch: str, session: AsyncSession
     """重新计算主表的投入汇总和收率"""
     inputs_result = await session.execute(
         select(McRefinementInput).where(
-            not McRefinementInput.is_deleted,
+            McRefinementInput.is_deleted.is_(False),
             McRefinementInput.refinement_batch == refinement_batch,
         )
     )
@@ -243,7 +243,7 @@ async def _recalc_refinement_totals(refinement_batch: str, session: AsyncSession
     main_result = await session.execute(
         select(McRefinementRecord).where(
             McRefinementRecord.batch_no == refinement_batch,
-            not McRefinementRecord.is_deleted,
+            McRefinementRecord.is_deleted.is_(False),
         )
     )
     main = main_result.scalar_one_or_none()

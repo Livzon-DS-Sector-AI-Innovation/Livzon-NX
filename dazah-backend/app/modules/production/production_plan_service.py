@@ -163,7 +163,7 @@ async def _sync_production_plan(
                     ProductionPlan.product_name == product_name,
                     ProductionPlan.workshop == mapped.get("workshop"),
                     ProductionPlan.plan_date == mapped.get("plan_date"),
-                    not ProductionPlan.is_deleted,
+                    ProductionPlan.is_deleted.is_(False),
                 )
             )
             record = existing_result.scalar_one_or_none()
@@ -236,7 +236,7 @@ async def _sync_sales_plan(
             existing = await session.execute(
                 select(SalesPlanDetail).where(
                     SalesPlanDetail.product_name == product_name,
-                    not SalesPlanDetail.is_deleted,
+                    SalesPlanDetail.is_deleted.is_(False),
                 )
             )
             record = existing.scalar_one_or_none()

@@ -943,9 +943,9 @@ async def get_sales_plan_details(
     product_name: str | None = None,
     session: AsyncSession = Depends(get_db),
 ):
-    query = select(SalesPlanDetail).where(not SalesPlanDetail.is_deleted)
+    query = select(SalesPlanDetail).where(SalesPlanDetail.is_deleted.is_(False))
     count_q = select(func.count(SalesPlanDetail.id)).where(
-        not SalesPlanDetail.is_deleted
+        SalesPlanDetail.is_deleted.is_(False)
     )
     if product_name:
         query = query.where(SalesPlanDetail.product_name == product_name)

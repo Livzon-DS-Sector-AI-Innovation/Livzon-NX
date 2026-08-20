@@ -67,7 +67,7 @@ async def _list(
     workshop: str = Query("203"),
     session: AsyncSession = Depends(get_db),
 ):
-    q = select(Conc2).where(not Conc2.is_deleted, Conc2.workshop == workshop)
+    q = select(Conc2).where(Conc2.is_deleted.is_(False), Conc2.workshop == workshop)
     if s:
         q = q.where(Conc2.batch_no.ilike(f"%{s}%"))
     total = (

@@ -29,7 +29,7 @@ async def list_pretreatments(
     session: AsyncSession = Depends(get_db),
 ):
     query = select(Pretreatment).where(
-        not Pretreatment.is_deleted, Pretreatment.workshop == workshop
+        Pretreatment.is_deleted.is_(False), Pretreatment.workshop == workshop
     )
     if received_batch:
         query = query.where(Pretreatment.received_batch.ilike(f"%{received_batch}%"))

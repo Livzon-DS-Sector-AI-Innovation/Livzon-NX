@@ -52,7 +52,7 @@ async def get_dr_extraction_full(
     """
     # 1. 查询所有发酵批次
     batch_q = select(DrFermentationBatch).where(
-        not DrFermentationBatch.is_deleted,
+        DrFermentationBatch.is_deleted.is_(False),
         DrFermentationBatch.workshop == workshop,
     )
     # 年月筛选：tank_date 格式为 "YYYY.MM.DD" 或 "YYYY-MM-DD"
@@ -73,7 +73,7 @@ async def get_dr_extraction_full(
     tank_q = (
         select(DrFermentationTank)
         .where(
-            not DrFermentationTank.is_deleted,
+            DrFermentationTank.is_deleted.is_(False),
             DrFermentationTank.fermentation_batch_id.in_(batch_ids),
         )
         .order_by(DrFermentationTank.tank_no)
@@ -85,7 +85,7 @@ async def get_dr_extraction_full(
     extr_q = (
         select(DrExtraction)
         .where(
-            not DrExtraction.is_deleted,
+            DrExtraction.is_deleted.is_(False),
             DrExtraction.fermentation_tank_id.in_(tank_ids),
         )
         .order_by(DrExtraction.extraction_batch_no)
@@ -97,7 +97,7 @@ async def get_dr_extraction_full(
     filtr_q = (
         select(DrFiltrate)
         .where(
-            not DrFiltrate.is_deleted,
+            DrFiltrate.is_deleted.is_(False),
             DrFiltrate.extraction_id.in_(extr_ids),
         )
         .order_by(DrFiltrate.tank_no)
@@ -172,7 +172,7 @@ async def get_dr_extraction_years(
     q = (
         select(func.substr(DrFermentationBatch.tank_date, 1, 4).label("yr"))
         .where(
-            not DrFermentationBatch.is_deleted,
+            DrFermentationBatch.is_deleted.is_(False),
             DrFermentationBatch.workshop == workshop,
             DrFermentationBatch.tank_date.isnot(None),
         )
@@ -197,7 +197,7 @@ async def list_dr_batches(
     session: AsyncSession = Depends(get_db),
 ):
     query = select(DrFermentationBatch).where(
-        not DrFermentationBatch.is_deleted,
+        DrFermentationBatch.is_deleted.is_(False),
         DrFermentationBatch.workshop == workshop,
     )
     if batch_no:
@@ -257,7 +257,7 @@ async def list_dr_tanks(batch_id: str, session: AsyncSession = Depends(get_db)):
     query = (
         select(DrFermentationTank)
         .where(
-            not DrFermentationTank.is_deleted,
+            DrFermentationTank.is_deleted.is_(False),
             DrFermentationTank.fermentation_batch_id == batch_id,
         )
         .order_by(DrFermentationTank.tank_no)
@@ -307,7 +307,7 @@ async def list_dr_extractions(tank_id: str, session: AsyncSession = Depends(get_
     query = (
         select(DrExtraction)
         .where(
-            not DrExtraction.is_deleted,
+            DrExtraction.is_deleted.is_(False),
             DrExtraction.fermentation_tank_id == tank_id,
         )
         .order_by(DrExtraction.extraction_batch_no)
@@ -363,7 +363,7 @@ async def list_dr_filtrates(
     query = (
         select(DrFiltrate)
         .where(
-            not DrFiltrate.is_deleted,
+            DrFiltrate.is_deleted.is_(False),
             DrFiltrate.extraction_id == extraction_id,
         )
         .order_by(DrFiltrate.tank_no)
@@ -438,7 +438,7 @@ async def get_dr_dashboard(
 
     # 发酵批次计数
     batch_count_q = select(func.count(DrFermentationBatch.id)).where(
-        not DrFermentationBatch.is_deleted,
+        DrFermentationBatch.is_deleted.is_(False),
         DrFermentationBatch.workshop == workshop,
         DrFermentationBatch.created_at >= start_date,
         DrFermentationBatch.created_at < end_date,
@@ -452,7 +452,7 @@ async def get_dr_dashboard(
         m_end = date(year, m + 1, 1) if m < 12 else date(year + 1, 1, 1)
         # 暂用批次计数代替产量，后续按实际业务调整
         q = select(func.count(DrFermentationBatch.id)).where(
-            not DrFermentationBatch.is_deleted,
+            DrFermentationBatch.is_deleted.is_(False),
             DrFermentationBatch.workshop == workshop,
             DrFermentationBatch.created_at >= m_start,
             DrFermentationBatch.created_at < m_end,
@@ -526,7 +526,7 @@ async def get_dr_record_years(
     # 提取 production_date 前 4 位作为年份（格式 YYYY.MM.DD），过滤掉 '-' 等非日期值
     q = (
         select(func.substr(model.production_date, 1, 4).label("yr"))
-        .where(not model.is_deleted, model.production_date.isnot(None))
+        .where(model.is_deleted.is_(False), model.production_date.isnot(None))
         .distinct()
     )
     rows = (await session.execute(q)).scalars().all()
@@ -547,7 +547,7 @@ async def get_dr_records(
     if not model:
         return success_response(None, message=f"未知表: {table}", status_code=400)
 
-    base_query = select(model).where(not model.is_deleted)
+    base_query = select(model).where(model.is_deleted.is_(False))
 
     # 按生产日期筛选（production_date 格式为 YYYY.MM.DD）
     if hasattr(model, "production_date"):

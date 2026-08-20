@@ -125,7 +125,7 @@ async def sync_config(config: ProductionFeishuConfig, session: AsyncSession) -> 
                 select(FermentationRecord).where(
                     FermentationRecord.batch_no == batch_no,
                     FermentationRecord.product_name == product_name,
-                    not FermentationRecord.is_deleted,
+                    FermentationRecord.is_deleted.is_(False),
                 )
             )
             record = existing.scalar_one_or_none()

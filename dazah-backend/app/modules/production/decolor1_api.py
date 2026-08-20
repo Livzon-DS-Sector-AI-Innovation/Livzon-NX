@@ -72,7 +72,7 @@ async def _list(
     session: AsyncSession = Depends(get_db),
 ):
     q = select(Decolor1).where(
-        not Decolor1.is_deleted, Decolor1.workshop == workshop
+        Decolor1.is_deleted.is_(False), Decolor1.workshop == workshop
     )
     if s:
         q = q.where(Decolor1.batch_no.ilike(f"%{s}%"))

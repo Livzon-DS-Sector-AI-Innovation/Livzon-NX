@@ -43,7 +43,7 @@ async def _get_fa_spreadsheet_config(session: AsyncSession) -> dict:
             ProductionFeishuConfig.product_name == FA_CONFIG_PRODUCT,
             ProductionFeishuConfig.sync_target == FA_CONFIG_SYNC_TARGET,
             ProductionFeishuConfig.is_active,
-            not ProductionFeishuConfig.is_deleted,
+            ProductionFeishuConfig.is_deleted.is_(False),
         )
         .order_by(ProductionFeishuConfig.updated_at.desc())
         .limit(1)

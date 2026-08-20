@@ -56,7 +56,7 @@ async def _get_mc_spreadsheet_config(session: AsyncSession) -> dict:
             ProductionFeishuConfig.product_name == MC_CONFIG_PRODUCT,
             ProductionFeishuConfig.sync_target == MC_CONFIG_SYNC_TARGET,
             ProductionFeishuConfig.is_active,
-            not ProductionFeishuConfig.is_deleted,
+            ProductionFeishuConfig.is_deleted.is_(False),
         )
         .order_by(ProductionFeishuConfig.updated_at.desc())
         .limit(1)
@@ -307,7 +307,7 @@ async def _sync_crude(
 
         # 发酵液
         flq = select(FermentationLiquid).where(
-            FermentationLiquid.batch_no == fl_b, not FermentationLiquid.is_deleted
+            FermentationLiquid.batch_no == fl_b, FermentationLiquid.is_deleted.is_(False)  # noqa: E501
         )
         if not (await session.execute(flq)).scalar_one_or_none():
             produce_date = _safe_date(d)
@@ -324,11 +324,11 @@ async def _sync_crude(
 
         # 提炼批次
         rbq = select(RefiningBatch).where(
-            RefiningBatch.batch_no == rb_b, not RefiningBatch.is_deleted
+            RefiningBatch.batch_no == rb_b, RefiningBatch.is_deleted.is_(False)
         )
         if not (await session.execute(rbq)).scalar_one_or_none():
             fnq = select(RefiningBatch).where(
-                RefiningBatch.fermentation_no == fl_b, not RefiningBatch.is_deleted
+                RefiningBatch.fermentation_no == fl_b, RefiningBatch.is_deleted.is_(False)  # noqa: E501
             )
             if not (await session.execute(fnq)).scalar_one_or_none():
                 produce_date = _safe_date(d)
@@ -359,7 +359,7 @@ async def _sync_crude(
         cur_acid_seq = 0
 
         stq = select(SubTankRecord).where(
-            SubTankRecord.batch_no == cur_st_batch, not SubTankRecord.is_deleted
+            SubTankRecord.batch_no == cur_st_batch, SubTankRecord.is_deleted.is_(False)
         )
         existing = (await session.execute(stq)).scalar_one_or_none()
         if existing:
@@ -403,7 +403,7 @@ async def _sync_crude(
                     select(SubTankRecord).where(
                         SubTankRecord.parent_batch == cur_rb_batch,
                         SubTankRecord.tank_no == 1,
-                        not SubTankRecord.is_deleted,
+                        SubTankRecord.is_deleted.is_(False),
                     )
                 )
             ).scalar_one_or_none()
@@ -431,7 +431,7 @@ async def _sync_crude(
         snq = select(SubTankSodiumStep).where(
             SubTankSodiumStep.sub_tank_id == cur_st_batch,
             SubTankSodiumStep.seq_no == cur_sodium_seq,
-            not SubTankSodiumStep.is_deleted,
+            SubTankSodiumStep.is_deleted.is_(False),
         )
         if (await session.execute(snq)).scalar_one_or_none():
             return
@@ -461,7 +461,7 @@ async def _sync_crude(
         acq = select(SubTankAcidStep).where(
             SubTankAcidStep.sub_tank_id == cur_st_batch,
             SubTankAcidStep.seq_no == cur_acid_seq,
-            not SubTankAcidStep.is_deleted,
+            SubTankAcidStep.is_deleted.is_(False),
         )
         if (await session.execute(acq)).scalar_one_or_none():
             return
@@ -646,7 +646,7 @@ async def _sync_extraction(
                 rec_exists_result = await session.execute(
                     select(ExtractionRecord).where(
                         ExtractionRecord.batch_no == batch_no,
-                        not ExtractionRecord.is_deleted,
+                        ExtractionRecord.is_deleted.is_(False),
                     )
                 )
                 existing_rec = rec_exists_result.scalar_one_or_none()
@@ -708,7 +708,7 @@ async def _sync_extraction(
                     select(ExtractionInput).where(
                         ExtractionInput.extraction_batch == batch_no,
                         ExtractionInput.crude_batch_no == crude_batch,
-                        not ExtractionInput.is_deleted,
+                        ExtractionInput.is_deleted.is_(False),
                     )
                 )
                 existing_inp = inp_exists_result.scalar_one_or_none()
@@ -816,7 +816,7 @@ async def _sync_refinement(
                 rec_exists_result = await session.execute(
                     select(McRefinementRecord).where(
                         McRefinementRecord.batch_no == batch_no,
-                        not McRefinementRecord.is_deleted,
+                        McRefinementRecord.is_deleted.is_(False),
                     )
                 )
                 existing_rec = rec_exists_result.scalar_one_or_none()
@@ -877,7 +877,7 @@ async def _sync_refinement(
                     select(McRefinementInput).where(
                         McRefinementInput.refinement_batch == batch_no,
                         McRefinementInput.wet_batch_no == wet_batch,
-                        not McRefinementInput.is_deleted,
+                        McRefinementInput.is_deleted.is_(False),
                     )
                 )
                 existing_inp = inp_exists_result.scalar_one_or_none()
@@ -980,7 +980,7 @@ async def _sync_blending(
                 rec_exists_result = await session.execute(
                     select(BlendingRecord).where(
                         BlendingRecord.batch_no == blend_batch,
-                        not BlendingRecord.is_deleted,
+                        BlendingRecord.is_deleted.is_(False),
                     )
                 )
                 existing_rec = rec_exists_result.scalar_one_or_none()
@@ -1027,7 +1027,7 @@ async def _sync_blending(
                     select(BlendingInput).where(
                         BlendingInput.blend_batch == blend_batch,
                         BlendingInput.input_batch_no == input_batch,
-                        not BlendingInput.is_deleted,
+                        BlendingInput.is_deleted.is_(False),
                     )
                 )
                 existing_inp = inp_exists_result.scalar_one_or_none()
@@ -1134,7 +1134,7 @@ async def _sync_qc(
                 rec_exists_result = await session.execute(
                     select(QcInspection).where(
                         QcInspection.qc_id == current_qc_id,
-                        not QcInspection.is_deleted,
+                        QcInspection.is_deleted.is_(False),
                     )
                 )
                 existing_rec = rec_exists_result.scalar_one_or_none()
@@ -1170,7 +1170,7 @@ async def _sync_qc(
                     select(QcInspectionInput).where(
                         QcInspectionInput.qc_batch == back_batch,
                         QcInspectionInput.input_batch == single_batch,
-                        not QcInspectionInput.is_deleted,
+                        QcInspectionInput.is_deleted.is_(False),
                     )
                 )
                 existing_inp = inp_exists_result.scalar_one_or_none()
@@ -1254,7 +1254,7 @@ async def _sync_ba(
                         select(ButylAcetateRecord).where(
                             ButylAcetateRecord.check_date == date_val,
                             ButylAcetateRecord.equipment == equipment,
-                            not ButylAcetateRecord.is_deleted,
+                            ButylAcetateRecord.is_deleted.is_(False),
                         )
                     )
                 ).scalar_one_or_none()

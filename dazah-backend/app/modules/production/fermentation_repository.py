@@ -21,7 +21,7 @@ class FermentationRepository:
         status: str | None = None,
         fermenter: str | None = None,
     ):
-        query = select(FermentationRecord).where(not FermentationRecord.is_deleted)
+        query = select(FermentationRecord).where(FermentationRecord.is_deleted.is_(False))  # noqa: E501
 
         if product_name:
             query = query.where(FermentationRecord.product_name == product_name)
@@ -47,7 +47,7 @@ class FermentationRepository:
     async def get_by_id(self, record_id: UUID) -> FermentationRecord | None:
         query = select(FermentationRecord).where(
             FermentationRecord.id == record_id,
-            not FermentationRecord.is_deleted,
+            FermentationRecord.is_deleted.is_(False),
         )
         result = await self.session.execute(query)
         return result.scalar_one_or_none()

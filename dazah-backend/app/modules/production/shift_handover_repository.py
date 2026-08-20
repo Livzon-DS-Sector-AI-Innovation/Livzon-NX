@@ -23,7 +23,7 @@ class ShiftHandoverRepository:
         date_from: str | None = None,
         date_to: str | None = None,
     ):
-        query = select(ShiftHandover).where(not ShiftHandover.is_deleted)
+        query = select(ShiftHandover).where(ShiftHandover.is_deleted.is_(False))
 
         if position:
             query = query.where(ShiftHandover.position == position)
@@ -47,7 +47,7 @@ class ShiftHandoverRepository:
     async def get_by_id(self, record_id: UUID) -> ShiftHandover | None:
         query = select(ShiftHandover).where(
             ShiftHandover.id == record_id,
-            not ShiftHandover.is_deleted,
+            ShiftHandover.is_deleted.is_(False),
         )
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
@@ -91,7 +91,7 @@ class ShiftHandoverRepository:
     async def get_distinct_positions(self) -> builtins.list[str]:
         query = (
             select(ShiftHandover.position)
-            .where(not ShiftHandover.is_deleted)
+            .where(ShiftHandover.is_deleted.is_(False))
             .distinct()
             .order_by(ShiftHandover.position)
         )

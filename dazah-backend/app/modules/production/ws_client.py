@@ -64,7 +64,7 @@ async def _handle_bitable_record_changed(file_token: str, table_id: str) -> None
                 ProductionFeishuConfig.bitable_app_token == file_token,
                 ProductionFeishuConfig.table_id == table_id,
                 ProductionFeishuConfig.is_active,
-                not ProductionFeishuConfig.is_deleted,
+                ProductionFeishuConfig.is_deleted.is_(False),
             )
         )
         config = result.scalar_one_or_none()
@@ -92,7 +92,7 @@ async def start_ws_from_db() -> dict:
             result = await session.execute(
                 select(ProductionFeishuConfig).where(
                     ProductionFeishuConfig.is_active,
-                    not ProductionFeishuConfig.is_deleted,
+                    ProductionFeishuConfig.is_deleted.is_(False),
                 )
             )
             configs = list(result.scalars().all())

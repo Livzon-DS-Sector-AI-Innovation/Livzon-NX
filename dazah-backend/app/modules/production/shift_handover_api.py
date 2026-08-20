@@ -63,7 +63,7 @@ async def search_users(
             select(ProductionFeishuConfig)
             .where(
                 ProductionFeishuConfig.is_active,
-                not ProductionFeishuConfig.is_deleted,
+                ProductionFeishuConfig.is_deleted.is_(False),
             )
             .limit(1)
         )

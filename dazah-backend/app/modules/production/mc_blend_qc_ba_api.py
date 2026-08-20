@@ -43,7 +43,7 @@ async def full_list_blending(
     from sqlalchemy import func as sa_func
 
     conditions = [
-        not BlendingRecord.is_deleted,
+        BlendingRecord.is_deleted.is_(False),
         BlendingRecord.workshop == workshop,
     ]
     if month is not None and 1 <= month <= 12:
@@ -64,7 +64,7 @@ async def full_list_blending(
         inputs_q = (
             select(BlendingInput)
             .where(
-                not BlendingInput.is_deleted,
+                BlendingInput.is_deleted.is_(False),
                 BlendingInput.blend_batch.in_(batch_nos),
             )
             .order_by(BlendingInput.blend_batch, BlendingInput.seq_no)
@@ -94,7 +94,7 @@ async def list_blending(
     session: AsyncSession = Depends(get_db),
 ):
     query = select(BlendingRecord).where(
-        not BlendingRecord.is_deleted, BlendingRecord.workshop == workshop
+        BlendingRecord.is_deleted.is_(False), BlendingRecord.workshop == workshop
     )
     if batch_no:
         query = query.where(BlendingRecord.batch_no.ilike(f"%{batch_no}%"))
@@ -149,7 +149,7 @@ async def delete_blending(record_id: UUID, session: AsyncSession = Depends(get_d
 @router.get("/mc/blending-records/{batch_no}/inputs", summary="混粉投入明细")
 async def list_blending_inputs(batch_no: str, session: AsyncSession = Depends(get_db)):
     query = select(BlendingInput).where(
-        not BlendingInput.is_deleted, BlendingInput.blend_batch == batch_no
+        BlendingInput.is_deleted.is_(False), BlendingInput.blend_batch == batch_no
     )
     rows = await session.execute(query)
     return success_response([_clean_dict(r) for r in rows.scalars().all()])
@@ -185,7 +185,7 @@ async def calculate_blending_impurities(
     """根据投入明细计算加权平均杂质（5个RRT点位 + 总杂 + 含量）"""
     inputs_result = await session.execute(
         select(BlendingInput).where(
-            not BlendingInput.is_deleted, BlendingInput.blend_batch == batch_no
+            BlendingInput.is_deleted.is_(False), BlendingInput.blend_batch == batch_no
         )
     )
     inputs = inputs_result.scalars().all()
@@ -213,7 +213,7 @@ async def calculate_blending_impurities(
     # 更新主表计算结果
     main = await session.execute(
         select(BlendingRecord).where(
-            BlendingRecord.batch_no == batch_no, not BlendingRecord.is_deleted
+            BlendingRecord.batch_no == batch_no, BlendingRecord.is_deleted.is_(False)
         )
     )
     main = main.scalar_one_or_none()
@@ -269,7 +269,7 @@ async def full_list_qc(
     from sqlalchemy import extract
 
     main_q = select(QcInspection).where(
-        not QcInspection.is_deleted,
+        QcInspection.is_deleted.is_(False),
     )
     if month is not None:
         main_q = main_q.where(extract("month", QcInspection.input_date) == month)
@@ -283,7 +283,7 @@ async def full_list_qc(
         inputs_q = (
             select(QcInspectionInput)
             .where(
-                not QcInspectionInput.is_deleted,
+                QcInspectionInput.is_deleted.is_(False),
                 QcInspectionInput.qc_batch.in_(batch_nos),
             )
             .order_by(QcInspectionInput.qc_batch, QcInspectionInput.input_batch)
@@ -308,7 +308,7 @@ async def full_list_qc(
 @router.get("/mc/qc-inputs/{qc_batch}", summary="QC投入明细列表")
 async def list_qc_inputs(qc_batch: str, session: AsyncSession = Depends(get_db)):
     query = select(QcInspectionInput).where(
-        not QcInspectionInput.is_deleted, QcInspectionInput.qc_batch == qc_batch
+        QcInspectionInput.is_deleted.is_(False), QcInspectionInput.qc_batch == qc_batch
     )
     rows = await session.execute(query)
     return success_response(
@@ -358,7 +358,7 @@ async def list_qc(
 ):
     query = (
         select(QcInspection)
-        .where(not QcInspection.is_deleted)
+        .where(QcInspection.is_deleted.is_(False))
         .order_by(QcInspection.created_at.desc())
     )
     count_q = select(func.count()).select_from(query.subquery())
@@ -405,7 +405,7 @@ async def update_qc(
 @router.get("/mc/qc-inspections/{qc_id}/items", summary="QC检验明细")
 async def list_qc_items(qc_id: str, session: AsyncSession = Depends(get_db)):
     query = select(QcInspectionItem).where(
-        not QcInspectionItem.is_deleted, QcInspectionItem.inspection_id == qc_id
+        QcInspectionItem.is_deleted.is_(False), QcInspectionItem.inspection_id == qc_id
     )
     rows = await session.execute(query)
     return success_response([_clean_dict(r) for r in rows.scalars().all()])
@@ -436,7 +436,7 @@ async def get_ba_records(session: AsyncSession = Depends(get_db)):
         (
             await session.execute(
                 select(ButylAcetateRecord)
-                .where(not ButylAcetateRecord.is_deleted)
+                .where(ButylAcetateRecord.is_deleted.is_(False))
                 .order_by(ButylAcetateRecord.check_date, ButylAcetateRecord.equipment)
             )
         )

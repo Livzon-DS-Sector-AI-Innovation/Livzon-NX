@@ -72,7 +72,7 @@ def _config_to_dict(c: ProductionFeishuConfig) -> dict:
 async def list_feishu_configs(session: AsyncSession = Depends(get_db)):
     result = await session.execute(
         select(ProductionFeishuConfig)
-        .where(not ProductionFeishuConfig.is_deleted)
+        .where(ProductionFeishuConfig.is_deleted.is_(False))
         .order_by(ProductionFeishuConfig.created_at.desc())
     )
     return success_response([_config_to_dict(c) for c in result.scalars().all()])
@@ -86,7 +86,7 @@ async def upsert_feishu_config(
         select(ProductionFeishuConfig)
         .where(
             ProductionFeishuConfig.product_name == body.product_name,
-            not ProductionFeishuConfig.is_deleted,
+            ProductionFeishuConfig.is_deleted.is_(False),
         )
         .order_by(ProductionFeishuConfig.created_at.desc())
         .limit(1)
@@ -272,7 +272,7 @@ async def list_feishu_tables(session: AsyncSession = Depends(get_db)):
     result = await session.execute(
         select(ProductionFeishuConfig).where(
             ProductionFeishuConfig.is_active,
-            not ProductionFeishuConfig.is_deleted,
+            ProductionFeishuConfig.is_deleted.is_(False),
         )
     )
     configs = list(result.scalars().all())
@@ -300,7 +300,7 @@ async def refresh_feishu_tables(session: AsyncSession = Depends(get_db)):
     result = await session.execute(
         select(ProductionFeishuConfig).where(
             ProductionFeishuConfig.is_active,
-            not ProductionFeishuConfig.is_deleted,
+            ProductionFeishuConfig.is_deleted.is_(False),
         )
     )
     configs = list(result.scalars().all())

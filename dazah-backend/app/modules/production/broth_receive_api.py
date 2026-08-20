@@ -29,7 +29,7 @@ async def list_broth_receives(
     session: AsyncSession = Depends(get_db),
 ):
     query = select(BrothReceive).where(
-        not BrothReceive.is_deleted, BrothReceive.workshop == workshop
+        BrothReceive.is_deleted.is_(False), BrothReceive.workshop == workshop
     )
     if received_batch:
         query = query.where(BrothReceive.received_batch.ilike(f"%{received_batch}%"))
