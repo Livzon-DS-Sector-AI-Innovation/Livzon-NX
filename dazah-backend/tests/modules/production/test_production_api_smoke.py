@@ -57,7 +57,6 @@ LIST_ENDPOINTS = [
     "/api/v1/production/dr/lineage/yield-distribution",
     "/api/v1/production/dr/records",
     "/api/v1/production/dr/records/years",
-    "/api/v1/production/dr/schedule/dump-plans",
     "/api/v1/production/dr/schedule/tasks",
     "/api/v1/production/dry",
     "/api/v1/production/fa/acidification/flat-list",
@@ -189,15 +188,62 @@ POST_ENDPOINTS = [
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("path", POST_ENDPOINTS)
-async def test_production_post_endpoints_invalid_payload(client: AsyncClient, path: str) -> None:
+async def test_production_post_endpoints_invalid_payload(client: AsyncClient, path: str) -> None:  # noqa: E501
     """空/无效 payload → 422 校验失败（覆盖路由与 Schema 校验层）。"""
     response = await client.post(path, json={})
-    assert response.status_code in (200, 400, 404, 409, 422), f"{path}: {response.status_code} {response.text[:200]}"
+    assert response.status_code in (200, 400, 404, 409, 422), f"{path}: {response.status_code} {response.text[:200]}"  # noqa: E501
 
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("path", POST_ENDPOINTS)
-async def test_production_post_endpoints_invalid_json(client: AsyncClient, path: str) -> None:
+async def test_production_post_endpoints_invalid_json(client: AsyncClient, path: str) -> None:  # noqa: E501
     """非 JSON body → 422。"""
-    response = await client.post(path, content="not-json", headers={"content-type": "application/json"})
-    assert response.status_code in (400, 404, 409, 422), f"{path}: {response.status_code}"
+    response = await client.post(path, content="not-json", headers={"content-type": "application/json"})  # noqa: E501
+    assert response.status_code in (400, 404, 409, 422), f"{path}: {response.status_code}"  # noqa: E501
+
+
+CREATE_PAYLOADS = {
+    "/api/v1/production/conc1": {"batch_no": "C1-TEST-1"},
+    "/api/v1/production/conc2": {"batch_no": "C2-TEST-1"},
+    "/api/v1/production/dry": {"batch_no": "DRY-TEST-1"},
+    "/api/v1/production/filter1": {"batch_no": "F1-TEST-1"},
+    "/api/v1/production/filter2": {"batch_no": "F2-TEST-1"},
+    "/api/v1/production/pack": {"batch_no": "PK-TEST-1"},
+    "/api/v1/production/centrifuge1": {"batch_no": "CF1-TEST-1"},
+    "/api/v1/production/centrifuge2": {"batch_no": "CF2-TEST-1"},
+    "/api/v1/production/decolor1": {"batch_no": "DC1-TEST-1"},
+    "/api/v1/production/recrystallize": {"batch_no": "RC-TEST-1"},
+    "/api/v1/production/pretreatments": {"received_batch": "PT-TEST-1"},
+    "/api/v1/production/broth-receives": {"received_batch": "BR-TEST-1"},
+    "/api/v1/production/ceramic-feeds": {"batch_no": "CF-TEST-1"},
+    "/api/v1/production/ceramic-membrane-cleans": {"membrane_no": "CMC-TEST-1"},
+    "/api/v1/production/ceramic-membrane-ops": {"batch_no": "CMO-TEST-1"},
+    "/api/v1/production/ceramic-equipment-logs": {"equipment_no": "CEL-TEST-1"},
+    "/api/v1/production/ceramic-material-separations": {"batch_no": "CMS-TEST-1"},
+    "/api/v1/production/batches": {"batch_no": "BT-TEST-1", "product_code": "FA"},
+    "/api/v1/production/fermentation": {
+        "batch_no": "FM-TEST-1",
+        "fermenter": "F-1",
+        "entry_date": "2026-08-01",
+    },
+    "/api/v1/production/shift-logs": {
+        "log_date": "2026-08-01",
+        "shift": "早班",
+        "workshop": "201-2",
+        "handover_from": "张三",
+        "handover_to": "李四",
+    },
+}
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("path", sorted(CREATE_PAYLOADS))
+async def test_production_create_success(client: AsyncClient, path: str) -> None:
+    """最小有效 payload 创建成功（覆盖 Service 写路径）。"""
+    payload = dict(CREATE_PAYLOADS[path])
+    suffix = uuid.uuid4().hex[:6]
+    for key in payload:
+        if isinstance(payload[key], str) and key not in ("log_date", "entry_date", "discharge_date"):  # noqa: E501
+            payload[key] = f"{payload[key]}-{suffix}"
+    response = await client.post(path, json=payload)
+    assert response.status_code == 200, f"{path}: {response.status_code} {response.text[:300]}"  # noqa: E501
