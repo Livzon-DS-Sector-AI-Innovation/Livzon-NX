@@ -24,7 +24,7 @@ interface DashboardProps {
   dateField: string
   cards: {
     title: string; value: (d: any, filtered: any[]) => number | string | null
-    suffix: string; precision?: number; color?: (v: any) => string
+    suffix: string; precision?: number; color?: (v: number) => string
   }[]
   charts: ChartDef[]
   month?: number  // 0=全部, 1-12=按月, 未传则内部管理
@@ -102,8 +102,8 @@ export default function Dashboard({ title, data, dateField, cards, charts, month
           const v = c.value(data, filtered)
           return (
             <Col key={i} flex="1">
-              <Statistic title={c.title} value={v as any} suffix={c.suffix} precision={c.precision}
-                styles={{ content: { fontSize: 16, color: c.color ? c.color(v) : undefined } }} />
+              <Statistic title={c.title} value={v ?? undefined} suffix={c.suffix} precision={c.precision}
+                styles={{ content: { fontSize: 16, color: c.color ? c.color(Number(v)) : undefined } }} />
             </Col>
           )
         })}

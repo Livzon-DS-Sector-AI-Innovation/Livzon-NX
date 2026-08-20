@@ -64,7 +64,7 @@ export default function EmployeeProfileClient({
         page_size: pageSize })
       setEmployees(res.data)
       setTotal(res.meta?.total || 0)
-    } catch (err: any) {
+    } catch (err) {
       message.error(err.message || '加载数据失败')
     }
   }, [debouncedSearchKeyword, activeDepartment, filterStatus, page, pageSize, doFetch])

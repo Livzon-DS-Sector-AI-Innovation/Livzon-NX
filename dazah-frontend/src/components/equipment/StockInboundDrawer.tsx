@@ -36,7 +36,7 @@ export function StockInboundDrawer({ onRefresh }: StockInboundDrawerProps) {
       message.success('入库成功')
       closeStockInboundDrawer()
       onRefresh?.()
-    } catch (error: any) {
+    } catch (error) {
       if (error?.message) message.error(error.message)
     }
   }

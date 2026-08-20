@@ -104,7 +104,7 @@ export default function CandidateDetailClient({
       await updateCandidateRecommendationLevelAction(candidate.id, value)
       setRecommendationLevel(value)
       message.success('推荐等级更新成功')
-    } catch (err: any) {
+    } catch (err) {
       message.error(err.message || '更新失败')
     } finally {
       setUpdating(false)
@@ -124,7 +124,7 @@ export default function CandidateDetailClient({
       message.success('保存成功')
       setIsEditing(false)
       router.refresh()
-    } catch (err: any) {
+    } catch (err) {
       message.error(err.message || '保存失败')
     } finally {
       setSaving(false)
@@ -148,7 +148,7 @@ export default function CandidateDetailClient({
       await syncCandidateToFeishuAction(candidate.id)
       message.success('已成功同步到飞书')
       router.refresh()
-    } catch (err: any) {
+    } catch (err) {
       message.error(err.message || '同步到飞书失败')
     } finally {
       setSyncing(false)

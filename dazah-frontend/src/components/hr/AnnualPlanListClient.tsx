@@ -30,7 +30,7 @@ export default function AnnualPlanListClient() {
         page_size: 200
       })
       setPlans(res.data || [])
-    } catch (err: any) {
+    } catch (err) {
       message.error('加载计划列表失败: ' + (err.message || '未知错误'))
     } finally {
       setLoading(false)
@@ -46,7 +46,7 @@ export default function AnnualPlanListClient() {
       await deleteAnnualTrainingPlan(id)
       setPlans((prev) => prev.filter((p) => p.id !== id))
       message.success('删除成功')
-    } catch (err: any) {
+    } catch (err) {
       message.error(err.message || '删除失败')
     }
   }
@@ -56,7 +56,7 @@ export default function AnnualPlanListClient() {
     setModalLoading(true)
     fetchDepartments({ page_size: 200 })
       .then((res) => {
-        const names = (res.data || []).map((d: any) => d.name)
+        const names = (res.data || []).map((d) => d.name)
         setDepartments(names)
       })
       .catch(() => {
@@ -82,7 +82,7 @@ export default function AnnualPlanListClient() {
       } else {
         loadPlans()
       }
-    } catch (err: any) {
+    } catch (err) {
       const msg = err.message || ''
       if (msg.includes('已存在') || msg.includes('Duplicate')) {
         message.error('该部门年度培训计划已存在')

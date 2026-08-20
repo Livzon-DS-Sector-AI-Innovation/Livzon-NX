@@ -25,7 +25,7 @@ export default function BatchProfileButton({ batchNo }: Props) {
     } catch {} finally { setLoading(false) }
   }
 
-  const renderSeedCulture = (sc: any) => (
+  const renderSeedCulture = (sc: Record<string, string | number | null | undefined>) => (
     <Descriptions bordered size="small" column={6} title={<Text strong style={{ fontSize: 14 }}>🧬 菌种制备（101一车间）</Text>}>
       <Descriptions.Item label="产品">{sc.product_name}</Descriptions.Item>
       <Descriptions.Item label="配制日期">{sc.prepare_date || '-'}</Descriptions.Item>
@@ -55,10 +55,10 @@ export default function BatchProfileButton({ batchNo }: Props) {
     </Descriptions>
   )
 
-  const renderFermentation = (ferms: any[]) => (
+  const renderFermentation = (ferms: Array<Record<string, string | number | null | undefined>>) => (
     <div>
       <Text strong style={{ fontSize: 14 }}>🏭 发酵记录</Text>
-      {ferms.map((f: any, i: number) => (
+      {ferms.map((f: Record<string, string | number | null | undefined>, i: number) => (
         <Descriptions key={i} bordered size="small" column={4} className="mt-2">
           <Descriptions.Item label="发酵罐">{f.fermenter}</Descriptions.Item>
           <Descriptions.Item label="产品">{f.product_name}</Descriptions.Item>
@@ -72,12 +72,12 @@ export default function BatchProfileButton({ batchNo }: Props) {
     </div>
   )
 
-  const renderEvents = (events: any[]) => (
+  const renderEvents = (events: Array<Record<string, string | number | null | undefined>>) => (
     <div>
       <Text strong style={{ fontSize: 14 }}>⚠ 关联异常事件（{events.length}）</Text>
       {events.length === 0 ? <div className="mt-2"><Text type="secondary">无</Text></div> : (
-        events.map((ev: any) => (
-          <Card key={ev.id} size="small" className="mt-2">
+        events.map((ev) => (
+          <Card key={String(ev.id)} size="small" className="mt-2">
             <Text>{dayjs(ev.event_time).format('MM-DD HH:mm')} {ev.workshop} {ev.event_type}{ev.description ? '：' + ev.description : ''}，影响{ev.impact_duration || '—'}</Text>
           </Card>
         ))
@@ -85,19 +85,19 @@ export default function BatchProfileButton({ batchNo }: Props) {
     </div>
   )
 
-  const renderRefinery = (refinery: any) => {
+  const renderRefinery = (refinery: Record<string, unknown[]>) => {
     const labels: Record<string, string> = {
       broth_receive: '发酵液接收', pretreatment: '预处理', ceramic_feed: '陶瓷膜·进料',
       ceramic_ops: '陶瓷膜·运行', ceramic_clean: '陶瓷膜·清洗', ceramic_sep: '陶瓷膜·分离',
       ceramic_equip: '陶瓷膜·设备', decolor1: '一次脱色',
     }
-    const entries = Object.entries(refinery || {}).filter(([, v]: any) => v?.length > 0)
+    const entries = Object.entries(refinery || {}).filter(([, v]) => v?.length > 0)
     if (!entries.length) return null
     return (
       <div>
         <Divider />
         <Text strong style={{ fontSize: 14 }}>🏭 提炼车间</Text>
-        {entries.map(([key, items]: any) => (
+        {entries.map(([key, items]) => (
           <div key={key} className="mt-2">
             <Text type="secondary">{labels[key] || key}（{items.length}条）</Text>
           </div>

@@ -44,7 +44,7 @@ export default function RosterClient({
       })
       setEmployees(res.data)
       setTotal(res.meta?.total || 0)
-    } catch (err: any) {
+    } catch (err) {
       message.error(err.message || '加载数据失败')
     } finally {
       setLoading(false)
@@ -67,7 +67,7 @@ export default function RosterClient({
           setEmployees(res.data)
           setTotal(res.meta?.total || 0)
         }
-      } catch (err: any) {
+      } catch (err) {
         if (!cancelled) message.error(err.message || '加载数据失败')
       } finally {
         if (!cancelled) setLoading(false)

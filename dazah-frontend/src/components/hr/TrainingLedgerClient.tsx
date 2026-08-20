@@ -62,7 +62,7 @@ export default function TrainingLedgerClient({
         page_size: 100
       })
       setRecords(ledgerRes.data || [])
-    } catch (err: any) {
+    } catch (err) {
       message.error('加载数据失败: ' + (err.message || '未知错误'))
     } finally {
       setLoading(false)
@@ -81,7 +81,7 @@ export default function TrainingLedgerClient({
     try {
       await exportTrainingLedger(employeeNumber)
       message.success('导出成功')
-    } catch (err: any) {
+    } catch (err) {
       message.error(err.message || '导出失败')
     }
   }
@@ -147,7 +147,7 @@ export default function TrainingLedgerClient({
       }
       setEditingId(null)
       setEditForm({})
-    } catch (err: any) {
+    } catch (err) {
       message.error(err.message || '保存失败')
     } finally {
       setSaving(false)
@@ -164,7 +164,7 @@ export default function TrainingLedgerClient({
       await deleteTrainingLedger(record.id)
       setRecords((prev) => prev.filter((r) => r.id !== record.id))
       message.success('删除成功')
-    } catch (err: any) {
+    } catch (err) {
       message.error(err.message || '删除失败')
     }
   }

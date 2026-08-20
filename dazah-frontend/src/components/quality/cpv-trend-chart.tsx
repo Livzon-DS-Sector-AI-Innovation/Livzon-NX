@@ -35,10 +35,10 @@ export function CpvTrendChart({ trend, avgValue }: CpvTrendChartProps) {
   const option: EChartsOption = {
     tooltip: {
       trigger: "axis",
-      formatter: (params: any) => {
+      formatter: (params) => {
         const p = Array.isArray(params) ? params : [params]
-        let result = `<strong>${p[0]?.axisValue}</strong><br/>`
-        p.forEach((item: any) => {
+        let result = `<strong>${(p[0] as { axisValue?: string } | undefined)?.axisValue}</strong><br/>`
+        p.forEach((item) => {
           if (item.value !== null && item.value !== undefined) {
             result += `${item.marker} ${item.seriesName}: ${typeof item.value === "number" ? item.value.toFixed(2) : item.value}<br/>`
           }

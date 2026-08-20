@@ -65,7 +65,7 @@ const fmtVal = (v: any, fmt: Fmt) => {
 }
 
 // 多行列：只把换行符 \n 转成 <br/>，其余保持单行（nowrap 禁止在 / 等符号处自动断行）
-const renderMultiline = (v: any) => {
+const renderMultiline = (v: unknown) => {
   if (v == null) return '-'
   return String(v).split('\n').map((line, i) => (
     <React.Fragment key={i}>

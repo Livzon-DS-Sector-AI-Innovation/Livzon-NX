@@ -38,8 +38,24 @@ const STAGE_CONFIG: Record<string, { color: string; icon: React.ReactNode; bg: s
   qc: { color: '#fa541c', bg: '#fff2e8', icon: <CheckCircleOutlined />, label: '入库' },
 }
 
+interface TraceNode {
+  batch_no: string
+  stage: string
+  label?: string
+  is_sibling?: boolean
+  detail?: string | null
+  yield_rate?: number | null
+  connects_to?: string | null
+}
+
+interface TraceStage {
+  stage: string
+  label: string
+  nodes: TraceNode[]
+}
+
 // ── 流程图节点组件 ──
-function FlowNode({ node, isTarget }: { node: any; isTarget: boolean }) {
+function FlowNode({ node, isTarget }: { node: TraceNode; isTarget: boolean }) {
   const cfg = STAGE_CONFIG[node.stage] || { color: '#999', bg: '#f5f5f5', icon: null }
   const isSib = node.is_sibling
 
@@ -97,12 +113,12 @@ function ArrowConnector() {
 }
 
 // ── 按工段分组的横向流程图 ──
-function StageFlowChart({ stages, targetBatch, targetStage }: { stages: any[]; targetBatch: string; targetStage: string }) {
+function StageFlowChart({ stages, targetBatch, targetStage }: { stages: TraceStage[]; targetBatch: string; targetStage: string }) {
   return (
     <div style={{ display: 'flex', alignItems: 'flex-start', overflowX: 'auto', padding: '16px 8px', gap: 0 }}>
-      {stages.map((sg: any, sgIdx: number) => {
-        const mainNodes = sg.nodes.filter((n: any) => !n.is_sibling)
-        const sibNodes = sg.nodes.filter((n: any) => n.is_sibling)
+      {stages.map((sg, sgIdx) => {
+        const mainNodes = sg.nodes.filter((n) => !n.is_sibling)
+        const sibNodes = sg.nodes.filter((n) => n.is_sibling)
         return (
         <span key={sg.stage} style={{ display: 'inline-flex', alignItems: 'flex-start' }}>
           {sgIdx > 0 && <ArrowConnector />}
@@ -113,7 +129,7 @@ function StageFlowChart({ stages, targetBatch, targetStage }: { stages: any[]; t
               </Tag>
             </div>
             {/* 主线节点 */}
-            {mainNodes.map((node: any) => (
+            {mainNodes.map((node) => (
               <FlowNode key={node.batch_no} node={node}
                 isTarget={node.batch_no === targetBatch && node.stage === targetStage} />
             ))}
@@ -123,7 +139,7 @@ function StageFlowChart({ stages, targetBatch, targetStage }: { stages: any[]; t
                 <div style={{ borderTop: '1px dashed #d9d9d9', margin: '2px 4px' }}>
                   <span style={{ fontSize: 10, color: '#999', background: '#fff', padding: '0 4px', position: 'relative', top: -8 }}>同级</span>
                 </div>
-                {sibNodes.map((node: any) => (
+                {sibNodes.map((node) => (
                   <FlowNode key={node.batch_no} node={node} isTarget={false} />
                 ))}
               </>
@@ -400,15 +416,15 @@ function TraceabilityPage() {
     tooltip: { trigger: 'axis' },
     legend: { data: ['Min', 'Q1', '中位', '均值', 'Q3', 'Max'], top: 0 },
     grid: { left: 10, right: 10, bottom: 0, top: 25, containLabel: true },
-    xAxis: { type: 'category', data: distData.map((d: any) => d.label) },
+    xAxis: { type: 'category', data: distData.map((d) => d.label) },
     yAxis: { type: 'value', name: '收率(%)' },
     series: [
-      { name: 'Min', type: 'bar', data: distData.map((d: any) => d.min), itemStyle: { color: '#91d5ff' } },
-      { name: 'Q1', type: 'bar', data: distData.map((d: any) => d.q1), itemStyle: { color: '#69c0ff' } },
-      { name: '中位', type: 'bar', data: distData.map((d: any) => d.median), itemStyle: { color: '#1890ff' } },
-      { name: '均值', type: 'bar', data: distData.map((d: any) => d.mean), itemStyle: { color: '#096dd9' } },
-      { name: 'Q3', type: 'bar', data: distData.map((d: any) => d.q3), itemStyle: { color: '#0050b3' } },
-      { name: 'Max', type: 'bar', data: distData.map((d: any) => d.max), itemStyle: { color: '#003a8c' } },
+      { name: 'Min', type: 'bar', data: distData.map((d) => d.min), itemStyle: { color: '#91d5ff' } },
+      { name: 'Q1', type: 'bar', data: distData.map((d) => d.q1), itemStyle: { color: '#69c0ff' } },
+      { name: '中位', type: 'bar', data: distData.map((d) => d.median), itemStyle: { color: '#1890ff' } },
+      { name: '均值', type: 'bar', data: distData.map((d) => d.mean), itemStyle: { color: '#096dd9' } },
+      { name: 'Q3', type: 'bar', data: distData.map((d) => d.q3), itemStyle: { color: '#0050b3' } },
+      { name: 'Max', type: 'bar', data: distData.map((d) => d.max), itemStyle: { color: '#003a8c' } },
     ],
   }
 
@@ -417,11 +433,11 @@ function TraceabilityPage() {
     tooltip: { trigger: 'axis' },
     legend: { data: ['<80%', '>110%'], top: 0 },
     grid: { left: 10, right: 10, bottom: 0, top: 25, containLabel: true },
-    xAxis: { type: 'category', data: distData.map((d: any) => d.label) },
+    xAxis: { type: 'category', data: distData.map((d) => d.label) },
     yAxis: { type: 'value', name: '批次数量' },
     series: [
-      { name: '<80%', type: 'bar', data: distData.map((d: any) => d.below_80), itemStyle: { color: '#ff7875' } },
-      { name: '>110%', type: 'bar', data: distData.map((d: any) => d.above_110), itemStyle: { color: '#ff4d4f' } },
+      { name: '<80%', type: 'bar', data: distData.map((d) => d.below_80), itemStyle: { color: '#ff7875' } },
+      { name: '>110%', type: 'bar', data: distData.map((d) => d.above_110), itemStyle: { color: '#ff4d4f' } },
     ],
   }
 
@@ -535,10 +551,10 @@ function TraceabilityPage() {
               <Card size="small" title={`批次 ${traceData.target_batch} 收率 vs 工段均值`} style={{ marginTop: 16 }}>
                 <Table
                   dataSource={traceData.stages
-                    .filter((sg: any) => sg.nodes.some((n: any) => n.yield_rate != null))
-                    .map((sg: any) => {
-                      const node = sg.nodes.find((n: any) => n.yield_rate != null)
-                      const avg = distData.find((d: any) => d.stage === sg.stage)
+                    .filter((sg: TraceStage) => sg.nodes.some((n: TraceNode) => n.yield_rate != null))
+                    .map((sg: TraceStage) => {
+                      const node = sg.nodes.find((n) => n.yield_rate != null)!
+                      const avg = distData.find((d) => d.stage === sg.stage)
                       return {
                         stage: sg.label,
                         batch_no: node.batch_no,
@@ -568,14 +584,14 @@ function TraceabilityPage() {
                 />
                 <div style={{ marginTop: 8, fontSize: 12, color: '#666' }}>
                   {(() => {
-                    const stages = traceData.stages.filter((sg: any) => sg.nodes.some((n: any) => n.yield_rate != null))
-                    const belowAvg = stages.filter((sg: any) => {
-                      const node = sg.nodes.find((n: any) => n.yield_rate != null)
-                      const avg = distData.find((d: any) => d.stage === sg.stage)
+                    const stages = traceData.stages.filter((sg: TraceStage) => sg.nodes.some((n: TraceNode) => n.yield_rate != null))
+                    const belowAvg = stages.filter((sg: TraceStage) => {
+                      const node = sg.nodes.find((n) => n.yield_rate != null)!
+                      const avg = distData.find((d) => d.stage === sg.stage)
                       return avg && Number(node.yield_rate) < avg.mean
                     })
                     if (belowAvg.length === 0) return '✅ 所有工段收率均不低于均值'
-                    return `⚠️ ${belowAvg.map((s: any) => s.label).join('、')} 低于工段均值，累计收率 ${traceData.cumulative_yield}%${traceData.max_loss_stage ? `，最大损失环节: ${STAGE_CONFIG[traceData.max_loss_stage]?.label || traceData.max_loss_stage}` : ''}`
+                    return `⚠️ ${belowAvg.map((s: TraceStage) => s.label).join('、')} 低于工段均值，累计收率 ${traceData.cumulative_yield}%${traceData.max_loss_stage ? `，最大损失环节: ${STAGE_CONFIG[traceData.max_loss_stage]?.label || traceData.max_loss_stage}` : ''}`
                   })()}
                 </div>
               </Card>
@@ -608,7 +624,7 @@ function TraceabilityPage() {
                         <span style={{ width: 110 }}>批号</span>
                         <span style={{ flex: 1 }}>分析</span>
                       </div>
-                      {historyRecords.map((r: any) => (
+                      {historyRecords.map((r) => (
                         <div key={r.id} style={{ display: 'flex', alignItems: 'center', padding: '4px 0', cursor: 'pointer', borderBottom: '1px solid #fafafa' }}
                           onClick={() => { setAiResult({...r, analysis_text: null, session_id: r.session_id}); setChatMessages([]) }}>
                           <Tag color={r.severity === 'high' ? 'red' : r.severity === 'medium' ? 'orange' : 'green'} style={{ fontSize: 10, margin: 0, width: 48 }}>
@@ -816,7 +832,7 @@ function TraceabilityPage() {
                   <Title level={5}>被多个成品批次复用的物料</Title>
                   <Table
                     dataSource={reuseData}
-                    rowKey={(r: any) => `${r.upstream_type}-${r.upstream_batch}`}
+                    rowKey={(r) => `${r.upstream_type}-${r.upstream_batch}`}
                     columns={reuseColumns}
                     pagination={{ pageSize: 10 }}
                     size="small"
@@ -830,7 +846,7 @@ function TraceabilityPage() {
               children: (
                 <div>
                   <Title level={5}>血链表各段关联覆盖</Title>
-                  {covSegments.map((s: any) => (
+                  {covSegments.map((s: { segment: string; count: number }) => (
                     <div key={s.segment} style={{ marginBottom: 12 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                         <Text>{s.segment}</Text>

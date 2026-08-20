@@ -302,7 +302,7 @@ const item = {
   remarks: '急用',
 }
 
-const request = (overrides: Record<string, unknown> = {}) => ({
+const request = (overrides: Record<string, any> = {}) => ({
   id: '22222222-2222-2222-2222-222222222222',
   category: 'hardware',
   request_department: '工程设备部',

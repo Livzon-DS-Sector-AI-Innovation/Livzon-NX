@@ -148,7 +148,7 @@ export default function HandoverPage() {
     try {
       const res = await authFetch(API(`/shift-handovers/search-users?q=${encodeURIComponent(kw)}`))
       if (res.code === 200 && res.data) {
-        setUserOptions(res.data.map((u: any) => ({ value: u.name, label: `${u.name}${u.department ? ' · ' + u.department : ''}` })))
+        setUserOptions(res.data.map((u: { name: string; department?: string }) => ({ value: u.name, label: `${u.name}${u.department ? ' · ' + u.department : ''}` })))
       }
     } catch {}
   }

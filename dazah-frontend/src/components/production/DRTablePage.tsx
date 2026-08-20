@@ -9,7 +9,7 @@ import { useRouter } from 'next/navigation'
 const { Title, Text } = Typography
 const API = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'
 
-interface ColDef { title: string; dataIndex: string; width?: number; ellipsis?: boolean; render?: (v: any) => string }
+interface ColDef { title: string; dataIndex: string; width?: number; ellipsis?: boolean; render?: (v: unknown) => string }
 
 interface Props {
   tableKey: string
@@ -75,10 +75,10 @@ export default function DRTablePage({ tableKey, title, columns: columnDefs, stag
   // 生成 onCell —— 只对 mergeKeys 中的列生效
   const mergeKeysSet = useMemo(() => new Set(mergeKeys || []), [mergeKeys])
   const onCellByCol = useMemo(() => {
-    const map: Record<string, (record: any) => { rowSpan: number }> = {}
+    const map: Record<string, (record: { _rowSpan?: number }) => { rowSpan: number }> = {}
     if (mergeKeys) {
       for (const k of mergeKeys) {
-        map[k] = (record: any) => ({ rowSpan: record._rowSpan ?? 1 })
+        map[k] = (record) => ({ rowSpan: record._rowSpan ?? 1 })
       }
     }
     return map
@@ -88,7 +88,7 @@ export default function DRTablePage({ tableKey, title, columns: columnDefs, stag
     const col = {
       ...c,
       ellipsis: c.ellipsis !== false && !c.title.includes('\n'),
-      render: c.render || ((v: any) => v != null ? String(v) : '-'),
+      render: c.render || ((v) => v != null ? String(v) : '-'),
       onCell: mergeKeysSet.has(c.dataIndex) ? onCellByCol[c.dataIndex] : undefined,
     }
     return col

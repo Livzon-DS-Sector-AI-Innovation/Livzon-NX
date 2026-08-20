@@ -1,6 +1,8 @@
 'use client'
-import {useEffect, useState, useCallback,} from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
+import type { ReactNode } from 'react'
 import { Table, Button, Space, Modal, Form, Input, InputNumber, DatePicker, Card, Typography, App, Row, Col, Select } from 'antd'
+import type { TableColumnsType } from 'antd'
 import { PlusOutlined, ArrowLeftOutlined } from '@ant-design/icons'
 import { useRouter } from 'next/navigation'
 import dayjs from 'dayjs'
@@ -27,12 +29,47 @@ async function api(path: string, opts?: RequestInit) {
   return r.json()
 }
 
+interface RefinementInput {
+  id?: string
+  wet_batch_no?: string | null
+  input_weight?: number | null
+  moisture?: number | null
+  content?: number | null
+  pure_qty?: number | null
+}
+
+interface RefinementRecord {
+  id: string
+  input_date?: string | null
+  batch_no?: string
+  total_input_weight?: number | null
+  dry_product_total?: number | null
+  cumulative_dry_product?: number | null
+  dissolution_tank?: string | null
+  butyl_acetate_volume?: number | null
+  crystallization_tank?: string | null
+  wet_weight?: number | null
+  dry_weight?: number | null
+  cumulative_dry_weight?: number | null
+  single_step_yield?: number | null
+  cumulative_yield?: number | null
+  total_pure_qty?: number | null
+  inputs?: RefinementInput[]
+}
+
+interface RefinementRow extends RefinementRecord {
+  input: RefinementInput
+  _key: string
+  _rowCount: number
+  _isFirst: boolean
+}
+
 function CellInput({ value, onSave, color }: { value: number | null | undefined; onSave: (v: number | null) => void; color?: string }) {
   const [editing, setEditing] = useState(false)
   if (!editing) return <div style={{ width: '100%', height: 20, cursor: 'text', color: color || undefined, fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setEditing(true)}>{value != null ? value : ''}</div>
   return <InputNumber size="small" autoFocus style={{ width: '100%', color: color || undefined }} defaultValue={value ?? undefined}
-    onBlur={e => { setEditing(false); const raw = e.target.value; if (raw === '' || raw === '-') { onSave(null); return } const n = Number(raw); if (!isNaN(n)) onSave(n) }}
-    onPressEnter={(e: any) => { setEditing(false); const raw = e.target.value; if (raw === '' || raw === '-') { onSave(null); return } const n = Number(raw); if (!isNaN(n)) onSave(n) }} />
+    onBlur={e => { setEditing(false); const raw = e.currentTarget.value; if (raw === '' || raw === '-') { onSave(null); return } const n = Number(raw); if (!isNaN(n)) onSave(n) }}
+    onPressEnter={(e) => { setEditing(false); const raw = e.currentTarget.value; if (raw === '' || raw === '-') { onSave(null); return } const n = Number(raw); if (!isNaN(n)) onSave(n) }} />
 }
 
 function DateCellInput({ value, onSave }: { value: string | null | undefined; onSave: (v: string | null) => void }) {
@@ -46,13 +83,13 @@ function DateCellInput({ value, onSave }: { value: string | null | undefined; on
 function TextCellInput({ value, onSave }: { value: string | null | undefined; onSave: (v: string | null) => void }) {
   const [editing, setEditing] = useState(false)
   if (!editing) return <div style={{ width: '100%', height: 20, cursor: 'text', fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setEditing(true)}>{value ?? ''}</div>
-  return <Input size="small" autoFocus style={{ width: '100%', fontSize: 10, height: 20, padding: '0 2px' }} defaultValue={value ?? ''} onBlur={e => { setEditing(false); onSave(e.target.value || null) }} />
+  return <Input size="small" autoFocus style={{ width: '100%', fontSize: 10, height: 20, padding: '0 2px' }} defaultValue={value ?? ''} onBlur={e => { setEditing(false); onSave(e.currentTarget.value || null) }} />
 }
 
 export default function McRefinementPage() {
   const router = useRouter(); const { message, modal } = App.useApp()
   const [form] = Form.useForm()
-  const [records, setRecords] = useState<any[]>([]); const [loading, setLoading] = useState(false); const [saving, setSaving] = useState(false)
+  const [records, setRecords] = useState<RefinementRecord[]>([]); const [loading, setLoading] = useState(false); const [saving, setSaving] = useState(false)
   const [month, setMonth] = useState<number>(dayjs().month() + 1)
   const [createVisible, setCreateVisible] = useState(false)
 
@@ -63,22 +100,22 @@ export default function McRefinementPage() {
   }, [message, month])
   useEffect(() => { load() }, [load]) // eslint-disable-line react-hooks/set-state-in-effect
 
-  const saveRecord = async (id: string, field: string, value: any, record: any) => {
-    setSaving(true); const d: any = { [field]: value }
-    if (field === 'dry_weight') d.single_step_yield = value != null && record.total_pure_qty != null && record.total_pure_qty > 0 ? Math.round(value / record.total_pure_qty * 10000) / 100 : null
+  const saveRecord = async (id: string, field: string, value: number | string | null, record: RefinementRecord) => {
+    setSaving(true); const d: Record<string, unknown> = { [field]: value }
+    if (field === 'dry_weight') d.single_step_yield = value != null && record.total_pure_qty != null && record.total_pure_qty > 0 ? Math.round(Number(value) / record.total_pure_qty * 10000) / 100 : null
     await api(`/refinement-records/${id}`, { method: 'PUT', body: JSON.stringify(d) }); setSaving(false); load()
   }
 
-  const saveInput = async (input: any, field: string, value: any, _refinementBatch: string) => { // eslint-disable-line @typescript-eslint/no-unused-vars
-    setSaving(true); const d: any = { [field]: value }
+  const saveInput = async (input: RefinementInput, field: string, value: number | string | null, _refinementBatch: string | undefined) => { // eslint-disable-line @typescript-eslint/no-unused-vars
+    setSaving(true); const d: Record<string, unknown> = { [field]: value }
     if (field === 'input_weight' || field === 'moisture' || field === 'content') {
       const w = (field === 'input_weight' ? value : input.input_weight) || 0; const m = (field === 'moisture' ? value : input.moisture) || 0; const c = (field === 'content' ? value : input.content) || 0
-      d.pure_qty = Math.round(w * (1 - m / 100) * c) / 100
+      d.pure_qty = Math.round(Number(w) * (1 - Number(m) / 100) * Number(c)) / 100
     }
     if (input.id) await api(`/refinement-inputs/${input.id}`, { method: 'PUT', body: JSON.stringify(d) }); setSaving(false); load()
   }
 
-  const addInputRow = async (refinementBatch: string) => {
+  const addInputRow = async (refinementBatch: string | undefined) => {
     setSaving(true); await api('/refinement-inputs', { method: 'POST', body: JSON.stringify({ refinement_batch: refinementBatch, wet_batch_no: '', input_weight: 0, moisture: 0, content: 0 }) })
     setSaving(false); load()
   }
@@ -94,34 +131,34 @@ export default function McRefinementPage() {
   }
 
   const flattenData = () => {
-    const rows: any[] = []
+    const rows: RefinementRow[] = []
     for (const rec of records) { const inputs = rec.inputs || []; const c = Math.max(inputs.length, 1); for (let i = 0; i < c; i++) rows.push({ ...rec, input: inputs[i] || {}, _key: `${rec.id}-${i}`, _rowCount: c, _isFirst: i === 0 }) }
     return rows
   }
 
-  const M = (content: any, r: any) => (r._isFirst ? content : null)
-  const onCell = (r: any) => { const rowSpan = r._isFirst ? r._rowCount : 0; return { rowSpan, style: rowSpan > 1 ? { verticalAlign: 'middle' } : undefined } as any }
+  const M = (content: ReactNode, r: RefinementRow): ReactNode => (r._isFirst ? content : null)
+  const onCell = (r: RefinementRow) => { const rowSpan = r._isFirst ? r._rowCount : 0; return { rowSpan, style: rowSpan > 1 ? { verticalAlign: 'middle' } : undefined } }
 
-  const columns: any[] = [
-    { title: '投料\n日期', dataIndex: 'input_date', width: 72, fixed: 'left', render: (_: any, r: any) => M(<DateCellInput value={r.input_date} onSave={v => saveRecord(r.id, 'input_date', v, r)} />, r), onCell },
-    { title: '二次结晶\n批号', dataIndex: 'batch_no', width: 105, fixed: 'left', render: (_: any, r: any) => M(<Text strong style={{ fontSize: 10 }}>{r.batch_no}</Text>, r), onCell },
-    { title: '一次精品\n批号', key: 'wet_batch', width: 80, render: (_: any, r: any) => <TextCellInput value={r.input?.wet_batch_no} onSave={v => saveInput(r.input, 'wet_batch_no', v, r.batch_no)} /> },
-    { title: '重量\n(kg)', key: 'inp_w', width: 58, render: (_: any, r: any) => <CellInput value={r.input?.input_weight} onSave={v => saveInput(r.input, 'input_weight', v, r.batch_no)} /> },
-    { title: '总重\n(kg)', dataIndex: 'total_input_weight', width: 58, render: (_: any, r: any) => M(<CellInput value={r.total_input_weight} onSave={v => saveRecord(r.id, 'total_input_weight', v, r)} />, r), onCell },
-    { title: '一次\n湿粉水分', key: 'inp_m', width: 55, render: (_: any, r: any) => <CellInput value={r.input?.moisture} onSave={v => saveInput(r.input, 'moisture', v, r.batch_no)} /> },
-    { title: '一次\n湿粉含量', key: 'inp_c', width: 55, render: (_: any, r: any) => <CellInput value={r.input?.content} onSave={v => saveInput(r.input, 'content', v, r.batch_no)} /> },
-    { title: '折纯量', key: 'inp_pure', width: 58, render: (_: any, r: any) => <CellInput value={r.input?.pure_qty} color="#1677ff" onSave={v => saveInput(r.input, 'pure_qty', v, r.batch_no)} /> },
-    { title: '折干产品\n总量(kg)', dataIndex: 'dry_product_total', width: 80, render: (_: any, r: any) => M(<CellInput value={r.dry_product_total} color="#1677ff" onSave={v => saveRecord(r.id, 'dry_product_total', v, r)} />, r), onCell },
-    { title: '累计折\n干产品量', dataIndex: 'cumulative_dry_product', width: 70, render: (_: any, r: any) => M(<CellInput value={r.cumulative_dry_product} onSave={v => saveRecord(r.id, 'cumulative_dry_product', v, r)} />, r), onCell },
-    { title: '溶解\n用罐', dataIndex: 'dissolution_tank', width: 68, render: (_: any, r: any) => M(<TextCellInput value={r.dissolution_tank} onSave={v => saveRecord(r.id, 'dissolution_tank', v, r)} />, r), onCell },
-    { title: '丁酯量\n(m³)', dataIndex: 'butyl_acetate_volume', width: 58, render: (_: any, r: any) => M(<CellInput value={r.butyl_acetate_volume} onSave={v => saveRecord(r.id, 'butyl_acetate_volume', v, r)} />, r), onCell },
-    { title: '结晶\n用罐', dataIndex: 'crystallization_tank', width: 68, render: (_: any, r: any) => M(<TextCellInput value={r.crystallization_tank} onSave={v => saveRecord(r.id, 'crystallization_tank', v, r)} />, r), onCell },
-    { title: '湿粉重\n量(kg)', dataIndex: 'wet_weight', width: 65, render: (_: any, r: any) => M(<CellInput value={r.wet_weight} onSave={v => saveRecord(r.id, 'wet_weight', v, r)} />, r), onCell },
-    { title: '干粉重\n量(kg)', dataIndex: 'dry_weight', width: 65, render: (_: any, r: any) => M(<CellInput value={r.dry_weight} onSave={v => saveRecord(r.id, 'dry_weight', v, r)} />, r), onCell },
-    { title: '累计干\n粉重量', dataIndex: 'cumulative_dry_weight', width: 65, render: (_: any, r: any) => M(<CellInput value={r.cumulative_dry_weight} onSave={v => saveRecord(r.id, 'cumulative_dry_weight', v, r)} />, r), onCell },
-    { title: '单步\n收率', dataIndex: 'single_step_yield', width: 52, render: (_: any, r: any) => M(<CellInput value={r.single_step_yield} color={r.single_step_yield != null ? (r.single_step_yield >= 85 ? '#52c41a' : '#f5222d') : undefined} onSave={v => saveRecord(r.id, 'single_step_yield', v, r)} />, r), onCell },
-    { title: '二次结晶\n累计收率', dataIndex: 'cumulative_yield', width: 68, render: (_: any, r: any) => M(<CellInput value={r.cumulative_yield} onSave={v => saveRecord(r.id, 'cumulative_yield', v, r)} />, r), onCell },
-    { title: '操作', key: 'act', width: 50, fixed: 'right', render: (_: any, r: any) => M(<Button type="link" size="small" danger onClick={() => modal.confirm({ title: `删除 ${r.batch_no}?`, onOk: async () => { await api(`/refinement-records/${r.id}`, { method: 'DELETE' }); load() } })} style={{ fontSize: 10 }}>删除</Button>, r), onCell },
+  const columns: TableColumnsType<RefinementRow> = [
+    { title: '投料\n日期', dataIndex: 'input_date', width: 72, fixed: 'left', render: (_, r) => M(<DateCellInput value={r.input_date} onSave={v => saveRecord(r.id, 'input_date', v, r)} />, r), onCell },
+    { title: '二次结晶\n批号', dataIndex: 'batch_no', width: 105, fixed: 'left', render: (_, r) => M(<Text strong style={{ fontSize: 10 }}>{r.batch_no}</Text>, r), onCell },
+    { title: '一次精品\n批号', key: 'wet_batch', width: 80, render: (_, r) => <TextCellInput value={r.input?.wet_batch_no} onSave={v => saveInput(r.input, 'wet_batch_no', v, r.batch_no)} /> },
+    { title: '重量\n(kg)', key: 'inp_w', width: 58, render: (_, r) => <CellInput value={r.input?.input_weight} onSave={v => saveInput(r.input, 'input_weight', v, r.batch_no)} /> },
+    { title: '总重\n(kg)', dataIndex: 'total_input_weight', width: 58, render: (_, r) => M(<CellInput value={r.total_input_weight} onSave={v => saveRecord(r.id, 'total_input_weight', v, r)} />, r), onCell },
+    { title: '一次\n湿粉水分', key: 'inp_m', width: 55, render: (_, r) => <CellInput value={r.input?.moisture} onSave={v => saveInput(r.input, 'moisture', v, r.batch_no)} /> },
+    { title: '一次\n湿粉含量', key: 'inp_c', width: 55, render: (_, r) => <CellInput value={r.input?.content} onSave={v => saveInput(r.input, 'content', v, r.batch_no)} /> },
+    { title: '折纯量', key: 'inp_pure', width: 58, render: (_, r) => <CellInput value={r.input?.pure_qty} color="#1677ff" onSave={v => saveInput(r.input, 'pure_qty', v, r.batch_no)} /> },
+    { title: '折干产品\n总量(kg)', dataIndex: 'dry_product_total', width: 80, render: (_, r) => M(<CellInput value={r.dry_product_total} color="#1677ff" onSave={v => saveRecord(r.id, 'dry_product_total', v, r)} />, r), onCell },
+    { title: '累计折\n干产品量', dataIndex: 'cumulative_dry_product', width: 70, render: (_, r) => M(<CellInput value={r.cumulative_dry_product} onSave={v => saveRecord(r.id, 'cumulative_dry_product', v, r)} />, r), onCell },
+    { title: '溶解\n用罐', dataIndex: 'dissolution_tank', width: 68, render: (_, r) => M(<TextCellInput value={r.dissolution_tank} onSave={v => saveRecord(r.id, 'dissolution_tank', v, r)} />, r), onCell },
+    { title: '丁酯量\n(m³)', dataIndex: 'butyl_acetate_volume', width: 58, render: (_, r) => M(<CellInput value={r.butyl_acetate_volume} onSave={v => saveRecord(r.id, 'butyl_acetate_volume', v, r)} />, r), onCell },
+    { title: '结晶\n用罐', dataIndex: 'crystallization_tank', width: 68, render: (_, r) => M(<TextCellInput value={r.crystallization_tank} onSave={v => saveRecord(r.id, 'crystallization_tank', v, r)} />, r), onCell },
+    { title: '湿粉重\n量(kg)', dataIndex: 'wet_weight', width: 65, render: (_, r) => M(<CellInput value={r.wet_weight} onSave={v => saveRecord(r.id, 'wet_weight', v, r)} />, r), onCell },
+    { title: '干粉重\n量(kg)', dataIndex: 'dry_weight', width: 65, render: (_, r) => M(<CellInput value={r.dry_weight} onSave={v => saveRecord(r.id, 'dry_weight', v, r)} />, r), onCell },
+    { title: '累计干\n粉重量', dataIndex: 'cumulative_dry_weight', width: 65, render: (_, r) => M(<CellInput value={r.cumulative_dry_weight} onSave={v => saveRecord(r.id, 'cumulative_dry_weight', v, r)} />, r), onCell },
+    { title: '单步\n收率', dataIndex: 'single_step_yield', width: 52, render: (_, r) => M(<CellInput value={r.single_step_yield} color={r.single_step_yield != null ? (r.single_step_yield >= 85 ? '#52c41a' : '#f5222d') : undefined} onSave={v => saveRecord(r.id, 'single_step_yield', v, r)} />, r), onCell },
+    { title: '二次结晶\n累计收率', dataIndex: 'cumulative_yield', width: 68, render: (_, r) => M(<CellInput value={r.cumulative_yield} onSave={v => saveRecord(r.id, 'cumulative_yield', v, r)} />, r), onCell },
+    { title: '操作', key: 'act', width: 50, fixed: 'right', render: (_, r) => M(<Button type="link" size="small" danger onClick={() => modal.confirm({ title: `删除 ${r.batch_no}?`, onOk: async () => { await api(`/refinement-records/${r.id}`, { method: 'DELETE' }); load() } })} style={{ fontSize: 10 }}>删除</Button>, r), onCell },
   ]
 
   const batchInputCounts = []
@@ -156,7 +193,7 @@ export default function McRefinementPage() {
           { title: '累计干粉重量', value: (all) => { let v = null; for (const d of all) if (d.cumulative_dry_weight != null) v = d.cumulative_dry_weight; return v }, suffix: 'kg', precision: 0 },
           { title: '批数', value: (_, f) => f.length, suffix: '批', precision: 0 },
           { title: '总干粉产量', value: (_, f) => f.reduce((a, b) => a + (b.dry_weight || 0), 0), suffix: 'kg', precision: 0 },
-          { title: '平均收率', value: (_, f) => { let s = 0, n = 0; f.forEach(d => { if (d.single_step_yield != null) { s += d.single_step_yield; n++ } }); return n > 0 ? Math.round(s / n * 100) / 100 : null }, suffix: '%', precision: 1, color: (v: any) => v >= 85 ? '#52c41a' : '#f5222d' },
+          { title: '平均收率', value: (_, f) => { let s = 0, n = 0; f.forEach(d => { if (d.single_step_yield != null) { s += d.single_step_yield; n++ } }); return n > 0 ? Math.round(s / n * 100) / 100 : null }, suffix: '%', precision: 1, color: (v) => v >= 85 ? '#52c41a' : '#f5222d' },
         ]}
         charts={[
           { key: 'yield', title: '单步收率趋势', unit: '%', color: '#1890ff', markLine: 85, label: '收率趋势', field: 'single_step_yield' },

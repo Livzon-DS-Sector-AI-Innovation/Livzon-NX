@@ -24,7 +24,7 @@ export default function FASheetsSyncButton() {
   const [visible, setVisible] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [selected, setSelected] = useState<string[]>(MODULES.map(m => m.key))
-  const [results, setResults] = useState<Record<string, any> | null>(null)
+  const [results, setResults] = useState<Record<string, unknown> | null>(null)
 
   const handleSync = async () => {
     if (selected.length === 0) { message.warning('请至少选择一个模块'); return }
@@ -52,7 +52,7 @@ export default function FASheetsSyncButton() {
     finally { setSyncing(false) }
   }
 
-  const getTag = (r: any) => {
+  const getTag = (r: { error?: string; batches?: number; sub_batches?: number; rows?: number } | null) => {
     if (!r) return <Tag>无数据</Tag>
     if (r.error) return <Tag color="red">失败: {r.error}</Tag>
     const batches = r.batches || 0
@@ -95,7 +95,7 @@ export default function FASheetsSyncButton() {
             <div style={{ marginTop: 8 }}>
               {MODULES.filter(m => results[m.key]).map(m => (
                 <div key={m.key} style={{ marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Text>{m.label}</Text> {getTag(results[m.key])}
+                  <Text>{m.label}</Text> {getTag(results[m.key] as { error?: string; batches?: number; sub_batches?: number; rows?: number } | null)}
                 </div>
               ))}
             </div>

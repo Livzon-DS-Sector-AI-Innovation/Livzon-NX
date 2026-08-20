@@ -59,7 +59,7 @@ export default function Workshop2012Page() {
   const currentMonth = selectedMonth.month() + 1
 
   const outputChartOption = useMemo(() => ({
-    tooltip: { trigger: 'axis', formatter: (p: any) => `${p[0].name}月<br/>产量: ${p[0].value.toLocaleString()} kg` },
+    tooltip: { trigger: 'axis', formatter: (p: Array<{ name: string; value: number }>) => `${p[0].name}月<br/>产量: ${p[0].value.toLocaleString()} kg` },
     xAxis: { type: 'category', data: monthlyTrend.map(t => `${t.month}月`) },
     yAxis: { type: 'value', name: 'kg', axisLabel: { formatter: (v: number) => (v / 1000).toFixed(0) + 't' } },
     series: [{
@@ -135,7 +135,7 @@ export default function Workshop2012Page() {
             <Col span={10}>
               <Card title="🥧 批次状态" style={{ height: '100%' }}>
                 <Space orientation="vertical" size={12} style={{ width: '100%' }}>
-                  {statusDist.map((item: any) => (
+                  {statusDist.map((item: { status: string; color: string; count: number }) => (
                     <Row key={item.status} justify="space-between" align="middle">
                       <Col>
                         <div style={{ width: 10, height: 10, borderRadius: 10, background: item.color, display: 'inline-block', marginRight: 8 }} />

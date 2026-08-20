@@ -74,8 +74,8 @@ function FATraceabilityContent() {
     if (!flowData || !flowData.stages || flowData.stages.length === 0) return null
 
     const allNodes: { stage: string; label: string; batch_no: string; detail: string }[] = []
-    flowData.stages.forEach((sg: any) => {
-      (sg.nodes || []).forEach((n: any) => {
+    flowData.stages.forEach((sg: { stage: string; label: string; nodes?: Array<{ batch_no: string; detail?: string }> }) => {
+      (sg.nodes || []).forEach((n: { batch_no: string; detail?: string }) => {
         allNodes.push({
           stage: sg.stage, label: sg.label,
           batch_no: n.batch_no, detail: n.detail || '',
@@ -210,7 +210,7 @@ function FATraceabilityContent() {
                     historyLoading ? <Spin size="small" /> :
                     historyRecords.length === 0 ? <Text type="secondary">暂无历史分析</Text> :
                     <div style={{ width: 420, maxHeight: 320, overflow: 'auto', fontSize: 12 }}>
-                      {historyRecords.map((r: any) => (
+                      {historyRecords.map((r) => (
                         <div key={r.id}
                           style={{ display: 'flex', alignItems: 'center', padding: '4px 0', cursor: 'pointer', borderBottom: '1px solid #fafafa' }}
                           onClick={() => {

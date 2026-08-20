@@ -56,7 +56,7 @@ export default function LabelVerificationClient({
       })
       setVerifications(res.data)
       setTotal(res.meta?.total || 0)
-    } catch (err: any) {
+    } catch (err) {
       message.error(err.message || '加载数据失败')
     } finally {
       setLoading(false)
@@ -67,7 +67,7 @@ export default function LabelVerificationClient({
     try {
       const res = await fetchLabelVerificationStatistics()
       setStatistics(res.data)
-    } catch (err: any) {
+    } catch (err) {
       console.error('加载统计数据失败', err)
     }
   }, [])
@@ -98,7 +98,7 @@ export default function LabelVerificationClient({
         video_file_name: result.data.file_name,
       })
       message.success('视频上传成功')
-    } catch (err: any) {
+    } catch (err) {
       message.error(err.message || '上传失败')
     } finally {
       setVideoUploading(false)
@@ -158,7 +158,7 @@ export default function LabelVerificationClient({
       } else {
         message.warning(`对比完成但置信度较低 (${compareData.confidence}%)，建议人工复核`)
       }
-    } catch (err: any) {
+    } catch (err) {
       setAutoCompareProgress('')
       if (err.errorFields) {
         message.warning('请先填写表单基本信息并上传视频')
@@ -170,7 +170,7 @@ export default function LabelVerificationClient({
     }
   }
 
-  const handleCreate = async (values: any) => {
+  const handleCreate = async (values: Omit<LabelVerificationCreateInput, 'production_date' | 'expiry_date' | 'verification_date' | 'verification_time'> & { production_date: dayjs.Dayjs; expiry_date: dayjs.Dayjs; verification_date: dayjs.Dayjs; verification_time: dayjs.Dayjs }) => {
     try {
       const data: LabelVerificationCreateInput = {
         batch_number: values.batch_number,
@@ -206,7 +206,7 @@ export default function LabelVerificationClient({
       setAutoCompareResult(null)
       loadData()
       loadStatistics()
-    } catch (err: any) {
+    } catch (err) {
       message.error(err.message || '创建失败')
     }
   }

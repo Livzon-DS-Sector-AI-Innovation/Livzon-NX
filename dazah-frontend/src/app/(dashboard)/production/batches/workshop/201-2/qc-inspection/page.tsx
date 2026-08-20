@@ -1,6 +1,8 @@
 'use client'
-import {useEffect, useState, useCallback,} from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
+import type { ReactNode } from 'react'
 import { Table, Button, Space, Modal, Form, Input, InputNumber, DatePicker, Card, Typography, App, Row, Col, Select } from 'antd'
+import type { TableColumnsType } from 'antd'
 import { PlusOutlined, ArrowLeftOutlined } from '@ant-design/icons'
 import { useRouter } from 'next/navigation'
 import dayjs from 'dayjs'
@@ -27,12 +29,38 @@ async function api(path: string, opts?: RequestInit) {
   return r.json()
 }
 
+interface QcInput {
+  id?: string
+  input_batch?: string | null
+  dry_weight?: number | null
+}
+
+interface QcRecord {
+  id: string
+  input_date?: string | null
+  batch_no?: string
+  pack_spec?: string | null
+  warehouse_weight?: number | null
+  barrel_count?: string | null
+  inspection_std?: string | null
+  front_batch_no?: string | null
+  cumulative_weight?: number | null
+  inputs?: QcInput[]
+}
+
+interface QcRow extends QcRecord {
+  input: QcInput
+  _key: string
+  _rowCount: number
+  _isFirst: boolean
+}
+
 function CellInput({ value, onSave }: { value: number | null | undefined; onSave: (v: number | null) => void }) {
   const [editing, setEditing] = useState(false)
   if (!editing) return <div style={{ width: '100%', height: 20, cursor: 'text', fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setEditing(true)}>{value != null ? value : ''}</div>
   return <InputNumber size="small" autoFocus style={{ width: '100%' }} defaultValue={value ?? undefined}
-    onBlur={e => { setEditing(false); const raw = e.target.value; if (raw === '' || raw === '-') { onSave(null); return } const n = Number(raw); if (!isNaN(n)) onSave(n) }}
-    onPressEnter={(e: any) => { setEditing(false); const raw = e.target.value; if (raw === '' || raw === '-') { onSave(null); return } const n = Number(raw); if (!isNaN(n)) onSave(n) }} />
+    onBlur={e => { setEditing(false); const raw = e.currentTarget.value; if (raw === '' || raw === '-') { onSave(null); return } const n = Number(raw); if (!isNaN(n)) onSave(n) }}
+    onPressEnter={(e) => { setEditing(false); const raw = e.currentTarget.value; if (raw === '' || raw === '-') { onSave(null); return } const n = Number(raw); if (!isNaN(n)) onSave(n) }} />
 }
 
 function DateCellInput({ value, onSave }: { value: string | null | undefined; onSave: (v: string | null) => void }) {
@@ -46,13 +74,13 @@ function DateCellInput({ value, onSave }: { value: string | null | undefined; on
 function TextCellInput({ value, onSave }: { value: string | null | undefined; onSave: (v: string | null) => void }) {
   const [editing, setEditing] = useState(false)
   if (!editing) return <div style={{ width: '100%', height: 20, cursor: 'text', fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setEditing(true)}>{value ?? ''}</div>
-  return <Input size="small" autoFocus style={{ width: '100%', fontSize: 10, height: 20, padding: '0 2px' }} defaultValue={value ?? ''} onBlur={e => { setEditing(false); onSave(e.target.value || null) }} />
+  return <Input size="small" autoFocus style={{ width: '100%', fontSize: 10, height: 20, padding: '0 2px' }} defaultValue={value ?? ''} onBlur={e => { setEditing(false); onSave(e.currentTarget.value || null) }} />
 }
 
 export default function QcInspectionPage() {
   const router = useRouter(); const { message, modal } = App.useApp()
   const [form] = Form.useForm()
-  const [records, setRecords] = useState<any[]>([]); const [loading, setLoading] = useState(false); const [saving, setSaving] = useState(false)
+  const [records, setRecords] = useState<QcRecord[]>([]); const [loading, setLoading] = useState(false); const [saving, setSaving] = useState(false)
   const [month, setMonth] = useState<number>(dayjs().month() + 1)
   const [createVisible, setCreateVisible] = useState(false)
 
@@ -63,15 +91,15 @@ export default function QcInspectionPage() {
   }, [message, month])
   useEffect(() => { load() }, [load]) // eslint-disable-line react-hooks/set-state-in-effect
 
-  const saveRecord = async (id: string, field: string, value: any) => {
+  const saveRecord = async (id: string, field: string, value: number | string | null) => {
     setSaving(true); await api(`/qc-inspections/${id}`, { method: 'PUT', body: JSON.stringify({ [field]: value }) }); setSaving(false); load()
   }
 
-  const saveInput = async (input: any, field: string, value: any) => {
+  const saveInput = async (input: QcInput, field: string, value: number | string | null) => {
     setSaving(true); await api(`/qc-inputs/${input.id}`, { method: 'PUT', body: JSON.stringify({ [field]: value }) }); setSaving(false); load()
   }
 
-  const addInputRow = async (qcBatch: string) => {
+  const addInputRow = async (qcBatch: string | undefined) => {
     setSaving(true); await api('/qc-inputs', { method: 'POST', body: JSON.stringify({ qc_batch: qcBatch, input_batch: '', dry_weight: 0 }) }); setSaving(false); load()
   }
 
@@ -81,26 +109,26 @@ export default function QcInspectionPage() {
   }
 
   const flattenData = () => {
-    const rows: any[] = []
+    const rows: QcRow[] = []
     for (const rec of records) { const inputs = rec.inputs || []; const c = Math.max(inputs.length, 1); for (let i = 0; i < c; i++) rows.push({ ...rec, input: inputs[i] || {}, _key: `${rec.id}-${i}`, _rowCount: c, _isFirst: i === 0 }) }
     return rows
   }
 
-  const M = (content: any, r: any) => (r._isFirst ? content : null)
-  const onCell = (r: any) => { const rowSpan = r._isFirst ? r._rowCount : 0; return { rowSpan, style: rowSpan > 1 ? { verticalAlign: 'middle' } : undefined } as any }
+  const M = (content: ReactNode, r: QcRow): ReactNode => (r._isFirst ? content : null)
+  const onCell = (r: QcRow) => { const rowSpan = r._isFirst ? r._rowCount : 0; return { rowSpan, style: rowSpan > 1 ? { verticalAlign: 'middle' } : undefined } }
 
-  const columns: any[] = [
-    { title: '日期', dataIndex: 'input_date', width: 72, fixed: 'left', render: (_: any, r: any) => M(<DateCellInput value={r.input_date} onSave={v => saveRecord(r.id, 'input_date', v)} />, r), onCell },
-    { title: '成品\n后台批号', dataIndex: 'batch_no', width: 100, fixed: 'left', render: (_: any, r: any) => M(<Text strong style={{ fontSize: 10 }}>{r.batch_no}</Text>, r), onCell },
-    { title: '单批\n批号', key: 'inp_batch', width: 110, render: (_: any, r: any) => <TextCellInput value={r.input?.input_batch} onSave={v => saveInput(r.input, 'input_batch', v)} /> },
-    { title: '干粉', key: 'inp_dry', width: 55, render: (_: any, r: any) => <CellInput value={r.input?.dry_weight} onSave={v => saveInput(r.input, 'dry_weight', v)} /> },
-    { title: '规格', dataIndex: 'pack_spec', width: 75, render: (_: any, r: any) => M(<TextCellInput value={r.pack_spec} onSave={v => saveRecord(r.id, 'pack_spec', v)} />, r), onCell },
-    { title: '入库\n重量(kg)', dataIndex: 'warehouse_weight', width: 75, render: (_: any, r: any) => M(<CellInput value={r.warehouse_weight} onSave={v => saveRecord(r.id, 'warehouse_weight', v)} />, r), onCell },
-    { title: '桶数', dataIndex: 'barrel_count', width: 55, render: (_: any, r: any) => M(<TextCellInput value={r.barrel_count} onSave={v => saveRecord(r.id, 'barrel_count', v)} />, r), onCell },
-    { title: '请检标准', dataIndex: 'inspection_std', width: 130, render: (_: any, r: any) => M(<TextCellInput value={r.inspection_std} onSave={v => saveRecord(r.id, 'inspection_std', v)} />, r), onCell },
-    { title: '前台批号', dataIndex: 'front_batch_no', width: 110, render: (_: any, r: any) => M(<TextCellInput value={r.front_batch_no} onSave={v => saveRecord(r.id, 'front_batch_no', v)} />, r), onCell },
-    { title: '累计\n重量(kg)', dataIndex: 'cumulative_weight', width: 75, render: (_: any, r: any) => M(<CellInput value={r.cumulative_weight} onSave={v => saveRecord(r.id, 'cumulative_weight', v)} />, r), onCell },
-    { title: '操作', key: 'act', width: 50, fixed: 'right', render: (_: any, r: any) => M(<Button type="link" size="small" danger onClick={() => modal.confirm({ title: `删除 ${r.batch_no}?`, onOk: async () => { await api(`/qc-inspections/${r.id}`, { method: 'DELETE' }); load() } })} style={{ fontSize: 10 }}>删除</Button>, r), onCell },
+  const columns: TableColumnsType<QcRow> = [
+    { title: '日期', dataIndex: 'input_date', width: 72, fixed: 'left', render: (_, r) => M(<DateCellInput value={r.input_date} onSave={v => saveRecord(r.id, 'input_date', v)} />, r), onCell },
+    { title: '成品\n后台批号', dataIndex: 'batch_no', width: 100, fixed: 'left', render: (_, r) => M(<Text strong style={{ fontSize: 10 }}>{r.batch_no}</Text>, r), onCell },
+    { title: '单批\n批号', key: 'inp_batch', width: 110, render: (_, r) => <TextCellInput value={r.input?.input_batch} onSave={v => saveInput(r.input, 'input_batch', v)} /> },
+    { title: '干粉', key: 'inp_dry', width: 55, render: (_, r) => <CellInput value={r.input?.dry_weight} onSave={v => saveInput(r.input, 'dry_weight', v)} /> },
+    { title: '规格', dataIndex: 'pack_spec', width: 75, render: (_, r) => M(<TextCellInput value={r.pack_spec} onSave={v => saveRecord(r.id, 'pack_spec', v)} />, r), onCell },
+    { title: '入库\n重量(kg)', dataIndex: 'warehouse_weight', width: 75, render: (_, r) => M(<CellInput value={r.warehouse_weight} onSave={v => saveRecord(r.id, 'warehouse_weight', v)} />, r), onCell },
+    { title: '桶数', dataIndex: 'barrel_count', width: 55, render: (_, r) => M(<TextCellInput value={r.barrel_count} onSave={v => saveRecord(r.id, 'barrel_count', v)} />, r), onCell },
+    { title: '请检标准', dataIndex: 'inspection_std', width: 130, render: (_, r) => M(<TextCellInput value={r.inspection_std} onSave={v => saveRecord(r.id, 'inspection_std', v)} />, r), onCell },
+    { title: '前台批号', dataIndex: 'front_batch_no', width: 110, render: (_, r) => M(<TextCellInput value={r.front_batch_no} onSave={v => saveRecord(r.id, 'front_batch_no', v)} />, r), onCell },
+    { title: '累计\n重量(kg)', dataIndex: 'cumulative_weight', width: 75, render: (_, r) => M(<CellInput value={r.cumulative_weight} onSave={v => saveRecord(r.id, 'cumulative_weight', v)} />, r), onCell },
+    { title: '操作', key: 'act', width: 50, fixed: 'right', render: (_, r) => M(<Button type="link" size="small" danger onClick={() => modal.confirm({ title: `删除 ${r.batch_no}?`, onOk: async () => { await api(`/qc-inspections/${r.id}`, { method: 'DELETE' }); load() } })} style={{ fontSize: 10 }}>删除</Button>, r), onCell },
   ]
 
   const batchInputCounts = []

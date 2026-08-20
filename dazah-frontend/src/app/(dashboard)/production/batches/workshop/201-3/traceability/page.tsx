@@ -42,7 +42,37 @@ const STAGE_CONFIG: Record<string, { color: string; icon: React.ReactNode; bg: s
 }
 
 // ── 流程图节点组件 ──
-function FlowNode({ node, isTarget }: { node: any; isTarget: boolean }) {
+interface TraceNode {
+  batch_no: string
+  stage: string
+  label?: string
+  is_sibling?: boolean
+  broken?: boolean
+  broken_reason?: string | null
+  detail?: string | null
+  yield_rate?: number | null
+  connects_to?: string | null
+  input_total?: number | null
+  quantity?: number | null
+  loss_kg?: number | null
+  loss_rate?: number | null
+  loss_level?: string | null
+  loss_breakdown?: {
+    recorded?: boolean
+    mother_liquor_kg?: number | null
+    recovery_powder_kg?: number | null
+    other_kg?: number | null
+  }
+  feeds?: Array<{ batch_no: string; label?: string; qty: number }>
+}
+
+interface TraceStage {
+  stage: string
+  label: string
+  nodes: TraceNode[]
+}
+
+function FlowNode({ node, isTarget }: { node: TraceNode; isTarget: boolean }) {
   const cfg = STAGE_CONFIG[node.stage] || { color: '#999', bg: '#f5f5f5', icon: null }
   const isSib = node.is_sibling
   // 投入明细（混批展开式）：全部兄弟批 + 投入合计 + 收率对账
@@ -129,7 +159,7 @@ function FlowNode({ node, isTarget }: { node: any; isTarget: boolean }) {
         {showFeeds && (
           <div style={{ marginTop: 6, borderTop: '1px dashed #e8e8e8', paddingTop: 6, fontSize: 11, color: '#666' }}>
             <div style={{ fontWeight: 500, marginBottom: 2 }}>投入 {feeds.length} 批</div>
-            {feeds.map((f: any) => (
+            {feeds.map((f: { batch_no: string; label?: string; qty: number }) => (
               <div key={f.batch_no} style={{ display: 'flex', justifyContent: 'space-between', lineHeight: '18px' }}>
                 <span>{f.label ? `${f.label} ${f.batch_no}` : f.batch_no}</span>
                 {f.qty > 0 && <span>{f.qty.toFixed(2)}kg</span>}
@@ -164,8 +194,8 @@ function FlowNode({ node, isTarget }: { node: any; isTarget: boolean }) {
         )}
         {showYrTag && (
           <div style={{ marginTop: 4 }}>
-            <Tag color={node.yield_rate >= 90 ? 'green' : node.yield_rate >= 80 ? 'orange' : 'red'} style={{ fontSize: 11 }}>
-              yr {Number(node.yield_rate).toFixed(1)}%
+            <Tag color={node.yield_rate != null && node.yield_rate >= 90 ? 'green' : node.yield_rate != null && node.yield_rate >= 80 ? 'orange' : 'red'} style={{ fontSize: 11 }}>
+              yr {node.yield_rate != null ? Number(node.yield_rate).toFixed(1) : '-'}%
             </Tag>
           </div>
         )}
@@ -289,7 +319,7 @@ function StageFlowChart({ stages, targetBatch, targetStage }: { stages: any[]; t
                       同源 {g.group}
                     </div>
                   )}
-                  {g.nodes.map((node: any) => (
+                  {g.nodes.map((node) => (
                     <FlowNode key={node.batch_no} node={node}
                       isTarget={node.batch_no === targetBatch && node.stage === targetStage} />
                   ))}
@@ -354,7 +384,7 @@ function LossFunnelCard({ data }: { data: any }) {
   }
   const layers = data.layers
   // 漏斗各层宽度按产出量缩放（层析湿粉为最宽基准）
-  const maxOut = Math.max(...layers.map((l: any) => l.output_pure || 0))
+  const maxOut = Math.max(...layers.map((l: { output_pure?: number }) => l.output_pure || 0))
   return (
     <Card size="small" title={`全程损耗漏斗 · ${data.target_batch}`} style={{ marginTop: 12 }}>
       <div style={{ fontSize: 12, color: '#666', marginBottom: 8 }}>
@@ -409,7 +439,7 @@ function LossStatsPanel({ data }: { data: any }) {
   const segNames: Record<string, string> = {
     second_refinement: '二次精制', third_refinement: '三次精制', fourth_refinement: '四次精制（干粉）',
   }
-  const monthsList = [...new Set(months.map((m: any) => m.year_month))].sort()
+  const monthsList = [...new Set(months.map((m: { year_month: string }) => m.year_month))].sort()
 
   // 全链趋势：取三个月以上数据画折线
   const trendOption = {
@@ -421,7 +451,7 @@ function LossStatsPanel({ data }: { data: any }) {
     series: segKeys.map((k) => ({
       name: segNames[k], type: 'line', connectNulls: true,
       data: monthsList.map((mo) => {
-        const it = months.find((m: any) => m.stage === k && m.year_month === mo)
+        const it = months.find((m: { stage: string; year_month: string; avg_yield?: number | null }) => m.stage === k && m.year_month === mo)
         return it ? it.avg_yield : null
       }),
     })),
@@ -434,7 +464,7 @@ function LossStatsPanel({ data }: { data: any }) {
         <Col span={14}>
           <Table
             dataSource={months}
-            rowKey={(r: any) => `${r.stage}-${r.year_month}`}
+            rowKey={(r: { stage: string; year_month: string }) => `${r.stage}-${r.year_month}`}
             pagination={{ pageSize: 12 }}
             size="small"
             columns={[
@@ -466,7 +496,7 @@ function LossStatsPanel({ data }: { data: any }) {
       ) : (
         <Table
           dataSource={unclosed}
-          rowKey={(r: any) => `${r.stage}-${r.batch_no}-${r.feed_batch_no}`}
+          rowKey={(r: { stage: string; batch_no: string; feed_batch_no: string }) => `${r.stage}-${r.batch_no}-${r.feed_batch_no}`}
           pagination={{ pageSize: 10 }}
           size="small"
           columns={[
@@ -584,7 +614,7 @@ function TraceabilityPage() {
   // ── 工段均值（层析节点收率为结晶收率，对比结晶均值）──
   const distMean = (stageKey: string): number | null => {
     const key = stageKey === 'chromatography' ? 'crystallization' : stageKey
-    return distData.find((d: any) => d.stage === key)?.mean ?? null
+    return distData.find((d) => d.stage === key)?.mean ?? null
   }
 
   // ── 收率分布 ECharts 配置 ──
@@ -592,15 +622,15 @@ function TraceabilityPage() {
     tooltip: { trigger: 'axis' },
     legend: { data: ['Min', 'Q1', '中位', '均值', 'Q3', 'Max'], top: 0 },
     grid: { left: 10, right: 10, bottom: 0, top: 25, containLabel: true },
-    xAxis: { type: 'category', data: distData.map((d: any) => d.label) },
+    xAxis: { type: 'category', data: distData.map((d) => d.label) },
     yAxis: { type: 'value', name: '收率(%)' },
     series: [
-      { name: 'Min', type: 'bar', data: distData.map((d: any) => d.min), itemStyle: { color: '#91d5ff' } },
-      { name: 'Q1', type: 'bar', data: distData.map((d: any) => d.q1), itemStyle: { color: '#69c0ff' } },
-      { name: '中位', type: 'bar', data: distData.map((d: any) => d.median), itemStyle: { color: '#1890ff' } },
-      { name: '均值', type: 'bar', data: distData.map((d: any) => d.mean), itemStyle: { color: '#096dd9' } },
-      { name: 'Q3', type: 'bar', data: distData.map((d: any) => d.q3), itemStyle: { color: '#0050b3' } },
-      { name: 'Max', type: 'bar', data: distData.map((d: any) => d.max), itemStyle: { color: '#003a8c' } },
+      { name: 'Min', type: 'bar', data: distData.map((d) => d.min), itemStyle: { color: '#91d5ff' } },
+      { name: 'Q1', type: 'bar', data: distData.map((d) => d.q1), itemStyle: { color: '#69c0ff' } },
+      { name: '中位', type: 'bar', data: distData.map((d) => d.median), itemStyle: { color: '#1890ff' } },
+      { name: '均值', type: 'bar', data: distData.map((d) => d.mean), itemStyle: { color: '#096dd9' } },
+      { name: 'Q3', type: 'bar', data: distData.map((d) => d.q3), itemStyle: { color: '#0050b3' } },
+      { name: 'Max', type: 'bar', data: distData.map((d) => d.max), itemStyle: { color: '#003a8c' } },
     ],
   }
 
@@ -609,11 +639,11 @@ function TraceabilityPage() {
     tooltip: { trigger: 'axis' },
     legend: { data: ['<80%', '>110%'], top: 0 },
     grid: { left: 10, right: 10, bottom: 0, top: 25, containLabel: true },
-    xAxis: { type: 'category', data: distData.map((d: any) => d.label) },
+    xAxis: { type: 'category', data: distData.map((d) => d.label) },
     yAxis: { type: 'value', name: '批次数量' },
     series: [
-      { name: '<80%', type: 'bar', data: distData.map((d: any) => d.below_80), itemStyle: { color: '#ff7875' } },
-      { name: '>110%', type: 'bar', data: distData.map((d: any) => d.above_110), itemStyle: { color: '#ff4d4f' } },
+      { name: '<80%', type: 'bar', data: distData.map((d) => d.below_80), itemStyle: { color: '#ff7875' } },
+      { name: '>110%', type: 'bar', data: distData.map((d) => d.above_110), itemStyle: { color: '#ff4d4f' } },
     ],
   }
 
@@ -630,7 +660,7 @@ function TraceabilityPage() {
   // ── 覆盖完整性（DR：分段批数 + 断链统计） ──
   const covSegments = coverageData?.segments || []
   const covBroken = coverageData?.broken || {}
-  const maxSegCount = Math.max(1, ...covSegments.map((s: any) => s.count))
+  const maxSegCount = Math.max(1, ...covSegments.map((s: { count: number }) => s.count))
 
   return (
     <div style={{ paddingBottom: 24 }}>
@@ -748,16 +778,16 @@ function TraceabilityPage() {
               <Card size="small" title={`批次 ${traceData.target_batch} 收率 vs 工段均值`} style={{ marginTop: 16 }}>
                 <Table
                   dataSource={traceData.stages
-                    .filter((sg: any) => sg.nodes.some((n: any) => n.yield_rate != null && !n.broken))
-                    .map((sg: any) => {
-                      const node = sg.nodes.find((n: any) => n.yield_rate != null && !n.broken)
+                    .filter((sg: TraceStage) => sg.nodes.some((n: TraceNode) => n.yield_rate != null && !n.broken))
+                    .map((sg: TraceStage) => {
+                      const node = sg.nodes.find((n) => n.yield_rate != null && !n.broken)!
                       const avg = distMean(sg.stage)
                       return {
                         stage: sg.label,
                         batch_no: node.batch_no,
                         batch_yield: Number(node.yield_rate),
                         avg_yield: avg ?? null,
-                        median: distData.find((d: any) => d.stage === (sg.stage === 'chromatography' ? 'crystallization' : sg.stage))?.median ?? null,
+                        median: distData.find((d) => d.stage === (sg.stage === 'chromatography' ? 'crystallization' : sg.stage))?.median ?? null,
                         diff: avg != null ? Number(node.yield_rate) - avg : null,
                       }
                     })}
@@ -782,15 +812,15 @@ function TraceabilityPage() {
                 <div style={{ marginTop: 8, fontSize: 12, color: '#666' }}>
                   {(() => {
                     const rows = traceData.stages
-                      .filter((sg: any) => sg.nodes.some((n: any) => n.yield_rate != null && !n.broken))
-                      .map((sg: any) => {
-                        const node = sg.nodes.find((n: any) => n.yield_rate != null && !n.broken)
+                      .filter((sg: TraceStage) => sg.nodes.some((n: TraceNode) => n.yield_rate != null && !n.broken))
+                      .map((sg: TraceStage) => {
+                        const node = sg.nodes.find((n) => n.yield_rate != null && !n.broken)!
                         const avg = distMean(sg.stage)
                         return { label: sg.label, yr: Number(node.yield_rate), avg }
                       })
-                    const belowAvg = rows.filter((r: any) => r.avg != null && r.yr < r.avg)
+                    const belowAvg = rows.filter((r: { avg: number | null; yr: number; label: string }) => r.avg != null && r.yr < r.avg)
                     if (belowAvg.length === 0) return '✅ 所有工段收率均不低于均值'
-                    return `⚠️ ${belowAvg.map((r: any) => r.label).join('、')} 低于工段均值，累计收率 ${traceData.cumulative_yield}%${traceData.max_loss_stage ? `，最大损失环节: ${STAGE_CONFIG[traceData.max_loss_stage]?.label || traceData.max_loss_stage}` : ''}`
+                    return `⚠️ ${belowAvg.map((r: { label: string }) => r.label).join('、')} 低于工段均值，累计收率 ${traceData.cumulative_yield}%${traceData.max_loss_stage ? `，最大损失环节: ${STAGE_CONFIG[traceData.max_loss_stage]?.label || traceData.max_loss_stage}` : ''}`
                   })()}
                 </div>
               </Card>
@@ -864,7 +894,7 @@ function TraceabilityPage() {
                   <Title level={5}>被多个下游批次复用的投料（跨批混料 / 回收粉共用）</Title>
                   <Table
                     dataSource={reuseData}
-                    rowKey={(r: any) => `${r.upstream_type}-${r.upstream_batch}`}
+                    rowKey={(r) => `${r.upstream_type}-${r.upstream_batch}`}
                     columns={reuseColumns}
                     pagination={{ pageSize: 10 }}
                     size="small"
@@ -878,7 +908,7 @@ function TraceabilityPage() {
               children: (
                 <div>
                   <Title level={5}>DR 六工段台账覆盖</Title>
-                  {covSegments.map((s: any) => (
+                  {covSegments.map((s: { segment: string; count: number }) => (
                     <div key={s.segment} style={{ marginBottom: 12 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                         <Text>{s.segment}</Text>

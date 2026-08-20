@@ -173,7 +173,7 @@ export default function DeviationPage() {
           <div className="mt-4">
             <Text strong>受影响批次（{affectedBatches.length}）：</Text>
             <Card size="small" className="mt-2">
-              {affectedBatches.map((b: any) => (
+              {affectedBatches.map((b) => (
                 <div key={b.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '4px 0', borderBottom: '1px solid #f0f0f0' }}>
                   <Tag color="blue">{b.fermenter}</Tag><Text strong>{b.batch_no}</Text>
                   <Text type="secondary">{b.product_name}</Text>

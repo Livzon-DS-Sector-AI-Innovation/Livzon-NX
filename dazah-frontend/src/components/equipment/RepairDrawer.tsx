@@ -78,7 +78,7 @@ export function RepairDrawer({ equipments, symptoms, onRefresh }: RepairDrawerPr
       message.success('报修工单已提交')
       closeRepairDrawer()
       onRefresh?.()
-    } catch (error: any) {
+    } catch (error) {
       if (error?.message) message.error(error.message)
     } finally {
       setSubmitting(false)

@@ -77,7 +77,7 @@ export default function EmployeeForm({ open, employee, onClose, onSuccess }: Emp
       form.resetFields()
       onSuccess()
       onClose()
-    } catch (err: any) {
+    } catch (err) {
       message.error(err.message || '操作失败')
     }
   }

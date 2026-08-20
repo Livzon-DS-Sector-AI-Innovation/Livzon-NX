@@ -42,7 +42,7 @@ export default function EmployeeTable({
       await deleteEmployee(id)
       message.success('删除成功')
       onRefresh()
-    } catch (err: any) {
+    } catch (err) {
       message.error(err.message || '删除失败')
     } finally {
       setLoading(false)
@@ -55,7 +55,7 @@ export default function EmployeeTable({
       const res = await syncToFeishuAction(id)
       message.success(`已同步到飞书: ${res.data.feishu_record_id}`)
       onRefresh()
-    } catch (err: any) {
+    } catch (err) {
       message.error(err.message || '同步到飞书失败')
     } finally {
       setSyncingId(null)

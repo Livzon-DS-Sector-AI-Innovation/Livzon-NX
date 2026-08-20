@@ -161,7 +161,7 @@ function Workshop203Content() {
               {yieldData?.stages?.length > 0 && (
                 <Card size="small" style={{ marginBottom: 16 }} title="📊 收率全链路">
                   <Row gutter={[8, 8]}>
-                    {yieldData.stages.map((s: any) => (
+                    {yieldData.stages.map((s: { stage: string; label: string; avg_yield: number; count: number; min_yield: number; max_yield: number }) => (
                       <Col span={12} key={s.stage}>
                         <Statistic title={s.label} value={s.avg_yield} suffix="%"
                           styles={{ content: { color: s.avg_yield >= 90 ? '#52c41a' : '#fa8c16', fontSize: 20 } }} />
@@ -233,12 +233,12 @@ function Workshop203Content() {
                  compareData?.error ? <Text type="secondary">{compareData.error}</Text> :
                  compareData?.stages ? (
                   <div style={{ flex: 1, overflow: 'auto', fontSize: 12 }}>
-                    {Object.entries(compareData.stages).map(([stageName, params]: any) => (
+                    {Object.entries(compareData.stages).map(([stageName, params]: [string, unknown]) => (
                       <Card key={stageName} size="small" className="mb-2" title={stageName}
                         styles={{ header: { fontSize: 12, fontWeight: 500, background: '#fafafa' } }}>
-                        {params.map((p: any) => {
-                          const sevColors: any = { normal: '#52c41a', warn: '#fa8c16', danger: '#f5222d' }
-                          const dirLabels: any = { high: '偏高', low: '偏低', normal: '正常' }
+                        {(params as Array<{ label: string; value: string | number; golden_avg?: number | null; deviation?: number; severity: string; direction: string; suggestion?: { happened: string; remedy: string; impact: string; prevent: string } }>).map((p) => {
+                          const sevColors: Record<string, string> = { normal: '#52c41a', warn: '#fa8c16', danger: '#f5222d' }
+                          const dirLabels: Record<string, string> = { high: '偏高', low: '偏低', normal: '正常' }
                           return (
                             <div key={p.label} style={{ marginBottom: 6 }}>
                               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -255,7 +255,7 @@ function Workshop203Content() {
                               </div>
                               {p.suggestion && (
                                 <details style={{ marginTop: 4, cursor: 'pointer' }}>
-                                  <summary style={{ fontSize: 11, color: '#1677ff', padding: '4px 0' }}>💡 展开纠正建议（偏离 {Math.abs(p.deviation)}%）</summary>
+                                  <summary style={{ fontSize: 11, color: '#1677ff', padding: '4px 0' }}>💡 展开纠正建议（偏离 {Math.abs(p.deviation ?? 0)}%）</summary>
                                   <div style={{ padding: '6px 8px', background: '#fffbe6', borderRadius: 4, fontSize: 11, lineHeight: 1.5 }}>
                                     <div>❌ {p.suggestion.happened}</div>
                                     <div style={{ color: '#1677ff' }}>🔧 {p.suggestion.remedy}</div>

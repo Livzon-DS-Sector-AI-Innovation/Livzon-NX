@@ -45,8 +45,8 @@ function buildLayout(stages: StageGroup[], targetBatch: string, targetStage: str
   const colHeights: number[] = []
   const colNodes: any[][] = []
   stageList.forEach((sg) => {
-    const mains = (sg.nodes || []).filter((n: any) => !n.is_sibling)
-    const sibs = (sg.nodes || []).filter((n: any) => n.is_sibling)
+    const mains = (sg.nodes || []).filter((n) => !n.is_sibling)
+    const sibs = (sg.nodes || []).filter((n) => n.is_sibling)
     colHeights.push(mains.length * ROW_H + (sibs.length > 0 ? BRANCH_GAP + sibs.length * ROW_H : 0))
     colNodes.push([])
   })
@@ -58,7 +58,7 @@ function buildLayout(stages: StageGroup[], targetBatch: string, targetStage: str
 
   // 第三阶段：分配 y 坐标
   stageList.forEach((sg, col) => {
-    const mains = (sg.nodes || []).filter((n: any) => !n.is_sibling)
+    const mains = (sg.nodes || []).filter((n) => !n.is_sibling)
     mains.forEach((n: any, row: number) => {
       const isTarget = n.batch_no === targetBatch && sg.stage === targetStage
       nodes.push({
@@ -72,8 +72,8 @@ function buildLayout(stages: StageGroup[], targetBatch: string, targetStage: str
 
   // 同级节点排在同列底部
   stageList.forEach((sg, col) => {
-    const mainCount = (sg.nodes || []).filter((n: any) => !n.is_sibling).length
-    const sibs = (sg.nodes || []).filter((n: any) => n.is_sibling)
+    const mainCount = (sg.nodes || []).filter((n) => !n.is_sibling).length
+    const sibs = (sg.nodes || []).filter((n) => n.is_sibling)
     sibs.forEach((n: any, row: number) => {
       nodes.push({
         id: `n${nid++}`, x: col * COL_X + 4, y: START_Y + colOffsets[col] + mainCount * ROW_H + BRANCH_GAP + row * ROW_H, w: 152, h: 52,
@@ -311,7 +311,7 @@ export default function TraceModal({ stage, batchNo, onClose, stageConfig, stage
                 <span style={{ width: 110 }}>批号</span>
                 <span style={{ flex: 1 }}>分析</span>
               </div>
-              {historyRecords.map((r: any) => (
+              {historyRecords.map((r) => (
                 <div key={r.id} style={{ display: 'flex', alignItems: 'center', padding: '4px 0', cursor: 'pointer', borderBottom: '1px solid #fafafa' }}
                   onClick={() => { setAiResult({...r, analysis_text: null, session_id: r.session_id}); setChatMessages([]) }}>
                   <Tag color={r.severity === 'high' ? 'red' : r.severity === 'medium' ? 'orange' : 'green'} style={{ fontSize: 10, margin: 0, width: 48 }}>

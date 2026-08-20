@@ -34,7 +34,7 @@ export default function BatchEventsButton({ batchId, batchLabel, status }: Batch
       <Button type="link" size="small" icon={<AlertOutlined />} style={{ color: '#faad14' }} onClick={open}>异常</Button>
       <Modal title={`${batchLabel} · 运行期间异常事件`} open={visible} onCancel={() => setVisible(false)} footer={null} width={640} loading={loading}>
         {events.length === 0 ? <Text type="secondary">暂无异常事件记录</Text> : (
-          events.map((ev: any) => {
+          events.map((ev) => {
             const txt = ev.restore_time
               ? `${dayjs(ev.event_time).format('YYYY年M月D日 HH:mm')}，${ev.workshop}发生${ev.event_type}${ev.description ? '：' + ev.description : ''}${ev.impact_scope ? '。影响范围：' + ev.impact_scope : ''}${ev.action_taken ? '。处理措施：' + ev.action_taken : ''}。于${dayjs(ev.restore_time).format('M月D日 HH:mm')}恢复正常${ev.impact_duration ? '，影响时长' + ev.impact_duration : ''}。`
               : `${dayjs(ev.event_time).format('YYYY年M月D日 HH:mm')}，${ev.workshop}发生${ev.event_type}${ev.description ? '：' + ev.description : ''}。`

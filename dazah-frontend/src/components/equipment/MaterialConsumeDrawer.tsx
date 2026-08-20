@@ -41,7 +41,7 @@ export function MaterialConsumeDrawer({ workOrderId, spareParts, onRefresh }: Ma
       message.success('领料成功')
       setOpen(false)
       onRefresh?.()
-    } catch (error: any) {
+    } catch (error) {
       if (error?.message) message.error(error.message)
     } finally {
       setLoading(false)

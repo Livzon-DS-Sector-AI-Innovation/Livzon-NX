@@ -39,8 +39,8 @@ function buildLayout(stages: StageGroup[], targetBatch: string, targetStage: str
   // 计算每列高度
   const colHeights: number[] = []
   stageList.forEach((sg) => {
-    const mains = (sg.nodes || []).filter((n: any) => !n.is_sibling)
-    const sibs = (sg.nodes || []).filter((n: any) => n.is_sibling)
+    const mains = (sg.nodes || []).filter((n) => !n.is_sibling)
+    const sibs = (sg.nodes || []).filter((n) => n.is_sibling)
     colHeights.push(mains.length * ROW_H + (sibs.length > 0 ? BRANCH_GAP + sibs.length * ROW_H : 0))
   })
 
@@ -49,7 +49,7 @@ function buildLayout(stages: StageGroup[], targetBatch: string, targetStage: str
 
   // 分配坐标
   stageList.forEach((sg, col) => {
-    const mains = (sg.nodes || []).filter((n: any) => !n.is_sibling)
+    const mains = (sg.nodes || []).filter((n) => !n.is_sibling)
     mains.forEach((n: any, row: number) => {
       const isTarget = n.batch_no === targetBatch && sg.stage === targetStage
       nodes.push({
@@ -63,8 +63,8 @@ function buildLayout(stages: StageGroup[], targetBatch: string, targetStage: str
 
   // 同级节点
   stageList.forEach((sg, col) => {
-    const mainCount = (sg.nodes || []).filter((n: any) => !n.is_sibling).length
-    const sibs = (sg.nodes || []).filter((n: any) => n.is_sibling)
+    const mainCount = (sg.nodes || []).filter((n) => !n.is_sibling).length
+    const sibs = (sg.nodes || []).filter((n) => n.is_sibling)
     sibs.forEach((n: any, row: number) => {
       nodes.push({
         id: `n${nid++}`, x: col * COL_X + 4, y: START_Y + colOffsets[col] + mainCount * ROW_H + BRANCH_GAP + row * ROW_H,
@@ -181,7 +181,7 @@ export default function FATraceModal({ stage, batchNo, onClose }: Props) {
             historyLoading ? <Spin size="small" /> :
             historyRecords.length === 0 ? <Text type="secondary">暂无历史分析</Text> :
             <div style={{ width: 480, maxHeight: 320, overflow: 'auto', fontSize: 12 }}>
-              {historyRecords.map((r: any) => (
+              {historyRecords.map((r) => (
                 <div key={r.id}
                   style={{ display: 'flex', alignItems: 'center', padding: '4px 0', cursor: 'pointer', borderBottom: '1px solid #fafafa' }}
                   onClick={() => {

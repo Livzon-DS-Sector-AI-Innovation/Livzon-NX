@@ -104,7 +104,7 @@ export function CapaPage() {
       message.success('CAPA创建成功')
       setCreateOpen(false)
       await loadData()
-    } catch (error: any) {
+    } catch (error) {
       message.error(error?.message || '创建CAPA失败')
     } finally {
       setSaving(false)
@@ -129,7 +129,7 @@ export function CapaPage() {
       a.click()
       URL.revokeObjectURL(url)
       message.success('导出成功')
-    } catch (err: any) {
+    } catch (err) {
       message.error(err.message || '导出失败')
     }
   }, [keyword, departmentFilter, productFilter, statusFilter, message])

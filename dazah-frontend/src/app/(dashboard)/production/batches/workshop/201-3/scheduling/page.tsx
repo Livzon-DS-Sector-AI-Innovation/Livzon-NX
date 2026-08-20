@@ -98,7 +98,7 @@ export default function Scheduling2013Page() {
       } else {
         message.error(json.message || '上传失败')
       }
-    } catch (e: any) {
+    } catch (e) {
       message.error('上传失败：' + (e?.message || '网络错误'))
     }
     return false // 阻止 antd 默认上传

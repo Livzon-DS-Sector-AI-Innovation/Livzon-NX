@@ -17,6 +17,45 @@ interface Impurities {
   purity?: number
 }
 
+interface DRFiltrate {
+  tank_no: string
+  volume?: number
+  potency?: number
+  product_qty?: number
+  dilute_wash_volume?: number
+  dilute_wash_potency?: number
+  dilute_wash_product_qty?: number
+}
+
+interface DRExtraction {
+  feeding_time?: string
+  extraction_batch_no?: string
+  feeding_plates?: number
+  extraction_product_qty?: number
+  total_qty?: number
+  single_batch_yield?: number
+  fermentation_liquid_yield?: number
+  filtrates?: DRFiltrate[]
+}
+
+interface DRTank {
+  tank_no?: string
+  handover_unit?: number
+  handover_volume?: number
+  fermentation_product_qty?: number
+  actual_product_qty?: number
+  handover_product_qty?: number
+  bacteria_residue_plates?: number
+  extractions?: DRExtraction[]
+}
+
+interface DRBatch {
+  tank_date?: string
+  batch_no?: string
+  impurities?: Impurities
+  tanks?: DRTank[]
+}
+
 interface TableRow {
   batchDate?: string
   batchNo?: string
@@ -54,10 +93,10 @@ interface TableRow {
   diluteWashProductQty?: number
 }
 
-export const DRTable: React.FC<{ data: any[] }> = ({ data }) => {
+export const DRTable: React.FC<{ data: DRBatch[] }> = ({ data }) => {
   const FIXED_TANK_NOS = ['1#', '2#', '3#', '4#']
 
-  const flattenData = (batches: any[]): TableRow[] => {
+  const flattenData = (batches: DRBatch[]): TableRow[] => {
     const rows: TableRow[] = []
 
     batches.forEach(batch => {
@@ -65,13 +104,13 @@ export const DRTable: React.FC<{ data: any[] }> = ({ data }) => {
       const tankCount = tanks.length
 
       // 第一步：把整批数据拍平成数组（每个萃取固定 4 行）
-      type RowInput = { tank: any; extraction: any; filtrateTankNo: string; filtrate: any }
+      type RowInput = { tank: DRTank; extraction: DRExtraction; filtrateTankNo: string; filtrate: DRFiltrate | undefined }
       const flatRows: RowInput[] = []
 
-      tanks.forEach((tank: any) => {
-        ;(tank.extractions || []).forEach((extraction: any) => {
-          const filtrateMap: Record<string, any> = {}
-          ;(extraction.filtrates || []).forEach((f: any) => { filtrateMap[f.tank_no] = f })
+      tanks.forEach((tank) => {
+        ;(tank.extractions || []).forEach((extraction) => {
+          const filtrateMap: Record<string, DRFiltrate | undefined> = {}
+          ;(extraction.filtrates || []).forEach((f) => { filtrateMap[f.tank_no] = f })
           FIXED_TANK_NOS.forEach((tankNo) => {
             flatRows.push({ tank, extraction, filtrateTankNo: tankNo, filtrate: filtrateMap[tankNo] })
           })
@@ -102,6 +141,75 @@ export const DRTable: React.FC<{ data: any[] }> = ({ data }) => {
         tankRowspans.push(baseRowspan + (i < remainder ? 1 : 0))
       }
 
+      let isBatchFirst = true
+      let tankIndex = -1
+      let currentTankRowspan = 0
+      let isTankFirst = false
+      let currentTank: DRTank | undefined
+
+      // 萃取：每 4 行切一个萃取
+      let isExtractionFirst = false
+      let currentExtraction: DRExtraction | undefined
+
+      flatRows.forEach((item, rowIdx) => {
+        // 罐边界：找到当前行属于哪个罐
+        let cumulative = 0
+        for (let ti = 0; ti < tankCount; ti++) {
+          cumulative += tankRowspans[ti]
+          if (rowIdx < cumulative) {
+            if (ti !== tankIndex) {
+              tankIndex = ti
+              currentTank = tanks[ti]
+              currentTankRowspan = tankRowspans[ti]
+              isTankFirst = true
+            }
+            break
+          }
+        }
+
+        // 萃取边界：每 4 行换一个萃取
+        if (rowIdx % FIXED_TANK_NOS.length === 0) {
+          currentExtraction = item.extraction
+          isExtractionFirst = true
+        }
+
+        rows.push({
+          batchDate: isBatchFirst ? batch.tank_date : undefined,
+          batchNo: isBatchFirst ? batch.batch_no : undefined,
+          impurities: isBatchFirst ? batch.impurities : undefined,
+          batchRowspan: isBatchFirst ? totalRows : 0,
+          batchActualProductQty: isBatchFirst ? batchActualProductQty : undefined,
+          batchHandoverProductQty: isBatchFirst ? batchHandoverProductQty : undefined,
+          batchBacteriaResiduePlates: isBatchFirst ? batchBacteriaResiduePlates : undefined,
+          batchFermentationLiquidYield: isBatchFirst ? batchFermentationLiquidYield : undefined,
+
+          tankNo: isTankFirst ? currentTank?.tank_no : undefined,
+          handoverUnit: isTankFirst ? currentTank?.handover_unit : undefined,
+          handoverVolume: isTankFirst ? currentTank?.handover_volume : undefined,
+          fermentationProductQty: isTankFirst ? currentTank?.fermentation_product_qty : undefined,
+          tankRowspan: isTankFirst ? currentTankRowspan : 0,
+
+          feedingTime: isExtractionFirst ? currentExtraction?.feeding_time : undefined,
+          extractionBatchNo: isExtractionFirst ? currentExtraction?.extraction_batch_no : undefined,
+          feedingPlates: isExtractionFirst ? currentExtraction?.feeding_plates : undefined,
+          extractionProductQty: isExtractionFirst ? currentExtraction?.extraction_product_qty : undefined,
+          totalQty: isExtractionFirst ? currentExtraction?.total_qty : undefined,
+          singleBatchYield: isExtractionFirst ? currentExtraction?.single_batch_yield : undefined,
+          extractionRowspan: isExtractionFirst ? FIXED_TANK_NOS.length : 0,
+
+          filtrateTankNo: item.filtrateTankNo,
+          volume: item.filtrate?.volume,
+          potency: item.filtrate?.potency,
+          filtrateProductQty: item.filtrate?.product_qty,
+          diluteWashVolume: item.filtrate?.dilute_wash_volume,
+          diluteWashPotency: item.filtrate?.dilute_wash_potency,
+          diluteWashProductQty: item.filtrate?.dilute_wash_product_qty,
+        })
+
+        isBatchFirst = false
+        isTankFirst = false
+        isExtractionFirst = false
+      })
     })
 
     return rows

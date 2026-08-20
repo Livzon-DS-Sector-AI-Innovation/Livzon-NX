@@ -69,7 +69,7 @@ export function CalibrationRecordDrawer({ calibrationPlans, onRefresh }: Calibra
       message.success('创建校准记录成功')
       closeCalibrationRecordDrawer()
       onRefresh?.()
-    } catch (error: any) {
+    } catch (error) {
       if (error?.message) message.error(error.message)
     }
   }

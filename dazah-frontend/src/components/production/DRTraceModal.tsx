@@ -54,8 +54,8 @@ function buildLayout(stages: StageGroup[], targetBatch: string, targetStage: str
   const colHeights: number[] = []
   const colNodes: any[][] = []
   stageList.forEach((sg) => {
-    const mains = (sg.nodes || []).filter((n: any) => !n.is_sibling)
-    const sibs = (sg.nodes || []).filter((n: any) => n.is_sibling)
+    const mains = (sg.nodes || []).filter((n) => !n.is_sibling)
+    const sibs = (sg.nodes || []).filter((n) => n.is_sibling)
     colHeights.push((mains.length + sibs.length) * ROW_H)
     colNodes.push([])
   })
@@ -67,7 +67,7 @@ function buildLayout(stages: StageGroup[], targetBatch: string, targetStage: str
 
   // 第三阶段：分配 y 坐标
   stageList.forEach((sg, col) => {
-    const mains = (sg.nodes || []).filter((n: any) => !n.is_sibling)
+    const mains = (sg.nodes || []).filter((n) => !n.is_sibling)
     mains.forEach((n: any, row: number) => {
       const isTarget = n.batch_no === targetBatch && sg.stage === targetStage
       nodes.push({
@@ -84,8 +84,8 @@ function buildLayout(stages: StageGroup[], targetBatch: string, targetStage: str
 
   // 同级节点排在同列底部
   stageList.forEach((sg, col) => {
-    const mainCount = (sg.nodes || []).filter((n: any) => !n.is_sibling).length
-    const sibs = (sg.nodes || []).filter((n: any) => n.is_sibling)
+    const mainCount = (sg.nodes || []).filter((n) => !n.is_sibling).length
+    const sibs = (sg.nodes || []).filter((n) => n.is_sibling)
     sibs.forEach((n: any, row: number) => {
       nodes.push({
         id: `n${nid++}`, x: col * COL_X + 4, y: START_Y + colOffsets[col] + mainCount * ROW_H + row * ROW_H, w: 152, h: 66,

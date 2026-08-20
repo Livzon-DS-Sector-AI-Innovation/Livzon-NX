@@ -63,7 +63,7 @@ export function CpvImportDrawer({ isOpen, onClose, productId, productName, dataT
     try {
       const result = await previewCpvImport(file, productId, dataType, importMode)
       setPreview(result)
-    } catch (err: any) {
+    } catch (err) {
       setErrorMsg(err.message || "预览失败")
     } finally {
       setPreviewing(false)
@@ -81,7 +81,7 @@ export function CpvImportDrawer({ isOpen, onClose, productId, productName, dataT
         handleClose()
         onSuccess()
       }, 1500)
-    } catch (err: any) {
+    } catch (err) {
       setErrorMsg(err.message || "导入失败")
     } finally {
       setImporting(false)

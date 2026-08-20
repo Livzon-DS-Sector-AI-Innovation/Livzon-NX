@@ -33,7 +33,7 @@ export default function TeamClient({ departmentId, departmentName }: TeamClientP
         page_size: pageSize })
       setTeams(res.data)
       setTotal(res.meta?.total || 0)
-    } catch (err: any) {
+    } catch (err) {
       message.error(err.message || '加载数据失败')
     } finally {
       setLoading(false)
@@ -64,7 +64,7 @@ export default function TeamClient({ departmentId, departmentName }: TeamClientP
       await deleteTeam(id)
       message.success('删除成功')
       loadData()
-    } catch (err: any) {
+    } catch (err) {
       message.error(err.message || '删除失败')
     }
   }

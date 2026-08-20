@@ -195,7 +195,7 @@ export function CategoryTree({ categories, onRefresh }: CategoryTreeProps) {
       await deleteCategory(node.id)
       message.success('删除分类成功')
       onRefresh?.()
-    } catch (error: any) {
+    } catch (error) {
       message.error(error?.message || '删除分类失败')
     }
   }

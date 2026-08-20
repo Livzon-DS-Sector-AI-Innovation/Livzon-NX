@@ -105,7 +105,7 @@ export default function SyncSettingsButton({ productName, syncTarget = 'seed_cul
     try {
       const res = await authFetch(API('/feishu-configs'))
       if (res.code === 200) {
-        const cfg = res.data.find((c: any) => c.product_name === productName && c.sync_target === syncTarget)
+        const cfg = res.data.find((c: { product_name: string; sync_target: string; id: string; updated_at?: string }) => c.product_name === productName && c.sync_target === syncTarget)
         if (cfg) {
           setConfigId(cfg.id); setLastSync(cfg.updated_at)
           form.setFieldsValue({

@@ -74,7 +74,7 @@ export function ProjectDrawer({ onRefresh }: ProjectDrawerProps) {
       }
       closeDrawer()
       onRefresh?.()
-    } catch (error: any) {
+    } catch (error) {
       if (error?.message) message.error(error.message)
     } finally {
       setSubmitting(false)

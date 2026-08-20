@@ -35,7 +35,7 @@ export default function OffboardingClient({
         page_size: pageSize })
       setRecords(res.data)
       setTotal(res.meta?.total || 0)
-    } catch (err: any) {
+    } catch (err) {
       message.error(err.message || '加载数据失败')
     } finally {
       setLoading(false)
@@ -70,7 +70,7 @@ export default function OffboardingClient({
       await deleteOffboardingRecord(id)
       message.success('删除成功')
       loadData()
-    } catch (err: any) {
+    } catch (err) {
       message.error(err.message || '删除失败')
     }
   }

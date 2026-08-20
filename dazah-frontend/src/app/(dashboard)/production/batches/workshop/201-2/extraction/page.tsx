@@ -1,6 +1,8 @@
 'use client'
-import {useEffect, useState, useCallback,} from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
+import type { ReactNode } from 'react'
 import { Table, Button, Space, Input, Modal, Form, InputNumber, DatePicker, Card, Typography, App, Row, Col, Select } from 'antd'
+import type { TableColumnsType } from 'antd'
 import { PlusOutlined, ArrowLeftOutlined } from '@ant-design/icons'
 import { useRouter } from 'next/navigation'
 import dayjs from 'dayjs'
@@ -27,12 +29,46 @@ async function api(path: string, opts?: RequestInit) {
   return r.json()
 }
 
+interface ExtractionInput {
+  id?: string
+  crude_batch_no?: string | null
+  crude_weight?: number | null
+  crude_moisture?: number | null
+  crude_content?: number | null
+  converted_qty?: number | null
+}
+
+interface ExtractionRecord {
+  id: string
+  extract_date?: string | null
+  batch_no?: string
+  filter_potency?: number | null
+  filter_volume?: number | null
+  filter_product_qty?: number | null
+  carbon_usage?: number | null
+  wet_weight?: number | null
+  wet_content?: number | null
+  dry_loss?: number | null
+  dry_weight?: number | null
+  total_converted_qty?: number | null
+  total_crude_weight?: number | null
+  yield_rate?: number | null
+  inputs?: ExtractionInput[]
+}
+
+interface ExtractionRow extends ExtractionRecord {
+  input: ExtractionInput
+  _key: string
+  _rowCount: number
+  _isFirst: boolean
+}
+
 function CellInput({ value, onSave, color }: { value: number | null | undefined; onSave: (v: number | null) => void; color?: string }) {
   const [editing, setEditing] = useState(false)
   if (!editing) return <div style={{ width: '100%', height: 20, cursor: 'text', color: color || undefined, fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setEditing(true)}>{value != null ? value : ''}</div>
   return <InputNumber size="small" autoFocus style={{ width: '100%', color: color || undefined }} defaultValue={value ?? undefined}
-    onBlur={e => { setEditing(false); const raw = e.target.value; if (raw === '' || raw === '-') { onSave(null); return } const n = Number(raw); if (!isNaN(n)) onSave(n) }}
-    onPressEnter={(e: any) => { setEditing(false); const raw = e.target.value; if (raw === '' || raw === '-') { onSave(null); return } const n = Number(raw); if (!isNaN(n)) onSave(n) }} />
+    onBlur={e => { setEditing(false); const raw = e.currentTarget.value; if (raw === '' || raw === '-') { onSave(null); return } const n = Number(raw); if (!isNaN(n)) onSave(n) }}
+    onPressEnter={(e) => { setEditing(false); const raw = e.currentTarget.value; if (raw === '' || raw === '-') { onSave(null); return } const n = Number(raw); if (!isNaN(n)) onSave(n) }} />
 }
 
 function DateCellInput({ value, onSave }: { value: string | null | undefined; onSave: (v: string | null) => void }) {
@@ -46,13 +82,13 @@ function DateCellInput({ value, onSave }: { value: string | null | undefined; on
 function TextCellInput({ value, onSave }: { value: string | null | undefined; onSave: (v: string | null) => void }) {
   const [editing, setEditing] = useState(false)
   if (!editing) return <div style={{ width: '100%', height: 20, cursor: 'text', fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setEditing(true)}>{value ?? ''}</div>
-  return <Input size="small" autoFocus style={{ width: '100%', fontSize: 10, height: 20, padding: '0 2px' }} defaultValue={value ?? ''} onBlur={e => { setEditing(false); onSave(e.target.value || null) }} />
+  return <Input size="small" autoFocus style={{ width: '100%', fontSize: 10, height: 20, padding: '0 2px' }} defaultValue={value ?? ''} onBlur={e => { setEditing(false); onSave(e.currentTarget.value || null) }} />
 }
 
 export default function ExtractionPage() {
   const router = useRouter(); const { message, modal } = App.useApp()
   const [form] = Form.useForm()
-  const [records, setRecords] = useState<any[]>([]); const [loading, setLoading] = useState(false); const [saving, setSaving] = useState(false)
+  const [records, setRecords] = useState<ExtractionRecord[]>([]); const [loading, setLoading] = useState(false); const [saving, setSaving] = useState(false)
   const [month, setMonth] = useState<number>(dayjs().month() + 1)
   const [createVisible, setCreateVisible] = useState(false)
 
@@ -63,34 +99,34 @@ export default function ExtractionPage() {
   }, [message, month])
   useEffect(() => { load() }, [load]) // eslint-disable-line react-hooks/set-state-in-effect
 
-  const saveRecord = async (id: string, field: string, value: any, record: any) => {
-    setSaving(true); const d: any = { [field]: value }
+  const saveRecord = async (id: string, field: string, value: number | string | null, record: ExtractionRecord) => {
+    setSaving(true); const d: Record<string, unknown> = { [field]: value }
     if (field === 'filter_potency' || field === 'filter_volume') {
       const p = field === 'filter_potency' ? value : record.filter_potency
       const v = field === 'filter_volume' ? value : record.filter_volume
-      d.filter_product_qty = p != null && v != null ? Math.round(p * v / 10) / 100 : null
+      d.filter_product_qty = p != null && v != null ? Math.round(Number(p) * Number(v) / 10) / 100 : null
     }
     if (field === 'wet_weight' || field === 'wet_content' || field === 'dry_loss') {
       const ww = field === 'wet_weight' ? value : record.wet_weight; const wc = field === 'wet_content' ? value : record.wet_content; const dl = field === 'dry_loss' ? value : record.dry_loss
-      d.dry_weight = ww != null && wc != null && dl != null ? Math.round(ww * wc / 100 * (100 - dl)) / 100 : null
+      d.dry_weight = ww != null && wc != null && dl != null ? Math.round(Number(ww) * Number(wc) / 100 * (100 - Number(dl))) / 100 : null
     }
     if (field === 'dry_weight' || field === 'total_converted_qty') {
       const dw = field === 'dry_weight' ? value : record.dry_weight; const tc = field === 'total_converted_qty' ? value : record.total_converted_qty
-      d.yield_rate = dw != null && tc != null && tc > 0 ? Math.round(dw / tc * 10000) / 100 : null
+      d.yield_rate = dw != null && tc != null && Number(tc) > 0 ? Math.round(Number(dw) / Number(tc) * 10000) / 100 : null
     }
     await api(`/extraction-records/${id}`, { method: 'PUT', body: JSON.stringify(d) }); setSaving(false); load()
   }
 
-  const saveInput = async (input: any, field: string, value: any, _extractionBatch: string) => { // eslint-disable-line @typescript-eslint/no-unused-vars
-    setSaving(true); const d: any = { [field]: value }
+  const saveInput = async (input: ExtractionInput, field: string, value: number | string | null, _extractionBatch: string | undefined) => { // eslint-disable-line @typescript-eslint/no-unused-vars
+    setSaving(true); const d: Record<string, unknown> = { [field]: value }
     if (field === 'crude_weight' || field === 'crude_moisture' || field === 'crude_content') {
       const w = (field === 'crude_weight' ? value : input.crude_weight) || 0; const m = (field === 'crude_moisture' ? value : input.crude_moisture) || 0; const c = (field === 'crude_content' ? value : input.crude_content) || 0
-      d.converted_qty = Math.round(w * (1 - m / 100) * c) / 100
+      d.converted_qty = Math.round(Number(w) * (1 - Number(m) / 100) * Number(c)) / 100
     }
     if (input.id) await api(`/extraction-inputs/${input.id}`, { method: 'PUT', body: JSON.stringify(d) }); setSaving(false); load()
   }
 
-  const addInputRow = async (extractionBatch: string, currentCount: number) => {
+  const addInputRow = async (extractionBatch: string | undefined, currentCount: number) => {
     setSaving(true); await api('/extraction-inputs', { method: 'POST', body: JSON.stringify({ extraction_batch: extractionBatch, seq_no: currentCount + 1, crude_batch_no: '', crude_weight: 0, crude_moisture: 0, crude_content: 0 }) })
     setSaving(false); load()
   }
@@ -106,7 +142,7 @@ export default function ExtractionPage() {
   }
 
   const flattenData = () => {
-    const rows: any[] = []
+    const rows: ExtractionRow[] = []
     for (const rec of records) {
       const inputs = rec.inputs || []; const c = Math.max(inputs.length, 1)
       for (let i = 0; i < c; i++) rows.push({ ...rec, input: inputs[i] || {}, _key: `${rec.id}-${i}`, _rowCount: c, _isFirst: i === 0 })
@@ -114,28 +150,28 @@ export default function ExtractionPage() {
     return rows
   }
 
-  const M = (content: any, r: any) => (r._isFirst ? content : null)
-  const onCell = (r: any) => { const rowSpan = r._isFirst ? r._rowCount : 0; return { rowSpan, style: rowSpan > 1 ? { verticalAlign: 'middle' } : undefined } as any }
+  const M = (content: ReactNode, r: ExtractionRow): ReactNode => (r._isFirst ? content : null)
+  const onCell = (r: ExtractionRow) => { const rowSpan = r._isFirst ? r._rowCount : 0; return { rowSpan, style: rowSpan > 1 ? { verticalAlign: 'middle' } : undefined } }
 
-  const columns: any[] = [
-    { title: '萃取\n生产日期', dataIndex: 'extract_date', width: 85, fixed: 'left', render: (_: any, r: any) => M(<DateCellInput value={r.extract_date} onSave={v => saveRecord(r.id, 'extract_date', v, r)} />, r), onCell },
-    { title: '萃取\n批号', dataIndex: 'batch_no', width: 100, fixed: 'left', render: (_: any, r: any) => M(<Text strong style={{ fontSize: 11 }}>{r.batch_no}</Text>, r), onCell },
-    { title: <><Text strong>粗品</Text><br />批号</>, key: 'inp_batch', width: 100, render: (_: any, r: any) => <TextCellInput value={r.input?.crude_batch_no} onSave={v => saveInput(r.input, 'crude_batch_no', v, r.batch_no)} /> },
-    { title: <>水分<br />(%)</>, key: 'inp_m', width: 58, render: (_: any, r: any) => <CellInput value={r.input?.crude_moisture} onSave={v => saveInput(r.input, 'crude_moisture', v, r.batch_no)} /> },
-    { title: <>含量<br />(%)</>, key: 'inp_c', width: 58, render: (_: any, r: any) => <CellInput value={r.input?.crude_content} onSave={v => saveInput(r.input, 'crude_content', v, r.batch_no)} /> },
-    { title: '粗品\n重量', key: 'inp_w', width: 65, render: (_: any, r: any) => <CellInput value={r.input?.crude_weight} onSave={v => saveInput(r.input, 'crude_weight', v, r.batch_no)} /> },
-    { title: <Text style={{ fontSize: 10 }}>折合产品重量(kg)</Text>, key: 'inp_cv', width: 90, render: (_: any, r: any) => <CellInput value={r.input?.converted_qty} onSave={v => saveInput(r.input, 'converted_qty', v, r.batch_no)} /> },
-    { title: '折纯\n总量', dataIndex: 'total_converted_qty', width: 65, render: (_: any, r: any) => M(<CellInput value={r.total_converted_qty} onSave={v => saveRecord(r.id, 'total_converted_qty', v, r)} />, r), onCell },
-    { title: <>滤液<br />效价(mg/L)</>, dataIndex: 'filter_potency', width: 90, render: (_: any, r: any) => M(<CellInput value={r.filter_potency} onSave={v => saveRecord(r.id, 'filter_potency', v, r)} />, r), onCell },
-    { title: <>滤液<br />体积(m³)</>, dataIndex: 'filter_volume', width: 68, render: (_: any, r: any) => M(<CellInput value={r.filter_volume} onSave={v => saveRecord(r.id, 'filter_volume', v, r)} />, r), onCell },
-    { title: <>滤液<br />产品量(kg)</>, dataIndex: 'filter_product_qty', width: 90, render: (_: any, r: any) => M(<CellInput value={r.filter_product_qty} color="#1677ff" onSave={v => saveRecord(r.id, 'filter_product_qty', v, r)} />, r), onCell },
-    { title: <>用碳量<br />(kg)</>, dataIndex: 'carbon_usage', width: 68, render: (_: any, r: any) => M(<CellInput value={r.carbon_usage} onSave={v => saveRecord(r.id, 'carbon_usage', v, r)} />, r), onCell },
-    { title: <>湿粉<br />毛重(kg)</>, dataIndex: 'wet_weight', width: 75, render: (_: any, r: any) => M(<CellInput value={r.wet_weight} onSave={v => saveRecord(r.id, 'wet_weight', v, r)} />, r), onCell },
-    { title: '湿粉\n含量', dataIndex: 'wet_content', width: 55, render: (_: any, r: any) => M(<CellInput value={r.wet_content} onSave={v => saveRecord(r.id, 'wet_content', v, r)} />, r), onCell },
-    { title: '干燥\n失重', dataIndex: 'dry_loss', width: 55, render: (_: any, r: any) => M(<CellInput value={r.dry_loss} onSave={v => saveRecord(r.id, 'dry_loss', v, r)} />, r), onCell },
-    { title: '折干\n产量(kg)', dataIndex: 'dry_weight', width: 75, render: (_: any, r: any) => M(<CellInput value={r.dry_weight} color="#1677ff" onSave={v => saveRecord(r.id, 'dry_weight', v, r)} />, r), onCell },
-    { title: '单步\n收率', dataIndex: 'yield_rate', width: 60, render: (_: any, r: any) => M(<CellInput value={r.yield_rate} color={r.yield_rate != null ? (r.yield_rate >= 85 ? '#52c41a' : '#f5222d') : undefined} onSave={v => saveRecord(r.id, 'yield_rate', v, r)} />, r), onCell },
-    { title: '操作', key: 'act', width: 50, fixed: 'right', render: (_: any, r: any) => M(<Button type="link" size="small" danger onClick={() => modal.confirm({ title: `删除 ${r.batch_no}?`, onOk: async () => { await api(`/extraction-records/${r.id}`, { method: 'DELETE' }); load() } })} style={{ fontSize: 10 }}>删除</Button>, r), onCell },
+  const columns: TableColumnsType<ExtractionRow> = [
+    { title: '萃取\n生产日期', dataIndex: 'extract_date', width: 85, fixed: 'left', render: (_, r) => M(<DateCellInput value={r.extract_date} onSave={v => saveRecord(r.id, 'extract_date', v, r)} />, r), onCell },
+    { title: '萃取\n批号', dataIndex: 'batch_no', width: 100, fixed: 'left', render: (_, r) => M(<Text strong style={{ fontSize: 11 }}>{r.batch_no}</Text>, r), onCell },
+    { title: <><Text strong>粗品</Text><br />批号</>, key: 'inp_batch', width: 100, render: (_, r) => <TextCellInput value={r.input?.crude_batch_no} onSave={v => saveInput(r.input, 'crude_batch_no', v, r.batch_no)} /> },
+    { title: <>水分<br />(%)</>, key: 'inp_m', width: 58, render: (_, r) => <CellInput value={r.input?.crude_moisture} onSave={v => saveInput(r.input, 'crude_moisture', v, r.batch_no)} /> },
+    { title: <>含量<br />(%)</>, key: 'inp_c', width: 58, render: (_, r) => <CellInput value={r.input?.crude_content} onSave={v => saveInput(r.input, 'crude_content', v, r.batch_no)} /> },
+    { title: '粗品\n重量', key: 'inp_w', width: 65, render: (_, r) => <CellInput value={r.input?.crude_weight} onSave={v => saveInput(r.input, 'crude_weight', v, r.batch_no)} /> },
+    { title: <Text style={{ fontSize: 10 }}>折合产品重量(kg)</Text>, key: 'inp_cv', width: 90, render: (_, r) => <CellInput value={r.input?.converted_qty} onSave={v => saveInput(r.input, 'converted_qty', v, r.batch_no)} /> },
+    { title: '折纯\n总量', dataIndex: 'total_converted_qty', width: 65, render: (_, r) => M(<CellInput value={r.total_converted_qty} onSave={v => saveRecord(r.id, 'total_converted_qty', v, r)} />, r), onCell },
+    { title: <>滤液<br />效价(mg/L)</>, dataIndex: 'filter_potency', width: 90, render: (_, r) => M(<CellInput value={r.filter_potency} onSave={v => saveRecord(r.id, 'filter_potency', v, r)} />, r), onCell },
+    { title: <>滤液<br />体积(m³)</>, dataIndex: 'filter_volume', width: 68, render: (_, r) => M(<CellInput value={r.filter_volume} onSave={v => saveRecord(r.id, 'filter_volume', v, r)} />, r), onCell },
+    { title: <>滤液<br />产品量(kg)</>, dataIndex: 'filter_product_qty', width: 90, render: (_, r) => M(<CellInput value={r.filter_product_qty} color="#1677ff" onSave={v => saveRecord(r.id, 'filter_product_qty', v, r)} />, r), onCell },
+    { title: <>用碳量<br />(kg)</>, dataIndex: 'carbon_usage', width: 68, render: (_, r) => M(<CellInput value={r.carbon_usage} onSave={v => saveRecord(r.id, 'carbon_usage', v, r)} />, r), onCell },
+    { title: <>湿粉<br />毛重(kg)</>, dataIndex: 'wet_weight', width: 75, render: (_, r) => M(<CellInput value={r.wet_weight} onSave={v => saveRecord(r.id, 'wet_weight', v, r)} />, r), onCell },
+    { title: '湿粉\n含量', dataIndex: 'wet_content', width: 55, render: (_, r) => M(<CellInput value={r.wet_content} onSave={v => saveRecord(r.id, 'wet_content', v, r)} />, r), onCell },
+    { title: '干燥\n失重', dataIndex: 'dry_loss', width: 55, render: (_, r) => M(<CellInput value={r.dry_loss} onSave={v => saveRecord(r.id, 'dry_loss', v, r)} />, r), onCell },
+    { title: '折干\n产量(kg)', dataIndex: 'dry_weight', width: 75, render: (_, r) => M(<CellInput value={r.dry_weight} color="#1677ff" onSave={v => saveRecord(r.id, 'dry_weight', v, r)} />, r), onCell },
+    { title: '单步\n收率', dataIndex: 'yield_rate', width: 60, render: (_, r) => M(<CellInput value={r.yield_rate} color={r.yield_rate != null ? (r.yield_rate >= 85 ? '#52c41a' : '#f5222d') : undefined} onSave={v => saveRecord(r.id, 'yield_rate', v, r)} />, r), onCell },
+    { title: '操作', key: 'act', width: 50, fixed: 'right', render: (_, r) => M(<Button type="link" size="small" danger onClick={() => modal.confirm({ title: `删除 ${r.batch_no}?`, onOk: async () => { await api(`/extraction-records/${r.id}`, { method: 'DELETE' }); load() } })} style={{ fontSize: 10 }}>删除</Button>, r), onCell },
   ]
 
   const batchInputCounts = []
@@ -170,7 +206,7 @@ export default function ExtractionPage() {
           { title: '总折干产量', value: (_, f) => f.reduce((a, b) => a + (b.dry_weight || 0), 0), suffix: 'kg', precision: 0 },
           { title: '总滤液产品量', value: (_, f) => f.reduce((a, b) => a + (b.filter_product_qty || 0), 0), suffix: 'kg', precision: 0 },
           { title: '批数', value: (_, f) => f.length, suffix: '批', precision: 0 },
-          { title: '平均收率', value: (_, f) => { let s = 0, n = 0; f.forEach(d => { if (d.yield_rate != null) { s += d.yield_rate; n++ } }); return n > 0 ? Math.round(s / n * 100) / 100 : null }, suffix: '%', precision: 1, color: (v: any) => v >= 85 ? '#52c41a' : '#f5222d' },
+          { title: '平均收率', value: (_, f) => { let s = 0, n = 0; f.forEach(d => { if (d.yield_rate != null) { s += d.yield_rate; n++ } }); return n > 0 ? Math.round(s / n * 100) / 100 : null }, suffix: '%', precision: 1, color: (v) => v >= 85 ? '#52c41a' : '#f5222d' },
         ]}
         charts={[
           { key: 'yield', title: '收率趋势', unit: '%', color: '#1890ff', markLine: 85, label: '收率趋势', field: 'yield_rate' },

@@ -53,7 +53,7 @@ export function DocxPreview({ chapterId, chapterTitle, onDownload, refreshKey }:
         renderHeaders: true,
         renderFooters: true,
       })
-    } catch (err: any) {
+    } catch (err) {
       console.error('DocxPreview render error:', err)
       setError(err.message || '文档渲染失败')
       setHasContent(false)

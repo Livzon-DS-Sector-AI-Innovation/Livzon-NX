@@ -19,7 +19,7 @@ export default function TrainingLedgerNewClient() {
     setLoading(true)
     fetchDepartments({ page_size: 200 })
       .then((res) => {
-        const names = (res.data || []).map((d: any) => d.name)
+        const names = (res.data || []).map((d) => d.name)
         setDepartments(names)
       })
       .catch(() => message.error('加载部门列表失败'))
@@ -52,7 +52,7 @@ export default function TrainingLedgerNewClient() {
       })
       message.success('培训台账创建成功')
       window.location.href = `/hr/training/ledger?employee_number=${emp.employee_number}`
-    } catch (err: any) {
+    } catch (err) {
       if (err.message?.includes('Duplicate') || err.message?.includes('已存在')) {
         message.warning('该员工的培训台账已存在')
         window.location.href = `/hr/training/ledger?employee_number=${emp.employee_number}`

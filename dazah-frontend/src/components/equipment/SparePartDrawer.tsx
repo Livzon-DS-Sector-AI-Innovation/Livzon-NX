@@ -67,7 +67,7 @@ export function SparePartDrawer({ onRefresh }: SparePartDrawerProps) {
       }
       closeSparePartDrawer()
       onRefresh?.()
-    } catch (error: any) {
+    } catch (error) {
       if (error?.message) message.error(error.message)
     }
   }

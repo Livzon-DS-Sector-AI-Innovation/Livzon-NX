@@ -41,7 +41,7 @@ export default function SchedulingPage() {
 
         // 确定实际列数
         const maxCols = Math.max(...rows.map(r => r.length), 1)
-        const colWidthsArr: number[] = ws['!cols']?.map((c: any) => c.wch || 80) || Array(maxCols).fill(80)
+        const colWidthsArr: number[] = ws['!cols']?.map((c) => c.wch || 80) || Array(maxCols).fill(80)
 
         // 补齐每行到相同列数
         const padded = rows.map(r => {
@@ -73,7 +73,7 @@ export default function SchedulingPage() {
         setData(tableData)
 
         message.success(`已加载: ${wsname}，${displayRows.length} 行 × ${maxCols} 列`)
-      } catch (err: any) {
+      } catch (err) {
         message.error('文件解析失败: ' + (err.message || ''))
       } finally {
         setLoading(false)
@@ -100,14 +100,14 @@ export default function SchedulingPage() {
     return null
   }
 
-  const isDayNumber = (val: any): boolean => {
+  const isDayNumber = (val: unknown): boolean => {
     const s = String(val ?? '').trim()
     const n = Number(s)
     return /^\d{1,2}$/.test(s) && n >= 1 && n <= 31
   }
 
   // 判断是否为标题行（含"排产"或跨月日期范围）
-  const isTitleRow = (val: any): boolean => {
+  const isTitleRow = (val: unknown): boolean => {
     const s = String(val ?? '').trim()
     return /排产/.test(s) && /\d+月\d+日/.test(s) && s.length > 20
   }
