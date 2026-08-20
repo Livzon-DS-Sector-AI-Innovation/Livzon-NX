@@ -53,7 +53,7 @@ function buildLayout(stages: StageGroup[], targetBatch: string, targetStage: str
   // 第一阶段：计算每列节点数量（先不分配 y）
   const colHeights: number[] = []
   const colNodes: any[][] = []
-  stageList.forEach((sg, col) => {
+  stageList.forEach((sg) => {
     const mains = (sg.nodes || []).filter((n: any) => !n.is_sibling)
     const sibs = (sg.nodes || []).filter((n: any) => n.is_sibling)
     colHeights.push((mains.length + sibs.length) * ROW_H)

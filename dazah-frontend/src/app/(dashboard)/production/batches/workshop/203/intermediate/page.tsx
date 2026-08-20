@@ -1,9 +1,8 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { Table, Select, Card, Typography, Button, Space } from 'antd'
-import { ArrowLeftOutlined, ReloadOutlined } from '@ant-design/icons'
+import { ArrowLeftOutlined } from '@ant-design/icons'
 import { useRouter } from 'next/navigation'
-import dayjs from 'dayjs'
 import FASheetsSyncButton from '@/components/production/FASheetsSyncButton'
 import FATraceButton from '@/components/production/FATraceButton'
 const { Title, Text } = Typography
@@ -19,14 +18,6 @@ const FA_STAGES = [
   { key: 'decolor_centrifuge', label: '脱色离心', path: '/production/batches/workshop/203/decolor-centrifuge' },
   { key: 'intermediate', label: '母液中间体', path: '/production/batches/workshop/203/intermediate', active: true },
 ]
-const COLS = ['日期','当日母液总体积/方','顶水回流/方6#板框','当日结晶液产母液量（方）',
-  '一次离心日用水量（方）','一次甩料车数','离心每车平均用水量（L)160','三效产生一次母液量（方）',
-  '三效单车产母液量(L)410','合计570','二次母液总量','二次离心日用水量（方）',
-  '二次甩料车数','离心每车平均用水量(L)170左右','合计750']
-
-const INT_COLS = ['离心每车平均用水量（L)160','三效单车产母液量(L)410','合计570',
-  '离心每车平均用水量(L)170左右','合计750','一次甩料车数','二次甩料车数']
-
 export default function IntermediatePage() {
   const router = useRouter()
   const [data, setData] = useState<any[]>([])

@@ -300,44 +300,44 @@ export async function deleteOffboardingRecord(id: string) {
 
 // ─── STUB: Annual Training Plan Actions (not yet implemented) ───
 
-export async function createAnnualTrainingPlan(data: { year: number; department: string; status: string }) {
+export async function createAnnualTrainingPlan(_data: { year: number; department: string; status: string }) {
   throw new Error('createAnnualTrainingPlan: 功能尚未实现')
   return { data: { id: '' } }
 }
 
-export async function deleteAnnualTrainingPlan(id: string) {
+export async function deleteAnnualTrainingPlan(_id: string) {
   throw new Error('deleteAnnualTrainingPlan: 功能尚未实现')
   return { success: true, message: "功能尚未实现" }
 }
 
-export async function batchUpdatePlanItems(planId: string, data: { items: any[] }) {
+export async function batchUpdatePlanItems(_planId: string, _data: { items: any[] }) {
   throw new Error('batchUpdatePlanItems: 功能尚未实现')
   return { success: true, message: "功能尚未实现" }
 }
 
 // ─── STUB: Candidate/Recruitment Actions (not yet implemented) ───
 
-export async function createCandidateAction(formData: FormData) {
+export async function createCandidateAction(_formData: FormData) {
   throw new Error('createCandidateAction: 功能尚未实现')
   return { success: true, message: "功能尚未实现" }
 }
 
-export async function parseResumePreviewAction(formData: FormData) {
+export async function parseResumePreviewAction(_formData: FormData) {
   throw new Error('parseResumePreviewAction: 功能尚未实现')
   return { data: { gender: "", school: "", education: "", major: "", match_report: "", recommendation_level: "" } }
 }
 
-export async function syncCandidateToFeishuAction(candidateId: string) {
+export async function syncCandidateToFeishuAction(_candidateId: string) {
   throw new Error('syncCandidateToFeishuAction: 功能尚未实现')
   return { success: true, message: "功能尚未实现" }
 }
 
-export async function updateCandidateAction(candidateId: string, data: any) {
+export async function updateCandidateAction(_candidateId: string, _data: any) {
   throw new Error('updateCandidateAction: 功能尚未实现')
   return { success: true, message: "功能尚未实现" }
 }
 
-export async function updateCandidateRecommendationLevelAction(candidateId: string, level: string) {
+export async function updateCandidateRecommendationLevelAction(_candidateId: string, _level: string) {
   throw new Error('updateCandidateRecommendationLevelAction: 功能尚未实现')
   return { success: true, message: "功能尚未实现" }
 }
@@ -347,7 +347,7 @@ export async function syncCandidatesFromFeishuAction() {
   return { success: true, message: "功能尚未实现" }
 }
 
-export async function deleteCandidateAction(candidateId: string) {
+export async function deleteCandidateAction(_candidateId: string) {
   throw new Error('deleteCandidateAction: 功能尚未实现')
   return { success: true, message: "功能尚未实现" }
 }

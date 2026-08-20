@@ -91,7 +91,7 @@ export default function BatchProfileButton({ batchNo }: Props) {
       ceramic_ops: '陶瓷膜·运行', ceramic_clean: '陶瓷膜·清洗', ceramic_sep: '陶瓷膜·分离',
       ceramic_equip: '陶瓷膜·设备', decolor1: '一次脱色',
     }
-    const entries = Object.entries(refinery || {}).filter(([_, v]: any) => v?.length > 0)
+    const entries = Object.entries(refinery || {}).filter(([, v]: any) => v?.length > 0)
     if (!entries.length) return null
     return (
       <div>

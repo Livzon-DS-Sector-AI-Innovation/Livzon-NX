@@ -1,15 +1,9 @@
 'use client'
-import { useEffect, useMemo, useState } from 'react'
-import { Table, Card, Typography, Button, Space, Pagination, Select } from 'antd'
-import {ArrowLeftOutlined,} from '@ant-design/icons'
+import { Button, Typography } from 'antd'
+import { ArrowLeftOutlined } from '@ant-design/icons'
 import { useRouter } from 'next/navigation'
-import dayjs from 'dayjs'
 
-import FASheetsSyncButton from '@/components/production/FASheetsSyncButton'
-import FATraceButton from '@/components/production/FATraceButton'
-
-const { Title, Text } = Typography
-const API = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'
+const { Title } = Typography
 
 const FA_STAGES = [
   { key: 'fermentation', label: '发酵液放罐', path: '/production/batches/workshop/203/fermentation', active: true },
@@ -22,3 +16,19 @@ const FA_STAGES = [
   { key: 'intermediate', label: '母液中间体', path: '/production/batches/workshop/203/intermediate' },
 ]
 
+export default function Workshop203FermentationPage() {
+  const router = useRouter()
+  return (
+    <div className="p-6">
+      <Title level={4} style={{ margin: 0 }}>
+        <Button type="link" icon={<ArrowLeftOutlined />} onClick={() => router.push('/production/batches/workshop/203')}>返回车间</Button>
+        发酵液放罐
+      </Title>
+      <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
+        {FA_STAGES.map(s => (
+          <Button key={s.key} type={s.active ? 'primary' : 'default'} size="small" onClick={() => router.push(s.path)}>{s.label}</Button>
+        ))}
+      </div>
+    </div>
+  )
+}

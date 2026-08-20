@@ -6,7 +6,7 @@ import { PlusOutlined, SearchOutlined, EditOutlined, DeleteOutlined } from '@ant
 import dayjs from 'dayjs'
 import BatchProfileButton from './BatchProfileButton'
 
-export default function CeramicCrudTable({ api, columns, searchField, searchPlaceholder, formFields, syncTarget, syncProduct, scrollX = 1200, workshop = '203' }: any) {
+export default function CeramicCrudTable({ api, columns, searchField, searchPlaceholder, formFields, scrollX = 1200, workshop = '203' }: any) {
   const { message, modal } = App.useApp()
   const [form] = Form.useForm(); const [editForm] = Form.useForm()
   const [loading, setLoading] = useState(false); const [records, setRecords] = useState<any[]>([])

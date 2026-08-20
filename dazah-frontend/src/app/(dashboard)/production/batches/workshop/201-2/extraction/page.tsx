@@ -81,7 +81,7 @@ export default function ExtractionPage() {
     await api(`/extraction-records/${id}`, { method: 'PUT', body: JSON.stringify(d) }); setSaving(false); load()
   }
 
-  const saveInput = async (input: any, field: string, value: any, extractionBatch: string) => {
+  const saveInput = async (input: any, field: string, value: any, _extractionBatch: string) => { // eslint-disable-line @typescript-eslint/no-unused-vars
     setSaving(true); const d: any = { [field]: value }
     if (field === 'crude_weight' || field === 'crude_moisture' || field === 'crude_content') {
       const w = (field === 'crude_weight' ? value : input.crude_weight) || 0; const m = (field === 'crude_moisture' ? value : input.crude_moisture) || 0; const c = (field === 'crude_content' ? value : input.crude_content) || 0

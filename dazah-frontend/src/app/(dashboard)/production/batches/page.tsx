@@ -13,7 +13,6 @@ import {Table,
   Card,
   Row,
   Col,
-  Typography,
   Tooltip,
   App,} from 'antd'
 import type { ColumnsType } from 'antd/es/table'

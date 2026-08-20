@@ -8,7 +8,7 @@ import {
   BulbOutlined, SendOutlined, HistoryOutlined,
 } from '@ant-design/icons'
 import { useRouter, useSearchParams } from 'next/navigation'
-import FA_BATCH_TYPES, { FA_STAGE_CFG, FA_STAGE_ORDER } from '@/components/production/faBatchTypes'
+import FA_BATCH_TYPES, { FA_STAGE_ORDER } from '@/components/production/faBatchTypes'
 import { useFAChat } from '@/hooks/useFAChat'
 
 const { Title, Text } = Typography
@@ -52,7 +52,7 @@ function FATraceabilityContent() {
     chatMessages, chatInput, chatSending, chatEndRef,
     historyRecords, historyLoading,
     doAiAnalysis, doChatSend, loadHistory,
-    setChatInput, setChatMessages, setAiResult, setHistoryRecords, aiResultRef,
+    setChatInput, setChatMessages, setAiResult, aiResultRef,
   } = useFAChat({ stage, batchNo })
 
   // ═══════════════ 搜索追溯 ═══════════════

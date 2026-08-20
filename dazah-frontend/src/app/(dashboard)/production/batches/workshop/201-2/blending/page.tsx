@@ -55,7 +55,7 @@ const IMPURITY_FIELDS = [
 export default function BlendingPage() {
   const router = useRouter(); const { message, modal } = App.useApp()
   const [form] = Form.useForm()
-  const [records, setRecords] = useState<any[]>([]); const [loading, setLoading] = useState(false); const [saving, setSaving] = useState(false)
+  const [records, setRecords] = useState<any[]>([]); const [loading, setLoading] = useState(false); const [, setSaving] = useState(false)
   const [month, setMonth] = useState<number>(dayjs().month() + 1)
   const [createVisible, setCreateVisible] = useState(false)
   const [calculating, setCalculating] = useState<Record<string, boolean>>({})

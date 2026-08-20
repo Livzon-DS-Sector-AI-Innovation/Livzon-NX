@@ -1,9 +1,8 @@
 'use client'
 import { useEffect, useMemo, useState } from 'react'
 import { Table, Select, Card, Typography, Button, Space, Pagination } from 'antd'
-import { ArrowLeftOutlined, ReloadOutlined } from '@ant-design/icons'
+import { ArrowLeftOutlined } from '@ant-design/icons'
 import { useRouter } from 'next/navigation'
-import dayjs from 'dayjs'
 import FASheetsSyncButton from '@/components/production/FASheetsSyncButton'
 import FATraceButton from '@/components/production/FATraceButton'
 
@@ -20,21 +19,6 @@ const FA_STAGES = [
   { key: 'decolor_centrifuge', label: '脱色离心', path: '/production/batches/workshop/203/decolor-centrifuge' },
   { key: 'intermediate', label: '母液中间体', path: '/production/batches/workshop/203/intermediate' },
 ]
-
-const PARENT_COLS = ['日期', '批号', '发酵液罐产（kg）', '用酸量（95-98%浓硫酸）',
-  '酸化液体积（kl)', '理论酸化液含量（g/L）', '膜滤液产品总量（kg）',
-  '本批低单位量（kg）', '上批套用低单位量（kg）', '批收率', '顶洗前体积（kl）',
-  '尾液含量（g/L）', '渣含量（g/L）', '体积（罐渣+膜渣（kl）', '渣产品量（kg）',
-  '渣损失率（渣苯丙量/罐产）', '渣体积/发酵液体积', '酸化液/发酵液体积',
-  '滤液体积/发酵液体积', '平衡率', '消泡剂使用量（L）']
-
-const ALL_COLS = ['日期', '批号', '发酵液体积（kl)', '发酵液含量（g/L）', '发酵液罐产（kg）',
-  '用酸量（95-98%浓硫酸）', 'PH（酸化后）', '酸化液体积（kl)', '理论酸化液含量（g/L）',
-  'PH', '膜滤液体积（KL）', '膜滤液含量（g/L）', '膜滤液产品量（kg）', '膜滤液产品总量（kg）',
-  '本批低单位含量（g/L）', '本批低单位体积（KL）', '本批低单位苯产品（kg）', '本批低单位量（kg）',
-  '上批套用低单位量（kg）', '批收率', '顶洗前体积（kl）', '尾液含量（g/L）', '渣含量（g/L）',
-  '体积（罐渣+膜渣（kl）', '渣产品量（kg）', '渣损失率（渣苯丙量/罐产）',
-  '渣体积/发酵液体积', '酸化液/发酵液体积', '滤液体积/发酵液体积', '平衡率', '消泡剂使用量（L）']
 
 export default function AcidificationPage() {
   const router = useRouter()
@@ -85,7 +69,6 @@ useEffect(() => {    fetch(`${API}/api/v1/production/fa/monthly-averages?table=a
     return result
   }, [data])
 
-  const rn = (v: any) => v != null ? (typeof v === 'number' ? v.toLocaleString() : String(v)) : ''
 
   return (
     <div className="p-6">

@@ -262,7 +262,7 @@ export default function ProductionDashboard() {
                     size="small"
                     pagination={false}
                     className="cursor-pointer"
-                    onRow={(record) => ({
+                    onRow={() => ({
                       onClick: () => router.push('/production/batches'),
                     })}
                   />

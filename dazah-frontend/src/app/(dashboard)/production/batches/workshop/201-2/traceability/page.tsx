@@ -227,20 +227,6 @@ function TraceabilityPage() {
   }, [batchNo, stage])
 
   // 批号类型下拉选项（12种，含中转类型）
-  const STAGE_OPTIONS = [
-    { value: 'fermentation', label: '发酵液批号' },
-    { value: 'refining', label: '提炼生产批号' },
-    { value: 'na_batch', label: '钠化批号' },
-    { value: 'crude_product', label: '粗品批号' },
-    { value: 'extraction', label: '萃取批号' },
-    { value: 'wet_powder', label: '一次精品批号' },
-    { value: 'refinement', label: '二次结晶批号' },
-    { value: 'single_batch_blend', label: '单批批号(混粉)' },
-    { value: 'single_batch_qc', label: '单批批号(入库)' },
-    { value: 'blending', label: '混合批号' },
-    { value: 'front_batch', label: '前台批号' },
-    { value: 'qc', label: '成品后台批号' },
-  ]
 
   // ── 全链路追溯 ──
   const doTrace = useCallback(async () => {
@@ -382,7 +368,7 @@ function TraceabilityPage() {
       const dataUrl = await toPng(flowRef.current, { backgroundColor: '#fff', pixelRatio: 2 })
       const a = document.createElement('a'); a.href = dataUrl
       a.download = `追溯_MC_${batchNo}_${new Date().toISOString().slice(0, 10)}.png`; a.click()
-    } catch (e) { message.error('导出失败') }
+    } catch { message.error('导出失败') }
   }, [batchNo, message])
 
   // ── URL 参数自动追溯 ──

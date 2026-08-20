@@ -69,7 +69,7 @@ export default function McRefinementPage() {
     await api(`/refinement-records/${id}`, { method: 'PUT', body: JSON.stringify(d) }); setSaving(false); load()
   }
 
-  const saveInput = async (input: any, field: string, value: any, refinementBatch: string) => {
+  const saveInput = async (input: any, field: string, value: any, _refinementBatch: string) => { // eslint-disable-line @typescript-eslint/no-unused-vars
     setSaving(true); const d: any = { [field]: value }
     if (field === 'input_weight' || field === 'moisture' || field === 'content') {
       const w = (field === 'input_weight' ? value : input.input_weight) || 0; const m = (field === 'moisture' ? value : input.moisture) || 0; const c = (field === 'content' ? value : input.content) || 0

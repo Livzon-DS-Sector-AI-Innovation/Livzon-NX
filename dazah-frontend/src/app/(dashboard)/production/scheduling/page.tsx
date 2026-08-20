@@ -113,7 +113,7 @@ export default function SchedulingPage() {
   }
 
   // ─── 表格列 ───
-  const columns = headers.map((col, ci) => ({
+  const columns = headers.map((col) => ({
     title: col,
     dataIndex: col,
     key: col,

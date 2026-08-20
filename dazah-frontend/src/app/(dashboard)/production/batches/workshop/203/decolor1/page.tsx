@@ -1,9 +1,8 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { Table, Select, Card, Typography, Button, Space, Pagination } from 'antd'
-import { ArrowLeftOutlined, ReloadOutlined } from '@ant-design/icons'
+import { ArrowLeftOutlined } from '@ant-design/icons'
 import { useRouter } from 'next/navigation'
-import dayjs from 'dayjs'
 import FASheetsSyncButton from '@/components/production/FASheetsSyncButton'
 import FATraceButton from '@/components/production/FATraceButton'
 
@@ -21,8 +20,6 @@ const FA_STAGES = [
   { key: 'intermediate', label: '母液中间体', path: '/production/batches/workshop/203/intermediate' },
 ]
 
-const COLS = ['日期','批号','体积(kl)','含量(g/L)','电导(us/cm)','调前电导碳柱(us/cm)','混合含量(g/L)',
-  '母液体积(kl)','母液含量(g/L)','电导(us/cm)2','活性炭添加量(kg)','碳后含量(g/L)','湿碳(kg)','收率','产品量(kg)','滤损失率','备注']
 
 export default function Decolor1Page() {
   const router = useRouter()
