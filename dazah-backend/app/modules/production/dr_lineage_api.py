@@ -1295,12 +1295,12 @@ async def dr_coverage(session: AsyncSession = Depends(get_db)):
             text("""
         SELECT DISTINCT feed_batch_no FROM production.dr_third_refinement
         WHERE is_deleted = false AND feed_batch_no IS NOT NULL AND TRIM(feed_batch_no)
-        <> ''  # noqa: E501
+        <> ''
         AND feed_batch_no NOT LIKE 'DR-F2%' AND feed_batch_no NOT LIKE 'DR-F1%'
         UNION
         SELECT DISTINCT feed_batch_no FROM production.dr_fourth_refinement
         WHERE is_deleted = false AND feed_batch_no IS NOT NULL AND TRIM(feed_batch_no)
-        <> ''  # noqa: E501
+        <> ''
         AND feed_batch_no NOT LIKE 'DR-F3%' AND feed_batch_no NOT LIKE 'DR-F2%'
         AND feed_batch_no NOT LIKE 'DR-F1%'
     """)
@@ -1622,7 +1622,7 @@ async def dr_loss_stats(session: AsyncSession = Depends(get_db)):
         FROM (
             SELECT 'second_refinement' AS stage,
                    split_part(production_date, '.', 1) || '.' ||
-        split_part(production_date, '.', 2) AS ym,  # noqa: E501
+        split_part(production_date, '.', 2) AS ym,
                    ROUND(batch_yield::numeric * 100, 1)::float8 AS y
             FROM production.dr_second_refinement
             WHERE is_deleted = false AND batch_yield IS NOT NULL
@@ -1630,7 +1630,7 @@ async def dr_loss_stats(session: AsyncSession = Depends(get_db)):
             UNION ALL
             SELECT 'third_refinement',
                    split_part(production_date, '.', 1) || '.' ||
-        split_part(production_date, '.', 2),  # noqa: E501
+        split_part(production_date, '.', 2),
                    ROUND(yield_rate::numeric * 100, 1)::float8
             FROM production.dr_third_refinement
             WHERE is_deleted = false AND yield_rate IS NOT NULL
@@ -1638,7 +1638,7 @@ async def dr_loss_stats(session: AsyncSession = Depends(get_db)):
             UNION ALL
             SELECT 'fourth_refinement',
                    split_part(production_date, '.', 1) || '.' ||
-        split_part(production_date, '.', 2),  # noqa: E501
+        split_part(production_date, '.', 2),
                    ROUND(yield_rate::numeric * 100, 1)::float8
             FROM production.dr_fourth_refinement
             WHERE is_deleted = false AND yield_rate IS NOT NULL
@@ -1671,7 +1671,7 @@ async def dr_loss_stats(session: AsyncSession = Depends(get_db)):
         SELECT DISTINCT refinement_batch_no, feed_batch_no
         FROM production.dr_third_refinement
         WHERE is_deleted = false AND feed_batch_no IS NOT NULL AND TRIM(feed_batch_no)
-        <> ''  # noqa: E501
+        <> ''
         AND feed_batch_no LIKE 'DR-F2%'
         AND NOT EXISTS (
             SELECT 1 FROM production.dr_second_refinement
@@ -1697,7 +1697,7 @@ async def dr_loss_stats(session: AsyncSession = Depends(get_db)):
         SELECT DISTINCT refinement_batch_no, feed_batch_no
         FROM production.dr_fourth_refinement
         WHERE is_deleted = false AND feed_batch_no IS NOT NULL AND TRIM(feed_batch_no)
-        <> ''  # noqa: E501
+        <> ''
         AND feed_batch_no LIKE 'DR-F3%'
         AND NOT EXISTS (
             SELECT 1 FROM production.dr_third_refinement

@@ -29,6 +29,7 @@ class CeramicFeed(BaseModel):
 
 
 class CeramicMembraneClean(BaseModel):
+    workshop: Mapped[str] = mapped_column(String(32), nullable=False, default="203")
     feishu_record_id: Mapped[str | None] = mapped_column(
         String(64), nullable=True, unique=True, comment="飞书记录ID"
     )
@@ -48,6 +49,7 @@ class CeramicMembraneClean(BaseModel):
 
 
 class CeramicMembraneOps(BaseModel):
+    workshop: Mapped[str] = mapped_column(String(32), nullable=False, default="203")
     feishu_record_id: Mapped[str | None] = mapped_column(
         String(64), nullable=True, unique=True, comment="飞书记录ID"
     )
@@ -67,6 +69,7 @@ class CeramicMembraneOps(BaseModel):
 
 
 class CeramicEquipmentLog(BaseModel):
+    workshop: Mapped[str] = mapped_column(String(32), nullable=False, default="203")
     feishu_record_id: Mapped[str | None] = mapped_column(
         String(64), nullable=True, unique=True, comment="飞书记录ID"
     )
@@ -86,6 +89,7 @@ class CeramicEquipmentLog(BaseModel):
 
 
 class CeramicMaterialSeparation(BaseModel):
+    workshop: Mapped[str] = mapped_column(String(32), nullable=False, default="203")
     feishu_record_id: Mapped[str | None] = mapped_column(
         String(64), nullable=True, unique=True, comment="飞书记录ID"
     )
