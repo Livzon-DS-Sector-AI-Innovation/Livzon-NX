@@ -36,11 +36,6 @@ export default function DRTablePage({ tableKey, title, columns: columnDefs, stag
       const json = await r.json()
       if (json.code === 200) {
         const items = json.data.items || []
-        console.log('[DRTablePage] API 返回:', { total: json.data.total, count: items.length })
-        if (items.length > 0) {
-          console.log('[DRTablePage] 第一条数据 keys:', Object.keys(items[0]))
-          console.log('[DRTablePage] 第一条数据:', JSON.stringify(items[0], null, 2))
-        }
         setData(items)
         setTotal(json.data.total || 0)
       } else message.error(json.message || '加载失败')
@@ -95,15 +90,6 @@ export default function DRTablePage({ tableKey, title, columns: columnDefs, stag
     }
     return col
   })
-
-  // 调试：打印列定义
-  useEffect(() => {
-    if (data.length > 0) {
-      console.log('[DRTablePage] 列 dataIndex:', columnDefs.map(c => c.dataIndex))
-      console.log('[DRTablePage] computedData[0]:', JSON.stringify(computedData[0], null, 2))
-      console.log('[DRTablePage] tableCols[0]:', JSON.stringify(tableCols[0]))
-    }
-  }, [data, columnDefs, computedData, tableCols])
 
   return (
     <div className="p-6">

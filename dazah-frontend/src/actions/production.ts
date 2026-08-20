@@ -341,14 +341,11 @@ export async function getFermentationRecord(id: string) {
 }
 
 export async function createFermentationRecord(data: FermentationFormData) {
-  console.log('[createFermentationRecord] received data:', JSON.stringify(data, null, 2))
   const body = JSON.stringify(data)
-  console.log('[createFermentationRecord] request body:', body)
   const response = await fetchApi<FermentationRecord>('/api/v1/production/fermentation', {
     method: 'POST',
     body,
   })
-  console.log('[createFermentationRecord] response:', JSON.stringify(response))
   revalidatePath('/production/fermentation')
   return response
 }
