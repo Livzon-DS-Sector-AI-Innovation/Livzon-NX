@@ -199,3 +199,26 @@ def _test_extract_date():
     assert production_plan_service._extract_date("2026-07-01") == date(2026, 7, 1)
     assert production_plan_service._extract_date(None) is None
     assert production_plan_service._extract_date("not-a-date") is None  # noqa: E501
+
+
+# ============ 收率异常判定（纯规则） ============
+
+
+def test_judge_anomaly_severity_rules() -> None:
+    from app.modules.production.mc_yield_anomaly_detector import judge_anomaly_severity
+
+    assert judge_anomaly_severity(50, 100, 0) is None  # iqr <= 0 → normal
+    assert judge_anomaly_severity(60, 100, 20) == "high"  # < median - 1.5*iqr
+    assert judge_anomaly_severity(75, 100, 20) == "medium"  # < median - iqr
+    assert judge_anomaly_severity(90, 100, 20) is None  # normal
+
+
+def test_parse_json_helpers() -> None:
+    from app.modules.production.mc_yield_anomaly_detector import _parse_json
+
+    assert _parse_json('{"a": 1}') == {"a": 1}
+    assert _parse_json("```json\n{\"b\": 2}\n```") == {"b": 2}
+    assert _parse_json("not json") == {}
+    import pytest as _pytest
+    with _pytest.raises(AttributeError):
+        _parse_json(None)
