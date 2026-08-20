@@ -21,7 +21,7 @@ class NCERepository:
         date_from=None,
         date_to=None,
     ):
-        query = select(NonConformingEvent).where(NonConformingEvent.is_deleted.is_(False))
+        query = select(NonConformingEvent).where(NonConformingEvent.is_deleted.is_(False))  # noqa: E501
         if workshop:
             query = query.where(NonConformingEvent.workshop == workshop)
         if event_type:
