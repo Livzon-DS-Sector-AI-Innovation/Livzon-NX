@@ -1076,10 +1076,10 @@ def test_count_current_round_approvals_ignores_same_timestamp_ambiguity() -> Non
         )
 
     approvals = [
-        make(PurchaseApprovalRole.hardware_warehouse.value, PurchaseApprovalResult.approved.value),
-        make(PurchaseApprovalRole.equipment_power.value, PurchaseApprovalResult.approved.value),
-        make(PurchaseApprovalRole.equipment_power.value, PurchaseApprovalResult.rejected.value),
-        make(PurchaseApprovalRole.hardware_warehouse.value, PurchaseApprovalResult.approved.value),
+        make(PurchaseApprovalRole.hardware_warehouse.value, PurchaseApprovalResult.approved.value),  # noqa: E501
+        make(PurchaseApprovalRole.equipment_power.value, PurchaseApprovalResult.approved.value),  # noqa: E501
+        make(PurchaseApprovalRole.equipment_power.value, PurchaseApprovalResult.rejected.value),  # noqa: E501
+        make(PurchaseApprovalRole.hardware_warehouse.value, PurchaseApprovalResult.approved.value),  # noqa: E501
     ]
     # 最近驳回后的 hardware_warehouse 审批只有 1 条（同刻也不受时间比较影响）
     assert (
