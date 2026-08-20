@@ -1,6 +1,5 @@
 'use client'
 import {Result,} from 'antd'
-import { useRouter } from 'next/navigation'
 
 export default function Page() {
   return (

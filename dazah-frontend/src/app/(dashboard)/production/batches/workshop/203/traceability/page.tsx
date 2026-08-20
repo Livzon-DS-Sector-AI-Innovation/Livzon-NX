@@ -12,7 +12,6 @@ import FA_BATCH_TYPES, { FA_STAGE_CFG, FA_STAGE_ORDER } from '@/components/produ
 import { useFAChat } from '@/hooks/useFAChat'
 
 const { Title, Text } = Typography
-const { TextArea } = Input
 const API = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'
 const BASE = '/api/v1/production/fa'
 

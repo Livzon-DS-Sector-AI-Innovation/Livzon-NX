@@ -39,7 +39,6 @@ import type {
 } from '@/types/production'
 import { BatchStatus as BatchStatusEnum, BATCH_STATUS_OPTIONS } from '@/types/production'
 
-const { Text } = Typography
 
 // Helper to get status color
 const getStatusColor = (status: BatchStatus) => {
@@ -120,7 +119,7 @@ export default function BatchesPage() {
         setBatches(response.data)
         setBatchTotal(response.meta?.total || 0)
       }
-    } catch (error) {
+    } catch {
       message.error('加载批次列表失败')
     } finally {
       setLoading(false)

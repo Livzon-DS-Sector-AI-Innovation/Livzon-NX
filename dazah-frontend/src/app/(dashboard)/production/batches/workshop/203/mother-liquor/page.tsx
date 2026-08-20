@@ -5,7 +5,6 @@ import {ArrowLeftOutlined,} from '@ant-design/icons'
 import FASheetsSyncButton from '@/components/production/FASheetsSyncButton'
 import FATraceButton from '@/components/production/FATraceButton'
 import { useRouter } from 'next/navigation'
-import dayjs from 'dayjs'
 
 const { Title, Text } = Typography
 const API = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'

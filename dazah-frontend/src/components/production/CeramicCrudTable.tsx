@@ -4,7 +4,6 @@ import {Table, Button, Space, Input, Modal, Form, Card, App, Row, Col} from 'ant
 import type { ColumnsType } from 'antd/es/table'
 import { PlusOutlined, SearchOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
-import SyncSettingsButton from './SyncSettingsButton'
 import BatchProfileButton from './BatchProfileButton'
 
 export default function CeramicCrudTable({ api, columns, searchField, searchPlaceholder, formFields, syncTarget, syncProduct, scrollX = 1200, workshop = '203' }: any) {

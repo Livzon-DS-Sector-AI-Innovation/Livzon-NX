@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { Table, Select, Card, Typography, Button, Space, Pagination } from 'antd'
 import {ArrowLeftOutlined,} from '@ant-design/icons'
 import { useRouter } from 'next/navigation'
-import dayjs from 'dayjs'
 import FASheetsSyncButton from '@/components/production/FASheetsSyncButton'
 import FATraceButton from '@/components/production/FATraceButton'
 const { Title, Text } = Typography

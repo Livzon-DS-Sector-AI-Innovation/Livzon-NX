@@ -53,7 +53,6 @@ export default function Workshop2013Page() {
 
   const d = data || {}
   const stages = d.stages || {}
-  const flow = d.flow || []
   const statusDist = d.status_distribution || []
   const monthlyTrend: { month: number; output_kg: number }[] = d.monthly_trend || [] // eslint-disable-line react-hooks/exhaustive-deps
   const rrtPassRates: { label: string; field: string; limit: number; total: number; passed: number; rate: number }[] = d.rrt_pass_rates || []

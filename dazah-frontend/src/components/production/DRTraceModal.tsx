@@ -4,7 +4,7 @@
 // 适配自 MC TraceModal：工段配置改为 DR 七工段，无 AI 分析（第一版不做），支持断链标注
 
 import { useEffect, useState, useRef } from 'react'
-import {Modal, Typography, Spin, Empty, App, Button, Tooltip} from 'antd'
+import { Modal, Typography, Spin, Empty, Button, Tooltip } from 'antd'
 import { DownloadOutlined } from '@ant-design/icons'
 
 const { Text } = Typography

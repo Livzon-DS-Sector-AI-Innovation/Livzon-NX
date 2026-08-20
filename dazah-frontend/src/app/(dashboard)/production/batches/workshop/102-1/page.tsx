@@ -20,7 +20,6 @@ import type { FermentationRecord, FermentationCreate } from '@/types/fermentatio
 import { FERMENTATION_STATUS_OPTIONS } from '@/types/fermentation'
 import dayjs from 'dayjs'
 import * as XLSX from 'xlsx'
-import SyncSettingsButton from '@/components/production/SyncSettingsButton'
 import BatchProfileButton from '@/components/production/BatchProfileButton'
 import BatchEventsButton from '@/components/production/BatchEventsButton'
 

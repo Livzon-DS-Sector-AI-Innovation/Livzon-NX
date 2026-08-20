@@ -33,7 +33,6 @@ import {getFermentationRecords,
   deleteFermentationRecord,} from '@/actions/production'
 import type {
   FermentationRecord,
-  FermentationFormData,
 } from '@/types/production'
 import { FERMENTATION_STATUS_OPTIONS } from '@/types/production'
 
@@ -109,7 +108,7 @@ export default function FermentationPage() {
       } else {
         message.error('加载发酵记录失败')
       }
-    } catch (error) {
+    } catch {
       message.error('加载发酵记录失败')
     } finally {
       setLoading(false)
@@ -169,7 +168,7 @@ export default function FermentationPage() {
           } else {
             message.error(response.message || '删除失败')
           }
-        } catch (error) {
+        } catch {
           message.error('删除失败')
         }
       },
@@ -185,7 +184,7 @@ export default function FermentationPage() {
       } else {
         message.error(response.message || '状态更新失败')
       }
-    } catch (error) {
+    } catch {
       message.error('状态更新失败')
     }
   }
@@ -259,7 +258,7 @@ export default function FermentationPage() {
       } else {
         message.error('导出失败')
       }
-    } catch (error) {
+    } catch {
       message.error('导出失败')
     } finally {
       setExportLoading(false)

@@ -552,7 +552,7 @@ function TraceabilityPage() {
       const dataUrl = await toPng(flowRef.current, { backgroundColor: '#fff', pixelRatio: 2 })
       const a = document.createElement('a'); a.href = dataUrl
       a.download = `追溯_DR_${batchNo}_${new Date().toISOString().slice(0, 10)}.png`; a.click()
-    } catch (e) { message.error('导出失败') }
+    } catch { message.error('导出失败') }
   }, [batchNo, message])
 
   // ── URL 参数自动追溯 ──

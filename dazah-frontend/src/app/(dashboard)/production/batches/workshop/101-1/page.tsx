@@ -17,7 +17,6 @@ import {
 } from '@/actions/seed-culture'
 import type { SeedCultureRecord, SeedCultureCreate } from '@/types/seed-culture'
 import SyncSettingsButton from '@/components/production/SyncSettingsButton'
-import BatchProfileButton from '@/components/production/BatchProfileButton'
 import dayjs from 'dayjs'
 
 const { Text, Title } = Typography

@@ -55,7 +55,6 @@ interface TableRow {
 }
 
 export const DRTable: React.FC<{ data: any[] }> = ({ data }) => {
-  const FIXED_EXTRACTION_ROWS = 4
   const FIXED_TANK_NOS = ['1#', '2#', '3#', '4#']
 
   const flattenData = (batches: any[]): TableRow[] => {
@@ -103,8 +102,6 @@ export const DRTable: React.FC<{ data: any[] }> = ({ data }) => {
         tankRowspans.push(baseRowspan + (i < remainder ? 1 : 0))
       }
 
-      const isBatchFirst = true
-      const tankIndex = -1
     })
 
     return rows
