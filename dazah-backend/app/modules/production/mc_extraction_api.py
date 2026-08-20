@@ -1,15 +1,24 @@
 """MC 霉酚酸 — 提取工段 API（粗品→萃取→湿粉）"""
 
 from uuid import UUID
+
 from fastapi import Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.database import get_db
 from app.core.response import paginated_response, success_response
-from app.modules.production.mc_extraction_models import ExtractionRecord, ExtractionInput
+from app.modules.production.mc_extraction_models import (
+    ExtractionInput,
+    ExtractionRecord,
+)
 from app.modules.production.mc_extraction_schemas import (
-    ExtractionRecordCreate, ExtractionRecordUpdate, ExtractionRecordResponse,
-    ExtractionInputCreate, ExtractionInputUpdate, ExtractionInputResponse,
+    ExtractionInputCreate,
+    ExtractionInputResponse,
+    ExtractionInputUpdate,
+    ExtractionRecordCreate,
+    ExtractionRecordResponse,
+    ExtractionRecordUpdate,
 )
 from app.shared.module_api import create_module_router
 from app.shared.module_registry import MODULES_BY_CODE
@@ -18,7 +27,10 @@ router = create_module_router(MODULES_BY_CODE["production"])
 
 # ═══════════ 提取主表 CRUD ═══════════
 
-@router.get("/mc/extraction-records/full-list", summary="提取台账完整数据（含投入明细）")
+
+@router.get(
+    "/mc/extraction-records/full-list", summary="提取台账完整数据（含投入明细）"
+)
 async def full_list_extraction_records(
     workshop: str = Query("201-2"),
     month: int | None = Query(None, ge=1, le=12),
@@ -26,12 +38,13 @@ async def full_list_extraction_records(
 ):
     """返回提取记录+投入明细的嵌套结构，用于台账页面"""
     from sqlalchemy import extract
+
     main_q = select(ExtractionRecord).where(
-        ExtractionRecord.is_deleted == False,
+        not ExtractionRecord.is_deleted,
         ExtractionRecord.workshop == workshop,
     )
     if month is not None:
-        main_q = main_q.where(extract('month', ExtractionRecord.extract_date) == month)
+        main_q = main_q.where(extract("month", ExtractionRecord.extract_date) == month)
     main_q = main_q.order_by(ExtractionRecord.extract_date.asc().nulls_last())
     main_rows = await session.execute(main_q)
     records = main_rows.scalars().all()
@@ -40,10 +53,14 @@ async def full_list_extraction_records(
     batch_nos = [r.batch_no for r in records]
     result = []
     if batch_nos:
-        inputs_q = select(ExtractionInput).where(
-            ExtractionInput.is_deleted == False,
-            ExtractionInput.extraction_batch.in_(batch_nos),
-        ).order_by(ExtractionInput.extraction_batch, ExtractionInput.seq_no)
+        inputs_q = (
+            select(ExtractionInput)
+            .where(
+                not ExtractionInput.is_deleted,
+                ExtractionInput.extraction_batch.in_(batch_nos),
+            )
+            .order_by(ExtractionInput.extraction_batch, ExtractionInput.seq_no)
+        )
         inputs_rows = await session.execute(inputs_q)
         all_inputs = inputs_rows.scalars().all()
 
@@ -64,12 +81,14 @@ async def full_list_extraction_records(
 
 @router.get("/mc/extraction-records", summary="提取记录列表")
 async def list_extraction_records(
-    page: int = Query(1, ge=1), page_size: int = Query(50, ge=1, le=200),
-    batch_no: str | None = Query(None), workshop: str = Query("201-2"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    batch_no: str | None = Query(None),
+    workshop: str = Query("201-2"),
     session: AsyncSession = Depends(get_db),
 ):
     query = select(ExtractionRecord).where(
-        ExtractionRecord.is_deleted == False,
+        not ExtractionRecord.is_deleted,
         ExtractionRecord.workshop == workshop,
     )
     if batch_no:
@@ -84,19 +103,24 @@ async def list_extraction_records(
 
 @router.post("/mc/extraction-records", summary="创建提取记录")
 async def create_extraction_record(
-    data: ExtractionRecordCreate, session: AsyncSession = Depends(get_db),
+    data: ExtractionRecordCreate,
+    session: AsyncSession = Depends(get_db),
 ):
     record = ExtractionRecord(**data.model_dump())
     session.add(record)
     await session.flush()
     await session.commit()
     await session.refresh(record)
-    return success_response(ExtractionRecordResponse.model_validate(record), message="创建成功")
+    return success_response(
+        ExtractionRecordResponse.model_validate(record), message="创建成功"
+    )
 
 
 @router.put("/mc/extraction-records/{record_id}", summary="更新提取记录")
 async def update_extraction_record(
-    record_id: UUID, data: ExtractionRecordUpdate, session: AsyncSession = Depends(get_db),
+    record_id: UUID,
+    data: ExtractionRecordUpdate,
+    session: AsyncSession = Depends(get_db),
 ):
     record = await session.get(ExtractionRecord, record_id)
     if not record or record.is_deleted:
@@ -104,12 +128,15 @@ async def update_extraction_record(
     for k, v in data.model_dump(exclude_unset=True).items():
         setattr(record, k, v)
     await session.flush()
-    return success_response(ExtractionRecordResponse.model_validate(record), message="更新成功")
+    return success_response(
+        ExtractionRecordResponse.model_validate(record), message="更新成功"
+    )
 
 
 @router.delete("/mc/extraction-records/{record_id}", summary="删除提取记录")
 async def delete_extraction_record(
-    record_id: UUID, session: AsyncSession = Depends(get_db),
+    record_id: UUID,
+    session: AsyncSession = Depends(get_db),
 ):
     record = await session.get(ExtractionRecord, record_id)
     if not record:
@@ -118,7 +145,7 @@ async def delete_extraction_record(
     inputs = await session.execute(
         select(ExtractionInput).where(
             ExtractionInput.extraction_batch == record.batch_no,
-            ExtractionInput.is_deleted == False,
+            not ExtractionInput.is_deleted,
         )
     )
     for inp in inputs.scalars().all():
@@ -130,14 +157,20 @@ async def delete_extraction_record(
 
 # ═══════════ 提取投入明细 CRUD ═══════════
 
+
 @router.get("/mc/extraction-records/{batch_no}/inputs", summary="提取投入明细列表")
 async def list_extraction_inputs(
-    batch_no: str, session: AsyncSession = Depends(get_db),
+    batch_no: str,
+    session: AsyncSession = Depends(get_db),
 ):
-    query = select(ExtractionInput).where(
-        ExtractionInput.is_deleted == False,
-        ExtractionInput.extraction_batch == batch_no,
-    ).order_by(ExtractionInput.seq_no)
+    query = (
+        select(ExtractionInput)
+        .where(
+            not ExtractionInput.is_deleted,
+            ExtractionInput.extraction_batch == batch_no,
+        )
+        .order_by(ExtractionInput.seq_no)
+    )
     rows = await session.execute(query)
     items = [ExtractionInputResponse.model_validate(r) for r in rows.scalars().all()]
     return success_response(items)
@@ -145,7 +178,8 @@ async def list_extraction_inputs(
 
 @router.post("/mc/extraction-inputs", summary="添加提取投入明细")
 async def create_extraction_input(
-    data: ExtractionInputCreate, session: AsyncSession = Depends(get_db),
+    data: ExtractionInputCreate,
+    session: AsyncSession = Depends(get_db),
 ):
     record = ExtractionInput(**data.model_dump())
     session.add(record)
@@ -154,12 +188,16 @@ async def create_extraction_input(
     await _recalc_extraction_totals(data.extraction_batch, session)
     await session.commit()
     await session.refresh(record)
-    return success_response(ExtractionInputResponse.model_validate(record), message="添加成功")
+    return success_response(
+        ExtractionInputResponse.model_validate(record), message="添加成功"
+    )
 
 
 @router.put("/mc/extraction-inputs/{record_id}", summary="更新提取投入明细")
 async def update_extraction_input(
-    record_id: UUID, data: ExtractionInputUpdate, session: AsyncSession = Depends(get_db),
+    record_id: UUID,
+    data: ExtractionInputUpdate,
+    session: AsyncSession = Depends(get_db),
 ):
     record = await session.get(ExtractionInput, record_id)
     if not record or record.is_deleted:
@@ -169,12 +207,15 @@ async def update_extraction_input(
         setattr(record, k, v)
     await _recalc_extraction_totals(old_batch, session)
     await session.flush()
-    return success_response(ExtractionInputResponse.model_validate(record), message="更新成功")
+    return success_response(
+        ExtractionInputResponse.model_validate(record), message="更新成功"
+    )
 
 
 @router.delete("/mc/extraction-inputs/{record_id}", summary="删除提取投入明细")
 async def delete_extraction_input(
-    record_id: UUID, session: AsyncSession = Depends(get_db),
+    record_id: UUID,
+    session: AsyncSession = Depends(get_db),
 ):
     record = await session.get(ExtractionInput, record_id)
     if not record:
@@ -190,7 +231,7 @@ async def _recalc_extraction_totals(extraction_batch: str, session: AsyncSession
     """重新计算主表的投入汇总"""
     inputs_result = await session.execute(
         select(ExtractionInput).where(
-            ExtractionInput.is_deleted == False,
+            not ExtractionInput.is_deleted,
             ExtractionInput.extraction_batch == extraction_batch,
         )
     )
@@ -200,13 +241,15 @@ async def _recalc_extraction_totals(extraction_batch: str, session: AsyncSession
     total_converted_qty = 0.0
     for inp in inputs:
         total_crude_weight += inp.crude_weight or 0
-        converted = inp.converted_qty or (inp.crude_weight * (1 - inp.crude_moisture / 100) * inp.crude_content / 100)
+        converted = inp.converted_qty or (
+            inp.crude_weight * (1 - inp.crude_moisture / 100) * inp.crude_content / 100
+        )
         total_converted_qty += converted
 
     main_result = await session.execute(
         select(ExtractionRecord).where(
             ExtractionRecord.batch_no == extraction_batch,
-            ExtractionRecord.is_deleted == False,
+            not ExtractionRecord.is_deleted,
         )
     )
     main = main_result.scalar_one_or_none()

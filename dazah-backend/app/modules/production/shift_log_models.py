@@ -1,7 +1,7 @@
 """生产日志与交接班 ORM model."""
 
 from datetime import date
-from enum import Enum
+from enum import StrEnum
 
 from sqlalchemy import Date, Index, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
@@ -9,10 +9,10 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.shared.base_model import BaseModel
 
 
-class ShiftType(str, Enum):
-    MORNING = "morning"     # 早班
-    AFTERNOON = "afternoon" # 中班
-    NIGHT = "night"         # 晚班
+class ShiftType(StrEnum):
+    MORNING = "morning"  # 早班
+    AFTERNOON = "afternoon"  # 中班
+    NIGHT = "night"  # 晚班
 
 
 class ShiftLog(BaseModel):
@@ -25,15 +25,11 @@ class ShiftLog(BaseModel):
         {"schema": "production"},
     )
 
-    log_date: Mapped[date] = mapped_column(
-        Date, nullable=False, comment="日期"
-    )
+    log_date: Mapped[date] = mapped_column(Date, nullable=False, comment="日期")
     shift: Mapped[str] = mapped_column(
         String(16), nullable=False, comment="班次（morning/afternoon/night）"
     )
-    workshop: Mapped[str] = mapped_column(
-        String(64), nullable=False, comment="车间"
-    )
+    workshop: Mapped[str] = mapped_column(String(64), nullable=False, comment="车间")
     handover_from: Mapped[str] = mapped_column(
         String(64), nullable=False, comment="交班人"
     )
@@ -52,6 +48,4 @@ class ShiftLog(BaseModel):
     pending_tasks: Mapped[str | None] = mapped_column(
         Text, nullable=True, comment="待办事项交接"
     )
-    remarks: Mapped[str | None] = mapped_column(
-        Text, nullable=True, comment="备注"
-    )
+    remarks: Mapped[str | None] = mapped_column(Text, nullable=True, comment="备注")

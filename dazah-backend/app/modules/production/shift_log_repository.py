@@ -21,7 +21,7 @@ class ShiftLogRepository:
         date_from: str | None = None,
         date_to: str | None = None,
     ):
-        query = select(ShiftLog).where(ShiftLog.is_deleted == False)
+        query = select(ShiftLog).where(not ShiftLog.is_deleted)
 
         if workshop:
             query = query.where(ShiftLog.workshop == workshop)
@@ -47,7 +47,7 @@ class ShiftLogRepository:
     async def get_by_id(self, record_id: UUID) -> ShiftLog | None:
         query = select(ShiftLog).where(
             ShiftLog.id == record_id,
-            ShiftLog.is_deleted == False,
+            not ShiftLog.is_deleted,
         )
         result = await self.session.execute(query)
         return result.scalar_one_or_none()

@@ -54,9 +54,7 @@ async def test_warehouse_daily_scheduler_selects_due_tables(monkeypatch) -> None
                 SimpleNamespace(id=current_id, last_synced_at=datetime.now(UTC)),
             ]
         ),
-        claim_queued_analysis_runs=AsyncMock(
-            return_value=[SimpleNamespace(id=due_id)]
-        ),
+        claim_queued_analysis_runs=AsyncMock(return_value=[SimpleNamespace(id=due_id)]),
     )
     service = SimpleNamespace(
         repo=repo,
@@ -101,9 +99,7 @@ async def test_daily_read_mirror_finds_only_stale_resources(monkeypatch) -> None
             last_complete_sync_at=datetime.now(UTC) - timedelta(days=1),
         ),
     ]
-    result = SimpleNamespace(
-        scalars=lambda: SimpleNamespace(all=lambda: resources)
-    )
+    result = SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: resources))
     session = SimpleNamespace(execute=AsyncMock(return_value=result))
     generator = read_scheduler.QualityFeishuReadDailySyncGenerator()
 

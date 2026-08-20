@@ -13,13 +13,14 @@ from openai import AsyncOpenAI
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import get_settings
-from app.core.llm import get_config
 from app.core.database import get_db
-from app.core.response import success_response, error_response
+from app.core.llm import get_config
+from app.core.response import error_response, success_response
 from app.modules.production.ai_analysis_models import AiAnalysis
 from app.modules.production.mc_lineage_api import (
-    lineage_trace, lineage_yield_distribution, STAGE_LABELS,
+    STAGE_LABELS,
+    lineage_trace,
+    lineage_yield_distribution,
 )
 from app.shared.module_api import create_module_router
 from app.shared.module_registry import MODULES_BY_CODE
@@ -29,7 +30,8 @@ router = create_module_router(MODULES_BY_CODE["production"])
 
 CHAT_SYSTEM_PROMPT = """你是丽珠制药 201 二车间的 MC（霉酚酸）生产工艺助手。
 
-你了解以下工段：粗提(发酵液→提炼→分罐→钠化→酸化)、提取(萃取→湿粉)、二次精制(结晶→干粉MC-F2)、混粉杂质计算、QC 入库。
+你了解以下工段：粗提(发酵液→提炼→分罐→钠化→酸化)、提取(萃取→湿粉)、
+        二次精制(结晶→干粉MC-F2)、混粉杂质计算、QC 入库。
 
 你可以帮助：
 1. 解答工艺问题（收率、杂质、参数范围）
@@ -41,7 +43,10 @@ CHAT_SYSTEM_PROMPT = """你是丽珠制药 201 二车间的 MC（霉酚酸）生
 
 
 def _build_chat_prompt(
-    history: list[dict], user_msg: str, batch_no: str, stage: str,
+    history: list[dict],
+    user_msg: str,
+    batch_no: str,
+    stage: str,
     trace_context: str,
 ) -> list[dict]:
     """构建 LLM 消息列表，注入批次追溯数据"""
@@ -64,13 +69,16 @@ def _build_chat_prompt(
     return messages
 
 
-async def _gather_trace_context(batch_no: str, stage: str, session: AsyncSession) -> str:
+async def _gather_trace_context(
+    batch_no: str, stage: str, session: AsyncSession
+) -> str:
     """收集批次的追溯和收率数据，拼成上下文文本"""
     parts = []
     try:
         # 追溯链路
         trace_resp = await lineage_trace(
-            batch_no=batch_no, stage=stage, include_siblings=True, session=session)
+            batch_no=batch_no, stage=stage, include_siblings=True, session=session
+        )
         trace_data = json.loads(trace_resp.body).get("data", {})
         stages = trace_data.get("stages", [])
         cumulative_yield = trace_data.get("cumulative_yield", 0)
@@ -85,7 +93,9 @@ async def _gather_trace_context(batch_no: str, stage: str, session: AsyncSession
                     detail = n.get("detail", "")
                     yr = n.get("yield_rate")
                     yr_str = f" 收率{yr}%" if yr and yr > 0 else ""
-                    parts.append(f"  {sg['label']} {n['batch_no']}{yr_str}{sib}{tgt} {detail}")
+                    parts.append(
+                        f"  {sg['label']} {n['batch_no']}{yr_str}{sib}{tgt} {detail}"
+                    )
             if max_loss_stage:
                 parts.append(f"最大损失工段: {max_loss_stage}")
 
@@ -97,7 +107,9 @@ async def _gather_trace_context(batch_no: str, stage: str, session: AsyncSession
                 parts.append("\n=== 工段收率统计 (min / Q1 / 中位 / Q3 / max) ===")
                 for d in dist_data:
                     s = STAGE_LABELS.get(d.get("stage"), d.get("stage", ""))
-                    parts.append(f"  {s}: min={d.get('min')} Q1={d.get('q1')} 中位={d.get('median')} Q3={d.get('q3')} max={d.get('max')}")
+                    parts.append(
+                        f"  {s}: min={d.get('min')} Q1={d.get('q1')} 中位={d.get('median')} Q3={d.get('q3')} max={d.get('max')}"  # noqa: E501
+                    )
         except Exception:
             pass
 
@@ -111,14 +123,27 @@ async def _gather_trace_context(batch_no: str, stage: str, session: AsyncSession
                     bn = n.get("batch_no", "")
                     if not bn:
                         continue
-                    row = (await session.execute(text("""
-                        SELECT rrt_053, rrt_0755, rrt_094_096, rrt_103_106, rrt_201, total_impurity
-                        FROM production.blending_records WHERE batch_no = :bn AND is_deleted = false
-                    """), {"bn": bn})).fetchone()
+                    row = (
+                        await session.execute(
+                            text("""
+                        SELECT rrt_053, rrt_0755, rrt_094_096, rrt_103_106, rrt_201,
+        total_impurity
+                        FROM production.blending_records WHERE batch_no = :bn AND
+        is_deleted = false
+                    """),
+                            {"bn": bn},
+                        )
+                    ).fetchone()
                     if not row:
                         continue
                     imp_parts = []
-                    for key in ("rrt_053", "rrt_0755", "rrt_094_096", "rrt_103_106", "rrt_201"):
+                    for key in (
+                        "rrt_053",
+                        "rrt_0755",
+                        "rrt_094_096",
+                        "rrt_103_106",
+                        "rrt_201",
+                    ):
                         val = getattr(row, key, None)
                         if val is not None:
                             imp_parts.append(f"{key}={round(float(val), 4)}%")
@@ -126,7 +151,9 @@ async def _gather_trace_context(batch_no: str, stage: str, session: AsyncSession
                     if ti is not None:
                         imp_parts.append(f"总杂={round(float(ti), 4)}%")
                     if imp_parts:
-                        parts.append(f"\n=== RRT 杂质 ({bn}) ===\n  {', '.join(imp_parts)}")
+                        parts.append(
+                            f"\n=== RRT 杂质 ({bn}) ===\n  {', '.join(imp_parts)}"
+                        )
 
     except Exception as e:
         logger.warning(f"收集批次上下文失败: {e}")
@@ -150,7 +177,7 @@ async def chat_send(request: Request, session: AsyncSession = Depends(get_db)):
     # 1. 查历史消息
     result = await session.execute(
         select(AiAnalysis)
-        .where(AiAnalysis.session_id == sid, AiAnalysis.is_deleted == False)
+        .where(AiAnalysis.session_id == sid, not AiAnalysis.is_deleted)
         .order_by(AiAnalysis.message_seq.asc())
     )
     history_rows = result.scalars().all()
@@ -185,11 +212,14 @@ async def chat_send(request: Request, session: AsyncSession = Depends(get_db)):
 
     # 4. 收集批次上下文 + 构建 prompt
     trace_context = await _gather_trace_context(batch_no, stage, session)
-    messages = _build_chat_prompt(history_dicts, message, batch_no, stage, trace_context)
+    messages = _build_chat_prompt(
+        history_dicts, message, batch_no, stage, trace_context
+    )
 
     # 5. SSE 流
     async def generate():
         full_text = ""
+        llm_error = ""
         try:
             cfg = await get_config("text")
             client = AsyncOpenAI(
@@ -209,7 +239,7 @@ async def chat_send(request: Request, session: AsyncSession = Depends(get_db)):
             async for chunk in stream:
                 delta = chunk.choices[0].delta if chunk.choices else None
                 if delta:
-                    token = delta.content or ''
+                    token = delta.content or ""
                     if token:
                         full_text += token
                         yield f"data: {json.dumps({'token': token})}\n\n"
@@ -217,6 +247,7 @@ async def chat_send(request: Request, session: AsyncSession = Depends(get_db)):
             yield f"data: {json.dumps({'done': True})}\n\n"
 
         except Exception as e:
+            llm_error = str(e)
             logger.error(f"LLM 流式失败: {e}")
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
 
@@ -228,7 +259,9 @@ async def chat_send(request: Request, session: AsyncSession = Depends(get_db)):
                 stage=stage,
                 message_seq=last_seq + 2,
                 role="assistant",
-                summary=full_text[:500] if full_text else f"分析失败: {e}" if 'e' in locals() else "",
+                summary=full_text[:500]
+                if full_text
+                else (f"分析失败: {llm_error}" if llm_error else ""),
                 llm_response=full_text or "",
                 llm_prompt=json.dumps(messages, ensure_ascii=False),
                 model_used=cfg.model_name or "deepseek-v4-pro",
@@ -258,7 +291,7 @@ async def chat_history(
     """获取指定会话的全部消息"""
     result = await session.execute(
         select(AiAnalysis)
-        .where(AiAnalysis.session_id == session_id, AiAnalysis.is_deleted == False)
+        .where(AiAnalysis.session_id == session_id, not AiAnalysis.is_deleted)
         .order_by(AiAnalysis.message_seq.asc())
     )
     rows = result.scalars().all()
@@ -275,13 +308,15 @@ async def chat_history(
                 "severity": r.severity,
                 "analysis_text": r.llm_response,
             }
-        messages.append({
-            "id": str(r.id),
-            "session_id": r.session_id,
-            "seq": r.message_seq,
-            "role": r.role,
-            "content": content,
-            "created_at": str(r.created_at) if r.created_at else None,
-        })
+        messages.append(
+            {
+                "id": str(r.id),
+                "session_id": r.session_id,
+                "seq": r.message_seq,
+                "role": r.role,
+                "content": content,
+                "created_at": str(r.created_at) if r.created_at else None,
+            }
+        )
 
     return success_response(data={"session_id": session_id, "messages": messages})

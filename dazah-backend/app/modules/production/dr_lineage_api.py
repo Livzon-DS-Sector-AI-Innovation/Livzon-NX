@@ -3,11 +3,16 @@
 关联规则（每行一个投料批；层析表 extraction_batch_no 一行一个萃取批）：
   发酵批 dr_fermentation_batches.batch_no        (DR-26026)
     → 萃取批 dr_extractions.extraction_batch_no  (DR-26026-1)
-    → 层析批 dr_chromatography_crystal.chromatography_batch_no（独立编号；extraction_batch_no 关联萃取批；产出 wet_powder_batch_no=DR-F1-xxx）
+    → 层析批
+        dr_chromatography_crystal.chromatography_batch_no（独立编号；extraction_batch_no
+        关联萃取批；产出 wet_powder_batch_no=DR-F1-xxx）
     → 一次精制 dr_first_refinement.refinement_batch_no (DR-F1-xxx 沿用湿粉批号)
-    → 二次精制 dr_second_refinement.refinement_batch_no (DR-F2-xxx; feed_batch_no=DR-F1-xxx)
-    → 三次精制 dr_third_refinement.refinement_batch_no  (DR-F3-xxx; feed_batch_no=DR-F2-xxx)
-    → 四次精制 dr_fourth_refinement.refinement_batch_no (DR-GB-xxx; feed_batch_no=DR-F3-xxx)
+    → 二次精制 dr_second_refinement.refinement_batch_no (DR-F2-xxx;
+        feed_batch_no=DR-F1-xxx)
+    → 三次精制 dr_third_refinement.refinement_batch_no  (DR-F3-xxx;
+        feed_batch_no=DR-F2-xxx)
+    → 四次精制 dr_fourth_refinement.refinement_batch_no (DR-GB-xxx;
+        feed_batch_no=DR-F3-xxx)
 
 断链典型（追溯自动标注 broken_links）：
   DR-F2-241013  三次投料、二次表无记录          → "二次精制表无记录"
@@ -17,7 +22,6 @@
 
 import logging
 import re
-from typing import Optional
 
 from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -35,8 +39,10 @@ router = create_module_router(MODULES_BY_CODE["production"])
 
 # ── 模型 ──────────────────────────────────────────────
 
+
 class FeedItem(BaseModel):
     """该批的一行投料明细（兄弟批全列）；qty 为折纯 kg，无量（层析/一次精制投料）为 0"""
+
     batch_no: str
     stage: str = ""
     label: str = ""
@@ -48,19 +54,19 @@ class LineageNode(BaseModel):
     label: str
     batch_no: str
     detail: str = ""
-    yield_rate: Optional[float] = None
-    quantity: Optional[float] = None
+    yield_rate: float | None = None
+    quantity: float | None = None
     is_sibling: bool = False
-    sib_group: str = ""                                    # 同源组标识（同组节点用虚线串联；如发酵批号）
+    sib_group: str = ""  # 同源组标识（同组节点用虚线串联；如发酵批号）
     connects_to: str = ""
     broken: bool = False
     broken_reason: str = ""
     feeds: list[FeedItem] = Field(default_factory=list)  # 投入明细（混批全部兄弟批）
-    input_total: float = 0.0                             # 投入合计（折纯 kg）
-    loss_kg: Optional[float] = None                      # 本段损耗（投入−产出折纯 kg；仅精制/干燥段）
-    loss_rate: Optional[float] = None                    # 本段损耗率 %（loss/投入×100）
-    loss_level: str = ""                                 # 损耗等级 green<5 / yellow<10 / red≥10
-    loss_breakdown: Optional[dict] = None                # 损耗去向拆解：母液带走/回收粉/其他
+    input_total: float = 0.0  # 投入合计（折纯 kg）
+    loss_kg: float | None = None  # 本段损耗（投入−产出折纯 kg；仅精制/干燥段）
+    loss_rate: float | None = None  # 本段损耗率 %（loss/投入×100）
+    loss_level: str = ""  # 损耗等级 green<5 / yellow<10 / red≥10
+    loss_breakdown: dict | None = None  # 损耗去向拆解：母液带走/回收粉/其他
     #   {"mother_liquor_kg": float|None,  母液带走（可回收，产品随母液离开）
     #    "recovery_powder_kg": float|None, 回收粉（可回用）
     #    "other_kg": float|None}           其他损失 = 总损耗 − 母液 − 回收粉
@@ -108,8 +114,13 @@ class CoverageItem(BaseModel):
 # ── 工段常量 ──────────────────────────────────────────
 
 DR_STAGE_ORDER = [
-    "fermentation", "extraction", "chromatography",
-    "first_refinement", "second_refinement", "third_refinement", "fourth_refinement",
+    "fermentation",
+    "extraction",
+    "chromatography",
+    "first_refinement",
+    "second_refinement",
+    "third_refinement",
+    "fourth_refinement",
 ]
 
 DR_STAGE_LABELS = {
@@ -143,7 +154,8 @@ _DIST_LABELS = {
     "fourth_refinement": "四次精制",
 }
 
-F = lambda v: float(v) if v is not None else 0.0
+def fmt_val(v):
+    return float(v) if v is not None else 0.0
 
 
 def _to_f1(bn: str) -> str:
@@ -175,27 +187,44 @@ async def _feed_pure_from_upstream(session, feed_batch_no: str) -> float:
     返回 0.0 表示查不到（断链/回收粉标签）。"""
     b = feed_batch_no.strip()
     if b.startswith("DR-F1-"):
-        row = (await session.execute(text(
-            "SELECT feed_pure_kg FROM production.dr_first_refinement "
-            "WHERE refinement_batch_no = :bn AND is_deleted = false LIMIT 1"
-        ), {"bn": b})).fetchone()
-        return F(row.feed_pure_kg) if row else 0.0
+        row = (
+            await session.execute(
+                text(
+                    "SELECT feed_pure_kg FROM production.dr_first_refinement "
+                    "WHERE refinement_batch_no = :bn AND is_deleted = false LIMIT 1"
+                ),
+                {"bn": b},
+            )
+        ).fetchone()
+        return fmt_val(row.feed_pure_kg) if row else 0.0
     if b.startswith("DR-F2-"):
-        row = (await session.execute(text(
-            "SELECT product_pure_kg FROM production.dr_second_refinement "
-            "WHERE refinement_batch_no = :bn AND is_deleted = false LIMIT 1"
-        ), {"bn": b})).fetchone()
-        return F(row.product_pure_kg) if row else 0.0
+        row = (
+            await session.execute(
+                text(
+                    "SELECT product_pure_kg FROM production.dr_second_refinement "
+                    "WHERE refinement_batch_no = :bn AND is_deleted = false LIMIT 1"
+                ),
+                {"bn": b},
+            )
+        ).fetchone()
+        return fmt_val(row.product_pure_kg) if row else 0.0
     if b.startswith("DR-F3-"):
-        row = (await session.execute(text(
-            "SELECT product_pure_kg FROM production.dr_third_refinement "
-            "WHERE refinement_batch_no = :bn AND is_deleted = false LIMIT 1"
-        ), {"bn": b})).fetchone()
-        return F(row.product_pure_kg) if row else 0.0
+        row = (
+            await session.execute(
+                text(
+                    "SELECT product_pure_kg FROM production.dr_third_refinement "
+                    "WHERE refinement_batch_no = :bn AND is_deleted = false LIMIT 1"
+                ),
+                {"bn": b},
+            )
+        ).fetchone()
+        return fmt_val(row.product_pure_kg) if row else 0.0
     return 0.0
 
 
-async def _loss_breakdown_from(session, stage: str, batch_no: str) -> tuple[float, float]:
+async def _loss_breakdown_from(
+    session, stage: str, batch_no: str
+) -> tuple[float, float]:
     """该精制批的损耗去向（kg）：(母液带走, 回收粉) —— 表存字段聚合。
       dr_first/second/third_refinement 有 mother_liquor_product_kg（母液带走产品量）
       dr_second_refinement 另有 recovery_powder_pure_kg（回收粉折纯）
@@ -204,33 +233,49 @@ async def _loss_breakdown_from(session, stage: str, batch_no: str) -> tuple[floa
     b = batch_no.strip()
     ml, rp = 0.0, 0.0
     if stage == "first_refinement":
-        row = (await session.execute(text(
-            "SELECT SUM(mother_liquor_product_kg) FROM production.dr_first_refinement "
-            "WHERE refinement_batch_no = :bn AND is_deleted = false"
-        ), {"bn": b})).fetchone()
-        ml = F(row[0]) if row and row[0] is not None else 0.0
+        row = (
+            await session.execute(
+                text(
+                    "SELECT SUM(mother_liquor_product_kg) FROM production.dr_first_refinement "  # noqa: E501
+                    "WHERE refinement_batch_no = :bn AND is_deleted = false"
+                ),
+                {"bn": b},
+            )
+        ).fetchone()
+        ml = fmt_val(row[0]) if row and row[0] is not None else 0.0
     elif stage == "second_refinement":
-        row = (await session.execute(text(
-            "SELECT SUM(mother_liquor_product_kg) AS ml, SUM(recovery_powder_pure_kg) AS rp "
-            "FROM production.dr_second_refinement "
-            "WHERE refinement_batch_no = :bn AND is_deleted = false"
-        ), {"bn": b})).fetchone()
+        row = (
+            await session.execute(
+                text(
+                    "SELECT SUM(mother_liquor_product_kg) AS ml, SUM(recovery_powder_pure_kg) AS rp "  # noqa: E501
+                    "FROM production.dr_second_refinement "
+                    "WHERE refinement_batch_no = :bn AND is_deleted = false"
+                ),
+                {"bn": b},
+            )
+        ).fetchone()
         if row:
-            ml = F(row.ml) if row.ml is not None else 0.0
-            rp = F(row.rp) if row.rp is not None else 0.0
+            ml = fmt_val(row.ml) if row.ml is not None else 0.0
+            rp = fmt_val(row.rp) if row.rp is not None else 0.0
     elif stage == "third_refinement":
-        row = (await session.execute(text(
-            "SELECT SUM(mother_liquor_product_kg) FROM production.dr_third_refinement "
-            "WHERE refinement_batch_no = :bn AND is_deleted = false"
-        ), {"bn": b})).fetchone()
-        ml = F(row[0]) if row and row[0] is not None else 0.0
+        row = (
+            await session.execute(
+                text(
+                    "SELECT SUM(mother_liquor_product_kg) FROM production.dr_third_refinement "  # noqa: E501
+                    "WHERE refinement_batch_no = :bn AND is_deleted = false"
+                ),
+                {"bn": b},
+            )
+        ).fetchone()
+        ml = fmt_val(row[0]) if row and row[0] is not None else 0.0
     # fourth_refinement 无 mother_liquor/recovery 字段 → (0,0)
     return ml, rp
 
 
 # ── 批号识别 ──────────────────────────────────────────
 
-def _detect_stage(batch_no: str) -> Optional[str]:
+
+def _detect_stage(batch_no: str) -> str | None:
     """按前缀识别工段；DR-xxx 类歧义返回 None 由数据库探测"""
     b = batch_no.strip().upper()
     if b.startswith("DR-GB"):
@@ -248,9 +293,14 @@ def _detect_stage(batch_no: str) -> Optional[str]:
 
 async def _stage_exists(session, stage: str, batch_no: str) -> bool:
     table, col = _MAIN_TABLES[stage]
-    r = (await session.execute(text(
-        f"SELECT 1 FROM production.{table} WHERE {col} = :bn AND is_deleted = false LIMIT 1"
-    ), {"bn": batch_no})).fetchone()
+    r = (
+        await session.execute(
+            text(
+                f"SELECT 1 FROM production.{table} WHERE {col} = :bn AND is_deleted = false LIMIT 1"  # noqa: E501
+            ),
+            {"bn": batch_no},
+        )
+    ).fetchone()
     return r is not None
 
 
@@ -290,34 +340,56 @@ def _feed_stage(feed_batch_no: str) -> str:
 
 # ── 节点 detail（收率×100，DR 存小数） ─────────────────
 
+
 async def _node_info(session, stage: str, batch_no: str):
     """返回 (detail, yield_pct, quantity)"""
     b = batch_no.strip()
     if stage == "extraction":
-        rows = (await session.execute(text(
-            "SELECT total_qty, single_batch_yield FROM production.dr_extractions "
-            "WHERE extraction_batch_no = :bn AND is_deleted = false"
-        ), {"bn": b})).fetchall()
+        rows = (
+            await session.execute(
+                text(
+                    "SELECT total_qty, single_batch_yield FROM production.dr_extractions "  # noqa: E501
+                    "WHERE extraction_batch_no = :bn AND is_deleted = false"
+                ),
+                {"bn": b},
+            )
+        ).fetchall()
         if not rows:
             return "", None, None
-        qty = sum(F(r.total_qty) for r in rows)
-        yr = next((F(r.single_batch_yield) * 100 for r in rows if r.single_batch_yield), None)
+        qty = sum(fmt_val(r.total_qty) for r in rows)
+        yr = next(
+            (fmt_val(r.single_batch_yield) * 100 for r in rows if
+        r.single_batch_yield), None
+        )
         d = f"合计 {qty:.2f}kg" if qty else ""
         if yr is not None:
             d = (d + ", " if d else "") + f"单批收率 {yr:.1f}%"
         return d, yr, qty
 
     if stage == "chromatography":
-        rows = (await session.execute(text(
-            "SELECT product_qty_kg, total_product_qty_kg, chromatography_yield, crystallization_yield "
-            "FROM production.dr_chromatography_crystal "
-            "WHERE chromatography_batch_no = :bn AND is_deleted = false"
-        ), {"bn": b})).fetchall()
+        rows = (
+            await session.execute(
+                text(
+                    "SELECT product_qty_kg, total_product_qty_kg, chromatography_yield, crystallization_yield "  # noqa: E501
+                    "FROM production.dr_chromatography_crystal "
+                    "WHERE chromatography_batch_no = :bn AND is_deleted = false"
+                ),
+                {"bn": b},
+            )
+        ).fetchall()
         if not rows:
             return "", None, None
-        qty = sum(F(r.product_qty_kg) for r in rows)
-        cy = next((F(r.chromatography_yield) * 100 for r in rows if r.chromatography_yield), None)
-        cry = next((F(r.crystallization_yield) * 100 for r in rows if r.crystallization_yield), None)
+        qty = sum(fmt_val(r.product_qty_kg) for r in rows)
+        cy = next(
+            (fmt_val(r.chromatography_yield) * 100 for r in rows if
+        r.chromatography_yield),
+            None,
+        )
+        cry = next(
+            (fmt_val(r.crystallization_yield) * 100 for r in rows if
+        r.crystallization_yield),
+            None,
+        )
         parts = []
         if cy is not None:
             parts.append(f"层析 {cy:.1f}%")
@@ -328,50 +400,70 @@ async def _node_info(session, stage: str, batch_no: str):
         return ", ".join(parts), cry if cry is not None else cy, qty
 
     if stage == "first_refinement":
-        row = (await session.execute(text(
-            "SELECT feed_pure_kg FROM production.dr_first_refinement "
-            "WHERE refinement_batch_no = :bn AND is_deleted = false LIMIT 1"
-        ), {"bn": b})).fetchone()
+        row = (
+            await session.execute(
+                text(
+                    "SELECT feed_pure_kg FROM production.dr_first_refinement "
+                    "WHERE refinement_batch_no = :bn AND is_deleted = false LIMIT 1"
+                ),
+                {"bn": b},
+            )
+        ).fetchone()
         if not row:
             return "", None, None
-        q = F(row.feed_pure_kg)
+        q = fmt_val(row.feed_pure_kg)
         return (f"折纯 {q:.2f}kg" if q else ""), None, q
 
     if stage == "second_refinement":
-        row = (await session.execute(text(
-            "SELECT product_pure_kg, batch_yield FROM production.dr_second_refinement "
-            "WHERE refinement_batch_no = :bn AND is_deleted = false LIMIT 1"
-        ), {"bn": b})).fetchone()
+        row = (
+            await session.execute(
+                text(
+                    "SELECT product_pure_kg, batch_yield FROM production.dr_second_refinement "  # noqa: E501
+                    "WHERE refinement_batch_no = :bn AND is_deleted = false LIMIT 1"
+                ),
+                {"bn": b},
+            )
+        ).fetchone()
         if not row:
             return "", None, None
-        q = F(row.product_pure_kg)
-        yr = F(row.batch_yield) * 100 if row.batch_yield else None
+        q = fmt_val(row.product_pure_kg)
+        yr = fmt_val(row.batch_yield) * 100 if row.batch_yield else None
         d = f"收率 {yr:.1f}%" if yr is not None else ""
         d = (d + ", " if d and q else "") + (f"折纯 {q:.2f}kg" if q else "")
         return d, yr, q
 
     if stage == "third_refinement":
-        row = (await session.execute(text(
-            "SELECT product_pure_kg, yield_rate FROM production.dr_third_refinement "
-            "WHERE refinement_batch_no = :bn AND is_deleted = false LIMIT 1"
-        ), {"bn": b})).fetchone()
+        row = (
+            await session.execute(
+                text(
+                    "SELECT product_pure_kg, yield_rate FROM production.dr_third_refinement "  # noqa: E501
+                    "WHERE refinement_batch_no = :bn AND is_deleted = false LIMIT 1"
+                ),
+                {"bn": b},
+            )
+        ).fetchone()
         if not row:
             return "", None, None
-        q = F(row.product_pure_kg)
-        yr = F(row.yield_rate) * 100 if row.yield_rate else None
+        q = fmt_val(row.product_pure_kg)
+        yr = fmt_val(row.yield_rate) * 100 if row.yield_rate else None
         d = f"收率 {yr:.1f}%" if yr is not None else ""
         d = (d + ", " if d and q else "") + (f"折纯 {q:.2f}kg" if q else "")
         return d, yr, q
 
     if stage == "fourth_refinement":
-        row = (await session.execute(text(
-            "SELECT dry_weight_kg, yield_rate FROM production.dr_fourth_refinement "
-            "WHERE refinement_batch_no = :bn AND is_deleted = false LIMIT 1"
-        ), {"bn": b})).fetchone()
+        row = (
+            await session.execute(
+                text(
+                    "SELECT dry_weight_kg, yield_rate FROM production.dr_fourth_refinement "  # noqa: E501
+                    "WHERE refinement_batch_no = :bn AND is_deleted = false LIMIT 1"
+                ),
+                {"bn": b},
+            )
+        ).fetchone()
         if not row:
             return "", None, None
-        q = F(row.dry_weight_kg)
-        yr = F(row.yield_rate) * 100 if row.yield_rate else None
+        q = fmt_val(row.dry_weight_kg)
+        yr = fmt_val(row.yield_rate) * 100 if row.yield_rate else None
         d = f"收率 {yr:.1f}%" if yr is not None else ""
         d = (d + ", " if d and q else "") + (f"干粉 {q:.2f}kg" if q else "")
         return d, yr, q
@@ -381,7 +473,8 @@ async def _node_info(session, stage: str, batch_no: str):
 
 # ── 断链检测 ──────────────────────────────────────────
 
-async def _broken_reason(session, stage: str, batch_no: str) -> Optional[str]:
+
+async def _broken_reason(session, stage: str, batch_no: str) -> str | None:
     """节点在自身工段表无记录（无源头的投料/回收粉标签）→ 断链原因"""
     b = batch_no.strip()
     if stage == "recovery":
@@ -389,9 +482,14 @@ async def _broken_reason(session, stage: str, batch_no: str) -> Optional[str]:
     if stage not in _MAIN_TABLES:
         return None
     table, col = _MAIN_TABLES[stage]
-    r = (await session.execute(text(
-        f"SELECT 1 FROM production.{table} WHERE {col} = :bn AND is_deleted = false LIMIT 1"
-    ), {"bn": b})).fetchone()
+    r = (
+        await session.execute(
+            text(
+                f"SELECT 1 FROM production.{table} WHERE {col} = :bn AND is_deleted = false LIMIT 1"  # noqa: E501
+            ),
+            {"bn": b},
+        )
+    ).fetchone()
     if r:
         return None
     # 表内无记录 → 投料无源头，按工段给具体断链原因
@@ -407,42 +505,63 @@ async def _broken_reason(session, stage: str, batch_no: str) -> Optional[str]:
 
 # ── 上下游关联 ────────────────────────────────────────
 
+
 async def _upstream(session, stage: str, batch_no: str):
     """谁生产了 B。返回 [(upstage, upbatch, feed_pure_kg)]"""
     b = batch_no.strip()
     if stage == "extraction":
         # 萃取批 → 发酵批（经罐→批次外键）
-        row = (await session.execute(text(
-            "SELECT t.fermentation_batch_id FROM production.dr_extractions e "
-            "JOIN production.dr_fermentation_tanks t ON t.id::text = e.fermentation_tank_id "
-            "WHERE e.extraction_batch_no = :bn AND e.is_deleted = false LIMIT 1"
-        ), {"bn": b})).fetchone()
+        row = (
+            await session.execute(
+                text(
+                    "SELECT t.fermentation_batch_id FROM production.dr_extractions e "
+                    "JOIN production.dr_fermentation_tanks t ON t.id::text = e.fermentation_tank_id "  # noqa: E501
+                    "WHERE e.extraction_batch_no = :bn AND e.is_deleted = false LIMIT 1"
+                ),
+                {"bn": b},
+            )
+        ).fetchone()
         if row and row.fermentation_batch_id:
-            br = (await session.execute(text(
-                "SELECT batch_no FROM production.dr_fermentation_batches WHERE id::text = :id LIMIT 1"
-            ), {"id": row.fermentation_batch_id})).fetchone()
+            br = (
+                await session.execute(
+                    text(
+                        "SELECT batch_no FROM production.dr_fermentation_batches WHERE id::text = :id LIMIT 1"  # noqa: E501
+                    ),
+                    {"id": row.fermentation_batch_id},
+                )
+            ).fetchone()
             if br and br.batch_no:
                 return [("fermentation", br.batch_no, None)]
         return []
 
     if stage == "chromatography":
         # 层析批 → 吃的各萃取批（逐行）
-        rows = (await session.execute(text(
-            "SELECT DISTINCT extraction_batch_no FROM production.dr_chromatography_crystal "
-            "WHERE chromatography_batch_no = :bn AND is_deleted = false AND extraction_batch_no IS NOT NULL "
-            "AND TRIM(extraction_batch_no) <> ''"
-        ), {"bn": b})).fetchall()
+        rows = (
+            await session.execute(
+                text(
+                    "SELECT DISTINCT extraction_batch_no FROM production.dr_chromatography_crystal "  # noqa: E501
+                    "WHERE chromatography_batch_no = :bn AND is_deleted = false AND extraction_batch_no IS NOT NULL "  # noqa: E501
+                    "AND TRIM(extraction_batch_no) <> ''"
+                ),
+                {"bn": b},
+            )
+        ).fetchall()
         return [("extraction", r.extraction_batch_no, None) for r in rows]
 
     if stage == "first_refinement":
-        # 一次精制 → 层析批（湿粉产出反查）。层析表 wet_powder_batch_no 可能无 DR-F1- 前缀，
+        # 一次精制 → 层析批（湿粉产出反查）。层析表 wet_powder_batch_no 可能无 DR-F1- 前缀，  # noqa: E501
         # 用双格式匹配（DR-F1-24019-1 / DR-24019-1）。
         bn1 = b
         bn2 = _f1_to_dr(b)
-        rows = (await session.execute(text(
-            "SELECT DISTINCT chromatography_batch_no FROM production.dr_chromatography_crystal "
-            "WHERE (wet_powder_batch_no = :bn OR wet_powder_batch_no = :bn2) AND is_deleted = false"
-        ), {"bn": bn1, "bn2": bn2})).fetchall()
+        rows = (
+            await session.execute(
+                text(
+                    "SELECT DISTINCT chromatography_batch_no FROM production.dr_chromatography_crystal "  # noqa: E501
+                    "WHERE (wet_powder_batch_no = :bn OR wet_powder_batch_no = :bn2) AND is_deleted = false"  # noqa: E501
+                ),
+                {"bn": bn1, "bn2": bn2},
+            )
+        ).fetchall()
         return [("chromatography", r.chromatography_batch_no, None) for r in rows]
 
     feed_cols = {
@@ -452,15 +571,20 @@ async def _upstream(session, stage: str, batch_no: str):
     }
     if stage in feed_cols:
         table, col, _ = feed_cols[stage]
-        rows = (await session.execute(text(
-            f"SELECT feed_batch_no, feed_pure_kg FROM production.{table} "
-            f"WHERE {col} = :bn AND is_deleted = false AND feed_batch_no IS NOT NULL "
-            "AND TRIM(feed_batch_no) <> ''"
-        ), {"bn": b})).fetchall()
+        rows = (
+            await session.execute(
+                text(
+                    f"SELECT feed_batch_no, feed_pure_kg FROM production.{table} "
+                    f"WHERE {col} = :bn AND is_deleted = false AND feed_batch_no IS NOT NULL "  # noqa: E501
+                    "AND TRIM(feed_batch_no) <> ''"
+                ),
+                {"bn": b},
+            )
+        ).fetchall()
         out = []
         for r in rows:
             for fb in _split_feeds(r.feed_batch_no):
-                fp = F(r.feed_pure_kg)
+                fp = fmt_val(r.feed_pure_kg)
                 # 三次/四次表 feed_pure_kg 常为空 → 顺链取上游产出折纯补全
                 if fp <= 0:
                     fp = await _feed_pure_from_upstream(session, fb)
@@ -472,11 +596,18 @@ async def _upstream(session, stage: str, batch_no: str):
 
 def _to_feeds(up_rows) -> list[FeedItem]:
     """把 _upstream 返回的 [(upstage, upbatch, feed_pure_kg)] 转成投入明细。
-    qty 只有二次/三次/四次精制有（折纯量）；层析/一次精制投料无量 → 0（仅作多投料源标注）"""
+    qty 只有二次/三次/四次精制有（折纯量）；层析/一次精制投料无量 →
+        0（仅作多投料源标注）"""
     out = []
     for us, ub, fpkg in up_rows:
-        out.append(FeedItem(batch_no=ub, stage=us,
-                            label=DR_STAGE_LABELS.get(us, us), qty=F(fpkg) or 0.0))
+        out.append(
+            FeedItem(
+                batch_no=ub,
+                stage=us,
+                label=DR_STAGE_LABELS.get(us, us),
+                qty=fmt_val(fpkg) or 0.0,
+            )
+        )
     return out
 
 
@@ -485,27 +616,42 @@ async def _downstream(session, stage: str, batch_no: str):
     b = batch_no.strip()
     if stage == "fermentation":
         # 发酵批 → 萃取批（批号前缀；与层析批同名歧义，仅查萃取表）
-        rows = (await session.execute(text(
-            "SELECT DISTINCT extraction_batch_no FROM production.dr_extractions "
-            "WHERE extraction_batch_no LIKE :pat AND is_deleted = false"
-        ), {"pat": b + "-%"})).fetchall()
+        rows = (
+            await session.execute(
+                text(
+                    "SELECT DISTINCT extraction_batch_no FROM production.dr_extractions "  # noqa: E501
+                    "WHERE extraction_batch_no LIKE :pat AND is_deleted = false"
+                ),
+                {"pat": b + "-%"},
+            )
+        ).fetchall()
         return [("extraction", r.extraction_batch_no, None) for r in rows]
 
     if stage == "extraction":
         # 萃取批 → 层析批（被哪些层析批投料）
-        rows = (await session.execute(text(
-            "SELECT DISTINCT chromatography_batch_no FROM production.dr_chromatography_crystal "
-            "WHERE extraction_batch_no = :bn AND is_deleted = false"
-        ), {"bn": b})).fetchall()
+        rows = (
+            await session.execute(
+                text(
+                    "SELECT DISTINCT chromatography_batch_no FROM production.dr_chromatography_crystal "  # noqa: E501
+                    "WHERE extraction_batch_no = :bn AND is_deleted = false"
+                ),
+                {"bn": b},
+            )
+        ).fetchall()
         return [("chromatography", r.chromatography_batch_no, None) for r in rows]
 
     if stage == "chromatography":
         # 层析批 → 一次精制（湿粉产出）。wet_powder_batch_no 可能无 DR-F1- 前缀，
         # 归一化为一次精制表规范批号 DR-F1-xxx（如 DR-24019-1 → DR-F1-24019-1）。
-        rows = (await session.execute(text(
-            "SELECT DISTINCT wet_powder_batch_no FROM production.dr_chromatography_crystal "
-            "WHERE chromatography_batch_no = :bn AND is_deleted = false AND wet_powder_batch_no IS NOT NULL"
-        ), {"bn": b})).fetchall()
+        rows = (
+            await session.execute(
+                text(
+                    "SELECT DISTINCT wet_powder_batch_no FROM production.dr_chromatography_crystal "  # noqa: E501
+                    "WHERE chromatography_batch_no = :bn AND is_deleted = false AND wet_powder_batch_no IS NOT NULL"  # noqa: E501
+                ),
+                {"bn": b},
+            )
+        ).fetchall()
         return [("first_refinement", _to_f1(r.wet_powder_batch_no), None) for r in rows]
 
     down_map = {
@@ -515,10 +661,15 @@ async def _downstream(session, stage: str, batch_no: str):
     }
     if stage in down_map:
         table, dst = down_map[stage]
-        rows = (await session.execute(text(
-            f"SELECT DISTINCT refinement_batch_no FROM production.{table} "
-            f"WHERE TRIM(feed_batch_no) = :bn AND is_deleted = false"
-        ), {"bn": b})).fetchall()
+        rows = (
+            await session.execute(
+                text(
+                    f"SELECT DISTINCT refinement_batch_no FROM production.{table} "
+                    f"WHERE TRIM(feed_batch_no) = :bn AND is_deleted = false"
+                ),
+                {"bn": b},
+            )
+        ).fetchall()
         return [(dst, r.refinement_batch_no, None) for r in rows]
 
     return []
@@ -540,59 +691,96 @@ async def _siblings(session, stage: str, batch_no: str, hint_fbatch: str = ""):
 
     if stage == "extraction":
         # 目标所在发酵批（可多个发酵罐/批）
-        fids = [r.fermentation_batch_id for r in (await session.execute(text(
-            "SELECT DISTINCT t.fermentation_batch_id FROM production.dr_extractions e "
-            "JOIN production.dr_fermentation_tanks t ON t.id::text = e.fermentation_tank_id "
-            "WHERE e.extraction_batch_no = :bn AND e.is_deleted = false"
-        ), {"bn": b})).fetchall() if r.fermentation_batch_id]
+        fids = [
+            r.fermentation_batch_id
+            for r in (
+                await session.execute(
+                    text(
+                        "SELECT DISTINCT t.fermentation_batch_id FROM production.dr_extractions e "  # noqa: E501
+                        "JOIN production.dr_fermentation_tanks t ON t.id::text = e.fermentation_tank_id "  # noqa: E501
+                        "WHERE e.extraction_batch_no = :bn AND e.is_deleted = false"
+                    ),
+                    {"bn": b},
+                )
+            ).fetchall()
+            if r.fermentation_batch_id
+        ]
         if not fids:
             return None, []
         # 撞名防御：优先用主链发酵批（与追溯图发酵节点一致）
         if hint_fbatch:
-            hid = (await session.execute(text(
-                "SELECT id::text AS id FROM production.dr_fermentation_batches "
-                "WHERE batch_no = :bn AND is_deleted = false LIMIT 1"
-            ), {"bn": hint_fbatch})).fetchone()
+            hid = (
+                await session.execute(
+                    text(
+                        "SELECT id::text AS id FROM production.dr_fermentation_batches "
+                        "WHERE batch_no = :bn AND is_deleted = false LIMIT 1"
+                    ),
+                    {"bn": hint_fbatch},
+                )
+            ).fetchone()
             if hid and hid.id in fids:
                 fids = [hid.id]
         fid = fids[0]
         # 组内全部萃取（含自身）
         members: set[str] = set()
         for fid in fids:
-            rows = (await session.execute(text(
-                "SELECT DISTINCT e.extraction_batch_no FROM production.dr_extractions e "
-                "JOIN production.dr_fermentation_tanks t ON t.id::text = e.fermentation_tank_id "
-                "WHERE t.fermentation_batch_id = :fid AND e.is_deleted = false "
-                "AND e.extraction_batch_no IS NOT NULL AND TRIM(e.extraction_batch_no) <> '' "
-                "AND e.extraction_batch_no <> '-'"
-            ), {"fid": fid})).fetchall()
+            rows = (
+                await session.execute(
+                    text(
+                        "SELECT DISTINCT e.extraction_batch_no FROM production.dr_extractions e "  # noqa: E501
+                        "JOIN production.dr_fermentation_tanks t ON t.id::text = e.fermentation_tank_id "  # noqa: E501
+                        "WHERE t.fermentation_batch_id = :fid AND e.is_deleted = false "
+                        "AND e.extraction_batch_no IS NOT NULL AND TRIM(e.extraction_batch_no) <> '' "  # noqa: E501
+                        "AND e.extraction_batch_no <> '-'"
+                    ),
+                    {"fid": fid},
+                )
+            ).fetchall()
             members.update(r.extraction_batch_no for r in rows)
         if len(members) <= 1:
             return None, []
         # group_key = 共同发酵批号
-        frow = (await session.execute(text(
-            "SELECT batch_no FROM production.dr_fermentation_batches "
-            "WHERE id::text = :fid AND is_deleted = false LIMIT 1"
-        ), {"fid": fids[0]})).fetchone()
+        frow = (
+            await session.execute(
+                text(
+                    "SELECT batch_no FROM production.dr_fermentation_batches "
+                    "WHERE id::text = :fid AND is_deleted = false LIMIT 1"
+                ),
+                {"fid": fids[0]},
+            )
+        ).fetchone()
         gk = frow.batch_no if frow else "同源发酵批"
         return gk, [("extraction", x) for x in sorted(members)]
 
     if stage == "chromatography":
         # 层析 B 吃的各萃取 → 每个萃取的所有层析（含自身）
-        exs = [r.extraction_batch_no for r in (await session.execute(text(
-            "SELECT DISTINCT extraction_batch_no FROM production.dr_chromatography_crystal "
-            "WHERE chromatography_batch_no = :bn AND is_deleted = false AND extraction_batch_no IS NOT NULL "
-            "AND TRIM(extraction_batch_no) <> ''"
-        ), {"bn": b})).fetchall()]
+        exs = [
+            r.extraction_batch_no
+            for r in (
+                await session.execute(
+                    text(
+                        "SELECT DISTINCT extraction_batch_no FROM production.dr_chromatography_crystal "  # noqa: E501
+                        "WHERE chromatography_batch_no = :bn AND is_deleted = false AND extraction_batch_no IS NOT NULL "  # noqa: E501
+                        "AND TRIM(extraction_batch_no) <> ''"
+                    ),
+                    {"bn": b},
+                )
+            ).fetchall()
+        ]
         if not exs:
             return None, []
         members: set[str] = set()
         for e in exs:
-            rows = (await session.execute(text(
-                "SELECT DISTINCT chromatography_batch_no FROM production.dr_chromatography_crystal "
-                "WHERE extraction_batch_no = :e AND is_deleted = false AND chromatography_batch_no IS NOT NULL "
-                "AND TRIM(chromatography_batch_no) <> ''"
-            ), {"e": e})).fetchall()
+            rows = (
+                await session.execute(
+                    text(
+                        "SELECT DISTINCT chromatography_batch_no FROM production.dr_chromatography_crystal "  # noqa: E501
+                        "WHERE extraction_batch_no = :e AND is_deleted = false AND chromatography_batch_no IS NOT NULL "  # noqa: E501
+                        "AND TRIM(chromatography_batch_no) <> ''"
+                    ),
+                    {"e": e},
+                )
+            ).fetchall()
             members.update(r.chromatography_batch_no for r in rows)
         if len(members) <= 1:
             return None, []
@@ -604,19 +792,32 @@ async def _siblings(session, stage: str, batch_no: str, hint_fbatch: str = ""):
         # 层析 wet_powder_batch_no 可能无 DR-F1- 前缀 → 双格式匹配 + 归一化输出。
         bn1 = b
         bn2 = _f1_to_dr(b)
-        cs = [r.chromatography_batch_no for r in (await session.execute(text(
-            "SELECT DISTINCT chromatography_batch_no FROM production.dr_chromatography_crystal "
-            "WHERE (wet_powder_batch_no = :bn OR wet_powder_batch_no = :bn2) AND is_deleted = false"
-        ), {"bn": bn1, "bn2": bn2})).fetchall()]
+        cs = [
+            r.chromatography_batch_no
+            for r in (
+                await session.execute(
+                    text(
+                        "SELECT DISTINCT chromatography_batch_no FROM production.dr_chromatography_crystal "  # noqa: E501
+                        "WHERE (wet_powder_batch_no = :bn OR wet_powder_batch_no = :bn2) AND is_deleted = false"  # noqa: E501
+                    ),
+                    {"bn": bn1, "bn2": bn2},
+                )
+            ).fetchall()
+        ]
         if not cs:
             return None, []
         members: set[str] = set()
         for c in cs:
-            rows = (await session.execute(text(
-                "SELECT DISTINCT wet_powder_batch_no FROM production.dr_chromatography_crystal "
-                "WHERE chromatography_batch_no = :c AND is_deleted = false AND wet_powder_batch_no IS NOT NULL "
-                "AND TRIM(wet_powder_batch_no) <> ''"
-            ), {"c": c})).fetchall()
+            rows = (
+                await session.execute(
+                    text(
+                        "SELECT DISTINCT wet_powder_batch_no FROM production.dr_chromatography_crystal "  # noqa: E501
+                        "WHERE chromatography_batch_no = :c AND is_deleted = false AND wet_powder_batch_no IS NOT NULL "  # noqa: E501
+                        "AND TRIM(wet_powder_batch_no) <> ''"
+                    ),
+                    {"c": c},
+                )
+            ).fetchall()
             members.update(_to_f1(r.wet_powder_batch_no) for r in rows)
         if len(members) <= 1:
             return None, []
@@ -628,10 +829,14 @@ async def _siblings(session, stage: str, batch_no: str, hint_fbatch: str = ""):
 
 # ── 追溯主端点 ────────────────────────────────────────
 
+
 @router.get("/dr/lineage/trace", summary="DR 批次全链路追溯（主链+跨批投料全显示）")
 async def dr_lineage_trace(
     batch_no: str = Query(...),
-    stage: str = Query("", description="工段：fermentation/extraction/chromatography/first_refinement/second_refinement/third_refinement/fourth_refinement"),
+    stage: str = Query(
+        "",
+        description="工段：fermentation/extraction/chromatography/first_refinement/second_refinement/third_refinement/fourth_refinement",
+    ),
     session: AsyncSession = Depends(get_db),
 ):
     if not batch_no or not batch_no.strip() or batch_no.strip() == "-":
@@ -647,18 +852,24 @@ async def dr_lineage_trace(
         key = f"{st}|{bn}"
         if key not in broken_seen:
             broken_seen.add(key)
-            broken_links.append({
-                "stage": st, "label": DR_STAGE_LABELS.get(st, "回收粉/母液"),
-                "batch_no": bn, "reason": reason,
-            })
+            broken_links.append(
+                {
+                    "stage": st,
+                    "label": DR_STAGE_LABELS.get(st, "回收粉/母液"),
+                    "batch_no": bn,
+                    "reason": reason,
+                }
+            )
 
     # ── 受限 BFS：主链向上递归 + 主链向下递归 + 下游节点投料行全显示（不递归投料批）──
-    # 设计要点（收敛扩散）：全向 BFS 会在共享边（萃取批被多层析批用、投料批被多三次批用）
+    # 设计要点（收敛扩散）：全向 BFS 会在共享边（萃取批被多层析批用、投料批被多三次批用）  # noqa: E501
     # 处把兄弟链整条拉入。改为方向性展开——
-    #   ① 主链向上：target → 一次 → 层析 → 萃取 → 发酵，每层展开全部生产者（层析吃多萃取全列、跨发酵批全列），不查生产者的下游
+    #   ① 主链向上：target → 一次 → 层析 → 萃取 → 发酵，每层展开全部生产者（层析吃多萃取全列、跨发酵批全列），不查生产者的下游  # noqa: E501
     #   ② 主链向下：target → 三次 → 四次，每层展开全部使用者
-    #   ③ 下游节点（三次/四次）的投料行全显示：DR-F2-241013、四次母液回收粉等跨批投料以断链节点列出，但不递归展开其上下游
-    nodes: dict[str, dict] = {s: {} for s in DR_STAGE_LABELS}  # stage -> {batch_no: meta}
+    #   ③ 下游节点（三次/四次）的投料行全显示：DR-F2-241013、四次母液回收粉等跨批投料以断链节点列出，但不递归展开其上下游  # noqa: E501
+    nodes: dict[str, dict] = {
+        s: {} for s in DR_STAGE_LABELS
+    }  # stage -> {batch_no: meta}
     recovery_nodes: dict[str, dict] = {}
 
     def _add_recovery(bn):
@@ -674,18 +885,30 @@ async def dr_lineage_trace(
         br = await _broken_reason(session, st, bn)
         if br:
             _note_broken(st, bn, br)
-        nodes[st][bn] = {"detail": d, "yield_rate": y, "quantity": q,
-                         "broken": bool(br), "broken_reason": br,
-                         "is_sibling": is_sibling, "sib_group": sib_group}
+        nodes[st][bn] = {
+            "detail": d,
+            "yield_rate": y,
+            "quantity": q,
+            "broken": bool(br),
+            "broken_reason": br,
+            "is_sibling": is_sibling,
+            "sib_group": sib_group,
+        }
 
     # target 节点
     td, ty, tq = await _node_info(session, real_stage, real_batch)
     treason = await _broken_reason(session, real_stage, real_batch)
     if treason:
         _note_broken(real_stage, real_batch, treason)
-    nodes[real_stage][real_batch] = {"detail": td, "yield_rate": ty, "quantity": tq,
-                                     "broken": bool(treason), "broken_reason": treason,
-                                     "is_sibling": False, "sib_group": ""}
+    nodes[real_stage][real_batch] = {
+        "detail": td,
+        "yield_rate": ty,
+        "quantity": tq,
+        "broken": bool(treason),
+        "broken_reason": treason,
+        "is_sibling": False,
+        "sib_group": "",
+    }
 
     seen = {(real_stage, real_batch)}
     # 各节点投入明细（混批全部兄弟批 + 折纯量），组装时填进 LineageNode.feeds
@@ -706,13 +929,15 @@ async def dr_lineage_trace(
                 await _add_node(us, ub)
                 queue_up.append((us, ub))
 
-    # ②③ 主链向下：展开使用者；三次/四次的投料行全显示但投料批不入队（不递归展开其上下游）
+    # ②③ 主链向下：展开使用者；三次/四次的投料行全显示但投料批不入队（不递归展开其上下游）  # noqa: E501
     queue_down = [(real_stage, real_batch)]
     # 同源兄弟批（如搜索萃取时同发酵的其他萃取）：整组标 sib_group 供前端虚线串联，
     # 兄弟批标 is_sibling + 作为向下种子展开各自去向
-    sib_group_key, sib_members = await _siblings(session, real_stage, real_batch, hint_fbatch=main_ferm)
+    sib_group_key, sib_members = await _siblings(
+        session, real_stage, real_batch, hint_fbatch=main_ferm
+    )
     for sst, sbn in sib_members:
-        is_self = (sst == real_stage and sbn == real_batch)
+        is_self = sst == real_stage and sbn == real_batch
         if (sst, sbn) not in seen:
             seen.add((sst, sbn))
             await _add_node(sst, sbn, is_sibling=not is_self, sib_group=sib_group_key)
@@ -762,14 +987,25 @@ async def dr_lineage_trace(
                     if lk != 0:
                         lr = round(lk / input_total * 100, 1)
                         loss_kg, loss_rate = lk, lr
-                        loss_level = "green" if lr < 5 else ("yellow" if lr < 10 else "red")
+                        loss_level = (
+                            "green" if lr < 5 else ("yellow" if lr < 10 else "red")
+                        )
             # 损耗去向拆解（母液带走 + 回收粉 + 其他损失；精制段均查）
             loss_breakdown = None
-            if s in ("first_refinement", "second_refinement", "third_refinement", "fourth_refinement"):
+            if s in (
+                "first_refinement",
+                "second_refinement",
+                "third_refinement",
+                "fourth_refinement",
+            ):
                 ml, rp = await _loss_breakdown_from(session, s, bn)
                 recorded = (ml > 0) or (rp > 0)
-                bd = {"mother_liquor_kg": None, "recovery_powder_kg": None,
-                      "other_kg": None, "recorded": recorded}
+                bd = {
+                    "mother_liquor_kg": None,
+                    "recovery_powder_kg": None,
+                    "other_kg": None,
+                    "recorded": recorded,
+                }
                 if ml > 0:
                     bd["mother_liquor_kg"] = round(ml, 2)
                 if rp > 0:
@@ -779,26 +1015,45 @@ async def dr_lineage_trace(
                     bd["other_kg"] = other if other > 0 else round(other, 2)
                 if recorded or (loss_kg is not None and s != "first_refinement"):
                     loss_breakdown = bd
-            nlist.append(LineageNode(
-                stage=s, label=DR_STAGE_LABELS[s], batch_no=bn,
-                detail=meta["detail"], yield_rate=meta["yield_rate"],
-                quantity=meta["quantity"], connects_to=ct,
-                broken=meta["broken"], broken_reason=meta["broken_reason"] or "",
-                is_sibling=meta.get("is_sibling", False),
-                sib_group=meta.get("sib_group", ""),
-                feeds=feeds, input_total=input_total,
-                loss_kg=loss_kg, loss_rate=loss_rate, loss_level=loss_level,
-                loss_breakdown=loss_breakdown,
-            ))
+            nlist.append(
+                LineageNode(
+                    stage=s,
+                    label=DR_STAGE_LABELS[s],
+                    batch_no=bn,
+                    detail=meta["detail"],
+                    yield_rate=meta["yield_rate"],
+                    quantity=meta["quantity"],
+                    connects_to=ct,
+                    broken=meta["broken"],
+                    broken_reason=meta["broken_reason"] or "",
+                    is_sibling=meta.get("is_sibling", False),
+                    sib_group=meta.get("sib_group", ""),
+                    feeds=feeds,
+                    input_total=input_total,
+                    loss_kg=loss_kg,
+                    loss_rate=loss_rate,
+                    loss_level=loss_level,
+                    loss_breakdown=loss_breakdown,
+                )
+            )
         # 排序：断链放最后
         nlist.sort(key=lambda n: (1 if n.broken else 0, n.batch_no))
         if nlist:
-            stages_out.append(StageGroup(stage=s, label=DR_STAGE_LABELS[s], nodes=nlist))
+            stages_out.append(
+                StageGroup(stage=s, label=DR_STAGE_LABELS[s], nodes=nlist)
+            )
     # 回收粉/母液独立分组（无台账的投料标签）
     if recovery_nodes:
-        rn = [LineageNode(stage="recovery", label="回收粉/母液", batch_no=bn,
-                          broken=True, broken_reason=meta["broken_reason"] or "")
-              for bn, meta in recovery_nodes.items()]
+        rn = [
+            LineageNode(
+                stage="recovery",
+                label="回收粉/母液",
+                batch_no=bn,
+                broken=True,
+                broken_reason=meta["broken_reason"] or "",
+            )
+            for bn, meta in recovery_nodes.items()
+        ]
         rn.sort(key=lambda n: n.batch_no)
         stages_out.append(StageGroup(stage="recovery", label="回收粉/母液", nodes=rn))
 
@@ -816,93 +1071,146 @@ async def dr_lineage_trace(
                 cum *= n.yield_rate / 100
                 break
 
-    return success_response(data={
-        "stages": [sg.model_dump(exclude_none=False) for sg in stages_out],
-        "target_batch": real_batch,
-        "target_stage": real_stage,
-        "cumulative_yield": round(cum, 1),
-        "max_loss_stage": mls,
-        "broken_links": broken_links,
-    })
+    return success_response(
+        data={
+            "stages": [sg.model_dump(exclude_none=False) for sg in stages_out],
+            "target_batch": real_batch,
+            "target_stage": real_stage,
+            "cumulative_yield": round(cum, 1),
+            "max_loss_stage": mls,
+            "broken_links": broken_links,
+        }
+    )
 
 
 # ── 收率分布 ──────────────────────────────────────────
 
+
 @router.get("/dr/lineage/yield-distribution", summary="DR 收率分布（按工段箱线统计）")
 async def dr_yield_distribution(session: AsyncSession = Depends(get_db)):
-    rows = (await session.execute(text("""
+    rows = (
+        await session.execute(
+            text("""
         SELECT stage, COUNT(*) AS n,
                ROUND(MIN(y)::numeric, 1) AS min_y,
                ROUND(PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY y)::numeric, 1) AS q1,
-               ROUND(PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY y)::numeric, 1) AS median,
+               ROUND(PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY y)::numeric, 1) AS
+        median,
                ROUND(AVG(y)::numeric, 1) AS mean,
                ROUND(PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY y)::numeric, 1) AS q3,
                ROUND(MAX(y)::numeric, 1) AS max_y,
                COUNT(*) FILTER (WHERE y < 80) AS below_80,
                COUNT(*) FILTER (WHERE y > 110) AS above_110
         FROM (
-            SELECT 'extraction' AS stage, ROUND(single_batch_yield::numeric * 100, 1)::float8 AS y
-            FROM production.dr_extractions WHERE is_deleted = false AND single_batch_yield IS NOT NULL
+            SELECT 'extraction' AS stage, ROUND(single_batch_yield::numeric * 100,
+        1)::float8 AS y
+            FROM production.dr_extractions WHERE is_deleted = false AND
+        single_batch_yield IS NOT NULL
             UNION ALL
-            SELECT 'chromatography', ROUND(chromatography_yield::numeric * 100, 1)::float8
-            FROM production.dr_chromatography_crystal WHERE is_deleted = false AND chromatography_yield IS NOT NULL
+            SELECT 'chromatography', ROUND(chromatography_yield::numeric * 100,
+        1)::float8
+            FROM production.dr_chromatography_crystal WHERE is_deleted = false AND
+        chromatography_yield IS NOT NULL
             UNION ALL
-            SELECT 'crystallization', ROUND(crystallization_yield::numeric * 100, 1)::float8
-            FROM production.dr_chromatography_crystal WHERE is_deleted = false AND crystallization_yield IS NOT NULL
+            SELECT 'crystallization', ROUND(crystallization_yield::numeric * 100,
+        1)::float8
+            FROM production.dr_chromatography_crystal WHERE is_deleted = false AND
+        crystallization_yield IS NOT NULL
             UNION ALL
             SELECT 'second_refinement', ROUND(batch_yield::numeric * 100, 1)::float8
-            FROM production.dr_second_refinement WHERE is_deleted = false AND batch_yield IS NOT NULL
+            FROM production.dr_second_refinement WHERE is_deleted = false AND
+        batch_yield IS NOT NULL
             UNION ALL
             SELECT 'third_refinement', ROUND(yield_rate::numeric * 100, 1)::float8
-            FROM production.dr_third_refinement WHERE is_deleted = false AND yield_rate IS NOT NULL
+            FROM production.dr_third_refinement WHERE is_deleted = false AND yield_rate
+        IS NOT NULL
             UNION ALL
             SELECT 'fourth_refinement', ROUND(yield_rate::numeric * 100, 1)::float8
-            FROM production.dr_fourth_refinement WHERE is_deleted = false AND yield_rate IS NOT NULL
+            FROM production.dr_fourth_refinement WHERE is_deleted = false AND
+        yield_rate IS NOT NULL
         ) t
         GROUP BY stage
-    """))).fetchall()
-    items = [YieldDistItem(stage=r.stage, label=_DIST_LABELS.get(r.stage, r.stage),
-        count=r.n, min=float(r.min_y or 0), q1=float(r.q1 or 0),
-        median=float(r.median or 0), mean=float(r.mean or 0),
-        q3=float(r.q3 or 0), max=float(r.max_y or 0),
-        below_80=r.below_80, above_110=r.above_110) for r in rows]
+    """)
+        )
+    ).fetchall()
+    items = [
+        YieldDistItem(
+            stage=r.stage,
+            label=_DIST_LABELS.get(r.stage, r.stage),
+            count=r.n,
+            min=float(r.min_y or 0),
+            q1=float(r.q1 or 0),
+            median=float(r.median or 0),
+            mean=float(r.mean or 0),
+            q3=float(r.q3 or 0),
+            max=float(r.max_y or 0),
+            below_80=r.below_80,
+            above_110=r.above_110,
+        )
+        for r in rows
+    ]
     return success_response(data=[i.model_dump() for i in items])
 
 
 # ── 物料复用 ──────────────────────────────────────────
 
-@router.get("/dr/lineage/material-reuse", summary="DR 物料复用（被多个下游批复用的投料）")
+
+@router.get(
+    "/dr/lineage/material-reuse", summary="DR 物料复用（被多个下游批复用的投料）"
+)
 async def dr_material_reuse(session: AsyncSession = Depends(get_db)):
-    rows = (await session.execute(text("""
+    rows = (
+        await session.execute(
+            text("""
         SELECT up_type, feed_batch_no AS up_batch, usage_count, used_by FROM (
             -- 三次精制投料被多个三次批使用
-            SELECT 'third_refinement' AS up_type, feed_batch_no, COUNT(DISTINCT refinement_batch_no) AS usage_count,
-                   STRING_AGG(DISTINCT refinement_batch_no, ', ' ORDER BY refinement_batch_no) AS used_by
+            SELECT 'third_refinement' AS up_type, feed_batch_no, COUNT(DISTINCT
+        refinement_batch_no) AS usage_count,
+                   STRING_AGG(DISTINCT refinement_batch_no, ', ' ORDER BY
+        refinement_batch_no) AS used_by
             FROM production.dr_third_refinement
-            WHERE feed_batch_no IS NOT NULL AND TRIM(feed_batch_no) <> '' AND is_deleted = false
+            WHERE feed_batch_no IS NOT NULL AND TRIM(feed_batch_no) <> '' AND
+        is_deleted = false
             GROUP BY feed_batch_no HAVING COUNT(DISTINCT refinement_batch_no) > 1
             UNION ALL
             -- 四次精制投料被多个四次批使用
-            SELECT 'fourth_refinement', feed_batch_no, COUNT(DISTINCT refinement_batch_no),
-                   STRING_AGG(DISTINCT refinement_batch_no, ', ' ORDER BY refinement_batch_no)
+            SELECT 'fourth_refinement', feed_batch_no, COUNT(DISTINCT
+        refinement_batch_no),
+                   STRING_AGG(DISTINCT refinement_batch_no, ', ' ORDER BY
+        refinement_batch_no)
             FROM production.dr_fourth_refinement
-            WHERE feed_batch_no IS NOT NULL AND TRIM(feed_batch_no) <> '' AND is_deleted = false
+            WHERE feed_batch_no IS NOT NULL AND TRIM(feed_batch_no) <> '' AND
+        is_deleted = false
             GROUP BY feed_batch_no HAVING COUNT(DISTINCT refinement_batch_no) > 1
             UNION ALL
             -- 萃取批液被多个层析批使用
-            SELECT 'chromatography', extraction_batch_no, COUNT(DISTINCT chromatography_batch_no),
-                   STRING_AGG(DISTINCT chromatography_batch_no, ', ' ORDER BY chromatography_batch_no)
+            SELECT 'chromatography', extraction_batch_no, COUNT(DISTINCT
+        chromatography_batch_no),
+                   STRING_AGG(DISTINCT chromatography_batch_no, ', ' ORDER BY
+        chromatography_batch_no)
             FROM production.dr_chromatography_crystal
-            WHERE extraction_batch_no IS NOT NULL AND TRIM(extraction_batch_no) <> '' AND is_deleted = false
-            GROUP BY extraction_batch_no HAVING COUNT(DISTINCT chromatography_batch_no) > 1
+            WHERE extraction_batch_no IS NOT NULL AND TRIM(extraction_batch_no) <> ''
+        AND is_deleted = false
+            GROUP BY extraction_batch_no HAVING COUNT(DISTINCT chromatography_batch_no)
+        > 1
         ) t ORDER BY usage_count DESC
-    """))).fetchall()
-    items = [MaterialReuseItem(upstream_type=r.up_type, upstream_batch=r.up_batch,
-        usage_count=r.usage_count, used_by=r.used_by) for r in rows]
+    """)
+        )
+    ).fetchall()
+    items = [
+        MaterialReuseItem(
+            upstream_type=r.up_type,
+            upstream_batch=r.up_batch,
+            usage_count=r.usage_count,
+            used_by=r.used_by,
+        )
+        for r in rows
+    ]
     return success_response(data=[i.model_dump() for i in items])
 
 
 # ── 覆盖完整性（断链统计） ────────────────────────────
+
 
 @router.get("/dr/lineage/coverage", summary="DR 覆盖完整性与断链清单")
 async def dr_coverage(session: AsyncSession = Depends(get_db)):
@@ -910,91 +1218,145 @@ async def dr_coverage(session: AsyncSession = Depends(get_db)):
     segs = []
     for s, (table, col) in _MAIN_TABLES.items():
         if s == "fermentation":
-            n = (await session.execute(text(
-                "SELECT COUNT(DISTINCT batch_no) FROM production.dr_fermentation_batches WHERE is_deleted = false"
-            ))).scalar() or 0
+            n = (
+                await session.execute(
+                    text(
+                        "SELECT COUNT(DISTINCT batch_no) FROM production.dr_fermentation_batches WHERE is_deleted = false"  # noqa: E501
+                    )
+                )
+            ).scalar() or 0
             segs.append(CoverageItem(segment="发酵批", count=n))
         elif s in ("extraction", "chromatography"):
-            n = (await session.execute(text(
-                f"SELECT COUNT(DISTINCT {col}) FROM production.{table} WHERE is_deleted = false"
-            ))).scalar() or 0
+            n = (
+                await session.execute(
+                    text(
+                        f"SELECT COUNT(DISTINCT {col}) FROM production.{table} WHERE is_deleted = false"  # noqa: E501
+                    )
+                )
+            ).scalar() or 0
             segs.append(CoverageItem(segment=DR_STAGE_LABELS[s], count=n))
         else:
-            n = (await session.execute(text(
-                f"SELECT COUNT(DISTINCT {col}) FROM production.{table} WHERE is_deleted = false"
-            ))).scalar() or 0
+            n = (
+                await session.execute(
+                    text(
+                        f"SELECT COUNT(DISTINCT {col}) FROM production.{table} WHERE is_deleted = false"  # noqa: E501
+                    )
+                )
+            ).scalar() or 0
             segs.append(CoverageItem(segment=DR_STAGE_LABELS[s], count=n))
 
     # 断链清单
     async def _missing(src_table, src_col, tgt_table, tgt_col, prefix=None):
         """源表投料批号在目标表查不到（可带前缀过滤）"""
         prefix_sql = f"AND {src_col} LIKE :pre" if prefix else ""
-        rows = (await session.execute(text(f"""
+        rows = (
+            await session.execute(
+                text(f"""
             SELECT DISTINCT {src_col} FROM production.{src_table}
             WHERE is_deleted = false AND {src_col} IS NOT NULL AND TRIM({src_col}) <> ''
             AND NOT EXISTS (
                 SELECT 1 FROM production.{tgt_table}
-                WHERE {tgt_col} = production.{src_table}.{src_col} AND is_deleted = false
+                WHERE {tgt_col} = production.{src_table}.{src_col} AND is_deleted =
+        false
             )
             {prefix_sql}
-        """), {"pre": prefix + "%"} if prefix else {})).fetchall()
+        """),
+                {"pre": prefix + "%"} if prefix else {},
+            )
+        ).fetchall()
         return [r[0] for r in rows]
 
     # 层析投料萃取表查不到（DR-24002-4 类）
-    missing_extraction = await _missing("dr_chromatography_crystal", "extraction_batch_no",
-                                        "dr_extractions", "extraction_batch_no")
+    missing_extraction = await _missing(
+        "dr_chromatography_crystal",
+        "extraction_batch_no",
+        "dr_extractions",
+        "extraction_batch_no",
+    )
     # 三次投料（DR-F2）二次表查不到（DR-F2-241013 类）
-    missing_second = await _missing("dr_third_refinement", "feed_batch_no",
-                                    "dr_second_refinement", "refinement_batch_no", prefix="DR-F2")
+    missing_second = await _missing(
+        "dr_third_refinement",
+        "feed_batch_no",
+        "dr_second_refinement",
+        "refinement_batch_no",
+        prefix="DR-F2",
+    )
     # 四次投料（DR-F3）三次表查不到
-    missing_third = await _missing("dr_fourth_refinement", "feed_batch_no",
-                                   "dr_third_refinement", "refinement_batch_no", prefix="DR-F3")
+    missing_third = await _missing(
+        "dr_fourth_refinement",
+        "feed_batch_no",
+        "dr_third_refinement",
+        "refinement_batch_no",
+        prefix="DR-F3",
+    )
     # 特殊投料标签（非 DR-F1/F2/F3/GB 前缀：回收粉/母液文本）
-    special_rows = (await session.execute(text("""
+    special_rows = (
+        await session.execute(
+            text("""
         SELECT DISTINCT feed_batch_no FROM production.dr_third_refinement
-        WHERE is_deleted = false AND feed_batch_no IS NOT NULL AND TRIM(feed_batch_no) <> ''
+        WHERE is_deleted = false AND feed_batch_no IS NOT NULL AND TRIM(feed_batch_no)
+        <> ''  # noqa: E501
         AND feed_batch_no NOT LIKE 'DR-F2%' AND feed_batch_no NOT LIKE 'DR-F1%'
         UNION
         SELECT DISTINCT feed_batch_no FROM production.dr_fourth_refinement
-        WHERE is_deleted = false AND feed_batch_no IS NOT NULL AND TRIM(feed_batch_no) <> ''
+        WHERE is_deleted = false AND feed_batch_no IS NOT NULL AND TRIM(feed_batch_no)
+        <> ''  # noqa: E501
         AND feed_batch_no NOT LIKE 'DR-F3%' AND feed_batch_no NOT LIKE 'DR-F2%'
         AND feed_batch_no NOT LIKE 'DR-F1%'
-    """))).fetchall()
+    """)
+        )
+    ).fetchall()
     special_feeds = [r[0] for r in special_rows]
 
-    return success_response(data={
-        "segments": [s.model_dump() for s in segs],
-        "broken": {
-            "extraction_feeds_not_in_extraction": {"count": len(missing_extraction), "batches": missing_extraction},
-            "third_feeds_not_in_second": {"count": len(missing_second), "batches": missing_second},
-            "fourth_feeds_not_in_third": {"count": len(missing_third), "batches": missing_third},
-            "special_feeds": {"count": len(special_feeds), "batches": special_feeds},
-        },
-    })
+    return success_response(
+        data={
+            "segments": [s.model_dump() for s in segs],
+            "broken": {
+                "extraction_feeds_not_in_extraction": {
+                    "count": len(missing_extraction),
+                    "batches": missing_extraction,
+                },
+                "third_feeds_not_in_second": {
+                    "count": len(missing_second),
+                    "batches": missing_second,
+                },
+                "fourth_feeds_not_in_third": {
+                    "count": len(missing_third),
+                    "batches": missing_third,
+                },
+                "special_feeds": {
+                    "count": len(special_feeds),
+                    "batches": special_feeds,
+                },
+            },
+        }
+    )
 
 
 # ── 单批全程损耗漏斗 ─────────────────────────────────
 
+
 class FunnelLayer(BaseModel):
     """损耗漏斗的一层（一个工段聚合）"""
+
     stage: str
     label: str
-    batch_count: int = 0                    # 该层批数
-    batches: list[str] = []                 # 批号列表
-    input_pure: Optional[float] = None      # 投入折纯 kg（层析层为 None：起点）
-    output_pure: Optional[float] = None     # 产出折纯/干粉 kg
-    segment_yield: Optional[float] = None   # 本段收率 %（output/input×100）
-    segment_loss: Optional[float] = None    # 本段损耗 kg（input−output）
-    note: str = ""                          # 口径/断链说明
+    batch_count: int = 0  # 该层批数
+    batches: list[str] = []  # 批号列表
+    input_pure: float | None = None  # 投入折纯 kg（层析层为 None：起点）
+    output_pure: float | None = None  # 产出折纯/干粉 kg
+    segment_yield: float | None = None  # 本段收率 %（output/input×100）
+    segment_loss: float | None = None  # 本段损耗 kg（input−output）
+    note: str = ""  # 口径/断链说明
 
 
 class FunnelResult(BaseModel):
     target_batch: str
     target_stage: str
     layers: list[FunnelLayer]
-    overall_yield: Optional[float] = None   # 全程收率 %（最终干粉/层析湿粉）
-    overall_loss: Optional[float] = None    # 全程损耗 kg（层析湿粉−最终干粉）
-    notes: list[str] = []                   # 全局说明（断链/口径）
+    overall_yield: float | None = None  # 全程收率 %（最终干粉/层析湿粉）
+    overall_loss: float | None = None  # 全程损耗 kg（层析湿粉−最终干粉）
+    notes: list[str] = []  # 全局说明（断链/口径）
 
 
 async def _wet_powder_roots(session, stage: str, batch_no: str) -> set[str]:
@@ -1051,7 +1413,12 @@ async def _chain_layers(session, roots: set[str]) -> dict[str, set[str]]:
                 continue
             seen.add((ds, dbn))
             layers.setdefault(ds, set()).add(dbn)
-            if ds in ("first_refinement", "second_refinement", "third_refinement", "fourth_refinement"):
+            if ds in (
+                "first_refinement",
+                "second_refinement",
+                "third_refinement",
+                "fourth_refinement",
+            ):
                 queue.append((ds, dbn))
     return layers
 
@@ -1064,23 +1431,31 @@ async def _layer_output(session, stage: str, batches: set[str]) -> float:
     lst = list(batches)
     col = {
         "chromatography": "wet_powder_pure_kg",
-        "first_refinement": "feed_pure_kg",      # 一次精制无产出字段，投料折纯即其量
+        "first_refinement": "feed_pure_kg",  # 一次精制无产出字段，投料折纯即其量
         "second_refinement": "product_pure_kg",
         "third_refinement": "product_pure_kg",
-        "fourth_refinement": "dry_weight_kg",    # 干粉（最终产品）
+        "fourth_refinement": "dry_weight_kg",  # 干粉（最终产品）
     }.get(stage)
     if not col:
         return 0.0
-    r = (await session.execute(text(
-        f"SELECT COALESCE(SUM({col}), 0) FROM production.{_MAIN_TABLES[stage][0]} "
-        "WHERE is_deleted = false AND " + _MAIN_TABLES[stage][1] + " = ANY(:lst)"
-    ), {"lst": lst})).scalar() or 0
+    r = (
+        await session.execute(
+            text(
+                f"SELECT COALESCE(SUM({col}), 0) FROM production.{_MAIN_TABLES[stage][0]} "  # noqa: E501
+                "WHERE is_deleted = false AND "
+                + _MAIN_TABLES[stage][1]
+                + " = ANY(:lst)"
+            ),
+            {"lst": lst},
+        )
+    ).scalar() or 0
     return float(r)
 
 
 async def _layer_input(session, stage: str, batches: set[str]) -> float:
     """该工段批号集合的投入折纯 kg——二次/三次/四次精制为混批节点，
-    用 _upstream 展开全部兄弟投料（含跨批 + feed_pure 链补），避免单批起点漏掉兄弟批。"""
+    用 _upstream 展开全部兄弟投料（含跨批 + feed_pure
+        链补），避免单批起点漏掉兄弟批。"""
     if not batches:
         return 0.0
     total = 0.0
@@ -1091,10 +1466,15 @@ async def _layer_input(session, stage: str, batches: set[str]) -> float:
     return round(total, 2)
 
 
-@router.get("/dr/lineage/loss-funnel", summary="DR 单批全程损耗漏斗（层析湿粉→干粉，逐段对账）")
+@router.get(
+    "/dr/lineage/loss-funnel", summary="DR 单批全程损耗漏斗（层析湿粉→干粉，逐段对账）"
+)
 async def dr_loss_funnel(
     batch_no: str = Query(...),
-    stage: str = Query("", description="工段：fermentation/extraction/chromatography/first_refinement/second_refinement/third_refinement/fourth_refinement"),
+    stage: str = Query(
+        "",
+        description="工段：fermentation/extraction/chromatography/first_refinement/second_refinement/third_refinement/fourth_refinement",
+    ),
     session: AsyncSession = Depends(get_db),
 ):
     if not batch_no or not batch_no.strip() or batch_no.strip() == "-":
@@ -1106,16 +1486,25 @@ async def dr_loss_funnel(
     # 层析湿粉起点（折纯可比口径）
     roots = await _wet_powder_roots(session, real_stage, real_batch)
     if not roots:
-        return success_response(data=FunnelResult(
-            target_batch=real_batch, target_stage=real_stage, layers=[],
-            notes=["未找到层析湿粉起点（数据未闭合或非 DR 批次）"],
-        ).model_dump())
+        return success_response(
+            data=FunnelResult(
+                target_batch=real_batch,
+                target_stage=real_stage,
+                layers=[],
+                notes=["未找到层析湿粉起点（数据未闭合或非 DR 批次）"],
+            ).model_dump()
+        )
 
     layers_map = await _chain_layers(session, roots)
-    stage_order = ["chromatography", "first_refinement", "second_refinement",
-                   "third_refinement", "fourth_refinement"]
+    stage_order = [
+        "chromatography",
+        "first_refinement",
+        "second_refinement",
+        "third_refinement",
+        "fourth_refinement",
+    ]
     layers: list[FunnelLayer] = []
-    prev_output: Optional[float] = None   # 上一层产出 = 本层投入（折纯可比）
+    prev_output: float | None = None  # 上一层产出 = 本层投入（折纯可比）
     for st in stage_order:
         batches = layers_map.get(st, set())
         if not batches:
@@ -1139,14 +1528,22 @@ async def dr_loss_funnel(
             seg_loss = round(inp - out, 2)
             seg_yield = round(out / inp * 100, 1)
             if seg_yield and seg_yield > 110:
-                note = (note + "，" if note else "") + "产出大于投入（混批含外来批，非本段异常）"
-        layers.append(FunnelLayer(
-            stage=st, label=DR_STAGE_LABELS.get(st, st),
-            batch_count=len(batches), batches=sorted(batches),
-            input_pure=round(inp, 2) if inp is not None else None,
-            output_pure=round(out, 2),
-            segment_yield=seg_yield, segment_loss=seg_loss, note=note,
-        ))
+                note = (
+                    note + "，" if note else ""
+                ) + "产出大于投入（混批含外来批，非本段异常）"
+        layers.append(
+            FunnelLayer(
+                stage=st,
+                label=DR_STAGE_LABELS.get(st, st),
+                batch_count=len(batches),
+                batches=sorted(batches),
+                input_pure=round(inp, 2) if inp is not None else None,
+                output_pure=round(out, 2),
+                segment_yield=seg_yield,
+                segment_loss=seg_loss,
+                note=note,
+            )
+        )
         prev_output = out
 
     # 全程收率：最终干粉 / 层析湿粉
@@ -1160,27 +1557,39 @@ async def dr_loss_funnel(
             overall_yield = round(end / start * 100, 1)
             overall_loss = round(start - end, 2)
         if len(layers) < len(stage_order):
-            notes.append("链在 " + layers[-1].label + " 处中断（数据未闭合），后续工段未对账")
+            notes.append(
+                "链在 " + layers[-1].label + " 处中断（数据未闭合），后续工段未对账"
+            )
         # 中间批次起点（F1/F2/F3/GB）时，下游混批含兄弟批 → 全程收率不代表单批
-        if overall_yield is not None and (overall_yield > 100 or overall_loss is not None and overall_loss < 0):
-            notes.append("从中间批次起点时，下游混批含兄弟批的料，全程收率/损耗不代表该批单批——"
-                         "建议从发酵批或层析批号查看全程")
+        if overall_yield is not None and (
+            overall_yield > 100 or overall_loss is not None and overall_loss < 0
+        ):
+            notes.append(
+                "从中间批次起点时，下游混批含兄弟批的料，全程收率/损耗不代表该批单批——"
+                "建议从发酵批或层析批号查看全程"
+            )
 
-    return success_response(data=FunnelResult(
-        target_batch=real_batch, target_stage=real_stage,
-        layers=[l.model_dump() for l in layers],
-        overall_yield=overall_yield, overall_loss=overall_loss, notes=notes,
-    ).model_dump())
+    return success_response(
+        data=FunnelResult(
+            target_batch=real_batch,
+            target_stage=real_stage,
+            layers=[layer.model_dump() for layer in layers],
+            overall_yield=overall_yield,
+            overall_loss=overall_loss,
+            notes=notes,
+        ).model_dump()
+    )
 
 
 # ── 车间损耗统计（按工段×月） ─────────────────────────
+
 
 class LossStatItem(BaseModel):
     stage: str
     label: str
     year_month: str
     count: int
-    avg_yield: float       # 平均收率 %（yield_rate×100）
+    avg_yield: float  # 平均收率 %（yield_rate×100）
     min_yield: float
     max_yield: float
 
@@ -1198,31 +1607,38 @@ class LossStatsResult(BaseModel):
     unclosed: list[UnclosedItem]
 
 
-@router.get("/dr/lineage/loss-stats", summary="DR 损耗统计（按工段×月平均收率 + 未闭合投料）")
+@router.get(
+    "/dr/lineage/loss-stats", summary="DR 损耗统计（按工段×月平均收率 + 未闭合投料）"
+)
 async def dr_loss_stats(session: AsyncSession = Depends(get_db)):
     # 各精制工段按年月聚合收率（存小数×100）
-    rows = (await session.execute(text("""
+    rows = (
+        await session.execute(
+            text("""
         SELECT stage, ym, COUNT(*) AS n,
                ROUND(AVG(y)::numeric, 1) AS avg_y,
                ROUND(MIN(y)::numeric, 1) AS min_y,
                ROUND(MAX(y)::numeric, 1) AS max_y
         FROM (
             SELECT 'second_refinement' AS stage,
-                   split_part(production_date, '.', 1) || '.' || split_part(production_date, '.', 2) AS ym,
+                   split_part(production_date, '.', 1) || '.' ||
+        split_part(production_date, '.', 2) AS ym,  # noqa: E501
                    ROUND(batch_yield::numeric * 100, 1)::float8 AS y
             FROM production.dr_second_refinement
             WHERE is_deleted = false AND batch_yield IS NOT NULL
               AND production_date IS NOT NULL AND production_date <> ''
             UNION ALL
             SELECT 'third_refinement',
-                   split_part(production_date, '.', 1) || '.' || split_part(production_date, '.', 2),
+                   split_part(production_date, '.', 1) || '.' ||
+        split_part(production_date, '.', 2),  # noqa: E501
                    ROUND(yield_rate::numeric * 100, 1)::float8
             FROM production.dr_third_refinement
             WHERE is_deleted = false AND yield_rate IS NOT NULL
               AND production_date IS NOT NULL AND production_date <> ''
             UNION ALL
             SELECT 'fourth_refinement',
-                   split_part(production_date, '.', 1) || '.' || split_part(production_date, '.', 2),
+                   split_part(production_date, '.', 1) || '.' ||
+        split_part(production_date, '.', 2),  # noqa: E501
                    ROUND(yield_rate::numeric * 100, 1)::float8
             FROM production.dr_fourth_refinement
             WHERE is_deleted = false AND yield_rate IS NOT NULL
@@ -1230,40 +1646,80 @@ async def dr_loss_stats(session: AsyncSession = Depends(get_db)):
         ) t
         GROUP BY stage, ym
         ORDER BY ym, stage
-    """))).fetchall()
-    items = [LossStatItem(stage=r.stage, label=DR_STAGE_LABELS.get(r.stage, r.stage),
-        year_month=r.ym, count=r.n, avg_yield=float(r.avg_y or 0),
-        min_yield=float(r.min_y or 0), max_yield=float(r.max_y or 0)) for r in rows]
+    """)
+        )
+    ).fetchall()
+    items = [
+        LossStatItem(
+            stage=r.stage,
+            label=DR_STAGE_LABELS.get(r.stage, r.stage),
+            year_month=r.ym,
+            count=r.n,
+            avg_yield=float(r.avg_y or 0),
+            min_yield=float(r.min_y or 0),
+            max_yield=float(r.max_y or 0),
+        )
+        for r in rows
+    ]
 
     # 未闭合投料（feed_batch_no 在上游表查不到）
     unclosed: list[UnclosedItem] = []
     # 三次投料（DR-F2）→ 二次表无记录
-    for r in (await session.execute(text("""
+    for r in (
+        await session.execute(
+            text("""
         SELECT DISTINCT refinement_batch_no, feed_batch_no
         FROM production.dr_third_refinement
-        WHERE is_deleted = false AND feed_batch_no IS NOT NULL AND TRIM(feed_batch_no) <> ''
+        WHERE is_deleted = false AND feed_batch_no IS NOT NULL AND TRIM(feed_batch_no)
+        <> ''  # noqa: E501
         AND feed_batch_no LIKE 'DR-F2%'
         AND NOT EXISTS (
             SELECT 1 FROM production.dr_second_refinement
-            WHERE refinement_batch_no = production.dr_third_refinement.feed_batch_no AND is_deleted = false
+            WHERE refinement_batch_no = production.dr_third_refinement.feed_batch_no
+        AND is_deleted = false
         )
-    """))).fetchall():
-        unclosed.append(UnclosedItem(stage="third_refinement", label="三次精制",
-            batch_no=r.refinement_batch_no, feed_batch_no=r.feed_batch_no, reason="三次投料在二次表查不到"))
+    """)
+        )
+    ).fetchall():
+        unclosed.append(
+            UnclosedItem(
+                stage="third_refinement",
+                label="三次精制",
+                batch_no=r.refinement_batch_no,
+                feed_batch_no=r.feed_batch_no,
+                reason="三次投料在二次表查不到",
+            )
+        )
     # 四次投料（DR-F3）→ 三次表无记录
-    for r in (await session.execute(text("""
+    for r in (
+        await session.execute(
+            text("""
         SELECT DISTINCT refinement_batch_no, feed_batch_no
         FROM production.dr_fourth_refinement
-        WHERE is_deleted = false AND feed_batch_no IS NOT NULL AND TRIM(feed_batch_no) <> ''
+        WHERE is_deleted = false AND feed_batch_no IS NOT NULL AND TRIM(feed_batch_no)
+        <> ''  # noqa: E501
         AND feed_batch_no LIKE 'DR-F3%'
         AND NOT EXISTS (
             SELECT 1 FROM production.dr_third_refinement
-            WHERE refinement_batch_no = production.dr_fourth_refinement.feed_batch_no AND is_deleted = false
+            WHERE refinement_batch_no = production.dr_fourth_refinement.feed_batch_no
+        AND is_deleted = false
         )
-    """))).fetchall():
-        unclosed.append(UnclosedItem(stage="fourth_refinement", label="四次精制",
-            batch_no=r.refinement_batch_no, feed_batch_no=r.feed_batch_no, reason="四次投料在三次表查不到"))
+    """)
+        )
+    ).fetchall():
+        unclosed.append(
+            UnclosedItem(
+                stage="fourth_refinement",
+                label="四次精制",
+                batch_no=r.refinement_batch_no,
+                feed_batch_no=r.feed_batch_no,
+                reason="四次投料在三次表查不到",
+            )
+        )
 
-    return success_response(data=LossStatsResult(
-        by_segment_month=items, unclosed=unclosed,
-    ).model_dump())
+    return success_response(
+        data=LossStatsResult(
+            by_segment_month=items,
+            unclosed=unclosed,
+        ).model_dump()
+    )

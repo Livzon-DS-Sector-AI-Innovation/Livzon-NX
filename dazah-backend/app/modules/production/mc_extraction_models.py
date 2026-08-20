@@ -1,13 +1,16 @@
 """MC 霉酚酸 — 提取工段 ORM 模型（粗品→萃取→湿粉）"""
 
 from datetime import date
-from sqlalchemy import Date, Float, ForeignKey, Index, Integer, String, Text
+
+from sqlalchemy import Date, Float, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
+
 from app.shared.base_model import BaseModel
 
 
 class ExtractionRecord(BaseModel):
     """提取工段主表 — 多批粗品合并提取"""
+
     __tablename__ = "extraction_records"
     __table_args__ = (
         Index("ix_er_batch", "batch_no"),
@@ -87,6 +90,7 @@ class ExtractionRecord(BaseModel):
 
 class ExtractionInput(BaseModel):
     """提取投入明细表 — 多行粗品投入"""
+
     __tablename__ = "extraction_inputs"
     __table_args__ = (
         Index("ix_ei_extraction", "extraction_batch"),

@@ -32,9 +32,7 @@ class NonConformingEvent(BaseModel):
     event_type: Mapped[str] = mapped_column(
         String(32), nullable=False, comment="事件类型"
     )
-    workshop: Mapped[str] = mapped_column(
-        String(64), nullable=False, comment="车间"
-    )
+    workshop: Mapped[str] = mapped_column(String(64), nullable=False, comment="车间")
     description: Mapped[str | None] = mapped_column(
         Text, nullable=True, comment="事件描述"
     )
@@ -44,9 +42,7 @@ class NonConformingEvent(BaseModel):
     action_taken: Mapped[str | None] = mapped_column(
         Text, nullable=True, comment="处理措施"
     )
-    remarks: Mapped[str | None] = mapped_column(
-        Text, nullable=True, comment="备注"
-    )
+    remarks: Mapped[str | None] = mapped_column(Text, nullable=True, comment="备注")
 
 
 class NCEBatchLink(BaseModel):
@@ -60,8 +56,14 @@ class NCEBatchLink(BaseModel):
     )
 
     nce_id: Mapped[UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("production.non_conforming_events.id"), nullable=False, comment="非密事件ID"
+        UUID(as_uuid=True),
+        ForeignKey("production.non_conforming_events.id"),
+        nullable=False,
+        comment="非密事件ID",
     )
     batch_id: Mapped[UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("production.fermentation_records.id"), nullable=False, comment="发酵批次ID"
+        UUID(as_uuid=True),
+        ForeignKey("production.fermentation_records.id"),
+        nullable=False,
+        comment="发酵批次ID",
     )

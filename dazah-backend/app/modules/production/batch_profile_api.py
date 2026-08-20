@@ -1,9 +1,8 @@
 """批次全貌查询 API — 跨模块按批号聚合所有记录"""
 
 import logging
-from uuid import UUID
 
-from fastapi import Depends, Query
+from fastapi import Depends
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,27 +21,46 @@ async def get_batch_profile(
     session: AsyncSession = Depends(get_db),
 ):
     """根据批号查询所有关联数据：菌种、发酵、非密事件"""
-    result: dict = {"batch_no": batch_no, "seed_culture": None, "fermentation": None, "events": []}
+    result: dict = {
+        "batch_no": batch_no,
+        "seed_culture": None,
+        "fermentation": None,
+        "events": [],
+    }
 
     # 1. 菌种记录
     sc_rows = await session.execute(
-        text("SELECT * FROM production.seed_cultures WHERE batch_no = :bn AND is_deleted = false"),
-        {"bn": batch_no}
+        text(
+            "SELECT * FROM production.seed_cultures WHERE batch_no = :bn AND is_deleted = false"  # noqa: E501
+        ),
+        {"bn": batch_no},
     )
     sc = sc_rows.first()
     if sc:
         cols = sc_rows.keys()
-        result["seed_culture"] = {k: str(v) if hasattr(v, "isoformat") else v for k, v in zip(cols, sc) if k not in ("created_by", "updated_by", "is_deleted")}
+        result["seed_culture"] = {
+            k: str(v) if hasattr(v, "isoformat") else v
+            for k, v in zip(cols, sc)
+            if k not in ("created_by", "updated_by", "is_deleted")
+        }
 
     # 2. 发酵记录
     ferm_rows = await session.execute(
-        text("SELECT * FROM production.fermentation_records WHERE batch_no = :bn AND is_deleted = false ORDER BY entry_date DESC"),
-        {"bn": batch_no}
+        text(
+            "SELECT * FROM production.fermentation_records WHERE batch_no = :bn AND is_deleted = false ORDER BY entry_date DESC"  # noqa: E501
+        ),
+        {"bn": batch_no},
     )
     ferm_list = []
     for row in ferm_rows:
         cols = ferm_rows.keys()
-        ferm_list.append({k: str(v) if hasattr(v, "isoformat") else v for k, v in zip(cols, row) if k not in ("created_by", "updated_by", "is_deleted")})
+        ferm_list.append(
+            {
+                k: str(v) if hasattr(v, "isoformat") else v
+                for k, v in zip(cols, row)
+                if k not in ("created_by", "updated_by", "is_deleted")
+            }
+        )
     result["fermentation"] = ferm_list
 
     # 3. 关联的非密事件（通过发酵记录）
@@ -54,12 +72,18 @@ async def get_batch_profile(
             WHERE f.batch_no = :bn AND e.is_deleted = false
             ORDER BY e.event_time DESC
         """),
-        {"bn": batch_no}
+        {"bn": batch_no},
     )
     events = []
     for row in event_rows:
         cols = event_rows.keys()
-        events.append({k: str(v) if hasattr(v, "isoformat") else v for k, v in zip(cols, row) if k not in ("created_by", "updated_by", "is_deleted")})
+        events.append(
+            {
+                k: str(v) if hasattr(v, "isoformat") else v
+                for k, v in zip(cols, row)
+                if k not in ("created_by", "updated_by", "is_deleted")
+            }
+        )
     result["events"] = events
 
     # 4. 提炼车间 — 遍历所有关联表
@@ -76,16 +100,28 @@ async def get_batch_profile(
     result["refinery"] = {}
     for key, (table, col) in refinery_tables.items():
         rows = await session.execute(
-            text(f"SELECT * FROM {table} WHERE {col} = :bn AND is_deleted = false ORDER BY created_at DESC"),
-            {"bn": batch_no}
+            text(
+                f"SELECT * FROM {table} WHERE {col} = :bn AND is_deleted = false ORDER BY created_at DESC"  # noqa: E501
+            ),
+            {"bn": batch_no},
         )
         items = []
         for row in rows:
             cols = rows.keys()
-            items.append({k: str(v) if hasattr(v, "isoformat") else v for k, v in zip(cols, row) if k not in ("created_by", "updated_by", "is_deleted")})
+            items.append(
+                {
+                    k: str(v) if hasattr(v, "isoformat") else v
+                    for k, v in zip(cols, row)
+                    if k not in ("created_by", "updated_by", "is_deleted")
+                }
+            )
         result["refinery"][key] = items
 
-    if not result["seed_culture"] and not result["fermentation"] and not any(result["refinery"].values()):
+    if (
+        not result["seed_culture"]
+        and not result["fermentation"]
+        and not any(result["refinery"].values())
+    ):
         return success_response(None, message="未找到该批号的相关记录", status_code=404)
 
     return success_response(result)

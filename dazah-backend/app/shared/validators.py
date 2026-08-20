@@ -12,6 +12,8 @@ def normalize_yield_rate(value: float | None) -> float | None:
     否则保持原值（已是百分比格式或为 0/None）。
     """
     if value is not None and 0 < value <= 10:
-        logger.info("yield_rate_auto_normalized", original=value, normalized=value * 100)
+        logger.info(
+            "yield_rate_auto_normalized", original=value, normalized=value * 100
+        )
         return value * 100
     return value

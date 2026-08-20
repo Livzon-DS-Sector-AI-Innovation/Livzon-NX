@@ -39,41 +39,67 @@ FIELD_MAPPING = {
     "渣中残留效价": "residue_titer",
 }
 
-NUMBER_FIELDS = {"seq_no", "neutralize_ph", "target_temp", "settling_temp",
-                  "titer_before", "titer_after", "yield_rate", "impurity_content", "loss", "residue_titer"}
+NUMBER_FIELDS = {
+    "seq_no",
+    "neutralize_ph",
+    "target_temp",
+    "settling_temp",
+    "titer_before",
+    "titer_after",
+    "yield_rate",
+    "impurity_content",
+    "loss",
+    "residue_titer",
+}
 DATE_FIELDS = set()
 
 
 def _extract_text(field_value) -> str | None:
-    if field_value is None: return None
-    if isinstance(field_value, str): return field_value.strip() or None
-    if isinstance(field_value, dict): return str(field_value.get("name") or field_value.get("text", "")).strip() or None
+    if field_value is None:
+        return None
+    if isinstance(field_value, str):
+        return field_value.strip() or None
+    if isinstance(field_value, dict):
+        return (
+            str(field_value.get("name") or field_value.get("text", "")).strip() or None
+        )
     if isinstance(field_value, list) and field_value:
         first = field_value[0]
-        if isinstance(first, str): return first.strip() or None
-        if isinstance(first, dict): return str(first.get("name") or first.get("text", "")).strip() or None
+        if isinstance(first, str):
+            return first.strip() or None
+        if isinstance(first, dict):
+            return str(first.get("name") or first.get("text", "")).strip() or None
     return str(field_value).strip() or None
 
 
 def _extract_number(field_value) -> float | None:
-    if isinstance(field_value, (int, float)): return float(field_value)
+    if isinstance(field_value, (int, float)):
+        return float(field_value)
     text = _extract_text(field_value)
-    if text is None: return None
-    try: return float(text)
-    except (ValueError, TypeError): return None
+    if text is None:
+        return None
+    try:
+        return float(text)
+    except (ValueError, TypeError):
+        return None
 
 
 def _parse_date(v):
-    if v is None: return None
+    if v is None:
+        return None
     if isinstance(v, (int, float)) and 0 < v < 1e15:
         return datetime.fromtimestamp(v / 1000).date()
     if isinstance(v, str):
-        try: return date.fromisoformat(v)
-        except ValueError: return None
+        try:
+            return date.fromisoformat(v)
+        except ValueError:
+            return None
     return v
 
 
-async def sync_pretreatment(config: ProductionFeishuConfig, session: AsyncSession) -> dict:
+async def sync_pretreatment(
+    config: ProductionFeishuConfig, session: AsyncSession
+) -> dict:
     app_secret = decrypt_secret(config.encrypted_app_secret)
     client = ProductionFeishuClient(config.app_id, app_secret, config.bitable_app_token)
 
@@ -86,20 +112,25 @@ async def sync_pretreatment(config: ProductionFeishuConfig, session: AsyncSessio
         mapped: dict = {}
         for feishu_name, db_col in FIELD_MAPPING.items():
             raw = fields.get(feishu_name)
-            if raw is None: continue
+            if raw is None:
+                continue
             if db_col in DATE_FIELDS:
                 val = _extract_text(raw)
-                if val is not None: mapped[db_col] = _parse_date(val)
+                if val is not None:
+                    mapped[db_col] = _parse_date(val)
                 continue
             if db_col in NUMBER_FIELDS:
                 val = _extract_number(raw)
             else:
                 val = _extract_text(raw)
-            if val is not None: mapped[db_col] = val
-        if not mapped.get("received_batch"): continue
+            if val is not None:
+                mapped[db_col] = val
+        if not mapped.get("received_batch"):
+            continue
         rows.append(mapped)
 
-    if not rows: return {"created": 0, "updated": 0}
+    if not rows:
+        return {"created": 0, "updated": 0}
 
     all_cols = sorted(set().union(*(r.keys() for r in rows)))
     params: dict = {}
@@ -107,12 +138,17 @@ async def sync_pretreatment(config: ProductionFeishuConfig, session: AsyncSessio
     for i, row in enumerate(rows):
         vals = ", ".join(f":{c}_{i}" for c in all_cols)
         values_clauses.append(f"(gen_random_uuid(), {vals})")
-        for c in all_cols: params[f"{c}_{i}"] = row.get(c)
+        for c in all_cols:
+            params[f"{c}_{i}"] = row.get(c)
 
-    update_set = ", ".join(f"{c} = EXCLUDED.{c}" for c in all_cols if c != "received_batch")
+    ", ".join(
+        f"{c} = EXCLUDED.{c}" for c in all_cols if c != "received_batch"
+    )
 
-    sql = text(f"INSERT INTO production.pretreatments (id, {', '.join(all_cols)}) VALUES "
-               + ", ".join(values_clauses)
-               + f" ON CONFLICT DO NOTHING")
+    sql = text(
+        f"INSERT INTO production.pretreatments (id, {', '.join(all_cols)}) VALUES "
+        + ", ".join(values_clauses)
+        + " ON CONFLICT DO NOTHING"
+    )
     await session.execute(sql, params)
     return {"created": len(rows), "updated": 0}

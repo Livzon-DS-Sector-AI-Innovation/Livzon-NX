@@ -1,16 +1,15 @@
 """DR 多拉菌素 — 飞书电子表格同步（过滤萃取工段）"""
 
 import logging
-from datetime import date, datetime
-from typing import Optional
+from typing import Any
 
 import httpx
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.platform.integrations.feishu.utils import OPEN_API_BASE_URL
 from app.core.secrets import decrypt_secret
 from app.modules.production.production_feishu_models import ProductionFeishuConfig
+from app.platform.integrations.feishu.utils import OPEN_API_BASE_URL
 
 logger = logging.getLogger(__name__)
 
@@ -19,20 +18,45 @@ SHEET_RANGE = "A4:AH5000"
 DATA_START_ROW = 4
 
 COL = {
-    "tank_date": 0, "batch_no": 1, "tank_no": 2,
-    "handover_unit": 3, "handover_volume": 4, "product_qty": 5,
-    "actual_product_qty": 6, "handover_product_qty": 7, "bacteria_plates": 8,
-    "feeding_time": 9, "extraction_batch_no": 10, "feeding_plates": 11, "extraction_pq": 12,
-    "filtrate_tank": 13, "filtrate_volume": 14, "filtrate_potency": 15, "filtrate_pq": 16,
-    "total_qty": 17, "fl_yield": 18, "single_yield": 19,
-    "dw_volume": 20, "dw_potency": 21, "dw_pq": 22,
-    "impurity_6": 23, "impurity_1": 24, "impurity_2": 25, "impurity_7": 26,
-    "impurity_3": 27, "impurity_4": 28, "impurity_5": 29,
-    "rrt_068": 30, "unknown_max": 31, "total_impurities": 32, "purity": 33,
+    "tank_date": 0,
+    "batch_no": 1,
+    "tank_no": 2,
+    "handover_unit": 3,
+    "handover_volume": 4,
+    "product_qty": 5,
+    "actual_product_qty": 6,
+    "handover_product_qty": 7,
+    "bacteria_plates": 8,
+    "feeding_time": 9,
+    "extraction_batch_no": 10,
+    "feeding_plates": 11,
+    "extraction_pq": 12,
+    "filtrate_tank": 13,
+    "filtrate_volume": 14,
+    "filtrate_potency": 15,
+    "filtrate_pq": 16,
+    "total_qty": 17,
+    "fl_yield": 18,
+    "single_yield": 19,
+    "dw_volume": 20,
+    "dw_potency": 21,
+    "dw_pq": 22,
+    "impurity_6": 23,
+    "impurity_1": 24,
+    "impurity_2": 25,
+    "impurity_7": 26,
+    "impurity_3": 27,
+    "impurity_4": 28,
+    "impurity_5": 29,
+    "rrt_068": 30,
+    "unknown_max": 31,
+    "total_impurities": 32,
+    "purity": 33,
 }
 
 IMPURITY_MAP = {
-    "rrt_068": "rrt_068", "unknown_max": "unknown_max_single",
+    "rrt_068": "rrt_068",
+    "unknown_max": "unknown_max_single",
     "total_impurities": "total_impurities",
 }
 
@@ -41,25 +65,38 @@ _token_cache: dict[str, str] = {}
 
 # ── 工具 ─────────────────────────────────────────────────
 
+
 async def _get_token(app_id: str, app_secret: str) -> str:
     k = f"dr_sync:{app_id}"
-    if k in _token_cache: return _token_cache[k]
+    if k in _token_cache:
+        return _token_cache[k]
     async with httpx.AsyncClient(base_url=OPEN_API_BASE_URL, timeout=30) as c:
-        r = await c.post("/auth/v3/tenant_access_token/internal",
-                         json={"app_id": app_id, "app_secret": app_secret})
+        r = await c.post(
+            "/auth/v3/tenant_access_token/internal",
+            json={"app_id": app_id, "app_secret": app_secret},
+        )
         r.raise_for_status()
         token = r.json()["tenant_access_token"]
         _token_cache[k] = token
         return str(token)
 
 
-async def _read_sheet(token: str, sheet_id: str, spreadsheet_token: str) -> list[list[str]]:
+async def _read_sheet(
+    token: str, sheet_id: str, spreadsheet_token: str
+) -> list[list[str]]:
     """读取飞书电子表格"""
-    path = f"/sheets/v2/spreadsheets/{spreadsheet_token}/values/{sheet_id}!{SHEET_RANGE}"
+    path = (
+        f"/sheets/v2/spreadsheets/{spreadsheet_token}/values/{sheet_id}!{SHEET_RANGE}"
+    )
     async with httpx.AsyncClient(base_url=OPEN_API_BASE_URL, timeout=60) as c:
-        r = await c.get(path, params={"valueRenderOption": "ToString",
-                         "dateTimeRenderOption": "FormattedString"},
-                         headers={"Authorization": f"Bearer {token}"})
+        r = await c.get(
+            path,
+            params={
+                "valueRenderOption": "ToString",
+                "dateTimeRenderOption": "FormattedString",
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
         if r.status_code != 200:
             raise RuntimeError(f"飞书 API HTTP {r.status_code}: {r.text[:300]}")
         data = r.json()
@@ -74,18 +111,24 @@ def _g(row: list[str], key: str) -> str:
     return str(row[idx]).strip() if idx < len(row) and row[idx] else ""
 
 
-def _f(row: list[str], key: str) -> Optional[float]:
+def _f(row: list[str], key: str) -> float | None:
     s = _g(row, key)
-    if not s or s == "-" or s.startswith("#"): return None
-    try: return float(s)
-    except (ValueError, TypeError): return None
+    if not s or s == "-" or s.startswith("#"):
+        return None
+    try:
+        return float(s)
+    except (ValueError, TypeError):
+        return None
 
 
-def _i(row: list[str], key: str) -> Optional[int]:
+def _i(row: list[str], key: str) -> int | None:
     s = _g(row, key)
-    if not s or s == "-": return None
-    try: return int(float(s))
-    except (ValueError, TypeError): return None
+    if not s or s == "-":
+        return None
+    try:
+        return int(float(s))
+    except (ValueError, TypeError):
+        return None
 
 
 def _is_empty(row: list[str]) -> bool:
@@ -96,17 +139,27 @@ def _is_empty(row: list[str]) -> bool:
 # 同步主逻辑
 # ═══════════════════════════════════════════════════════════
 
-async def sync_dr_extraction(config: ProductionFeishuConfig, session: AsyncSession) -> dict:
+
+async def sync_dr_extraction(
+    config: ProductionFeishuConfig, session: AsyncSession
+) -> dict:
     app_secret = decrypt_secret(config.encrypted_app_secret)
     token = await _get_token(config.app_id, app_secret)
     logger.info("[DR同步] 读取飞书表格...")
     rows = await _read_sheet(token, config.table_id, config.bitable_app_token)
 
-    stats = {"created_batches": 0, "created_tanks": 0,
-             "created_extractions": 0, "created_filtrates": 0,
-             "updated_batches": 0, "updated_tanks": 0,
-             "updated_extractions": 0, "updated_filtrates": 0,
-             "skipped": 0, "errors": 0}
+    stats = {
+        "created_batches": 0,
+        "created_tanks": 0,
+        "created_extractions": 0,
+        "created_filtrates": 0,
+        "updated_batches": 0,
+        "updated_tanks": 0,
+        "updated_extractions": 0,
+        "updated_filtrates": 0,
+        "skipped": 0,
+        "errors": 0,
+    }
 
     # 合并单元格继承
     cur_batch_no = ""
@@ -141,12 +194,17 @@ async def sync_dr_extraction(config: ProductionFeishuConfig, session: AsyncSessi
             # ─ 1. 批次 ─
             if bno:  # 新批次行
                 batch_data = {
-                    "batch_no": cur_batch_no, "workshop": "201-3",
+                    "batch_no": cur_batch_no,
+                    "workshop": "201-3",
                     "tank_date": _g(row, "tank_date") or None,
                 }
                 cur_batch_id = await _upsert(
-                    session, "production.dr_fermentation_batches",
-                    batch_data, ["batch_no"], stats, "batches"
+                    session,
+                    "production.dr_fermentation_batches",
+                    batch_data,
+                    ["batch_no"],
+                    stats,
+                    "batches",
                 )
 
             # ─ 2. 发酵罐 ─
@@ -162,8 +220,12 @@ async def sync_dr_extraction(config: ProductionFeishuConfig, session: AsyncSessi
                     "bacteria_residue_plates": _i(row, "bacteria_plates"),
                 }
                 cur_tank_id = await _upsert(
-                    session, "production.dr_fermentation_tanks",
-                    tank_data, ["tank_no", "fermentation_batch_id"], stats, "tanks"
+                    session,
+                    "production.dr_fermentation_tanks",
+                    tank_data,
+                    ["tank_no", "fermentation_batch_id"],
+                    stats,
+                    "tanks",
                 )
 
             if not cur_tank_id:
@@ -183,8 +245,12 @@ async def sync_dr_extraction(config: ProductionFeishuConfig, session: AsyncSessi
                     "single_batch_yield": _f(row, "single_yield"),
                 }
                 cur_extr_id = await _upsert(
-                    session, "production.dr_extractions",
-                    extr_data, ["extraction_batch_no", "fermentation_tank_id"], stats, "extractions"
+                    session,
+                    "production.dr_extractions",
+                    extr_data,
+                    ["extraction_batch_no", "fermentation_tank_id"],
+                    stats,
+                    "extractions",
                 )
 
             if not cur_extr_id:
@@ -205,17 +271,31 @@ async def sync_dr_extraction(config: ProductionFeishuConfig, session: AsyncSessi
                     "dilute_wash_product_qty": _f(row, "dw_pq"),
                 }
                 await _upsert(
-                    session, "production.dr_filtrates",
-                    filtr_data, ["extraction_id", "tank_no"], stats, "filtrates"
+                    session,
+                    "production.dr_filtrates",
+                    filtr_data,
+                    ["extraction_id", "tank_no"],
+                    stats,
+                    "filtrates",
                 )
 
             # ─ 5. 杂质（仅在该行有值时更新） ─
             if cur_batch_id:
                 imp_updates = {}
                 imp_params = {}
-                for field in ["impurity_6", "impurity_1", "impurity_2", "impurity_7",
-                              "impurity_3", "impurity_4", "impurity_5",
-                              "rrt_068", "unknown_max", "total_impurities", "purity"]:
+                for field in [
+                    "impurity_6",
+                    "impurity_1",
+                    "impurity_2",
+                    "impurity_7",
+                    "impurity_3",
+                    "impurity_4",
+                    "impurity_5",
+                    "rrt_068",
+                    "unknown_max",
+                    "total_impurities",
+                    "purity",
+                ]:
                     val = _f(row, field)
                     if val is not None:
                         db_col = IMPURITY_MAP.get(field, field)
@@ -225,7 +305,9 @@ async def sync_dr_extraction(config: ProductionFeishuConfig, session: AsyncSessi
                     set_sql = ", ".join(f"{k} = :{k}" for k in imp_updates)
                     imp_params["bid"] = cur_batch_id
                     await session.execute(
-                        text(f"UPDATE production.dr_fermentation_batches SET {set_sql} WHERE id = :bid"),
+                        text(
+                            f"UPDATE production.dr_fermentation_batches SET {set_sql} WHERE id = :bid"  # noqa: E501
+                        ),
                         imp_params,
                     )
 
@@ -234,8 +316,10 @@ async def sync_dr_extraction(config: ProductionFeishuConfig, session: AsyncSessi
         except Exception as e:
             logger.warning(f"[DR同步] 行 {ri + DATA_START_ROW}: {e}")
             stats["errors"] += 1
-            try: await session.rollback()
-            except Exception: pass
+            try:
+                await session.rollback()
+            except Exception:
+                pass
 
     await session.commit()
     logger.info("[DR同步] 完成: %s", stats)
@@ -244,8 +328,15 @@ async def sync_dr_extraction(config: ProductionFeishuConfig, session: AsyncSessi
 
 # ── upsert 通用函数 ──────────────────────────────────────
 
-async def _upsert(session: AsyncSession, table: str, data: dict,
-                  unique_keys: list[str], stats: dict, stat_key: str) -> str:
+
+async def _upsert(
+    session: AsyncSession,
+    table: str,
+    data: dict,
+    unique_keys: list[str],
+    stats: dict,
+    stat_key: str,
+) -> str:
     """按 unique_keys 去重 upsert，返回记录 UUID"""
     # 查现有
     where = " AND ".join(f"{k} = :{k}" for k in unique_keys)
@@ -276,7 +367,9 @@ async def _upsert(session: AsyncSession, table: str, data: dict,
         cols = ", ".join(data.keys())
         vals = ", ".join(f":{k}" for k in data)
         await session.execute(
-            text(f"INSERT INTO {table} (id, {cols}) VALUES (gen_random_uuid(), {vals})"),
+            text(
+                f"INSERT INTO {table} (id, {cols}) VALUES (gen_random_uuid(), {vals})"
+            ),
             data,
         )
         # 再次查询获取新 ID
@@ -303,11 +396,13 @@ async def run_dr_sync(session: AsyncSession) -> dict:
     from app.modules.production.production_plan_service import sync_config_by_target
 
     result = await session.execute(
-        select(ProductionFeishuConfig).where(
+        select(ProductionFeishuConfig)
+        .where(
             ProductionFeishuConfig.product_name == DR_PRODUCT_NAME,
-            ProductionFeishuConfig.is_active == True,
-            ProductionFeishuConfig.is_deleted == False,
-        ).order_by(ProductionFeishuConfig.sync_target)
+            ProductionFeishuConfig.is_active,
+            not ProductionFeishuConfig.is_deleted,
+        )
+        .order_by(ProductionFeishuConfig.sync_target)
     )
     configs = result.scalars().all()
     if not configs:
@@ -331,7 +426,7 @@ async def run_dr_sync(session: AsyncSession) -> dict:
     return results
 
 
-_dr_sync_scheduler: "AsyncIOScheduler | None" = None
+_dr_sync_scheduler: Any = None
 DR_SYNC_INTERVAL_MINUTES = 10
 
 

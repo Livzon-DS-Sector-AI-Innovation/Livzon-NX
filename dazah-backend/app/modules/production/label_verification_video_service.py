@@ -4,11 +4,8 @@ import base64
 import json
 import logging
 import os
-import re
-from datetime import date, datetime
 
 import cv2
-import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -54,9 +51,7 @@ class LabelVerificationVideoService:
                 break
 
             if current_frame % frame_interval == 0:
-                _, buffer = cv2.imencode(
-                    ".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 75]
-                )
+                _, buffer = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 75])
                 img_base64 = base64.b64encode(buffer).decode("utf-8")
                 frames_base64.append(f"data:image/jpeg;base64,{img_base64}")
 
@@ -90,7 +85,8 @@ class LabelVerificationVideoService:
 
     def _build_recognition_prompt(self) -> str:
         """构建 AI 视觉识别的提示词"""
-        return """你是一个药品生产标签核验专家。请仔细分析这些视频帧截图，识别标签上的所有信息。
+        return
+        """你是一个药品生产标签核验专家。请仔细分析这些视频帧截图，识别标签上的所有信息。
 
 这些帧来自同一段视频，展示的是同一批产品的标签和桶。请综合所有帧的信息，尽量完整地识别以下内容。
 
@@ -122,19 +118,20 @@ class LabelVerificationVideoService:
 
     def _build_detailed_prompt(self, form_data: dict) -> str:
         """构建带表单数据的详细对比提示词"""
-        return f"""你是一个药品生产标签核验专家。请仔细分析这些视频帧截图，将标签上的信息与以下表单数据进行逐项对比。
+        return
+        f"""你是一个药品生产标签核验专家。请仔细分析这些视频帧截图，将标签上的信息与以下表单数据进行逐项对比。
 
 表单数据：
-- 批号：{form_data.get('batch_number', '未填写')}
-- 产品名称：{form_data.get('product_name', '未填写')}
-- 生产日期：{form_data.get('production_date', '未填写')}
-- 有效期至：{form_data.get('expiry_date', '未填写')}
-- 总桶数：{form_data.get('total_barrels', '未填写')}
-- 整桶数：{form_data.get('standard_barrels', '未填写')}
-- 零头桶数：{form_data.get('remainder_barrel', '未填写')}
-- 整桶重量：{form_data.get('standard_weight', '未填写')} kg
-- 零头重量：{form_data.get('remainder_weight', '未填写')} kg
-- 总重量：{form_data.get('total_weight', '未填写')} kg
+- 批号：{form_data.get("batch_number", "未填写")}
+- 产品名称：{form_data.get("product_name", "未填写")}
+- 生产日期：{form_data.get("production_date", "未填写")}
+- 有效期至：{form_data.get("expiry_date", "未填写")}
+- 总桶数：{form_data.get("total_barrels", "未填写")}
+- 整桶数：{form_data.get("standard_barrels", "未填写")}
+- 零头桶数：{form_data.get("remainder_barrel", "未填写")}
+- 整桶重量：{form_data.get("standard_weight", "未填写")} kg
+- 零头重量：{form_data.get("remainder_weight", "未填写")} kg
+- 总重量：{form_data.get("total_weight", "未填写")} kg
 
 请对以下 8 项逐一判断（true=一致，false=不一致或无法确认）：
 
@@ -268,14 +265,10 @@ class LabelVerificationVideoService:
         current_fps = initial_fps
 
         while current_fps >= max_retry_fps:
-            logger.info(
-                f"视频分析第 {retry_count + 1} 轮, FPS={current_fps}"
-            )
+            logger.info(f"视频分析第 {retry_count + 1} 轮, FPS={current_fps}")
 
             # 提取帧
-            frames = self.extract_frames(
-                video_path, fps=current_fps, max_frames=25
-            )
+            frames = self.extract_frames(video_path, fps=current_fps, max_frames=25)
             if not frames:
                 raise ValueError("无法从视频中提取到任何帧")
 
@@ -286,9 +279,7 @@ class LabelVerificationVideoService:
             prompt = self._build_detailed_prompt(form_data)
 
             try:
-                raw_response = await ai_service.chat_vision(
-                    prompt, selected_frames
-                )
+                raw_response = await ai_service.chat_vision(prompt, selected_frames)
                 result = self._parse_ai_response(raw_response)
             except Exception as e:
                 logger.warning(f"AI 分析失败 (FPS={current_fps}): {e}")
@@ -320,9 +311,7 @@ class LabelVerificationVideoService:
             result, len(selected_frames), current_fps, retry_count
         )
 
-    def _select_key_frames(
-        self, frames: list[str], max_count: int = 12
-    ) -> list[str]:
+    def _select_key_frames(self, frames: list[str], max_count: int = 12) -> list[str]:
         """从所有帧中选择关键帧，尽量均匀分布"""
         if len(frames) <= max_count:
             return frames
@@ -383,9 +372,7 @@ class LabelVerificationVideoService:
             result_status = "全部一致"
             result_summary = "✅✅✅ 全部一致"
         else:
-            failed = [
-                k for k, v in checks.items() if not v
-            ]
+            failed = [k for k, v in checks.items() if not v]
             result_status = "存在差异"
             result_summary = f"❌ {len(failed)} 项不一致"
 

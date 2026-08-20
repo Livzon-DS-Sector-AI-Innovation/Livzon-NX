@@ -29,12 +29,26 @@ async def list_nce(
     date_to: str | None = Query(None),
     svc: NCEService = Depends(get_nce_service),
 ):
-    items, total = await svc.list_records(page=page, page_size=page_size, workshop=workshop, event_type=event_type, date_from=date_from, date_to=date_to)
-    return paginated_response([NCEResponse.model_validate(i) for i in items], page, page_size, total)
+    items, total = await svc.list_records(
+        page=page,
+        page_size=page_size,
+        workshop=workshop,
+        event_type=event_type,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    return paginated_response(
+        [NCEResponse.model_validate(i) for i in items], page, page_size, total
+    )
 
 
-@router.get("/non-conforming-events/{event_id}/affected-batches", summary="查询非密事件关联的批次")
-async def get_affected_batches(event_id: UUID, svc: NCEService = Depends(get_nce_service)):
+@router.get(
+    "/non-conforming-events/{event_id}/affected-batches",
+    summary="查询非密事件关联的批次",
+)
+async def get_affected_batches(
+    event_id: UUID, svc: NCEService = Depends(get_nce_service)
+):
     batches = await svc.get_affected_batches(event_id)
     return success_response(batches)
 
@@ -46,7 +60,9 @@ async def create_nce(data: NCECreate, svc: NCEService = Depends(get_nce_service)
 
 
 @router.put("/non-conforming-events/{record_id}", summary="更新非密事件")
-async def update_nce(record_id: UUID, data: NCEUpdate, svc: NCEService = Depends(get_nce_service)):
+async def update_nce(
+    record_id: UUID, data: NCEUpdate, svc: NCEService = Depends(get_nce_service)
+):
     record = await svc.update_record(record_id, data.model_dump(exclude_unset=True))
     return success_response(NCEResponse.model_validate(record), message="更新成功")
 

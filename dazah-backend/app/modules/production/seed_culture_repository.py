@@ -19,7 +19,7 @@ class SeedCultureRepository:
         batch_no: str | None = None,
         product_name: str | None = None,
     ):
-        query = select(SeedCulture).where(SeedCulture.is_deleted == False)
+        query = select(SeedCulture).where(not SeedCulture.is_deleted)
 
         if batch_no:
             query = query.where(SeedCulture.batch_no.ilike(f"%{batch_no}%"))
@@ -29,7 +29,9 @@ class SeedCultureRepository:
         count_query = select(func.count()).select_from(query.subquery())
         total = (await self.session.execute(count_query)).scalar_one()
 
-        query = query.order_by(SeedCulture.prepare_date.desc().nullslast(), SeedCulture.batch_no.desc())
+        query = query.order_by(
+            SeedCulture.prepare_date.desc().nullslast(), SeedCulture.batch_no.desc()
+        )
         query = query.offset((page - 1) * page_size).limit(page_size)
         result = await self.session.execute(query)
         items = list(result.scalars().all())
@@ -37,7 +39,9 @@ class SeedCultureRepository:
         return items, total
 
     async def get_by_id(self, record_id: UUID) -> SeedCulture | None:
-        query = select(SeedCulture).where(SeedCulture.id == record_id, SeedCulture.is_deleted == False)
+        query = select(SeedCulture).where(
+            SeedCulture.id == record_id, not SeedCulture.is_deleted
+        )
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
 

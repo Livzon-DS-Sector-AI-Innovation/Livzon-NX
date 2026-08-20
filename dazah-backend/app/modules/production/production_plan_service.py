@@ -7,9 +7,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.secrets import decrypt_secret
+from app.modules.production.models import ProductionPlan, SalesPlanDetail
 from app.modules.production.production_feishu_client import ProductionFeishuClient
 from app.modules.production.production_feishu_models import ProductionFeishuConfig
-from app.modules.production.models import ProductionPlan, SalesPlanDetail
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +75,9 @@ def _extract_text(field_value) -> str | None:
     if isinstance(field_value, str):
         return field_value.strip() or None
     if isinstance(field_value, dict):
-        return str(field_value.get("name") or field_value.get("text", "")).strip() or None
+        return (
+            str(field_value.get("name") or field_value.get("text", "")).strip() or None
+        )
     if isinstance(field_value, list) and field_value:
         first = field_value[0]
         if isinstance(first, str):
@@ -116,7 +118,9 @@ def _extract_date(ts) -> date | None:
     return None
 
 
-async def _sync_production_plan(config: ProductionFeishuConfig, session: AsyncSession) -> dict:
+async def _sync_production_plan(
+    config: ProductionFeishuConfig, session: AsyncSession
+) -> dict:
     """从飞书同步生产计划数据"""
     app_secret = decrypt_secret(config.encrypted_app_secret)
     client = ProductionFeishuClient(
@@ -140,7 +144,11 @@ async def _sync_production_plan(config: ProductionFeishuConfig, session: AsyncSe
                 val = fields.get(feishu_name)
                 if db_name == "plan_date":
                     mapped[db_name] = _extract_date(val)
-                elif db_name in ("planned_yield", "actual_completion", "completion_rate"):
+                elif db_name in (
+                    "planned_yield",
+                    "actual_completion",
+                    "completion_rate",
+                ):
                     mapped[db_name] = _extract_number(val)
                 else:
                     mapped[db_name] = _extract_text(val)
@@ -155,7 +163,7 @@ async def _sync_production_plan(config: ProductionFeishuConfig, session: AsyncSe
                     ProductionPlan.product_name == product_name,
                     ProductionPlan.workshop == mapped.get("workshop"),
                     ProductionPlan.plan_date == mapped.get("plan_date"),
-                    ProductionPlan.is_deleted == False,
+                    not ProductionPlan.is_deleted,
                 )
             )
             record = existing_result.scalar_one_or_none()
@@ -182,18 +190,32 @@ async def _sync_production_plan(config: ProductionFeishuConfig, session: AsyncSe
     return {"created": created, "updated": updated, "product": config.product_name}
 
 
-async def _sync_sales_plan(config: ProductionFeishuConfig, session: AsyncSession) -> dict:
+async def _sync_sales_plan(
+    config: ProductionFeishuConfig, session: AsyncSession
+) -> dict:
     """从飞书同步销售计划执行表数据"""
     app_secret = decrypt_secret(config.encrypted_app_secret)
-    client = ProductionFeishuClient(app_id=config.app_id, app_secret=app_secret, app_token=config.bitable_app_token)
+    client = ProductionFeishuClient(
+        app_id=config.app_id, app_secret=app_secret, app_token=config.bitable_app_token
+    )
 
-    created = 0; updated = 0
+    created = 0
+    updated = 0
     page_token: str | None = None
 
-    NUMBER_FIELDS = {"last_month_delivered_uninvoiced", "current_year_delivered", "month_planned_delivery",
-                     "month_delivered_qty", "undelivered_qty", "month_planned_invoice", "invoiced_qty",
-                     "delivery_completion_rate", "last_month_end_inventory", "month_planned_capacity",
-                     "month_end_inventory"}
+    number_fields = {
+        "last_month_delivered_uninvoiced",
+        "current_year_delivered",
+        "month_planned_delivery",
+        "month_delivered_qty",
+        "undelivered_qty",
+        "month_planned_invoice",
+        "invoiced_qty",
+        "delivery_completion_rate",
+        "last_month_end_inventory",
+        "month_planned_capacity",
+        "month_end_inventory",
+    }
 
     while True:
         result = await client.list_records(config.table_id, page_token=page_token)
@@ -202,7 +224,7 @@ async def _sync_sales_plan(config: ProductionFeishuConfig, session: AsyncSession
             mapped: dict = {}
             for feishu_name, db_name in SALES_FIELD_MAP.items():
                 val = fields.get(feishu_name)
-                if db_name in NUMBER_FIELDS:
+                if db_name in number_fields:
                     mapped[db_name] = _extract_number(val)
                 else:
                     mapped[db_name] = _extract_text(val)
@@ -214,7 +236,7 @@ async def _sync_sales_plan(config: ProductionFeishuConfig, session: AsyncSession
             existing = await session.execute(
                 select(SalesPlanDetail).where(
                     SalesPlanDetail.product_name == product_name,
-                    SalesPlanDetail.is_deleted == False,
+                    not SalesPlanDetail.is_deleted,
                 )
             )
             record = existing.scalar_one_or_none()
@@ -223,20 +245,24 @@ async def _sync_sales_plan(config: ProductionFeishuConfig, session: AsyncSession
 
             if record:
                 for k, v in mapped.items():
-                    if v is not None: setattr(record, k, v)
+                    if v is not None:
+                        setattr(record, k, v)
                 updated += 1
             else:
                 session.add(SalesPlanDetail(**mapped))
                 created += 1
         await session.flush()
-        if not result["has_more"]: break
+        if not result["has_more"]:
+            break
         page_token = result.get("page_token")
 
     logger.info("销售计划同步完成: created=%s, updated=%s", created, updated)
     return {"created": created, "updated": updated, "product": config.product_name}
 
 
-async def sync_config_by_target(config: ProductionFeishuConfig, session: AsyncSession) -> dict:
+async def sync_config_by_target(
+    config: ProductionFeishuConfig, session: AsyncSession
+) -> dict:
     """根据 sync_target 路由到对应的同步逻辑"""
     target = config.sync_target or "production_plan"
     if target == "production_plan":
@@ -244,85 +270,120 @@ async def sync_config_by_target(config: ProductionFeishuConfig, session: AsyncSe
     elif target == "sales_plan":
         return await _sync_sales_plan(config, session)
     elif target == "fermentation_record":
-        from app.modules.production.production_feishu_service import sync_config as fermentation_sync
+        from app.modules.production.production_feishu_service import (
+            sync_config as fermentation_sync,
+        )
+
         return await fermentation_sync(config, session)
     elif target == "seed_culture":
         from app.modules.production.seed_culture_sync import sync_seed_culture_to_table
+
         return await sync_seed_culture_to_table(config, session)
     elif target == "broth_receive":
         from app.modules.production.broth_receive_sync import sync_broth_receive
+
         return await sync_broth_receive(config, session)
     elif target == "broth_pretreat":
         from app.modules.production.pretreatment_sync import sync_pretreatment
+
         return await sync_pretreatment(config, session)
     elif target == "ceramic_feed":
         from app.modules.production.ceramic_feed_sync import sync_ceramic_feed
+
         return await sync_ceramic_feed(config, session)
     elif target == "ceramic_ops":
         from app.modules.production.ceramic_ops_sync import sync_ceramic_ops
+
         return await sync_ceramic_ops(config, session)
     elif target == "ceramic_clean":
         from app.modules.production.ceramic_clean_sync import sync_ceramic_clean
+
         return await sync_ceramic_clean(config, session)
     elif target == "ceramic_sep":
         from app.modules.production.ceramic_sep_sync import sync_ceramic_sep
+
         return await sync_ceramic_sep(config, session)
     elif target == "ceramic_equip":
         from app.modules.production.ceramic_equip_sync import sync_ceramic_equip
+
         return await sync_ceramic_equip(config, session)
     elif target == "decolor1":
         from app.modules.production.decolor1_sync import sync_decolor1
+
         return await sync_decolor1(config, session)
     elif target == "filter1":
         from app.modules.production.filter1_sync import sync_filter1
+
         return await sync_filter1(config, session)
     elif target == "conc1":
         from app.modules.production.conc1_sync import sync_conc1
+
         return await sync_conc1(config, session)
     elif target == "centrifuge1":
         from app.modules.production.centrifuge1_sync import sync_centrifuge1
+
         return await sync_centrifuge1(config, session)
     elif target == "recrystallize":
         from app.modules.production.recrystallize_sync import sync_recrystallize
+
         return await sync_recrystallize(config, session)
     elif target == "filter2":
         from app.modules.production.filter2_sync import sync_filter2
+
         return await sync_filter2(config, session)
     elif target == "conc2":
         from app.modules.production.conc2_sync import sync_conc2
+
         return await sync_conc2(config, session)
     elif target == "centrifuge2":
         from app.modules.production.centrifuge2_sync import sync_centrifuge2
+
         return await sync_centrifuge2(config, session)
     elif target == "dry":
         from app.modules.production.dry_sync import sync_dry
+
         return await sync_dry(config, session)
     elif target == "pack":
         from app.modules.production.pack_sync import sync_pack
+
         return await sync_pack(config, session)
     elif target == "dr_extraction":
         from app.modules.production.dr_feishu_sync import sync_dr_extraction
+
         return await sync_dr_extraction(config, session)
     elif target == "dr_chromatography":
         from app.modules.production.dr_chromatography_sync import sync_dr_chromatography
+
         return await sync_dr_chromatography(config, session)
     elif target == "dr_refinement":
         from app.modules.production.dr_refinement_sync import sync_dr_refinement
+
         return await sync_dr_refinement(config, session)
     elif target == "dr_second_refinement":
-        from app.modules.production.dr_second_refinement_sync import sync_dr_second_refinement
+        from app.modules.production.dr_second_refinement_sync import (
+            sync_dr_second_refinement,
+        )
+
         return await sync_dr_second_refinement(config, session)
     elif target == "dr_third_refinement":
-        from app.modules.production.dr_third_refinement_sync import sync_dr_third_refinement
+        from app.modules.production.dr_third_refinement_sync import (
+            sync_dr_third_refinement,
+        )
+
         return await sync_dr_third_refinement(config, session)
     elif target == "dr_fourth_refinement":
-        from app.modules.production.dr_fourth_refinement_sync import sync_dr_fourth_refinement
+        from app.modules.production.dr_fourth_refinement_sync import (
+            sync_dr_fourth_refinement,
+        )
+
         return await sync_dr_fourth_refinement(config, session)
     # ── 环保模块同步目标 ──
     elif target in ("wastewater", "exhaust_gas", "solid_waste"):
         from app.modules.environment.environment_feishu import sync_environment_table
+
         return await sync_environment_table(target, config, session)
     else:
         # batch, production_record, material_balance — 通用自动同步
         from app.modules.production.auto_sync_service import auto_sync_config
+
         return await auto_sync_config(config, session)

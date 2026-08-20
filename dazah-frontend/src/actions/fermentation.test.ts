@@ -69,7 +69,7 @@ describe('fermentation actions', () => {
     const fetchMock = vi.fn(() => jsonResponse({ code: 200, message: 'success', data: { id: 'rec-new' } }),)
     vi.stubGlobal('fetch', fetchMock)
 
-    const payload = { batch_no: 'FA-002', product_name: 'FA', entry_date: '2026-07-01' }
+    const payload = { batch_no: 'FA-002', product_name: 'FA', entry_date: '2026-07-01', fermenter: 'F-1' }
     await expect(createFermentationRecord(payload)).resolves.toMatchObject({ code: 200 })
 
     expect(fetchMock).toHaveBeenCalledWith(

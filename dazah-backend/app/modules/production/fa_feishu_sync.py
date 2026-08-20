@@ -1,16 +1,20 @@
 """FA 苯丙氨酸 — 发酵液放罐 飞书表格同步
 
-从飞书电子表格子表读取数据，解析主批/子批两层结构，upsert 到 fa_fermentation_batches + fa_fermentation_sub_batches。
+从飞书电子表格子表读取数据，解析主批/子批两层结构，upsert 到 fa_fermentation_batches +
+        fa_fermentation_sub_batches。
 
-spreadsheet_token / app_id / app_secret 由调用方从数据库 production_feishu_configs 表读取后传入。
+spreadsheet_token / app_id / app_secret 由调用方从数据库 production_feishu_configs
+        表读取后传入。
 """
+
 import asyncio
 import logging
 import os
 import re
 from pathlib import Path
-from dotenv import load_dotenv
+
 import httpx
+from dotenv import load_dotenv
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
@@ -44,7 +48,9 @@ async def _get_token(app_id: str, app_secret: str) -> str:
         return str(token)
 
 
-async def _read_sheet(spreadsheet_token: str, app_id: str, app_secret: str) -> list[list]:
+async def _read_sheet(
+    spreadsheet_token: str, app_id: str, app_secret: str
+) -> list[list]:
     """读取整个工作表，返回二维数组（每行是一个 list）"""
     token = await _get_token(app_id, app_secret)
 
@@ -55,7 +61,8 @@ async def _read_sheet(spreadsheet_token: str, app_id: str, app_secret: str) -> l
     }
     async with httpx.AsyncClient(base_url=OPEN_API_BASE_URL, timeout=60) as client:
         resp = await client.get(
-            path, params=params,
+            path,
+            params=params,
             headers={"Authorization": f"Bearer {token}"},
         )
         resp.raise_for_status()
@@ -112,7 +119,9 @@ def _safe_pct(val: str) -> str:
         return f"'{val}'"
 
 
-async def sync_fermentation(session: AsyncSession, spreadsheet_token: str, app_id: str, app_secret: str):
+async def sync_fermentation(
+    session: AsyncSession, spreadsheet_token: str, app_id: str, app_secret: str
+):
     """主同步函数"""
     logger.info("FA 发酵液放罐同步开始...")
 
@@ -121,8 +130,8 @@ async def sync_fermentation(session: AsyncSession, spreadsheet_token: str, app_i
     logger.info(f"飞书读取完成，共 {len(rows)} 行")
 
     # 2. 解析数据
-    batches: list[dict] = []       # 主批
-    sub_batches: list[dict] = []   # 子批
+    batches: list[dict] = []  # 主批
+    sub_batches: list[dict] = []  # 子批
 
     current_date: str | None = None  # 继承合并单元格的日期（Row A）
     current_tank: str | None = None  # 继承合并单元格的罐号（Row B）
@@ -138,9 +147,9 @@ async def sync_fermentation(session: AsyncSession, spreadsheet_token: str, app_i
         col_h = _get(row, 7)  # 电导
         col_i = _get(row, 8)  # 调酸量
         col_j = _get(row, 9)  # 滤速
-        col_k = _get(row, 10) # 湿固
-        col_l = _get(row, 11) # 产量
-        col_m = _get(row, 12) # 收率
+        col_k = _get(row, 10)  # 湿固
+        col_l = _get(row, 11)  # 产量
+        col_m = _get(row, 12)  # 收率
 
         # 继承合并单元格
         if col_a:
@@ -197,15 +206,15 @@ async def sync_fermentation(session: AsyncSession, spreadsheet_token: str, app_i
     # 3. 写入数据库（UPSERT）
     created_b, updated_b = 0, 0
     for b in batches:
-        date_val = f"'{b['日期']}'" if b['日期'] else "NULL"
+        date_val = f"'{b['日期']}'" if b["日期"] else "NULL"
         sql = text(f"""
             INSERT INTO production.fa_fermentation_batches
                 ("发酵罐号", "放罐日期", "放罐体积_kl", "放罐含量_gL",
                  "主批自身总量_kg", "汇总总量_kg", "电导_uscm", "调酸量_L",
                  "酸化液滤速_ml10min", "发酵液湿固", "产量", "收率")
-            VALUES ('{b['罐号']}', {date_val}, {b['体积']}, {b['含量']},
-                    {b['自身总量']}, {b['汇总总量']}, {b['电导']}, {b['调酸']},
-                    {b['滤速']}, {b['湿固']}, {b['产量']}, {b['收率']})
+            VALUES ('{b["罐号"]}', {date_val}, {b["体积"]}, {b["含量"]},
+                    {b["自身总量"]}, {b["汇总总量"]}, {b["电导"]}, {b["调酸"]},
+                    {b["滤速"]}, {b["湿固"]}, {b["产量"]}, {b["收率"]})
             ON CONFLICT ("发酵罐号") DO UPDATE SET
                 "放罐日期" = EXCLUDED."放罐日期",
                 "放罐体积_kl" = EXCLUDED."放罐体积_kl",
@@ -230,9 +239,10 @@ async def sync_fermentation(session: AsyncSession, spreadsheet_token: str, app_i
     for s in sub_batches:
         sql = text(f"""
             INSERT INTO production.fa_fermentation_sub_batches
-                ("发酵批号", "父发酵罐号", "子批后缀", "放罐体积_kl", "放罐含量_gL", "批总量_kg")
-            VALUES ('{s['批号']}', '{s['父罐号']}', '{s['后缀']}',
-                    {s['体积']}, {s['含量']}, {s['批总量']})
+                ("发酵批号", "父发酵罐号", "子批后缀", "放罐体积_kl", "放罐含量_gL",
+        "批总量_kg")
+            VALUES ('{s["批号"]}', '{s["父罐号"]}', '{s["后缀"]}',
+                    {s["体积"]}, {s["含量"]}, {s["批总量"]})
             ON CONFLICT ("父发酵罐号", "子批后缀") DO UPDATE SET
                 "发酵批号" = EXCLUDED."发酵批号",
                 "放罐体积_kl" = EXCLUDED."放罐体积_kl",
@@ -263,19 +273,32 @@ async def sync_fermentation(session: AsyncSession, spreadsheet_token: str, app_i
 
 async def main():
     """独立运行入口（从命令行直接执行）"""
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
+    )
 
-    db_url = os.getenv("DATABASE_URL", "postgresql+asyncpg://postgres:postgres@db:5432/dazah")
+    db_url = os.getenv(
+        "DATABASE_URL", "postgresql+asyncpg://postgres:postgres@db:5432/dazah"
+    )
     engine = create_async_engine(db_url)
     async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     async with async_session() as session:
-        from app.modules.production.fa_feishu_scheduler import _get_fa_spreadsheet_config
+        from app.modules.production.fa_feishu_scheduler import (
+            _get_fa_spreadsheet_config,
+        )
+
         cfg = await _get_fa_spreadsheet_config(session)
-        result = await sync_fermentation(session, cfg["spreadsheet_token"], cfg["app_id"], cfg["app_secret"])
+        result = await sync_fermentation(
+            session, cfg["spreadsheet_token"], cfg["app_id"], cfg["app_secret"]
+        )
         print(f"\n[DONE] {result}")
-        print(f"  Parent batches: {result['batches']} (new={result['created_batches']}, updated={result['updated_batches']})")
-        print(f"  Sub batches: {result['sub_batches']} (new={result['created_subs']}, updated={result['updated_subs']})")
+        print(
+            f"  Parent batches: {result['batches']} (new={result['created_batches']}, updated={result['updated_batches']})"  # noqa: E501
+        )
+        print(
+            f"  Sub batches: {result['sub_batches']} (new={result['created_subs']}, updated={result['updated_subs']})"  # noqa: E501
+        )
 
     await engine.dispose()
 

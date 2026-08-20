@@ -1,5 +1,7 @@
 """批次进度总览 API — 查询13个工艺步骤的数据完成情况"""
+
 from datetime import date
+
 from fastapi import Depends, Query
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -47,13 +49,13 @@ STEP_LABELS = [
 @router.get("/batch-progress", summary="批次进度总览")
 async def batch_progress(
     s: str | None = Query(None, alias="batch_no"),
-    workshop: str = Query('203'),
+    workshop: str = Query("203"),
     session: AsyncSession = Depends(get_db),
 ):
     """一次查询13张表，返回批次进度矩阵 + 概览统计 + 卡点分析"""
     # ── 1. 批次进度矩阵 ──
     unions = " UNION ALL ".join(
-        f'SELECT "{col}" AS batch_no, \'{key}\' AS step FROM production.{table} WHERE is_deleted = false AND workshop = :ws'
+        f"SELECT \"{col}\" AS batch_no, '{key}' AS step FROM production.{table} WHERE is_deleted = false AND workshop = :ws"  # noqa: E501
         for key, table, col in STEP_TABLES
     )
     sql = f"SELECT batch_no, step FROM ({unions}) AS t"
@@ -93,7 +95,7 @@ async def batch_progress(
             "SELECT COUNT(*) FILTER (WHERE created_at::date = :today) AS today_count,"
             " COALESCE(SUM(NULLIF(total_net_weight, '')::numeric), 0) AS monthly_output"
             " FROM production.pack"
-            " WHERE is_deleted = false AND workshop = :ws AND created_at::date >= :month_start"
+            " WHERE is_deleted = false AND workshop = :ws AND created_at::date >= :month_start"  # noqa: E501
         ),
         {"today": today, "month_start": month_start, "ws": workshop},
     )
@@ -114,16 +116,18 @@ async def batch_progress(
         if stuck_batches:
             _, prev_label, _ = STEP_LABELS[i - 1]
             _, curr_label_long, curr_short = STEP_LABELS[i]
-            bottlenecks.append({
-                "prev_step": prev_key,
-                "prev_label": prev_label,
-                "step_key": curr_key,
-                "step_label": curr_label_long,
-                "step_short": curr_short,
-                "stuck_count": len(stuck_batches),
-                "stuck_batches": stuck_batches[:10],  # 最多展示10条
-                "has_more": len(stuck_batches) > 10,
-            })
+            bottlenecks.append(
+                {
+                    "prev_step": prev_key,
+                    "prev_label": prev_label,
+                    "step_key": curr_key,
+                    "step_label": curr_label_long,
+                    "step_short": curr_short,
+                    "stuck_count": len(stuck_batches),
+                    "stuck_batches": stuck_batches[:10],  # 最多展示10条
+                    "has_more": len(stuck_batches) > 10,
+                }
+            )
 
     # ── 5. 最近完工 ──
     recent_completed = [
@@ -134,17 +138,21 @@ async def batch_progress(
     recent_completed.sort(key=lambda x: x["batch_no"], reverse=True)
     recent_completed = recent_completed[:10]
 
-    return success_response({
-        "batches": batches,
-        "step_keys": step_keys,
-        "step_labels": [{"key": k, "label": l, "short": s} for k, l, s in STEP_LABELS],
-        "summary": {
-            "total_batches": total_batches,
-            "in_progress": in_progress,
-            "completed": completed_count,
-            "today_pack_count": today_pack_count,
-            "monthly_output_kg": monthly_output,
-            "bottlenecks": bottlenecks,
-            "recent_completed": recent_completed,
-        },
-    })
+    return success_response(
+        {
+            "batches": batches,
+            "step_keys": step_keys,
+            "step_labels": [
+                {"key": k, "label": lb, "short": s} for k, lb, s in STEP_LABELS
+            ],
+            "summary": {
+                "total_batches": total_batches,
+                "in_progress": in_progress,
+                "completed": completed_count,
+                "today_pack_count": today_pack_count,
+                "monthly_output_kg": monthly_output,
+                "bottlenecks": bottlenecks,
+                "recent_completed": recent_completed,
+            },
+        }
+    )

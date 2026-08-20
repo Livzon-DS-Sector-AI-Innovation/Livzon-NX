@@ -47,8 +47,12 @@ class ProductionFeishuClient:
         token = await self._get_token()
         async with httpx.AsyncClient(base_url=OPEN_API_BASE_URL, timeout=30) as client:
             resp = await client.request(
-                method, path,
-                headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json; charset=utf-8"},
+                method,
+                path,
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json; charset=utf-8",
+                },
                 **kwargs,
             )
             resp.raise_for_status()
@@ -57,11 +61,17 @@ class ProductionFeishuClient:
             raise RuntimeError(body.get("msg", str(body)))
         return body.get("data") or {}
 
-    async def list_records(self, table_id: str, page_size: int = 100, page_token: str | None = None) -> dict:
+    async def list_records(
+        self, table_id: str, page_size: int = 100, page_token: str | None = None
+    ) -> dict:
         payload: dict = {"page_size": page_size}
         if page_token:
             payload["page_token"] = page_token
-        data = await self._request("POST", f"/bitable/v1/apps/{self.app_token}/tables/{table_id}/records/search", json=payload)
+        data = await self._request(
+            "POST",
+            f"/bitable/v1/apps/{self.app_token}/tables/{table_id}/records/search",
+            json=payload,
+        )
         return {
             "items": data.get("items") or [],
             "has_more": bool(data.get("has_more")),
@@ -70,9 +80,17 @@ class ProductionFeishuClient:
         }
 
     async def list_fields(self, table_id: str) -> list[dict]:
-        data = await self._request("GET", f"/bitable/v1/apps/{self.app_token}/tables/{table_id}/fields", params={"page_size": 100})
+        data = await self._request(
+            "GET",
+            f"/bitable/v1/apps/{self.app_token}/tables/{table_id}/fields",
+            params={"page_size": 100},
+        )
         return data.get("items") or []
 
     async def subscribe(self) -> bool:
-        await self._request("POST", f"/drive/v1/files/{self.app_token}/subscribe", params={"file_type": "bitable"})
+        await self._request(
+            "POST",
+            f"/drive/v1/files/{self.app_token}/subscribe",
+            params={"file_type": "bitable"},
+        )
         return True

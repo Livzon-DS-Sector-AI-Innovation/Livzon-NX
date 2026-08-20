@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from sqlalchemy import func, select, update
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.production.fermentation_models import FermentationRecord
@@ -21,9 +21,7 @@ class FermentationRepository:
         status: str | None = None,
         fermenter: str | None = None,
     ):
-        query = select(FermentationRecord).where(
-            FermentationRecord.is_deleted == False
-        )
+        query = select(FermentationRecord).where(not FermentationRecord.is_deleted)
 
         if product_name:
             query = query.where(FermentationRecord.product_name == product_name)
@@ -49,7 +47,7 @@ class FermentationRepository:
     async def get_by_id(self, record_id: UUID) -> FermentationRecord | None:
         query = select(FermentationRecord).where(
             FermentationRecord.id == record_id,
-            FermentationRecord.is_deleted == False,
+            not FermentationRecord.is_deleted,
         )
         result = await self.session.execute(query)
         return result.scalar_one_or_none()

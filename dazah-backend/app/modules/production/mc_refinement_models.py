@@ -1,13 +1,16 @@
 """MC 霉酚酸 — MC 二次精制工段 ORM 模型（湿粉→二次结晶→干粉 MC-F2）"""
 
 from datetime import date
+
 from sqlalchemy import Date, Float, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
+
 from app.shared.base_model import BaseModel
 
 
 class McRefinementRecord(BaseModel):
     """MC 二次精制主表 — 多批湿粉合并二次结晶"""
+
     __tablename__ = "mc_refinement_records"
     __table_args__ = (
         Index("ix_mcr_batch", "batch_no"),
@@ -89,6 +92,7 @@ class McRefinementRecord(BaseModel):
 
 class McRefinementInput(BaseModel):
     """MC 二次精制投入明细表 — 多行湿粉投入"""
+
     __tablename__ = "mc_refinement_inputs"
     __table_args__ = (
         Index("ix_mcri_refinement", "refinement_batch"),
@@ -105,12 +109,8 @@ class McRefinementInput(BaseModel):
     input_weight: Mapped[float] = mapped_column(
         Float, nullable=False, comment="重量(kg)"
     )
-    moisture: Mapped[float] = mapped_column(
-        Float, nullable=False, comment="水分(%)"
-    )
-    content: Mapped[float] = mapped_column(
-        Float, nullable=False, comment="含量(%)"
-    )
+    moisture: Mapped[float] = mapped_column(Float, nullable=False, comment="水分(%)")
+    content: Mapped[float] = mapped_column(Float, nullable=False, comment="含量(%)")
     pure_qty: Mapped[float | None] = mapped_column(
         Float, nullable=True, comment="折纯量(kg) — 计算字段"
     )

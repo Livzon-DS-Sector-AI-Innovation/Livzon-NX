@@ -59,7 +59,7 @@ describe('shift-handover actions', () => {
     )
     vi.stubGlobal('fetch', fetchMock)
 
-    const payload = { position: '洁净区', workshop: 'WS-1' }
+    const payload = { position: '洁净区', workshop: 'WS-1', shift: '早班', handover_time: '2026-07-01T08:00', handover_from: '张三', handover_to: '李四' }
     await expect(createShiftHandover(payload)).resolves.toMatchObject({ code: 200 })
     expect(fetchMock).toHaveBeenCalledWith(
       `${API_BASE}/api/v1/production/shift-handovers`,
@@ -74,7 +74,7 @@ describe('shift-handover actions', () => {
     )
     vi.stubGlobal('fetch', fetchMock)
 
-    await expect(updateShiftHandover('sh-1', { remark: 'ok' })).resolves.toMatchObject({ code: 200 })
+    await expect(updateShiftHandover('sh-1', { remarks: 'ok' })).resolves.toMatchObject({ code: 200 })
     expect(fetchMock).toHaveBeenCalledWith(
       `${API_BASE}/api/v1/production/shift-handovers/sh-1`,
       expect.objectContaining({ method: 'PUT' }),

@@ -1,3 +1,4 @@
+import logging
 from datetime import date
 from uuid import UUID
 
@@ -14,6 +15,9 @@ from app.modules.production.label_verification_service import LabelVerificationS
 from app.shared.module_api import create_module_router
 from app.shared.module_registry import MODULES_BY_CODE
 from app.shared.schemas import PageParams
+
+logger = logging.getLogger(__name__)
+
 
 router = create_module_router(MODULES_BY_CODE["quality"])
 
@@ -141,15 +145,15 @@ async def upload_label_verification_video(
 ):
     """上传视频文件，返回文件 key 和文件名"""
     import os
-    from fastapi import UploadFile
     from datetime import datetime
+
     from app.core.config import get_settings
 
     settings = get_settings()
     upload_dir = os.path.join(settings.UPLOAD_DIR, "label-verification")
     os.makedirs(upload_dir, exist_ok=True)
 
-    file_ext = os.path.splitext(file.filename or ".mp4")[1]
+    os.path.splitext(file.filename or ".mp4")[1]
     timestamp = int(datetime.now().timestamp())
     safe_name = f"video_{timestamp}_{file.filename or 'unknown'}"
     file_path = os.path.join(upload_dir, safe_name)
@@ -180,15 +184,19 @@ async def analyze_label_verification_video(
 ):
     """分析视频中的标签信息，返回 AI 识别结果"""
     import os
+
     from app.core.config import get_settings
-    from app.modules.production.label_verification_video_service import LabelVerificationVideoService
-    from app.core.llm import llm_client, LLMOutputError
+    from app.core.llm import llm_client
+    from app.modules.production.label_verification_video_service import (
+        LabelVerificationVideoService,
+    )
 
     settings = get_settings()
     video_path = os.path.join(settings.UPLOAD_DIR, file_key)
 
     if not os.path.exists(video_path):
         from fastapi import HTTPException
+
         raise HTTPException(status_code=404, detail="视频文件不存在")
 
     # 提取视频帧
@@ -197,6 +205,7 @@ async def analyze_label_verification_video(
 
     if not frames:
         from fastapi import HTTPException
+
         raise HTTPException(status_code=400, detail="无法从视频中提取帧")
 
     # 使用统一的 LLM 客户端（视觉模型）
@@ -229,6 +238,7 @@ async def analyze_label_verification_video(
 
     # 解析 JSON 结果
     import json
+
     try:
         # 清理可能的 markdown 格式
         cleaned = result.strip()
@@ -255,17 +265,19 @@ async def analyze_label_verification_video(
     except Exception as e:
         logger.error(f"视频分析失败: {e}")
         from fastapi import HTTPException
+
         raise HTTPException(status_code=500, detail=f"视频分析失败: {str(e)}")
 
 
 # ─── 自动对比接口 ───
 
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field  # noqa: E402
 
 
 class AutoCompareRequest(BaseModel):
     """自动对比请求体"""
+
     video_file_key: str = Field(..., description="视频文件 key")
     batch_number: str = Field(..., description="批号")
     product_name: str = Field("", description="产品名称")
@@ -292,11 +304,12 @@ async def auto_compare_video(
     如果识别不全，会自动降低帧率重新分析。
     """
     import os
+
     from app.core.config import get_settings
+    from app.core.llm import llm_client
     from app.modules.production.label_verification_video_service import (
         LabelVerificationVideoService,
     )
-    from app.core.llm import llm_client
 
     settings = get_settings()
 
@@ -305,11 +318,13 @@ async def auto_compare_video(
     if not os.path.exists(video_path):
         # 尝试 label-verification 子目录
         video_path = os.path.join(
-            settings.UPLOAD_DIR, "label-verification",
-            os.path.basename(payload.video_file_key)
+            settings.UPLOAD_DIR,
+            "label-verification",
+            os.path.basename(payload.video_file_key),
         )
         if not os.path.exists(video_path):
             from fastapi import HTTPException
+
             raise HTTPException(status_code=404, detail="视频文件不存在")
 
     # 构建表单数据
@@ -327,9 +342,9 @@ async def auto_compare_video(
     }
 
     # 初始化 AI 服务（使用视觉模型）
-    ai_api_key = os.getenv("AI_API_KEY", "")
-    ai_base_url = os.getenv("AI_BASE_URL", "https://api.openai.com/v1")
-    ai_vision_model = os.getenv("AI_VISION_MODEL", "gpt-4o")
+    os.getenv("AI_API_KEY", "")
+    os.getenv("AI_BASE_URL", "https://api.openai.com/v1")
+    os.getenv("AI_VISION_MODEL", "gpt-4o")
 
     # 使用统一的 LLM 客户端（视觉模型）
 
@@ -340,11 +355,12 @@ async def auto_compare_video(
         result = await video_service.analyze_and_compare(
             video_path=video_path,
             form_data=form_data,
-            ai_service=ai_service,
-    )
+            ai_service=llm_client,
+        )
     except Exception as e:
         logger.error(f"自动对比失败: {e}")
         from fastapi import HTTPException
+
         raise HTTPException(status_code=500, detail=f"视频分析失败: {str(e)}")
 
     return success_response(

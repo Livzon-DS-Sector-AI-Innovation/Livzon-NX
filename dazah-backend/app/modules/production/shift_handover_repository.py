@@ -1,7 +1,7 @@
 """班组交接确认 repository."""
 
+import builtins
 from datetime import datetime
-from typing import List
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -23,7 +23,7 @@ class ShiftHandoverRepository:
         date_from: str | None = None,
         date_to: str | None = None,
     ):
-        query = select(ShiftHandover).where(ShiftHandover.is_deleted == False)
+        query = select(ShiftHandover).where(not ShiftHandover.is_deleted)
 
         if position:
             query = query.where(ShiftHandover.position == position)
@@ -47,7 +47,7 @@ class ShiftHandoverRepository:
     async def get_by_id(self, record_id: UUID) -> ShiftHandover | None:
         query = select(ShiftHandover).where(
             ShiftHandover.id == record_id,
-            ShiftHandover.is_deleted == False,
+            not ShiftHandover.is_deleted,
         )
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
@@ -88,7 +88,12 @@ class ShiftHandoverRepository:
         await self.session.refresh(record)
         return record
 
-    async def get_distinct_positions(self) -> List[str]:
-        query = select(ShiftHandover.position).where(ShiftHandover.is_deleted == False).distinct().order_by(ShiftHandover.position)
+    async def get_distinct_positions(self) -> builtins.list[str]:
+        query = (
+            select(ShiftHandover.position)
+            .where(not ShiftHandover.is_deleted)
+            .distinct()
+            .order_by(ShiftHandover.position)
+        )
         result = await self.session.execute(query)
         return [row[0] for row in result.all()]

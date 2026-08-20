@@ -1,53 +1,88 @@
 """预处理工艺记录 schemas"""
 
 from datetime import datetime
-from typing import Optional
 from uuid import UUID
+
 from pydantic import BaseModel, Field
 
 
 class PretreatmentCreate(BaseModel):
-    seq_no: Optional[int] = None; received_batch: str = Field(...)
-    broth_volume: Optional[str] = None; acid_type: Optional[str] = None
-    acid_amount: Optional[str] = None; neutralize_ph: Optional[float] = None
-    dilution_water_volume: Optional[str] = None; dilution_ratio: Optional[str] = None
-    target_temp: Optional[float] = None; holding_time: Optional[str] = None
-    temp_curve: Optional[str] = None; settling_time: Optional[str] = None
-    settling_temp: Optional[float] = None; stirring_speed: Optional[str] = None
-    stirring_time: Optional[str] = None; supernatant_volume: Optional[str] = None
-    sediment_weight: Optional[str] = None; titer_before: Optional[float] = None
-    titer_after: Optional[float] = None; yield_rate: Optional[float] = None
-    impurity_content: Optional[float] = None; loss: Optional[float] = None
-    residue_titer: Optional[float] = None
+    seq_no: int | None = None
+    received_batch: str = Field(...)
+    broth_volume: str | None = None
+    acid_type: str | None = None
+    acid_amount: str | None = None
+    neutralize_ph: float | None = None
+    dilution_water_volume: str | None = None
+    dilution_ratio: str | None = None
+    target_temp: float | None = None
+    holding_time: str | None = None
+    temp_curve: str | None = None
+    settling_time: str | None = None
+    settling_temp: float | None = None
+    stirring_speed: str | None = None
+    stirring_time: str | None = None
+    supernatant_volume: str | None = None
+    sediment_weight: str | None = None
+    titer_before: float | None = None
+    titer_after: float | None = None
+    yield_rate: float | None = None
+    impurity_content: float | None = None
+    loss: float | None = None
+    residue_titer: float | None = None
 
 
 class PretreatmentUpdate(BaseModel):
-    seq_no: Optional[int] = None; received_batch: Optional[str] = None
-    broth_volume: Optional[str] = None; acid_type: Optional[str] = None
-    acid_amount: Optional[str] = None; neutralize_ph: Optional[float] = None
-    dilution_water_volume: Optional[str] = None; dilution_ratio: Optional[str] = None
-    target_temp: Optional[float] = None; holding_time: Optional[str] = None
-    temp_curve: Optional[str] = None; settling_time: Optional[str] = None
-    settling_temp: Optional[float] = None; stirring_speed: Optional[str] = None
-    stirring_time: Optional[str] = None; supernatant_volume: Optional[str] = None
-    sediment_weight: Optional[str] = None; titer_before: Optional[float] = None
-    titer_after: Optional[float] = None; yield_rate: Optional[float] = None
-    impurity_content: Optional[float] = None; loss: Optional[float] = None
-    residue_titer: Optional[float] = None
+    seq_no: int | None = None
+    received_batch: str | None = None
+    broth_volume: str | None = None
+    acid_type: str | None = None
+    acid_amount: str | None = None
+    neutralize_ph: float | None = None
+    dilution_water_volume: str | None = None
+    dilution_ratio: str | None = None
+    target_temp: float | None = None
+    holding_time: str | None = None
+    temp_curve: str | None = None
+    settling_time: str | None = None
+    settling_temp: float | None = None
+    stirring_speed: str | None = None
+    stirring_time: str | None = None
+    supernatant_volume: str | None = None
+    sediment_weight: str | None = None
+    titer_before: float | None = None
+    titer_after: float | None = None
+    yield_rate: float | None = None
+    impurity_content: float | None = None
+    loss: float | None = None
+    residue_titer: float | None = None
 
 
 class PretreatmentResponse(BaseModel):
-    id: UUID; seq_no: Optional[int] = None; received_batch: str
-    broth_volume: Optional[str] = None; acid_type: Optional[str] = None
-    acid_amount: Optional[str] = None; neutralize_ph: Optional[float] = None
-    dilution_water_volume: Optional[str] = None; dilution_ratio: Optional[str] = None
-    target_temp: Optional[float] = None; holding_time: Optional[str] = None
-    temp_curve: Optional[str] = None; settling_time: Optional[str] = None
-    settling_temp: Optional[float] = None; stirring_speed: Optional[str] = None
-    stirring_time: Optional[str] = None; supernatant_volume: Optional[str] = None
-    sediment_weight: Optional[str] = None; titer_before: Optional[float] = None
-    titer_after: Optional[float] = None; yield_rate: Optional[float] = None
-    impurity_content: Optional[float] = None; loss: Optional[float] = None
-    residue_titer: Optional[float] = None
-    created_at: datetime; updated_at: datetime
+    id: UUID
+    seq_no: int | None = None
+    received_batch: str
+    broth_volume: str | None = None
+    acid_type: str | None = None
+    acid_amount: str | None = None
+    neutralize_ph: float | None = None
+    dilution_water_volume: str | None = None
+    dilution_ratio: str | None = None
+    target_temp: float | None = None
+    holding_time: str | None = None
+    temp_curve: str | None = None
+    settling_time: str | None = None
+    settling_temp: float | None = None
+    stirring_speed: str | None = None
+    stirring_time: str | None = None
+    supernatant_volume: str | None = None
+    sediment_weight: str | None = None
+    titer_before: float | None = None
+    titer_after: float | None = None
+    yield_rate: float | None = None
+    impurity_content: float | None = None
+    loss: float | None = None
+    residue_titer: float | None = None
+    created_at: datetime
+    updated_at: datetime
     model_config = {"from_attributes": True}

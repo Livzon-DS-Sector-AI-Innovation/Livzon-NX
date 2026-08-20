@@ -13,12 +13,11 @@ from openai import AsyncOpenAI
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import get_settings
-from app.core.llm import get_config
 from app.core.database import get_db
-from app.core.response import success_response, error_response
+from app.core.llm import get_config
+from app.core.response import error_response, success_response
 from app.modules.production.ai_analysis_models import AiAnalysis
-from app.modules.production.fa_lineage_api import FA_STAGE_LABELS, FA_STAGE_ORDER
+from app.modules.production.fa_lineage_api import FA_STAGE_LABELS
 from app.shared.module_api import create_module_router
 from app.shared.module_registry import MODULES_BY_CODE
 
@@ -38,7 +37,10 @@ FA_CHAT_SYSTEM_PROMPT = """你是丽珠制药 203 车间的 FA（L-苯丙氨酸�
 
 
 def _build_chat_prompt(
-    history: list[dict], user_msg: str, batch_no: str, stage: str,
+    history: list[dict],
+    user_msg: str,
+    batch_no: str,
+    stage: str,
     trace_context: str,
 ) -> list[dict]:
     """构建 LLM 消息列表，注入批次数据"""
@@ -68,26 +70,31 @@ async def _gather_fa_context(batch_no: str, stage: str, session: AsyncSession) -
     # ── 1. 追溯链路 + 收率数据 ──
     try:
         # BFS 追踪上下游
-        SIBLING_SQL = """
+        sibling_sql = """
             SELECT bl.upstream_type, bl.upstream_batch, bl.quantity
             FROM production.fa_batch_lineage bl
             WHERE bl.downstream_batch = :batch AND bl.downstream_type = :stage
         """
-        DOWNSTREAM_SQL = """
+        downstream_sql = """
             SELECT bl.downstream_type, bl.downstream_batch, bl.quantity
             FROM production.fa_batch_lineage bl
             WHERE bl.upstream_batch = :batch AND bl.upstream_type = :stage
         """
 
         # 收集所有相关批次
-        all_batches: list[tuple[str, str, float | None]] = []  # (stage, batch_no, quantity)
+        all_batches: list[
+            tuple[str, str, float | None]
+        ] = []  # (stage, batch_no, quantity)
 
         # upstream BFS
-        cur = [(batch_no, stage)]; seen = {(batch_no, stage)}
+        cur = [(batch_no, stage)]
+        seen = {(batch_no, stage)}
         while cur:
             nxt = []
             for cb, cs in cur:
-                rows = (await session.execute(text(SIBLING_SQL), {"batch": cb, "stage": cs})).fetchall()
+                rows = (
+                    await session.execute(text(sibling_sql), {"batch": cb, "stage": cs})
+                ).fetchall()
                 for r in rows:
                     k = (r.upstream_batch, r.upstream_type)
                     if k not in seen:
@@ -98,11 +105,16 @@ async def _gather_fa_context(batch_no: str, stage: str, session: AsyncSession) -
             cur = nxt
 
         # downstream BFS
-        cur = [(batch_no, stage)]; seen_dn = {(batch_no, stage)}
+        cur = [(batch_no, stage)]
+        seen_dn = {(batch_no, stage)}
         while cur:
             nxt = []
             for cb, cs in cur:
-                rows = (await session.execute(text(DOWNSTREAM_SQL), {"batch": cb, "stage": cs})).fetchall()
+                rows = (
+                    await session.execute(
+                        text(downstream_sql), {"batch": cb, "stage": cs}
+                    )
+                ).fetchall()
                 for r in rows:
                     k = (r.downstream_batch, r.downstream_type)
                     if k not in seen_dn:
@@ -113,7 +125,12 @@ async def _gather_fa_context(batch_no: str, stage: str, session: AsyncSession) -
             cur = nxt
 
         # 按工段排序
-        stage_order = {"fermentation": 0, "acidification": 1, "decolor1": 2, "decolor_centrifuge": 3}
+        stage_order = {
+            "fermentation": 0,
+            "acidification": 1,
+            "decolor1": 2,
+            "decolor_centrifuge": 3,
+        }
         all_batches.sort(key=lambda x: stage_order.get(x[0], 99))
 
         # 收集每个批次的收率信息
@@ -127,32 +144,49 @@ async def _gather_fa_context(batch_no: str, stage: str, session: AsyncSession) -
 
             # 查收率
             if s == "acidification":
-                ar = (await session.execute(text(
-                    'SELECT "批收率" FROM production.fa_acidification_records WHERE "批号" = :bn LIMIT 1'
-                ), {"bn": bn})).fetchone()
+                ar = (
+                    await session.execute(
+                        text(
+                            'SELECT "批收率" FROM production.fa_acidification_records WHERE "批号" = :bn LIMIT 1'  # noqa: E501
+                        ),
+                        {"bn": bn},
+                    )
+                ).fetchone()
                 if ar and ar[0]:
                     try:
-                        yr_str = str(ar[0]).replace('%', '')
+                        yr_str = str(ar[0]).replace("%", "")
                         yr = float(yr_str)
-                        if yr < 2: yr *= 100
+                        if yr < 2:
+                            yr *= 100
                         detail_parts.append(f"收率{yr:.1f}%")
                     except (ValueError, TypeError):
                         pass
             elif s == "decolor_centrifuge":
-                cr = (await session.execute(text(
-                    'SELECT "收率" FROM production.fa_decolor_centrifuge_records WHERE "批号" = :bn ORDER BY "批号" LIMIT 1'
-                ), {"bn": bn})).fetchone()
+                cr = (
+                    await session.execute(
+                        text(
+                            'SELECT "收率" FROM production.fa_decolor_centrifuge_records WHERE "批号" = :bn ORDER BY "批号" LIMIT 1'  # noqa: E501
+                        ),
+                        {"bn": bn},
+                    )
+                ).fetchone()
                 if cr and cr[0]:
                     try:
                         yr = float(cr[0])
-                        if yr < 2: yr *= 100
+                        if yr < 2:
+                            yr *= 100
                         detail_parts.append(f"收率{yr:.1f}%")
                     except (ValueError, TypeError):
                         pass
             elif s == "fermentation":
-                fr = (await session.execute(text(
-                    'SELECT "汇总总量_kg" FROM production.fa_fermentation_batches WHERE "发酵罐号" = :bn'
-                ), {"bn": bn})).fetchone()
+                fr = (
+                    await session.execute(
+                        text(
+                            'SELECT "汇总总量_kg" FROM production.fa_fermentation_batches WHERE "发酵罐号" = :bn'  # noqa: E501
+                        ),
+                        {"bn": bn},
+                    )
+                ).fetchone()
                 if fr and fr[0]:
                     detail_parts.append(f"产量{float(fr[0]):.0f}kg")
 
@@ -160,7 +194,7 @@ async def _gather_fa_context(batch_no: str, stage: str, session: AsyncSession) -
             batch_lines.append(f"  {label} {bn} {detail}{is_target}")
 
         if batch_lines:
-            parts.append(f"=== 批次追溯链路 ===")
+            parts.append("=== 批次追溯链路 ===")
             parts.extend(batch_lines)
 
     except Exception as e:
@@ -170,39 +204,71 @@ async def _gather_fa_context(batch_no: str, stage: str, session: AsyncSession) -
     try:
         stats_parts = []
         # 酸化收率统计
-        acid_stats = (await session.execute(text("""
-            SELECT ROUND(MIN(NULLIF(REGEXP_REPLACE("批收率", '%', '', 'g'), '')::numeric)::numeric, 1),
-                   ROUND(PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY NULLIF(REGEXP_REPLACE("批收率", '%', '', 'g'), '')::numeric)::numeric, 1),
-                   ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY NULLIF(REGEXP_REPLACE("批收率", '%', '', 'g'), '')::numeric)::numeric, 1),
-                   ROUND(PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY NULLIF(REGEXP_REPLACE("批收率", '%', '', 'g'), '')::numeric)::numeric, 1),
-                   ROUND(MAX(NULLIF(REGEXP_REPLACE("批收率", '%', '', 'g'), '')::numeric)::numeric, 1)
+        acid_stats = (
+            await session.execute(
+                text("""
+            SELECT ROUND(MIN(NULLIF(REGEXP_REPLACE("批收率", '%', '', 'g'),
+        '')::numeric)::numeric, 1),
+                   ROUND(PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY
+        NULLIF(REGEXP_REPLACE("批收率", '%', '', 'g'), '')::numeric)::numeric, 1),
+                   ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY
+        NULLIF(REGEXP_REPLACE("批收率", '%', '', 'g'), '')::numeric)::numeric, 1),
+                   ROUND(PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY
+        NULLIF(REGEXP_REPLACE("批收率", '%', '', 'g'), '')::numeric)::numeric, 1),
+                   ROUND(MAX(NULLIF(REGEXP_REPLACE("批收率", '%', '', 'g'),
+        '')::numeric)::numeric, 1)
             FROM production.fa_acidification_records
-        """))).fetchone()
+        """)
+            )
+        ).fetchone()
         if acid_stats and acid_stats[0]:
             stats_parts.append(
-                f"  酸化收率: min={acid_stats[0]} Q1={acid_stats[1]} 中位={acid_stats[2]} Q3={acid_stats[3]} max={acid_stats[4]}%")
+                f"  酸化收率: min={acid_stats[0]} Q1={acid_stats[1]} 中位={acid_stats[2]} Q3={acid_stats[3]} max={acid_stats[4]}%"  # noqa: E501
+            )
 
         # 离心收率统计
-        cent_stats = (await session.execute(text("""
-            SELECT ROUND(MIN(CASE WHEN "收率"::numeric < 2 THEN "收率"::numeric * 100 ELSE "收率"::numeric END)::numeric, 1),
-                   ROUND(PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY CASE WHEN "收率"::numeric < 2 THEN "收率"::numeric * 100 ELSE "收率"::numeric END)::numeric, 1),
-                   ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY CASE WHEN "收率"::numeric < 2 THEN "收率"::numeric * 100 ELSE "收率"::numeric END)::numeric, 1),
-                   ROUND(PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY CASE WHEN "收率"::numeric < 2 THEN "收率"::numeric * 100 ELSE "收率"::numeric END)::numeric, 1),
-                   ROUND(MAX(CASE WHEN "收率"::numeric < 2 THEN "收率"::numeric * 100 ELSE "收率"::numeric END)::numeric, 1)
+        cent_stats = (
+            await session.execute(
+                text("""
+            SELECT ROUND(MIN(CASE WHEN "收率"::numeric < 2 THEN "收率"::numeric *
+        100 ELSE
+        "收率"::numeric END)::numeric, 1),
+                   ROUND(PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY CASE WHEN
+        "收率"::numeric < 2 THEN "收率"::numeric * 100 ELSE "收率"::numeric
+        END)::numeric, 1),
+                   ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY CASE WHEN
+        "收率"::numeric < 2 THEN "收率"::numeric * 100 ELSE "收率"::numeric
+        END)::numeric, 1),
+                   ROUND(PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY CASE WHEN
+        "收率"::numeric < 2 THEN "收率"::numeric * 100 ELSE "收率"::numeric
+        END)::numeric, 1),
+                   ROUND(MAX(CASE WHEN "收率"::numeric < 2 THEN "收率"::numeric *
+        100 ELSE
+        "收率"::numeric END)::numeric, 1)
             FROM production.fa_decolor_centrifuge_records WHERE "收率" IS NOT NULL
-        """))).fetchone()
+        """)
+            )
+        ).fetchone()
         if cent_stats and cent_stats[0]:
             stats_parts.append(
-                f"  离心收率: min={cent_stats[0]} Q1={cent_stats[1]} 中位={cent_stats[2]} Q3={cent_stats[3]} max={cent_stats[4]}%")
+                f"  离心收率: min={cent_stats[0]} Q1={cent_stats[1]} 中位={cent_stats[2]} Q3={cent_stats[3]} max={cent_stats[4]}%"  # noqa: E501
+            )
 
         # 电导统计
-        cond_stats = (await session.execute(text("""
+        cond_stats = (
+            await session.execute(
+                text("""
             SELECT ROUND(AVG("电导_uscm")::numeric, 0),
-                   ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY "电导_uscm")::numeric, 0)
+                   ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY
+        "电导_uscm")::numeric, 0)
             FROM production.fa_fermentation_batches
-        """))).fetchone()
+        """)
+            )
+        ).fetchone()
         if cond_stats and cond_stats[0]:
-            stats_parts.append(f"  电导(us/cm): 均值={cond_stats[0]} 中位={cond_stats[1]}")
+            stats_parts.append(
+                f"  电导(us/cm): 均值={cond_stats[0]} 中位={cond_stats[1]}"
+            )
 
         if stats_parts:
             parts.append("\n=== 工段收率与参数统计 (全量) ===")
@@ -214,7 +280,7 @@ async def _gather_fa_context(batch_no: str, stage: str, session: AsyncSession) -
     try:
         batch_data, _stats_data = await _get_trace_data(session, batch_no, stage)
         if batch_data:
-            parts.append(f"\n=== 批次详细生产数据 ===")
+            parts.append("\n=== 批次详细生产数据 ===")
             parts.append(batch_data)
     except Exception as e:
         logger.warning(f"FA 收集批次详细数据失败: {e}")
@@ -238,7 +304,7 @@ async def fa_chat_send(request: Request, session: AsyncSession = Depends(get_db)
     # 1. 查历史消息
     result = await session.execute(
         select(AiAnalysis)
-        .where(AiAnalysis.session_id == sid, AiAnalysis.is_deleted == False)
+        .where(AiAnalysis.session_id == sid, not AiAnalysis.is_deleted)
         .order_by(AiAnalysis.message_seq.asc())
     )
     history_rows = result.scalars().all()
@@ -273,7 +339,9 @@ async def fa_chat_send(request: Request, session: AsyncSession = Depends(get_db)
 
     # 4. 收集批次上下文 + 构建 prompt
     trace_context = await _gather_fa_context(batch_no, stage, session)
-    messages = _build_chat_prompt(history_dicts, message, batch_no, stage, trace_context)
+    messages = _build_chat_prompt(
+        history_dicts, message, batch_no, stage, trace_context
+    )
 
     # 5. SSE 流
     async def generate():
@@ -297,7 +365,7 @@ async def fa_chat_send(request: Request, session: AsyncSession = Depends(get_db)
             async for chunk in stream:
                 delta = chunk.choices[0].delta if chunk.choices else None
                 if delta:
-                    token = delta.content or ''
+                    token = delta.content or ""
                     if token:
                         full_text += token
                         yield f"data: {json.dumps({'token': token})}\n\n"
@@ -346,7 +414,7 @@ async def fa_chat_history(
     """获取指定会话的全部消息"""
     result = await session.execute(
         select(AiAnalysis)
-        .where(AiAnalysis.session_id == session_id, AiAnalysis.is_deleted == False)
+        .where(AiAnalysis.session_id == session_id, not AiAnalysis.is_deleted)
         .order_by(AiAnalysis.message_seq.asc())
     )
     rows = result.scalars().all()
@@ -363,13 +431,15 @@ async def fa_chat_history(
                 "severity": r.severity,
                 "analysis_text": r.llm_response,
             }
-        messages.append({
-            "id": str(r.id),
-            "session_id": r.session_id,
-            "seq": r.message_seq,
-            "role": r.role,
-            "content": content,
-            "created_at": str(r.created_at) if r.created_at else None,
-        })
+        messages.append(
+            {
+                "id": str(r.id),
+                "session_id": r.session_id,
+                "seq": r.message_seq,
+                "role": r.role,
+                "content": content,
+                "created_at": str(r.created_at) if r.created_at else None,
+            }
+        )
 
     return success_response(data={"session_id": session_id, "messages": messages})

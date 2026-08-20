@@ -1,9 +1,6 @@
 """班组交接确认 API routes."""
 
-from datetime import datetime
 from uuid import UUID
-
-from datetime import datetime
 
 from fastapi import Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -51,17 +48,24 @@ async def list_shift_handovers(
 
 
 @router.get("/shift-handovers/search-users", summary="搜索企业用户")
-async def search_users(q: str = Query("", description="搜索关键词"), session: AsyncSession = Depends(get_db)):
+async def search_users(
+    q: str = Query("", description="搜索关键词"),
+    session: AsyncSession = Depends(get_db),
+):
     from sqlalchemy import select
-    from app.modules.production.production_feishu_models import ProductionFeishuConfig
-    from app.modules.production.production_feishu_client import ProductionFeishuClient
+
     from app.core.secrets import decrypt_secret
+    from app.modules.production.production_feishu_client import ProductionFeishuClient
+    from app.modules.production.production_feishu_models import ProductionFeishuConfig
+
     try:
         result = await session.execute(
-            select(ProductionFeishuConfig).where(
-                ProductionFeishuConfig.is_active == True,
-                ProductionFeishuConfig.is_deleted == False,
-            ).limit(1)
+            select(ProductionFeishuConfig)
+            .where(
+                ProductionFeishuConfig.is_active,
+                not ProductionFeishuConfig.is_deleted,
+            )
+            .limit(1)
         )
         config = result.scalar_one_or_none()
         if not config:
@@ -72,22 +76,31 @@ async def search_users(q: str = Query("", description="搜索关键词"), sessio
         token = await client._get_token()
 
         import httpx
+
         from app.platform.integrations.feishu.utils import OPEN_API_BASE_URL
+
         async with httpx.AsyncClient(base_url=OPEN_API_BASE_URL, timeout=30) as h:
-            resp = await h.get('/contact/v3/users',
-                headers={'Authorization': f'Bearer {token}'},
-                params={'page_size': 100, 'department_id_type': 'open_department_id'})
+            resp = await h.get(
+                "/contact/v3/users",
+                headers={"Authorization": f"Bearer {token}"},
+                params={"page_size": 100, "department_id_type": "open_department_id"},
+            )
             data = resp.json()
 
-        if data.get('code') != 0:
+        if data.get("code") != 0:
             return success_response([], message=f"通讯录访问失败: {data.get('msg')}")
 
-        items = data.get('data', {}).get('items', [])
+        items = data.get("data", {}).get("items", [])
         q_lower = q.lower()
         result_users = [
-            {"id": u.get("open_id", ""), "name": u.get("name", ""), "department": ",".join(u.get("department_ids", []))}
+            {
+                "id": u.get("open_id", ""),
+                "name": u.get("name", ""),
+                "department": ",".join(u.get("department_ids", [])),
+            }
             for u in items
-            if q_lower in u.get("name", "").lower() or q_lower in (u.get("en_name") or "").lower()
+            if q_lower in u.get("name", "").lower()
+            or q_lower in (u.get("en_name") or "").lower()
         ][:20]
         return success_response(result_users)
     except Exception as e:
@@ -119,7 +132,9 @@ async def create_shift_handover(
     svc: ShiftHandoverService = Depends(get_shift_handover_service),
 ):
     record = await svc.create_record(data.model_dump())
-    return success_response(ShiftHandoverResponse.model_validate(record), message="创建成功")
+    return success_response(
+        ShiftHandoverResponse.model_validate(record), message="创建成功"
+    )
 
 
 @router.put("/shift-handovers/{record_id}", summary="更新班组交接记录")
@@ -129,7 +144,9 @@ async def update_shift_handover(
     svc: ShiftHandoverService = Depends(get_shift_handover_service),
 ):
     record = await svc.update_record(record_id, data.model_dump(exclude_unset=True))
-    return success_response(ShiftHandoverResponse.model_validate(record), message="更新成功")
+    return success_response(
+        ShiftHandoverResponse.model_validate(record), message="更新成功"
+    )
 
 
 @router.post("/shift-handovers/{record_id}/confirm", summary="确认接班")
@@ -138,7 +155,9 @@ async def confirm_shift_handover(
     svc: ShiftHandoverService = Depends(get_shift_handover_service),
 ):
     record = await svc.confirm_record(record_id)
-    return success_response(ShiftHandoverResponse.model_validate(record), message="确认成功")
+    return success_response(
+        ShiftHandoverResponse.model_validate(record), message="确认成功"
+    )
 
 
 @router.delete("/shift-handovers/{record_id}", summary="删除班组交接记录")

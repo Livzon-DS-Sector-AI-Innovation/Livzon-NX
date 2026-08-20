@@ -65,7 +65,7 @@ describe('shift-log actions', () => {
     const fetchMock = vi.fn(() => jsonResponse({ code: 200, message: 'success', data: { id: 'sl-new' } }),)
     vi.stubGlobal('fetch', fetchMock)
 
-    const payload = { shift: '夜班', log_date: '2026-07-05' }
+    const payload = { shift: '夜班', log_date: '2026-07-05', workshop: 'WS-1', handover_from: '张三', handover_to: '李四' }
     await expect(createShiftLog(payload)).resolves.toMatchObject({ code: 200 })
     expect(fetchMock).toHaveBeenCalledWith(
       `${API_BASE}/api/v1/production/shift-logs`,
@@ -78,7 +78,7 @@ describe('shift-log actions', () => {
     const fetchMock = vi.fn(() => jsonResponse({ code: 200, message: 'success', data: { id: 'sl-1' } }),)
     vi.stubGlobal('fetch', fetchMock)
 
-    await expect(updateShiftLog('sl-1', { remark: 'ok' })).resolves.toMatchObject({ code: 200 })
+    await expect(updateShiftLog('sl-1', { remarks: 'ok' })).resolves.toMatchObject({ code: 200 })
     expect(fetchMock).toHaveBeenCalledWith(
       `${API_BASE}/api/v1/production/shift-logs/sl-1`,
       expect.objectContaining({ method: 'PUT' }),

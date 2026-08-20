@@ -1,45 +1,84 @@
 """飞书 → ceramic_feeds 全量同步（INSERT/UPDATE/DELETE）"""
+
 import logging
 from datetime import date, datetime
+
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.secrets import decrypt_secret
 from app.modules.production.production_feishu_client import ProductionFeishuClient
 from app.modules.production.production_feishu_models import ProductionFeishuConfig
 
 logger = logging.getLogger(__name__)
 
-FIELD_MAPPING = {"日期":"sep_date","批次号":"batch_no","分离阶段":"separation_stage","截留液体积(m³)":"retentate_volume","透过液体积(m³)":"permeate_volume","截留液浓度(g/L)":"retentate_concentration","透过液浓度(g/L)":"permeate_concentration","浓缩倍数":"concentration_factor","操作人":"operator","备注":"remarks"}
-NUMBER_FIELDS = {"retentate_volume","permeate_volume","retentate_concentration","permeate_concentration","concentration_factor"}
+FIELD_MAPPING = {
+    "日期": "sep_date",
+    "批次号": "batch_no",
+    "分离阶段": "separation_stage",
+    "截留液体积(m³)": "retentate_volume",
+    "透过液体积(m³)": "permeate_volume",
+    "截留液浓度(g/L)": "retentate_concentration",
+    "透过液浓度(g/L)": "permeate_concentration",
+    "浓缩倍数": "concentration_factor",
+    "操作人": "operator",
+    "备注": "remarks",
+}
+NUMBER_FIELDS = {
+    "retentate_volume",
+    "permeate_volume",
+    "retentate_concentration",
+    "permeate_concentration",
+    "concentration_factor",
+}
 DATE_FIELDS = {"sep_date"}
 TABLE = "ceramic_material_separations"
 
+
 def _ext(fv):
-    if fv is None: return None
-    if isinstance(fv, str): return fv.strip() or None
-    if isinstance(fv, dict): return str(fv.get("name") or fv.get("text","")).strip() or None
+    if fv is None:
+        return None
+    if isinstance(fv, str):
+        return fv.strip() or None
+    if isinstance(fv, dict):
+        return str(fv.get("name") or fv.get("text", "")).strip() or None
     if isinstance(fv, list) and fv:
         f = fv[0]
-        if isinstance(f, str): return f.strip() or None
-        if isinstance(f, dict): return str(f.get("name") or f.get("text","")).strip() or None
+        if isinstance(f, str):
+            return f.strip() or None
+        if isinstance(f, dict):
+            return str(f.get("name") or f.get("text", "")).strip() or None
     return str(fv).strip() or None
 
+
 def _num(fv):
-    if isinstance(fv, (int, float)): return float(fv)
+    if isinstance(fv, (int, float)):
+        return float(fv)
     t = _ext(fv)
-    if t is None: return None
-    try: return float(t)
-    except (ValueError, TypeError): return None
+    if t is None:
+        return None
+    try:
+        return float(t)
+    except (ValueError, TypeError):
+        return None
+
 
 def _pd(v):
-    if v is None: return None
-    if isinstance(v, (int, float)) and 0 < v < 1e15: return datetime.fromtimestamp(v/1000).date()
+    if v is None:
+        return None
+    if isinstance(v, (int, float)) and 0 < v < 1e15:
+        return datetime.fromtimestamp(v / 1000).date()
     if isinstance(v, str):
-        try: return date.fromisoformat(v)
-        except ValueError: return None
+        try:
+            return date.fromisoformat(v)
+        except ValueError:
+            return None
     return v
 
-async def sync_ceramic_sep(config: ProductionFeishuConfig, session: AsyncSession) -> dict:
+
+async def sync_ceramic_sep(
+    config: ProductionFeishuConfig, session: AsyncSession
+) -> dict:
     app_secret = decrypt_secret(config.encrypted_app_secret)
     client = ProductionFeishuClient(config.app_id, app_secret, config.bitable_app_token)
 
@@ -58,29 +97,39 @@ async def sync_ceramic_sep(config: ProductionFeishuConfig, session: AsyncSession
 
         for fn, db_col in FIELD_MAPPING.items():
             raw = fields.get(fn)
-            if raw is None: continue
+            if raw is None:
+                continue
             if db_col in DATE_FIELDS:
-                if isinstance(raw, (int, float)): mapped[db_col] = _pd(raw)
-                else: v = _ext(raw); mapped[db_col] = _pd(v) if v else None
+                if isinstance(raw, (int, float)):
+                    mapped[db_col] = _pd(raw)
+                else:
+                    v = _ext(raw)
+                    mapped[db_col] = _pd(v) if v else None
                 continue
             v = _num(raw) if db_col in NUMBER_FIELDS else _ext(raw)
-            if v is not None: mapped[db_col] = v
+            if v is not None:
+                mapped[db_col] = v
 
-        if not mapped.get("batch_no"): continue
+        if not mapped.get("batch_no"):
+            continue
 
         # UPSERT: check if exists by feishu_record_id
         existing = await session.execute(
-            text(f"SELECT id FROM production.{TABLE} WHERE feishu_record_id = :rid AND is_deleted = false"),
-            {"rid": rid}
+            text(
+                f"SELECT id FROM production.{TABLE} WHERE feishu_record_id = :rid AND is_deleted = false"  # noqa: E501
+            ),
+            {"rid": rid},
         )
         row = existing.fetchone()
 
         if row:
             # UPDATE
-            set_clause = ", ".join(f"{k} = :{k}" for k in mapped if k != "feishu_record_id")
+            set_clause = ", ".join(
+                f"{k} = :{k}" for k in mapped if k != "feishu_record_id"
+            )
             await session.execute(
                 text(f"UPDATE production.{TABLE} SET {set_clause} WHERE id = :id"),
-                {"id": row[0], **mapped}
+                {"id": row[0], **mapped},
             )
             updated += 1
         else:
@@ -88,8 +137,10 @@ async def sync_ceramic_sep(config: ProductionFeishuConfig, session: AsyncSession
             cols = ", ".join(mapped.keys())
             vals = ", ".join(f":{k}" for k in mapped)
             await session.execute(
-                text(f"INSERT INTO production.{TABLE} (id, {cols}) VALUES (gen_random_uuid(), {vals})"),
-                mapped
+                text(
+                    f"INSERT INTO production.{TABLE} (id, {cols}) VALUES (gen_random_uuid(), {vals})"  # noqa: E501
+                ),
+                mapped,
             )
             created += 1
 
@@ -97,8 +148,10 @@ async def sync_ceramic_sep(config: ProductionFeishuConfig, session: AsyncSession
     if feishu_ids:
         # 使用 ANY + 数组参数
         await session.execute(
-            text(f"UPDATE production.{TABLE} SET is_deleted = true WHERE is_deleted = false AND feishu_record_id IS NOT NULL AND feishu_record_id != ALL(:ids)"),
-            {"ids": list(feishu_ids)}
+            text(
+                f"UPDATE production.{TABLE} SET is_deleted = true WHERE is_deleted = false AND feishu_record_id IS NOT NULL AND feishu_record_id != ALL(:ids)"  # noqa: E501
+            ),
+            {"ids": list(feishu_ids)},
         )
 
     return {"created": created, "updated": updated, "deleted": 0}

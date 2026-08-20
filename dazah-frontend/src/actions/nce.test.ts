@@ -53,7 +53,7 @@ describe('nce actions', () => {
     const fetchMock = vi.fn(() => jsonResponse({ code: 200, message: 'success', data: { id: 'nce-new' } }),)
     vi.stubGlobal('fetch', fetchMock)
 
-    const payload = { event_type: '偏差', description: '温度偏高' }
+    const payload = { event_type: '偏差', description: '温度偏高', event_time: '2026-07-01T08:00', workshop: '201-2' }
     await expect(createNCE(payload)).resolves.toMatchObject({ code: 200 })
     expect(fetchMock).toHaveBeenCalledWith(
       `${API_BASE}/api/v1/production/non-conforming-events`,
@@ -66,7 +66,7 @@ describe('nce actions', () => {
     const fetchMock = vi.fn(() => jsonResponse({ code: 200, message: 'success', data: { id: 'nce-1' } }),)
     vi.stubGlobal('fetch', fetchMock)
 
-    await expect(updateNCE('nce-1', { remark: '已处理' })).resolves.toMatchObject({ code: 200 })
+    await expect(updateNCE('nce-1', { remarks: '已处理' })).resolves.toMatchObject({ code: 200 })
     expect(fetchMock).toHaveBeenCalledWith(
       `${API_BASE}/api/v1/production/non-conforming-events/nce-1`,
       expect.objectContaining({ method: 'PUT' }),

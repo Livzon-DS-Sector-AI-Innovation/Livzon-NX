@@ -2,8 +2,10 @@
 
 提供手动触发和状态查询端点。
 """
+
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,21 +31,28 @@ async def trigger_anomaly_detection(session: AsyncSession = Depends(get_db)):
     try:
         result = await run_anomaly_detection(session)
         _last_run_result = result
-        _last_run_time = datetime.now(timezone.utc).isoformat()
+        _last_run_time = datetime.now(UTC).isoformat()
         logger.info(
             "[异常检测API] 手动触发完成 — scanned=%d detected=%d high=%d medium=%d",
-            result.get("scanned", 0), result.get("detected", 0),
-            result.get("high", 0), result.get("medium", 0),
+            result.get("scanned", 0),
+            result.get("detected", 0),
+            result.get("high", 0),
+            result.get("medium", 0),
         )
-        return success_response(result, message=(
-            f"扫描 {result['scanned']} 批, 检测到 {result['detected']} 个异常 "
-            f"(high={result['high']} medium={result['medium']}), "
-            f"正常 {result['skipped_normal']} 批"
-        ))
+        return success_response(
+            result,
+            message=(
+                f"扫描 {result['scanned']} 批, 检测到 {result['detected']} 个异常 "
+                f"(high={result['high']} medium={result['medium']}), "
+                f"正常 {result['skipped_normal']} 批"
+            ),
+        )
     except Exception as e:
         logger.exception("[异常检测API] 手动触发失败")
         return success_response(
-            {"error": str(e)}, message="异常检测执行失败", status_code=500,
+            {"error": str(e)},
+            message="异常检测执行失败",
+            status_code=500,
         )
 
 
@@ -51,9 +60,12 @@ async def trigger_anomaly_detection(session: AsyncSession = Depends(get_db)):
 async def get_anomaly_detection_status():
     """返回最近一次异常检测的运行时间和汇总结果（内存缓存）。"""
     if _last_run_result is None:
-        return success_response({"last_run": None, "last_result": None},
-                                message="尚未执行过异常检测")
-    return success_response({
-        "last_run": _last_run_time,
-        "last_result": _last_run_result,
-    })
+        return success_response(
+            {"last_run": None, "last_result": None}, message="尚未执行过异常检测"
+        )
+    return success_response(
+        {
+            "last_run": _last_run_time,
+            "last_result": _last_run_result,
+        }
+    )

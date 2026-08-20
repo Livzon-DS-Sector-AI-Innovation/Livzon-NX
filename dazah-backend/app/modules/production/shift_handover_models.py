@@ -19,15 +19,9 @@ class ShiftHandover(BaseModel):
         {"schema": "production"},
     )
 
-    position: Mapped[str] = mapped_column(
-        String(64), nullable=False, comment="岗位"
-    )
-    workshop: Mapped[str] = mapped_column(
-        String(64), nullable=False, comment="车间"
-    )
-    shift: Mapped[str] = mapped_column(
-        String(16), nullable=False, comment="班次"
-    )
+    position: Mapped[str] = mapped_column(String(64), nullable=False, comment="岗位")
+    workshop: Mapped[str] = mapped_column(String(64), nullable=False, comment="车间")
+    shift: Mapped[str] = mapped_column(String(16), nullable=False, comment="班次")
     handover_time: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, comment="交接时间"
     )
@@ -55,9 +49,7 @@ class ShiftHandover(BaseModel):
     ppe_status: Mapped[str | None] = mapped_column(
         Text, nullable=True, comment="人员劳动防护用品穿戴"
     )
-    remarks: Mapped[str | None] = mapped_column(
-        Text, nullable=True, comment="备注"
-    )
+    remarks: Mapped[str | None] = mapped_column(Text, nullable=True, comment="备注")
     status: Mapped[str] = mapped_column(
         String(16), nullable=False, default="pending", comment="状态: pending/confirmed"
     )

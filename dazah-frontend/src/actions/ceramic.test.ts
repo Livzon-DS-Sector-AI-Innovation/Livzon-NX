@@ -97,7 +97,7 @@ describe('ceramic actions', () => {
     await expect(ceramicEquip.list({})).resolves.toMatchObject({ code: 200 })
 
     // All four should target the same /api/v1/production/ceramic-* prefix
-    const urls = fetchMock.mock.calls.map((c) => c[0])
+    const urls = fetchMock.mock.calls.map((c) => String((c as unknown[])[0]))
     expect(urls[0]).toContain('ceramic-membrane-ops')
     expect(urls[1]).toContain('ceramic-membrane-cleans')
     expect(urls[2]).toContain('ceramic-material-separations')

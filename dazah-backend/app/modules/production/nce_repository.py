@@ -12,8 +12,16 @@ class NCERepository:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def list(self, page=1, page_size=20, workshop=None, event_type=None, date_from=None, date_to=None):
-        query = select(NonConformingEvent).where(NonConformingEvent.is_deleted == False)
+    async def list(
+        self,
+        page=1,
+        page_size=20,
+        workshop=None,
+        event_type=None,
+        date_from=None,
+        date_to=None,
+    ):
+        query = select(NonConformingEvent).where(not NonConformingEvent.is_deleted)
         if workshop:
             query = query.where(NonConformingEvent.workshop == workshop)
         if event_type:
@@ -32,7 +40,9 @@ class NCERepository:
         return list(result.scalars().all()), total
 
     async def get_by_id(self, record_id: UUID) -> NonConformingEvent | None:
-        query = select(NonConformingEvent).where(NonConformingEvent.id == record_id, NonConformingEvent.is_deleted == False)
+        query = select(NonConformingEvent).where(
+            NonConformingEvent.id == record_id, not NonConformingEvent.is_deleted
+        )
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
 

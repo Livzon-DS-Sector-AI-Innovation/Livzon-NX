@@ -1,7 +1,7 @@
 """Sync Feishu Bitable data to fermentation records."""
 
 import logging
-from datetime import date, datetime
+from datetime import date
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -38,7 +38,9 @@ def _extract_text(field_value: list | dict | str | None) -> str | None:
     if isinstance(field_value, str):
         return field_value.strip() or None
     if isinstance(field_value, dict):
-        return str(field_value.get("name") or field_value.get("text", "")).strip() or None
+        return (
+            str(field_value.get("name") or field_value.get("text", "")).strip() or None
+        )
     if isinstance(field_value, list) and field_value:
         first = field_value[0]
         if isinstance(first, str):
@@ -84,7 +86,7 @@ async def sync_config(config: ProductionFeishuConfig, session: AsyncSession) -> 
         items = result["items"]
         for item in items:
             fields = item.get("fields") or {}
-            record_id = item.get("record_id", "")
+            item.get("record_id", "")
 
             # 映射字段
             mapped = {}
@@ -93,7 +95,15 @@ async def sync_config(config: ProductionFeishuConfig, session: AsyncSession) -> 
                 if db_name in ("entry_date", "discharge_date"):
                     text = _extract_text(val)
                     mapped[db_name] = date.fromisoformat(text) if text else None
-                elif db_name in ("cycle_1", "cycle_2", "cycle_3", "cycle_4", "cycle_5", "cycle_6", "tank_yield"):
+                elif db_name in (
+                    "cycle_1",
+                    "cycle_2",
+                    "cycle_3",
+                    "cycle_4",
+                    "cycle_5",
+                    "cycle_6",
+                    "tank_yield",
+                ):
                     mapped[db_name] = _extract_number(val)
                 elif db_name == "status":
                     text = _extract_text(val)
@@ -110,11 +120,12 @@ async def sync_config(config: ProductionFeishuConfig, session: AsyncSession) -> 
             product_name = mapped.get("product_name") or config.product_name
 
             from sqlalchemy import select
+
             existing = await session.execute(
                 select(FermentationRecord).where(
                     FermentationRecord.batch_no == batch_no,
                     FermentationRecord.product_name == product_name,
-                    FermentationRecord.is_deleted == False,
+                    not FermentationRecord.is_deleted,
                 )
             )
             record = existing.scalar_one_or_none()
@@ -148,7 +159,7 @@ async def sync_all_active(session: AsyncSession) -> list[dict]:
     from sqlalchemy import select
 
     result = await session.execute(
-        select(ProductionFeishuConfig).where(ProductionFeishuConfig.is_active == True)
+        select(ProductionFeishuConfig).where(ProductionFeishuConfig.is_active)
     )
     configs = list(result.scalars().all())
     summaries = []

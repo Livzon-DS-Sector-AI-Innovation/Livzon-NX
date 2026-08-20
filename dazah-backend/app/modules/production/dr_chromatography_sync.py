@@ -1,15 +1,14 @@
 """DR 多拉菌素 — 层析及一次结晶岗位飞书电子表格同步"""
 
 import logging
-from typing import Optional
 
 import httpx
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.platform.integrations.feishu.utils import OPEN_API_BASE_URL
 from app.core.secrets import decrypt_secret
 from app.modules.production.production_feishu_models import ProductionFeishuConfig
+from app.platform.integrations.feishu.utils import OPEN_API_BASE_URL
 
 logger = logging.getLogger(__name__)
 
@@ -48,8 +47,11 @@ COL = {
 }
 
 MERGE_KEYS = [
-    "fl_batch_no", "production_date",
-    "chromatography_batch_no", "column_no", "extraction_batch_no",
+    "fl_batch_no",
+    "production_date",
+    "chromatography_batch_no",
+    "column_no",
+    "extraction_batch_no",
 ]
 
 # 字符串类型明细列（按文本读取，不做 float 转换）
@@ -73,10 +75,11 @@ async def _get_token(app_id: str, app_secret: str) -> str:
         return str(token)
 
 
-async def _read_sheet(token: str, sheet_id: str, spreadsheet_token: str) -> list[list[str]]:
+async def _read_sheet(
+    token: str, sheet_id: str, spreadsheet_token: str
+) -> list[list[str]]:
     path = (
-        f"/sheets/v2/spreadsheets/{spreadsheet_token}"
-        f"/values/{sheet_id}!{SHEET_RANGE}"
+        f"/sheets/v2/spreadsheets/{spreadsheet_token}/values/{sheet_id}!{SHEET_RANGE}"
     )
     async with httpx.AsyncClient(base_url=OPEN_API_BASE_URL, timeout=60) as c:
         r = await c.get(
@@ -101,7 +104,7 @@ def _g(row: list[str], key: str) -> str:
     return str(row[idx]).strip() if idx < len(row) and row[idx] else ""
 
 
-def _f(row: list[str], key: str) -> Optional[float]:
+def _f(row: list[str], key: str) -> float | None:
     s = _g(row, key)
     if not s or s == "-" or s.startswith("#"):
         return None
@@ -119,7 +122,10 @@ def _is_empty(row: list[str]) -> bool:
 # 同步主逻辑
 # ═══════════════════════════════════════════════════════════
 
-async def sync_dr_chromatography(config: ProductionFeishuConfig, session: AsyncSession) -> dict:
+
+async def sync_dr_chromatography(
+    config: ProductionFeishuConfig, session: AsyncSession
+) -> dict:
     app_secret = decrypt_secret(config.encrypted_app_secret)
     token = await _get_token(config.app_id, app_secret)
     logger.info("[DR层析同步] 读取飞书表格...")

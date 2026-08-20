@@ -70,9 +70,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         async with async_session_factory() as session:
             await reset_interrupted_syncs(session)
     except Exception:
-        logger.exception(
-            "Failed to reset interrupted procurement material sync status"
-        )
+        logger.exception("Failed to reset interrupted procurement material sync status")
 
     from app.modules.procurement.api import clear_stale_material_sync_lock
 

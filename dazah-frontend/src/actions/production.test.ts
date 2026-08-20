@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/lib/auth', () => ({ getAuthHeaders: mocks.getAuthHeaders }))
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }))
 
+import { BatchStatus, OperationType, ProcessSpecStatus } from '@/types/production'
 import {
   getBatches,
   getBatch,
@@ -56,11 +57,11 @@ describe('production actions', () => {
     const fetchMock = vi.fn(() => jsonResponse({ code: 200, message: 'success', data: [] }),)
     vi.stubGlobal('fetch', fetchMock)
 
-    await expect(getBatches({ page: 1, page_size: 20, status: 'running' })).resolves.toMatchObject({
+    await expect(getBatches({ page: 1, page_size: 20, status: BatchStatus.IN_PROGRESS })).resolves.toMatchObject({
       code: 200,
     })
     expect(fetchMock).toHaveBeenCalledWith(
-      `${API_BASE}/api/v1/production/batches?page=1&page_size=20&status=running`,
+      `${API_BASE}/api/v1/production/batches?page=1&page_size=20&status=in_progress`,
       expect.objectContaining({
         headers: expect.objectContaining({ Authorization: 'Bearer test-token' }),
       }),
@@ -95,7 +96,7 @@ describe('production actions', () => {
     const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: { id: 'b-1' } }))
     vi.stubGlobal('fetch', fetchMock)
 
-    await expect(updateBatch('b-1', { status: 'completed' })).resolves.toMatchObject({ code: 200 })
+    await expect(updateBatch('b-1', { notes: '完成' })).resolves.toMatchObject({ code: 200 })
     expect(fetchMock).toHaveBeenCalledWith(
       `${API_BASE}/api/v1/production/batches/b-1`,
       expect.objectContaining({ method: 'PUT' }),
@@ -169,9 +170,9 @@ describe('production actions', () => {
     const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: [] }))
     vi.stubGlobal('fetch', fetchMock)
 
-    await expect(getProcessSpecs({ status: 'active' })).resolves.toMatchObject({ code: 200 })
+    await expect(getProcessSpecs({ status: ProcessSpecStatus.EFFECTIVE })).resolves.toMatchObject({ code: 200 })
     expect(fetchMock).toHaveBeenCalledWith(
-      `${API_BASE}/api/v1/production/process-specs?status=active`,
+      `${API_BASE}/api/v1/production/process-specs?status=effective`,
       expect.objectContaining({
         headers: expect.objectContaining({ Authorization: 'Bearer test-token' }),
       }),
@@ -182,7 +183,7 @@ describe('production actions', () => {
     const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: { id: 'ps-1' } }))
     vi.stubGlobal('fetch', fetchMock)
 
-    const payload = { spec_name: '无菌工艺', version: 'v1' }
+    const payload = { spec_code: 'S-001', product_code: 'FA', spec_name: '无菌工艺', version: 'v1' }
     await expect(createProcessSpec(payload)).resolves.toMatchObject({ code: 200 })
     expect(fetchMock).toHaveBeenCalledWith(
       `${API_BASE}/api/v1/production/process-specs`,
@@ -195,7 +196,7 @@ describe('production actions', () => {
     const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: { id: 'st-1' } }))
     vi.stubGlobal('fetch', fetchMock)
 
-    const payload = { spec_id: 'ps-1', step_name: '消毒' }
+    const payload = { spec_id: 'ps-1', step_no: 1, step_name: '消毒' }
     await expect(createProcessStep(payload)).resolves.toMatchObject({ code: 200 })
     expect(fetchMock).toHaveBeenCalledWith(
       `${API_BASE}/api/v1/production/steps`,
@@ -208,7 +209,7 @@ describe('production actions', () => {
     const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: { id: 'prm-1' } }))
     vi.stubGlobal('fetch', fetchMock)
 
-    await expect(createProcessParameter({ step_id: 'st-1', param_key: 'temp' })).resolves.toMatchObject({ code: 200 })
+    await expect(createProcessParameter({ step_id: 'st-1', param_name: '温度' })).resolves.toMatchObject({ code: 200 })
     expect(fetchMock).toHaveBeenCalledWith(
       `${API_BASE}/api/v1/production/parameters`,
       expect.objectContaining({ method: 'POST' }),
@@ -231,7 +232,7 @@ describe('production actions', () => {
     const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: { id: 'r-1' } }))
     vi.stubGlobal('fetch', fetchMock)
 
-    await expect(createProductionRecord({ batch_id: 'b-1', stage: 'seed' })).resolves.toMatchObject({ code: 200 })
+    await expect(createProductionRecord({ batch_id: 'b-1', record_no: 'R-001', operation_type: 'material_add' as OperationType })).resolves.toMatchObject({ code: 200 })
     expect(fetchMock).toHaveBeenCalledWith(
       `${API_BASE}/api/v1/production/records`,
       expect.objectContaining({ method: 'POST' }),
@@ -274,7 +275,7 @@ describe('production actions', () => {
     const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: { id: 'fr-1' } }))
     vi.stubGlobal('fetch', fetchMock)
 
-    const payload = { batch_no: 'B001', fermenter: 'F-1', temp: 30 }
+    const payload = { batch_no: 'B001', fermenter: 'F-1', entry_date: '2026-07-01' }
     await expect(createFermentationRecord(payload)).resolves.toMatchObject({ code: 200 })
     expect(fetchMock).toHaveBeenCalledWith(
       `${API_BASE}/api/v1/production/fermentation`,
@@ -287,7 +288,7 @@ describe('production actions', () => {
     const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: { id: 'fr-1' } }))
     vi.stubGlobal('fetch', fetchMock)
 
-    await expect(updateFermentationRecord('fr-1', { temp: 32 })).resolves.toMatchObject({ code: 200 })
+    await expect(updateFermentationRecord('fr-1', { status: 'running' })).resolves.toMatchObject({ code: 200 })
     expect(fetchMock).toHaveBeenCalledWith(
       `${API_BASE}/api/v1/production/fermentation/fr-1`,
       expect.objectContaining({ method: 'PUT' }),

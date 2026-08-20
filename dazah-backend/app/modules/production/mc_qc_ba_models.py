@@ -1,13 +1,25 @@
 """MC 霉酚酸 — QC检验 + 乙酸丁酯盘点 ORM 模型"""
 
 from datetime import date
-from sqlalchemy import Boolean, Date, Float, Index, Integer, String, Text, UniqueConstraint
+
+from sqlalchemy import (
+    Boolean,
+    Date,
+    Float,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
+
 from app.shared.base_model import BaseModel
 
 
 class QcInspection(BaseModel):
     """QC检验主表 — 实测值 vs 理论值比对"""
+
     __tablename__ = "qc_inspections"
     __table_args__ = (
         Index("ix_qci_qc_id", "qc_id"),
@@ -36,14 +48,21 @@ class QcInspection(BaseModel):
     barrel_count: Mapped[str | None] = mapped_column(
         String(128), nullable=True, comment="桶数（如：98桶）"
     )
-    blend_date: Mapped[date | None] = mapped_column(Date, nullable=True, comment="混粉日期")
+    blend_date: Mapped[date | None] = mapped_column(
+        Date, nullable=True, comment="混粉日期"
+    )
     status: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0, comment="状态（0待检/1检验中/2合格/3复测中/4返工）"
+        Integer,
+        nullable=False,
+        default=0,
+        comment="状态（0待检/1检验中/2合格/3复测中/4返工）",
     )
     remarks: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # ── 混粉入库台账专属字段 ──
-    input_date: Mapped[date | None] = mapped_column(Date, nullable=True, comment="入库日期")
+    input_date: Mapped[date | None] = mapped_column(
+        Date, nullable=True, comment="入库日期"
+    )
     cumulative_weight: Mapped[float | None] = mapped_column(
         Float, nullable=True, comment="累计入库重量(kg)"
     )
@@ -51,6 +70,7 @@ class QcInspection(BaseModel):
 
 class QcInspectionItem(BaseModel):
     """QC检验明细表 — 各RRT点位的实测值"""
+
     __tablename__ = "qc_inspection_items"
     __table_args__ = (
         Index("ix_qcii_inspection", "inspection_id"),
@@ -82,17 +102,17 @@ class QcInspectionItem(BaseModel):
 
 # ═══════════════════════ 丁酯台账（飞书同步） ═══════════════════════
 
+
 class ButylAcetateRecord(BaseModel):
     """丁酯消耗/入库台账 — 飞书交叉表镜像"""
+
     __tablename__ = "butyl_acetate_records"
     __table_args__ = (
         UniqueConstraint("check_date", "equipment"),
         {"schema": "production"},
     )
 
-    check_date: Mapped[date] = mapped_column(
-        Date, nullable=False, comment="抽查日期"
-    )
+    check_date: Mapped[date] = mapped_column(Date, nullable=False, comment="抽查日期")
     equipment: Mapped[str] = mapped_column(
         String(64), nullable=False, comment="设备名称（入库行='入库'）"
     )
@@ -109,8 +129,10 @@ class ButylAcetateRecord(BaseModel):
 
 # ═══════════════════════ QC检验投入明细 — 混粉入库台账子表 ═══════════════════════
 
+
 class QcInspectionInput(BaseModel):
     """QC检验单 — 投入明细（每批干粉来源）"""
+
     __tablename__ = "qc_inspection_inputs"
     __table_args__ = (
         Index("ix_qcii_qc", "qc_batch"),

@@ -1,17 +1,15 @@
 """Production API routes."""
 
 import uuid
-from datetime import datetime
-from typing import Any
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import CurrentUser, get_current_user
 from app.core.response import ApiResponse
-from app.modules.production.schemas import (
+from app.modules.production.schemas import (  # noqa: E402
     BatchCreate,
     BatchMaterialCreate,
     BatchMaterialResponse,
@@ -19,10 +17,8 @@ from app.modules.production.schemas import (
     BatchResponse,
     BatchStatusUpdate,
     BatchUpdate,
-    MaterialBalanceCalculate,
     MaterialBalanceResponse,
     MaterialBalanceUpdate,
-    OperationType,
     ProcessParameterCreate,
     ProcessParameterResponse,
     ProcessParameterUpdate,
@@ -54,7 +50,9 @@ async def get_batches(
     status: str | None = None,
     product_code: str | None = None,
     batch_no: str | None = None,
-    exclude_cancelled: str | None = Query(None, description="是否排除已取消的批次，传入 'true' 或 'false'"),
+    exclude_cancelled: str | None = Query(
+        None, description="是否排除已取消的批次，传入 'true' 或 'false'"
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
 ):
@@ -62,8 +60,12 @@ async def get_batches(
     service = ProductionService(db)
     skip = (page - 1) * page_size
     # 将字符串参数转换为布尔值
-    exclude_cancelled_bool = exclude_cancelled is not None and exclude_cancelled.lower() == 'true'
-    batches, total = await service.get_batches(skip, page_size, status, product_code, batch_no, exclude_cancelled_bool)
+    exclude_cancelled_bool = (
+        exclude_cancelled is not None and exclude_cancelled.lower() == "true"
+    )
+    batches, total = await service.get_batches(
+        skip, page_size, status, product_code, batch_no, exclude_cancelled_bool
+    )
     return ApiResponse(
         data=[BatchResponse.model_validate(b) for b in batches],
         meta={"page": page, "page_size": page_size, "total": total},
@@ -113,7 +115,9 @@ async def update_batch(
     return ApiResponse(data=BatchResponse.model_validate(batch))
 
 
-@router.put("/batches/{batch_id}/status", response_model=ApiResponse, summary="更新批次状态")
+@router.put(
+    "/batches/{batch_id}/status", response_model=ApiResponse, summary="更新批次状态"
+)
 async def update_batch_status(
     batch_id: uuid.UUID,
     data: BatchStatusUpdate,
@@ -150,7 +154,11 @@ async def delete_batch(
 # ============ BatchMaterial Routes ============
 
 
-@router.get("/batches/{batch_id}/materials", response_model=ApiResponse, summary="获取批次物料列表")
+@router.get(
+    "/batches/{batch_id}/materials",
+    response_model=ApiResponse,
+    summary="获取批次物料列表",
+)
 async def get_batch_materials(
     batch_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
@@ -159,10 +167,14 @@ async def get_batch_materials(
     """获取批次物料列表"""
     service = ProductionService(db)
     materials = await service.get_batch_materials(batch_id)
-    return ApiResponse(data=[BatchMaterialResponse.model_validate(m) for m in materials])
+    return ApiResponse(
+        data=[BatchMaterialResponse.model_validate(m) for m in materials]
+    )
 
 
-@router.post("/batches/{batch_id}/materials", response_model=ApiResponse, summary="添加批次物料")
+@router.post(
+    "/batches/{batch_id}/materials", response_model=ApiResponse, summary="添加批次物料"
+)
 async def add_batch_material(
     batch_id: uuid.UUID,
     data: BatchMaterialCreate,
@@ -176,7 +188,9 @@ async def add_batch_material(
     return ApiResponse(data=BatchMaterialResponse.model_validate(material))
 
 
-@router.put("/materials/{material_id}", response_model=ApiResponse, summary="更新批次物料")
+@router.put(
+    "/materials/{material_id}", response_model=ApiResponse, summary="更新批次物料"
+)
 async def update_batch_material(
     material_id: uuid.UUID,
     data: BatchMaterialUpdate,
@@ -193,7 +207,9 @@ async def update_batch_material(
     return ApiResponse(data=BatchMaterialResponse.model_validate(material))
 
 
-@router.delete("/materials/{material_id}", response_model=ApiResponse, summary="删除批次物料")
+@router.delete(
+    "/materials/{material_id}", response_model=ApiResponse, summary="删除批次物料"
+)
 async def delete_batch_material(
     material_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
@@ -303,14 +319,18 @@ async def get_process_specs(
     """获取工艺规程列表"""
     service = ProductionService(db)
     skip = (page - 1) * page_size
-    specs, total = await service.get_process_specs(skip, page_size, status, product_code)
+    specs, total = await service.get_process_specs(
+        skip, page_size, status, product_code
+    )
     return ApiResponse(
         data=[ProcessSpecResponse.model_validate(s) for s in specs],
         meta={"page": page, "page_size": page_size, "total": total},
     )
 
 
-@router.get("/process-specs/{spec_id}", response_model=ApiResponse, summary="获取工艺规程详情")
+@router.get(
+    "/process-specs/{spec_id}", response_model=ApiResponse, summary="获取工艺规程详情"
+)
 async def get_process_spec(
     spec_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
@@ -337,7 +357,9 @@ async def create_process_spec(
     return ApiResponse(data=ProcessSpecResponse.model_validate(spec))
 
 
-@router.put("/process-specs/{spec_id}", response_model=ApiResponse, summary="更新工艺规程")
+@router.put(
+    "/process-specs/{spec_id}", response_model=ApiResponse, summary="更新工艺规程"
+)
 async def update_process_spec(
     spec_id: uuid.UUID,
     data: ProcessSpecUpdate,
@@ -353,7 +375,9 @@ async def update_process_spec(
     return ApiResponse(data=ProcessSpecResponse.model_validate(spec))
 
 
-@router.delete("/process-specs/{spec_id}", response_model=ApiResponse, summary="删除工艺规程")
+@router.delete(
+    "/process-specs/{spec_id}", response_model=ApiResponse, summary="删除工艺规程"
+)
 async def delete_process_spec(
     spec_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
@@ -370,7 +394,12 @@ async def delete_process_spec(
 
 # ============ ProcessStep Routes =====
 
-@router.get("/process-specs/{spec_id}/steps", response_model=ApiResponse, summary="获取工艺步骤列表")
+
+@router.get(
+    "/process-specs/{spec_id}/steps",
+    response_model=ApiResponse,
+    summary="获取工艺步骤列表",
+)
 async def get_process_steps(
     spec_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
@@ -429,7 +458,11 @@ async def delete_process_step(
 # ============ ProcessParameter Routes ============
 
 
-@router.get("/steps/{step_id}/parameters", response_model=ApiResponse, summary="获取工艺参数列表")
+@router.get(
+    "/steps/{step_id}/parameters",
+    response_model=ApiResponse,
+    summary="获取工艺参数列表",
+)
 async def get_process_parameters(
     step_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
@@ -438,7 +471,9 @@ async def get_process_parameters(
     """获取工艺参数列表"""
     service = ProductionService(db)
     params = await service.get_parameters(step_id)
-    return ApiResponse(data=[ProcessParameterResponse.model_validate(p) for p in params])
+    return ApiResponse(
+        data=[ProcessParameterResponse.model_validate(p) for p in params]
+    )
 
 
 @router.post("/parameters", response_model=ApiResponse, summary="创建工艺参数")
@@ -454,7 +489,9 @@ async def create_process_parameter(
     return ApiResponse(data=ProcessParameterResponse.model_validate(param))
 
 
-@router.put("/parameters/{param_id}", response_model=ApiResponse, summary="更新工艺参数")
+@router.put(
+    "/parameters/{param_id}", response_model=ApiResponse, summary="更新工艺参数"
+)
 async def update_process_parameter(
     param_id: uuid.UUID,
     data: ProcessParameterUpdate,
@@ -470,7 +507,9 @@ async def update_process_parameter(
     return ApiResponse(data=ProcessParameterResponse.model_validate(param))
 
 
-@router.delete("/parameters/{param_id}", response_model=ApiResponse, summary="删除工艺参数")
+@router.delete(
+    "/parameters/{param_id}", response_model=ApiResponse, summary="删除工艺参数"
+)
 async def delete_process_parameter(
     param_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
@@ -488,7 +527,11 @@ async def delete_process_parameter(
 # ============ ProductionRecord Routes ============
 
 
-@router.get("/batches/{batch_id}/records", response_model=ApiResponse, summary="获取生产记录列表")
+@router.get(
+    "/batches/{batch_id}/records",
+    response_model=ApiResponse,
+    summary="获取生产记录列表",
+)
 async def get_production_records(
     batch_id: uuid.UUID,
     page: int = Query(1, ge=1),
@@ -500,7 +543,9 @@ async def get_production_records(
     service = ProductionService(db)
     skip = (page - 1) * page_size
     records = await service.get_records(batch_id, skip, page_size)
-    return ApiResponse(data=[ProductionRecordResponse.model_validate(r) for r in records])
+    return ApiResponse(
+        data=[ProductionRecordResponse.model_validate(r) for r in records]
+    )
 
 
 @router.post("/records", response_model=ApiResponse, summary="创建生产记录")
@@ -533,7 +578,9 @@ async def update_production_record(
     return ApiResponse(data=ProductionRecordResponse.model_validate(record))
 
 
-@router.delete("/records/{record_id}", response_model=ApiResponse, summary="删除生产记录")
+@router.delete(
+    "/records/{record_id}", response_model=ApiResponse, summary="删除生产记录"
+)
 async def delete_production_record(
     record_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
@@ -551,7 +598,9 @@ async def delete_production_record(
 # ============ MaterialBalance Routes ============
 
 
-@router.get("/batches/{batch_id}/balance", response_model=ApiResponse, summary="获取物料平衡")
+@router.get(
+    "/batches/{batch_id}/balance", response_model=ApiResponse, summary="获取物料平衡"
+)
 async def get_material_balance(
     batch_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
@@ -565,7 +614,11 @@ async def get_material_balance(
     return ApiResponse(data=MaterialBalanceResponse.model_validate(balance))
 
 
-@router.post("/batches/{batch_id}/balance/calculate", response_model=ApiResponse, summary="计算物料平衡")
+@router.post(
+    "/batches/{batch_id}/balance/calculate",
+    response_model=ApiResponse,
+    summary="计算物料平衡",
+)
 async def calculate_material_balance(
     batch_id: uuid.UUID,
     min_balance_rate: float = Query(95.0, ge=0, le=100),
@@ -581,7 +634,9 @@ async def calculate_material_balance(
     return ApiResponse(data=MaterialBalanceResponse.model_validate(balance))
 
 
-@router.put("/batches/{batch_id}/balance", response_model=ApiResponse, summary="更新物料平衡")
+@router.put(
+    "/batches/{batch_id}/balance", response_model=ApiResponse, summary="更新物料平衡"
+)
 async def update_material_balance(
     batch_id: uuid.UUID,
     data: MaterialBalanceUpdate,
@@ -598,7 +653,9 @@ async def update_material_balance(
     return ApiResponse(data=MaterialBalanceResponse.model_validate(balance))
 
 
-@router.delete("/batches/{batch_id}/balance", response_model=ApiResponse, summary="删除物料平衡")
+@router.delete(
+    "/batches/{batch_id}/balance", response_model=ApiResponse, summary="删除物料平衡"
+)
 async def delete_material_balance(
     batch_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
@@ -612,215 +669,311 @@ async def delete_material_balance(
     await db.commit()
     return ApiResponse(message="删除成功")
 
+
 # ============ 压差统计路由 ============
-from app.modules.production.pressure_api import router as pressure_router
+from app.modules.production.pressure_api import router as pressure_router  # noqa: E402
 
 router.include_router(pressure_router, tags=["压差统计"])
 
 # ============ 发酵记录路由 ============
-from app.modules.production.fermentation_api import router as fermentation_router
+from app.modules.production.fermentation_api import (  # noqa: E402
+    router as fermentation_router,  # noqa: E402
+)
 
 router.include_router(fermentation_router, tags=["生产管理 - 发酵记录"])
 
 # ============ 飞书同步路由 ============
-from app.modules.production.production_feishu_api import router as feishu_router
+from app.modules.production.production_feishu_api import (  # noqa: E402
+    router as feishu_router,  # noqa: E402
+)
 
 router.include_router(feishu_router, tags=["生产管理 - 飞书同步"])
 
 # ============ 生产日志与交接班路由 ============
-from app.modules.production.shift_log_api import router as shift_log_router
+from app.modules.production.shift_log_api import (  # noqa: E402
+    router as shift_log_router,  # noqa: E402
+)
 
 router.include_router(shift_log_router, tags=["生产管理 - 日志与交接班"])
 
 # ============ 班组交接确认路由 ============
-from app.modules.production.shift_handover_api import router as shift_handover_router
+from app.modules.production.shift_handover_api import (  # noqa: E402
+    router as shift_handover_router,  # noqa: E402
+)
 
 router.include_router(shift_handover_router, tags=["生产管理 - 班组交接确认"])
 
 # ============ 种子培养记录路由 ============
-from app.modules.production.seed_culture_api import router as seed_culture_router
+from app.modules.production.seed_culture_api import (  # noqa: E402
+    router as seed_culture_router,  # noqa: E402
+)
 
 router.include_router(seed_culture_router, tags=["生产管理 - 种子培养"])
 
 # ============ 非密事件与运行偏差路由 ============
-from app.modules.production.nce_api import router as nce_router
+from app.modules.production.nce_api import router as nce_router  # noqa: E402
 
 router.include_router(nce_router, tags=["生产管理 - 非密事件"])
 
 # ============ 批次全貌路由 ============
-from app.modules.production.batch_profile_api import router as batch_profile_router
+from app.modules.production.batch_profile_api import (  # noqa: E402
+    router as batch_profile_router,  # noqa: E402
+)
 
 router.include_router(batch_profile_router, tags=["生产管理 - 批次全貌"])
 
 # ============ 发酵液接收路由 ============
-from app.modules.production.broth_receive_api import router as broth_receive_router
+from app.modules.production.broth_receive_api import (  # noqa: E402
+    router as broth_receive_router,  # noqa: E402
+)
 
 router.include_router(broth_receive_router, tags=["生产管理 - 发酵液接收"])
 
 # ============ 预处理工艺路由 ============
-from app.modules.production.pretreatment_api import router as pretreatment_router
+from app.modules.production.pretreatment_api import (  # noqa: E402
+    router as pretreatment_router,  # noqa: E402
+)
 
 router.include_router(pretreatment_router, tags=["生产管理 - 预处理"])
 
 # ============ 陶瓷膜过滤路由 ============
-from app.modules.production.ceramic_api import router as ceramic_router
+from app.modules.production.ceramic_api import router as ceramic_router  # noqa: E402
 
 router.include_router(ceramic_router, tags=["生产管理 - 陶瓷膜过滤"])
 
 # ============ 一次脱色路由 ============
-from app.modules.production.decolor1_api import router as decolor1_router
+from app.modules.production.decolor1_api import router as decolor1_router  # noqa: E402
 
 router.include_router(decolor1_router, tags=["生产管理 - 一次脱色"])
 
 # ============ 一次板框过滤路由 ============
-from app.modules.production.filter1_api import router as filter1_router
+from app.modules.production.filter1_api import router as filter1_router  # noqa: E402
 
 router.include_router(filter1_router, tags=["生产管理 - 一次板框过滤"])
 
 # ============ 一次浓缩路由 ============
-from app.modules.production.conc1_api import router as conc1_router
+from app.modules.production.conc1_api import router as conc1_router  # noqa: E402
 
 router.include_router(conc1_router, tags=["生产管理 - 一次浓缩"])
 
 # ============ 一次离心路由 ============
-from app.modules.production.centrifuge1_api import router as centrifuge1_router
+from app.modules.production.centrifuge1_api import (  # noqa: E402
+    router as centrifuge1_router,  # noqa: E402
+)
 
 router.include_router(centrifuge1_router, tags=["生产管理 - 一次离心"])
 
 # ============ 二次重结晶脱色路由 ============
-from app.modules.production.recrystallize_api import router as recrystallize_router
+from app.modules.production.recrystallize_api import (  # noqa: E402
+    router as recrystallize_router,  # noqa: E402
+)
 
 router.include_router(recrystallize_router, tags=["生产管理 - 二次重结晶脱色"])
 
 # ============ 二次板框过滤路由 ============
-from app.modules.production.filter2_api import router as filter2_router
+from app.modules.production.filter2_api import router as filter2_router  # noqa: E402
 
 router.include_router(filter2_router, tags=["生产管理 - 二次板框过滤"])
 
 # ============ 二次浓缩路由 ============
-from app.modules.production.conc2_api import router as conc2_router
+from app.modules.production.conc2_api import router as conc2_router  # noqa: E402
 
 router.include_router(conc2_router, tags=["生产管理 - 二次浓缩"])
 
 # ============ 二次离心路由 ============
-from app.modules.production.centrifuge2_api import router as centrifuge2_router
+from app.modules.production.centrifuge2_api import (  # noqa: E402
+    router as centrifuge2_router,  # noqa: E402
+)
 
 router.include_router(centrifuge2_router, tags=["生产管理 - 二次离心"])
 
 # ============ 烘干路由 ============
-from app.modules.production.dry_api import router as dry_router
+from app.modules.production.dry_api import router as dry_router  # noqa: E402
 
 router.include_router(dry_router, tags=["生产管理 - 烘干"])
 
 # ============ 包装路由 ============
-from app.modules.production.pack_api import router as pack_router
+from app.modules.production.pack_api import router as pack_router  # noqa: E402
 
 router.include_router(pack_router, tags=["生产管理 - 包装"])
 
 # ============ 批次进度总览路由 ============
-from app.modules.production.batch_progress_api import router as batch_progress_router
+from app.modules.production.batch_progress_api import (  # noqa: E402
+    router as batch_progress_router,  # noqa: E402
+)
 
 router.include_router(batch_progress_router, tags=["生产管理 - 批次进度"])
 
 # ============ MC（霉酚酸）粗提路由 ============
-from app.modules.production.mc_crude_extract_api import router as mc_crude_router
+from app.modules.production.mc_crude_extract_api import (  # noqa: E402
+    router as mc_crude_router,  # noqa: E402
+)
 
 router.include_router(mc_crude_router, tags=["生产管理 - MC粗提"])
 
 # ============ MC（霉酚酸）提取路由 ============
-from app.modules.production.mc_extraction_api import router as mc_extraction_router
+from app.modules.production.mc_extraction_api import (  # noqa: E402
+    router as mc_extraction_router,  # noqa: E402
+)
 
 router.include_router(mc_extraction_router, tags=["生产管理 - MC提取"])
 
 # ============ MC（霉酚酸）二次精制路由 ============
-from app.modules.production.mc_refinement_api import router as mc_refinement_router
+from app.modules.production.mc_refinement_api import (  # noqa: E402
+    router as mc_refinement_router,  # noqa: E402
+)
 
 router.include_router(mc_refinement_router, tags=["生产管理 - MC二次精制"])
 
 # ============ MC（霉酚酸）混粉 + QC + 丁酯路由 ============
-from app.modules.production.mc_blend_qc_ba_api import router as mc_blend_qc_ba_router
+from app.modules.production.mc_blend_qc_ba_api import (  # noqa: E402
+    router as mc_blend_qc_ba_router,  # noqa: E402
+)
 
 router.include_router(mc_blend_qc_ba_router, tags=["生产管理 - MC混粉/QC/丁酯"])
 
 # ============ MC（霉酚酸）仪表盘路由 ============
-from app.modules.production.mc_dashboard_api import router as mc_dashboard_router
+from app.modules.production.mc_dashboard_api import (  # noqa: E402
+    router as mc_dashboard_router,  # noqa: E402
+)
 
 router.include_router(mc_dashboard_router, tags=["生产管理 - MC仪表盘"])
 
 # ============ MC（霉酚酸）飞书电子表格同步路由 ============
-from app.modules.production.mc_feishu_sync_api import router as mc_feishu_sync_router
+from app.modules.production.mc_feishu_sync_api import (  # noqa: E402
+    router as mc_feishu_sync_router,  # noqa: E402
+)
 
 router.include_router(mc_feishu_sync_router, tags=["生产管理 - MC飞书同步"])
 
 # ============ MC 批次血链表 ============
-from app.modules.production.mc_lineage_api import router as mc_lineage_router
+from app.modules.production.mc_lineage_api import (  # noqa: E402
+    router as mc_lineage_router,  # noqa: E402
+)
 
 router.include_router(mc_lineage_router, tags=["生产管理 - MC批次血链表"])
 
-from app.modules.production.ai_analysis_api import router as ai_analysis_router
+from app.modules.production.ai_analysis_api import (  # noqa: E402
+    router as ai_analysis_router,  # noqa: E402
+)
+
 router.include_router(ai_analysis_router, tags=["生产管理 - MC批次血链表"])
 
-from app.modules.production.mc_chat_api import router as mc_chat_router
+from app.modules.production.mc_chat_api import router as mc_chat_router  # noqa: E402
+
 router.include_router(mc_chat_router, tags=["生产管理 - MC批次血链表"])
 
-from app.modules.production.mc_yield_anomaly_api import router as mc_anomaly_router
+from app.modules.production.mc_yield_anomaly_api import (  # noqa: E402
+    router as mc_anomaly_router,  # noqa: E402
+)
+
 router.include_router(mc_anomaly_router, tags=["生产管理 - MC收率异常检测"])
 
-from app.modules.production.fa_api import router as fa_router
+from app.modules.production.fa_api import router as fa_router  # noqa: E402
+
 router.include_router(fa_router, tags=["生产管理 - FA苯丙氨酸"])
 
-from app.modules.production.fa_lineage_api import router as fa_lineage_router
+from app.modules.production.fa_lineage_api import (  # noqa: E402
+    router as fa_lineage_router,  # noqa: E402
+)
+
 router.include_router(fa_lineage_router, tags=["生产管理 - FA批次血链表"])
 
-from app.modules.production.fa_ai_analysis_api import router as fa_ai_router
+from app.modules.production.fa_ai_analysis_api import (  # noqa: E402
+    router as fa_ai_router,  # noqa: E402
+)
+
 router.include_router(fa_ai_router, tags=["生产管理 - FA AI分析"])
 
-from app.modules.production.fa_chat_api import router as fa_chat_router
+from app.modules.production.fa_chat_api import router as fa_chat_router  # noqa: E402
+
 router.include_router(fa_chat_router, tags=["生产管理 - FA AI对话"])
 
-from app.modules.production.fa_dashboard_api import router as fa_dashboard_router
+from app.modules.production.fa_dashboard_api import (  # noqa: E402
+    router as fa_dashboard_router,  # noqa: E402
+)
+
 router.include_router(fa_dashboard_router, tags=["生产管理 - FA 收率看板"])
 
-from app.modules.production.fa_models import FaFermentationBatch, FaFermentationSubBatch, FaAcidificationRecord, FaDecolor1Record  # noqa: F401
-
 # ============ DR（多拉菌素）路由 ============
-from app.modules.production.dr_api import router as dr_router
+from app.modules.production.dr_api import router as dr_router  # noqa: E402
+from app.modules.production.fa_models import (  # noqa: F401, E402
+    FaAcidificationRecord,
+    FaDecolor1Record,
+    FaFermentationBatch,
+    FaFermentationSubBatch,
+)
 
 router.include_router(dr_router, tags=["生产管理 - DR多拉菌素"])
 
-from app.modules.production.dr_models import DrFermentationBatch, DrFermentationTank, DrExtraction, DrFiltrate  # noqa: F401
+from app.modules.production.dr_lineage_api import (  # noqa: E402
+    router as dr_lineage_router,  # noqa: E402
+)
+from app.modules.production.dr_models import (  # noqa: F401, E402
+    DrExtraction,
+    DrFermentationBatch,
+    DrFermentationTank,
+    DrFiltrate,
+)
 
-from app.modules.production.dr_lineage_api import router as dr_lineage_router
 router.include_router(dr_lineage_router, tags=["生产管理 - DR批次追溯"])
 
-from app.modules.production.dr_schedule_api import router as dr_schedule_router
+from app.modules.production.dr_schedule_api import (  # noqa: E402
+    router as dr_schedule_router,  # noqa: E402
+)
+
 router.include_router(dr_schedule_router, tags=["生产管理 - DR排产放罐计划"])
 
 # ============ 销售计划明细路由 ============
-from app.modules.production.models import SalesPlanDetail
-from app.modules.production.schemas import SalesPlanDetailCreate, SalesPlanDetailResponse, SalesPlanDetailUpdate
-from app.core.response import paginated_response
+from app.core.response import paginated_response  # noqa: E402
+from app.modules.production.models import SalesPlanDetail  # noqa: E402
+from app.modules.production.schemas import (  # noqa: E402
+    SalesPlanDetailCreate,
+    SalesPlanDetailResponse,
+    SalesPlanDetailUpdate,
+)
 
 
-@router.get("/sales-plan-details", response_model=ApiResponse, summary="获取销售计划明细列表")
+@router.get(
+    "/sales-plan-details", response_model=ApiResponse, summary="获取销售计划明细列表"
+)
 async def get_sales_plan_details(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=200),
     product_name: str | None = None,
     session: AsyncSession = Depends(get_db),
 ):
-    query = select(SalesPlanDetail).where(SalesPlanDetail.is_deleted == False)
-    count_q = select(func.count(SalesPlanDetail.id)).where(SalesPlanDetail.is_deleted == False)
+    query = select(SalesPlanDetail).where(not SalesPlanDetail.is_deleted)
+    count_q = select(func.count(SalesPlanDetail.id)).where(
+        not SalesPlanDetail.is_deleted
+    )
     if product_name:
         query = query.where(SalesPlanDetail.product_name == product_name)
         count_q = count_q.where(SalesPlanDetail.product_name == product_name)
     total = (await session.execute(count_q)).scalar() or 0
     offset = (page - 1) * page_size
-    rows = (await session.execute(query.order_by(SalesPlanDetail.created_at.desc()).offset(offset).limit(page_size))).scalars().all()
-    return paginated_response([SalesPlanDetailResponse.model_validate(r) for r in rows], page, page_size, total)
+    rows = (
+        (
+            await session.execute(
+                query.order_by(SalesPlanDetail.created_at.desc())
+                .offset(offset)
+                .limit(page_size)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return paginated_response(
+        [SalesPlanDetailResponse.model_validate(r) for r in rows],
+        page,
+        page_size,
+        total,
+    )
 
 
-@router.post("/sales-plan-details", response_model=ApiResponse, summary="创建销售计划明细")
+@router.post(
+    "/sales-plan-details", response_model=ApiResponse, summary="创建销售计划明细"
+)
 async def create_sales_plan_detail(
     data: SalesPlanDetailCreate,
     session: AsyncSession = Depends(get_db),
@@ -832,7 +985,11 @@ async def create_sales_plan_detail(
     return ApiResponse(data=SalesPlanDetailResponse.model_validate(detail))
 
 
-@router.put("/sales-plan-details/{detail_id}", response_model=ApiResponse, summary="更新销售计划明细")
+@router.put(
+    "/sales-plan-details/{detail_id}",
+    response_model=ApiResponse,
+    summary="更新销售计划明细",
+)
 async def update_sales_plan_detail(
     detail_id: uuid.UUID,
     data: SalesPlanDetailUpdate,
@@ -848,7 +1005,11 @@ async def update_sales_plan_detail(
     return ApiResponse(data=SalesPlanDetailResponse.model_validate(detail))
 
 
-@router.delete("/sales-plan-details/{detail_id}", response_model=ApiResponse, summary="删除销售计划明细")
+@router.delete(
+    "/sales-plan-details/{detail_id}",
+    response_model=ApiResponse,
+    summary="删除销售计划明细",
+)
 async def delete_sales_plan_detail(
     detail_id: uuid.UUID,
     session: AsyncSession = Depends(get_db),
@@ -859,4 +1020,3 @@ async def delete_sales_plan_detail(
     detail.is_deleted = True
     await session.commit()
     return ApiResponse(message="删除成功")
-

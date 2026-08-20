@@ -1,7 +1,6 @@
 """Fermentation record Pydantic schemas."""
 
 from datetime import date, datetime
-from typing import Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -13,35 +12,35 @@ class FermentationCreate(BaseModel):
     product_name: str = Field(default="L-苯丙氨酸", description="产品名称")
     fermenter: str = Field(..., description="发酵罐")
     entry_date: date = Field(..., description="进罐日期")
-    discharge_date: Optional[date] = Field(None, description="放罐日期")
-    cycle_1: Optional[float] = Field(None, description="周期1")
-    cycle_2: Optional[float] = Field(None, description="周期2")
-    cycle_3: Optional[float] = Field(None, description="周期3")
-    cycle_4: Optional[float] = Field(None, description="周期4")
-    cycle_5: Optional[float] = Field(None, description="周期5")
-    cycle_6: Optional[float] = Field(None, description="周期6")
-    tank_yield: Optional[float] = Field(None, description="罐产")
+    discharge_date: date | None = Field(None, description="放罐日期")
+    cycle_1: float | None = Field(None, description="周期1")
+    cycle_2: float | None = Field(None, description="周期2")
+    cycle_3: float | None = Field(None, description="周期3")
+    cycle_4: float | None = Field(None, description="周期4")
+    cycle_5: float | None = Field(None, description="周期5")
+    cycle_6: float | None = Field(None, description="周期6")
+    tank_yield: float | None = Field(None, description="罐产")
     status: str = Field(default="in_progress", description="状态")
-    remarks: Optional[str] = Field(None, description="备注")
-    attachment: Optional[str] = Field(None, description="附件")
+    remarks: str | None = Field(None, description="备注")
+    attachment: str | None = Field(None, description="附件")
 
 
 # ── Update ──
 class FermentationUpdate(BaseModel):
-    batch_no: Optional[str] = Field(None, description="批号")
-    fermenter: Optional[str] = Field(None, description="发酵罐")
-    entry_date: Optional[date] = Field(None, description="进罐日期")
-    discharge_date: Optional[date] = Field(None, description="放罐日期")
-    cycle_1: Optional[float] = Field(None, description="周期1")
-    cycle_2: Optional[float] = Field(None, description="周期2")
-    cycle_3: Optional[float] = Field(None, description="周期3")
-    cycle_4: Optional[float] = Field(None, description="周期4")
-    cycle_5: Optional[float] = Field(None, description="周期5")
-    cycle_6: Optional[float] = Field(None, description="周期6")
-    tank_yield: Optional[float] = Field(None, description="罐产")
-    status: Optional[str] = Field(None, description="状态")
-    remarks: Optional[str] = Field(None, description="备注")
-    attachment: Optional[str] = Field(None, description="附件")
+    batch_no: str | None = Field(None, description="批号")
+    fermenter: str | None = Field(None, description="发酵罐")
+    entry_date: date | None = Field(None, description="进罐日期")
+    discharge_date: date | None = Field(None, description="放罐日期")
+    cycle_1: float | None = Field(None, description="周期1")
+    cycle_2: float | None = Field(None, description="周期2")
+    cycle_3: float | None = Field(None, description="周期3")
+    cycle_4: float | None = Field(None, description="周期4")
+    cycle_5: float | None = Field(None, description="周期5")
+    cycle_6: float | None = Field(None, description="周期6")
+    tank_yield: float | None = Field(None, description="罐产")
+    status: str | None = Field(None, description="状态")
+    remarks: str | None = Field(None, description="备注")
+    attachment: str | None = Field(None, description="附件")
 
 
 # ── Response ──
@@ -51,17 +50,17 @@ class FermentationResponse(BaseModel):
     product_name: str
     fermenter: str
     entry_date: date
-    discharge_date: Optional[date] = None
-    cycle_1: Optional[float] = None
-    cycle_2: Optional[float] = None
-    cycle_3: Optional[float] = None
-    cycle_4: Optional[float] = None
-    cycle_5: Optional[float] = None
-    cycle_6: Optional[float] = None
-    tank_yield: Optional[float] = None
+    discharge_date: date | None = None
+    cycle_1: float | None = None
+    cycle_2: float | None = None
+    cycle_3: float | None = None
+    cycle_4: float | None = None
+    cycle_5: float | None = None
+    cycle_6: float | None = None
+    tank_yield: float | None = None
     status: str
-    remarks: Optional[str] = None
-    attachment: Optional[str] = None
+    remarks: str | None = None
+    attachment: str | None = None
     created_at: datetime
     updated_at: datetime
 

@@ -6,7 +6,7 @@ Maps Feishu field names to seed_cultures columns using predefined mapping.
 import logging
 from datetime import date, datetime
 
-from sqlalchemy import select, text
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.secrets import decrypt_secret
@@ -98,7 +98,9 @@ def _extract_text(field_value) -> str | None:
     if isinstance(field_value, str):
         return field_value.strip() or None
     if isinstance(field_value, dict):
-        return str(field_value.get("name") or field_value.get("text", "")).strip() or None
+        return (
+            str(field_value.get("name") or field_value.get("text", "")).strip() or None
+        )
     if isinstance(field_value, list) and field_value:
         first = field_value[0]
         if isinstance(first, str):
@@ -121,7 +123,9 @@ def _extract_number(field_value) -> float | None:
         return None
 
 
-async def sync_seed_culture_to_table(config: ProductionFeishuConfig, session: AsyncSession) -> dict:
+async def sync_seed_culture_to_table(
+    config: ProductionFeishuConfig, session: AsyncSession
+) -> dict:
     """Sync feishu records to seed_cultures table using bulk upsert."""
     app_secret = decrypt_secret(config.encrypted_app_secret)
     client = ProductionFeishuClient(
@@ -171,7 +175,7 @@ async def sync_seed_culture_to_table(config: ProductionFeishuConfig, session: As
     for row in rows:
         all_cols_set.update(row.keys())
     cols = sorted(all_cols_set)  # 确保每次查询顺序一致
-    placeholders = ", ".join(f":{c}_{i}" for i in range(len(rows)) for c in cols)
+    ", ".join(f":{c}_{i}" for i in range(len(rows)) for c in cols)
     # Re-structure: one flat dict with indexed param names
     params: dict = {}
     for i, row in enumerate(rows):
@@ -184,12 +188,14 @@ async def sync_seed_culture_to_table(config: ProductionFeishuConfig, session: As
         values_clauses.append(f"(gen_random_uuid(), {vals})")
 
     all_cols = "id, " + ", ".join(cols)
-    update_set = ", ".join(f"{c} = EXCLUDED.{c}" for c in cols if c not in ("batch_no", "product_name"))
+    update_set = ", ".join(
+        f"{c} = EXCLUDED.{c}" for c in cols if c not in ("batch_no", "product_name")
+    )
 
     sql = (
         f"INSERT INTO production.seed_cultures ({all_cols}) VALUES "
         + ", ".join(values_clauses)
-        + f" ON CONFLICT (batch_no, product_name) WHERE is_deleted = false DO UPDATE SET {update_set}"
+        + f" ON CONFLICT (batch_no, product_name) WHERE is_deleted = false DO UPDATE SET {update_set}"  # noqa: E501
     )
 
     await session.execute(text(sql), params)

@@ -9,20 +9,20 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.response import success_response, paginated_response
-from app.shared.module_api import create_module_router
-from app.shared.module_registry import MODULES_BY_CODE
+from app.core.response import paginated_response, success_response
 from app.modules.production.dr_models import (
+    DrChromatographyCrystal,
+    DrExtraction,
     DrFermentationBatch,
     DrFermentationTank,
-    DrExtraction,
     DrFiltrate,
-    DrChromatographyCrystal,
     DrFirstRefinement,
+    DrFourthRefinement,
     DrSecondRefinement,
     DrThirdRefinement,
-    DrFourthRefinement,
 )
+from app.shared.module_api import create_module_router
+from app.shared.module_registry import MODULES_BY_CODE
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +38,7 @@ def _clean_dict(obj) -> dict:
 # 萃取工段 — 四级嵌套全量数据（供 DRTable 组件）
 # ═══════════════════════════════════════════════════════
 
+
 @router.get("/dr/extraction/full", summary="DR 萃取工段完整嵌套数据")
 async def get_dr_extraction_full(
     workshop: str = Query("201-3"),
@@ -51,7 +52,7 @@ async def get_dr_extraction_full(
     """
     # 1. 查询所有发酵批次
     batch_q = select(DrFermentationBatch).where(
-        DrFermentationBatch.is_deleted == False,
+        not DrFermentationBatch.is_deleted,
         DrFermentationBatch.workshop == workshop,
     )
     # 年月筛选：tank_date 格式为 "YYYY.MM.DD" 或 "YYYY-MM-DD"
@@ -69,26 +70,38 @@ async def get_dr_extraction_full(
         return success_response([])
 
     # 2. 查询所有罐
-    tank_q = select(DrFermentationTank).where(
-        DrFermentationTank.is_deleted == False,
-        DrFermentationTank.fermentation_batch_id.in_(batch_ids),
-    ).order_by(DrFermentationTank.tank_no)
+    tank_q = (
+        select(DrFermentationTank)
+        .where(
+            not DrFermentationTank.is_deleted,
+            DrFermentationTank.fermentation_batch_id.in_(batch_ids),
+        )
+        .order_by(DrFermentationTank.tank_no)
+    )
     tank_rows = (await session.execute(tank_q)).scalars().all()
     tank_ids = [str(r.id) for r in tank_rows]
 
     # 3. 查询所有萃取
-    extr_q = select(DrExtraction).where(
-        DrExtraction.is_deleted == False,
-        DrExtraction.fermentation_tank_id.in_(tank_ids),
-    ).order_by(DrExtraction.extraction_batch_no)
+    extr_q = (
+        select(DrExtraction)
+        .where(
+            not DrExtraction.is_deleted,
+            DrExtraction.fermentation_tank_id.in_(tank_ids),
+        )
+        .order_by(DrExtraction.extraction_batch_no)
+    )
     extr_rows = (await session.execute(extr_q)).scalars().all()
     extr_ids = [str(r.id) for r in extr_rows]
 
     # 4. 查询所有滤液
-    filtr_q = select(DrFiltrate).where(
-        DrFiltrate.is_deleted == False,
-        DrFiltrate.extraction_id.in_(extr_ids),
-    ).order_by(DrFiltrate.tank_no)
+    filtr_q = (
+        select(DrFiltrate)
+        .where(
+            not DrFiltrate.is_deleted,
+            DrFiltrate.extraction_id.in_(extr_ids),
+        )
+        .order_by(DrFiltrate.tank_no)
+    )
     filtr_rows = (await session.execute(filtr_q)).scalars().all()
 
     # ── 组装嵌套结构 ──
@@ -159,7 +172,7 @@ async def get_dr_extraction_years(
     q = (
         select(func.substr(DrFermentationBatch.tank_date, 1, 4).label("yr"))
         .where(
-            DrFermentationBatch.is_deleted == False,
+            not DrFermentationBatch.is_deleted,
             DrFermentationBatch.workshop == workshop,
             DrFermentationBatch.tank_date.isnot(None),
         )
@@ -174,6 +187,7 @@ async def get_dr_extraction_years(
 # 发酵批次 CRUD
 # ═══════════════════════════════════════════════════════
 
+
 @router.get("/dr/fermentation-batches", summary="DR 发酵批次列表")
 async def list_dr_batches(
     page: int = Query(1, ge=1),
@@ -183,7 +197,7 @@ async def list_dr_batches(
     session: AsyncSession = Depends(get_db),
 ):
     query = select(DrFermentationBatch).where(
-        DrFermentationBatch.is_deleted == False,
+        not DrFermentationBatch.is_deleted,
         DrFermentationBatch.workshop == workshop,
     )
     if batch_no:
@@ -205,11 +219,15 @@ async def create_dr_batch(data: dict, session: AsyncSession = Depends(get_db)):
     record = DrFermentationBatch(**data)
     session.add(record)
     await session.commit()
-    return success_response({"id": str(record.id), "batch_no": record.batch_no}, message="创建成功")
+    return success_response(
+        {"id": str(record.id), "batch_no": record.batch_no}, message="创建成功"
+    )
 
 
 @router.put("/dr/fermentation-batches/{record_id}", summary="更新 DR 发酵批次")
-async def update_dr_batch(record_id: UUID, data: dict, session: AsyncSession = Depends(get_db)):
+async def update_dr_batch(
+    record_id: UUID, data: dict, session: AsyncSession = Depends(get_db)
+):
     record = await session.get(DrFermentationBatch, record_id)
     if not record or record.is_deleted:
         return success_response(None, message="记录不存在", status_code=404)
@@ -233,12 +251,17 @@ async def delete_dr_batch(record_id: UUID, session: AsyncSession = Depends(get_d
 # 发酵罐 CRUD
 # ═══════════════════════════════════════════════════════
 
+
 @router.get("/dr/fermentation-batches/{batch_id}/tanks", summary="某批次下的发酵罐列表")
 async def list_dr_tanks(batch_id: str, session: AsyncSession = Depends(get_db)):
-    query = select(DrFermentationTank).where(
-        DrFermentationTank.is_deleted == False,
-        DrFermentationTank.fermentation_batch_id == batch_id,
-    ).order_by(DrFermentationTank.tank_no)
+    query = (
+        select(DrFermentationTank)
+        .where(
+            not DrFermentationTank.is_deleted,
+            DrFermentationTank.fermentation_batch_id == batch_id,
+        )
+        .order_by(DrFermentationTank.tank_no)
+    )
     rows = await session.execute(query)
     return success_response([_clean_dict(r) for r in rows.scalars().all()])
 
@@ -252,7 +275,9 @@ async def create_dr_tank(data: dict, session: AsyncSession = Depends(get_db)):
 
 
 @router.put("/dr/fermentation-tanks/{record_id}", summary="更新发酵罐")
-async def update_dr_tank(record_id: UUID, data: dict, session: AsyncSession = Depends(get_db)):
+async def update_dr_tank(
+    record_id: UUID, data: dict, session: AsyncSession = Depends(get_db)
+):
     record = await session.get(DrFermentationTank, record_id)
     if not record or record.is_deleted:
         return success_response(None, message="记录不存在", status_code=404)
@@ -276,12 +301,17 @@ async def delete_dr_tank(record_id: UUID, session: AsyncSession = Depends(get_db
 # 萃取批次 CRUD
 # ═══════════════════════════════════════════════════════
 
+
 @router.get("/dr/tanks/{tank_id}/extractions", summary="某罐下的萃取批次列表")
 async def list_dr_extractions(tank_id: str, session: AsyncSession = Depends(get_db)):
-    query = select(DrExtraction).where(
-        DrExtraction.is_deleted == False,
-        DrExtraction.fermentation_tank_id == tank_id,
-    ).order_by(DrExtraction.extraction_batch_no)
+    query = (
+        select(DrExtraction)
+        .where(
+            not DrExtraction.is_deleted,
+            DrExtraction.fermentation_tank_id == tank_id,
+        )
+        .order_by(DrExtraction.extraction_batch_no)
+    )
     rows = await session.execute(query)
     return success_response([_clean_dict(r) for r in rows.scalars().all()])
 
@@ -295,7 +325,9 @@ async def create_dr_extraction(data: dict, session: AsyncSession = Depends(get_d
 
 
 @router.put("/dr/extractions/{record_id}", summary="更新萃取批次")
-async def update_dr_extraction(record_id: UUID, data: dict, session: AsyncSession = Depends(get_db)):
+async def update_dr_extraction(
+    record_id: UUID, data: dict, session: AsyncSession = Depends(get_db)
+):
     record = await session.get(DrExtraction, record_id)
     if not record or record.is_deleted:
         return success_response(None, message="记录不存在", status_code=404)
@@ -306,7 +338,9 @@ async def update_dr_extraction(record_id: UUID, data: dict, session: AsyncSessio
 
 
 @router.delete("/dr/extractions/{record_id}", summary="删除萃取批次")
-async def delete_dr_extraction(record_id: UUID, session: AsyncSession = Depends(get_db)):
+async def delete_dr_extraction(
+    record_id: UUID, session: AsyncSession = Depends(get_db)
+):
     record = await session.get(DrExtraction, record_id)
     if not record:
         return success_response(None, message="记录不存在", status_code=404)
@@ -319,12 +353,21 @@ async def delete_dr_extraction(record_id: UUID, session: AsyncSession = Depends(
 # 滤液 CRUD
 # ═══════════════════════════════════════════════════════
 
-@router.get("/dr/extractions/{extraction_id}/filtrates", summary="某萃取批次下的滤液列表")
-async def list_dr_filtrates(extraction_id: str, session: AsyncSession = Depends(get_db)):
-    query = select(DrFiltrate).where(
-        DrFiltrate.is_deleted == False,
-        DrFiltrate.extraction_id == extraction_id,
-    ).order_by(DrFiltrate.tank_no)
+
+@router.get(
+    "/dr/extractions/{extraction_id}/filtrates", summary="某萃取批次下的滤液列表"
+)
+async def list_dr_filtrates(
+    extraction_id: str, session: AsyncSession = Depends(get_db)
+):
+    query = (
+        select(DrFiltrate)
+        .where(
+            not DrFiltrate.is_deleted,
+            DrFiltrate.extraction_id == extraction_id,
+        )
+        .order_by(DrFiltrate.tank_no)
+    )
     rows = await session.execute(query)
     return success_response([_clean_dict(r) for r in rows.scalars().all()])
 
@@ -338,7 +381,9 @@ async def create_dr_filtrate(data: dict, session: AsyncSession = Depends(get_db)
 
 
 @router.put("/dr/filtrates/{record_id}", summary="更新滤液记录")
-async def update_dr_filtrate(record_id: UUID, data: dict, session: AsyncSession = Depends(get_db)):
+async def update_dr_filtrate(
+    record_id: UUID, data: dict, session: AsyncSession = Depends(get_db)
+):
     record = await session.get(DrFiltrate, record_id)
     if not record or record.is_deleted:
         return success_response(None, message="记录不存在", status_code=404)
@@ -361,6 +406,7 @@ async def delete_dr_filtrate(record_id: UUID, session: AsyncSession = Depends(ge
 # ═══════════════════════════════════════════════════════
 # DR 仪表盘
 # ═══════════════════════════════════════════════════════
+
 
 @router.get("/dr/dashboard/summary", summary="DR 仪表盘汇总数据")
 async def get_dr_dashboard(
@@ -392,7 +438,7 @@ async def get_dr_dashboard(
 
     # 发酵批次计数
     batch_count_q = select(func.count(DrFermentationBatch.id)).where(
-        DrFermentationBatch.is_deleted == False,
+        not DrFermentationBatch.is_deleted,
         DrFermentationBatch.workshop == workshop,
         DrFermentationBatch.created_at >= start_date,
         DrFermentationBatch.created_at < end_date,
@@ -406,7 +452,7 @@ async def get_dr_dashboard(
         m_end = date(year, m + 1, 1) if m < 12 else date(year + 1, 1, 1)
         # 暂用批次计数代替产量，后续按实际业务调整
         q = select(func.count(DrFermentationBatch.id)).where(
-            DrFermentationBatch.is_deleted == False,
+            not DrFermentationBatch.is_deleted,
             DrFermentationBatch.workshop == workshop,
             DrFermentationBatch.created_at >= m_start,
             DrFermentationBatch.created_at < m_end,
@@ -414,31 +460,33 @@ async def get_dr_dashboard(
         count = (await session.execute(q)).scalar_one()
         monthly_trend.append({"month": m, "output_kg": count * 0})  # 产量待填充
 
-    return success_response({
-        "_month": month,
-        "stages": stages,
-        "monthly_output_kg": 0.0,
-        "monthly_batches": monthly_batches,
-        "avg_yield": 0.0,
-        "pass_rate": 0,
-        "flow": [
-            {"key": "crude", "label": "过滤萃取", "in_progress": 0},
-            {"key": "extraction", "label": "层析及一次结晶", "in_progress": 0},
-            {"key": "refinement", "label": "一次精制", "in_progress": 0},
-            {"key": "blending", "label": "二次精制", "in_progress": 0},
-            {"key": "qc", "label": "三次精制", "in_progress": 0},
-        ],
-        "monthly_trend": monthly_trend,
-        "rrt_pass_rates": [],
-        "status_distribution": [
-            {"status": "进行中", "count": monthly_batches, "color": "#1677ff"},
-            {"status": "已完成", "count": 0, "color": "#52c41a"},
-            {"status": "待审核", "count": 0, "color": "#fa8c16"},
-        ],
-        "ba_stock_kg": 0,
-        "ba_batches": 0,
-        "ba_monthly_consume": 0,
-    })
+    return success_response(
+        {
+            "_month": month,
+            "stages": stages,
+            "monthly_output_kg": 0.0,
+            "monthly_batches": monthly_batches,
+            "avg_yield": 0.0,
+            "pass_rate": 0,
+            "flow": [
+                {"key": "crude", "label": "过滤萃取", "in_progress": 0},
+                {"key": "extraction", "label": "层析及一次结晶", "in_progress": 0},
+                {"key": "refinement", "label": "一次精制", "in_progress": 0},
+                {"key": "blending", "label": "二次精制", "in_progress": 0},
+                {"key": "qc", "label": "三次精制", "in_progress": 0},
+            ],
+            "monthly_trend": monthly_trend,
+            "rrt_pass_rates": [],
+            "status_distribution": [
+                {"status": "进行中", "count": monthly_batches, "color": "#1677ff"},
+                {"status": "已完成", "count": 0, "color": "#52c41a"},
+                {"status": "待审核", "count": 0, "color": "#fa8c16"},
+            ],
+            "ba_stock_kg": 0,
+            "ba_batches": 0,
+            "ba_monthly_consume": 0,
+        }
+    )
 
 
 # ═══════════════════════════════════════════════════════
@@ -478,7 +526,7 @@ async def get_dr_record_years(
     # 提取 production_date 前 4 位作为年份（格式 YYYY.MM.DD），过滤掉 '-' 等非日期值
     q = (
         select(func.substr(model.production_date, 1, 4).label("yr"))
-        .where(model.is_deleted == False, model.production_date.isnot(None))
+        .where(not model.is_deleted, model.production_date.isnot(None))
         .distinct()
     )
     rows = (await session.execute(q)).scalars().all()
@@ -499,14 +547,16 @@ async def get_dr_records(
     if not model:
         return success_response(None, message=f"未知表: {table}", status_code=400)
 
-    base_query = select(model).where(model.is_deleted == False)
+    base_query = select(model).where(not model.is_deleted)
 
     # 按生产日期筛选（production_date 格式为 YYYY.MM.DD）
     if hasattr(model, "production_date"):
         if year is not None:
             base_query = base_query.where(model.production_date.like(f"{year}%"))
         if month is not None:
-            base_query = base_query.where(model.production_date.like(f"%.{month:02d}.%"))
+            base_query = base_query.where(
+                model.production_date.like(f"%.{month:02d}.%")
+            )
 
     count_q = select(func.count()).select_from(base_query.subquery())
     total = (await session.execute(count_q)).scalar_one()
@@ -516,9 +566,7 @@ async def get_dr_records(
     if order_keys:
         query = query.order_by(*[getattr(model, k) for k in order_keys])
 
-    rows = await session.execute(
-        query.offset((page - 1) * page_size).limit(page_size)
-    )
+    rows = await session.execute(query.offset((page - 1) * page_size).limit(page_size))
     items = [_clean_dict(r) for r in rows.scalars().all()]
 
     return success_response({"items": items, "total": total})

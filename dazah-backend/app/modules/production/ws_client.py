@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 
 import lark_oapi as lark
 from lark_oapi.api.drive.v1 import P2DriveFileBitableRecordChangedV1
+from sqlalchemy import select
 
 from app.core.database import async_session_factory
 from app.core.secrets import decrypt_secret
@@ -13,7 +14,6 @@ from app.modules.production.production_feishu_client import ProductionFeishuClie
 from app.modules.production.production_feishu_models import ProductionFeishuConfig
 from app.modules.production.production_plan_service import sync_config_by_target
 from app.platform.integrations.feishu.ws_client import start_ws_client, stop_ws_client
-from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -63,8 +63,8 @@ async def _handle_bitable_record_changed(file_token: str, table_id: str) -> None
             select(ProductionFeishuConfig).where(
                 ProductionFeishuConfig.bitable_app_token == file_token,
                 ProductionFeishuConfig.table_id == table_id,
-                ProductionFeishuConfig.is_active == True,
-                ProductionFeishuConfig.is_deleted == False,
+                ProductionFeishuConfig.is_active,
+                not ProductionFeishuConfig.is_deleted,
             )
         )
         config = result.scalar_one_or_none()
@@ -73,7 +73,10 @@ async def _handle_bitable_record_changed(file_token: str, table_id: str) -> None
         try:
             summary = await sync_config_by_target(config, session)
             await session.commit()
-            logger.info("生产飞书 WS 自动同步完成: %s 条", summary.get("created", 0) + summary.get("updated", 0))
+            logger.info(
+                "生产飞书 WS 自动同步完成: %s 条",
+                summary.get("created", 0) + summary.get("updated", 0),
+            )
         except Exception:
             await session.rollback()
             logger.exception("生产飞书 WS 自动同步失败")
@@ -88,8 +91,8 @@ async def start_ws_from_db() -> dict:
         async with async_session_factory() as session:
             result = await session.execute(
                 select(ProductionFeishuConfig).where(
-                    ProductionFeishuConfig.is_active == True,
-                    ProductionFeishuConfig.is_deleted == False,
+                    ProductionFeishuConfig.is_active,
+                    not ProductionFeishuConfig.is_deleted,
                 )
             )
             configs = list(result.scalars().all())
@@ -103,7 +106,9 @@ async def start_ws_from_db() -> dict:
             return await restart_ws_with_config(
                 app_id=config.app_id,
                 app_secret=decrypt_secret(config.encrypted_app_secret),
-                app_tokens={config.product_name or config.name: config.bitable_app_token},
+                app_tokens={
+                    config.product_name or config.name: config.bitable_app_token
+                },
             )
     except Exception as exc:
         await stop_ws()
@@ -115,7 +120,9 @@ async def restart_ws_from_db() -> dict:
     return await start_ws_from_db()
 
 
-async def restart_ws_with_config(app_id: str, app_secret: str, app_tokens: dict[str, str]) -> dict:
+async def restart_ws_with_config(
+    app_id: str, app_secret: str, app_tokens: dict[str, str]
+) -> dict:
     global _app_id, _app_tokens, _connected, _enabled, _last_error, _last_started_at
 
     if _main_loop is None:
@@ -134,7 +141,9 @@ async def restart_ws_with_config(app_id: str, app_secret: str, app_tokens: dict[
 
     try:
         for app_token in app_tokens.values():
-            client = ProductionFeishuClient(app_id=app_id, app_secret=app_secret, app_token=app_token)
+            client = ProductionFeishuClient(
+                app_id=app_id, app_secret=app_secret, app_token=app_token
+            )
             await client.subscribe()
         start_ws_client(
             app_id=app_id,
