@@ -177,7 +177,7 @@ export default function ProcessParametersPage() {
     } catch { /* ignore */ }
   }, [])
 
-  useEffect(() => { loadSpecs() }, [loadSpecs])
+  useEffect(() => { loadSpecs() }, [loadSpecs]) // eslint-disable-line react-hooks/set-state-in-effect
 
   // 加载步骤
   const loadSteps = useCallback(async (specId: string) => {
@@ -188,7 +188,7 @@ export default function ProcessParametersPage() {
   }, [message])
 
   useEffect(() => {
-    if (selectedSpecId) loadSteps(selectedSpecId)
+    if (selectedSpecId) loadSteps(selectedSpecId) // eslint-disable-line react-hooks/set-state-in-effect
     else setSteps([])
   }, [selectedSpecId, loadSteps])
 
@@ -203,7 +203,7 @@ export default function ProcessParametersPage() {
   }, [message])
 
   useEffect(() => {
-    if (selectedStepId) loadParams(selectedStepId)
+    if (selectedStepId) loadParams(selectedStepId) // eslint-disable-line react-hooks/set-state-in-effect
     else setParams([])
   }, [selectedStepId, loadParams])
 

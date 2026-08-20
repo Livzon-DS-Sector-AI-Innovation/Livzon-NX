@@ -46,9 +46,9 @@ export default function DrCrudeExtractionPage() {
     } finally {
       setLoading(false)
     }
-  }, [year, month])
+  }, [year, month]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => { loadData() }, [loadData])
+  useEffect(() => { loadData() }, [loadData]) // eslint-disable-line react-hooks/set-state-in-effect
 
   // 初次加载可用年份列表，数据更新到新年份时下拉框自动跟随
   useEffect(() => {

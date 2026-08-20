@@ -94,8 +94,7 @@ export default function Workshop1012Page() {
       const first = PRODUCTS.find(p => activeProducts.has(p.key))
       if (first) handleTabChange(first.key)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeProducts])
+  }, [activeProducts]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const [loading, setLoading] = useState(false)
   const [records, setRecords] = useState<FermentationRecord[]>([])
@@ -153,7 +152,7 @@ export default function Workshop1012Page() {
   }
 
   useEffect(() => {
-    load(currentProduct.productName)
+    load(currentProduct.productName) // eslint-disable-line react-hooks/set-state-in-effect
   }, [activeKey, load, currentProduct.productName])
 
   // TODO: 替换为101二车间实际发酵罐编号

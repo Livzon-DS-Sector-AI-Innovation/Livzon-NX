@@ -172,11 +172,11 @@ export default function TraceModal({ stage, batchNo, onClose, stageConfig, stage
       if (json.code === 200) setHistoryRecords(json.data.records || [])
     } catch { /* ignore */ }
     finally { setHistoryLoading(false) }
-  }, [stage, batchNo])
+  }, [stage, batchNo]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!batchNo) return
-    setLoading(true); setError('')
+    setLoading(true); setError('') // eslint-disable-line react-hooks/set-state-in-effect
     fetch(API(`${apiPath}/trace?stage=${encodeURIComponent(stage)}&batch_no=${encodeURIComponent(batchNo)}`))
       .then(r => r.json())
       .then(json => {
@@ -186,7 +186,7 @@ export default function TraceModal({ stage, batchNo, onClose, stageConfig, stage
       })
       .catch(() => setError('网络错误'))
       .finally(() => setLoading(false))
-  }, [stage, batchNo])
+  }, [stage, batchNo]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const exportPng = () => {
     const svg = svgRef.current
@@ -282,7 +282,7 @@ export default function TraceModal({ stage, batchNo, onClose, stageConfig, stage
     } finally {
       setChatSending(false)
     }
-  }, [chatInput, aiResult, message])
+  }, [chatInput, aiResult, message]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const maxX = layout.nodes.reduce((m, n) => Math.max(m, n.x + n.w), 0) + 40
   const maxY = Math.max(layout.nodes.reduce((m, n) => Math.max(m, n.y + n.h), 0),

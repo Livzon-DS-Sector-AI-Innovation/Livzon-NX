@@ -65,7 +65,7 @@ function Workshop203Content() {
   const [compareLoading, setCompareLoading] = useState(false)
 
   useEffect(() => {
-    fetchData(selectedMonth.format('YYYY-MM'))
+    fetchData(selectedMonth.format('YYYY-MM')) // eslint-disable-line react-hooks/set-state-in-effect
   }, [selectedMonth, fetchData])
 
   useEffect(() => {

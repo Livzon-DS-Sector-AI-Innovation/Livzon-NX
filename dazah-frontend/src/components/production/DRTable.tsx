@@ -103,8 +103,8 @@ export const DRTable: React.FC<{ data: any[] }> = ({ data }) => {
         tankRowspans.push(baseRowspan + (i < remainder ? 1 : 0))
       }
 
-      let isBatchFirst = true
-      let tankIndex = -1
+      const isBatchFirst = true
+      const tankIndex = -1
     })
 
     return rows

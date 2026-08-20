@@ -63,7 +63,7 @@ export default function CrudeExtractionPage() {
       if (fr.code === 200) setFlOptions(fr.data)
     } catch { message.error('加载失败') } finally { setLoading(false) }
   }, [message, month])
-  useEffect(() => { load() }, [load])
+  useEffect(() => { load() }, [load]) // eslint-disable-line react-hooks/set-state-in-effect
 
   // 自动计算
   const calcCrPq = (w: number | null, ct: number | null, ms: number | null) => w != null && ct != null && ms != null ? Math.round(w * ct * (100 - ms)) / 10000 : null
@@ -169,7 +169,7 @@ export default function CrudeExtractionPage() {
     }
     return rows
   }
-  const flatRows = useMemo(() => flattenData(), [data])
+  const flatRows = useMemo(() => flattenData(), [data]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const B = (v: any, r: any) => (r._isBatchFirst ? (v ?? '') : null)
   const SM = (content: any, r: any) => (r._isStFirst ? content : null)
@@ -218,7 +218,7 @@ export default function CrudeExtractionPage() {
     { title: '累积粗\n品产品量', key: 'cr_cq', width: 62, render: (_: any, r: any) => SM(<CellInput value={r.st?.cumulative_crude_qty} onSave={v => saveST(r.st?.id, 'cumulative_crude_qty', v, r.st)} />, r), onCell: onStCell },
     { title: '粗品累\n计收率', key: 'cr_cy', width: 58, render: (_: any, r: any) => SM(<CellInput value={r.st?.cumulative_crude_yield} onSave={v => saveST(r.st?.id, 'cumulative_crude_yield', v, r.st)} />, r), onCell: onStCell },
     { title: '备注', key: 'cr_rm', width: 55, render: (_: any, r: any) => SM(<Input size="small" style={{ width: '100%', fontSize: 10, height: 20, padding: '0 2px' }} defaultValue={r.st?.remarks} onBlur={e => saveST(r.st?.id, 'remarks', e.target.value, r.st)} />, r), onCell: onStCell },
-  ], [data])
+  ], [data]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const subTankInfos: { batchNo: string; stId: string; rowCount: number }[] = []
   const seen = new Set<string>()

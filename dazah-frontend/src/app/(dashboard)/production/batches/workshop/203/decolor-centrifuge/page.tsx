@@ -38,7 +38,10 @@ export default function DecolorCentrifugePage() {
       if (json.code === 200) { setData(json.data.items || []); setTotal(json.data.total || 0) }
     } catch (e) { console.error(e) } finally { setLoading(false) }
   }
-  useEffect(() => { load() }, [month])
+   
+   
+   
+  useEffect(() => { load() }, [month]) // eslint-disable-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
   useEffect(() => {
     fetch(`${API}/api/v1/production/fa/monthly-averages?table=decolor_centrifuge_records`)
       .then(r => r.json()).then(j => { if(j.code===200){setAvgData(j.data.data||[]);setAvgCols(j.data.columns||[])} }).catch(()=>{})

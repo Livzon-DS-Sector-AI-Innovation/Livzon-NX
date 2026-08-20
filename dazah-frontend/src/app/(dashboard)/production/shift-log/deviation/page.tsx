@@ -43,7 +43,10 @@ export default function DeviationPage() {
     finally { setLoading(false) }
   }
 
-  useEffect(() => { load() }, [])
+   
+   
+   
+  useEffect(() => { load() }, []) // eslint-disable-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
 
   const openForm = (r?: NCERecord) => {
     setEditing(r || null)

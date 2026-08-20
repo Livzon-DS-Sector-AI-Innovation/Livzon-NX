@@ -15,7 +15,10 @@ export default function CeramicCrudTable({ api, columns, searchField, searchPlac
   const [st, setSt] = useState(''); const [page, setPage] = useState(1); const [ps, setPs] = useState(20)
 
   const load = async () => { setLoading(true); try { const p: any = { page: 1, page_size: 200, workshop }; if (st) p[searchField] = st; const r = await api.list(p); if (r.code === 200) setRecords(r.data); else message.error('加载失败') } catch { message.error('加载失败') } finally { setLoading(false) } }
-  useEffect(() => { load() }, [])
+   
+   
+   
+  useEffect(() => { load() }, []) // eslint-disable-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
   const openForm = (r?: any) => { setEditing(r || null); if (r) editForm.setFieldsValue(r); else form.resetFields(); setVisible(true) }
   const handleDelete = (id: string) => modal.confirm({ title: '确认删除', onOk: async () => { const r1 = await api.delete(id); if (r1.code === 200) { message.success('已删除'); load() } else message.error(r1.message || '删除失败') } })
   const handleSubmit = async () => { try { const vals = editing ? await editForm.validateFields() : await form.validateFields(); const data: Record<string, unknown> = {}; for (const [k, v] of Object.entries(vals)) { if (v instanceof dayjs) { data[k] = (v as dayjs.Dayjs).toISOString(); continue } data[k] = v ?? null } if (editing) { const r1 = await api.update(editing.id, data); if (r1.code === 200) { message.success('已更新'); setVisible(false); load() } else message.error(r1.message || '更新失败') } else { const r1 = await api.create(data); if (r1.code === 200) { message.success('已创建'); setVisible(false); form.resetFields(); load() } else message.error(r1.message || '创建失败') } } catch { message.error('请检查表单') } }

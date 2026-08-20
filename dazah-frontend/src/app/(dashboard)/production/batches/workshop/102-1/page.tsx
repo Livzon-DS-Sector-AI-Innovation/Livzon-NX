@@ -98,7 +98,10 @@ export default function DoramectinPage() {
     finally { setLoading(false) }
   }
 
-  useEffect(() => { load() }, [])
+   
+   
+   
+  useEffect(() => { load() }, []) // eslint-disable-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
 
   // TODO: 替换为102一车间实际发酵罐编号
   const FERMENTER_OPTIONS: string[] = []

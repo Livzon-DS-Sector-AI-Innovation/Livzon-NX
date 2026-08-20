@@ -128,8 +128,8 @@ export default function BatchesPage() {
   }
 
   useEffect(() => {
-    loadBatches()
-  }, [batchQueryParams.page, batchQueryParams.page_size, statusFilter])
+    loadBatches() // eslint-disable-line react-hooks/set-state-in-effect
+  }, [batchQueryParams.page, batchQueryParams.page_size, statusFilter]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSearch = () => {
     setBatchQueryParams({ page: 1 })

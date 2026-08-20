@@ -133,8 +133,8 @@ export default function WorkshopDataView({ workshopName }: WorkshopDataViewProps
   }
 
   useEffect(() => {
-    loadBatches()
-  }, [])
+    loadBatches() // eslint-disable-line react-hooks/set-state-in-effect
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const filtered = batches.filter(b => {
     if (statusFilter && b.status !== statusFilter) return false

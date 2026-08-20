@@ -16,7 +16,7 @@ export default function SummaryPage() {
       <Card style={{ maxWidth: 800 }}>
         <Paragraph strong style={{ fontSize: 15 }}>定位</Paragraph>
         <Paragraph type="secondary">
-          本班次的"生产战报"，在交班前由系统一键自动配平生成。
+          本班次的&ldquo;生产战报&rdquo;，在交班前由系统一键自动配平生成。
         </Paragraph>
 
         <Paragraph strong style={{ fontSize: 15, marginTop: 24 }}>包含内容</Paragraph>

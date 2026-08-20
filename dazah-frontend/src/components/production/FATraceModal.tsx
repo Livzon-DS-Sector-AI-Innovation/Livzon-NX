@@ -125,7 +125,7 @@ export default function FATraceModal({ stage, batchNo, onClose }: Props) {
   // 追溯查询
   useEffect(() => {
     if (!batchNo) return
-    setLoading(true); setError('')
+    setLoading(true); setError('') // eslint-disable-line react-hooks/set-state-in-effect
     fetch(API(`/fa/lineage/trace?stage=${encodeURIComponent(stage)}&batch_no=${encodeURIComponent(batchNo)}`))
       .then(r => r.json())
       .then(json => {

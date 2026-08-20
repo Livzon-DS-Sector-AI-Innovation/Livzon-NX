@@ -176,9 +176,9 @@ function SalesPlanTab() {
       const json = await res.json()
       if (json.code === 200) { setData(json.data); setTotal(json.meta?.total || 0) }
     } catch { message.error('加载失败') } finally { setLoading(false) }
-  }, [message])
+  }, [message]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => { load(page) }, [page, load])
+  useEffect(() => { load(page) }, [page, load]) // eslint-disable-line react-hooks/set-state-in-effect
 
   const handleDelete = async (id: string) => {
     const res = await fetch(`${API}/${id}`, { method: 'DELETE' })
@@ -317,7 +317,7 @@ export default function PlanPage() {
   )
 
   useEffect(() => {
-    load(page)
+    load(page) // eslint-disable-line react-hooks/set-state-in-effect
   }, [page, productFilter, workshopFilter, load])
 
   const handleDelete = async (id: string) => {

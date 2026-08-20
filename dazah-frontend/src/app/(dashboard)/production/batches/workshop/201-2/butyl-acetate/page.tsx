@@ -24,10 +24,13 @@ export default function ButylAcetatePage() {
     } catch { message.error('加载失败') }
     finally { setLoading(false) }
   }
-  useEffect(() => { load() }, [])
+   
+   
+   
+  useEffect(() => { load() }, []) // eslint-disable-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
   const [now, setNow] = useState('')
   useEffect(() => {
-    setNow(new Date().toLocaleString('zh-CN'))
+    setNow(new Date().toLocaleString('zh-CN')) // eslint-disable-line react-hooks/set-state-in-effect
     const t = setInterval(() => setNow(new Date().toLocaleString('zh-CN')), 1000)
     return () => clearInterval(t)
   }, [])

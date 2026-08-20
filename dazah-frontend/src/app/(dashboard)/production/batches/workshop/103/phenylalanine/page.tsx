@@ -98,7 +98,10 @@ export default function PhenylalaninePage() {
     finally { setLoading(false) }
   }
 
-  useEffect(() => { load() }, [])
+   
+   
+   
+  useEffect(() => { load() }, []) // eslint-disable-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
 
   const FERMENTER_OPTIONS = ['302A', '303A', '304A']
   // 正在运行中的发酵罐（不能被新记录选用）

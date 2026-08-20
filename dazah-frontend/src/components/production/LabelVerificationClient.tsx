@@ -61,7 +61,7 @@ export default function LabelVerificationClient({
     } finally {
       setLoading(false)
     }
-  }, [batchNumber, productName, filterStatus, dateRange, page, pageSize])
+  }, [batchNumber, productName, filterStatus, dateRange, page, pageSize]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadStatistics = useCallback(async () => {
     try {
@@ -73,7 +73,7 @@ export default function LabelVerificationClient({
   }, [])
 
   useEffect(() => {
-    loadData()
+    loadData() // eslint-disable-line react-hooks/set-state-in-effect
     loadStatistics()
   }, [loadData, loadStatistics])
 

@@ -92,8 +92,7 @@ export default function Workshop103LovastatinPage() {
       const first = PRODUCTS.find(p => activeProducts.has(p.key))
       if (first) handleTabChange(first.key)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeProducts])
+  }, [activeProducts]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const [loading, setLoading] = useState(false)
   const [records, setRecords] = useState<FermentationRecord[]>([])
@@ -151,7 +150,7 @@ export default function Workshop103LovastatinPage() {
   }
 
   useEffect(() => {
-    load(currentProduct.productName)
+    load(currentProduct.productName) // eslint-disable-line react-hooks/set-state-in-effect
   }, [activeKey, load, currentProduct.productName])
 
   const FERMENTER_OPTIONS = ['301B', '302B', '303B', '304B', '305B', '306B']

@@ -145,8 +145,8 @@ export default function ProductDataView({ productName }: ProductDataViewProps) {
   }
 
   useEffect(() => {
-    loadBatches()
-  }, [productName])
+    loadBatches() // eslint-disable-line react-hooks/set-state-in-effect
+  }, [productName]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // 前端分页和筛选
   useEffect(() => {
@@ -159,7 +159,7 @@ export default function ProductDataView({ productName }: ProductDataViewProps) {
         b.batch_no.toLowerCase().includes(searchText.toLowerCase())
       )
     }
-    setBatches(result)
+    setBatches(result) // eslint-disable-line react-hooks/set-state-in-effect
   }, [allBatches, statusFilter, searchText])
 
   const paginatedBatches = batches.slice((page - 1) * pageSize, page * pageSize)

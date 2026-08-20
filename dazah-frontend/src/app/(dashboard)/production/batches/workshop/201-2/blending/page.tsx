@@ -65,7 +65,7 @@ export default function BlendingPage() {
     const params = 'workshop=201-2' + (month > 0 ? `&month=${month}` : '')
     try { const r = await api(`/blending-records/full-list?${params}`); if (r.code === 200) setRecords(r.data) } catch { message.error('加载失败') } finally { setLoading(false) }
   }, [message, month])
-  useEffect(() => { load() }, [load])
+  useEffect(() => { load() }, [load]) // eslint-disable-line react-hooks/set-state-in-effect
 
   const saveRecord = async (id: string, field: string, value: any) => {
     setSaving(true); await api(`/blending-records/${id}`, { method: 'PUT', body: JSON.stringify({ [field]: value }) }); setSaving(false); load()

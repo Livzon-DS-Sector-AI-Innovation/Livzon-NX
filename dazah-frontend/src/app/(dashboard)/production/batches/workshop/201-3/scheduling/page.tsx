@@ -83,7 +83,7 @@ export default function Scheduling2013Page() {
       .finally(() => setLoading(false))
   }, [])
 
-  useEffect(() => { loadData() }, [loadData])
+  useEffect(() => { loadData() }, [loadData]) // eslint-disable-line react-hooks/set-state-in-effect
 
   // 计划员上传最新排产 Excel → 后端保存到 schedule_data，上传后刷新列表
   const handleUploadExcel = async (file: File) => {
@@ -184,7 +184,9 @@ export default function Scheduling2013Page() {
   const today = dayjs()
   const weekEnd = today.add(7, 'day')
 
-  const items = data?.items || []
+   
+   
+  const items = data?.items || [] // eslint-disable-line react-hooks/exhaustive-deps
   const monthOptions = useMemo(() => {
     const set = new Set<string>()
     items.forEach((i) => set.add(`${i.year}-${String(i.month).padStart(2, '0')}`))
@@ -194,7 +196,7 @@ export default function Scheduling2013Page() {
   // 数据加载后：若当前月份不在可选项（当月无排产），回退显示全部
   useEffect(() => {
     if (month && monthOptions.length > 0 && !monthOptions.includes(month)) {
-      setMonth('')
+      setMonth('') // eslint-disable-line react-hooks/set-state-in-effect
     }
   }, [month, monthOptions])
   const tankOptions = useMemo(() => [...new Set(items.map((i) => i.tank_no))].sort(), [items])

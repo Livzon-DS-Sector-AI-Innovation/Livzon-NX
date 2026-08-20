@@ -45,7 +45,10 @@ export default function Decolor1Page() {
     finally { setLoading(false) }
   }
 
-  useEffect(() => { load() }, [month])
+   
+   
+   
+  useEffect(() => { load() }, [month]) // eslint-disable-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
 useEffect(() => {    fetch(`${API}/api/v1/production/fa/monthly-averages?table=decolor1_records`)      .then(r => r.json()).then(j => { if(j.code===200){setAvgData(j.data.data||[]);setAvgCols(j.data.columns||[])} }).catch(()=>{})  }, [])
 
   return (

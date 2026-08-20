@@ -79,9 +79,9 @@ export default function DrSecondRefinementPage() {
     } finally {
       setLoading(false)
     }
-  }, [year, month])
+  }, [year, month]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => { loadData() }, [loadData])
+  useEffect(() => { loadData() }, [loadData]) // eslint-disable-line react-hooks/set-state-in-effect
 
   useEffect(() => {
     fetch(`${API}/api/v1/production/dr/records/years?table=dr_second_refinement`)

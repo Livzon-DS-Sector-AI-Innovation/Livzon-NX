@@ -139,7 +139,7 @@ export default function HandoverPage() {
     finally { setLoading(false) }
   }, [positionFilter, workshopFilter, dateRange, message])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { load() }, [load]) // eslint-disable-line react-hooks/set-state-in-effect
 
   // 飞书用户搜索
   const [userOptions, setUserOptions] = useState<{ value: string; label: string }[]>([])

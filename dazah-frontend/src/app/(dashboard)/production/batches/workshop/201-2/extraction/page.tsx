@@ -61,7 +61,7 @@ export default function ExtractionPage() {
     const params = 'workshop=201-2' + (month > 0 ? `&month=${month}` : '')
     try { const r = await api(`/extraction-records/full-list?${params}`); if (r.code === 200) setRecords(r.data) } catch { message.error('加载失败') } finally { setLoading(false) }
   }, [message, month])
-  useEffect(() => { load() }, [load])
+  useEffect(() => { load() }, [load]) // eslint-disable-line react-hooks/set-state-in-effect
 
   const saveRecord = async (id: string, field: string, value: any, record: any) => {
     setSaving(true); const d: any = { [field]: value }

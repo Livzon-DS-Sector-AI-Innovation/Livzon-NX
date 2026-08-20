@@ -67,10 +67,9 @@ export default function SeedCulturePage() {
   useEffect(() => {
     if (!activeProducts.has(activeKey)) {
       const first = PRODUCTS.find(p => activeProducts.has(p.key))
-      if (first) setActiveKey(first.key)
+      if (first) setActiveKey(first.key) // eslint-disable-line react-hooks/set-state-in-effect
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeProducts])
+  }, [activeProducts]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── 输入历史 ───
   const [fieldHistory, setFieldHistory] = useState<Record<string, string[]>>(() => {
@@ -98,7 +97,7 @@ export default function SeedCulturePage() {
     finally { setLoading(false) }
   }, [currentProduct.productName, searchText, message])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { load() }, [load]) // eslint-disable-line react-hooks/set-state-in-effect
 
   const handleTabChange = (key: string) => {
     setActiveKey(key); setSearchText(''); setPage(1)
@@ -378,7 +377,7 @@ export default function SeedCulturePage() {
             <div key={p.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span>{p.label}</span>
               <Switch checked={tempActive.has(p.key)} onChange={checked => {
-                const next = new Set(tempActive); checked ? next.add(p.key) : next.delete(p.key); setTempActive(next)
+                const next = new Set(tempActive); if (checked) { next.add(p.key) } else { next.delete(p.key) }; setTempActive(next)
               }} checkedChildren="生产中" unCheckedChildren="停产" />
             </div>
           ))}

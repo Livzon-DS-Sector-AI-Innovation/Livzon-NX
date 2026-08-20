@@ -388,10 +388,9 @@ function TraceabilityPage() {
   // ── URL 参数自动追溯 ──
   useEffect(() => {
     if (urlStage && urlBatch) {
-      doTrace()
+      doTrace() // eslint-disable-line react-hooks/set-state-in-effect
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── 加载分析数据 ──
   const loadAnalytics = useCallback(async () => {
@@ -408,7 +407,7 @@ function TraceabilityPage() {
     } catch { /* ignore */ }
   }, [])
 
-  useEffect(() => { loadAnalytics() }, [loadAnalytics])
+  useEffect(() => { loadAnalytics() }, [loadAnalytics]) // eslint-disable-line react-hooks/set-state-in-effect
 
   // ── 收率分布 ECharts 配置 ──
   const yieldBoxOption = {

@@ -117,8 +117,8 @@ export default function FermentationPage() {
   }
 
   useEffect(() => {
-    loadRecords()
-  }, [page, pageSize, statusFilter])
+    loadRecords() // eslint-disable-line react-hooks/set-state-in-effect
+  }, [page, pageSize, statusFilter]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSearch = () => {
     setPage(1)

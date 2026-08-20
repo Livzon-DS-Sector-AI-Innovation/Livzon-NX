@@ -91,7 +91,7 @@ export function ModuleDOE({ optimizationId, initialData, reactionSteps, currentS
     else if (trialScheme === 'L16') activeFactors = factors.slice(0, 4)
     else if (trialScheme === 'L25') activeFactors = factors.slice(0, 5)
     else activeFactors = factors.slice(0, 4) // 最多4个因素
-    let generatedRuns: DOERun[] = []
+    const generatedRuns: DOERun[] = []
 
     // 计算每个因素的水平值
     const getFactorLevels = (factor: DOEFactor): (string | number)[] => {

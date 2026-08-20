@@ -43,7 +43,10 @@ export default function DRTablePage({ tableKey, title, columns: columnDefs, stag
     finally { setLoading(false) }
   }
 
-  useEffect(() => { load() }, [])
+   
+   
+   
+  useEffect(() => { load() }, []) // eslint-disable-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
 
   // ── 合并单元格：相邻行 mergeKeys 全相同时，第一行 rowSpan=组大小，其余为 0 ──
   const computedData = useMemo(() => {

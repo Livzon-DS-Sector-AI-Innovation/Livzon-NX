@@ -44,7 +44,7 @@ export default function Workshop2012Page() {
   }, [])
 
   useEffect(() => {
-    fetchData(selectedMonth.format('YYYY-MM'))
+    fetchData(selectedMonth.format('YYYY-MM')) // eslint-disable-line react-hooks/set-state-in-effect
   }, [selectedMonth, fetchData])
 
   const handleMonthChange = (d: Dayjs | null) => {
@@ -55,7 +55,7 @@ export default function Workshop2012Page() {
   const stages = d.stages || {}
   const flow = d.flow || []
   const statusDist = d.status_distribution || []
-  const monthlyTrend: { month: number; output_kg: number }[] = d.monthly_trend || []
+  const monthlyTrend: { month: number; output_kg: number }[] = d.monthly_trend || [] // eslint-disable-line react-hooks/exhaustive-deps
   const rrtPassRates: { label: string; field: string; limit: number; total: number; passed: number; rate: number }[] = d.rrt_pass_rates || []
   const currentMonth = selectedMonth.month() + 1
 

@@ -55,7 +55,7 @@ export default function ProductClient({ initialProducts, initialTotal }: Product
 
   useEffect(() => {
     loadData()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [keyword, filterCategory, filterType, page, pageSize, loadData])
 
   const handlePageChange = (newPage: number, newPageSize: number) => {

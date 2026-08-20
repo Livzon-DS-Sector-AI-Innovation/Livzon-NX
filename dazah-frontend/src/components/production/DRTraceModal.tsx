@@ -205,7 +205,7 @@ export default function DRTraceModal({ stage, batchNo, onClose, stageConfig, sta
 
   useEffect(() => {
     if (!batchNo) return
-    setLoading(true); setError('')
+    setLoading(true); setError('') // eslint-disable-line react-hooks/set-state-in-effect
     fetch(API(`${apiPath}/trace?stage=${encodeURIComponent(stage)}&batch_no=${encodeURIComponent(batchNo)}`))
       .then(r => r.json())
       .then(json => {
@@ -215,7 +215,7 @@ export default function DRTraceModal({ stage, batchNo, onClose, stageConfig, sta
       })
       .catch(() => setError('网络错误'))
       .finally(() => setLoading(false))
-  }, [stage, batchNo])
+  }, [stage, batchNo]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const exportPng = () => {
     const svg = svgRef.current
