@@ -4,11 +4,9 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card, Row, Col, Typography, Statistic, Button, Tag, Space, Spin, Progress, DatePicker } from 'antd'
-import {
-  ExperimentOutlined, FilterOutlined, BulbOutlined,
+import {ExperimentOutlined, FilterOutlined, BulbOutlined,
   CalculatorOutlined, CheckCircleOutlined, DatabaseOutlined,
-  ArrowRightOutlined, ArrowUpOutlined, ArrowDownOutlined, NodeIndexOutlined,
-} from '@ant-design/icons'
+  ArrowRightOutlined, NodeIndexOutlined,} from '@ant-design/icons'
 import ReactECharts from 'echarts-for-react'
 import dayjs, { type Dayjs } from 'dayjs'
 import SyncSettingsButton from '@/components/production/SyncSettingsButton'

@@ -20,12 +20,6 @@ const FA_STAGE_CFG: Record<string, { color: string }> = {
   decolor_centrifuge: { color: '#722ed1' },
 }
 
-const FA_STAGE_LABELS: Record<string, string> = {
-  fermentation: '发酵放罐',
-  acidification: '酸化过滤',
-  decolor1: '一次脱色',
-  decolor_centrifuge: '脱色离心',
-}
 
 const FA_STAGE_ORDER = ['fermentation', 'acidification', 'decolor1', 'decolor_centrifuge']
 
@@ -125,7 +119,7 @@ export default function FATraceModal({ stage, batchNo, onClose }: Props) {
     chatMessages, chatInput, chatSending, chatEndRef,
     historyRecords, historyLoading,
     doAiAnalysis, doChatSend, loadHistory,
-    setChatInput, setChatMessages, setAiResult, setHistoryRecords, aiResultRef,
+    setChatInput, setChatMessages, setAiResult, aiResultRef,
   } = useFAChat({ stage, batchNo })
 
   // 追溯查询

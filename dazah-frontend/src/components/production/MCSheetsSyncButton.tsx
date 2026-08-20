@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Button, Modal, Checkbox, Space, Typography, App, Alert, Tag } from 'antd'
+import {Button, Modal, Checkbox, Typography, App, Alert, Tag} from 'antd'
 import { SyncOutlined } from '@ant-design/icons'
 
 const { Text, Paragraph } = Typography

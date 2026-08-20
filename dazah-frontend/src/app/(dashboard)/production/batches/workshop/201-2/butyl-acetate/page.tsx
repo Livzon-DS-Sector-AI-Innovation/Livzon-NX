@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, useMemo } from 'react'
 import { Table, Card, Typography, Button, App, Space } from 'antd'
-import { ArrowLeftOutlined, ReloadOutlined } from '@ant-design/icons'
+import {ArrowLeftOutlined,} from '@ant-design/icons'
 import { useRouter } from 'next/navigation'
 import MCSheetsSyncButton from '@/components/production/MCSheetsSyncButton'
 const { Title, Text } = Typography

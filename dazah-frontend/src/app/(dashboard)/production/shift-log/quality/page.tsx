@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Card, Typography, Divider, Tag, Row, Col, Input, Button, Table, Modal, Space } from 'antd'
+import {Card, Typography, Divider, Tag, Row, Col, Input, Button, Table, Modal,} from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { FundOutlined, ExperimentOutlined, SafetyOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons'
 
@@ -36,20 +36,6 @@ const makeRow = (): IPCRecord => ({
   吸光度值: '',
   备注: '',
 })
-
-const IPC_COLUMNS: ColumnsType<IPCRecord> = [
-  { title: '罐号', dataIndex: '罐号', width: 90, render: (v, _, i) => <Input size="small" value={v} data-index={i} data-field="罐号" /> },
-  { title: '接种时间', dataIndex: '接种时间', width: 100, render: (v, _, i) => <Input size="small" value={v} data-index={i} data-field="接种时间" /> },
-  { title: '取样时间', dataIndex: '取样时间', width: 90, render: (v, _, i) => <Input size="small" value={v} data-index={i} data-field="取样时间" /> },
-  { title: '培养周期', dataIndex: '培养周期', width: 80, render: (v, _, i) => <Input size="small" value={v} data-index={i} data-field="培养周期" /> },
-  { title: 'pH', dataIndex: 'pH', width: 70, render: (v, _, i) => <Input size="small" value={v} data-index={i} data-field="pH" /> },
-  { title: '稀释倍数', dataIndex: '稀释倍数1', width: 80, render: (v, _, i) => <Input size="small" value={v} data-index={i} data-field="稀释倍数1" /> },
-  { title: '测定结果', dataIndex: '测定结果', width: 90, render: (v, _, i) => <Input size="small" value={v} data-index={i} data-field="测定结果" /> },
-  { title: '残糖含量', dataIndex: '残糖含量', width: 90, render: (v, _, i) => <Input size="small" value={v} data-index={i} data-field="残糖含量" /> },
-  { title: '稀释倍数', dataIndex: '稀释倍数2', width: 80, render: (v, _, i) => <Input size="small" value={v} data-index={i} data-field="稀释倍数2" /> },
-  { title: '吸光度值', dataIndex: '吸光度值', width: 90, render: (v, _, i) => <Input size="small" value={v} data-index={i} data-field="吸光度值" /> },
-  { title: '备注', dataIndex: '备注', width: 120, render: (v, _, i) => <Input size="small" value={v} data-index={i} data-field="备注" /> },
-]
 
 const FieldRow = () => (
   <Row gutter={4} justify="space-between" style={{ textAlign: 'center', whiteSpace: 'pre-line', lineHeight: 1.6 }}>

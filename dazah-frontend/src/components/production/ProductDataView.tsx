@@ -20,19 +20,16 @@ import {
   App,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import {
-  PlusOutlined,
+import {PlusOutlined,
   SearchOutlined,
   EditOutlined,
   DeleteOutlined,
-  PlayCircleOutlined,
   CheckCircleOutlined,
   DownloadOutlined,
   ExperimentOutlined,
   PieChartOutlined,
   BarChartOutlined,
-  ClockCircleOutlined,
-} from '@ant-design/icons'
+  ClockCircleOutlined,} from '@ant-design/icons'
 import { getBatches, createBatch, updateBatch, deleteBatch } from '@/actions/production'
 import type { Batch, BatchFormData, BatchStatus } from '@/types/production'
 import { BatchStatus as BatchStatusEnum, BATCH_STATUS_OPTIONS } from '@/types/production'

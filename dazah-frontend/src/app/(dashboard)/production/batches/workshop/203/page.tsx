@@ -101,7 +101,6 @@ function Workshop203Content() {
   }, [compareBatch, goldenScore])
 
   const d = data || {}
-  const stages = d.stages || {}
 
   if (loading) return <div className="flex justify-center py-20"><Spin size="large" /></div>
 

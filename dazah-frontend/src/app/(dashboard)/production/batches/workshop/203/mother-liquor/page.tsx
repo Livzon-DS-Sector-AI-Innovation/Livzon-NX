@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { Table, Select, Card, Typography, Button, Space } from 'antd'
-import { ArrowLeftOutlined, ReloadOutlined } from '@ant-design/icons'
+import {ArrowLeftOutlined,} from '@ant-design/icons'
 import FASheetsSyncButton from '@/components/production/FASheetsSyncButton'
 import FATraceButton from '@/components/production/FATraceButton'
 import { useRouter } from 'next/navigation'

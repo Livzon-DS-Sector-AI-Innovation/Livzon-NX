@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect, useCallback } from 'react'
+import {useState, useEffect, useCallback} from 'react'
 import { Button, Modal, Form, Input, AutoComplete, Typography, App, Alert, Space, Tag } from 'antd'
 import { LinkOutlined, SyncOutlined, PlayCircleOutlined, ClockCircleOutlined } from '@ant-design/icons'
 
@@ -87,7 +87,7 @@ export default function SyncSettingsButton({ productName, syncTarget = 'seed_cul
   const { message } = App.useApp()
   const [visible, setVisible] = useState(false)
   const [form] = Form.useForm()
-  const [loading, setLoading] = useState(false)
+  const [, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [testing, setTesting] = useState(false)

@@ -28,13 +28,9 @@ import {
   ExperimentOutlined,
   DownloadOutlined,
 } from '@ant-design/icons'
-import {
-  getFermentationRecords,
-  createFermentationRecord,
-  updateFermentationRecord,
+import {getFermentationRecords,
   updateFermentationStatus,
-  deleteFermentationRecord,
-} from '@/actions/production'
+  deleteFermentationRecord,} from '@/actions/production'
 import type {
   FermentationRecord,
   FermentationFormData,

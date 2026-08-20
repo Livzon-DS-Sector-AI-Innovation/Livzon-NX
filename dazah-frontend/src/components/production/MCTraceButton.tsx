@@ -6,7 +6,6 @@ import { SearchOutlined, NodeIndexOutlined } from '@ant-design/icons'
 import TraceModal from './TraceModal'
 import BATCH_TYPES from './batchTypes'
 
-const { Text } = Typography
 
 interface Props {
   initialModule?: string

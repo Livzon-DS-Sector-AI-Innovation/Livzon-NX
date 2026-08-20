@@ -6,7 +6,6 @@ import { SearchOutlined, NodeIndexOutlined } from '@ant-design/icons'
 import DRTraceModal from './DRTraceModal'
 import { getDRFieldOptions } from './drBatchTypes'
 
-const { Text } = Typography
 
 interface Props {
   initialModule?: string

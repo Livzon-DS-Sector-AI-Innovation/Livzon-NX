@@ -2,9 +2,7 @@
 // FA 苯丙氨酸 — 全链路追溯页面（血缘流程图 + AI 分析 + 对话）
 
 import { useState, useCallback, Suspense } from 'react'
-import {
-  Button, Input, Space, Card, Typography, App, Tag, Spin, Empty, Row, Col, Popover, Select
-} from 'antd'
+import {Button, Input, Space, Card, Typography, App, Tag, Spin, Empty, Popover, Select} from 'antd'
 import {
   ArrowLeftOutlined, SearchOutlined, NodeIndexOutlined,
   BulbOutlined, SendOutlined, HistoryOutlined,
@@ -13,7 +11,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import FA_BATCH_TYPES, { FA_STAGE_CFG, FA_STAGE_ORDER } from '@/components/production/faBatchTypes'
 import { useFAChat } from '@/hooks/useFAChat'
 
-const { Title, Text, Paragraph } = Typography
+const { Title, Text } = Typography
 const { TextArea } = Input
 const API = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'
 const BASE = '/api/v1/production/fa'

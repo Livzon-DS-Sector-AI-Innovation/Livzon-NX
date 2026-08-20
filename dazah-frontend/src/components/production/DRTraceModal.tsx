@@ -4,7 +4,7 @@
 // 适配自 MC TraceModal：工段配置改为 DR 七工段，无 AI 分析（第一版不做），支持断链标注
 
 import { useEffect, useState, useRef } from 'react'
-import { Modal, Typography, Tag, Spin, Empty, App, Button, Tooltip } from 'antd'
+import {Modal, Typography, Spin, Empty, App, Button, Tooltip} from 'antd'
 import { DownloadOutlined } from '@ant-design/icons'
 
 const { Text } = Typography
@@ -63,11 +63,6 @@ function buildLayout(stages: StageGroup[], targetBatch: string, targetStage: str
   // 第二阶段：计算每列的垂直偏移量以居中于相邻列
   const colOffsets: number[] = []
   for (let col = 0; col < colHeights.length; col++) {
-    const prevH = col > 0 ? colHeights[col - 1] : 0
-    const nextH = col < colHeights.length - 1 ? colHeights[col + 1] : 0
-    const maxNeighbor = Math.max(...colHeights, 0)
-    const myH = colHeights[col]
-    colOffsets.push(myH < maxNeighbor ? (maxNeighbor - myH) / 2 : 0)
   }
 
   // 第三阶段：分配 y 坐标
@@ -206,7 +201,6 @@ export default function DRTraceModal({ stage, batchNo, onClose, stageConfig, sta
   const [loading, setLoading] = useState(true)
   const [layout, setLayout] = useState<{ nodes: any[]; lines: any[]; notes: any[] }>({ nodes: [], lines: [], notes: [] })
   const [error, setError] = useState('')
-  const { message } = App.useApp()
   const svgRef = useRef<SVGSVGElement>(null)
 
   useEffect(() => {

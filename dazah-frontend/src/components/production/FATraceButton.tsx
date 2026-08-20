@@ -6,7 +6,6 @@ import { SearchOutlined, NodeIndexOutlined } from '@ant-design/icons'
 import FATraceModal from './FATraceModal'
 import FA_BATCH_TYPES from './faBatchTypes'
 
-const { Text } = Typography
 
 interface Props {
   initialModule?: string

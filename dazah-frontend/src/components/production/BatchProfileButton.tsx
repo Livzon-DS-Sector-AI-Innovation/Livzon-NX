@@ -5,7 +5,7 @@ import { Button, Modal, Descriptions, Tag, Card, Typography, Divider, Spin } fro
 import { NodeIndexOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 
-const { Text, Title } = Typography
+const { Text } = Typography
 const BACKEND = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'
 const SCT = 'seed_culture'
 

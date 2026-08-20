@@ -109,7 +109,7 @@ export default function HandoverPage() {
     }).catch(() => {})
   }, [])
   // 表单联动
-  const [formWorkshop, setFormWorkshop] = useState<string>('')
+  const [, setFormWorkshop] = useState<string>('')
   const [formScheduleMode, setFormScheduleMode] = useState<ScheduleMode>('4-3')
   // 须知弹窗
   const [noticeVisible, setNoticeVisible] = useState(false)

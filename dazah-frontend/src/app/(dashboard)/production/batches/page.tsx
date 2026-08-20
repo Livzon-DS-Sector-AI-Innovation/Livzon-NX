@@ -1,8 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import {
-  Table,
+import {Table,
   Button,
   Space,
   Input,
@@ -14,22 +13,17 @@ import {
   Card,
   Row,
   Col,
-  DatePicker,
   Typography,
   Tooltip,
-  App,
-} from 'antd'
+  App,} from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import {
-  PlusOutlined,
+import {PlusOutlined,
   SearchOutlined,
   EditOutlined,
   DeleteOutlined,
   PlayCircleOutlined,
   CheckCircleOutlined,
-  StopOutlined,
-  DownloadOutlined,
-} from '@ant-design/icons'
+  DownloadOutlined,} from '@ant-design/icons'
 import { useProductionStore } from '@/stores/production'
 import {
   getBatches,

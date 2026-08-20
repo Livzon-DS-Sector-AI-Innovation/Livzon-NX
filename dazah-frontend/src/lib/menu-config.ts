@@ -1,9 +1,3 @@
-import {
-  BATCH_PRODUCTION_LINE_GROUPS,
-  BATCH_PRODUCT_NAMES,
-  getBatchProductPath,
-  getBatchProductionLinePath,
-} from "./production-batch-lines"
 import { ENERGY_DATA_PAGES } from "./energy-data-pages"
 
 export interface SubMenuItem {

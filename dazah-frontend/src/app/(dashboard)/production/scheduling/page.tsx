@@ -1,8 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { Card, Typography, Upload, Table, App, Row, Col, Button, Space } from 'antd'
-import { ScheduleOutlined, InboxOutlined, DownloadOutlined } from '@ant-design/icons'
+import {Card, Typography, Upload, Table, App, Row, Col,} from 'antd'
+import {ScheduleOutlined, InboxOutlined,} from '@ant-design/icons'
 import * as XLSX from 'xlsx'
 
 const { Title, Text } = Typography
@@ -19,7 +19,7 @@ export default function SchedulingPage() {
   const [headers, setHeaders] = useState<string[]>([])
   const [data, setData] = useState<any[]>([])
   const [merges, setMerges] = useState<MergedCell[]>([])
-  const [colWidths, setColWidths] = useState<number[]>([])
+  const [, setColWidths] = useState<number[]>([])
   const [loading, setLoading] = useState(false)
 
   const handleUpload = (file: File) => {

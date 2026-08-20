@@ -2,9 +2,7 @@
 // 全链路追溯页面 — 批次血链表横向流程图 + 收率递推 + 分析面板
 
 import { useEffect, useState, useCallback, useRef, Suspense } from 'react'
-import {
-  Button, Input, Space, Card, Typography, App, Tag, Tabs, Table, Progress, Spin, Empty, Row, Col, Select, Popover, List
-} from 'antd'
+import {Button, Input, Space, Card, Typography, App, Tag, Tabs, Table, Progress, Spin, Empty, Row, Col, Select, Popover,} from 'antd'
 import {
   ArrowLeftOutlined, SearchOutlined, NodeIndexOutlined,
   ExperimentOutlined, FilterOutlined, BulbOutlined, CalculatorOutlined,
