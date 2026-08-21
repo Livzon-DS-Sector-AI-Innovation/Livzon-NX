@@ -10,7 +10,7 @@ vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }))
 
 import { createCategory, createEquipment, deleteCategory, updateWorkOrder } from './equipment'
 
-const API_BASE = 'http://localhost:8000'
+const API_BASE = process.env.API_BASE_URL || 'http://localhost:8000'
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {

@@ -21,7 +21,7 @@ import {
   getBlendingRecords,
 } from './stages'
 
-const API = 'http://localhost:8000'
+const API = process.env.API_BASE_URL || 'http://localhost:8000'
 const BASE = '/api/v1/production/mc'
 const REVALIDATE = '/production/batches/workshop/201-2'
 

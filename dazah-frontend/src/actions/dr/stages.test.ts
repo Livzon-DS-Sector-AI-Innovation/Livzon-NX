@@ -20,7 +20,7 @@ import {
   updateExtractionRecord,
 } from './stages'
 
-const API = 'http://localhost:8000'
+const API = process.env.API_BASE_URL || 'http://localhost:8000'
 // 源文件 dr/stages.ts 顶部 BASE 沿用 /api/v1/production/mc（从 mc/stages.ts 复制）
 const BASE = '/api/v1/production/mc'
 const REVALIDATE = '/production/batches/workshop/201-3'

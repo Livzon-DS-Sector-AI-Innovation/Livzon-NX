@@ -18,7 +18,7 @@ import {
   updateSeedCulture,
 } from './seed-culture'
 
-const API_BASE = 'http://localhost:8000'
+const API_BASE = process.env.API_BASE_URL || 'http://localhost:8000'
 const REVALIDATE = '/production/batches/workshop/101-1'
 
 function jsonResponse(body: unknown, status = 200) {

@@ -19,7 +19,7 @@ import {
   updateShiftLog,
 } from './shift-log'
 
-const API_BASE = 'http://localhost:8000'
+const API_BASE = process.env.API_BASE_URL || 'http://localhost:8000'
 const REVALIDATE = '/production/shift-log/workshop'
 
 function jsonResponse(body: unknown, status = 200) {
