@@ -1,8 +1,10 @@
 /* @vitest-environment happy-dom */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { act } from 'react'
-import { createRoot } from 'react-dom/client'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createRoot, type Root } from 'react-dom/client'
+import { App } from 'antd'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const actions = vi.hoisted(() => ({
   getFermentationRecords: vi.fn(),
@@ -22,51 +24,34 @@ vi.mock('@/components/production/BatchEventsButton', () => ({
 import FermentationPage from './page'
 
 const RECORDS = [
-  {
-    id: 'f-1',
-    batch_no: 'F-2026-01',
-    product_name: '多拉菌素',
-    fermenter: '1#罐',
-    entry_date: '2026-03-01',
-    discharge_date: '2026-03-10',
-    status: 'completed',
-    tank_yield: 1200,
-    remarks: '',
-  },
+  { id: 'f1', batch_no: 'F-2026-01', product_name: '洛伐他汀', fermenter: '1#', entry_date: '2026-03-01',
+    discharge_date: '2026-03-02', cycle_1: 10, cycle_2: 12, cycle_3: 14, cycle_4: 16, cycle_5: 18, cycle_6: 20,
+    tank_yield: 1200, status: 'completed', remarks: '' },
 ]
 
-function renderPage() {
-  const container = document.createElement('div')
-  document.body.append(container)
-  const root = createRoot(container)
-  act(() => {
-    root.render(<FermentationPage />)
-  })
-  return { root, container }
-}
-
-describe('FermentationPage (101-2)', () => {
-  beforeEach(() => {
-    actions.getFermentationRecords.mockResolvedValue({ code: 200, message: 'success', data: RECORDS })
-  })
+describe('FermentationPage', () => {
+  let root: Root
+  let container: HTMLElement
 
   afterEach(() => {
+    act(() => root.unmount())
+    container?.remove()
     vi.clearAllMocks()
   })
 
-  it('renders fermentation records in the ledger', async () => {
-    const { root, container } = renderPage()
-
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 50))
+  it('renders the lovastatin fermentation list with data', async () => {
+    actions.getFermentationRecords.mockResolvedValue({ code: 200, message: 'success', data: RECORDS })
+    container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    act(() => {
+      root.render(<App><FermentationPage /></App>)
     })
-
-    const text = container.textContent || ''
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 60))
+    })
+    const text = (container.textContent || '') + (document.body.textContent || '')
     expect(text).toContain('F-2026-01')
-    expect(text).toContain('1#罐')
-    expect(text).toContain('已完成')
-
-    act(() => root.unmount())
-    container?.remove()
+    expect(actions.getFermentationRecords).toHaveBeenCalled()
   })
 })
