@@ -136,3 +136,61 @@ def test_drg_models_and_labels():
     assert dr.DR_STAGE_ORDER[0] == "fermentation"
     assert "fourth_refinement" in dr.DR_STAGE_LABELS
     assert dr._MAIN_TABLES["chromatography"][0] == "dr_chromatography_crystal"
+    assert dr._DIST_LABELS["second_refinement"] == "二次精制"
+
+
+# ═══════════ mc_yield_anomaly_detector 纯函数 ═══════════
+
+from app.modules.production import mc_yield_anomaly_detector as anomaly
+
+
+def test_judge_anomaly_severity():
+    # median=90, iqr=20 → high < 60, medium < 70
+    assert anomaly.judge_anomaly_severity(50, 90, 20) == "high"
+    assert anomaly.judge_anomaly_severity(65, 90, 20) == "medium"
+    assert anomaly.judge_anomaly_severity(80, 90, 20) is None
+    assert anomaly.judge_anomaly_severity(50, 90, 0) is None
+
+
+def test_parse_json_simple():
+    assert anomaly._parse_json('{"a": 1}') == {"a": 1}
+    assert anomaly._parse_json("not json") == {}
+    # 带 markdown 代码块
+    assert anomaly._parse_json('```json\n{"x": 2}\n```') == {"x": 2}
+    # 截断 JSON 的补全
+    parsed = anomaly._parse_json('{"summary":"ok"}')
+    assert parsed.get("summary") == "ok"
+
+
+# ═══════════ fa_dashboard_api / fa_ai_analysis_api 纯函数 ═══════════
+
+from app.modules.production import fa_dashboard_api as fdash
+from app.modules.production import fa_ai_analysis_api as faai
+
+
+def test_fa_dashboard_float_helpers():
+    assert fdash._to_yield(None) == 0.0
+    assert fdash._to_yield(1.5) == 150.0
+    assert fdash._to_yield(98.5) == 98.5
+    assert fdash._to_yield("0.8") == 80.0
+    assert fdash._to_yield("85%") == 85.0
+    assert fdash._to_yield("bad") == 0.0
+    assert fdash._to_float(None) == 0.0
+    assert fdash._to_float("3.5") == 3.5
+    assert fdash._to_float("7%") == 7.0
+    assert fdash._to_float("x") == 0.0
+
+
+def test_fa_suggestion_lookup():
+    # 规则 key 为参数名（如 conductivity/acid_adj），direction 为 high/low
+    assert fdash._get_suggestion("conductivity", "high") is not None
+    assert fdash._get_suggestion("conductivity", "low") is not None
+    assert fdash._get_suggestion("acid_adj", "high") is not None
+    assert fdash._get_suggestion("unknown_key", "high") is None
+
+
+def test_fa_ai_parse_json():
+    assert faai._parse_json('{"summary":"ok"}') == {"summary": "ok"}
+    assert faai._parse_json('prefix ```json\n{"ox": 1}\n``` suffix') == {"ox": 1}
+    assert faai._parse_json('plain { "a": 1 }') == {"a": 1}
+    assert faai._parse_json("no json") == {}

@@ -244,3 +244,141 @@ async def test_sync_filters_non_dict_items(module_name: str) -> None:
         ):
             result = await func(_config(), session)
     assert isinstance(result, dict)
+
+# ═══════════ mc_feishu_sheets_sync 服务主路径（db+network 走 mock） ═══════════
+
+
+class _FakeResult:
+    """模拟 sqlalchemy Result：scalars().first() 与 fetchone() 同步。"""
+
+    def __init__(self, first=None, fetchone_val=None):
+        self._first = first
+        self._fetchone_val = fetchone_val
+
+    def scalars(self):
+        return self
+
+    def first(self):
+        return self._first
+
+    def fetchone(self):
+        return self._fetchone_val
+
+
+class _FakeSession:
+    """模拟 AsyncSession：execute 返回可 scalars().first() / fetchone() 的 Result。"""
+
+    def __init__(self, config=None, existing=None, fetchone_val=None):
+        self.config = config
+        self.existing = existing
+        self.fetchone_val = fetchone_val
+        self.executed = []
+
+    async def execute(self, stmt, *args, **kwargs):
+        self.executed.append(stmt)
+        return _FakeResult(self)
+
+    async def commit(self):
+        pass
+
+    async def rollback(self):
+        pass
+
+
+class _FakeResult:
+    def __init__(self, session):
+        self._session = session
+
+    def scalars(self):
+        return self
+
+    def first(self):
+        return self._session.existing
+
+    def fetchone(self):
+        return self._session.fetchone_val
+
+    def all(self):
+        # run_dr_sync 用 result.scalars().all()
+        return self._session.existing or []
+
+
+@pytest.mark.anyio
+async def test_mc_sync_unknown_module_reports_error():
+    """未知模块返回错误而不抛异常。"""
+    from app.modules.production import mc_feishu_sheets_sync as sync
+    # 提供有效配置对象，使 run_mc_sync 能拿到 cfg
+    cfg_obj = SimpleNamespace(
+        bitable_app_token="sptoken",
+        app_id="app-id",
+        encrypted_app_secret="enc-secret",
+    )
+    session = _FakeSession(existing=cfg_obj)
+    with patch.object(sync, "decrypt_secret", return_value="secret"):
+        # run_mc_sync 内部 import mc_yield_anomaly_detector.run_anomaly_detection
+        with patch(
+            "app.modules.production.mc_yield_anomaly_detector.run_anomaly_detection",
+            new=AsyncMock(return_value={}),
+        ):
+            with patch.object(sync, "_sync_lineage", new=AsyncMock(return_value=0)):
+                result = await sync.run_mc_sync(["not_a_module"], session)
+    assert result["not_a_module"]["error"]
+
+@pytest.mark.anyio
+async def test_mc_sync_config_missing_secret_ok():
+    from app.modules.production import mc_feishu_sheets_sync as sync
+    session = _FakeSession(existing=None)
+    with patch.object(sync, "decrypt_secret", return_value="secret"):
+        with patch.object(sync, "_get_mc_spreadsheet_config", new=AsyncMock(
+            return_value={
+                "spreadsheet_token": "t", "app_id": "a", "app_secret": "s",
+            }
+        )):
+            with patch(
+                "app.modules.production.mc_yield_anomaly_detector.run_anomaly_detection",
+                new=AsyncMock(return_value={}),
+            ):
+                with patch.object(sync, "_sync_lineage", new=AsyncMock(return_value=0)):
+                    result = await sync.run_mc_sync([], session)
+    assert isinstance(result, dict)
+
+
+@pytest.mark.anyio
+async def test_dr_run_sync_no_config_returns_error():
+    """DR 同步无配置时返回 error 而非异常。"""
+    from app.modules.production import dr_feishu_sync as drsync
+    session = _FakeSession(existing=[])
+    result = await drsync.run_dr_sync(session)
+    assert "error" in result
+
+
+@pytest.mark.anyio
+async def test_dr_run_sync_with_configs_runs_rollback_on_error():
+    """DR 同步遍历配置，某个 target 失败时记录 error 并回滚。"""
+    from app.modules.production import dr_feishu_sync as dr
+    # existing 为两个配置（scalars().all() 由 _FakeResult 序列化）
+    cfg1 = SimpleNamespace(id="c1", sync_target="production_plan")
+    cfg2 = SimpleNamespace(id="c2", sync_target="dr_plan")
+
+    class _ResultAll:
+        def scalars(self):
+            return self
+        def all(self):
+            return [cfg1, cfg2]
+
+    class _SessionAll:
+        def __init__(self):
+            self.rolled = 0
+        async def execute(self, stmt, *a, **k):
+            return _ResultAll()
+        async def rollback(self):
+            self.rolled += 1
+
+    sessionA = _SessionAll()
+    with patch(
+        "app.modules.production.production_plan_service.sync_config_by_target",
+        new=AsyncMock(side_effect=RuntimeError("boom")),
+    ):
+        result = await dr.run_dr_sync(sessionA)
+    assert result[cfg1.sync_target]["error"]
+    assert sessionA.rolled == 2
