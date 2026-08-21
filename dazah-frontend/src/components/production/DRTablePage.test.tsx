@@ -66,7 +66,7 @@ describe('DRTablePage', () => {
     document.body.append(container)
     root = createRoot(container)
     act(() => {
-      root.render(<App><DRTablePage title="台账" columns={COLS} stages={STAGES} /></App>)
+      root.render(<App><DRTablePage tableKey="empty" title="台账" columns={COLS} stages={STAGES} /></App>)
     })
     await act(async () => {
       await new Promise((r) => setTimeout(r, 50))
