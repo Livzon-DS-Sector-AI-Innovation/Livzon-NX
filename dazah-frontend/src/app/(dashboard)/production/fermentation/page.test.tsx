@@ -1,6 +1,7 @@
 /* @vitest-environment happy-dom */
 
 import { act } from 'react'
+import { App } from 'antd'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -65,7 +66,7 @@ describe('FermentationPage', () => {
 
   it('renders the fermentation ledger', async () => {
     act(() => {
-      root.render(<FermentationPage />)
+      root.render(<App><FermentationPage /></App>)
     })
 
     await act(async () => {
@@ -79,7 +80,7 @@ describe('FermentationPage', () => {
 
   it('renders cycle columns and status when records loaded', async () => {
     act(() => {
-      root.render(<FermentationPage />)
+      root.render(<App><FermentationPage /></App>)
     })
     await act(async () => {
       await new Promise((r) => setTimeout(r, 50))
@@ -99,7 +100,7 @@ describe('FermentationPage', () => {
     }
     vi.stubGlobal('fetch', vi.fn(exportMock))
     act(() => {
-      root.render(<FermentationPage />)
+      root.render(<App><FermentationPage /></App>)
     })
     await act(async () => {
       await new Promise((r) => setTimeout(r, 50))
