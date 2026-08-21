@@ -12,8 +12,8 @@ const LAYOUT_STAGES = [
   { stage: 'refinement', label: '精制MC-F2', nodes: [{ batch_no: 'MC-F2-1', yield_rate: 88.5, quantity: 100 }] },
   { stage: 'extraction', label: '萃取批号', nodes: [] },
   { stage: 'sub_tank', label: '钠化批号', nodes: [
-    { batch_no: 'MC-1', yield_rate: 90.0, quantity: 100 },
-    { batch_no: 'MC-1-b', yield_rate: 85.0, quantity: 30, is_sibling: true, connects_to: 'MC-F2-1' },
+    { batch_no: 'MC-1', yield_rate: 90, quantity: 100 },
+    { batch_no: 'MC-1-b', yield_rate: 85, quantity: 30, is_sibling: true, connects_to: 'MC-F2-1' },
   ] },
 ]
 
@@ -30,15 +30,12 @@ describe('TraceModal buildLayout', () => {
     expect(layout.nodes.length).toBeGreaterThan(0)
     expect(layout.lines).toBeInstanceOf(Array)
     expect(layout.notes).toBeInstanceOf(Array)
-    // 主节点带目标标记
     const target = layout.nodes.find((n) => n.batch_no === 'MC-F2-1')
     expect(target?.is_target).toBe(true)
     expect(target?.label).toBe('精制MC-F2')
-    // 兄弟节点被标记为 sibling，且带汇入连接文字
     const sib = layout.nodes.find((n) => n.batch_no === 'MC-1-b')
     expect(sib?.is_sibling).toBe(true)
     expect(String(sib?.connects_to || '')).toContain('MC-F2-1')
-    // 主链节点有定位坐标
     const main = layout.nodes.find((n) => n.batch_no === 'MC-1')
     expect(main).toBeTruthy()
     expect(typeof main?.x).toBe('number')
@@ -89,7 +86,6 @@ describe('TraceModal buildLayout', () => {
   })
 
   it('executes AI analysis and chat follow-up flow', async () => {
-    // /trace, /ai-history, /ai-analysis return normal JSON; /chat/send returns SSE
     function fetchMock(url: string): Promise<Response> {
       if (url.includes('/trace')) {
         return Promise.resolve(new Response(JSON.stringify({
@@ -139,14 +135,12 @@ describe('TraceModal buildLayout', () => {
       await new Promise((r) => setTimeout(r, 80))
     })
 
-    // 触发 AI 分析
     const aiButton = Array.from(document.querySelectorAll('button')).find((b) => b.textContent?.includes('AI'))
     if (aiButton) {
       await act(async () => { aiButton.click(); await new Promise((r) => setTimeout(r, 60)) })
     }
     const aiBtns = Array.from(document.querySelectorAll('button')).filter((b) => b.textContent?.includes('AI'))
     expect(aiBtns.length).toBeGreaterThan(0)
-    // 触发历史
     const histBtn = Array.from(document.querySelectorAll('button')).find((b) => b.textContent?.includes('历史'))
     if (histBtn) {
       await act(async () => { histBtn.click(); await new Promise((r) => setTimeout(r, 60)) })
@@ -173,5 +167,53 @@ describe('TraceModal buildLayout edges', () => {
     const layout = buildLayout(stages, 'MC-F2-1', 'refinement', cfg, ['refinement', 'sub_tank'])
     expect(layout.notes.length).toBeGreaterThan(0)
     expect(layout.lines).toBeInstanceOf(Array)
+  })
+
+  it('renders the modal with a valid layout and AI analysis result', async () => {
+    const TRACE = {
+      stages: LAYOUT_STAGES,
+      target_batch: 'MC-F2-1',
+      target_stage: 'refinement',
+    }
+    function fetchMock(url: string): Promise<Response> {
+      if (url.includes('/ai-analysis')) {
+        return Promise.resolve(new Response(JSON.stringify({ code: 200, message: 'success', data: {
+          severity: 'high', summary: '存在风险', causes: ['原因'], suggestions: ['建议'], session_id: 's1',
+          anomalies: [{ stage: '精制', batch_no: 'MC-F2-1', value: 88.5, detail: '偏低' }],
+          analysis_text: '详细LLM输出',
+        } }), { status: 200, headers: { 'content-type': 'application/json' } }))
+      }
+      if (url.includes('/trace')) {
+        return Promise.resolve(new Response(JSON.stringify({ code: 200, message: 'success', data: TRACE }), {
+          status: 200, headers: { 'content-type': 'application/json' },
+        }))
+      }
+      if (url.includes('/ai-history')) {
+        return Promise.resolve(new Response(JSON.stringify({ code: 200, message: 'success', data: { records: [] } }), {
+          status: 200, headers: { 'content-type': 'application/json' },
+        }))
+      }
+      return Promise.resolve(new Response(JSON.stringify({ code: 200, message: 'success', data: null }), {
+        status: 200, headers: { 'content-type': 'application/json' },
+      }))
+    }
+    vi.stubGlobal('fetch', vi.fn(fetchMock))
+    const container2 = document.createElement('div')
+    document.body.append(container2)
+    const root2 = createRoot(container2)
+    act(() => root2.render(<App><TraceModal stage="refinement" batchNo="MC-F2-1" onClose={() => {}} /></App>))
+    await act(async () => { await new Promise((r) => setTimeout(r, 100)) })
+    const aiBtn = Array.from(document.body.querySelectorAll('button')).find((b) => b.textContent?.includes('AI'))
+    if (aiBtn) {
+      await act(async () => { aiBtn.click(); await new Promise((r) => setTimeout(r, 80)) })
+    }
+    const text = (document.body.textContent || '')
+    expect(text).toContain('存在风险')
+    expect(text).toContain('原因：原因')
+    expect(text).toContain('建议：建议')
+    expect(text).toContain('严重')
+    act(() => root2.unmount())
+    container2?.remove()
+    vi.unstubAllGlobals()
   })
 })
