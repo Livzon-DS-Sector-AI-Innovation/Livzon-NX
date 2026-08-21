@@ -345,7 +345,7 @@ describe('production actions', () => {
   it('updates and deletes a batch material', async () => {
     const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: null }))
     vi.stubGlobal('fetch', fetchMock)
-    await expect(updateBatchMaterial('m-1', { qty: 2 })).resolves.toMatchObject({ code: 200 })
+    await expect(updateBatchMaterial('m-1', { material_name: '葡萄糖' })).resolves.toMatchObject({ code: 200 })
     expect(fetchMock).toHaveBeenCalledWith(
       `${API_BASE}/api/v1/production/materials/m-1`,
       expect.objectContaining({ method: 'PUT' }),
@@ -434,7 +434,7 @@ describe('production actions', () => {
   it('updates and deletes a production record', async () => {
     const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: null }))
     vi.stubGlobal('fetch', fetchMock)
-    await expect(updateProductionRecord('r-1', { actual_qty: 5 })).resolves.toMatchObject({ code: 200 })
+    await expect(updateProductionRecord('r-1', { remarks: '完成' })).resolves.toMatchObject({ code: 200 })
     expect(fetchMock).toHaveBeenCalledWith(
       `${API_BASE}/api/v1/production/records/r-1`,
       expect.objectContaining({ method: 'PUT' }),
