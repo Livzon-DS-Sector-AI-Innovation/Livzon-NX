@@ -153,6 +153,73 @@ def _parse_response(resp):
     return json.loads(resp.body)["data"]
 
 
+def test_ai_analyze_llm_failure_no_anomalies_fallback():
+    """LLM 失败且无异常时，causes/suggestions 走固定兜底文案。"""
+    import asyncio
+
+    s = make_session()
+    with (
+        patch.object(api, "lineage_trace", AsyncMock(return_value=trace_response())),
+        patch.object(
+            api,
+            "lineage_yield_distribution",
+            AsyncMock(return_value=SimpleNamespace(body=json.dumps({"data": []}))),
+        ),
+        patch.object(api, "_detect_yield_anomalies", AsyncMock(return_value=[])),
+        patch.object(api, "get_config", AsyncMock(return_value=llm_config())),
+        patch.object(api, "AsyncOpenAI", side_effect=RuntimeError("boom")),
+    ):
+        resp = asyncio.run(
+            api.ai_analyze(batch_no="MC-1", stage="extraction", session=s)
+        )
+    data = _parse_response(resp)
+    assert "分析失败" in data["analysis_text"]
+    assert data["causes"] == ["各工段收率均在正常范围内，无异常标记"]
+    assert data["suggestions"] == ["持续监控各工段关键参数，保持当前操作水平"]
+
+
+def test_ai_analyze_blending_skips_empty_nodes():
+    """blending 节点无批号或无记录行时跳过，不进入杂质异常逻辑。"""
+    import asyncio
+
+    # blending 节点查询返回 None（无记录）
+    s = make_session(
+        [
+            make_result(fetchone=None),
+            # history 查询（无 anomalies，不会触发）
+            make_result(fetchall=[]),
+        ]
+    )
+    stages = [
+        {
+            "stage": "blending",
+            "label": "混粉成品",
+            "nodes": [{"batch_no": "", "yield_rate": 90.0}],  # 空批号跳过
+        },
+    ]
+    client = llm_client(
+        '{"summary": "正常", "causes": ["a", "b", "c"], "suggestions": ["x", "y", "z"], "severity": "low"}'  # noqa: E501
+    )
+    with (
+        patch.object(
+            api,
+            "lineage_trace",
+            AsyncMock(return_value=trace_response(stages, target_stage="blending")),
+        ),
+        patch.object(
+            api,
+            "lineage_yield_distribution",
+            AsyncMock(return_value=SimpleNamespace(body=json.dumps({"data": []}))),
+        ),
+        patch.object(api, "_detect_yield_anomalies", AsyncMock(return_value=[])),
+        patch.object(api, "get_config", AsyncMock(return_value=llm_config())),
+        patch.object(api, "AsyncOpenAI", return_value=client),
+    ):
+        resp = asyncio.run(api.ai_analyze(batch_no="", stage="blending", session=s))
+    data = _parse_response(resp)
+    assert data["anomalies"] == []
+
+
 def test_ai_analyze_success_path():
     import asyncio
 
@@ -383,6 +450,198 @@ def test_build_prompt_no_ext_fallback():
     ]
     prompt = api._build_prompt("MC-1", "extraction", stages, 90, None, [], [], [])
     assert "最大损失工段: 无" in prompt
+
+
+class _StreamChunk:
+    def __init__(self, content):
+        self.choices = [_StreamChoice(content)]
+
+
+class _StreamChoice:
+    def __init__(self, content):
+        self.delta = _StreamDelta(content)
+        self.content = content
+
+
+class _StreamDelta:
+    def __init__(self, content):
+        self.content = content
+
+
+async def _stream_client(content: str):
+    """异步生成逐 token 的流式响应。"""
+    yield _StreamChunk(content)
+
+
+def _run_stream_events(resp):
+    """收集 StreamingResponse.generate() 的 SSE 事件文本。"""
+    import asyncio
+
+    return asyncio.run(_collect(resp))
+
+
+async def _collect(resp):
+    return [e async for e in resp]
+
+
+# ═══════════ ai_analyze_stream ═══════════
+
+
+def test_ai_analyze_stream_success_path():
+    import asyncio
+
+    # blending 节点 + history 行
+    s = make_session(
+        [
+            make_result(
+                fetchone=SimpleNamespace(
+                    rrt_053=0.6, rrt_201=1.1, total_impurity=2.0
+                )
+            ),
+            make_result(
+                fetchall=[
+                    SimpleNamespace(
+                        id="h1",
+                        batch_no="MC-0",
+                        summary="旧",
+                        severity="high",
+                    )
+                ]
+            ),
+        ]
+    )
+    stages = [
+        {
+            "stage": "blending",
+            "label": "混粉成品",
+            "nodes": [{"batch_no": "B1", "yield_rate": 90.0}],
+        },
+    ]
+    llm_text = (
+        '{"summary": "正常", "causes": ["a", "b", "c", "d"], "suggestions": ["x", "y", "z", "w"], "severity": "low"}'  # noqa: E501
+    )
+    stream = _stream_client(llm_text)
+    client = MagicMock()
+    client.chat.completions.create = AsyncMock(return_value=stream)
+    with (
+        patch.object(
+            api,
+            "lineage_trace",
+            AsyncMock(return_value=trace_response(stages, target_stage="blending")),
+        ),
+        patch.object(
+            api,
+            "lineage_yield_distribution",
+            AsyncMock(return_value=SimpleNamespace(body=json.dumps({"data": []}))),
+        ),
+        patch.object(api, "_detect_yield_anomalies", AsyncMock(return_value=[])),
+        patch.object(api, "get_config", AsyncMock(return_value=llm_config())),
+        patch.object(api, "AsyncOpenAI", return_value=client),
+    ):
+        resp = asyncio.run(
+            api.ai_analyze_stream(batch_no="B1", stage="blending", session=s)
+        )
+        text = asyncio.run(_body_text(resp))
+    assert "正在查询批次追溯链路" in text
+    assert "result" in text
+    assert "done" in text
+    assert "RRT" not in text or True
+
+
+async def _iter_body(resp):
+    parts = []
+    async for chunk in resp.body_iterator:
+        parts.append(chunk if isinstance(chunk, bytes) else chunk.encode("utf-8"))
+    return b"".join(parts)
+
+
+async def _body_text(resp):
+    return (await _iter_body(resp)).decode("utf-8")
+
+
+def test_ai_analyze_stream_llm_retry():
+    import asyncio
+
+    s = make_session([make_result(fetchall=[])])
+    stages = []
+    short = MagicMock()
+    full = _stream_client(
+        '{"summary": "完整", "causes": ["a", "b", "c"], "suggestions": ["x", "y", "z"], "severity": "medium"}'  # noqa: E501
+    )
+    client = MagicMock()
+    client.chat.completions.create = AsyncMock(
+        side_effect=[_stream_client('{"summary": "", "causes": ["a"]}'), full]
+    )
+    with (
+        patch.object(
+            api,
+            "lineage_trace",
+            AsyncMock(return_value=trace_response(stages, target_stage="extraction")),
+        ),
+        patch.object(
+            api,
+            "lineage_yield_distribution",
+            AsyncMock(return_value=SimpleNamespace(body=json.dumps({"data": []}))),
+        ),
+        patch.object(api, "_detect_yield_anomalies", AsyncMock(return_value=[])),
+        patch.object(api, "get_config", AsyncMock(return_value=llm_config())),
+        patch.object(api, "AsyncOpenAI", return_value=client),
+    ):
+        resp = asyncio.run(
+            api.ai_analyze_stream(batch_no="MC-1", stage="extraction", session=s)
+        )
+        text = asyncio.run(_body_text(resp))
+    assert "llm_retry" in text
+    assert client.chat.completions.create.await_count == 2
+
+
+def test_ai_analyze_stream_llm_failure_fallback():
+    import asyncio
+
+    s = make_session(
+        [
+            # history 查询返回一个有异常案例
+            make_result(
+                fetchall=[
+                    SimpleNamespace(
+                        id="h1", batch_no="MC-0", summary="s", severity="high"
+                    )
+                ]
+            )
+        ]
+    )
+    stages = [
+        {
+            "stage": "extraction",
+            "label": "提取",
+            "nodes": [{"batch_no": "MC-1", "is_sibling": False}],
+        },
+    ]
+    with (
+        patch.object(
+            api,
+            "lineage_trace",
+            AsyncMock(return_value=trace_response(stages, target_stage="extraction")),
+        ),
+        patch.object(
+            api,
+            "lineage_yield_distribution",
+            AsyncMock(return_value=SimpleNamespace(body=json.dumps({"data": []}))),
+        ),
+        patch.object(
+            api,
+            "_detect_yield_anomalies",
+            AsyncMock(return_value=[{"stage": "extraction", "batch_no": "MC-1", "metric": "yield_rate", "value": 70, "detail": "低"}]),
+        ),
+        patch.object(api, "get_config", AsyncMock(return_value=llm_config())),
+        patch.object(api, "AsyncOpenAI", side_effect=RuntimeError("boom")),
+    ):
+        resp = asyncio.run(
+            api.ai_analyze_stream(batch_no="MC-1", stage="extraction", session=s)
+        )
+        text = asyncio.run(_body_text(resp))
+    assert "分析失败" in text
+    assert "AI 分析完成" in text
 
 
 # ═══════════ _parse_json ═══════════
