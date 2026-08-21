@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import date
 
 import pytest
@@ -372,3 +373,148 @@ async def test_fa_chat_gather_context_branch_queries():
     assert "FA-A" in ctx
     assert "批次详细生产数据" in ctx
     assert "批次数据文本" in ctx
+
+
+# ═══════════ mc_chat_api 对话 prompt / 追溯上下文 ═══════════
+
+
+def test_mc_chat_build_prompt_with_context():
+    from app.modules.production import mc_chat_api as mchat
+
+    msgs = mchat._build_chat_prompt(
+        history=[
+            {"role": "user", "summary": "问", "llm_response": None},
+            {"role": "assistant", "summary": None, "llm_response": "答"},
+            {"role": "system", "summary": "忽略", "llm_response": None},
+        ],
+        user_msg="新的问题",
+        batch_no="MC-100",
+        stage="refining",
+        trace_context="MC 批次链路内容",
+    )
+    roles = [m["role"] for m in msgs]
+    assert roles == ["system", "user", "assistant", "user"]
+    any_inject = any(
+        "当前关注批次: MC-100" in m["content"] for m in msgs if m["role"] == "system"
+    )
+    assert any_inject
+    # 非 user/assistant 的 history 被过滤掉
+    assert msgs[1]["content"] == "问"
+    assert msgs[2]["content"] == "答"
+    assert msgs[-1]["content"] == "新的问题"
+
+
+def test_mc_chat_build_prompt_no_context_and_stage_label():
+    from app.modules.production import mc_chat_api as mchat
+
+    # 无批次 → 不注入；stage 未在 STAGE_LABELS 中 → 原样显示
+    msgs = mchat._build_chat_prompt(
+        history=[], user_msg="hi", batch_no="", stage="unknown_stage", trace_context=""
+    )
+    assert [m["role"] for m in msgs] == ["system", "user"]
+    assert msgs[-1]["content"] == "hi"
+    assert "当前关注批次" not in msgs[0]["content"]
+
+
+@pytest.mark.anyio
+async def test_mc_chat_gather_trace_context_full():
+    """覆盖 _gather_trace_context 的追溯链路、收率分布、RRT 杂质 RRT 分支。"""
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from app.modules.production import mc_chat_api as f
+
+    session = AsyncMock()
+    r = MagicMock()
+    r.fetchone.return_value = SimpleNamespace(
+        rrt_053=0.5, rrt_0755=None, rrt_094_096=0.3,
+        rrt_103_106=None, rrt_201=0.2, total_impurity=1.0,
+    )
+    session.execute.return_value = r
+
+    trace_body = json.dumps(
+        {
+            "data": {
+                "stages": [
+                    {
+                        "label": "粗提",
+                        "stage": "refining",
+                        "nodes": [
+                            {
+                                "batch_no": "MC-A",
+                                "yield_rate": 0.9,
+                                "is_sibling": False,
+                                "detail": "顺利",
+                            },
+                            {
+                                "batch_no": "MC-A",
+                                "yield_rate": 92,
+                                "is_sibling": True,
+                                "detail": "同级",
+                            },
+                        ],
+                    },
+                    {
+                        "label": "混粉成品",
+                        "stage": "blending",
+                        "nodes": [
+                            {"batch_no": "MC-B", "yield_rate": None, "detail": "混粉"},
+                        ],
+                    },
+                ],
+                "cumulative_yield": 80,
+                "max_loss_stage": "粗提",
+                "target_stage": "blending",
+            }
+        }
+    )
+    dist_body = json.dumps(
+        {
+            "data": [
+                {"stage": "refining", "min": 10, "q1": 20, "median": 30,
+                 "q3": 40, "max": 50},
+                {"stage": "blending", "min": 1, "q1": 2, "median": 3,
+                 "q3": 4, "max": 5},
+            ]
+        }
+    )
+
+    async def fake_trace(**kw):
+        return SimpleNamespace(body=trace_body)
+
+    async def fake_dist(**kw):
+        return SimpleNamespace(body=dist_body)
+
+    with patch(
+        "app.modules.production.mc_chat_api.lineage_trace",
+        new=fake_trace,
+    ), patch(
+        "app.modules.production.mc_chat_api.lineage_yield_distribution",
+        new=fake_dist,
+    ):
+        ctx = await f._gather_trace_context("MC-A", "refining", session)
+
+    assert "批次追溯链路" in ctx
+    assert "MC-A" in ctx
+    assert "[同级]" in ctx
+    assert "← 当前" in ctx
+    assert "最大损失工段: 粗提" in ctx
+    assert "min=10" in ctx
+    assert "RRT 杂质 (MC-B)" in ctx
+    assert "总杂=1.0%"
+
+
+@pytest.mark.anyio
+async def test_mc_chat_gather_trace_context_exception():
+    """追溯抛异常 → 返回占位文本，不扩散。"""
+    from unittest.mock import AsyncMock, patch
+
+    from app.modules.production import mc_chat_api as f
+
+    session = AsyncMock()
+    with patch(
+        "app.modules.production.mc_chat_api.lineage_trace",
+        new=AsyncMock(side_effect=Exception("boom")),
+    ):
+        ctx = await f._gather_trace_context("X", "x", session)
+    assert ctx == "(批次数据暂时无法获取)"
