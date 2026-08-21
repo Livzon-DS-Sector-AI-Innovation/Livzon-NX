@@ -214,4 +214,53 @@ describe('TraceabilityPage (201-2)', () => {
     })
     expect(container.textContent || '').toContain('全链路追溯')
   })
+
+  it('renders analytics tabs: material reuse and coverage completeness', async () => {
+    vi.stubGlobal('fetch', vi.fn(fetchMock))
+    act(() => {
+      root.render(<App><TraceabilityPage /></App>)
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 100))
+    })
+
+    const reuseTab = Array.from(container.querySelectorAll('.ant-tabs-tab')).find((t) => t.textContent?.includes('物料复用')) as HTMLElement | undefined
+    if (reuseTab) {
+      await act(async () => { reuseTab.click(); await new Promise((r) => setTimeout(r, 60)) })
+    }
+    const reuseText = container.textContent || ''
+    expect(reuseText).toContain('物料复用')
+    expect(reuseText).toContain('被多个成品批次复用的物料')
+
+    const covTab = Array.from(document.querySelectorAll('.ant-tabs-tab')).find((t) => t.textContent?.includes('覆盖完整性')) as HTMLElement | undefined
+    if (covTab) {
+      await act(async () => { covTab.click(); await new Promise((r) => setTimeout(r, 60)) })
+    }
+    const covText = container.textContent || ''
+    expect(covText).toContain('血链表各段关联覆盖')
+  })
+
+  it('renders AI analysis detail: anomalies and copy action', async () => {
+    vi.stubGlobal('fetch', vi.fn(fetchMock))
+    act(() => {
+      root.render(<App><TraceabilityPage /></App>)
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 100))
+    })
+
+    const aiBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('AI 分析')) as HTMLElement | undefined
+    if (aiBtn) {
+      await act(async () => { aiBtn.click(); await new Promise((r) => setTimeout(r, 160)) })
+    }
+    await act(async () => { await new Promise((r) => setTimeout(r, 60)) })
+    const text = container.textContent || ''
+    // aiResult.anomalies 分支渲染
+    expect(text).toContain('异常标记')
+    expect(text).toContain('MC-E1')
+    expect(text).toContain('可能原因')
+    expect(text).toContain('物料投入异常')
+    expect(text).toContain('优化建议')
+    expect(text).toContain('复核')
+  })
 })

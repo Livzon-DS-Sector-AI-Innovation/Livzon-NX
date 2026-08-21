@@ -44,6 +44,7 @@ function Harness({ stage, batchNo }: { stage: string; batchNo: string }) {
         发送
       </button>
       <button onClick={() => chat.loadHistory()}>历史</button>
+      <button onClick={() => chat.setAiResult({ session_id: 's1' })}>设会话</button>
       <span data-testid="ai">{chat.aiResult ? 'has-result' : 'none'}</span>
       <span data-testid="thinking">{chat.thinkingText}</span>
       <span data-testid="history">{chat.historyRecords ? chat.historyRecords.length : 0}</span>
@@ -166,6 +167,60 @@ describe('useFAChat', () => {
       expect.anything(),
     )
     // 仍可渲染
+    expect(container.querySelector('[data-testid=ai]')?.textContent).toBe('none')
+  })
+
+  it('doChatSend streams tokens to the assistant message when a session exists', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(streamResponse([
+      'data: {"token":"回答"}',
+      'data: {"token":"内容"}',
+      '',
+    ]))))
+    container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    act(() => {
+      root.render(
+        <App>
+          <Harness stage="fermentation" batchNo="FA-4" />
+        </App>
+      )
+    })
+    const btns = container.querySelectorAll('button')
+    // 先设置 session（会触发 doChatSend 的 session_id 分支）
+    await act(async () => {
+      btns[3].click()
+      await new Promise((r) => setTimeout(r, 20))
+    })
+    await act(async () => {
+      btns[1].click()
+      await new Promise((r) => setTimeout(r, 60))
+    })
+    expect(container.querySelector('[data-testid=ai]')?.textContent).toBe('has-result')
+  })
+
+  it('doAiAnalysis surfaces an error event and malformed-token is skipped', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(streamResponse([
+      'data: {"type":"error","msg":"模型不可用"}',
+      'data: not-json',
+      '',
+    ]))))
+    container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    act(() => {
+      root.render(
+        <App>
+          <Harness stage="fermentation" batchNo="FA-5" />
+        </App>
+      )
+    })
+    const btn = container.querySelector('button')!
+    await act(async () => {
+      btn.click()
+      await new Promise((r) => setTimeout(r, 60))
+    })
+    // error 事件不设 result，且非 JSON行跳过；ai 仍是 none
     expect(container.querySelector('[data-testid=ai]')?.textContent).toBe('none')
   })
 })

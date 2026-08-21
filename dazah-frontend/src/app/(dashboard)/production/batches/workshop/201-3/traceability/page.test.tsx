@@ -97,13 +97,35 @@ function fetchMock(url: string) {
     ] }))
   }
   if (url.includes('/lineage/reuse')) {
-    return Promise.resolve(jsonResponse({ code: 200, message: 'success', data: [] }))
+    return Promise.resolve(jsonResponse({ code: 200, message: 'success', data: [
+      { upstream_type: 'extraction', upstream_batch: 'DR-E1', usage_count: 4, used_by: 'DR-F1' },
+      { upstream_type: 'chromatography', upstream_batch: 'DR-C1', usage_count: 2, used_by: 'DR-F2' },
+    ] }))
   }
   if (url.includes('/lineage/coverage')) {
-    return Promise.resolve(jsonResponse({ code: 200, message: 'success', data: { segments: [], broken: {} } }))
+    return Promise.resolve(jsonResponse({ code: 200, message: 'success', data: {
+      segments: [
+        { segment: '发酵', count: 5 },
+        { segment: '萃取', count: 3 },
+      ],
+      broken: {
+        extraction_feeds_not_in_extraction: { count: 2, batches: ['DR-X1', 'DR-X2'] },
+        third_feeds_not_in_second: { count: 1, batches: ['DR-Y1'] },
+        fourth_feeds_not_in_third: { count: 1, batches: ['DR-Z1'] },
+        special_feeds: { count: 1, batches: ['DR-H1'] },
+      },
+    } }))
   }
   if (url.includes('/lineage/loss-stats')) {
-    return Promise.resolve(jsonResponse({ code: 200, message: 'success', data: null }))
+    return Promise.resolve(jsonResponse({ code: 200, message: 'success', data: {
+      by_segment_month: [
+        { stage: 'second_refinement', year_month: '2026-07', count: 12, avg_yield: 90.5, min_yield: 80, max_yield: 98 },
+        { stage: 'third_refinement', year_month: '2026-08', count: 10, avg_yield: 85.0, min_yield: 75, max_yield: 95 },
+      ],
+      unclosed: [
+        { stage: 'fourth_refinement', batch_no: 'DR-GB1', feed_batch_no: 'DR-F3-X', reason: '三次表无记录' },
+      ],
+    } }))
   }
   if (url.includes('/lineage/ai-history')) {
     return Promise.resolve(jsonResponse({ code: 200, message: 'success', data: { records: [] } }))
@@ -200,5 +222,44 @@ describe('TraceabilityPage (201-3)', () => {
       await new Promise((r) => setTimeout(r, 60))
     })
     expect(container.textContent || '').toContain('全链路追溯')
+  })
+
+  it('renders the loss funnel, broken links, and analytics tabs with mock data', async () => {
+    vi.stubGlobal('fetch', vi.fn(fetchMock))
+    act(() => {
+      root.render(<App><TraceabilityPage /></App>)
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 120))
+    })
+    const text = container.textContent || ''
+    // LossFunnelCard（故障漏斗）
+    expect(text).toContain('全程损耗漏斗')
+    expect(text).toContain('全程收率')
+    expect(text).toContain('段收率')
+    // 断链清单卡片
+    expect(text).toContain('断链清单')
+    expect(text).toContain('DR-S1')
+    // 分析面板 Tabs：收率分布
+    expect(text).toContain('收率分布')
+    expect(text).toContain('DR 六工段收率箱线数据')
+    // 覆盖完整性（coverage tab，默认未激活，需点击切换）
+    const covTab = Array.from(container.querySelectorAll('.ant-tabs-tab')).find((t) => t.textContent?.includes('覆盖完整性')) as HTMLElement | undefined
+    if (covTab) {
+      await act(async () => { covTab.click(); await new Promise((r) => setTimeout(r, 60)) })
+    }
+    const covText = container.textContent || ''
+    expect(covText).toContain('DR 六工段台账覆盖')
+    expect(covText).toContain('层析投料萃取表查不到')
+    expect(covText).toContain('DR-X1')
+    // 损耗统计配置页
+    const lossTab = Array.from(document.querySelectorAll('.ant-tabs-tab')).find((t) => t.textContent?.includes('损耗统计')) as HTMLElement | undefined
+    if (lossTab) {
+      await act(async () => { lossTab.click(); await new Promise((r) => setTimeout(r, 60)) })
+    }
+    const lossText = container.textContent || ''
+    expect(lossText).toContain('按月平均收率')
+    expect(lossText).toContain('未闭合投料')
+    expect(lossText).toContain('DR-GB1')
   })
 })

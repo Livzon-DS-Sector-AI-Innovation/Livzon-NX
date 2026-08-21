@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import importlib
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -420,3 +420,125 @@ async def test_dr_run_sync_with_configs_runs_rollback_on_error():
         result = await dr.run_dr_sync(session_all)
     assert result[cfg1.sync_target]["error"]
     assert session_all.rolled == 2
+
+
+# ═══════════ dr_lineage_api 辅助查询（SQL mock） ═══════════
+
+_MM_UNSET = object()
+
+
+def _result_with(fetchone=_MM_UNSET, fetchall=_MM_UNSET):
+    r = MagicMock()
+    if fetchone is not _MM_UNSET:
+        r.fetchone.return_value = fetchone
+    if fetchall is not _MM_UNSET:
+        r.fetchall.return_value = fetchall
+    return r
+
+
+def _result_fetchone(v):
+    r = MagicMock()
+    r.fetchone.return_value = v
+    return r
+
+
+def _result_fetchall(v):
+    r = MagicMock()
+    if isinstance(v, list):
+        r.fetchall.return_value = v
+    else:
+        r.fetchall.return_value = [v]
+    return r
+
+
+@pytest.mark.anyio
+async def test_dr_lineage_resolve_prefers_explicit_stage():
+    drlineage = importlib.import_module("app.modules.production.dr_lineage_api")
+    session = AsyncMock()
+    async def _exec(sql, params=None):
+        s = str(sql)
+        if "SELECT 1 FROM production.dr_extractions" in s:
+            return _result_fetchone(True)
+        return _result_fetchone(True)
+    session.execute.side_effect = _exec
+    stg, bn = await drlineage._resolve(session, "extraction", "DR-26026-1")
+    assert stg == "extraction"
+    assert bn == "DR-26026-1"
+
+
+@pytest.mark.anyio
+async def test_dr_lineage_resolve_falls_back_to_probe():
+    drlineage = importlib.import_module("app.modules.production.dr_lineage_api")
+    session = AsyncMock()
+    async def branch(sql, *q):
+        s = str(sql)
+        if "SELECT 1 FROM production.dr_first_refinement" in s:
+            return _result_fetchone(True)
+        return _result_fetchone(None)
+    session.execute.side_effect = branch
+    stg, bn = await drlineage._resolve(session, "", "DR-F1-24019")
+    assert stg == "first_refinement"
+
+
+@pytest.mark.anyio
+async def test_dr_lineage_upstream_downstream_branches():
+    drlineage = importlib.import_module("app.modules.production.dr_lineage_api")
+    session = AsyncMock()
+    async def branch(sql, *q, **k):
+        s = str(sql)
+        if "dr_extractions e" in s and "fermentation_batch_id" in s:
+            return _result_fetchone(SimpleNamespace(fermentation_batch_id="fb1"))
+        if "SELECT batch_no FROM production.dr_fermentation_batches" in s:
+            return _result_fetchone(SimpleNamespace(batch_no="DR-26026"))
+        if "DISTINCT extraction_batch_no FROM production.dr_chromatography_crystal" in s:  # noqa: E501
+            return _result_fetchall(SimpleNamespace(extraction_batch_no="DR-E1"))
+        if "DISTINCT chromatography_batch_no" in s and "wet_powder_batch_no" in s:  # noqa: E501
+            return _result_fetchall(SimpleNamespace(chromatography_batch_no="DR-C1"))
+        if "DISTINCT wet_powder_batch_no" in s:
+            return _result_fetchall(SimpleNamespace(wet_powder_batch_no="DR-24019-1"))
+        if "SELECT feed_batch_no, feed_pure_kg" in s:
+            return _result_fetchall([
+                SimpleNamespace(feed_batch_no="DR-F1-1 + DR-F1-2", feed_pure_kg=0.0),
+                SimpleNamespace(feed_batch_no="DR-H1", feed_pure_kg=0.0),
+            ])  # noqa: E501
+        if "SELECT DISTINCT extraction_batch_no FROM production.dr_extractions" in s:
+            return _result_fetchall(SimpleNamespace(extraction_batch_no="DR-260-1"))
+        if s.startswith("SELECT DISTINCT refinement_batch_no"):
+            return _result_fetchall(SimpleNamespace(refinement_batch_no="DR-F2-1"))
+        return _result_fetchall([])
+    session.execute.side_effect = branch
+
+    up = await drlineage._upstream(session, "extraction", "DR-26026-1")
+    assert up[0][0] == "fermentation"
+    up2 = await drlineage._upstream(session, "chromatography", "DR-C1")
+    assert up2[0][0] == "extraction"
+    up3 = await drlineage._upstream(session, "first_refinement", "DR-F1-24019-1")
+    assert up3[0][0] == "chromatography"
+    up4 = await drlineage._upstream(session, "second_refinement", "DR-F2-1")
+    assert up4[0][0] in ("first_refinement", "recovery")
+    dn = await drlineage._downstream(session, "fermentation", "DR-B-26")
+    assert dn[0][0] == "extraction"
+    dn2 = await drlineage._downstream(session, "first_refinement", "DR-F1-1")
+    assert dn2[0][0] == "second_refinement"
+
+
+@pytest.mark.anyio
+async def test_fa_feishu_sync_fermentation_parse_and_upsert():
+    fafsync = importlib.import_module("app.modules.production.fa_feishu_sync")
+    rows = [
+        ["2026-03-05", "FA-EX1", "", "10", "100", "500", "600", "80", "1.2", "20", "0.39", "5", "0.5"],  # noqa: E501
+        ["2026-03-05", "FA-EX1", "FA-EX1C", "5", "90", "300", "", "", "", "", "", "", ""],  # noqa: E501
+        ["2026.03.06", "FA-EX2", "", "8", "", "", "400", "", "", "", "", "", "", ""],
+        ["03月份", "", "", "", "", "", "", "", "", "", "", "", ""],
+        ["", "FA-EX3", "", "", "", "", "", "", "", "", "", "", ""],
+        ["", "", "", "", "", "", "", "", "", "", "", "", ""],
+    ]
+    session = AsyncMock()
+    result = MagicMock()
+    result.rowcount = 2
+    session.execute.return_value = result
+    from unittest.mock import patch as _patch
+    with _patch.object(fafsync, "_read_sheet", new=AsyncMock(return_value=rows)):
+        out = await fafsync.sync_fermentation(session, "token", "app", "sec")
+    assert out["batches"] >= 1
+    assert out["sub_batches"] >= 1

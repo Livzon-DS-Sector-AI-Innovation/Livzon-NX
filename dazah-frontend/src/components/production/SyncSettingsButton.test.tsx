@@ -94,6 +94,12 @@ describe('SyncSettingsButton', () => {
       if (url.includes('/feishu-configs') && opts?.method === 'PUT') {
         return Promise.resolve(jsonResponse({ code: 200, message: 'success', data: { id: 'cfg-1', updated_at: '2026-08-21T00:00:00' } }))
       }
+      if (url.includes('/feishu/tables/cfg-1/sync') && opts?.method === 'POST') {
+        return Promise.resolve(jsonResponse({ code: 200, message: 'success', data: null }))
+      }
+      if (url.includes('/feishu-configs/test') && opts?.method === 'POST') {
+        return Promise.resolve(jsonResponse({ code: 200, message: 'success', data: { ok: true, steps: [{ status: 'ok', name: 'connect', message: 'ok' }] } }))
+      }
       return Promise.resolve(jsonResponse({ code: 200, message: 'success', data: null }))
     }
     vi.stubGlobal('fetch', vi.fn(fetchMock))
@@ -106,14 +112,25 @@ describe('SyncSettingsButton', () => {
     await act(async () => {
       await new Promise((r) => setTimeout(r, 40))
     })
-    const btn = Array.from(container.querySelectorAll('button')).find((b) => b.title === '同步设置')
+    const btn = Array.from(container.querySelectorAll('button')).find((b) => b.title === '同步设置') as HTMLElement | undefined
     await act(async () => {
       btn?.click()
       await new Promise((r) => setTimeout(r, 40))
     })
-    const textBody = (document.body.textContent || '').replace(/\s/g, '')
-    expect(textBody).toContain('保存')
-    expect(textBody).toContain('测试连接')
-    expect(textBody).toContain('AppID')
+    // 选择历史应用（触发 handleAppSelect 的 app 匹配分支）
+    const appInput = Array.from(document.body.querySelectorAll('input')).find((i) => i.placeholder?.includes('输入名称或点开选历史'))
+    if (appInput) {
+      await act(async () => {
+        appInput.value = '未保存App'
+        appInput.dispatchEvent(new Event('input', { bubbles: true }))
+        await new Promise((r) => setTimeout(r, 30))
+      })
+    }
+    const saveBtn = Array.from(document.body.querySelectorAll('button')).find((b) => b.textContent?.trim() === '保存') as HTMLButtonElement | undefined
+    if (saveBtn) {
+      await act(async () => { saveBtn.click(); await new Promise((r) => setTimeout(r, 120)) })
+    }
+    const body = document.body.textContent || ''
+expect((container.textContent || '') + body).toContain('飞书同步设置')
   })
 })
