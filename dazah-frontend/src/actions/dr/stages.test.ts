@@ -55,10 +55,10 @@ function jsonResponse(body: unknown, status = 200) {
   })
 }
 
-function expectAuth(match: any) {
-  return expect.objectContaining({
+function authOptions() {
+  return {
     headers: expect.objectContaining({ Authorization: 'Bearer test-token' }),
-  })
+  }
 }
 
 describe('dr stages actions', () => {
@@ -77,7 +77,7 @@ describe('dr stages actions', () => {
     })
     expect(fetchMock).toHaveBeenCalledWith(
       `${API}${BASE}/extraction-records?batch_no=DR-1`,
-      expectAuth(),
+      authOptions(),
     )
   })
 
@@ -118,7 +118,7 @@ describe('dr stages actions', () => {
     await expect(getExtractionInputs('DR-1')).resolves.toMatchObject({ code: 200 })
     expect(fetchMock).toHaveBeenCalledWith(
       `${API}${BASE}/extraction-records/DR-1/inputs`,
-      expectAuth(),
+      authOptions(),
     )
 
     const payload = { batch_no: 'DR-1', material: 'broth' }
@@ -149,11 +149,11 @@ describe('dr stages actions', () => {
     await expect(getBlendingRecords({})).resolves.toMatchObject({ code: 200 })
     expect(fetchMock).toHaveBeenCalledWith(
       `${API}${BASE}/refinement-records`,
-      expectAuth(),
+      authOptions(),
     )
     expect(fetchMock).toHaveBeenCalledWith(
       `${API}${BASE}/blending-records`,
-      expectAuth(),
+      authOptions(),
     )
   })
 
@@ -171,7 +171,7 @@ describe('dr stages actions', () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       `${API}${BASE}/refinement-records/DR-1/inputs`,
-      expectAuth(),
+      authOptions(),
     )
     expect(fetchMock).toHaveBeenCalledWith(
       `${API}${BASE}/refinement-inputs`,
@@ -225,7 +225,7 @@ describe('dr stages actions', () => {
     )
     expect(fetchMock).toHaveBeenCalledWith(
       `${API}${BASE}/blending-records/DR-1/inputs`,
-      expectAuth(),
+      authOptions(),
     )
     expect(fetchMock).toHaveBeenCalledWith(
       `${API}${BASE}/blending-inputs`,
@@ -244,7 +244,7 @@ describe('dr stages actions', () => {
     await expect(getQcInspections({ batch_no: 'DR-1' })).resolves.toMatchObject({ code: 200 })
     expect(fetchMock).toHaveBeenCalledWith(
       `${API}${BASE}/qc-inspections?batch_no=DR-1`,
-      expectAuth(),
+      authOptions(),
     )
 
     await expect(createQcInspection({ batch_no: 'DR-1' })).resolves.toMatchObject({ code: 200 })
@@ -262,7 +262,7 @@ describe('dr stages actions', () => {
     await expect(getQcInspectionItems('qc-1')).resolves.toMatchObject({ code: 200 })
     expect(fetchMock).toHaveBeenCalledWith(
       `${API}${BASE}/qc-inspections/qc-1/items`,
-      expectAuth(),
+      authOptions(),
     )
 
     await expect(createQcInspectionItem({ qc_id: 'qc-1', result: 'ok' })).resolves.toMatchObject({ code: 200 })
