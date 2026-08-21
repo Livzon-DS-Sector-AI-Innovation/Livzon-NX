@@ -31,7 +31,7 @@ interface Props {
   apiPrefix?: string;
 }
 
-function buildLayout(stages: StageGroup[], targetBatch: string, targetStage: string, cfg: Record<string, { color: string }>, order: string[]) {
+export function buildLayout(stages: StageGroup[], targetBatch: string, targetStage: string, cfg: Record<string, { color: string }>, order: string[]) {
   const nodes: any[] = []; const lines: any[] = []; const notes: any[] = []
   const stageList = stages.filter(s => order.includes(s.stage))
   if (stageList.length === 0) return { nodes, lines, notes }
