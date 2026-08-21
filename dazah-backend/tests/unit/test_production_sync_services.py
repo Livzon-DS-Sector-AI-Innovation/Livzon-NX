@@ -542,3 +542,41 @@ async def test_fa_feishu_sync_fermentation_parse_and_upsert():
         out = await fafsync.sync_fermentation(session, "token", "app", "sec")
     assert out["batches"] >= 1
     assert out["sub_batches"] >= 1
+
+
+# ═══════════ mc_feishu_sheets_sync._sync_extraction 主路径（models mock） ═══════════
+
+
+@pytest.mark.anyio
+async def test_mc_sync_extraction_full_path():
+    """覆盖 _sync_extraction 的创建/更新主表与投入明细、跳过行。"""
+    from app.modules.production import mc_feishu_sheets_sync as sync
+
+    rows = [
+        ["2026-03-01", "MC-101", "MC-C1", "5", "90", "100", "80", "90", "85", "800", "2.0", "86", "10", "5", "90", "2", "50", "0.9", "1.0", "500", "2", "0.88"],  # noqa: E501
+        ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],  # noqa: E501
+        ["03月份", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],  # noqa: E501
+        ["2026-03-02", "MC-0102", "MC-B", "10", "88", "90", "7", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],  # noqa: E501
+    ]
+    session = AsyncMock()
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = None
+    session.execute.return_value = result
+    session.flush = AsyncMock()
+    session.commit = AsyncMock()
+    with patch.object(sync, "_read_sheet_range", new=AsyncMock(return_value=rows)):
+        stats = await sync._sync_extraction(session, "tok", "app", "sec")
+    assert stats["created_records"] >= 1
+    assert stats["created_inputs"] >= 1
+    assert stats["skipped"] >= 1
+
+
+@pytest.mark.anyio
+async def test_mc_sync_scheduler_defaults():
+    from app.modules.production import mc_feishu_sheets_sync as sync_module
+    sync_module._mc_sync_scheduler = None
+    sync_module.start_mc_sync_scheduler()
+    sync_module.start_mc_sync_scheduler()  # 二次调用不进
+    assert getattr(sync_module, "_mc_sync_scheduler", None) is not None
+    sync_module.stop_mc_sync_scheduler()
+    assert getattr(sync_module, "_mc_sync_scheduler", None) is None
