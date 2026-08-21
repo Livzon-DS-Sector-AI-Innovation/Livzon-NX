@@ -1,0 +1,142 @@
+"""DR 多拉菌素 追溯/分布/覆盖/漏斗 端点测试（SQL 全 mock）。"""
+
+from __future__ import annotations
+
+import json
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
+from app.modules.production import dr_lineage_api as dr
+
+
+def _result(fetchone=False, fetchall=None, scalar=None):
+    r = MagicMock()
+    r.fetchone.return_value = fetchone
+    r.fetchall.return_value = fetchall if fetchall is not None else []
+    r.scalar.return_value = scalar
+    return r
+
+
+def _session():
+    return AsyncMock()
+
+
+@pytest.mark.anyio
+async def test_dr_lineage_trace_full_flow():
+    """主端点全流程：明确工段 → BFS 展开 → 组装 stage groups → 输出。"""
+    s = AsyncMock()
+    branch, _ = _route_all()
+    s.execute.side_effect = branch
+    resp = await dr.dr_lineage_trace(batch_no="DR-26026", stage="extraction", session=s)
+    data = json.loads(resp.body)["data"]
+    assert data["target_batch"] == "DR-26026"
+    assert data["target_stage"] == "extraction"
+    s2 = AsyncMock()
+    branch2, _ = _route_all()
+    s2.execute.side_effect = branch2
+    with pytest.raises(BaseException):
+        await dr.dr_lineage_trace(batch_no="", stage="", session=s2)
+
+
+def _route_all():
+    """一条通用路由：合理返回 fetchall/fetchone/scalar。"""
+    def branch(sql, params=None):
+        s = str(sql)
+        r = MagicMock()
+        if "SELECT 1 FROM" in s:
+            r.fetchone.return_value = (True,)
+        elif "total_qty" in s:
+            r.fetchall.return_value = [SimpleNamespace(total_qty=10.0, single_batch_yield=0.9)]  # noqa: E501
+        elif "chromatography_yield" in s:
+            r.fetchall.return_value = [SimpleNamespace(  # noqa: E501
+                product_qty_kg=5.0, chromatography_yield=0.9,
+                crystallization_yield=0.85)]
+        elif "SUM(mother_liquor_product_kg) AS ml" in s:
+            r.fetchone.return_value = SimpleNamespace(ml=2.0, rp=1.0)
+        elif "SUM(mother_liquor_product_kg)" in s:
+            r.fetchone.return_value = (3.0,)
+        elif "DISTINCT e.extraction_batch_no" in s:
+            r.fetchall.return_value = [SimpleNamespace(extraction_batch_no="DR-E")]
+            r.fetchone.return_value = None
+        elif "DISTINCT extraction_batch_no FROM production.dr_chromatography_crystal" in s:  # noqa: E501
+            r.fetchall.return_value = [SimpleNamespace(extraction_batch_no="DR-E")]
+        elif "DISTINCT chromatography_batch_no" in s:
+            r.fetchall.return_value = [SimpleNamespace(chromatography_batch_no="DR-C")]
+        elif "DISTINCT wet_powder_batch_no" in s:
+            r.fetchall.return_value = [SimpleNamespace(wet_powder_batch_no="DR-24019-1")]  # noqa: E501
+        elif "Batch_no FROM dr_fermentation" in s or "batch_no FROM" in s:
+            r.fetchone.return_value = SimpleNamespace(batch_no="DR-F")
+        elif "fermentation_batch_id" in s:
+            r.fetchone.return_value = SimpleNamespace(fermentation_batch_id="fb")
+        elif "feed_batch_no, feed_pure_kg" in s:
+            r.fetchall.return_value = [SimpleNamespace(feed_batch_no="DR-F1-1", feed_pure_kg=3.0)]  # noqa: E501
+        elif "product_pure_kg" in s and "yield_rate" in s:
+            r.fetchone.return_value = SimpleNamespace(product_pure_kg=7.0, yield_rate=0.98)  # noqa: E501
+        elif "dry_weight_kg" in s:
+            r.fetchone.return_value = SimpleNamespace(dry_weight_kg=9.0, yield_rate=0.99)  # noqa: E501
+        elif "feed_pure_kg" in s:
+            r.fetchone.return_value = SimpleNamespace(feed_pure_kg=4.0)
+        elif "dr_fourth_refinement" in s and "feed_batch_no" in s:
+            r.fetchall.return_value = []
+        elif "COUNT(DISTINCT" in s:
+            r.scalar.return_value = 2
+        elif "COALESCE(SUM(" in s:
+            r.scalar.return_value = 5.0
+        elif "GROUP BY" in s:
+            r.fetchall.return_value = [SimpleNamespace(  # noqa: E501
+                stage="extraction", n=3, min_y=80.0, q1=85.0, median=90.0,
+                mean=90.5, q3=95.0, max_y=100.0, below_80=1, above_110=0)]
+        else:
+            r.fetchall.return_value = []
+            r.fetchone.return_value = None
+        return r
+    return branch, MagicMock()
+
+
+@pytest.mark.anyio
+async def test_dr_distribution_reuse_coverage():
+    """三条聚合端点：yield-distribution / material-reuse / coverage 返回空。"""
+    s = AsyncMock()
+    branch, _ = _route_all()
+    s.execute.side_effect = _dist_branch
+    dist = await dr.dr_yield_distribution(session=s)
+    assert json.loads(dist.body)["data"] == []
+    reuse = await dr.dr_material_reuse(session=s)
+    assert json.loads(reuse.body)["data"] == []
+    cov = await dr.dr_coverage(session=s)
+    cov_data = json.loads(cov.body)["data"]
+    assert cov_data["segments"]  # 7 个工段段覆盖（count=0）
+    assert isinstance(cov_data["broken"], dict)
+
+
+def _dist_branch(sql, params=None):
+    r = MagicMock()
+    # 让所有查询返回空，覆盖三端点的空数据路径
+    r.fetchall.return_value = []
+    r.fetchone.return_value = None
+    r.scalar.return_value = 0
+    return r
+
+
+@pytest.mark.anyio
+async def test_dr_loss_funnel_and_stats():
+    s = AsyncMock()
+    branch, _ = _route_all()
+    s.execute.side_effect = branch
+    resp = await dr.dr_loss_funnel(batch_no="DR-26026", stage="chromatography", session=s)  # noqa: E501
+    data = json.loads(resp.body)["data"]
+    assert data["target_batch"] == "DR-26026"
+
+    with pytest.raises(BaseException):
+        await dr.dr_loss_funnel(batch_no="", stage="", session=s)
+
+
+def test_route_all_return_value():
+    # 验证 _route_all 对所有 SQL 类型都能安全返回
+    branch, _ = _route_all()
+    r = branch("SELECT 1 FROM production.dr_extractions WHERE ...")
+    assert r.fetchone.return_value == (True,)
+    r2 = branch("SELECT total_qty, single_batch_yield FROM production.dr_extractions")
+    assert len(r2.fetchall.return_value) >= 1
