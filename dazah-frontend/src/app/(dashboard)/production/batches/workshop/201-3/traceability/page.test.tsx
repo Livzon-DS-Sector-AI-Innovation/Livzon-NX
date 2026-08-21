@@ -169,7 +169,7 @@ describe('TraceabilityPage (201-3)', () => {
     }
     const traceBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('追溯'))
     if (traceBtn) {
-      await act(async () => { traceBtn.click(); await new Promise((r) => setTimeout(r, 80)) })
+      await act(async () => { traceBtn.click(); await new Promise((r) => setTimeout(r, 150)) })
     }
     const text = container.textContent || ''
     // 触发追溯后应出现全链路追溯结果卡片
