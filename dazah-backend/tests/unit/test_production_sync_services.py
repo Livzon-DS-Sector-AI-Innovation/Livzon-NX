@@ -580,3 +580,44 @@ async def test_mc_sync_scheduler_defaults():
     assert getattr(sync_module, "_mc_sync_scheduler", None) is not None
     sync_module.stop_mc_sync_scheduler()
     assert getattr(sync_module, "_mc_sync_scheduler", None) is None
+
+
+@pytest.mark.anyio
+async def test_mc_sync_refinement_and_ba():
+    """覆盖 _sync_refinement 创建/更新 + _sync_ba 交叉表解析。"""
+    from app.modules.production import mc_feishu_sheets_sync as sync
+
+    # refinement: 有批次行 + 投入行 + 跳过行
+    ref_rows = [
+        ["2026-03-01", "MC-F2-101", "MC-F1-501", "30", "30", "5", "90", "25", "20", "180", "T1", "1.2", "C1", "10", "8", "120", "0.9", "0.88", "300", "2.0", "1.5"],  # noqa: E501
+        ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],  # noqa: E501
+        ["2026-03-02", "MC-F2-0102", "", "5", "5", "1", "85", "4", "3", "90", "T2", "0.8", "C2", "2", "1.5", "60", "0.95", "0.9", "150", "1.0", "0.8"],  # noqa: E501
+    ]
+    session = AsyncMock()
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = None
+    session.execute.return_value = result
+    session.flush = AsyncMock()
+    session.commit = AsyncMock()
+    with patch.object(sync, "_read_sheet_range", new=AsyncMock(return_value=ref_rows)):
+        stats = await sync._sync_refinement(session, "tok", "app", "sec")
+    assert stats["created_records"] >= 1
+    assert stats["created_inputs"] >= 1
+
+    # ba: 交叉表（表头含日期，数据行含 入库/合计/空/跳过）
+    ba_rows = [
+        ["消耗记录", "日期", "2026.03.01", "2026.03.02"],
+        ["", "1#萃取罐", "21.1", ""],
+        ["", "入库A", "5.5", ""],
+        ["", "合计(吨)", "50", ""],
+        ["", "成品入库累计", "90", ""],
+        ["", "2#罐", "", "3.3"],
+    ]
+    session2 = AsyncMock()
+    result2 = MagicMock()
+    result2.scalar_one_or_none.return_value = None
+    session2.execute.return_value = result2
+    with patch.object(sync, "_read_sheet_range", new=AsyncMock(return_value=ba_rows)):
+        stats2 = await sync._sync_ba(session2, "tok", "app", "sec")
+    assert stats2["created_records"] >= 1
+    assert stats2["skipped"] == 0
