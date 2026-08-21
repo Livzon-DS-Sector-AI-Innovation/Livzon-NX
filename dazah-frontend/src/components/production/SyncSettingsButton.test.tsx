@@ -196,7 +196,7 @@ describe('SyncSettingsButton 解析/连接/同步', () => {
     const btn = Array.from(document.body.querySelectorAll('button')).find((b) => b.title === '同步设置')
     await act(async () => { btn?.click(); await new Promise((res) => setTimeout(res, 60)) })
     // 手动填写必填字段（App ID / Secret / Token / Table ID）
-    function setInputByPlaceholder(ph, val) {
+    function setInputByPlaceholder(ph: string, val: string) {
       const el = Array.from(document.body.querySelectorAll('input')).find((i) => i.placeholder?.includes(ph))
       if (el) {
         el.value = val
