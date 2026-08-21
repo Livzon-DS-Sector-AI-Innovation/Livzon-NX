@@ -56,3 +56,33 @@ async def test_get_mc_sync_status():
     assert data["modules"]["crude"]["label"] == "粗提"
     assert data["modules"]["crude"]["last_sync"] == "2026-08-21T00:00:00+00:00"
     assert data["modules"]["ba"]["label"] == "丁酯盘点"
+
+
+# ═══════════ mc_feishu_sheets_sync 调度器/配置纯净函数 ═══════════
+
+
+@pytest.mark.anyio
+async def test_start_stop_mc_sync_scheduler():
+    """启动/停止 MC 飞书同步定时任务（幂等）。"""
+    from app.modules.production import mc_feishu_sheets_sync as mcsync
+
+    mcsync._mc_sync_scheduler = None
+    mcsync.start_mc_sync_scheduler()
+    assert mcsync._mc_sync_scheduler is not None
+    mcsync.stop_mc_sync_scheduler()
+    assert mcsync._mc_sync_scheduler is None
+
+
+@pytest.mark.anyio
+async def test_mc_sync_scheduler_double_start():
+    """重复启动不重复创建。"""
+    from unittest.mock import MagicMock
+
+    from app.modules.production import mc_feishu_sheets_sync as mcsync
+
+    mcsync._mc_sync_scheduler = MagicMock()
+    mcsync.start_mc_sync_scheduler()  # 已存在 → 直接返回，不重启
+    mcsync._mc_sync_scheduler.add_job.assert_not_called()
+    assert mcsync._mc_sync_scheduler is not None
+    mcsync.stop_mc_sync_scheduler()
+    assert mcsync._mc_sync_scheduler is None
