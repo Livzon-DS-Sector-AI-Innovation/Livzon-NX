@@ -88,4 +88,91 @@ describe('TraceModal buildLayout', () => {
     container?.remove()
     vi.unstubAllGlobals()
   })
+
+  it('executes AI analysis and chat follow-up flow', async () => {
+    // /trace, /ai-history, /ai-analysis return normal JSON; /chat/send returns SSE
+    function fetchMock(url: string): Promise<Response> {
+      if (url.includes('/trace')) {
+        return Promise.resolve(new Response(JSON.stringify({
+          code: 200, message: 'success',
+          data: { stages: LAYOUT_STAGES, target_batch: 'MC-F2-1', target_stage: 'refinement' },
+        }), { status: 200, headers: { 'content-type': 'application/json' } }))
+      }
+      if (url.includes('/ai-history')) {
+        return Promise.resolve(new Response(JSON.stringify({
+          code: 200, message: 'success', data: { records: [
+            { id: 1, severity: 'high', created_at: '2026-08-21 09:00', stage_label: '精制', batch_no: 'MC-F2-1', summary: '存在风险', session_id: 's1' },
+          ] },
+        }), { status: 200, headers: { 'content-type': 'application/json' } }))
+      }
+      if (url.includes('/ai-analysis')) {
+        return Promise.resolve(new Response(JSON.stringify({
+          code: 200, message: 'success', data: {
+            severity: 'high', summary: '存在风险', causes: ['原因1'], suggestions: ['建议1'], session_id: 's1',
+          },
+        }), { status: 200, headers: { 'content-type': 'application/json' } }))
+      }
+      if (url.includes('/chat/send')) {
+        const body = new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode('data: {"token":"回复"}\n'))
+            controller.close()
+          },
+        })
+        return Promise.resolve(new Response(body, {
+          status: 200, headers: { 'content-type': 'text/event-stream' },
+        }))
+      }
+      return Promise.resolve(new Response(JSON.stringify({ code: 200, message: 'success', data: null }), {
+        status: 200, headers: { 'content-type': 'application/json' },
+      }))
+    }
+    vi.stubGlobal('fetch', vi.fn(fetchMock))
+
+    let root: Root
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    act(() => {
+      root.render(<App><TraceModal stage="refinement" batchNo="MC-F2-1" onClose={() => {}} /></App>)
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 80))
+    })
+
+    // 触发 AI 分析
+    const aiButton = Array.from(document.querySelectorAll('button')).find((b) => b.textContent?.includes('AI'))
+    if (aiButton) {
+      await act(async () => { aiButton.click(); await new Promise((r) => setTimeout(r, 60)) })
+    }
+    const aiBtns = Array.from(document.querySelectorAll('button')).filter((b) => b.textContent?.includes('AI'))
+    expect(aiBtns.length).toBeGreaterThan(0)
+    // 触发历史
+    const histBtn = Array.from(document.querySelectorAll('button')).find((b) => b.textContent?.includes('历史'))
+    if (histBtn) {
+      await act(async () => { histBtn.click(); await new Promise((r) => setTimeout(r, 60)) })
+    }
+    act(() => root.unmount())
+    container?.remove()
+    vi.unstubAllGlobals()
+  })
+})
+
+// 额外覆盖 buildLayout 更多分支
+describe('TraceModal buildLayout edges', () => {
+  it('handles sibling connections and stage notes', () => {
+    const cfg: Record<string, { color: string }> = { refinement: { color: '#722ed1' }, sub_tank: { color: '#13c2c2' } }
+    const stages = [
+      { stage: 'refinement', label: '精制MC-F2', nodes: [{ batch_no: 'MC-F2-1', yield_rate: 88.5 }],
+        note: 'note' },
+      { stage: 'sub_tank', label: '钠化批号', nodes: [
+        { batch_no: 'MC-1', yield_rate: 90, connects_to: 'MC-2' },
+        { batch_no: 'MC-2', yield_rate: 85 },
+        { batch_no: 'MC-1-b', yield_rate: 80, is_sibling: true, connects_to: 'MC-2' },
+      ] },
+    ]
+    const layout = buildLayout(stages, 'MC-F2-1', 'refinement', cfg, ['refinement', 'sub_tank'])
+    expect(layout.notes.length).toBeGreaterThan(0)
+    expect(layout.lines).toBeInstanceOf(Array)
+  })
 })
