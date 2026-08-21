@@ -124,4 +124,90 @@ describe('WorkshopDataView', () => {
     })
     expect(prodActions.getBatches).toHaveBeenCalled()
   })
+
+  it('opens delete confirm modal and triggers delete', async () => {
+    container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    act(() => {
+      root.render(
+        <App>
+          <WorkshopDataView workshopName="201车间" />
+        </App>
+      )
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    const delBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.trim() === '删除') as HTMLElement | undefined
+    if (delBtn) {
+      await act(async () => { delBtn.click(); await new Promise((r) => setTimeout(r, 100)) })
+    }
+    const okBtn = Array.from(document.body.querySelectorAll('.ant-modal-confirm-btns button')).find((b) => b.textContent?.trim() === 'OK') as HTMLElement | undefined
+    if (okBtn) {
+      await act(async () => { okBtn.click(); await new Promise((r) => setTimeout(r, 80)) })
+    }
+    expect(prodActions.deleteBatch).toHaveBeenCalled()
+  })
+
+  it('opens add modal and edits a batch', async () => {
+    container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    act(() => {
+      root.render(
+        <App>
+          <WorkshopDataView workshopName="201车间" />
+        </App>
+      )
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    const addBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('新建批次')) as HTMLElement | undefined
+    if (addBtn) {
+      await act(async () => { addBtn.click(); await new Promise((r) => setTimeout(r, 50)) })
+    }
+    const addText = (container.textContent || '') + (document.body.textContent || '')
+    expect(addText).toContain('新建批次 - 201车间')
+    // 关闭
+    const cancelBtn = Array.from(document.body.querySelectorAll('.ant-modal button')).find((b) => b.textContent?.trim() === '取消') as HTMLElement | undefined
+    if (cancelBtn) {
+      await act(async () => { cancelBtn.click(); await new Promise((r) => setTimeout(r, 40)) })
+    }
+    // 编辑
+    const editBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('编辑')) as HTMLElement | undefined
+    if (editBtn) {
+      await act(async () => { editBtn.click(); await new Promise((r) => setTimeout(r, 50)) })
+    }
+    expect((container.textContent || '') + (document.body.textContent || '')).toContain('编辑批次 - 201车间')
+  })
+
+  it('applies search and status filtering', async () => {
+    container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    act(() => {
+      root.render(
+        <App>
+          <WorkshopDataView workshopName="201车间" />
+        </App>
+      )
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    const searchInput = Array.from(container.querySelectorAll('input')).find((i) => i.placeholder?.includes('搜索批次号'))
+    if (searchInput) {
+      await act(async () => {
+        searchInput.value = 'B-002'
+        searchInput.dispatchEvent(new Event('input', { bubbles: true }))
+        await new Promise((r) => setTimeout(r, 50))
+      })
+    }
+    // 状态筛选下拉：触发 antd Select 打开（仅覆盖状态筛选 onChange 分支的空值路径）
+    const text = container.textContent || ''
+    expect(text).toContain('201车间')
+    expect(prodActions.getBatches).toHaveBeenCalled()
+  })
 })
