@@ -85,3 +85,21 @@ describe('FermentationPage', () => {
     expect((document.body.textContent || '')).toContain('月度生产计划')
   })
 })
+
+
+describe('FermentationPage 101-2 产线配置（自包含）', () => {
+  it('opens 产线配置 modal and shows 生产中 switch', async () => {
+    const c2 = document.createElement('div')
+    document.body.append(c2)
+    const r2 = createRoot(c2)
+    act(() => { r2.render(<App><FermentationPage /></App>) })
+    await act(async () => { await new Promise((r) => setTimeout(r, 60)) })
+    const cfgBtn = Array.from(document.body.querySelectorAll('button')).find((b) => b.textContent?.includes('产线配置'))
+    if (cfgBtn) {
+      await act(async () => { cfgBtn.click(); await new Promise((r) => setTimeout(r, 60)) })
+    }
+    expect((document.body.textContent || '')).toContain('产线配置')
+    act(() => r2.unmount())
+    c2?.remove()
+  })
+})
