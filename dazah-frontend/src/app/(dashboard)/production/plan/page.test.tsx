@@ -113,7 +113,7 @@ describe('PlanPage', () => {
     await act(async () => {
       await new Promise((r) => setTimeout(r, 50))
     })
-    const salesTab = Array.from(container.querySelectorAll('.ant-tabs-tab')).find((t) => t.textContent?.includes('产销计划'))
+    const salesTab = Array.from(container.querySelectorAll('.ant-tabs-tab')).find((t) => t.textContent?.includes('产销计划')) as HTMLElement | undefined
     if (salesTab) {
       await act(async () => { salesTab.click(); await new Promise((r) => setTimeout(r, 60)) })
     }
@@ -145,10 +145,10 @@ describe('PlanPage', () => {
     const delBtn = Array.from(container.querySelectorAll('.ant-popover-open')).length > 0
     const deleteBtns = Array.from(container.querySelectorAll('button')).filter((b) => b.textContent?.includes('删除'))
     if (deleteBtns.length > 0) {
-      act(() => { deleteBtns[0].click() })
+      act(() => { (deleteBtns[0] as HTMLButtonElement).click() })
       await act(async () => { await new Promise((r) => setTimeout(r, 40)) })
       // Popconfirm confirm
-      const okBtn = Array.from(container.querySelectorAll('.ant-popover-buttons button')).find((b) => b.textContent?.includes('确定'))
+      const okBtn = Array.from(container.querySelectorAll('.ant-popover-buttons button')).find((b) => b.textContent?.includes('确定')) as HTMLButtonElement | undefined
       if (okBtn) {
         await act(async () => { okBtn.click(); await new Promise((r) => setTimeout(r, 40)) })
       }

@@ -99,7 +99,7 @@ describe('ProductDataView', () => {
     const text = (container.textContent || '') + (document.body.textContent || '')
     expect(text).toContain('新建批次 - 霉酚酸')
     // 提交表单（字段缺少会走 validateFields 验证失败，进入 catch 分支）
-    const okBtn = Array.from(document.body.querySelectorAll('.ant-modal button')).find((b) => b.textContent?.trim() === '确认')
+    const okBtn = Array.from(document.body.querySelectorAll('.ant-modal button')).find((b) => b.textContent?.trim() === '确认') as HTMLElement | undefined
     if (okBtn) {
       await act(async () => { okBtn.click(); await new Promise((r) => setTimeout(r, 50)) })
     }
@@ -114,12 +114,12 @@ describe('ProductDataView', () => {
     await act(async () => {
       await new Promise((r) => setTimeout(r, 80))
     })
-    const delBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.trim() === '删除')
+    const delBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.trim() === '删除') as HTMLElement | undefined
     if (delBtn) {
       await act(async () => { delBtn.click(); await new Promise((r) => setTimeout(r, 100)) })
     }
     // App.useApp 的 confirm 在测试环境渲染为按钮文案 'OK'/'Cancel'，取任意 OK 按钮
-    const okBtn = Array.from(document.body.querySelectorAll('.ant-modal-confirm-btns button')).find((b) => b.textContent?.trim() === 'OK')
+    const okBtn = Array.from(document.body.querySelectorAll('.ant-modal-confirm-btns button')).find((b) => b.textContent?.trim() === 'OK') as HTMLElement | undefined
     if (okBtn) {
       await act(async () => { okBtn.click(); await new Promise((r) => setTimeout(r, 80)) })
     }

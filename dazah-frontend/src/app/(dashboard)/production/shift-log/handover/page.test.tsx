@@ -106,7 +106,7 @@ describe('ShiftHandoverPage', () => {
       await act(async () => { newBtn.click(); await new Promise((r) => setTimeout(r, 50)) })
     }
     expect((document.body.textContent || '')).toContain('交接班须知')
-    const knowledgeOk = Array.from(document.querySelectorAll('.ant-modal button')).find((b) => b.textContent?.includes('已知晓，确认提交'))
+    const knowledgeOk = Array.from(document.querySelectorAll('.ant-modal button')).find((b) => b.textContent?.includes('已知晓，确认提交')) as HTMLButtonElement | undefined
     if (knowledgeOk) {
       await act(async () => { knowledgeOk.click(); await new Promise((r) => setTimeout(r, 60)) })
     }

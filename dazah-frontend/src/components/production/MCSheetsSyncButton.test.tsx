@@ -68,7 +68,7 @@ describe('MCSheetsSyncButton', () => {
       await act(async () => { btns[0].click(); await new Promise((r) => setTimeout(r, 50)) })
     }
     // 点击「开始同步」触发 handleSync
-    const syncBtn = Array.from(document.body.querySelectorAll('.ant-modal button')).find((b) => b.textContent?.trim() === '开始同步')
+    const syncBtn = Array.from(document.body.querySelectorAll('.ant-modal button')).find((b) => b.textContent?.trim() === '开始同步') as HTMLButtonElement | undefined
     if (syncBtn) {
       await act(async () => { syncBtn.click(); await new Promise((r) => setTimeout(r, 100)) })
     }
