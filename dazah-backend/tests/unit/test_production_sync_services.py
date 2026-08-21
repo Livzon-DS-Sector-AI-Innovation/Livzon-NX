@@ -374,11 +374,11 @@ async def test_dr_run_sync_with_configs_runs_rollback_on_error():
         async def rollback(self):
             self.rolled += 1
 
-    sessionA = _SessionAll()
+    session_all = _SessionAll()
     with patch(
         "app.modules.production.production_plan_service.sync_config_by_target",
         new=AsyncMock(side_effect=RuntimeError("boom")),
     ):
-        result = await dr.run_dr_sync(sessionA)
+        result = await dr.run_dr_sync(session_all)
     assert result[cfg1.sync_target]["error"]
-    assert sessionA.rolled == 2
+    assert session_all.rolled == 2

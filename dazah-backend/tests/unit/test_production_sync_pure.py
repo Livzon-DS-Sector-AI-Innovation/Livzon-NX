@@ -9,7 +9,10 @@ from __future__ import annotations
 from datetime import date
 
 from app.modules.production import dr_lineage_api as dr
+from app.modules.production import fa_ai_analysis_api as faai
+from app.modules.production import fa_dashboard_api as fdash
 from app.modules.production import mc_feishu_sheets_sync as sync
+from app.modules.production import mc_yield_anomaly_detector as anomaly
 
 # ═══════════ mc_feishu_sheets_sync 纯函数 ═══════════
 
@@ -141,9 +144,6 @@ def test_drg_models_and_labels():
 
 # ═══════════ mc_yield_anomaly_detector 纯函数 ═══════════
 
-from app.modules.production import mc_yield_anomaly_detector as anomaly
-
-
 def test_judge_anomaly_severity():
     # median=90, iqr=20 → high < 60, medium < 70
     assert anomaly.judge_anomaly_severity(50, 90, 20) == "high"
@@ -163,10 +163,6 @@ def test_parse_json_simple():
 
 
 # ═══════════ fa_dashboard_api / fa_ai_analysis_api 纯函数 ═══════════
-
-from app.modules.production import fa_dashboard_api as fdash
-from app.modules.production import fa_ai_analysis_api as faai
-
 
 def test_fa_dashboard_float_helpers():
     assert fdash._to_yield(None) == 0.0
