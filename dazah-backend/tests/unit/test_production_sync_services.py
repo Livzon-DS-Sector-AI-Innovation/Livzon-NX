@@ -344,6 +344,44 @@ async def test_mc_sync_config_missing_secret_ok():
 
 
 @pytest.mark.anyio
+async def test_mc_get_tenant_token_and_read_sheet_range():
+    """用 httpx.MockTransport 覆盖 _get_tenant_token 与 _read_sheet_range 的分支。"""
+    import httpx
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/tenant_access_token/internal"):
+            return httpx.Response(200, json={"tenant_access_token": "tok-1"})
+        if "/values/" in request.url.path:
+            return httpx.Response(
+                200,
+                json={
+                    "code": 0,
+                    "msg": "success",
+                    "data": {"valueRange": {"values": [[1, 2, None], ["a", "b", "c"]]}},
+                },
+            )
+        return httpx.Response(200, json={"code": 0, "msg": "success"})
+
+    transport = httpx.MockTransport(handler)
+    real_async_client = httpx.AsyncClient
+
+    from app.modules.production import mc_feishu_sheets_sync as syncmod
+
+    def fake_async_client(*, base_url=None, timeout=30):
+        return real_async_client(
+            transport=transport, timeout=timeout, base_url=base_url
+        )
+
+    with patch.object(syncmod.httpx, "AsyncClient", fake_async_client):
+        token = await syncmod._get_tenant_token("app-1", "secret-1")
+        assert token == "tok-1"
+        assert await syncmod._get_tenant_token("app-1", "secret-1") == "tok-1"
+        rows = await syncmod._read_sheet_range("sheet1", "A1:C3", "spt", "app-1", "secret-1")  # noqa: E501
+        assert rows[0] == ["1", "2", ""]
+        assert rows[1] == ["a", "b", "c"]
+
+
+@pytest.mark.anyio
 async def test_dr_run_sync_no_config_returns_error():
     """DR 同步无配置时返回 error 而非异常。"""
     from app.modules.production import dr_feishu_sync as drsync
