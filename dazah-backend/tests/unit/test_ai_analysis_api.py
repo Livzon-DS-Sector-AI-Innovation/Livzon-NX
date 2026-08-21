@@ -220,6 +220,52 @@ def test_ai_analyze_blending_skips_empty_nodes():
     assert data["anomalies"] == []
 
 
+def test_ai_analyze_blending_skips_non_blend_stage_and_no_row():
+    """blending 分支里存在非 blending 工段（149 continue）与有批号但无记录行（166 continue）。"""  # noqa: E501
+    import asyncio
+
+    # 第一个 execute：blending 节点查询返回 None；第二个：history（无异常不会查）
+    s = make_session(
+        [
+            make_result(fetchone=None),
+            make_result(fetchall=[]),
+        ]
+    )
+    stages = [
+        {
+            "stage": "extraction",  # 非 blending → 149 continue
+            "label": "提取",
+            "nodes": [{"batch_no": "MC-1", "yield_rate": 80.0}],
+        },
+        {
+            "stage": "blending",
+            "label": "混粉成品",
+            "nodes": [{"batch_no": "B1"}],  # 有批号但查询无行 → 166 continue
+        },
+    ]
+    client = llm_client(
+        '{"summary": "正常", "causes": ["a", "b", "c"], "suggestions": ["x", "y", "z"], "severity": "low"}'  # noqa: E501
+    )
+    with (
+        patch.object(
+            api,
+            "lineage_trace",
+            AsyncMock(return_value=trace_response(stages, target_stage="blending")),
+        ),
+        patch.object(
+            api,
+            "lineage_yield_distribution",
+            AsyncMock(return_value=SimpleNamespace(body=json.dumps({"data": []}))),
+        ),
+        patch.object(api, "_detect_yield_anomalies", AsyncMock(return_value=[])),
+        patch.object(api, "get_config", AsyncMock(return_value=llm_config())),
+        patch.object(api, "AsyncOpenAI", return_value=client),
+    ):
+        resp = asyncio.run(api.ai_analyze(batch_no="B1", stage="blending", session=s))
+    data = _parse_response(resp)
+    assert data["anomalies"] == []
+
+
 def test_ai_analyze_success_path():
     import asyncio
 
@@ -631,7 +677,17 @@ def test_ai_analyze_stream_llm_failure_fallback():
         patch.object(
             api,
             "_detect_yield_anomalies",
-            AsyncMock(return_value=[{"stage": "extraction", "batch_no": "MC-1", "metric": "yield_rate", "value": 70, "detail": "低"}]),
+            AsyncMock(
+                return_value=[
+                    {
+                        "stage": "extraction",
+                        "batch_no": "MC-1",
+                        "metric": "yield_rate",
+                        "value": 70,
+                        "detail": "低",
+                    }
+                ]
+            ),
         ),
         patch.object(api, "get_config", AsyncMock(return_value=llm_config())),
         patch.object(api, "AsyncOpenAI", side_effect=RuntimeError("boom")),
