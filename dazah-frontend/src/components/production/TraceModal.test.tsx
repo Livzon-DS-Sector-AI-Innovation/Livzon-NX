@@ -1,6 +1,9 @@
 /* @vitest-environment happy-dom */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+import { act } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
+import { App } from 'antd'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import TraceModal from './TraceModal'
@@ -47,5 +50,42 @@ describe('TraceModal buildLayout', () => {
     const layout = buildLayout(LAYOUT_STAGES, 'MC-F2-1', 'refinement', { refinement: { color: '#000' } }, ['unknown_stage'])
     expect(layout.nodes).toEqual([])
     expect(layout.lines).toEqual([])
+  })
+
+  it('renders the trace modal, loads history and AI analysis flow', async () => {
+    const TRACE = {
+      stages: LAYOUT_STAGES,
+      target_batch: 'MC-F2-1',
+      target_stage: 'refinement',
+    }
+    function fetchMock(url: string): Promise<Response> {
+      const body =
+        url.includes('/trace')
+          ? { code: 200, message: 'success', data: TRACE }
+          : url.includes('/ai-history')
+            ? { code: 200, message: 'success', data: { records: [] } }
+            : { code: 200, message: 'success', data: null }
+      return Promise.resolve(new Response(JSON.stringify(body), {
+        status: 200, headers: { 'content-type': 'application/json' },
+      }))
+    }
+    vi.stubGlobal('fetch', vi.fn(fetchMock))
+
+    let root: Root
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    act(() => {
+      root.render(<App><TraceModal stage="refinement" batchNo="MC-F2-1" onClose={() => {}} /></App>)
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    const text = (container.textContent || '') + (document.body.textContent || '')
+    expect(text).toContain('批次追溯')
+    expect(text).toContain('MC-F2-1')
+    act(() => root.unmount())
+    container?.remove()
+    vi.unstubAllGlobals()
   })
 })
