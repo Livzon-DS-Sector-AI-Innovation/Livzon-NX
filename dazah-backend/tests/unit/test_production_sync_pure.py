@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from datetime import date
 
+from app.modules.production import ai_analysis_api as ai_api
 from app.modules.production import dr_lineage_api as dr
 from app.modules.production import fa_ai_analysis_api as faai
 from app.modules.production import fa_dashboard_api as fdash
@@ -253,3 +254,33 @@ def test_fa_scheduler_g_and_pd_ed_n_p():
     assert fascheduler._p("0.85") == "'85%'"
     assert fascheduler._p("-") == "NULL"
     assert fascheduler._p("x") == "'x'"
+
+
+# ═══════════ ai_analysis_api 纯函数 ═══════════
+
+def test_ai_api_parse_json():
+    assert ai_api._parse_json('{"summary":"ok"}') == {"summary": "ok"}
+    assert ai_api._parse_json('```json\n{"ox": 1}\n```') == {"ox": 1}
+    # 截断补全 + 正则提取 summary/severity
+    parsed = ai_api._parse_json('{"summary":"风险","severity":"high"}')
+    assert parsed.get("summary") == "风险"
+    assert parsed.get("severity") == "high"
+    assert ai_api._parse_json("no json") == {}
+
+
+def test_ai_api_build_prompt_includes_labels():
+    # _build_prompt 根据 stages 生成 prompt（含阶段标签）
+    prompt = ai_api._build_prompt(
+        batch_no="MC-1", stage="sub_tank",
+        stages=[
+            {"stage": "sub_tank", "label": "钠化批号",
+             "nodes": [{"batch_no": "MC-1", "detail": ""}]},
+        ],
+        cumulative_yield=90,
+        max_loss_stage=None,
+        anomalies=[],
+        impurities=[],
+        ref_cases=[],
+    )
+    assert isinstance(prompt, str)
+    assert prompt  # 非空

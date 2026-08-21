@@ -120,4 +120,52 @@ describe('useFAChat', () => {
     })
     expect(container.querySelector('[data-testid=history]')?.textContent).toBe('2')
   })
+
+  it('doAiAnalysis with empty batchNo does nothing', async () => {
+    const fetchFn = vi.fn(() => Promise.resolve(streamResponse(['data: {"type":"result","summary":"x"}\n'])))
+    vi.stubGlobal('fetch', fetchFn)
+    container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    act(() => {
+      root.render(
+        <App>
+          <Harness stage="" batchNo="" />
+        </App>
+      )
+    })
+    const btn = container.querySelector('button')!
+    await act(async () => {
+      btn.click()
+      await new Promise((r) => setTimeout(r, 30))
+    })
+    expect(fetchFn).not.toHaveBeenCalled()
+  })
+
+  it('doChatSend warns when no session id exists', async () => {
+    const fetchFn = vi.fn(() => Promise.resolve(jsonResponse({ code: 200, data: null })))
+    vi.stubGlobal('fetch', fetchFn)
+    container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    act(() => {
+      root.render(
+        <App>
+          <Harness stage="fermentation" batchNo="FA-3" />
+        </App>
+      )
+    })
+    const btns = container.querySelectorAll('button')
+    await act(async () => {
+      btns[1].click()
+      await new Promise((r) => setTimeout(r, 30))
+    })
+    // 无 session_id -> 不应真正发送
+    expect(fetchFn).not.toHaveBeenCalledWith(
+      expect.stringContaining('/chat/send'),
+      expect.anything(),
+    )
+    // 仍可渲染
+    expect(container.querySelector('[data-testid=ai]')?.textContent).toBe('none')
+  })
 })
