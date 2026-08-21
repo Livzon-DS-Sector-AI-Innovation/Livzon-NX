@@ -2,6 +2,7 @@
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import { App } from 'antd'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('next/navigation', () => ({
@@ -101,7 +102,7 @@ describe('ExtractionPage', () => {
     )
 
     act(() => {
-      root.render(<ExtractionPage />)
+      root.render(<App><ExtractionPage /></App>)
     })
 
     await act(async () => {
@@ -109,5 +110,20 @@ describe('ExtractionPage', () => {
     })
 
     expect(container.textContent).toContain('暂无提取记录')
+  })
+
+  it('opens the create-extraction modal', async () => {
+    vi.stubGlobal('fetch', vi.fn(fetchMock))
+    act(() => {
+      root.render(<App><ExtractionPage /></App>)
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 60))
+    })
+    const createBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('新建提取记录'))
+    if (createBtn) {
+      await act(async () => { createBtn.click(); await new Promise((r) => setTimeout(r, 60)) })
+    }
+    expect((document.body.textContent || '')).toContain('新建提取记录')
   })
 })

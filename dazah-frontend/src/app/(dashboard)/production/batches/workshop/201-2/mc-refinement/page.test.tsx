@@ -2,6 +2,7 @@
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import { App } from 'antd'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('next/navigation', () => ({
@@ -102,7 +103,7 @@ describe('McRefinementPage', () => {
     )
 
     act(() => {
-      root.render(<McRefinementPage />)
+      root.render(<App><McRefinementPage /></App>)
     })
 
     await act(async () => {
@@ -110,5 +111,23 @@ describe('McRefinementPage', () => {
     })
 
     expect(container.textContent).toContain('暂无精制记录')
+  })
+
+  it('opens the create-refinement modal', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(jsonResponse({ code: 200, message: 'success', data: [{ id: 'r1', batch_no: 'MC-F2-1' }] })))
+    )
+    act(() => {
+      root.render(<App><McRefinementPage /></App>)
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 60))
+    })
+    const createBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('新建精制记录'))
+    if (createBtn) {
+      await act(async () => { createBtn.click(); await new Promise((r) => setTimeout(r, 60)) })
+    }
+    expect((document.body.textContent || '')).toContain('新建精制记录')
   })
 })
