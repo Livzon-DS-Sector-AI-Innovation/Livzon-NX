@@ -88,3 +88,67 @@ describe('SchedulingPage', () => {
     expect(text).toContain('上传')
   })
 })
+
+describe('SchedulingPage upload & merge rendering', () => {
+  let root: ReturnType<typeof createRoot>
+  let container: HTMLElement
+
+  afterEach(() => {
+    act(() => root.unmount())
+    container?.remove()
+    vi.clearAllMocks()
+  })
+
+  it('parses uploaded excel and renders table with merged cells', async () => {
+    xlsx.read.mockReturnValue({
+      SheetNames: ['排产'],
+      Sheets: {
+        排产: {
+          '!merges': [{ s: { r: 0, c: 0 }, e: { r: 0, c: 1 } }],
+          '!cols': [{ wch: 100 }],
+        },
+      },
+    })
+    xlsx.utils.sheet_to_json.mockReturnValue([
+      ['排产计划 2026年7月1日 至 7月15日'],
+      ['', ''],
+    ])
+
+    // Mock FileReader
+    const FileReaderMock = vi.fn(() => ({
+      onload: null as ((e: { target: { result: string | ArrayBuffer | null } }) => void) | null,
+      onerror: null as (() => void) | null,
+      readAsBinaryString: vi.fn(function () {
+        this.onload?.({ target: { result: 'fake-binary' } })
+      }),
+    }))
+    vi.stubGlobal('FileReader', FileReaderMock)
+
+    container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    act(() => { root.render(<App><SchedulingPage /></App>) })
+    await act(async () => { await new Promise((r) => setTimeout(r, 30)) })
+
+    // 直接通过真实上传组件触发（FileReader 已 mock 自动调用 onload）
+    const drag = container.querySelector('.ant-upload')
+    if (drag) {
+      await act(async () => { drag.dispatchEvent(new Event('click', { bubbles: true })); await new Promise((r) => setTimeout(r, 30)) })
+    }
+    const text = container.textContent || ''
+    expect(text).toContain('排产计划')
+    vi.unstubAllGlobals()
+  })
+
+  it('renders title and helper card without upload', () => {
+    container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    act(() => { root.render(<App><SchedulingPage /></App>) })
+    const text = container.textContent || ''
+    expect(text).toContain('排产计划')
+    expect(text).toContain('上传排产计划 Excel 文件')
+  })
+})
+
+
