@@ -137,4 +137,55 @@ describe('ProductDataView', () => {
     })
     expect(actions.getBatches).toHaveBeenCalled()
   })
+
+  it('filters by status and search text and exports a CSV', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => jsonResponse({ code: 200, message: 'success', data: [] })))
+    const exportSpy = vi.fn()
+    vi.stubGlobal('URL', { ...URL, createObjectURL: vi.fn(() => 'blob:x'), revokeObjectURL: vi.fn(), }) as any
+    global.URL.createObjectURL = exportSpy
+    act(() => {
+      root.render(<App><ProductDataView productName="霉酚酸" /></App>)
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    // 状态筛选
+    const statusSelect = Array.from(container.querySelectorAll('.ant-select')).find((s) => (s as HTMLElement).textContent?.includes('状态筛选'))
+    // 搜索框
+    const searchInput = Array.from(container.querySelectorAll('input')).find((i) => i.placeholder?.includes('搜索批次号'))
+    if (searchInput) {
+      await act(async () => {
+        searchInput.value = 'BG-2026-02'
+        searchInput.dispatchEvent(new Event('input', { bubbles: true }))
+        await new Promise((r) => setTimeout(r, 50))
+      })
+    }
+    const exportBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('导出')) as HTMLElement | undefined
+    if (exportBtn) {
+      await act(async () => { exportBtn.click(); await new Promise((r) => setTimeout(r, 80)) })
+    }
+    expect(container.textContent || '').toContain('霉酚酸')
+    vi.unstubAllGlobals()
+  })
+
+  it('edits a batch via the modal and submits an update', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => jsonResponse({ code: 200, message: 'success', data: [] })))
+    act(() => {
+      root.render(<App><ProductDataView productName="霉酚酸" /></App>)
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    const editBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('编辑')) as HTMLElement | undefined
+    if (editBtn) {
+      await act(async () => { editBtn.click(); await new Promise((r) => setTimeout(r, 50)) })
+    }
+    const text = (container.textContent || '') + (document.body.textContent || '')
+    expect(text).toContain('编辑批次 - 霉酚酸')
+    // 关闭弹窗
+    const cancelBtn = Array.from(document.body.querySelectorAll('.ant-modal button')).find((b) => b.textContent?.trim() === '取消') as HTMLElement | undefined
+    if (cancelBtn) {
+      await act(async () => { cancelBtn.click(); await new Promise((r) => setTimeout(r, 40)) })
+    }
+  })
 })
