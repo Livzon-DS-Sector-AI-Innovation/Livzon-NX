@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const actions = vi.hoisted(() => ({ getBatches: vi.fn() }))
 vi.mock('@/actions/production', () => actions)
 
-import {comp} from './page'
+import LincomycinHclPage from './page'
 
 const BATCHES = [
   { id: 'b1', batch_no: 'BG-2026-01', product_name: '盐酸林可霉素', product_code: 'BG', status: 'in_progress' },
