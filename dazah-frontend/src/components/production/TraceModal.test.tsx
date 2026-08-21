@@ -1,5 +1,4 @@
 /* @vitest-environment happy-dom */
-/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
