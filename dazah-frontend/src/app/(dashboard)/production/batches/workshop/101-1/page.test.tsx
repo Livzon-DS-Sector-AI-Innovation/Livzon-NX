@@ -2,6 +2,7 @@
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import { App } from 'antd'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const actions = vi.hoisted(() => ({
@@ -66,7 +67,7 @@ describe('SeedCulturePage (101-1)', () => {
     actions.getSeedCultures.mockResolvedValue({ code: 500, message: '服务错误', data: [] })
 
     act(() => {
-      root.render(<SeedCulturePage />)
+      root.render(<App><SeedCulturePage /></App>)
     })
 
     await act(async () => {

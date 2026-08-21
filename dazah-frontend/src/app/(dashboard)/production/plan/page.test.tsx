@@ -10,6 +10,13 @@ vi.mock('next/navigation', () => ({
 vi.mock('@/components/production/SyncSettingsButton', () => ({
   default: () => <button>同步设置</button>,
 }))
+const prodActions = vi.hoisted(() => ({
+  getPlans: vi.fn(),
+  createPlan: vi.fn(),
+  updatePlan: vi.fn(),
+  deletePlan: vi.fn(),
+}))
+vi.mock('@/actions/production', () => prodActions)
 
 import PlanPage from './page'
 
@@ -45,6 +52,7 @@ describe('PlanPage', () => {
   let container: HTMLElement
 
   beforeEach(() => {
+    prodActions.getPlans.mockResolvedValue({ code: 200, message: 'success', data: [], meta: { total: 0 } })
     container = document.createElement('div')
     document.body.append(container)
     root = createRoot(container)
