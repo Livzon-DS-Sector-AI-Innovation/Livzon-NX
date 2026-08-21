@@ -72,10 +72,16 @@ describe('FermentationPage', () => {
     await act(async () => {
       await new Promise((r) => setTimeout(r, 50))
     })
-    const addBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('新建'))
+    const addBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('新建发酵记录'))
     if (addBtn) {
       await act(async () => { addBtn.click(); await new Promise((r) => setTimeout(r, 60)) })
     }
     expect((document.body.textContent || '')).toContain('新建发酵记录')
+    // 打开月度计划弹窗
+    const planBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('月度计划'))
+    if (planBtn) {
+      await act(async () => { planBtn.click(); await new Promise((r) => setTimeout(r, 60)) })
+    }
+    expect((document.body.textContent || '')).toContain('月度生产计划')
   })
 })

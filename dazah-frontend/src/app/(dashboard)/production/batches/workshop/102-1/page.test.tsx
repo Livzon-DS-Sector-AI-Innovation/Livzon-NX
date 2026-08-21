@@ -3,7 +3,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { App } from 'antd'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const actions = vi.hoisted(() => ({
   getFermentationRecords: vi.fn(),
@@ -32,6 +32,14 @@ describe('FermentationPage', () => {
   let root: Root
   let container: HTMLElement
 
+  beforeEach(() => {
+    actions.getFermentationRecords.mockResolvedValue({ code: 200, message: 'success', data: RECORDS })
+    actions.deleteFermentationRecord.mockResolvedValue({ code: 200, message: 'success', data: null })
+    actions.createFermentationRecord.mockResolvedValue({ code: 200, message: 'success', data: null })
+    actions.updateFermentationRecord.mockResolvedValue({ code: 200, message: 'success', data: null })
+    window.localStorage.clear()
+  })
+
   afterEach(() => {
     act(() => root.unmount())
     container?.remove()
@@ -39,7 +47,6 @@ describe('FermentationPage', () => {
   })
 
   it('renders the doramectin fermentation list with data', async () => {
-    actions.getFermentationRecords.mockResolvedValue({ code: 200, message: 'success', data: RECORDS })
     container = document.createElement('div')
     document.body.append(container)
     root = createRoot(container)
@@ -51,6 +58,29 @@ describe('FermentationPage', () => {
     })
     const text = (container.textContent || '') + (document.body.textContent || '')
     expect(text).toContain('F-2026-01')
+    expect(text).toContain('月度计划')
     expect(actions.getFermentationRecords).toHaveBeenCalled()
+  })
+
+  it('opens the create and monthly-plan modals', async () => {
+    container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    act(() => {
+      root.render(<App><FermentationPage /></App>)
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 60))
+    })
+    const addBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('新建发酵记录'))
+    if (addBtn) {
+      await act(async () => { addBtn.click(); await new Promise((r) => setTimeout(r, 60)) })
+    }
+    expect((document.body.textContent || '')).toContain('新建发酵记录')
+    const planBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('月度计划'))
+    if (planBtn) {
+      await act(async () => { planBtn.click(); await new Promise((r) => setTimeout(r, 60)) })
+    }
+    expect((document.body.textContent || '')).toContain('月度生产计划')
   })
 })
