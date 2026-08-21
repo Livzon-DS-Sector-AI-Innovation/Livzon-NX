@@ -610,7 +610,6 @@ def test_ai_analyze_stream_llm_retry():
 
     s = make_session([make_result(fetchall=[])])
     stages = []
-    short = MagicMock()
     full = _stream_client(
         '{"summary": "完整", "causes": ["a", "b", "c"], "suggestions": ["x", "y", "z"], "severity": "medium"}'  # noqa: E501
     )
