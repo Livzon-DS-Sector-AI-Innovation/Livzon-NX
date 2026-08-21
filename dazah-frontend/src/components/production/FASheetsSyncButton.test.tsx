@@ -49,7 +49,7 @@ describe('FASheetsSyncButton', () => {
     const fetchMock = (url: string) => {
       if (url.includes('/fa/sync/trigger')) {
         return Promise.resolve(jsonResponse({ code: 200, message: 'success',
-          data: { data: { results: SYNC_RESULTS, errors: 0 } } }))
+          data: { results: SYNC_RESULTS, errors: 0 } }))
       }
       return Promise.resolve(jsonResponse({ code: 200, message: 'success', data: null }))
     }
@@ -65,8 +65,14 @@ describe('FASheetsSyncButton', () => {
     })
     const btns = Array.from(container.querySelectorAll('button')).filter((b) => b.textContent?.includes('同步'))
     if (btns.length > 0) {
-      await act(async () => { btns[0].click(); await new Promise((r) => setTimeout(r, 60)) })
+      await act(async () => { btns[0].click(); await new Promise((r) => setTimeout(r, 50)) })
     }
-    expect((container.textContent || '') + (document.body.textContent || '')).toContain('数据源')
+    const syncBtns = Array.from(document.body.querySelectorAll('button')).filter((b) => b.textContent?.replace(/\s/g, '') === '开始同步')
+    if (syncBtns.length > 0) {
+      await act(async () => { syncBtns[0].click(); await new Promise((r) => setTimeout(r, 200)) })
+    }
+    const text = (container.textContent || '') + (document.body.textContent || '')
+    expect(text).toContain('数据源')
+    expect(text).toContain('新建/更新 3 批 + 2 子批')
   })
 })

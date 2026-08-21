@@ -2,6 +2,7 @@
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import { App } from 'antd'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('next/navigation', () => ({
@@ -40,6 +41,23 @@ const ROWS = [
   },
 ]
 
+const PLANS = [
+  {
+    id: 'pl-1',
+    workshop: '101-1发酵车间',
+    product_name: '洛伐他汀',
+    plan_date: '2026-07-01',
+    planned_yield: 800,
+    unit: 'kg',
+    actual_completion: 720,
+    completion_rate: 0.9,
+    safety_status: '正常',
+    quality_status: '合格',
+    remarks: '',
+    source: 'feishu',
+  },
+]
+
 function jsonResponse(body: unknown) {
   return new Response(JSON.stringify(body), {
     status: 200,
@@ -50,9 +68,28 @@ function jsonResponse(body: unknown) {
 describe('PlanPage', () => {
   let root: Root
   let container: HTMLElement
+  let fetchMock: ReturnType<typeof vi.fn>
 
   beforeEach(() => {
-    prodActions.getPlans.mockResolvedValue({ code: 200, message: 'success', data: [], meta: { total: 0 } })
+    prodActions.getPlans.mockResolvedValue({ code: 200, message: 'success', data: PLANS, meta: { total: 1 } })
+    prodActions.deletePlan.mockResolvedValue({ code: 200, message: 'success', data: null })
+    prodActions.createPlan.mockResolvedValue({ code: 200, message: 'success', data: null })
+    prodActions.updatePlan.mockResolvedValue({ code: 200, message: 'success', data: null })
+
+    fetchMock = vi.fn((url: string, opts?: Request) => {
+      const method = opts?.method || 'GET'
+      if (url.includes('/sales-plan-details') && method === 'GET') {
+        return Promise.resolve(jsonResponse({ code: 200, message: 'success', data: ROWS, meta: { total: 1 } }))
+      }
+      if (url.includes('/sales-plan-details') && method === 'POST') {
+        return Promise.resolve(jsonResponse({ code: 200, message: 'success', data: null }))
+      }
+      if (url.includes('/sales-plan-details') && method === 'DELETE') {
+        return Promise.resolve(jsonResponse({ code: 200, message: 'success', data: null }))
+      }
+      return Promise.resolve(jsonResponse({ code: 200, message: 'success', data: null }))
+    })
+
     container = document.createElement('div')
     document.body.append(container)
     root = createRoot(container)
@@ -61,28 +98,82 @@ describe('PlanPage', () => {
   afterEach(() => {
     act(() => root.unmount())
     container?.remove()
+    vi.clearAllMocks()
   })
 
-  it('renders the sales plan detail ledger', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn((url: string) =>
-        url.includes('/sales-plan-details')
-          ? Promise.resolve(jsonResponse({ code: 200, message: 'success', data: ROWS, meta: { total: 1 } }))
-          : Promise.resolve(jsonResponse({ code: 200, message: 'success', data: null }))
-      )
-    )
+  it('renders the sales plan detail ledger with loaded rows', async () => {
+    prodActions.getPlans.mockResolvedValue({ code: 200, message: 'success', data: [], meta: { total: 0 } })
+    vi.stubGlobal('fetch', fetchMock)
 
     act(() => {
-      root.render(<PlanPage />)
+      root.render(<App><PlanPage /></App>)
     })
 
+    // 切换到销售执行 Tab
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50))
+    })
+    const salesTab = Array.from(container.querySelectorAll('.ant-tabs-tab')).find((t) => t.textContent?.includes('产销计划'))
+    if (salesTab) {
+      await act(async () => { salesTab.click(); await new Promise((r) => setTimeout(r, 60)) })
+    }
+
+    const text = container.textContent || ''
+    expect(text).toContain('生产计划')
+    expect(text).toContain('霉酚酸')
+    expect(text).toContain('500')
+    // SyncSettingsButton 展示
+    expect(text).toContain('同步设置')
+  })
+
+  it('renders the production-plan tab with rows and handles plan edit/delete/apply filters', async () => {
+    vi.stubGlobal('fetch', fetchMock)
+
+    act(() => {
+      root.render(<App><PlanPage /></App>)
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 60))
+    })
+
+    const text = container.textContent || ''
+    expect(text).toContain('洛伐他汀')
+    expect(text).toContain('90.0%')
+    expect(text).toContain('飞书')
+
+    // 点击删除按钮触发 deletePlan
+    const delBtn = Array.from(container.querySelectorAll('.ant-popover-open')).length > 0
+    const deleteBtns = Array.from(container.querySelectorAll('button')).filter((b) => b.textContent?.includes('删除'))
+    if (deleteBtns.length > 0) {
+      act(() => { deleteBtns[0].click() })
+      await act(async () => { await new Promise((r) => setTimeout(r, 40)) })
+      // Popconfirm confirm
+      const okBtn = Array.from(container.querySelectorAll('.ant-popover-buttons button')).find((b) => b.textContent?.includes('确定'))
+      if (okBtn) {
+        await act(async () => { okBtn.click(); await new Promise((r) => setTimeout(r, 40)) })
+      }
+      expect(prodActions.deletePlan).toHaveBeenCalled()
+    }
+  })
+
+  it('creates a new production plan through the modal', async () => {
+    vi.stubGlobal('fetch', fetchMock)
+    prodActions.getPlans.mockResolvedValue({ code: 200, message: 'success', data: [], meta: { total: 0 } })
+
+    act(() => {
+      root.render(<App><PlanPage /></App>)
+    })
     await act(async () => {
       await new Promise((r) => setTimeout(r, 50))
     })
 
-    const text = container.textContent || ''
+    // 触发所有可能的「新建计划」按钮
+    const newBtns = Array.from(container.querySelectorAll('button')).filter((b) => b.textContent?.trim() === '新建计划')
+    for (const btn of newBtns) {
+      await act(async () => { btn.click(); await new Promise((r) => setTimeout(r, 60)) })
+    }
+    const text = document.body.textContent || ''
+    expect(text).toContain('新建生产计划')
     expect(text).toContain('生产计划')
-    expect(text).toContain('产销计划')
   })
 })

@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn() }),
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => new URLSearchParams('stage=fermentation&batch_no=MC-F1'),
 }))
 vi.mock('echarts-for-react', () => ({
   default: () => <div data-testid="echarts" />,
@@ -105,9 +105,11 @@ function fetchMock(url: string) {
   }
   if (url.includes('ai-analysis-stream')) {
     return Promise.resolve(streamResponse([
-      'data: {"type":"step","step":1,"msg":"开始"}',
-      'data: {"type":"token","content":"风险"}',
-      'data: {"type":"result","severity":"high","summary":"存在风险","session_id":"s1"}',
+      'data: {"type":"step","step":1,"msg":"开始分析","done":true}',
+      'data: {"type":"token","content":"潜在风险"}',
+      'data: {"type":"result","severity":"high","summary":"存在风险","session_id":"s1",'
+      + '"causes":["物料投入异常"],"suggestions":["复核"],"anomalies":[{"stage":"萃取","batch_no":"MC-E1","value":80,"detail":"偏低"}],'
+      + '"analysis_text":"详细分析"}',
       '',
     ]))
   }
@@ -130,7 +132,7 @@ describe('TraceabilityPage (201-2)', () => {
     vi.clearAllMocks()
   })
 
-  it('renders the full-chain traceability page with a batch query panel', async () => {
+  it('renders the full-chain traceability page and triggers an auto trace from URL params', async () => {
     vi.stubGlobal('fetch', vi.fn(fetchMock))
 
     act(() => {
@@ -138,11 +140,14 @@ describe('TraceabilityPage (201-2)', () => {
     })
 
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 60))
+      await new Promise((r) => setTimeout(r, 80))
     })
 
     const text = container.textContent || ''
     expect(text).toContain('全链路追溯')
+    // 由于 URL 携带 stage/batch_no，mount 时应已触发自动追溯并渲染流程节点
+    expect(text).toContain('累计收率: 85.2%')
+    expect(text).toContain('MC-E1')
   })
 
   it('renders trace result flow when batch is queried', async () => {
@@ -169,6 +174,27 @@ describe('TraceabilityPage (201-2)', () => {
     // 触发后应出现 FlowNode 分支内容（本段损耗/对账收率）
     const text = container.textContent || ''
     expect(text).toContain('全链路追溯')
+  })
+
+  it('runs an AI analysis over the SSE stream and renders the result & chat', async () => {
+    vi.stubGlobal('fetch', vi.fn(fetchMock))
+    act(() => {
+      root.render(<App><TraceabilityPage /></App>)
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 80))
+    })
+
+    const aiBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('AI 分析'))
+    if (aiBtn) {
+      await act(async () => { aiBtn.click(); await new Promise((r) => setTimeout(r, 120)) })
+    }
+
+    const text = container.textContent || ''
+    // ai-result 分支：summary（存在风险）/thinkingSteps（开始分析）/token（潜在风险）渲染
+    expect(text).toContain('存在风险')
+    expect(text).toContain('开始分析')
+    expect(text).toContain('潜在风险')
   })
 
   it('shows the empty placeholder when no trace data', async () => {

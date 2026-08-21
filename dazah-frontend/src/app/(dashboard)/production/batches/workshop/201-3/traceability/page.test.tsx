@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn() }),
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => new URLSearchParams('stage=fermentation&batch_no=DR-F1'),
 }))
 vi.mock('echarts-for-react', () => ({
   default: () => <div data-testid="echarts" />,
@@ -110,9 +110,11 @@ function fetchMock(url: string) {
   }
   if (url.includes('ai-analysis-stream')) {
     return Promise.resolve(streamResponse([
-      'data: {"type":"step","step":1,"msg":"开始"}',
-      'data: {"type":"token","content":"风险"}',
-      'data: {"type":"result","severity":"high","summary":"存在风险","session_id":"s1"}',
+      'data: {"type":"step","step":1,"msg":"开始分析","done":true}',
+      'data: {"type":"token","content":"潜在风险"}',
+      'data: {"type":"result","severity":"high","summary":"存在风险","session_id":"s1",'
+      + '"causes":["物料投入异常"],"suggestions":["复核"],"anomalies":[{"stage":"萃取","batch_no":"DR-E1","value":68,"detail":"偏低"}],'
+      + '"analysis_text":"详细分析"}',
       '',
     ]))
   }
@@ -135,7 +137,7 @@ describe('TraceabilityPage (201-3)', () => {
     vi.clearAllMocks()
   })
 
-  it('renders the full-chain traceability page with a batch query panel', async () => {
+  it('renders the full-chain traceability page and triggers an auto trace from URL params', async () => {
     vi.stubGlobal('fetch', vi.fn(fetchMock))
 
     act(() => {
@@ -143,11 +145,14 @@ describe('TraceabilityPage (201-3)', () => {
     })
 
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 60))
+      await new Promise((r) => setTimeout(r, 80))
     })
 
     const text = container.textContent || ''
     expect(text).toContain('全链路追溯')
+    // URL 携带 stage/batch_no，mount 时应已触发自动追溯并渲染流程节点与分析面板
+    expect(text).toContain('累计收率: 85.2%')
+    expect(text).toContain('DR-E1')
   })
 
   it('renders trace result flow when batch is queried', async () => {

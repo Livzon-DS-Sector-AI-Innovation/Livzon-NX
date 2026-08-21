@@ -50,7 +50,7 @@ describe('DRSheetsSyncButton', () => {
     const fetchMock = (url: string) => {
       if (url.includes('/dr/sync/trigger')) {
         return Promise.resolve(jsonResponse({ code: 200, message: 'success',
-          data: { data: { results: SYNC_RESULTS, total_created: 6, total_updated: 7 } } }))
+          data: { results: SYNC_RESULTS, total_created: 6, total_updated: 7 } }))
       }
       return Promise.resolve(jsonResponse({ code: 200, message: 'success', data: null }))
     }
@@ -69,12 +69,15 @@ describe('DRSheetsSyncButton', () => {
       btn?.click()
       await new Promise((r) => setTimeout(r, 40))
     })
-    // 打开弹窗并点开始同步
-    const syncBtns = Array.from(container.querySelectorAll('button')).filter((b) => b.textContent?.includes('开始同步'))
-    if (syncBtns.length > 0) {
-      await act(async () => { syncBtns[0].click(); await new Promise((r) => setTimeout(r, 60)) })
+    // 打开弹窗并查找「开始同步」按钮（注意文本可能含空白）
+    const syncBtn = Array.from(document.body.querySelectorAll('button')).find((b) => b.textContent?.replace(/\s/g, '').includes('开始同步'))
+    if (syncBtn) {
+      await act(async () => { syncBtn.click(); await new Promise((r) => setTimeout(r, 100)) })
     }
     const text = (container.textContent || '') + (document.body.textContent || '')
     expect(text).toContain('数据源：')
+    expect(text).toContain('新建 6')
+    expect(text).toContain('更新 7')
+    expect(text).toContain('失败: 连接失败')
   })
 })
