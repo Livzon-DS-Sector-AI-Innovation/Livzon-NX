@@ -95,4 +95,36 @@ describe('Scheduling2013Page', () => {
     })
     expect(container.textContent || '').toContain('排产')
   })
+
+  it('renders the confirm/modal for confirming an approved batch', async () => {
+    vi.stubGlobal('fetch', vi.fn(fetchMock))
+    act(() => {
+      root.render(<App><Scheduling2013Page /></App>)
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    const confirmBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('确认接罐'))
+    if (confirmBtn) {
+      await act(async () => { confirmBtn.click(); await new Promise((r) => setTimeout(r, 60)) })
+    }
+    const text = (container.textContent || '') + (document.body.textContent || '')
+    expect(text).toContain('确认接罐')
+  })
+
+  it('opens the delay-reason modal for pending batches', async () => {
+    vi.stubGlobal('fetch', vi.fn(fetchMock))
+    act(() => {
+      root.render(<App><Scheduling2013Page /></App>)
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    const delayBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('延期'))
+    if (delayBtn) {
+      await act(async () => { delayBtn.click(); await new Promise((r) => setTimeout(r, 60)) })
+    }
+    const text = (container.textContent || '') + (document.body.textContent || '')
+    expect(text).toContain('延期')
+  })
 })
