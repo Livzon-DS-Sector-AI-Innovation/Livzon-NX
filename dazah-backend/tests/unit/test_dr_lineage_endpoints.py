@@ -140,3 +140,82 @@ def test_route_all_return_value():
     assert r.fetchone.return_value == (True,)
     r2 = branch("SELECT total_qty, single_batch_yield FROM production.dr_extractions")
     assert len(r2.fetchall.return_value) >= 1
+
+
+# ═══════════ dr_coverage / dr_material_reuse / dr_loss_stats ═══════════
+
+_MAIN_TABLES = {
+    "fermentation": ("dr_fermentation_batches", "batch_no"),
+    "extraction": ("dr_extractions", "extraction_batch_no"),
+    "chromatography": ("dr_chromatography_crystal", "chromatography_batch_no"),
+}
+
+
+@pytest.mark.anyio
+async def test_dr_coverage_full():
+    """覆盖完整性：各工段计数 + 断链 _missing 无前缀/有前缀 + 特殊投料标签。"""
+    s = AsyncMock()
+    s.execute.return_value = SimpleNamespace(
+        fetchall=lambda: [("DR-EX-1",)], scalar=lambda: 3,
+    )
+    resp = await dr.dr_coverage(session=s)
+    data = json.loads(resp.body)["data"]
+    assert len(data["segments"]) == 7  # _MAIN_TABLES 有 7 个工段
+    assert data["broken"]["extraction_feeds_not_in_extraction"]["count"] == 1
+    assert data["broken"]["third_feeds_not_in_second"]["count"] == 1
+    assert "DR-EX-1" in data["broken"]["special_feeds"]["batches"]
+
+
+@pytest.mark.anyio
+async def test_dr_material_reuse_full():
+    """物料复用：单 union 查询返回多个投料复用项。"""
+    s = AsyncMock()
+    rows = [
+        SimpleNamespace(up_type="third_refinement", up_batch="DR-F2-1", usage_count=2, used_by="DR-2, DR-3"),  # noqa: E501
+        SimpleNamespace(up_type="chromatography", up_batch="DR-EX-1", usage_count=3, used_by="DR-C-1, DR-C-2"),  # noqa: E501
+    ]
+    s.execute.return_value = SimpleNamespace(fetchall=lambda: rows)
+    resp = await dr.dr_material_reuse(session=s)
+    data = json.loads(resp.body)["data"]
+    assert len(data) == 2
+    assert data[0]["upstream_type"] == "third_refinement"
+    assert data[1]["upstream_batch"] == "DR-EX-1"
+
+
+@pytest.mark.anyio
+async def test_dr_loss_stats_full():
+    """损耗统计：按年月聚合行 + 三次/四次未闭合投料。"""
+    s = AsyncMock()
+
+    def branch(sql, params=None):
+        ssql = str(sql)
+        r = MagicMock()
+        if "SELECT stage, ym, COUNT(*)" in ssql:
+            r.fetchall.return_value = [
+                SimpleNamespace(stage="second_refinement", ym="2026.05", n=2, avg_y=88.0, min_y=80.0, max_y=96.0),  # noqa: E501
+            ]
+        elif "SELECT DISTINCT refinement_batch_no, feed_batch_no" in ssql and "dr_third_refinement" in ssql:  # noqa: E501
+            r.fetchall.return_value = [SimpleNamespace(refinement_batch_no="DR-3-1", feed_batch_no="DR-F2-X")]  # noqa: E501
+        elif "SELECT DISTINCT refinement_batch_no, feed_batch_no" in ssql and "dr_fourth_refinement" in ssql:  # noqa: E501
+            r.fetchall.return_value = [SimpleNamespace(refinement_batch_no="DR-4-1", feed_batch_no="DR-F3-X")]  # noqa: E501
+        else:
+            r.fetchall.return_value = []
+        return r
+
+    s.execute.side_effect = branch
+    resp = await dr.dr_loss_stats(session=s)
+    data = json.loads(resp.body)["data"]
+    assert len(data["by_segment_month"]) == 1
+    assert data["by_segment_month"][0]["year_month"] == "2026.05"
+    assert len(data["unclosed"]) == 2
+    assert data["unclosed"][0]["reason"] == "三次投料在二次表查不到"
+
+
+@pytest.mark.anyio
+async def test_dr_loss_stats_empty():
+    s = AsyncMock()
+    s.execute.return_value = MagicMock(fetchall=lambda: [])
+    resp = await dr.dr_loss_stats(session=s)
+    data = json.loads(resp.body)["data"]
+    assert data["by_segment_month"] == []
+    assert data["unclosed"] == []
