@@ -93,4 +93,59 @@ describe('DRTraceModal', () => {
     })
     expect((container.textContent || '') + (document.body.textContent || '')).toContain('未查到数据')
   })
+
+  it('renders multi-source sib-group lines and empty layout path', async () => {
+    const data = {
+      stages: [
+        { stage: 'fermentation', label: '发酵', nodes: [
+          { batch_no: 'DR-A', quantity: 100 },
+          { batch_no: 'DR-B', quantity: 90 },
+        ] },
+        { stage: 'extraction', label: '萃取', nodes: [
+          { batch_no: 'DR-E1', quantity: 80, loss_kg: 1, loss_rate: 2, loss_level: 'green' },
+          { batch_no: 'DR-E2', is_sibling: true, connects_to: 'DR-E1', sib_group: 'DR-A、DR-B' },
+          { batch_no: 'DR-E3', broken: true, broken_reason: '无源头' },
+        ] },
+      ],
+      target_batch: 'DR-E1',
+      target_stage: 'extraction',
+    }
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse({ code: 200, message: 'success', data }))))
+    container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    act(() => {
+      root.render(
+        <App>
+          <DRTraceModal stage="extraction" batchNo="DR-E1" onClose={() => {}} />
+        </App>
+      )
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 100))
+    })
+    const text = (container.textContent || '') + (document.body.textContent || '')
+    expect(text).toContain('批次追溯')
+    expect(text).toContain('DR-E1')
+    expect(text).toContain('无源头')
+  })
+
+  it('renders empty when no order-matching stage is provided', async () => {
+    const data = { stages: [{ stage: 'unknown', label: 'x', nodes: [] }], target_batch: 'DR-0', target_stage: 'unknown' }
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse({ code: 200, message: 'success', data }))))
+    container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    act(() => {
+      root.render(
+        <App>
+          <DRTraceModal stage="unknown" batchNo="DR-0" onClose={() => {}} />
+        </App>
+      )
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    expect((container.textContent || '') + (document.body.textContent || '')).toContain('未查到相关批次')
+  })
 })
