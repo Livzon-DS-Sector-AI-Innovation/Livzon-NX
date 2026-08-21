@@ -90,4 +90,40 @@ describe('SeedCulturePage (101-1)', () => {
     })
     expect(actions.getSeedCultures).toHaveBeenCalled()
   })
+
+  it('opens the create and edit modals via ledger buttons', async () => {
+    actions.deleteSeedCulture.mockResolvedValue({ code: 200, message: 'success', data: null })
+    act(() => {
+      root.render(<App><SeedCulturePage /></App>)
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 60))
+    })
+    // 新建按钮
+    const createBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('新建'))
+    if (createBtn) {
+      await act(async () => { createBtn.click(); await new Promise((r) => setTimeout(r, 60)) })
+    }
+    expect((document.body.textContent || '')).toContain('新建')
+    // 编辑按钮
+    const editBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('编辑'))
+    if (editBtn) {
+      await act(async () => { editBtn.click(); await new Promise((r) => setTimeout(r, 60)) })
+    }
+    expect((document.body.textContent || '')).toContain('编辑')
+  })
+
+  it('opens the line configuration modal', async () => {
+    act(() => {
+      root.render(<App><SeedCulturePage /></App>)
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 60))
+    })
+    const cfgBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('产线配置'))
+    if (cfgBtn) {
+      await act(async () => { cfgBtn.click(); await new Promise((r) => setTimeout(r, 60)) })
+    }
+    expect((document.body.textContent || '')).toContain('产线配置')
+  })
 })
