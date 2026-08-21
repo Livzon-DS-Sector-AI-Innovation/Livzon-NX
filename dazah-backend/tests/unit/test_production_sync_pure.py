@@ -11,6 +11,8 @@ from datetime import date
 from app.modules.production import dr_lineage_api as dr
 from app.modules.production import fa_ai_analysis_api as faai
 from app.modules.production import fa_dashboard_api as fdash
+from app.modules.production import fa_feishu_scheduler as fascheduler
+from app.modules.production import fa_feishu_sync as fas
 from app.modules.production import mc_feishu_sheets_sync as sync
 from app.modules.production import mc_yield_anomaly_detector as anomaly
 
@@ -190,3 +192,64 @@ def test_fa_ai_parse_json():
     assert faai._parse_json('prefix ```json\n{"ox": 1}\n``` suffix') == {"ox": 1}
     assert faai._parse_json('plain { "a": 1 }') == {"a": 1}
     assert faai._parse_json("no json") == {}
+
+
+# ═══════════ fa_feishu_sync 纯函数 ═══════════
+
+def test_fa_get_column():
+    assert fas._get(["a", " b ", "c"], 1) == "b"
+    assert fas._get(["a"], 5) == ""
+    assert fas._get([], 0) == ""
+
+
+def test_fa_parse_date():
+    assert fas._parse_date("12月27日") == "2025-12-27"
+    assert fas._parse_date("3月05日") == "2026-03-05"
+    assert fas._parse_date("not-a-date") is None
+    assert fas._parse_date("") is None
+
+
+def test_fa_safe_num():
+    assert fas._safe_num(" 12.5 ") == "12.5"
+    assert fas._safe_num("98%") == "98.0"
+    assert fas._safe_num("-") == "NULL"
+    assert fas._safe_num("") == "NULL"
+    assert fas._safe_num("abc") == "NULL"
+
+
+def test_fa_safe_pct():
+    assert fas._safe_pct("0.39") == "'39%'"
+    assert fas._safe_pct("85") == "'85'"
+    assert fas._safe_pct("-") == "NULL"
+    assert fas._safe_pct("0.5") == "'50%'"
+    assert fas._safe_pct("x") == "'x'"
+
+
+# ═══════════ fa_feishu_scheduler 纯辅助函数 ═══════════
+
+def test_fa_scheduler_g_and_pd_ed_n_p():
+    # _g：安全取列
+    assert fascheduler._g(["a", " b ", "c"], 1) == "b"
+    assert fascheduler._g(["a"], 5) == ""
+    # _pd：日期解析（slash/点/中文）
+    assert fascheduler._pd("2026-03-01") == "2026-03-01"
+    assert fascheduler._pd("2026/3/1") == "2026-03-01"
+    assert fascheduler._pd("2026.3.5") == "2026-03-05"
+    assert fascheduler._pd("12月27日") == "2025-12-27"
+    assert fascheduler._pd("2026年3月2日") == "2026-03-02"
+    assert fascheduler._pd("bad") is None
+    # _ed：Excel 日期序列号
+    assert fascheduler._ed("44927") is not None  # 约 2023-01-01
+    assert fascheduler._ed("bad") is None
+    # _n：数值
+    assert fascheduler._n(" 12.5 ") == "12.5"
+    assert fascheduler._n("98%") == "98.0"
+    assert fascheduler._n("-") == "NULL"
+    assert fascheduler._n("#DIV/0!") == "NULL"
+    assert fascheduler._n("") == "NULL"
+    assert fascheduler._n("abc") == "NULL"
+    # _p：百分比
+    assert fascheduler._p("0.39") == "'39%'"
+    assert fascheduler._p("0.85") == "'85%'"
+    assert fascheduler._p("-") == "NULL"
+    assert fascheduler._p("x") == "'x'"
