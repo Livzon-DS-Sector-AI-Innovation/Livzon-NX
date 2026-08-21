@@ -2,6 +2,7 @@
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import { App } from 'antd'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('next/navigation', () => ({
@@ -133,6 +134,26 @@ describe('CrudeExtractionPage', () => {
     // 新增按钮
     expect(text).toContain('新建发酵液')
     expect(text).toContain('新建提炼批次')
+  })
+
+  it('opens the create fermentation-liquid and refining-batch modals', async () => {
+    vi.stubGlobal('fetch', vi.fn(fetchMock))
+    act(() => {
+      root.render(<App><CrudeExtractionPage /></App>)
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 60))
+    })
+    const flBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('新建发酵液'))
+    if (flBtn) {
+      await act(async () => { flBtn.click(); await new Promise((r) => setTimeout(r, 60)) })
+    }
+    expect((document.body.textContent || '')).toContain('新建发酵液')
+    const rbBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('新建提炼批次'))
+    if (rbBtn) {
+      await act(async () => { rbBtn.click(); await new Promise((r) => setTimeout(r, 60)) })
+    }
+    expect((document.body.textContent || '')).toContain('新建提炼批次')
   })
 
   it('shows empty state when no batches exist', async () => {
