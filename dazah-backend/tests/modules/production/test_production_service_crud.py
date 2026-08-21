@@ -7,7 +7,6 @@ from datetime import date
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.production.service import ProductionService
 from app.modules.production.schemas import (
     BatchCreate,
     BatchStatusUpdate,
@@ -15,6 +14,7 @@ from app.modules.production.schemas import (
     ProcessStepCreate,
     ProductionPlanCreate,
 )
+from app.modules.production.service import ProductionService
 
 
 @pytest.mark.anyio
