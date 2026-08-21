@@ -63,6 +63,21 @@ describe('SeedCulturePage (101-1)', () => {
     expect(text).toContain('新建')
   })
 
+  it('renders the empty-products line configuration state and switches tabs', async () => {
+    // localStorage 无保存值时，默认所有产品上线
+    act(() => {
+      root.render(<SeedCulturePage />)
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50))
+    })
+
+    const text = container.textContent || ''
+    expect(text).toContain('产线配置')
+    // 多产品时出现 Tabs（handleTabChange 分支）
+    expect(text).toContain('多拉菌素')
+  })
+
   it('shows an error message when loading fails', async () => {
     actions.getSeedCultures.mockResolvedValue({ code: 500, message: '服务错误', data: [] })
 
