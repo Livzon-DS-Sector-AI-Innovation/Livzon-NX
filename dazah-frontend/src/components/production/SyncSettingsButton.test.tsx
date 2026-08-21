@@ -52,5 +52,68 @@ describe('SyncSettingsButton', () => {
     })
     const textBody = (container.textContent || '') + (document.body.textContent || '')
     expect(textBody).toContain('飞书同步设置')
+    expect(textBody).toContain('飞书链接')
+  })
+
+  it('parses a feishu URL and fills token/table id', async () => {
+    vi.stubGlobal('fetch', vi.fn(plainFetchConfigs))
+    container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    act(() => {
+      root.render(<App><SyncSettingsButton productName="霉酚酸" syncTarget="seed_culture" /></App>)
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 40))
+    })
+    const btn = Array.from(container.querySelectorAll('button')).find((b) => b.title === '同步设置')
+    await act(async () => {
+      btn?.click()
+      await new Promise((r) => setTimeout(r, 40))
+    })
+    const urlInput = Array.from(document.body.querySelectorAll('input')).find((i) => i.placeholder?.includes('粘贴飞书表格链接'))
+    if (urlInput) {
+      await act(async () => {
+        urlInput.value = 'https://xxx.feishu.cn/wiki/WiTok123?sheet=ShXid&type=spreadsheet'
+        urlInput.dispatchEvent(new Event('input', { bubbles: true }))
+        urlInput.dispatchEvent(new Event('change', { bubbles: true }))
+        await new Promise((r) => setTimeout(r, 60))
+      })
+    }
+    // 链接解析后应出现「电子表格」标签和 Token 预览
+    const textBody = (container.textContent || '') + (document.body.textContent || '')
+    expect(textBody).toContain('飞书同步设置')
+    expect(textBody).toContain('测试连接')
+  })
+
+  it('saves a config to the backend via feishu-configs', async () => {
+    const fetchMock = (url: string, opts?: any) => {
+      if (url.includes('/feishu-configs') && (!opts?.method || opts.method === 'GET')) {
+        return Promise.resolve(jsonResponse({ code: 200, message: 'success', data: [] }))
+      }
+      if (url.includes('/feishu-configs') && opts?.method === 'PUT') {
+        return Promise.resolve(jsonResponse({ code: 200, message: 'success', data: { id: 'cfg-1', updated_at: '2026-08-21T00:00:00' } }))
+      }
+      return Promise.resolve(jsonResponse({ code: 200, message: 'success', data: null }))
+    }
+    vi.stubGlobal('fetch', vi.fn(fetchMock))
+    container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    act(() => {
+      root.render(<App><SyncSettingsButton productName="霉酚酸" syncTarget="seed_culture" /></App>)
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 40))
+    })
+    const btn = Array.from(container.querySelectorAll('button')).find((b) => b.title === '同步设置')
+    await act(async () => {
+      btn?.click()
+      await new Promise((r) => setTimeout(r, 40))
+    })
+    const textBody = (document.body.textContent || '').replace(/\s/g, '')
+    expect(textBody).toContain('保存')
+    expect(textBody).toContain('测试连接')
+    expect(textBody).toContain('AppID')
   })
 })

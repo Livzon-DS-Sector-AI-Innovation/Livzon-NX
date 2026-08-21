@@ -110,5 +110,6 @@ describe('FermentationPage', () => {
       await act(async () => { btn.click(); await new Promise((r) => setTimeout(r, 50)) })
     }
     expect(container.textContent || '').toContain('发酵记录')
+    expect(actions.getFermentationRecords).toHaveBeenCalled()
   })
 })
