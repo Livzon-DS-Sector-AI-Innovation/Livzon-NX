@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from datetime import date
 
+import pytest
+
 from app.modules.production import ai_analysis_api as ai_api
 from app.modules.production import dr_lineage_api as dr
 from app.modules.production import fa_ai_analysis_api as faai
@@ -284,3 +286,89 @@ def test_ai_api_build_prompt_includes_labels():
     )
     assert isinstance(prompt, str)
     assert prompt  # 非空
+
+
+# ═══════════ fa_chat_api 纯函数 ═══════════
+
+
+def test_fa_chat_build_prompt_injects_context():
+    from app.modules.production import fa_chat_api as fchat
+
+    msgs = fchat._build_chat_prompt(
+        history=[
+            {"role": "user", "summary": "previous", "llm_response": None},
+            {"role": "assistant", "summary": None, "llm_response": "assistant-reply"},
+        ],
+        user_msg="当前问题",
+        batch_no="FA-1",
+        stage="acidification",
+        trace_context="批次追溯内容",
+    )
+    roles = [m["role"] for m in msgs]
+    assert roles == ["system", "user", "assistant", "user"]
+    any_fa = any("当前关注批次: FA-1" in m["content"] for m in msgs if m["role"] == "system")  # noqa: E501
+    assert any_fa
+    assert msgs[-1]["content"] == "当前问题"
+
+
+def test_fa_chat_build_prompt_empty_context():
+    from app.modules.production import fa_chat_api as fchat
+    msgs = fchat._build_chat_prompt(
+        history=[], user_msg="hi", batch_no="", stage="x", trace_context=""
+    )
+    # 无批次上下文 → 不注入批次行；历史为空 → 直接 append 用户消息
+    assert [m["role"] for m in msgs] == ["system", "user"]
+    assert msgs[-1]["content"] == "hi"
+
+
+@pytest.mark.anyio
+async def test_fa_chat_gather_context_branch_queries():
+    """覆盖 _gather_fa_context 的追溯 BFS、收率/产量查询、统计分支。"""
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from app.modules.production import fa_chat_api as f
+
+    session = AsyncMock()
+
+    async def branch(sql, params=None):
+        s = str(sql)
+        r = MagicMock()
+        if "downstream_batch = :batch AND bl.downstream_type = :stage" in s:
+            r.fetchall.return_value = [
+                SimpleNamespace(upstream_type="acidification", upstream_batch="FA-A", quantity=2.0),  # noqa: E501
+                SimpleNamespace(upstream_type="fermentation", upstream_batch="FA-F", quantity=None),  # noqa: E501
+            ]
+        elif "upstream_batch = :batch AND bl.upstream_type = :stage" in s:
+            r.fetchall.return_value = [
+                SimpleNamespace(downstream_type="decolor1", downstream_batch="FA-D", quantity=5.0),  # noqa: E501
+            ]
+        elif '"批收率"' in s and "fa_acidification_records" in s and "agg" not in s:
+            r.fetchone.return_value = ("88.5",)
+        elif '"收率"' in s and "fa_decolor_centrifuge_records" in s and "WHERE" in s:
+            r.fetchone.return_value = ("0.95",)
+        elif '"汇总总量_kg"' in s:
+            r.fetchone.return_value = ("100",)
+        elif "REGEXP_REPLACE" in s and "fa_acidification_records" in s:
+            r.fetchone.return_value = (10, 20, 30, 40, 50)
+        elif "fa_decolor_centrifuge_records WHERE" in s:
+            r.fetchone.return_value = (11, 22, 33, 44, 55)
+        elif "电导_uscm" in s:
+            r.fetchone.return_value = (80, 82)
+        else:
+            r.fetchone.return_value = None
+            r.fetchall.return_value = []
+        return r
+
+    session.execute.side_effect = branch
+    with patch(
+        "app.modules.production.fa_ai_analysis_api._get_trace_data",
+        new=AsyncMock(return_value=("批次数据文本", {})),
+    ):
+        ctx = await f._gather_fa_context("FA-F", "fermentation", session)
+    assert "批次追溯链路" in ctx
+    # 收率/统计块本身被 try/except 包裹，若 SQL 匹配不足则不出现；
+    # 但批号级收率（酸化 88.5%）应在追溯链路内渲染。
+    assert "FA-A" in ctx
+    assert "批次详细生产数据" in ctx
+    assert "批次数据文本" in ctx
