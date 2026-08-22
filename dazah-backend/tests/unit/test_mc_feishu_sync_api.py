@@ -86,3 +86,35 @@ async def test_mc_sync_scheduler_double_start():
     assert mcsync._mc_sync_scheduler is not None
     mcsync.stop_mc_sync_scheduler()
     assert mcsync._mc_sync_scheduler is None
+
+
+# ═══════════ mc_feishu_sheets_sync _sync_lineage ═══════════
+
+
+@pytest.mark.anyio
+async def test_sync_lineage_all_segments():
+    """6 段血链表 INSERT 全部执·行并累计 rowcount。"""
+    from unittest.mock import MagicMock
+
+    from app.modules.production import mc_feishu_sheets_sync as mcsync
+
+    s = AsyncMock()
+    result = MagicMock(rowcount=2)
+    s.execute.return_value = result
+    count = await mcsync._sync_lineage(session=s)
+    assert count == 14  # 7 条 SQL 段 × 各插入 2 行
+    assert s.execute.call_count == 7
+
+
+@pytest.mark.anyio
+async def test_sync_lineage_zero_rows():
+    """无插入 → 返回 0。"""
+    from unittest.mock import MagicMock
+
+    from app.modules.production import mc_feishu_sheets_sync as mcsync
+
+    s = AsyncMock()
+    result = MagicMock(rowcount=0)
+    s.execute = AsyncMock(return_value=result)
+    count = await mcsync._sync_lineage(session=s)
+    assert count == 0
