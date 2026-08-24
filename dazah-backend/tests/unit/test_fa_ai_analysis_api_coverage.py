@@ -263,7 +263,10 @@ async def test_stream_success():
 async def test_stream_no_batch_error_path():
     """批次数据为空 → error 事件并结束，不调用 LLM。"""
     s = _session()
-    with patch.object(api, "_get_trace_data", AsyncMock(return_value=("", ""))):
+    with (
+        patch.object(api, "_get_trace_data", AsyncMock(return_value=("", ""))),
+        patch.object(api, "get_config", AsyncMock(return_value=None)),
+    ):
         resp = await api.fa_ai_analysis_stream(batch_no="NOPE", stage="fermentation", session=s)  # noqa: E501
         text = await _body_text(resp)
     assert "未找到批次数据" in text
