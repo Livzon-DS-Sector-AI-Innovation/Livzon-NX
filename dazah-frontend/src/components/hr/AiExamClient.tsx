@@ -76,7 +76,7 @@ export default function AiExamClient() {
         setTrueFalseQuestions(res.data.true_false_questions)
       }
       message.success('试卷题目生成成功')
-    } catch (err: any) {
+    } catch (err) {
       message.error(err.message || '出题失败')
     } finally {
       setGenerating(false)
@@ -118,7 +118,7 @@ export default function AiExamClient() {
       document.body.removeChild(link)
       window.URL.revokeObjectURL(url)
       message.success('试卷导出成功')
-    } catch (err: any) {
+    } catch (err) {
       message.error(err.message || '导出失败')
     } finally {
       setExporting(false)

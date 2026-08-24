@@ -51,7 +51,7 @@ export default function AnnualPlanDetailClient({
     try {
       const res = await fetchPlanItems(planId)
       setItems(res.data || [])
-    } catch (err: any) {
+    } catch (err) {
       message.error('加载明细失败: ' + (err.message || '未知错误'))
     } finally {
       setLoading(false)
@@ -78,7 +78,7 @@ export default function AnnualPlanDetailClient({
       document.body.removeChild(a)
       window.URL.revokeObjectURL(url)
       message.success('导出成功')
-    } catch (err: any) {
+    } catch (err) {
       message.error(err.message || '导出失败')
     }
   }
@@ -146,7 +146,7 @@ export default function AnnualPlanDetailClient({
       setEditingId(null)
       setEditForm({})
       await loadItems()
-    } catch (err: any) {
+    } catch (err) {
       message.error(err.message || '保存失败')
     } finally {
       setSaving(false)

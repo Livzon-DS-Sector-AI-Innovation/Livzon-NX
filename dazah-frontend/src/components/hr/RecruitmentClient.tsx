@@ -49,7 +49,7 @@ export default function RecruitmentClient({
         page_size: pageSize })
       setCandidates(res.data)
       setTotal(res.meta?.total || 0)
-    } catch (err: any) {
+    } catch (err) {
       message.error(err.message || '加载数据失败')
     } finally {
       setLoading(false)
@@ -67,7 +67,7 @@ export default function RecruitmentClient({
       const res = await syncCandidatesFromFeishuAction()
       message.success(res.message)
       loadData()
-    } catch (err: any) {
+    } catch (err) {
       message.error(err.message || '同步失败')
     } finally {
       setSyncing(false)
@@ -79,7 +79,7 @@ export default function RecruitmentClient({
       await deleteCandidateAction(id)
       message.success('删除成功')
       loadData()
-    } catch (err: any) {
+    } catch (err) {
       message.error(err.message || '删除失败')
     }
   }

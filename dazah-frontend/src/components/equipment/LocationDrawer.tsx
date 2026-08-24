@@ -49,7 +49,7 @@ export function LocationDrawer({ onRefresh }: { onRefresh?: () => void }) {
       }
       closeLocationDrawer()
       onRefresh?.()
-    } catch (err: any) {
+    } catch (err) {
       // Ant Design validation errors have an errorFields property
       if (err?.errorFields) return
       message.error('操作失败')

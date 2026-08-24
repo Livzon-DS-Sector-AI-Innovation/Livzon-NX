@@ -41,7 +41,7 @@ export default function ReferenceStandardClient({
       })
       setRecords(res.data)
       setTotal(res.meta?.total || 0)
-    } catch (err: any) {
+    } catch (err) {
       message.error(err.message || '加载数据失败')
     } finally {
       setLoading(false)
@@ -91,7 +91,7 @@ export default function ReferenceStandardClient({
         setParsedInfo('COA解析完成，但未提取到关键信息，请手动填写')
         message.warning('COA解析完成，但未提取到关键信息，请手动填写')
       }
-    } catch (err: any) {
+    } catch (err) {
       message.error(err.message || 'COA解析失败')
       setParsedInfo('COA解析失败，请手动填写')
     } finally {
@@ -141,7 +141,7 @@ export default function ReferenceStandardClient({
       } else {
         message.error(result.message)
       }
-    } catch (err: any) {
+    } catch (err) {
       message.error(err.message || '生成失败')
     } finally {
       setGenerating(false)
@@ -153,7 +153,7 @@ export default function ReferenceStandardClient({
       await deleteReferenceStandardAction(id)
       message.success('删除成功')
       loadData()
-    } catch (err: any) {
+    } catch (err) {
       message.error(err.message || '删除失败')
     }
   }

@@ -42,7 +42,7 @@ export default function DepartmentClient({
         page_size: pageSize })
       setDepartments(res.data)
       setTotal(res.meta?.total || 0)
-    } catch (err: any) {
+    } catch (err) {
       message.error(err.message || '加载数据失败')
     } finally {
       setLoading(false)
@@ -77,7 +77,7 @@ export default function DepartmentClient({
       await deleteDepartment(id)
       message.success('删除成功')
       loadData()
-    } catch (err: any) {
+    } catch (err) {
       message.error(err.message || '删除失败')
     }
   }

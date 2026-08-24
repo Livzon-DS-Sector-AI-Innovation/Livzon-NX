@@ -57,7 +57,7 @@ export function CreateDeviation() {
       })
       message.success('飞书台账已创建')
       router.push('/quality/deviations/ledger')
-    } catch (error: any) {
+    } catch (error) {
       message.error(error?.message || '创建失败')
     }
   }

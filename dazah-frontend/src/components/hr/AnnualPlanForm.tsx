@@ -20,7 +20,7 @@ export default function AnnualPlanForm() {
     setLoading(true)
     fetchDepartments({ page_size: 200 })
       .then((res) => {
-        const names = (res.data || []).map((d: any) => d.name)
+        const names = (res.data || []).map((d) => d.name)
         setDepartments(names)
       })
       .catch(() => {
@@ -44,7 +44,7 @@ export default function AnnualPlanForm() {
       } else {
         router.push('/hr/training/annual-plan')
       }
-    } catch (err: any) {
+    } catch (err) {
       message.error(err.message || '创建失败')
     } finally {
       setSubmitting(false)

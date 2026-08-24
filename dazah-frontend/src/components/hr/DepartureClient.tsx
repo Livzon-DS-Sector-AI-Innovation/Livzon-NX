@@ -47,7 +47,7 @@ export default function DepartureClient({
         page_size: pageSize })
       setRecords(res.data)
       setTotal(res.meta?.total || 0)
-    } catch (err: any) {
+    } catch (err) {
       message.error(err.message || '加载数据失败')
     } finally {
       setLoading(false)
@@ -65,7 +65,7 @@ export default function DepartureClient({
       const res = await syncDepartureFromFeishu()
       message.success(res.message)
       loadData()
-    } catch (err: any) {
+    } catch (err) {
       message.error(err.message || '同步失败')
     } finally {
       setSyncing(false)

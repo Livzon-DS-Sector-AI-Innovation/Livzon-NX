@@ -80,7 +80,7 @@ export function ChangeImportDrawer({ isOpen, onClose, onSuccess }: ChangeImportD
       const formData = new FormData()
       formData.append("file", file)
       setPreview(await previewChangeImport(formData))
-    } catch (err: any) {
+    } catch (err) {
       setErrorMsg(err.message || "预览失败")
     } finally {
       setPreviewing(false)
@@ -110,7 +110,7 @@ export function ChangeImportDrawer({ isOpen, onClose, onSuccess }: ChangeImportD
         handleClose()
         onSuccess()
       }, 1500)
-    } catch (err: any) {
+    } catch (err) {
       setErrorMsg(err.message || "导入失败")
     } finally {
       setImporting(false)
@@ -129,7 +129,7 @@ export function ChangeImportDrawer({ isOpen, onClose, onSuccess }: ChangeImportD
       a.download = "变更管理台账_模板.docx"
       a.click()
       URL.revokeObjectURL(url)
-    } catch (err: any) {
+    } catch (err) {
       setErrorMsg(err.message || "下载模板失败")
     }
   }

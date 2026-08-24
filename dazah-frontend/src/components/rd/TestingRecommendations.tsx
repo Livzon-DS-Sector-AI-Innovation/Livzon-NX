@@ -79,7 +79,7 @@ export function TestingRecommendations({ solvents }: TestingRecommendationsProps
       dataIndex: 'limit_ppm',
       key: 'limit_ppm',
       width: 100,
-      render: (val: any) => {
+      render: (val: number | string | null | undefined) => {
         if (val == null) return '-'
         return typeof val === 'number' ? val.toFixed(0) : val
       },

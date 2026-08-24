@@ -197,7 +197,7 @@ export function BayesianOptimizationPage() {
       }
       
       message.success(`优化完成，共 ${rows.length} 条结果`)
-    } catch (error: any) {
+    } catch (error) {
       console.error('Optimization error:', error)
       message.error(error.message || '优化失败')
     } finally {
@@ -328,7 +328,7 @@ export function BayesianOptimizationPage() {
           message.success(`反应范围已生成，共 ${result.row_count} 个实验组合`)
         }
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Generate scope error:', error)
       message.error(error.message || '生成反应范围失败')
     } finally {

@@ -86,7 +86,7 @@ export default function TrainingNotificationClient() {
 
   useEffect(() => {
     fetchDepartments({ page_size: 100 }).then((res) => {
-      const list = (res.data || []).map((d: any) => ({ value: d.name, label: d.name }))
+      const list = (res.data || []).map((d) => ({ value: d.name, label: d.name }))
       setDepartments(list)
     })
   }, [])
@@ -103,7 +103,7 @@ export default function TrainingNotificationClient() {
     for (const dept of depts) {
       try {
         const res = await fetchEmployees({ department: dept, page_size: 100 })
-        const list = (res.data || []).map((e: any) => ({
+        const list = (res.data || []).map((e) => ({
           value: e.name,
           label: `${e.name} (${e.employee_number || ''})`
         }))
@@ -152,7 +152,7 @@ export default function TrainingNotificationClient() {
       }
       await generateTrainingNotification(payload)
       message.success('培训通知已生成')
-    } catch (err: any) {
+    } catch (err) {
       message.error(err.message || '生成失败')
     } finally {
       setSubmittingWord(false)
@@ -183,7 +183,7 @@ export default function TrainingNotificationClient() {
       }
       await generateTrainingSignInSheet(payload)
       message.success('培训签到表已生成')
-    } catch (err: any) {
+    } catch (err) {
       message.error(err.message || '生成失败')
     } finally {
       setSubmittingExcel(false)
@@ -214,7 +214,7 @@ export default function TrainingNotificationClient() {
       }
       await generateTrainingEvaluation(payload)
       message.success('培训效果评估表已生成')
-    } catch (err: any) {
+    } catch (err) {
       message.error(err.message || '生成失败')
     } finally {
       setSubmittingEval(false)
@@ -331,7 +331,7 @@ export default function TrainingNotificationClient() {
               }
             })
           }
-        } catch (err: any) {
+        } catch (err) {
           message.error(err.message || '添加到培训台账失败')
         } finally {
           setAddingToLedger(false)
@@ -394,7 +394,7 @@ export default function TrainingNotificationClient() {
           }
           const res = await sendTrainingNotification(payload)
           message.success(res.message)
-        } catch (err: any) {
+        } catch (err) {
           message.error(err.message || '添加失败')
         } finally {
           setSendingNotify(false)

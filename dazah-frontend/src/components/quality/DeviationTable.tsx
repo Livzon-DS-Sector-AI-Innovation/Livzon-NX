@@ -129,7 +129,7 @@ export function DeviationTable({ loading = false, onRefresh }: DeviationTablePro
           await deleteFeishuDeviationLedgerRecord(record.record_id)
           message.success('飞书台账已删除')
           onRefresh?.()
-        } catch (error: any) {
+        } catch (error) {
           message.error(error?.message || '删除失败')
         }
       },

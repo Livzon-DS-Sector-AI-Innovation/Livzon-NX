@@ -232,7 +232,7 @@ export function CapaPlanTrackPage() {
           await deleteFeishuCapaPlanTrack(record.record_id)
           message.success('删除成功')
           await loadData()
-        } catch (error: any) {
+        } catch (error) {
           message.error(error?.message || '删除失败')
         }
       },

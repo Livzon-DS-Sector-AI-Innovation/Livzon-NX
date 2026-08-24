@@ -110,7 +110,7 @@ export function StepGroupCard({ steps }: StepGroupCardProps) {
       dataIndex: 'pde',
       key: 'pde',
       width: 110,
-      render: (val: any) => {
+      render: (val: number | string | null | undefined) => {
         if (val == null) return '-'
         if (typeof val === 'number') return val.toFixed(1)
         return val

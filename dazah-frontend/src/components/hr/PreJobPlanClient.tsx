@@ -50,7 +50,7 @@ export default function PreJobPlanClient() {
     try {
       await fetchPrejobTrainingPlan(selectedEmployee.id, selectedEmployee.name)
       message.success('岗前培训计划已导出')
-    } catch (err: any) {
+    } catch (err) {
       message.error(err.message || '导出失败')
     } finally {
       setDownloading(false)

@@ -78,12 +78,12 @@ export async function streamChat(
     }
 
     onDone()
-  } catch (err: any) {
+  } catch (err) {
     onError(err instanceof Error ? err : new Error(String(err)))
   }
 }
 
-export async function generateExamQuestions(data: any): Promise<any> {
+export async function generateExamQuestions(data: unknown): Promise<any> {
   const res = await fetch('/api/v1/ai/exam/generate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -94,7 +94,7 @@ export async function generateExamQuestions(data: any): Promise<any> {
   return json.data
 }
 
-export async function exportExam(data: any): Promise<any> {
+export async function exportExam(data: unknown): Promise<any> {
   const res = await fetch(`/api/v1/ai/exam/export`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

@@ -46,7 +46,7 @@ export default function ProductClient({ initialProducts, initialTotal }: Product
       })
       setProducts(res.data)
       setTotal(res.meta?.total || 0)
-    } catch (err: any) {
+    } catch (err) {
       message.error(err.message || '加载数据失败')
     } finally {
       setLoading(false)
@@ -55,7 +55,7 @@ export default function ProductClient({ initialProducts, initialTotal }: Product
 
   useEffect(() => {
     loadData()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [keyword, filterCategory, filterType, page, pageSize, loadData])
 
   const handlePageChange = (newPage: number, newPageSize: number) => {
@@ -69,7 +69,7 @@ export default function ProductClient({ initialProducts, initialTotal }: Product
       const res = await syncProductsFromFeishu()
       message.success(res.message)
       loadData()
-    } catch (err: any) {
+    } catch (err) {
       message.error(err.message || '同步失败')
     } finally {
       setSyncing(false)
@@ -110,7 +110,7 @@ export default function ProductClient({ initialProducts, initialTotal }: Product
       }
       setModalOpen(false)
       loadData()
-    } catch (err: any) {
+    } catch (err) {
       if (err.errorFields) return
       message.error(err.message || '操作失败')
     } finally {

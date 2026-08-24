@@ -195,7 +195,7 @@ export function LocationTree({ locations, onRefresh }: LocationTreeProps) {
       await deleteLocation(node.id)
       message.success('删除位置成功')
       onRefresh?.()
-    } catch (error: any) {
+    } catch (error) {
       message.error(error?.message || '删除位置失败')
     }
   }

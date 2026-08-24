@@ -28,7 +28,7 @@ export default function SignInSheetClient() {
 
   useEffect(() => {
     fetchDepartments({ page_size: 100 }).then((res) => {
-      const list = (res.data || []).map((d: any) => ({ value: d.name, label: d.name }))
+      const list = (res.data || []).map((d) => ({ value: d.name, label: d.name }))
       setDepartments(list)
     })
     setLoading(true)
@@ -80,7 +80,7 @@ export default function SignInSheetClient() {
       }
       await generateTrainingSignInSheet(payload)
       message.success('培训签到表已生成')
-    } catch (err: any) {
+    } catch (err) {
       message.error(err.message || '生成失败')
     } finally {
       setSubmitting(false)

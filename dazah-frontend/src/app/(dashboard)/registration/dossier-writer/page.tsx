@@ -67,7 +67,7 @@ export default function DossierWriterListPage() {
       setCurrentDossier(dossier)
       setUploadModalOpen(true)
       loadDossiers()
-    } catch (err: any) {
+    } catch (err) {
       const msg = err?.message || err?.detail || '创建失败'
       message.error(msg)
     } finally {
@@ -93,7 +93,7 @@ export default function DossierWriterListPage() {
       
       setUploadModalOpen(false)
       loadDossiers()
-    } catch (err: any) {
+    } catch (err) {
       const msg = err?.message || err?.detail || '上传失败'
       message.error(msg)
     }
@@ -128,7 +128,7 @@ export default function DossierWriterListPage() {
         message.error(result.message || result.error || '解析失败')
       }
       loadDossiers()
-    } catch (err: any) {
+    } catch (err) {
       const msg = err?.message || err?.detail || '解析失败'
       message.error(msg)
     } finally {

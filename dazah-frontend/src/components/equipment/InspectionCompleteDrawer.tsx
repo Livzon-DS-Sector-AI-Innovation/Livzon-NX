@@ -55,7 +55,7 @@ export function InspectionCompleteDrawer({ onRefresh }: InspectionCompleteDrawer
       message.success('巡检完成')
       closeInspectionCompleteDrawer()
       onRefresh?.()
-    } catch (error: any) {
+    } catch (error) {
       if (error?.message) message.error(error.message)
     }
   }

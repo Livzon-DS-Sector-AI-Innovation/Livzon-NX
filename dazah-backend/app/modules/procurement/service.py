@@ -1362,21 +1362,17 @@ def _count_current_round_approvals(
     *,
     approval_role: PurchaseApprovalRole,
 ) -> int:
-    rejected_times = [
-        approval.approval_time
-        for approval in approvals
-        if approval.result == PurchaseApprovalResult.rejected.value
-    ]
-    latest_rejection = max(rejected_times) if rejected_times else None
-    return sum(
-        approval.approval_role == approval_role.value
-        and approval.result == PurchaseApprovalResult.approved.value
-        and (
-            latest_rejection is None
-            or approval.approval_time > latest_rejection
-        )
-        for approval in approvals
-    )
+    """统计最近一次驳回后同角色已批准的人数（基于记录顺序，避免同一时刻时间戳歧义）。"""
+    count = 0
+    for approval in reversed(approvals):
+        if approval.result == PurchaseApprovalResult.rejected.value:
+            break
+        if (
+            approval.approval_role == approval_role.value
+            and approval.result == PurchaseApprovalResult.approved.value
+        ):
+            count += 1
+    return count
 
 
 def _build_purchase_request_items(

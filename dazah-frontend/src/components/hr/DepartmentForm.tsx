@@ -43,7 +43,7 @@ export default function DepartmentForm({ open, department, onClose, onSuccess }:
       form.resetFields()
       onSuccess()
       onClose()
-    } catch (err: any) {
+    } catch (err) {
       message.error(err.message || '操作失败')
     }
   }

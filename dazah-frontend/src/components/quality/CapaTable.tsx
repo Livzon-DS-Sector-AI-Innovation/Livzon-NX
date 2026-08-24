@@ -141,7 +141,7 @@ export function CapaTable({ loading = false, onRefresh }: CapaTableProps) {
           await deleteFeishuCapa(record.record_id)
           message.success('删除成功')
           onRefresh?.()
-        } catch (error: any) {
+        } catch (error) {
           message.error(error?.message || '删除失败')
         }
       },
@@ -186,7 +186,7 @@ export function CapaTable({ loading = false, onRefresh }: CapaTableProps) {
       message.success('CAPA更新成功')
       setEditOpen(false)
       onRefresh?.()
-    } catch (error: any) {
+    } catch (error) {
       message.error(error?.message || '更新CAPA失败')
     } finally {
       setSaving(false)

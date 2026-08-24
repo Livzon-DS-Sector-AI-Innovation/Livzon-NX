@@ -106,7 +106,7 @@ export interface CpvImportPreview {
   error_rows: Array<{
     row_number: number
     error_message: string
-    row_data: Record<string, any>
+    row_data: Record<string, unknown>
   }>
   matched_parameters: string[]
   unmatched_columns: string[]

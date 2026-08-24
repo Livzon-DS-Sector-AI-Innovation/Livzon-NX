@@ -43,6 +43,7 @@ export default function ManualInputPage() {
   const [addForm] = Form.useForm()
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/immutability
     loadPoints()
   }, [area])
 

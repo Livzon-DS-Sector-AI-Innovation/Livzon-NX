@@ -12,7 +12,7 @@ from app.platform.integrations.feishu import read_mirror
 from app.platform.integrations.feishu.read_mirror import (
     ModuleFeishuReadMirrorService,
 )
-from app.platform.integrations.feishu.read_scheduler import PRODUCTION_MODELS
+from app.platform.integrations.feishu.read_scheduler import QUALITY_MODELS
 
 
 def _session(**overrides):
@@ -32,10 +32,10 @@ def _session(**overrides):
 def _service(session=None, *, app_id="app", app_secret="secret"):
     return ModuleFeishuReadMirrorService(
         session or _session(),
-        module_code="production",
+        module_code="quality",
         app_id=app_id,
         app_secret=app_secret,
-        models=PRODUCTION_MODELS,
+        models=QUALITY_MODELS,
     )
 
 
@@ -267,11 +267,7 @@ async def test_locked_sync_paginates_deduplicates_and_commits(
     monkeypatch.setattr(
         service,
         "_replace_fields",
-        AsyncMock(
-            return_value=[
-                SimpleNamespace(field_id="field", field_name="名称")
-            ]
-        ),
+        AsyncMock(return_value=[SimpleNamespace(field_id="field", field_name="名称")]),
     )
 
     result = await service._sync_resource_locked(resource.id)
@@ -404,9 +400,7 @@ async def test_page_data_and_empty_page_records(monkeypatch) -> None:
         "_binding_payload",
         AsyncMock(return_value={"id": str(binding.id)}),
     )
-    assert (await service.page_data("page"))["bindings"] == [
-        {"id": str(binding.id)}
-    ]
+    assert (await service.page_data("page"))["bindings"] == [{"id": str(binding.id)}]
 
     monkeypatch.setattr(
         service,
@@ -544,15 +538,18 @@ def test_read_mirror_helpers_cover_nested_attachments_and_bad_values() -> None:
         "target",
     )
     assert not service._contains_attachment_token("target", "target")
-    assert service._field_payload(
-        SimpleNamespace(
-            field_id="field",
-            field_name="名称",
-            field_type="invalid",
-            property={},
-            sort_order=1,
-        )
-    )["type"] is None
+    assert (
+        service._field_payload(
+            SimpleNamespace(
+                field_id="field",
+                field_name="名称",
+                field_type="invalid",
+                property={},
+                sort_order=1,
+            )
+        )["type"]
+        is None
+    )
     assert service._timestamp(None) is None
     assert service._timestamp(1_767_225_600_000) == datetime(
         2026,

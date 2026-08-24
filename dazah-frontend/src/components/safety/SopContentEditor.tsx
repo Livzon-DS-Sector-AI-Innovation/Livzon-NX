@@ -528,7 +528,7 @@ function parseEmergencyBlocks(md: string): EmergencyBlock[] {
   const lines = md.split('\n')
   let currentBlock: EmergencyBlock | null = null
   let contentLines: string[] = []
-  let preambleLines: string[] = []
+  const preambleLines: string[] = []
   let inPreamble = true
 
   for (const line of lines) {

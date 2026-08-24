@@ -128,7 +128,7 @@ export default function HazardInspectionForm({
     if (initialValues) return // 有草稿数据时不覆盖
     getCurrentUser().then((user) => {
       if (!user) return
-      const patch: Record<string, any> = {}
+      const patch: Record<string, unknown> = {}
       if (user.name && user.id) {
         patch.discovered_by = user.id
         patch.discovered_by_name = user.name
@@ -155,7 +155,7 @@ export default function HazardInspectionForm({
   }, [initialValues])
 
   // 规范化表单值：mode="tags"/"multiple" 字段返回数组，需转为字符串
-  const normalizeValues = (values: any): InspectionFormValues => {
+  const normalizeValues = (values: InspectionFormValues): InspectionFormValues => {
     // 从选中的用户选项中提取纯姓名（去掉 " - 部门" 后缀）
     let discoveredByName = values.discovered_by_name || ''
     if (!discoveredByName && values.discovered_by) {
