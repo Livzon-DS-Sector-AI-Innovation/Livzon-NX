@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -280,3 +280,84 @@ def test_split_feeds_and_feed_stage():
     assert dr._feed_stage("DR-GB-xxx") == "fourth_refinement"
     assert dr._feed_stage("DR-E1") == "recovery"  # unknown prefix → recovery
     assert dr._feed_stage("UNKNOWN") == "recovery"
+
+
+# ═══════════ dr_lineage_api 异步函数（mock session） ═══════════
+
+
+@pytest.mark.anyio
+async def test_stage_exists():
+    """_stage_exists: 查询表是否存在批号。"""
+    from unittest.mock import MagicMock
+
+    from app.modules.production import dr_lineage_api as dr
+
+    # 存在的情况
+    session = AsyncMock()
+    result = MagicMock()
+    result.fetchone.return_value = ("row",)
+    session.execute.return_value = result
+    assert await dr._stage_exists(session, "fermentation", "DR-F1") is True
+
+    # 不存在的情况
+    result2 = MagicMock()
+    result2.fetchone.return_value = None
+    session.execute.return_value = result2
+    assert await dr._stage_exists(session, "fermentation", "DR-UNKNOWN") is False
+
+
+@pytest.mark.anyio
+async def test_resolve_with_stage():
+    """_resolve: 有明确 stage 时直接返回。"""
+    from app.modules.production import dr_lineage_api as dr
+
+    session = AsyncMock()
+    # Mock _stage_exists to return True for fermentation
+    with patch.object(dr, "_stage_exists", new=AsyncMock(return_value=True)):
+        stage, batch = await dr._resolve(session, "fermentation", "DR-F1-xxx")
+        assert stage == "fermentation"
+        assert batch == "DR-F1-xxx"
+
+
+@pytest.mark.anyio
+async def test_resolve_with_detect():
+    """_resolve: 无 stage 时通过前缀检测。"""
+    from app.modules.production import dr_lineage_api as dr
+
+    session = AsyncMock()
+    # Mock _stage_exists to return True for second_refinement
+    with patch.object(dr, "_stage_exists", new=AsyncMock(return_value=True)):
+        stage, batch = await dr._resolve(session, "", "DR-F2-xxx")
+        assert stage == "second_refinement"
+        assert batch == "DR-F2-xxx"
+
+
+@pytest.mark.anyio
+async def test_resolve_fallback_probe():
+    """_resolve: 前缀检测失败时逐表探测。"""
+    from app.modules.production import dr_lineage_api as dr
+
+    session = AsyncMock()
+    # Mock _stage_exists to return False for first two stages, True for third
+    call_count = [0]
+
+    async def mock_stage_exists(session, stage, batch):
+        call_count[0] += 1
+        return call_count[0] >= 3  # 第三次返回 True
+
+    with patch.object(dr, "_stage_exists", new=mock_stage_exists):
+        stage, batch = await dr._resolve(session, "", "DR-26026")
+        assert stage is not None
+        assert batch == "DR-26026"
+
+
+@pytest.mark.anyio
+async def test_resolve_not_found():
+    """_resolve: 所有探测都失败时返回 None。"""
+    from app.modules.production import dr_lineage_api as dr
+
+    session = AsyncMock()
+    with patch.object(dr, "_stage_exists", new=AsyncMock(return_value=False)):
+        stage, batch = await dr._resolve(session, "", "DR-UNKNOWN")
+        assert stage is None
+        assert batch is None
