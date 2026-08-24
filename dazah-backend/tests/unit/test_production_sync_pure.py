@@ -8,9 +8,9 @@ from __future__ import annotations
 
 import json
 from datetime import date
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock
 
 from app.modules.production import ai_analysis_api as ai_api
 from app.modules.production import dr_lineage_api as dr
@@ -691,7 +691,8 @@ async def test_fa_ai_analysis_get_trace_data():
     # Mock 发酵数据查询
     ferment_result = MagicMock()
     ferment_result.fetchone.return_value = (
-        "FA-EX1", "2026-03-01", 500.0, 100.0, 10.0, 50.0, "2.5", "子批1(100kl/50gL/200kg)"
+        "FA-EX1", "2026-03-01", 500.0, 100.0, 10.0, 50.0, "2.5",
+        "子批1(100kl/50gL/200kg)",
     )
 
     # Mock 酸化数据查询
@@ -708,17 +709,17 @@ async def test_fa_ai_analysis_get_trace_data():
     acid_result.fetchall.return_value = [acid_row]
 
     # Mock 脱色数据查询
-    from types import SimpleNamespace as _NS
+    from types import SimpleNamespace
 
     decolor_result = MagicMock()
-    decolor_result.fetchone.return_value = _NS(
+    decolor_result.fetchone.return_value = SimpleNamespace(
         批号="FA-EX1-1", vol=150.0, content=25.0, carbon=5.0,
         after_carbon=20.0, cond1=80.0, cond2=75.0, cond3=70.0,
     )
 
     # Mock 离心数据查询
     centrifuge_result = MagicMock()
-    centrifuge_result.fetchall.return_value = [_NS(
+    centrifuge_result.fetchall.return_value = [SimpleNamespace(
         in_vol=120.0, yield_rate=0.95, before_c=30.0, after_c=25.0, 批号="FA-EX1-1",
     )]
 

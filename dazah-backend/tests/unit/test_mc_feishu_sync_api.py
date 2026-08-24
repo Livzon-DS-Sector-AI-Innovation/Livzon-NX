@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -118,3 +118,50 @@ async def test_sync_lineage_zero_rows():
     s.execute = AsyncMock(return_value=result)
     count = await mcsync._sync_lineage(session=s)
     assert count == 0
+
+
+# ═══════════ mc_feishu_sheets_sync._sync_crude 主路径 ═══════════
+
+
+@pytest.mark.anyio
+async def test_mc_sync_crude_full_path():
+    """覆盖 _sync_crude 的新批次、子罐2、追加步骤等主路径。"""
+    from app.modules.production import mc_feishu_sheets_sync as sync
+
+    rows = [
+        # 新批次子罐1（I列 MC-101-1），J-P 钠化、Q-W 酸化均有值
+        [
+            "2026-03-01", "MC-F-1", "MC-RB-1", "50", "", "", "", "",
+            "MC-101-1", "5", "180", "300", "8.5", "1.2", "90", "10",
+            "100", "30", "250", "12", "7.0", "35", "28", "260", "0.95", "0.90",
+        ],
+        # 子罐2（I列 MC-101-2）
+        [
+            "", "", "", "", "", "", "", "",
+            "MC-101-2", "5", "180", "300", "8.5", "1.2", "90", "10",
+            "100", "30", "250", "12", "7.0", "35", "28", "260", "0.95", "0.90",
+        ],
+        # 追加步骤（I列为空，J-P/Q-W 有数据）
+        [
+            "", "", "", "", "", "", "", "",
+            "", "4", "160", "280", "8.0", "1.0", "85", "9",
+            "90", "28", "240", "11", "6.8", "33", "26", "250", "0.94", "0.88",
+        ],
+        # 月份分隔行 → 跳过
+        ["03月份", ""],
+        # 空行 → 跳过
+        ["", ""],
+    ]
+    session = AsyncMock()
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = None  # 记录不存在 → 创建路径
+    session.execute.return_value = result
+    session.flush = AsyncMock()
+    session.commit = AsyncMock()
+    with patch.object(sync, "_read_sheet_range", new=AsyncMock(return_value=rows)):
+        stats = await sync._sync_crude(session, "tok", "app", "sec")
+    assert stats["created_fl"] >= 1
+    assert stats["created_st"] >= 1
+    assert stats["skipped"] >= 1
+    assert stats["created_sodium"] >= 1
+    assert stats["created_acid"] >= 1

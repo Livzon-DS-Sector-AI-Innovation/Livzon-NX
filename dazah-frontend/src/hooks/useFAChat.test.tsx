@@ -35,18 +35,13 @@ function Harness({ stage, batchNo }: { stage: string; batchNo: string }) {
   return (
     <div>
       <button onClick={() => chat.doAiAnalysis()}>分析</button>
-      <button
-        onClick={() => {
-          chat.setChatInput('追问一下')
-          chat.doChatSend()
-        }}
-      >
-        发送
-      </button>
+      <button onClick={() => chat.doChatSend()}>发送</button>
       <button onClick={() => chat.loadHistory()}>历史</button>
       <button onClick={() => chat.setAiResult({ session_id: 's1' })}>设会话</button>
+      <button onClick={() => chat.setChatInput('追问一下')}>打字</button>
       <span data-testid="ai">{chat.aiResult ? 'has-result' : 'none'}</span>
       <span data-testid="thinking">{chat.thinkingText}</span>
+      <span data-testid="msgs">{chat.chatMessages.map((m) => m.content).join('|')}</span>
       <span data-testid="history">{chat.historyRecords ? chat.historyRecords.length : 0}</span>
     </div>
   )
@@ -187,7 +182,7 @@ describe('useFAChat', () => {
       )
     })
     const btns = container.querySelectorAll('button')
-    // 先设置 session（会触发 doChatSend 的 session_id 分支）
+    // 先设置会话（会触发 doChatSend 的 session_id 分支）
     await act(async () => {
       btns[3].click()
       await new Promise((r) => setTimeout(r, 20))
@@ -221,6 +216,140 @@ describe('useFAChat', () => {
       await new Promise((r) => setTimeout(r, 60))
     })
     // error 事件不设 result，且非 JSON行跳过；ai 仍是 none
+    expect(container.querySelector('[data-testid=ai]')?.textContent).toBe('none')
+  })
+
+  it('doChatSend streams tokens into the assistant bubble after a completed analysis', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: RequestInfo | URL) => {
+        const u = String(url)
+        if (u.includes('/ai-analysis-stream')) {
+          return Promise.resolve(streamResponse([
+            'data: {"type":"step","step":1,"done":false,"msg":"开始分析"}',
+            'data: {"type":"result","severity":"high","summary":"存在风险","session_id":"s2"}',
+            '',
+          ]))
+        }
+        // /chat/send
+        return Promise.resolve(streamResponse(['data: {"token":"回答"}', 'data: {"token":"内容"}', '']))
+      })
+    )
+    container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    act(() => {
+      root.render(
+        <App>
+          <Harness stage="fermentation" batchNo="FA-4" />
+        </App>
+      )
+    })
+    const btns = container.querySelectorAll('button')
+    // 分析（result 事件内部填充 aiResultRef）→ 打字 → 发送
+    await act(async () => {
+      btns[0].click()
+      await new Promise((r) => setTimeout(r, 60))
+    })
+    expect(container.querySelector('[data-testid=ai]')?.textContent).toBe('has-result')
+    await act(async () => {
+      btns[4].click()
+      await new Promise((r) => setTimeout(r, 30))
+    })
+    await act(async () => {
+      btns[1].click()
+      await new Promise((r) => setTimeout(r, 60))
+    })
+    expect(container.querySelector('[data-testid=msgs]')?.textContent).toBe('追问一下|回答内容')
+  })
+
+  it('doChatSend warns when a session is missing even after typing', async () => {
+    const fetchFn = vi.fn(() => Promise.resolve(jsonResponse({ code: 200, data: null })))
+    vi.stubGlobal('fetch', fetchFn)
+    container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    act(() => {
+      root.render(
+        <App>
+          <Harness stage="fermentation" batchNo="FA-8" />
+        </App>
+      )
+    })
+    const btns = container.querySelectorAll('button')
+    await act(async () => {
+      btns[4].click()
+      await new Promise((r) => setTimeout(r, 30))
+    })
+    await act(async () => {
+      btns[1].click()
+      await new Promise((r) => setTimeout(r, 30))
+    })
+    // 有输入但没有会话 → 不发请求、不追加消息
+    expect(fetchFn).not.toHaveBeenCalledWith(
+      expect.stringContaining('/chat/send'),
+      expect.anything(),
+    )
+    expect(container.querySelector('[data-testid=msgs]')?.textContent).toBe('')
+  })
+
+  it('doChatSend marks the assistant message with a retry hint when the stream fails', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: RequestInfo | URL) => {
+        const u = String(url)
+        if (u.includes('/ai-analysis-stream')) {
+          return Promise.resolve(streamResponse([
+            'data: {"type":"result","severity":"medium","summary":"风险","session_id":"s3"}',
+            '',
+          ]))
+        }
+        return Promise.reject(new Error('network down'))
+      })
+    )
+    container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    act(() => {
+      root.render(
+        <App>
+          <Harness stage="fermentation" batchNo="FA-6" />
+        </App>
+      )
+    })
+    const btns = container.querySelectorAll('button')
+    await act(async () => {
+      btns[0].click()
+      await new Promise((r) => setTimeout(r, 60))
+    })
+    await act(async () => {
+      btns[4].click()
+      await new Promise((r) => setTimeout(r, 30))
+    })
+    await act(async () => {
+      btns[1].click()
+      await new Promise((r) => setTimeout(r, 60))
+    })
+    expect(container.querySelector('[data-testid=msgs]')?.textContent).toContain('[网络错误]')
+  })
+
+  it('doAiAnalysis surfaces a generic failure when the stream request rejects', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new Error('boom'))))
+    container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => {
+      root.render(
+        <App>
+          <Harness stage="fermentation" batchNo="FA-7" />
+        </App>
+      )
+    })
+    const btn = container.querySelector('button')!
+    await act(async () => {
+      btn.click()
+      await new Promise((r) => setTimeout(r, 60))
+    })
     expect(container.querySelector('[data-testid=ai]')?.textContent).toBe('none')
   })
 })

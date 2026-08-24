@@ -9,7 +9,15 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn() }),
 }))
 vi.mock('@/components/production/Dashboard', () => ({
-  default: () => <div data-testid="dashboard" />,
+  default: (props: { cards?: Array<{ value?: (first: unknown, rest: unknown) => unknown }>; data?: unknown }) => {
+    // 执行卡片聚合函数，覆盖页面内收率/产量计算逻辑
+    const cards = props.cards || []
+    const data = props.data || []
+    for (const card of cards) {
+      if (typeof card.value === 'function') card.value(null, data)
+    }
+    return <div data-testid="dashboard" />
+  },
 }))
 vi.mock('@/components/production/MCSheetsSyncButton', () => ({
   default: () => <button>同步</button>,
@@ -175,5 +183,174 @@ describe('CrudeExtractionPage', () => {
     })
 
     expect(container.textContent).toContain('暂无分罐数据')
+  })
+
+  // React 监听原生 value setter；直接赋值不会触发 onChange
+  function setNativeValue(input: HTMLInputElement, value: string) {
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set
+    setter?.call(input, value)
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  }
+
+  async function editNumericCell(divValueText: string, nextValue: string) {
+    const cell = Array.from(container.querySelectorAll('div')).find((el) => (el.textContent || '').trim() === divValueText) as HTMLElement | undefined
+    await act(async () => {
+      cell?.click()
+      await new Promise((r) => setTimeout(r, 40))
+    })
+    const numInput = container.querySelector('.ant-input-number input') as HTMLInputElement | undefined
+    await act(async () => {
+      if (numInput) {
+        setNativeValue(numInput, nextValue)
+        numInput.dispatchEvent(new Event('input', { bubbles: true }))
+        numInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, keyCode: 13 }))
+        numInput.dispatchEvent(new FocusEvent('blur', { bubbles: true }))
+        numInput.dispatchEvent(new FocusEvent('focusout', { bubbles: true }))
+      }
+      await new Promise((r) => setTimeout(r, 150))
+    })
+  }
+
+  function crudeRequestsMock() {
+    const requests: Array<{ url: string; init?: RequestInit }> = []
+    const mock = (url: string, init?: RequestInit) => {
+      requests.push({ url, init })
+      if (url.includes('/crude-extract/full-list')) {
+        return Promise.resolve(jsonResponse({ code: 200, message: 'success', data: [FULL_LIST_ITEM] }))
+      }
+      if (url.includes('/crude-extract/fermentation-liquids')) {
+        return Promise.resolve(jsonResponse({ code: 200, message: 'success', data: [{ batch_no: 'MC-101-25202' }] }))
+      }
+      return Promise.resolve(jsonResponse({ code: 200, message: 'success', data: null }))
+    }
+    return { requests, mock }
+  }
+
+  it('edits the acid filter volume cell and PUTs the derived acid product quantity', async () => {
+    const { requests, mock } = crudeRequestsMock()
+    vi.stubGlobal('fetch', vi.fn(mock))
+    act(() => {
+      root.render(<App><CrudeExtractionPage /></App>)
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 60))
+    })
+    await editNumericCell('8', '10')
+    const put = requests.find((r) => r.init?.method === 'PUT' && r.url.includes('/crude-extract/acid-steps/ac-1'))
+    expect(put).toBeDefined()
+    const body = JSON.parse(String(put?.init?.body))
+    expect(body.acid_filter_volume).toBe(10)
+    expect(body.acid_product_qty).toBe(60)
+  })
+
+  it('edits the crude content cell and PUTs the derived crude product quantity', async () => {
+    const { requests, mock } = crudeRequestsMock()
+    vi.stubGlobal('fetch', vi.fn(mock))
+    act(() => {
+      root.render(<App><CrudeExtractionPage /></App>)
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 60))
+    })
+    await editNumericCell('20', '25')
+    const put = requests.find((r) => r.init?.method === 'PUT' && r.url.includes('/crude-extract/sub-tank-records/st-1'))
+    expect(put).toBeDefined()
+    const body = JSON.parse(String(put?.init?.body))
+    expect(body.crude_weight).toBe(25)
+    expect(body.crude_product_qty).toBe(21.375)
+  })
+
+  it('adds a step row by clicking the add-step button', async () => {
+    const requests: Array<{ url: string; init?: RequestInit }> = []
+    const mock = (url: string, init?: RequestInit) => {
+      requests.push({ url, init })
+      if (url.includes('/crude-extract/full-list')) {
+        return Promise.resolve(jsonResponse({ code: 200, message: 'success', data: [FULL_LIST_ITEM] }))
+      }
+      if (url.includes('/crude-extract/fermentation-liquids')) {
+        return Promise.resolve(jsonResponse({ code: 200, message: 'success', data: [{ batch_no: 'MC-101-25202' }] }))
+      }
+      return Promise.resolve(jsonResponse({ code: 200, message: 'success', data: null }))
+    }
+    vi.stubGlobal('fetch', vi.fn(mock))
+    act(() => {
+      root.render(<App><CrudeExtractionPage /></App>)
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 60))
+    })
+    const addBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('+ 步骤'))
+    await act(async () => { addBtn?.click(); await new Promise((r) => setTimeout(r, 120)) })
+    expect(requests.some((r) => r.init?.method === 'POST' && r.url.includes('/crude-extract/sodium-steps'))).toBe(true)
+    expect(requests.some((r) => r.init?.method === 'POST' && r.url.includes('/crude-extract/acid-steps'))).toBe(true)
+  })
+
+  it('warns when the create-refining-batch modal form is incomplete', async () => {
+    const { mock } = crudeRequestsMock()
+    vi.stubGlobal('fetch', vi.fn(mock))
+    act(() => {
+      root.render(<App><CrudeExtractionPage /></App>)
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 60))
+    })
+    const openBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('新建提炼批次'))
+    await act(async () => { openBtn?.click(); await new Promise((r) => setTimeout(r, 60)) })
+    const okBtn = Array.from(document.body.querySelectorAll('.ant-modal button')).find((b) => /^确\s*认$/.test((b.textContent || '').trim())) as HTMLElement | undefined
+    await act(async () => { okBtn?.click(); await new Promise((r) => setTimeout(r, 150)) })
+    expect(document.body.textContent || '').toContain('请检查表单')
+  })
+
+  it('warns when the create-fermentation-liquid modal form is incomplete', async () => {
+    const { mock } = crudeRequestsMock()
+    vi.stubGlobal('fetch', vi.fn(mock))
+    act(() => {
+      root.render(<App><CrudeExtractionPage /></App>)
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 60))
+    })
+    const openBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('新建发酵液'))
+    await act(async () => { openBtn?.click(); await new Promise((r) => setTimeout(r, 60)) })
+    const okBtn = Array.from(document.body.querySelectorAll('.ant-modal button')).find((b) => /^确\s*认$/.test((b.textContent || '').trim())) as HTMLElement | undefined
+    await act(async () => { okBtn?.click(); await new Promise((r) => setTimeout(r, 150)) })
+    expect(document.body.textContent || '').toContain('请检查表单')
+  })
+
+  it('clears a numeric cell value and saves null on blur', async () => {
+    const requests: Array<{ url: string; init?: RequestInit }> = []
+    const mock = (url: string, init?: RequestInit) => {
+      requests.push({ url, init })
+      if (url.includes('/crude-extract/full-list')) {
+        return Promise.resolve(jsonResponse({ code: 200, message: 'success', data: [FULL_LIST_ITEM] }))
+      }
+      if (url.includes('/crude-extract/fermentation-liquids')) {
+        return Promise.resolve(jsonResponse({ code: 200, message: 'success', data: [{ batch_no: 'MC-101-25202' }] }))
+      }
+      return Promise.resolve(jsonResponse({ code: 200, message: 'success', data: null }))
+    }
+    vi.stubGlobal('fetch', vi.fn(mock))
+    act(() => {
+      root.render(<App><CrudeExtractionPage /></App>)
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 60))
+    })
+    const cell = Array.from(container.querySelectorAll('div')).find((el) => (el.textContent || '').trim() === '92') as HTMLElement | undefined
+    await act(async () => { cell?.click(); await new Promise((r) => setTimeout(r, 40)) })
+    const numInput = container.querySelector('.ant-input-number input') as HTMLInputElement | undefined
+    await act(async () => {
+      if (numInput) {
+        setNativeValue(numInput, '')
+        numInput.dispatchEvent(new Event('input', { bubbles: true }))
+        numInput.dispatchEvent(new FocusEvent('blur', { bubbles: true }))
+        numInput.dispatchEvent(new FocusEvent('focusout', { bubbles: true }))
+      }
+      await new Promise((r) => setTimeout(r, 120))
+    })
+    const put = requests.find((r) => r.init?.method === 'PUT' && r.url.includes('/crude-extract/sub-tank-records/st-1'))
+    expect(put).toBeDefined()
+    const body = JSON.parse(String(put?.init?.body))
+    expect(body.yield_rate).toBeNull()
   })
 })

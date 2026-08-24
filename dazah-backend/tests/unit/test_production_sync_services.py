@@ -672,3 +672,56 @@ async def test_dr_sync_scheduler_start_stop():
     assert drsync._dr_sync_scheduler is not None
     drsync.stop_dr_sync_scheduler()
     assert drsync._dr_sync_scheduler is None
+
+
+# ═══════════ dr_*_refinement_sync 纯函数 + 带数据路径 ═══════════
+
+
+@pytest.mark.parametrize("module_name", DR_SYNC_MODULES)
+def test_dr_refinement_sync_pure_functions(module_name: str):
+    """覆盖 _g/_f/_is_empty 纯函数的各类输入。"""
+    module = importlib.import_module(f"app.modules.production.{module_name}")
+    c = getattr(module, "COL", {})
+    if not c:
+        pytest.skip("no COL")
+    first_key = next(iter(c))
+    idx = c[first_key]
+    row = [""] * (idx + 3)
+    row[idx] = "  ABC  "
+    assert module._g(row, first_key) == "ABC"
+    assert module._g([], first_key) == ""
+    if hasattr(module, "_f"):
+        row2 = [""] * (idx + 3)
+        row2[idx] = "12.5"
+        assert module._f(row2, first_key) == 12.5
+        row3 = [""] * (idx + 3)
+        row3[idx] = "-"
+        assert module._f(row3, first_key) is None
+    assert module._is_empty(["", "  ", ""]) is True
+    assert module._is_empty(["x", "", ""]) is False
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("module_name", DR_SYNC_MODULES)
+async def test_dr_refinement_sync_with_data(module_name: str):
+    """带数据同步：命中 DELETE + INSERT 主路径。"""
+    module = importlib.import_module(f"app.modules.production.{module_name}")
+    func = getattr(module, DR_FUNCS[module_name])
+    col = getattr(module, "COL", {})
+    merge_keys = getattr(module, "MERGE_KEYS", [])
+    batch_key = next((k for k in merge_keys if "batch_no" in k), None)
+    col_idx = col.get(batch_key)
+    if col_idx is None:
+        pytest.skip(f"{module_name} 无批号字段")
+    ncols = max(col.values()) + 1
+    row = [""] * ncols
+    row[col_idx] = "DR-BATCH-001"
+    feed_key = next((k for k in col if "feed" in k and "batch" in k), None)
+    if feed_key:
+        row[col[feed_key]] = "DR-FB-001"
+    session = _session()
+    with patch.object(module, "decrypt_secret", return_value="secret"):
+        with patch.object(module, "_get_token", new=AsyncMock(return_value="token")):
+            with patch.object(module, "_read_sheet", new=AsyncMock(return_value=[row])):
+                result = await func(_config(), session)
+    assert isinstance(result, dict)

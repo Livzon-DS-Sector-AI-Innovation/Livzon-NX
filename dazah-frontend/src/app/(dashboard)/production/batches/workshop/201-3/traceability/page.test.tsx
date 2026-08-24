@@ -5,8 +5,10 @@ import { createRoot, type Root } from 'react-dom/client'
 import { App } from 'antd'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+const { routerPushMock } = vi.hoisted(() => ({ routerPushMock: vi.fn() }))
+
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: routerPushMock }),
   useSearchParams: () => new URLSearchParams('stage=fermentation&batch_no=DR-F1'),
 }))
 vi.mock('echarts-for-react', () => ({
@@ -261,5 +263,199 @@ describe('TraceabilityPage (201-3)', () => {
     expect(lossText).toContain('按月平均收率')
     expect(lossText).toContain('未闭合投料')
     expect(lossText).toContain('DR-GB1')
+  })
+
+  it('renders LossFunnelCard fallback when funnel layers are missing', async () => {
+    const mock = (url: string) => {
+      if (url.includes('lineage/loss-funnel')) {
+        return Promise.resolve(jsonResponse({ code: 200, message: 'success', data: { layers: [], target_batch: 'DR-F1', overall_yield: null, overall_loss: null, notes: [] } }))
+      }
+      if (url.includes('lineage/trace')) {
+        return Promise.resolve(jsonResponse({ code: 200, message: 'success', data: TRACE }))
+      }
+      return Promise.resolve(jsonResponse({ code: 200, message: 'success', data: [] }))
+    }
+    vi.stubGlobal('fetch', vi.fn(mock))
+    act(() => {
+      root.render(<App><TraceabilityPage /></App>)
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 120))
+    })
+    expect(container.textContent || '').toContain('未找到层析湿粉起点')
+  })
+
+  it('renders funnel notes when layers and notes exist', async () => {
+    const mock = (url: string) => {
+      if (url.includes('lineage/loss-funnel')) {
+        return Promise.resolve(jsonResponse({ code: 200, message: 'success', data: {
+          target_batch: 'DR-F1', overall_yield: 88, overall_loss: 12,
+          layers: [
+            { stage: 'chromatography', label: '层析', output_pure: 100, input_pure: 110, batch_count: 1, segment_yield: 90, segment_loss: 3 },
+            { stage: 'fourth_refinement', label: '四次精制', output_pure: 80, batch_count: 1, segment_yield: 85 },
+          ],
+          notes: ['干粉口径', '母液带出 2kg'],
+        } }))
+      }
+      if (url.includes('lineage/trace')) {
+        return Promise.resolve(jsonResponse({ code: 200, message: 'success', data: TRACE }))
+      }
+      return Promise.resolve(jsonResponse({ code: 200, message: 'success', data: [] }))
+    }
+    vi.stubGlobal('fetch', vi.fn(mock))
+    act(() => {
+      root.render(<App><TraceabilityPage /></App>)
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 120))
+    })
+const text = container.textContent || ''
+    expect(text).toContain('母液带出 2kg')
+    expect(text).toContain('干粉口径')
+  })
+
+  it('shows the trace API failure message on error code', async () => {
+    const mock = (url: string) => {
+      if (url.includes('lineage/trace')) {
+        return Promise.resolve(jsonResponse({ code: 400, message: '该批次不存在于 DR 台账', data: null }))
+      }
+      return Promise.resolve(jsonResponse({ code: 200, message: 'success', data: [] }))
+    }
+    vi.stubGlobal('fetch', vi.fn(mock))
+    act(() => {
+      root.render(<App><TraceabilityPage /></App>)
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 120))
+    })
+    expect(document.body.textContent || '').toContain('该批次不存在于 DR 台账')
+  })
+
+  it('shows a network error when the trace request rejects', async () => {
+    const mock = (url: string) => {
+      if (url.includes('lineage/trace')) return Promise.reject(new Error('network down'))
+      return Promise.resolve(jsonResponse({ code: 200, message: 'success', data: [] }))
+    }
+    vi.stubGlobal('fetch', vi.fn(mock))
+    act(() => {
+      root.render(<App><TraceabilityPage /></App>)
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 120))
+    })
+    expect(document.body.textContent || '').toContain('网络错误，请检查服务是否正常运行')
+  })
+
+  it('exports the flow chart PNG via anchor click', async () => {
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    vi.stubGlobal('fetch', vi.fn(fetchMock))
+    act(() => {
+      root.render(<App><TraceabilityPage /></App>)
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 120))
+    })
+    const exportBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('导出图片'))
+    await act(async () => {
+      exportBtn?.click()
+      await new Promise((r) => setTimeout(r, 120))
+    })
+    expect(clickSpy).toHaveBeenCalled()
+    clickSpy.mockRestore()
+  })
+
+  it('renders reuse rows with usage count tags and fallback labels', async () => {
+    const mock = (url: string) => {
+      if (url.includes('lineage/material-reuse')) {
+        return Promise.resolve(jsonResponse({ code: 200, message: 'success', data: [
+          { upstream_type: 'chromatography', upstream_batch: 'DR-C1', usage_count: 4, used_by: 'DR-F1' },
+          { upstream_type: '回收粉', upstream_batch: 'DR-R1', usage_count: 1, used_by: 'DR-F2' },
+        ] }))
+      }
+      if (url.includes('lineage/trace')) {
+        return Promise.resolve(jsonResponse({ code: 200, message: 'success', data: TRACE }))
+      }
+      return Promise.resolve(jsonResponse({ code: 200, message: 'success', data: [] }))
+    }
+    vi.stubGlobal('fetch', vi.fn(mock))
+    act(() => {
+      root.render(<App><TraceabilityPage /></App>)
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 120))
+    })
+    const reuseTab = Array.from(container.querySelectorAll('.ant-tabs-tab')).find((t) => t.textContent?.includes('物料复用')) as HTMLElement | undefined
+    await act(async () => { reuseTab?.click(); await new Promise((r) => setTimeout(r, 80)) })
+    const text = container.textContent || ''
+    expect(text).toContain('DR-C1')
+    expect(text).toContain('4 次')
+    expect(text).toContain('回收粉')
+  })
+
+  it('shows below-average comparison warning with cumulative yield and max-loss stage', async () => {
+    const mock = (url: string) => {
+      if (url.includes('lineage/yield-distribution')) {
+        return Promise.resolve(jsonResponse({ code: 200, message: 'success', data: [
+          { stage: 'extraction', label: '萃取', count: 8, min: 60, q1: 70, median: 88, mean: 90, q3: 95, max: 100, below_80: 2, above_110: 0 },
+        ] }))
+      }
+      if (url.includes('lineage/trace')) {
+        return Promise.resolve(jsonResponse({ code: 200, message: 'success', data: TRACE }))
+      }
+      return Promise.resolve(jsonResponse({ code: 200, message: 'success', data: [] }))
+    }
+    vi.stubGlobal('fetch', vi.fn(mock))
+    act(() => {
+      root.render(<App><TraceabilityPage /></App>)
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 120))
+    })
+    const text = container.textContent || ''
+    expect(text).toContain('低于工段均值')
+    expect(text).toContain('累计收率 85.2%')
+    expect(text).toContain('最大损失环节: 萃取')
+  })
+
+  // React 监听原生 value setter；直接赋值不会触发 onChange
+  function setNativeValue(input: HTMLInputElement, value: string) {
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set
+    setter?.call(input, value)
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  }
+
+  it('searches a freshly typed batch number and routes back to the workshop', async () => {
+    const traceCalls: string[] = []
+    const mock = (url: string) => {
+      if (url.includes('lineage/trace')) {
+        traceCalls.push(url)
+        return Promise.resolve(jsonResponse({ code: 200, message: 'success', data: TRACE }))
+      }
+      return Promise.resolve(jsonResponse({ code: 200, message: 'success', data: [] }))
+    }
+    vi.stubGlobal('fetch', vi.fn(mock))
+    act(() => {
+      root.render(<App><TraceabilityPage /></App>)
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 120))
+    })
+    const input = Array.from(container.querySelectorAll('input')).find((i) => (i.placeholder || '').includes('24003'))
+    await act(async () => {
+      if (input) setNativeValue(input, 'DR-9K-1')
+      await new Promise((r) => setTimeout(r, 30))
+    })
+    const searchBtn = Array.from(container.querySelectorAll('button')).find((b) => b.querySelector('.anticon-search'))
+    await act(async () => {
+      searchBtn?.click()
+      await new Promise((r) => setTimeout(r, 150))
+    })
+    expect(traceCalls.some((u) => u.includes('batch_no=DR-9K-1'))).toBe(true)
+    const backBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('返回车间'))
+    await act(async () => {
+      backBtn?.click()
+      await new Promise((r) => setTimeout(r, 50))
+    })
+    expect(routerPushMock).toHaveBeenCalledWith('/production/batches/workshop/201-3')
   })
 })

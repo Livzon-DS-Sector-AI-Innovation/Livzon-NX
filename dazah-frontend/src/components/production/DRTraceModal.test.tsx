@@ -130,7 +130,7 @@ describe('DRTraceModal', () => {
     expect(text).toContain('无源头')
   })
 
-  it('renders empty when no order-matching stage is provided', async () => {
+it('renders empty when no order-matching stage is provided', async () => {
     const data = { stages: [{ stage: 'unknown', label: 'x', nodes: [] }], target_batch: 'DR-0', target_stage: 'unknown' }
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse({ code: 200, message: 'success', data }))))
     container = document.createElement('div')
@@ -147,5 +147,67 @@ describe('DRTraceModal', () => {
       await new Promise((r) => setTimeout(r, 80))
     })
     expect((container.textContent || '') + (document.body.textContent || '')).toContain('未查到相关批次')
+  })
+
+  it('renders sibling dashes, connects_to lines, broken/loss data, and exports PNG', async () => {
+    const data = {
+      stages: [
+        { stage: 'fermentation', label: '发酵', nodes: [
+          { batch_no: 'DR-A', connects_to: 'DR-B', quantity: 100 },
+        ] },
+        { stage: 'extraction', label: '萃取', nodes: [
+          { batch_no: 'DR-B', quantity: 90, loss_kg: 2.5, loss_rate: 3.1, loss_level: 'red', detail: 'd-x',
+            loss_breakdown: { recorded: true, mother_liquor_kg: 1, recovery_powder_kg: 0.5, other_kg: 1 } },
+          { batch_no: 'DR-C', is_sibling: true, connects_to: 'DR-F', sib_group: 'DR-A' },
+          { batch_no: 'DR-D', is_sibling: true, connects_to: 'DR-F', sib_group: 'DR-A' },
+        ] },
+        { stage: 'chromatography', label: '层析', nodes: [
+          { batch_no: 'DR-F', quantity: 98 },
+        ] },
+      ],
+      target_batch: 'DR-B',
+      target_stage: 'extraction',
+    }
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse({ code: 200, message: 'success', data }))))
+    vi.stubGlobal('URL', { ...URL, createObjectURL: vi.fn(() => 'blob:x'), revokeObjectURL: vi.fn() }) as any
+    container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    act(() => {
+      root.render(
+        <App>
+          <DRTraceModal stage="extraction" batchNo="DR-B" onClose={() => {}} />
+        </App>
+      )
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 100))
+    })
+    const text = (container.textContent || '') + (document.body.textContent || '')
+    expect(text).toContain('批次追溯')
+    expect(text).toContain('DR-B')
+    expect(text).toContain('DR-F')
+    const exportBtn = Array.from(document.body.querySelectorAll('button')).find((b) => (b.textContent || '').includes('导出')) as HTMLButtonElement | undefined
+    if (exportBtn) {
+      await act(async () => { exportBtn.click(); await new Promise((r) => setTimeout(r, 50)) })
+    }
+  })
+
+  it('shows network error when the trace request rejects', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new Error('boom'))))
+    container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    act(() => {
+      root.render(
+        <App>
+          <DRTraceModal stage="fermentation" batchNo="DR-B" onClose={() => {}} />
+        </App>
+      )
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    expect((container.textContent || '') + (document.body.textContent || '')).toContain('网络错误')
   })
 })

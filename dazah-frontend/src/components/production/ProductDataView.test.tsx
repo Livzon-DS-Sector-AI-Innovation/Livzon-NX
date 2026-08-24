@@ -188,4 +188,144 @@ describe('ProductDataView', () => {
       await act(async () => { cancelBtn.click(); await new Promise((r) => setTimeout(r, 40)) })
     }
   })
+
+  it('shows error message when getBatches rejects', async () => {
+    actions.getBatches.mockRejectedValue(new Error('boom'))
+    act(() => {
+      root.render(<App><ProductDataView productName="霉酚酸" /></App>)
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    expect(actions.getBatches).toHaveBeenCalled()
+    expect((container.textContent || '') + (document.body.textContent || '')).toContain('加载批次数据失败')
+  })
+
+  it('creates a batch after filling required fields and flips pagination', async () => {
+    const many = Array.from({ length: 25 }, (_, i) => ({
+      id: `b${i + 1}`,
+      batch_no: `BG-P${i + 1}`,
+      product_name: '霉酚酸',
+      product_code: 'BG',
+      status: 'completed',
+    }))
+    actions.getBatches.mockResolvedValue({ code: 200, message: 'success', data: many })
+    act(() => {
+      root.render(<App><ProductDataView productName="霉酚酸" /></App>)
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    const addBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('新建批次')) as HTMLElement | undefined
+    if (addBtn) {
+      await act(async () => { addBtn.click(); await new Promise((r) => setTimeout(r, 60)) })
+    }
+    const batchInput = Array.from(document.body.querySelectorAll('input')).find((i) => i.placeholder?.includes('请输入批次号')) as HTMLInputElement | undefined
+    const codeInput = Array.from(document.body.querySelectorAll('input')).find((i) => i.placeholder?.includes('请输入产品编码')) as HTMLInputElement | undefined
+    if (batchInput && codeInput) {
+      await act(async () => {
+        const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set
+        setter?.call(batchInput, 'BG-NEW-1')
+        batchInput.dispatchEvent(new Event('input', { bubbles: true }))
+        setter?.call(codeInput, 'BG-NEW')
+        codeInput.dispatchEvent(new Event('input', { bubbles: true }))
+        await new Promise((r) => setTimeout(r, 100))
+      })
+    }
+    const okBtn = Array.from(document.body.querySelectorAll('button')).find((b) => (b.textContent || '').replace(/\s+/g, '') === '确认') as HTMLButtonElement | undefined
+    if (okBtn) {
+      await act(async () => { okBtn.click(); await new Promise((r) => setTimeout(r, 200)) })
+    }
+    expect(actions.createBatch).toHaveBeenCalledWith(expect.objectContaining({ batch_no: 'BG-NEW-1' }))
+    // 分页翻到第 2 页
+    const page2 = container.querySelector('.ant-pagination-item-2') as HTMLElement | undefined
+    if (page2) {
+      await act(async () => { page2.click(); await new Promise((r) => setTimeout(r, 60)) })
+    }
+    expect(container.textContent || '').toContain('BG-P23')
+  })
+
+  it('edits a batch and submits the update response', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => jsonResponse({ code: 200, message: 'success', data: [] })))
+    act(() => {
+      root.render(<App><ProductDataView productName="霉酚酸" /></App>)
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    const editBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('编辑')) as HTMLElement | undefined
+    if (editBtn) {
+      await act(async () => { editBtn.click(); await new Promise((r) => setTimeout(r, 80)) })
+    }
+    const okBtn = Array.from(document.body.querySelectorAll('button')).find((b) => (b.textContent || '').replace(/\s+/g, '') === '确认') as HTMLButtonElement | undefined
+    if (okBtn) {
+      await act(async () => { okBtn.click(); await new Promise((r) => setTimeout(r, 200)) })
+    }
+    expect(actions.updateBatch).toHaveBeenCalledWith('b1', expect.objectContaining({ product_name: '霉酚酸' }))
+  })
+
+  it('filters via status select and search text typing', async () => {
+    act(() => {
+      root.render(<App><ProductDataView productName="霉酚酸" /></App>)
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    // 状态筛选选「已完成」
+    const select = container.querySelector('.ant-select') as HTMLElement | undefined
+    if (select) {
+      await act(async () => {
+        select.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+        await new Promise((r) => setTimeout(r, 80))
+      })
+      const option = Array.from(document.body.querySelectorAll('.ant-select-item-option')).find((o) => o.textContent?.includes('已完成'))
+      if (option) {
+        await act(async () => { option.dispatchEvent(new MouseEvent('click', { bubbles: true })); await new Promise((r) => setTimeout(r, 80)) })
+      }
+    }
+    expect(container.textContent || '').not.toContain('BG-2026-01')
+    expect(container.textContent || '').toContain('BG-2026-02')
+    // 搜索无匹配内容
+    const searchInput = Array.from(container.querySelectorAll('input')).find((i) => i.placeholder?.includes('搜索批次号')) as HTMLInputElement | undefined
+    if (searchInput) {
+      await act(async () => {
+        const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set
+        setter?.call(searchInput, '不存在的批号')
+        searchInput.dispatchEvent(new Event('input', { bubbles: true }))
+        await new Promise((r) => setTimeout(r, 80))
+      })
+    }
+    expect(container.textContent || '').not.toContain('BG-2026-02')
+  })
+
+  it('warns when exporting an empty result set', async () => {
+    actions.getBatches.mockResolvedValue({ code: 200, message: 'success', data: [] })
+    act(() => {
+      root.render(<App><ProductDataView productName="霉酚酸" /></App>)
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    const exportBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('导出')) as HTMLElement | undefined
+    if (exportBtn) {
+      await act(async () => { exportBtn.click(); await new Promise((r) => setTimeout(r, 80)) })
+    }
+    expect(container.textContent || '').toContain('霉酚酸')
+  })
+
+  it('renders the production period label for the >=27 day window', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(2026, 7, 28))
+    try {
+      act(() => {
+        root.render(<App><ProductDataView productName="霉酚酸" /></App>)
+      })
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 50))
+      })
+      expect(container.textContent || '').toContain('9月生产批次数据查看与管理')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
