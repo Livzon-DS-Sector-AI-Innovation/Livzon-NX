@@ -27,6 +27,8 @@ import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from tools.registry import registry
+
 logger = logging.getLogger(__name__)
 
 # ── Constants ─────────────────────────────────────────────────────────────
@@ -706,8 +708,6 @@ SKILL_MANAGE_SCHEMA = {
 
 
 # ── Registration ──────────────────────────────────────────────────────────
-
-from tools.registry import registry
 
 registry.register(
     name="skill_manage",

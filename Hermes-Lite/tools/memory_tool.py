@@ -34,6 +34,8 @@ from hermes_constants import get_hermes_home
 from typing import Dict, Any, List, Optional
 
 from utils import atomic_replace
+from tools.registry import registry, tool_error
+from tools.threat_patterns import first_threat_message as _first_threat_message
 
 # fcntl is Unix-only; on Windows use msvcrt for file locking
 msvcrt = None
@@ -71,9 +73,6 @@ ENTRY_DELIMITER = "\n§\n"
 #    entry persists for the entire session and across sessions until
 #    explicitly removed.
 # ---------------------------------------------------------------------------
-
-from tools.threat_patterns import first_threat_message as _first_threat_message
-
 
 def _scan_memory_content(content: str) -> Optional[str]:
     """Scan memory content for injection/exfil patterns. Returns error string if blocked."""
@@ -731,8 +730,6 @@ MEMORY_SCHEMA = {
 
 
 # --- Registry ---
-from tools.registry import registry, tool_error
-
 registry.register(
     name="memory",
     toolset="memory",

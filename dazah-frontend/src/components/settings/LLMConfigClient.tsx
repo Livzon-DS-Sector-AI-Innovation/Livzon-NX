@@ -34,8 +34,18 @@ import {
   deleteLLMConfig,
   testLLMConnection,
   testLLMConfig,
+  probeLLMConfig,
 } from '@/actions/settings'
-import type { LLMConfig } from '@/actions/settings'
+import type {
+  LLMConfig,
+  LLMConfigProbeRequest,
+  LLMConfigUpdate,
+} from '@/actions/settings'
+import {
+  buildLLMConfigPayload,
+  getNewLLMConfigFormValues,
+  type LLMConfigFormValues,
+} from './llmConfigForm'
 
 const { Title, Text } = Typography
 const { TextArea } = Input
@@ -52,9 +62,11 @@ export default function LLMConfigClient({ embedded = false }: LLMConfigClientPro
   const [modalOpen, setModalOpen] = useState(false)
   const [editingConfig, setEditingConfig] = useState<LLMConfig | null>(null)
   const [saving, setSaving] = useState(false)
+  const [probing, setProbing] = useState<LLMConfigProbeRequest['probe_type'] | null>(null)
   const [testingId, setTestingId] = useState<string | null>(null)
   const [activatingId, setActivatingId] = useState<string | null>(null)
-  const [form] = Form.useForm()
+  const [form] = Form.useForm<LLMConfigFormValues>()
+  const useTemperature = Form.useWatch('use_temperature', form) ?? false
 
   const loadConfigs = useCallback(async () => {
     setLoading(true)
@@ -70,17 +82,13 @@ export default function LLMConfigClient({ embedded = false }: LLMConfigClientPro
   }, [message])
 
   useEffect(() => {
-    loadConfigs()
+    queueMicrotask(loadConfigs)
   }, [loadConfigs])
 
   const handleCreate = () => {
     setEditingConfig(null)
     form.resetFields()
-    form.setFieldsValue({
-      temperature: 0.1,
-      timeout_seconds: 120,
-      is_active: false,
-    })
+    form.setFieldsValue(getNewLLMConfigFormValues())
     setModalOpen(true)
   }
 
@@ -91,7 +99,8 @@ export default function LLMConfigClient({ embedded = false }: LLMConfigClientPro
       api_base_url: record.api_base_url,
       api_key: '',
       model_name: record.model_name,
-      temperature: record.temperature,
+      temperature: record.temperature > 0 ? record.temperature : 0.1,
+      use_temperature: record.temperature > 0,
       timeout_seconds: record.timeout_seconds,
       is_active: record.is_active,
       notes: record.notes,
@@ -112,13 +121,12 @@ export default function LLMConfigClient({ embedded = false }: LLMConfigClientPro
   const handleSave = async () => {
     try {
       const values = await form.validateFields()
-      const payload = { ...values }
-      if (editingConfig && !payload.api_key) {
-        delete payload.api_key
-      }
+      const payload = buildLLMConfigPayload(values)
       setSaving(true)
       if (editingConfig) {
-        await updateLLMConfig(editingConfig.id, payload)
+        const updatePayload: LLMConfigUpdate = { ...payload }
+        if (!updatePayload.api_key) delete updatePayload.api_key
+        await updateLLMConfig(editingConfig.id, updatePayload)
         message.success('更新成功')
       } else {
         await createLLMConfig(payload)
@@ -144,6 +152,37 @@ export default function LLMConfigClient({ embedded = false }: LLMConfigClientPro
       message.error('激活失败')
     } finally {
       setActivatingId(null)
+    }
+  }
+
+  const handleProbe = async (probeType: LLMConfigProbeRequest['probe_type']) => {
+    try {
+      const fields: Array<keyof LLMConfigFormValues> = [
+        'api_base_url',
+        'api_key',
+        'timeout_seconds',
+      ]
+      if (probeType === 'model') fields.push('model_name')
+      const values = await form.validateFields(fields)
+      if (!values.api_key) {
+        message.warning('请先输入 API 密钥后再测试连通性')
+        return
+      }
+
+      setProbing(probeType)
+      const res = await probeLLMConfig({
+        probe_type: probeType,
+        api_base_url: values.api_base_url,
+        api_key: values.api_key,
+        model_name: probeType === 'model' ? values.model_name : null,
+        timeout_seconds: values.timeout_seconds,
+      })
+      message.success(res.data.detail)
+    } catch (error) {
+      if (error && typeof error === 'object' && 'errorFields' in error) return
+      message.error(error instanceof Error ? error.message : '连通性测试失败')
+    } finally {
+      setProbing(null)
     }
   }
 
@@ -215,6 +254,8 @@ export default function LLMConfigClient({ embedded = false }: LLMConfigClientPro
       dataIndex: 'temperature',
       key: 'temperature',
       width: 110,
+      render: (temperature: number) =>
+        temperature > 0 ? temperature : <Text type="secondary">模型默认</Text>,
     },
     {
       title: '超时(秒)',
@@ -340,11 +381,30 @@ export default function LLMConfigClient({ embedded = false }: LLMConfigClientPro
           </Form.Item>
 
           <Form.Item
-            name="api_base_url"
             label="API 基础 URL"
-            rules={[{ required: true, message: '请输入 API 地址' }]}
+            htmlFor="api_base_url"
+            required
           >
-            <Input placeholder="https://api.openai.com/v1" />
+            <Space.Compact block>
+              <Form.Item
+                name="api_base_url"
+                noStyle
+                rules={[
+                  { required: true, message: '请输入 API 地址' },
+                  { type: 'url', message: '请输入有效的 API URL' },
+                ]}
+              >
+                <Input id="api_base_url" placeholder="https://api.openai.com/v1" />
+              </Form.Item>
+              <Button
+                icon={<ApiOutlined />}
+                loading={probing === 'url'}
+                disabled={probing !== null && probing !== 'url'}
+                onClick={() => handleProbe('url')}
+              >
+                测试 URL
+              </Button>
+            </Space.Compact>
           </Form.Item>
 
           <Form.Item
@@ -357,20 +417,56 @@ export default function LLMConfigClient({ embedded = false }: LLMConfigClientPro
           </Form.Item>
 
           <Form.Item
-            name="model_name"
             label="模型名称"
-            rules={[{ required: true, message: '请输入模型名称' }]}
+            htmlFor="model_name"
+            required
           >
-            <Input placeholder="gpt-4o" />
+            <Space.Compact block>
+              <Form.Item
+                name="model_name"
+                noStyle
+                rules={[{ required: true, message: '请输入模型名称' }]}
+              >
+                <Input id="model_name" placeholder="gpt-4o" />
+              </Form.Item>
+              <Button
+                icon={<ApiOutlined />}
+                loading={probing === 'model'}
+                disabled={probing !== null && probing !== 'model'}
+                onClick={() => handleProbe('model')}
+              >
+                测试模型
+              </Button>
+            </Space.Compact>
           </Form.Item>
 
           <Space size="large">
             <Form.Item
-              name="temperature"
-              label="Temperature"
-              extra="填 0 时不向模型请求传递 temperature，使用模型默认值"
+              label="温度设置"
+              extra={useTemperature
+                ? '向模型请求传递自定义 temperature'
+                : '不传递 temperature，使用模型默认值'}
             >
-              <InputNumber min={0} max={2} step={0.1} style={{ width: 120 }} />
+              <Space>
+                <Form.Item name="use_temperature" valuePropName="checked" noStyle>
+                  <Switch checkedChildren="自定义" unCheckedChildren="模型默认" />
+                </Form.Item>
+                {useTemperature && (
+                  <Form.Item
+                    name="temperature"
+                    noStyle
+                    rules={[{ required: true, message: '请输入温度' }]}
+                  >
+                    <InputNumber
+                      min={0.1}
+                      max={2}
+                      step={0.1}
+                      style={{ width: 120 }}
+                      aria-label="Temperature"
+                    />
+                  </Form.Item>
+                )}
+              </Space>
             </Form.Item>
             <Form.Item name="timeout_seconds" label="超时(秒)">
               <InputNumber min={10} max={600} style={{ width: 120 }} />

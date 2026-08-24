@@ -9,10 +9,10 @@ from datetime import datetime, timezone
 from dataclasses import dataclass
 from typing import Callable, Optional
 
-logger = logging.getLogger(__name__)
-
 from hermes_constants import get_hermes_home
 from tools.tool_backend_helpers import managed_nous_tools_enabled
+
+logger = logging.getLogger(__name__)
 
 _DEFAULT_TOOL_GATEWAY_DOMAIN = "nousresearch.com"
 _DEFAULT_TOOL_GATEWAY_SCHEME = "https"

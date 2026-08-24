@@ -10,9 +10,9 @@ import os
 import threading
 from collections import OrderedDict
 from pathlib import Path
+from typing import Optional
 
 from hermes_constants import get_hermes_home, get_skills_dir, is_wsl
-from typing import Optional
 
 from agent.runtime_cwd import resolve_agent_cwd
 from agent.skill_utils import (
@@ -26,6 +26,7 @@ from agent.skill_utils import (
     skill_matches_platform,
 )
 from utils import atomic_json_write
+from tools.threat_patterns import scan_for_threats as _scan_for_threats
 
 logger = logging.getLogger(__name__)
 
@@ -38,9 +39,6 @@ logger = logging.getLogger(__name__)
 # This module just chooses how to react when a match is found (block-with-
 # placeholder; the actual content never reaches the system prompt).
 # ---------------------------------------------------------------------------
-
-from tools.threat_patterns import scan_for_threats as _scan_for_threats
-
 
 def _scan_context_content(content: str, filename: str) -> str:
     """Scan context file content for injection. Returns sanitized content.

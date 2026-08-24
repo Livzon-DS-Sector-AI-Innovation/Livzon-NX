@@ -106,7 +106,12 @@ class LLMClient:
             if response_format:
                 body["response_format"] = {"type": response_format}
 
-            resp = await client.post("/chat/completions", json=body)
+            try:
+                resp = await client.post("/chat/completions", json=body)
+            except httpx.TimeoutException as exc:
+                raise LLMProviderError("LLM 服务响应超时", status_code=504) from exc
+            except httpx.RequestError as exc:
+                raise LLMProviderError("LLM 服务暂不可用", status_code=502) from exc
 
             if resp.status_code == 429:
                 raise LLMRateLimitError("Rate limit exceeded", status_code=429)
@@ -114,7 +119,7 @@ class LLMClient:
             if resp.is_error:
                 error_text = resp.text[:500]
                 raise LLMProviderError(
-                    f"LLM API error: {resp.status_code} - {error_text}",
+                    "LLM 服务返回错误",
                     status_code=resp.status_code,
                     raw_response=error_text,
                 )
@@ -122,6 +127,58 @@ class LLMClient:
             data: Any = resp.json()
             return cast(str, data["choices"][0]["message"]["content"])
 
+        finally:
+            await client.aclose()
+
+    async def chat_with_tools(
+        self,
+        messages: Sequence[Message],
+        *,
+        tools: Sequence[Mapping[str, Any]],
+        temperature: float | None = None,
+        max_tokens: int = 16384,
+        config_type: str = "text",
+    ) -> JsonObject:
+        """Send an OpenAI-compatible tool-calling request.
+
+        Tool orchestration remains inside the owning backend service; this
+        method only adapts the unified provider client and returns the
+        assistant message envelope (never provider credentials or raw error
+        bodies).
+        """
+        client, config = await self._get_client_and_config(config_type)
+        try:
+            body: JsonObject = {
+                "model": config.model_name,
+                "messages": [dict(message) for message in messages],
+                "tools": [dict(tool) for tool in tools],
+                "max_tokens": max_tokens,
+            }
+            _apply_temperature(body, temperature, config.model_name)
+            try:
+                response = await client.post("/chat/completions", json=body)
+            except httpx.TimeoutException as exc:
+                raise LLMProviderError("LLM 服务响应超时", status_code=504) from exc
+            except httpx.RequestError as exc:
+                raise LLMProviderError("LLM 服务暂不可用", status_code=502) from exc
+
+            if response.status_code == 429:
+                raise LLMRateLimitError("Rate limit exceeded", status_code=429)
+            if response.is_error:
+                raise LLMProviderError(
+                    "LLM 服务返回错误", status_code=response.status_code
+                )
+
+            payload: Any = response.json()
+            choices = payload.get("choices") if isinstance(payload, dict) else None
+            if not isinstance(choices, list) or not choices:
+                raise LLMProviderError("LLM 服务返回内容为空", status_code=502)
+            message = (
+                choices[0].get("message") if isinstance(choices[0], dict) else None
+            )
+            if not isinstance(message, dict):
+                raise LLMProviderError("LLM 服务返回消息格式错误", status_code=502)
+            return cast(JsonObject, message)
         finally:
             await client.aclose()
 
@@ -235,7 +292,12 @@ class LLMClient:
             }
             _apply_temperature(body, temp, config.model_name)
 
-            resp = await client.post("/chat/completions", json=body)
+            try:
+                resp = await client.post("/chat/completions", json=body)
+            except httpx.TimeoutException as exc:
+                raise LLMProviderError("LLM 服务响应超时", status_code=504) from exc
+            except httpx.RequestError as exc:
+                raise LLMProviderError("LLM 服务暂不可用", status_code=502) from exc
 
             if resp.status_code == 429:
                 raise LLMRateLimitError("Rate limit exceeded", status_code=429)
@@ -243,7 +305,7 @@ class LLMClient:
             if resp.is_error:
                 error_text = resp.text[:500]
                 raise LLMProviderError(
-                    f"Vision API error: {resp.status_code} - {error_text}",
+                    "视觉模型服务返回错误",
                     status_code=resp.status_code,
                     raw_response=error_text,
                 )

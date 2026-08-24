@@ -17,6 +17,8 @@ Design:
 import json
 from typing import Dict, Any, List, Optional
 
+from tools.registry import registry, tool_error
+
 
 # Valid status values for todo items
 VALID_STATUSES = {"pending", "in_progress", "completed", "cancelled"}
@@ -264,8 +266,6 @@ TODO_SCHEMA = {
 
 
 # --- Registry ---
-from tools.registry import registry, tool_error
-
 registry.register(
     name="todo",
     toolset="todo",

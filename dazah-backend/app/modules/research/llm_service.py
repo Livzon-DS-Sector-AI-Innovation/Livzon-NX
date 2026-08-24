@@ -1,22 +1,24 @@
 """LLM 服务模块 - 使用 core.llm 统一客户端"""
 
-import json
+from typing import Any
+
 from app.core.llm import llm_client
 
 
-async def call_llm(prompt: str, system_prompt: str = "") -> dict:
+async def call_llm(prompt: str, system_prompt: str = "") -> dict[str, Any]:
     """调用 LLM API - 使用 core.llm 统一客户端"""
     messages = []
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
     messages.append({"role": "user", "content": prompt})
-    
+
     return await llm_client.chat_json(messages)
 
 
 def build_q3d_prompt(text: str) -> str:
     """构建 Q3D 元素识别 prompt"""
-    return f"""你是一个制药工艺分析专家。请从以下药品合成工艺文本中提取所有需要评估的元素杂质。
+    return f"""你是一个制药工艺分析专家。请从以下药品合成工艺文本中提取所有需要评估的\
+元素杂质。
 
 ## 任务
 1. 识别文本中提到的所有元素（催化剂、试剂、设备来源等）
@@ -45,23 +47,75 @@ def build_q3d_prompt(text: str) -> str:
 """
 
 
-def build_q3c_prompt(steps: list[dict]) -> str:
+def build_q3c_prompt(steps: list[dict[str, Any]]) -> str:
     """构建 Q3C 溶剂识别 prompt (skill's version with ICH Q3C database)"""
-    
+
     # ICH Q3C Solvent Database
-    ich_class1 = ["Benzene", "Carbon tetrachloride", "1,2-Dichloroethane", "1,1-Dichloroethene", "1,1,1-Trichloroethane"]
-    ich_class2 = ["Acetonitrile", "Chlorobenzene", "1,1,2-Trichloroethane", "Acetic Acid", "Acetone", "Anisole",
-                  "1-Butanol", "2-Butanol", "Butyl Acetate", "tert-Butylmethyl ether", "Chloroform", "Cumene",
-                  "Cyclohexane", "Cyclohexanol", "Cyclopentane", "1,2-Dichloroethylene", "Dichloromethane",
-                  "1,2-Dimethoxyethane", "N,N-Dimethylacetamide", "N,N-Dimethylformamide", "2-Methoxyethanol",
-                  "Dimethyl sulfoxide", "1,4-Dioxane", "Ethanol", "Ethyl Acetate", "Ethyl ether", "Ethyl formate",
-                  "Ethylene Glycol", "Formamide", "Heptane", "Hexane", "Isobutanol", "Isopropyl Acetate",
-                  "Isopropyl ether", "Isopropanol", "Methanol", "2-Methyl-1-propanol", "Methyl Acetate",
-                  "Methyl ethyl ketone", "Methyl isobutyl ketone", "2-Methyltetrahydrofuran", "N-Methylpyrrolidone",
-                  "Nitromethane", "Pentane", "1-Pentanol", "1-Propanol", "2-Propanol", "Propyl Acetate",
-                  "Pyridine", "Tetrahydrofuran", "Tetralin", "Toluene", "1,1,2-Trichloroethylene", "Xylenes"]
+    ich_class1 = [
+        "Benzene",
+        "Carbon tetrachloride",
+        "1,2-Dichloroethane",
+        "1,1-Dichloroethene",
+        "1,1,1-Trichloroethane",
+    ]
+    ich_class2 = [
+        "Acetonitrile",
+        "Chlorobenzene",
+        "1,1,2-Trichloroethane",
+        "Acetic Acid",
+        "Acetone",
+        "Anisole",
+        "1-Butanol",
+        "2-Butanol",
+        "Butyl Acetate",
+        "tert-Butylmethyl ether",
+        "Chloroform",
+        "Cumene",
+        "Cyclohexane",
+        "Cyclohexanol",
+        "Cyclopentane",
+        "1,2-Dichloroethylene",
+        "Dichloromethane",
+        "1,2-Dimethoxyethane",
+        "N,N-Dimethylacetamide",
+        "N,N-Dimethylformamide",
+        "2-Methoxyethanol",
+        "Dimethyl sulfoxide",
+        "1,4-Dioxane",
+        "Ethanol",
+        "Ethyl Acetate",
+        "Ethyl ether",
+        "Ethyl formate",
+        "Ethylene Glycol",
+        "Formamide",
+        "Heptane",
+        "Hexane",
+        "Isobutanol",
+        "Isopropyl Acetate",
+        "Isopropyl ether",
+        "Isopropanol",
+        "Methanol",
+        "2-Methyl-1-propanol",
+        "Methyl Acetate",
+        "Methyl ethyl ketone",
+        "Methyl isobutyl ketone",
+        "2-Methyltetrahydrofuran",
+        "N-Methylpyrrolidone",
+        "Nitromethane",
+        "Pentane",
+        "1-Pentanol",
+        "1-Propanol",
+        "2-Propanol",
+        "Propyl Acetate",
+        "Pyridine",
+        "Tetrahydrofuran",
+        "Tetralin",
+        "Toluene",
+        "1,1,2-Trichloroethylene",
+        "Xylenes",
+    ]
     ich_class3 = ["1,2,4-Trimethylbenzene", "2-Ethoxyethanol", "Sulfolane"]
-    
+
     # Common solvent synonyms
     solvent_synonyms = {
         "ethanol": ["alcohol", "ethyl alcohol", "乙醇", "无水乙醇", "95% 乙醇"],
@@ -99,10 +153,11 @@ def build_q3c_prompt(steps: list[dict]) -> str:
         "sulfuric acid": ["硫酸"],
         "hydrochloric acid": ["HCl", "盐酸"],
         "nitric acid": ["硝酸"],
-        "phosphoric acid": ["磷酸"]
+        "phosphoric acid": ["磷酸"],
     }
-    
-    prompt = f"""你是一个制药工艺分析专家。请从以下合成工艺步骤中提取所有使用的溶剂，并根据 ICH Q3C(R9) 指南进行分类。
+
+    prompt = f"""你是一个制药工艺分析专家。请从以下合成工艺步骤中提取所有使用的溶剂，\
+并根据 ICH Q3C(R9) 指南进行分类。
 
 ## 任务
 1. 识别每个步骤中作为溶剂使用的有机挥发性化学品
@@ -124,16 +179,16 @@ def build_q3c_prompt(steps: list[dict]) -> str:
 
 以下是常见溶剂的中文/英文/缩写名称 (匹配时请考虑所有这些变体):
 """
-    
+
     for canonical, synonyms in solvent_synonyms.items():
         prompt += f"- {canonical}: {', '.join(synonyms)}\n"
-    
+
     prompt += """
 ## 匹配规则
 
 **重要**: 当匹配溶剂时:
 1. **忽略浓度前缀**: 95% 乙醇、无水乙醇、Absolute ethanol → 都匹配到 Ethanol
-2. **考虑多语言名称**: 
+2. **考虑多语言名称**:
    - 中文名：乙醇，二氯甲烷，四氢呋喃
    - 英文名：Ethanol, Dichloromethane, Tetrahydrofuran
    - 缩写：DCM, THF, EtOH, MeOH
@@ -204,30 +259,35 @@ def build_q3c_prompt(steps: list[dict]) -> str:
 
 ## 工艺步骤文本
 """
-    
+
     # Add each step's content
     for step in steps:
         step_text = step.get("content", "")
         prompt += f"\n\n{step.get('title', 'Step')}: {step_text}\n"
-    
+
     prompt += "\n\n请只返回 JSON，不要其他解释。确保每个溶剂都包含 ich_class 字段。"
-    
+
     return prompt
 
 
-async def extract_elements_with_llm(text: str) -> list[dict]:
+async def extract_elements_with_llm(text: str) -> list[dict[str, Any]]:
     """使用 LLM 从文本中提取元素"""
     prompt = build_q3d_prompt(text)
     result = await call_llm(prompt)
-    return result.get("elements", [])
+    elements = result.get("elements", [])
+    return (
+        [item for item in elements if isinstance(item, dict)]
+        if isinstance(elements, list)
+        else []
+    )
 
 
-async def extract_solvents_with_llm(steps: list[dict]) -> dict:
+async def extract_solvents_with_llm(steps: list[dict[str, Any]]) -> dict[str, Any]:
     """使用 LLM 从工艺步骤中提取溶剂并分类 (skill's version)
-    
+
     Args:
         steps: List of parsed process steps from ich_service.parse_process_steps
-        
+
     Returns:
         Full LLM response with steps structure
     """
