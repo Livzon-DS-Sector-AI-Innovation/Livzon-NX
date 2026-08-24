@@ -10,6 +10,7 @@ import json
 from datetime import date
 
 import pytest
+from unittest.mock import AsyncMock, MagicMock
 
 from app.modules.production import ai_analysis_api as ai_api
 from app.modules.production import dr_lineage_api as dr
@@ -675,3 +676,73 @@ def test_dr_feishu_sync_is_empty():
     assert drsync._is_empty(["a", "", ""]) is False
     assert drsync._is_empty(["", "b", ""]) is False
     assert drsync._is_empty([]) is True
+
+
+# ═══════════ fa_ai_analysis_api._get_trace_data ═══════════
+
+
+@pytest.mark.anyio
+async def test_fa_ai_analysis_get_trace_data():
+    """_get_trace_data: 收集批次全量数据。"""
+    from app.modules.production import fa_ai_analysis_api as faai
+
+    session = AsyncMock()
+
+    # Mock 发酵数据查询
+    ferment_result = MagicMock()
+    ferment_result.fetchone.return_value = (
+        "FA-EX1", "2026-03-01", 500.0, 100.0, 10.0, 50.0, "2.5", "子批1(100kl/50gL/200kg)"
+    )
+
+    # Mock 酸化数据查询
+    acid_result = MagicMock()
+    acid_row = MagicMock()
+    acid_row.acid = 20.0
+    acid_row.ph_acid = 3.5
+    acid_row.acid_vol = 100.0
+    acid_row.mf_vol = 80.0
+    acid_row.mf_content = 30.0
+    acid_row.mf_qty = 2400.0
+    acid_row.slag_loss = 0.05
+    acid_row.balance = 0.98
+    acid_result.fetchall.return_value = [acid_row]
+
+    # Mock 脱色数据查询
+    from types import SimpleNamespace as _NS
+
+    decolor_result = MagicMock()
+    decolor_result.fetchone.return_value = _NS(
+        批号="FA-EX1-1", vol=150.0, content=25.0, carbon=5.0,
+        after_carbon=20.0, cond1=80.0, cond2=75.0, cond3=70.0,
+    )
+
+    # Mock 离心数据查询
+    centrifuge_result = MagicMock()
+    centrifuge_result.fetchall.return_value = [_NS(
+        in_vol=120.0, yield_rate=0.95, before_c=30.0, after_c=25.0, 批号="FA-EX1-1",
+    )]
+
+    stats_result = MagicMock()
+    stats_result.fetchone.return_value = None
+
+    def execute_side_effect(query, params=None):
+        sql_str = str(query)
+        if "fa_fermentation_batches" in sql_str and "LEFT JOIN" in sql_str:
+            return ferment_result
+        elif "fa_acidification_records" in sql_str and "ORDER BY id" in sql_str:
+            return acid_result
+        elif "fa_decolor1_records" in sql_str:
+            return decolor_result
+        elif "fa_decolor_centrifuge_records" in sql_str and "LIMIT 10" in sql_str:
+            return centrifuge_result
+        return stats_result  # 统计查询返回 None
+
+    session.execute.side_effect = execute_side_effect
+
+    batch_data, stats_data = await faai._get_trace_data(
+        session, "FA-EX1", "fermentation"
+    )
+    assert "发酵放罐: FA-EX1" in batch_data
+    assert "酸化过滤:" in batch_data
+    assert "一次脱色:" in batch_data
+    assert "脱色离心" in batch_data
