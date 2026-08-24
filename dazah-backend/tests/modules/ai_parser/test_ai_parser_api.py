@@ -24,7 +24,13 @@ async def test_ai_parser_maps_missing_configuration_without_leaking_details(
     ) -> dict[str, object]:
         raise LLMConfigError("provider-secret-must-not-leak")
 
-    monkeypatch.setattr(api.llm_client, "chat_json", fail_with_configuration_error)
+    # Patch the class method so monkeypatch teardown does not leave a bound
+    # method on the shared singleton and shadow later module-level patches.
+    monkeypatch.setattr(
+        type(api.llm_client),
+        "chat_json",
+        fail_with_configuration_error,
+    )
 
     with pytest.raises(HTTPException) as exc_info:
         await api._call_parser_llm("parse this")

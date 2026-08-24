@@ -8,6 +8,16 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 
 from app.core.llm.encryption import decrypt_api_key
+from app.core.secrets import decrypt_secret
+from app.modules.production.models import (
+    ProductionFeishuReadField,
+    ProductionFeishuReadPageBinding,
+    ProductionFeishuReadRecord,
+    ProductionFeishuReadResource,
+    ProductionFeishuReadSourceRoot,
+    ProductionFeishuReadSyncRun,
+)
+from app.modules.production.repository import ProductionRepository
 from app.modules.quality.models import (
     QualityFeishuAppSettings,
     QualityFeishuReadField,
@@ -30,6 +40,15 @@ QUALITY_MODELS = ReadMirrorModels(
     record=QualityFeishuReadRecord,
     binding=QualityFeishuReadPageBinding,
     sync_run=QualityFeishuReadSyncRun,
+)
+
+PRODUCTION_MODELS = ReadMirrorModels(
+    root=ProductionFeishuReadSourceRoot,
+    resource=ProductionFeishuReadResource,
+    field=ProductionFeishuReadField,
+    record=ProductionFeishuReadRecord,
+    binding=ProductionFeishuReadPageBinding,
+    sync_run=ProductionFeishuReadSyncRun,
 )
 
 
@@ -57,6 +76,26 @@ class _DailyReadMirrorGenerator(TaskGenerator):
             if item.last_complete_sync_at is None
             or item.last_complete_sync_at.date() < today
         ]
+
+
+class ProductionFeishuReadDailySyncGenerator(_DailyReadMirrorGenerator):
+    """Keep the production read-mirror scheduler compatible with old jobs."""
+
+    name = "production.feishu_read_daily_sync"
+    resource_model = ProductionFeishuReadResource
+
+    async def execute_one(self, session: Any, item: Any) -> None:
+        config = await ProductionRepository(session).get_active_feishu_config()
+        if config is None or not config.encrypted_app_secret:
+            return
+        service = ModuleFeishuReadMirrorService(
+            session,
+            module_code="production",
+            app_id=config.app_id,
+            app_secret=decrypt_secret(config.encrypted_app_secret),
+            models=PRODUCTION_MODELS,
+        )
+        await service.sync_resource(UUID(str(item)))
 
 
 class QualityFeishuReadDailySyncGenerator(_DailyReadMirrorGenerator):

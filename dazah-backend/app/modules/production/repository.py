@@ -18,6 +18,7 @@ from app.modules.production.models import (
     ProductionPlan,
     ProductionRecord,
 )
+from app.modules.production.production_feishu_models import ProductionFeishuConfig
 
 
 class ProductionRepository:
@@ -25,6 +26,20 @@ class ProductionRepository:
 
     def __init__(self, session: AsyncSession):
         self.session = session
+
+    async def get_active_feishu_config(self) -> ProductionFeishuConfig | None:
+        """Return the latest active Feishu configuration for compatibility jobs."""
+        query = (
+            select(ProductionFeishuConfig)
+            .where(
+                ProductionFeishuConfig.is_deleted.is_(False),
+                ProductionFeishuConfig.is_active.is_(True),
+            )
+            .order_by(ProductionFeishuConfig.updated_at.desc())
+            .limit(1)
+        )
+        result = await self.session.execute(query)
+        return result.scalar_one_or_none()
 
     # ============ Batch Operations ============
 
