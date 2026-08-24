@@ -219,3 +219,64 @@ async def test_dr_loss_stats_empty():
     data = json.loads(resp.body)["data"]
     assert data["by_segment_month"] == []
     assert data["unclosed"] == []
+
+
+# ═══════════ dr_lineage_api 纯函数 ═══════════
+
+
+def test_fmt_val():
+    """格式化各种类型的值为浮点数。"""
+    from app.modules.production import dr_lineage_api as dr
+
+    assert dr.fmt_val(None) == 0.0
+    assert dr.fmt_val(123) == 123.0
+    assert dr.fmt_val(12.34) == 12.34
+    assert dr.fmt_val("45.6") == 45.6
+
+
+def test_to_f1_and_f1_to_dr():
+    """F1 批号与 DR 批号的相互转换。"""
+    from app.modules.production import dr_lineage_api as dr
+
+    # _to_f1: DR-xxx → DR-F1-xxx
+    assert dr._to_f1("DR-26026") == "DR-F1-26026"
+    assert dr._to_f1("DR-24019-1") == "DR-F1-24019-1"
+    assert dr._to_f1("DR-F1-26026") == "DR-F1-26026"  # 已经是 DR-F1 前缀
+
+    # _f1_to_dr: DR-F1-xxx → DR-xxx
+    assert dr._f1_to_dr("DR-F1-26026") == "DR-26026"
+    assert dr._f1_to_dr("DR-F1-24019-1") == "DR-24019-1"
+    assert dr._f1_to_dr("DR-26026") == "DR-26026"  # 不是 DR-F1 前缀，保持原样
+
+
+def test_detect_stage():
+    """根据批号前缀推断工段。"""
+    from app.modules.production import dr_lineage_api as dr
+
+    assert dr._detect_stage("DR-F1-xxx") == "first_refinement"
+    assert dr._detect_stage("DR-F2-xxx") == "second_refinement"
+    assert dr._detect_stage("DR-F3-xxx") == "third_refinement"
+    assert dr._detect_stage("DR-GB-xxx") == "fourth_refinement"
+    assert dr._detect_stage("DR-H-xxx") is None  # 回收粉特殊标签
+    assert dr._detect_stage("DR-26026") is None  # 歧义，DB 探测
+    assert dr._detect_stage("UNKNOWN") is None
+
+
+def test_split_feeds_and_feed_stage():
+    """拆分投料字符串并推断投料工段。"""
+    from app.modules.production import dr_lineage_api as dr
+
+    # _split_feeds - splits by +、顿号、逗号
+    assert dr._split_feeds("DR-E1+DR-E2") == ["DR-E1", "DR-E2"]
+    assert dr._split_feeds("DR-E1、DR-E2") == ["DR-E1", "DR-E2"]
+    assert dr._split_feeds("DR-E1,DR-E2") == ["DR-E1", "DR-E2"]
+    assert dr._split_feeds("") == []
+    assert dr._split_feeds("DR-E1") == ["DR-E1"]
+
+    # _feed_stage - returns "recovery" for unknown prefixes
+    assert dr._feed_stage("DR-F1-xxx") == "first_refinement"
+    assert dr._feed_stage("DR-F2-xxx") == "second_refinement"
+    assert dr._feed_stage("DR-F3-xxx") == "third_refinement"
+    assert dr._feed_stage("DR-GB-xxx") == "fourth_refinement"
+    assert dr._feed_stage("DR-E1") == "recovery"  # unknown prefix → recovery
+    assert dr._feed_stage("UNKNOWN") == "recovery"
