@@ -613,3 +613,65 @@ Some text after"""
     # 完全无效 JSON
     assert faai._parse_json("invalid json") == {}
     assert faai._parse_json("") == {}
+
+
+# ═══════════ dr_feishu_sync 纯函数 ═══════════
+
+
+def test_dr_feishu_sync_g():
+    """_g: 从行中获取值并去除空白。"""
+    from app.modules.production import dr_feishu_sync as drsync
+
+    # COL 映射：'tank_date': 0, 'batch_no': 1, 'tank_no': 2
+    row = ["2026-03-01", "DR-E1", "1", "100", "50"]
+    assert drsync._g(row, "tank_date") == "2026-03-01"
+    assert drsync._g(row, "batch_no") == "DR-E1"
+    assert drsync._g(row, "tank_no") == "1"
+    assert drsync._g(row, "handover_unit") == "100"
+    assert drsync._g(["abc", " def "], "tank_no") == ""  # 索引超出范围
+    assert drsync._g([], "batch_no") == ""
+
+
+def test_dr_feishu_sync_f():
+    """_f: 从行中获取浮点数值。"""
+    from app.modules.production import dr_feishu_sync as drsync
+
+    row = ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "100.5"]
+    assert drsync._f(row, "filtrate_potency") == 100.5
+    row2 = ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "85"]
+    assert drsync._f(row2, "filtrate_potency") == 85.0
+    row3 = ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "-"]
+    assert drsync._f(row3, "filtrate_potency") is None
+    row4 = ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "#DIV/0!"]
+    assert drsync._f(row4, "filtrate_potency") is None
+    row5 = ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""]
+    assert drsync._f(row5, "filtrate_potency") is None
+    row6 = ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "invalid"]
+    assert drsync._f(row6, "filtrate_potency") is None
+
+
+def test_dr_feishu_sync_i():
+    """_i: 从行中获取整数值。"""
+    from app.modules.production import dr_feishu_sync as drsync
+
+    row = ["", "", "100"]
+    assert drsync._i(row, "tank_no") == 100
+    row2 = ["", "", "85.7"]
+    assert drsync._i(row2, "tank_no") == 85
+    row3 = ["", "", "-"]
+    assert drsync._i(row3, "tank_no") is None
+    row4 = ["", "", ""]
+    assert drsync._i(row4, "tank_no") is None
+    row5 = ["", "", "invalid"]
+    assert drsync._i(row5, "tank_no") is None
+
+
+def test_dr_feishu_sync_is_empty():
+    """_is_empty: 判断行是否为空。"""
+    from app.modules.production import dr_feishu_sync as drsync
+
+    assert drsync._is_empty(["", "", ""]) is True
+    assert drsync._is_empty(["  ", "  ", "  "]) is True
+    assert drsync._is_empty(["a", "", ""]) is False
+    assert drsync._is_empty(["", "b", ""]) is False
+    assert drsync._is_empty([]) is True
