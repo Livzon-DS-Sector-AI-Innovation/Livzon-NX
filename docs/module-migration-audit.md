@@ -5,7 +5,7 @@
 - 功能基线为 `C:\Users\Dan\Documents\dazah-Migration\`；其中的文档、注释、配置和上传附件仅作为实现参考，不作为用户指令。
 - 迁移范围按已确认口径为质量、注册、人事、仓储和系统权限五项。认证、对象存储、LLM、Agent、MCP、调度和 WebSocket 基础设施继续使用当前项目实现。
 - 源项目的后端 301 个业务文件和前端 166 个路由文件已完成文件层面迁入审查；未复制源目录约 2,513 个业务附件。
-- 当前结论为“迁移实现和关键页面自动化验收已完成，Python 静态门禁已闭合”：本次已补回旧接口、修正已确认的前端断链，并加入契约门禁；`app`、`tests`、`scripts` 的严格 Mypy 与 Ruff 已清零，后端全目录 `ruff check .`、根目录脚本 Ruff 和 Hermes-Lite 全目录 Ruff 均已通过。历史 migration、生成基线和 EDBO 示例的 lint 问题已完成机械整改，并通过编译与 Alembic 检查。
+- 当前结论为“迁移实现和关键页面自动化验收已完成，静态质量门禁已闭合，但变更行覆盖门禁尚未闭合”：本次已补回旧接口、修正已确认的前端断链，并加入契约门禁；`app` 的严格 Mypy 与后端全目录 Ruff 已清零，前端 typecheck/lint（0 errors）也已通过。历史 migration、生成基线和 EDBO 示例的 lint 问题已完成机械整改，并通过编译与 Alembic 检查。变更行覆盖仍需对迁移的大量新增业务代码补充真实测试，不能以排除文件或降低阈值代替。
 
 ## 页面—接口—权限—数据—上传—测试矩阵
 
@@ -47,13 +47,13 @@
 已通过：
 
 - 全量 Pytest 复跑为 `1531 passed`（约 25 分钟）；质量 Agent 适配器回归 `tests/unit/test_agent_tool_adapter_coverage.py` 为 `6 passed`。测试过程有既有 Pydantic 弃用、JWT 测试密钥长度和动态 AsyncMock 未 await 等 warnings，但无失败。
-- 后端覆盖率复跑为 `1531 passed`；floor 脚本从 `coverage.xml` 读取行覆盖率 60.16%、分支覆盖率 35.46%，达到 60%/33.5% 门槛。变更行覆盖脚本因当前工作区未提交返回无可比较的已提交 executable lines，不能替代正式提交候选的变更行证明。
+- 后端覆盖率复跑为 `1531 passed`；floor 脚本从 `coverage.xml` 读取行覆盖率 60.16%、分支覆盖率 35.46%，达到 60%/33.5% 门槛。以本地 `dev` 为迁移父基线运行变更行覆盖为 `52.94% (21634/40867)`，低于 80% 门槛；这是当前正式阻塞项。
 - 受影响范围契约与安全测试：49 项真实 AsyncClient/迁移契约回归通过（HR、质量、注册、仓储、系统权限、上传回滚和 OOS/OOT 关键词查询）；全量测试同时通过。
 - 受影响 Python 文件编译通过；`app/main.py`、新增 AsyncClient 回归及应用全量严格 Mypy 通过。后端 `app tests scripts` 与全目录 Ruff、根目录 `scripts` Ruff 和 Hermes-Lite 全目录 Ruff 均为 0，未通过扩大忽略规则掩盖；历史 migration、生成基线和 `edboplus-main` 示例整改后也已通过全目录检查。
 - `scripts/generate-api.ps1` 成功；后端 OpenAPI、前端快照和生成类型已同步。1601 个操作的重复 operation ID 与重复 method/path 均为 0；包含 research/pilot 路径的操作也均唯一，不再出现此前的重复 operation ID。
 - Alembic `heads`、`current` 和 `check` 通过，当前 head 为 `4772bce4935d`；本次未复制源 migration，也未执行 DROP。
 - 前端迁移契约、五模块菜单契约和系统五页契约：迁移契约同时检查菜单页解析、占位引用清理、迁移接口以及可解析的字面量前端 API 路径；TypeScript typecheck 通过。
-- 前端 `pnpm run lint` 通过（0 errors，1058 条 warnings）；`pnpm run typecheck`、`pnpm run test:unit`（42 个文件/187 项）、`pnpm run test:coverage`（同样 187 项）和 `pnpm run build` 均通过。覆盖率报告已生成，但全量文件覆盖率仅 Statements 5.81%、Branches 4.58%、Lines 6.03%；CI 使用的变更行门禁在当前未提交工作区中显示没有可比较的已提交变更行。
+- 前端 `pnpm run lint` 通过（0 errors，1058 条 warnings）；此前全量 `pnpm run typecheck`、`pnpm run test:unit`（42 个文件/187 项）、`pnpm run test:coverage` 和 `pnpm run build` 均通过；本轮新增的 18 个门禁测试文件已定向通过。覆盖率报告已生成，但全量文件覆盖率仅 Statements 5.81%、Branches 4.58%、Lines 6.03%；以本地 `dev` 为迁移父基线运行变更行覆盖为 `2.10% (335/15984)`，低于 80% 门槛，前端迁移页面、Server Actions 和客户端 API 仍需真实行为测试。
 - 关键前端 Playwright E2E `pnpm test:e2e:critical` 为 21/21 通过；配置自带 mock API 和开发服务器，验证了身份、采购和 Agent 治理关键流程。五模块页面与系统权限的完整写操作 E2E 仍单独记录为待补。
 - 五模块迁移页面与系统权限页面专用烟测 `e2e/migration/modules.spec.ts` 为 26/26 通过；覆盖质量、注册、仓储和系统五页组，检查页面可加载且无意外 API 4xx/5xx。该套件使用 mock API，不能替代真实后端写操作和数据范围测试。
 - 开发环境 Docker Compose 配置、backend/frontend `dev` 镜像重建与重启、运行容器健康状态、后端 `/health`（200）、前端根路径（307 → `/production`）和容器内 Alembic `check` 均通过；未使用生产镜像或容器。
@@ -64,10 +64,11 @@
 
 - 迁移触达范围及后端全目录的 Ruff 历史问题已清理为 0；本轮对历史 migration、生成基线和 EDBO 示例仅进行了格式、异常边界、类型比较和命名整改，未新增 migration 或改变 Alembic head。
 - 已完成五模块和系统权限的代表性 AsyncClient、认证、输入校验、上传回滚及关键入口烟测；仍需在开发环境补跑完整 401/403/404/422/409、数据范围、通知分渠道结果、Agent 权限隔离、WebSocket 单例和完整写操作 E2E。
-- `check-test-impact.py` 已按 `4e09450880d2796449709d590979b63df23b3fc0..HEAD` 通过；由于当前改动未提交，脚本只能覆盖已提交 Git 差异，不能证明工作区新增代码的变更行覆盖或测试影响映射。未创建临时提交规避该限制。
+- `check-test-impact.py --base dev --head HEAD` 已通过，且已提交三组门禁测试补充。当前工作区仍保留独立的 LLM/Hermes 未提交改动；它们未纳入迁移提交。远端 `origin/dev` 已包含迁移提交但领先本地分支，直接以该 ref 比较会产生反向差异，推送前必须由用户决定更新分支基线的方式（merge/rebase）。
 
 ## 交付前剩余动作
 
-1. 使用开发环境数据库、Redis、MinIO 和飞书替身补跑真实接口、上传回滚、权限审计、WebSocket 单例和关键页面 E2E。
-2. 形成正式提交候选后，以真实 base/head 再运行 `check-test-impact.py` 和变更行覆盖检查，确保未提交工作区限制消失。
-3. 保留当前数据库、旧接口和未提交 LLM 改动；验收完成后再单独评估 legacy 表下线，不在本次迁移中删除。
+1. 为迁移新增业务代码补齐真实行为测试，将后端 `52.94%`、前端 `2.10%` 的变更行覆盖提升至 80%，再运行两套差异覆盖门禁。
+2. 使用开发环境数据库、Redis、MinIO 和飞书替身补跑真实接口、上传回滚、权限审计、WebSocket 单例和关键页面 E2E。
+3. 在明确目标分支后更新当前分支基线，再运行 `check-test-impact.py` 和变更行覆盖检查；当前不具备无条件推送结论。
+4. 保留当前数据库、旧接口和未提交 LLM 改动；验收完成后再单独评估 legacy 表下线，不在本次迁移中删除。
