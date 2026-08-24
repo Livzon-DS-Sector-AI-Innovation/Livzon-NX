@@ -518,3 +518,65 @@ async def test_mc_chat_gather_trace_context_exception():
     ):
         ctx = await f._gather_trace_context("X", "x", session)
     assert ctx == "(批次数据暂时无法获取)"
+
+
+# ═══════════ fa_feishu_scheduler 纯函数 ═══════════
+
+
+def test_fa_scheduler_g():
+    """_g: 从行中获取值并去除空白。"""
+    from app.modules.production import fa_feishu_scheduler as fas
+
+    assert fas._g(["a", " b ", "c"], 0) == "a"
+    assert fas._g(["a", " b ", "c"], 1) == "b"
+    assert fas._g(["a", " b ", "c"], 5) == ""  # 索引超出范围
+    assert fas._g([], 0) == ""
+
+
+def test_fa_scheduler_pd():
+    """_pd: 解析各种日期格式。"""
+    from app.modules.production import fa_feishu_scheduler as fas
+
+    assert fas._pd("2026-03-05") == "2026-03-05"
+    assert fas._pd("2026/3/5") == "2026-03-05"
+    assert fas._pd("2026.3.5") == "2026-03-05"
+    assert fas._pd("3月5日") == "2026-03-05"
+    assert fas._pd("12月15日") == "2025-12-15"  # 12月归2025年
+    assert fas._pd("2026年3月5日") == "2026-03-05"
+    assert fas._pd("invalid") is None
+
+
+def test_fa_scheduler_ed():
+    """_ed: Excel 日期序列号转 ISO 日期。"""
+    from app.modules.production import fa_feishu_scheduler as fas
+
+    # Excel 序列号 45356 = 2024-03-05 (从 1899-12-30 开始)
+    result = fas._ed("45356")
+    assert result == "2024-03-05"
+    assert fas._ed("invalid") is None
+    assert fas._ed("") is None
+
+
+def test_fa_scheduler_n():
+    """_n: 数值字符串转换。"""
+    from app.modules.production import fa_feishu_scheduler as fas
+
+    assert fas._n("100") == "100.0"
+    assert fas._n("85.5") == "85.5"
+    assert fas._n("50%") == "50.0"
+    assert fas._n("-") == "NULL"
+    assert fas._n("#DIV/0!") == "NULL"
+    assert fas._n("") == "NULL"
+    assert fas._n("invalid") == "NULL"
+
+
+def test_fa_scheduler_p():
+    """_p: 百分比格式化。"""
+    from app.modules.production import fa_feishu_scheduler as fas
+
+    assert fas._p("0.5") == "'50%'"
+    assert fas._p("0.855") == "'85.5%'"
+    assert fas._p("1") == "'100%'"
+    assert fas._p("-") == "NULL"
+    assert fas._p("") == "NULL"
+    assert fas._p("invalid") == "'invalid'"
