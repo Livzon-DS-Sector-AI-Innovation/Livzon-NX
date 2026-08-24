@@ -38,7 +38,7 @@ function generateReportFromRecords(records: InvestigationRecord[]): string {
     }
     if (record.capaProposals && record.capaProposals.length > 0) {
       text += 'CAPA建议：\n'
-      record.capaProposals.forEach((p: any) => {
+      record.capaProposals.forEach((p) => {
         text += `  ${p.summary} — 执行人：${p.executor} — 预计完成日期：${p.expectedCompletionDate}\n`
       })
     }

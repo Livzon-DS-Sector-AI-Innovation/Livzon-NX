@@ -246,7 +246,7 @@ export default function HrChatbot() {
       setIsRecording(false)
     }
 
-    recognition.onresult = (event: any) => {
+    recognition.onresult = (event: { results: SpeechRecognitionResultList }) => {
       const transcript = event.results[0][0].transcript
       setInputValue((prev: string) => {
         const separator = prev && !prev.endsWith(' ') ? ' ' : ''
@@ -255,7 +255,7 @@ export default function HrChatbot() {
       setTimeout(() => inputRef.current?.focus(), 100)
     }
 
-    recognition.onerror = (event: any) => {
+    recognition.onerror = (event: { error: string }) => {
       console.error('Speech recognition error:', event.error)
       setIsRecording(false)
     }

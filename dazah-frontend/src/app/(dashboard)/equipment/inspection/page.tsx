@@ -19,13 +19,13 @@ export default async function InspectionPageWrapper() {
       fetchLocationTree(),
     ])
     templates = templatesResult.items || []
-    equipments = (equipmentsResult.items || []).map((e: any) => ({
+    equipments = (equipmentsResult.items || []).map((e: { id: string; name: string; equipment_no: string }) => ({
       id: e.id,
       name: e.name,
       equipment_no: e.equipment_no,
     }))
     categories = categoriesResult || []
-    locations = (locationsResult || []).map((l: any) => ({
+    locations = (locationsResult || []).map((l: { id: string; name: string; code?: string; location_code?: string }) => ({
       id: l.id,
       name: l.name,
       code: l.code || l.location_code || '',

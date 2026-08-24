@@ -6,8 +6,6 @@ import logging
 import os
 from typing import Any
 
-from app.core.llm import llm_client
-
 logger = logging.getLogger(__name__)
 
 
@@ -99,8 +97,9 @@ class LabelVerificationVideoService:
 
     def _build_recognition_prompt(self) -> str:
         """构建 AI 视觉识别的提示词"""
-        return """你是一个药品生产标签核验专家。请仔细分析这些视频帧截图，识别标签上的\
-所有信息。
+        return (
+            """
+你是一个药品生产标签核验专家。请仔细分析这些视频帧截图，识别标签上的所有信息。
 
 这些帧来自同一段视频，展示的是同一批产品的标签和桶。请综合所有帧的信息，尽量完整地识别以下内容。
 
@@ -129,11 +128,13 @@ class LabelVerificationVideoService:
 4. 如果某个信息在多帧中都能看到，以清晰度最高的那帧为准
 5. 如果某些信息完全无法识别，请设为 null，不要猜测
 6. barrels_seen 列出你在视频中实际看到的所有桶的编号"""
+        )
 
     def _build_detailed_prompt(self, form_data: dict[str, Any]) -> str:
         """构建带表单数据的详细对比提示词"""
-        return f"""你是一个药品生产标签核验专家。请仔细分析这些视频帧截图，\
-将标签上的信息与以下表单数据进行逐项对比。
+        return (
+            f"""
+你是一个药品生产标签核验专家。请仔细分析这些视频帧截图，将标签上的信息与以下表单数据进行逐项对比。
 
 表单数据：
 - 批号：{form_data.get("batch_number", "未填写")}
@@ -193,6 +194,7 @@ class LabelVerificationVideoService:
   }},
   "notes": "其他备注"
 }}"""
+        )
 
     def _parse_ai_response(self, raw: str) -> dict[str, Any]:
         """解析 AI 返回的 JSON，处理 markdown 格式等"""
@@ -258,7 +260,8 @@ class LabelVerificationVideoService:
     async def analyze_and_compare(
         self,
         video_path: str,
-        form_data: dict[str, Any],
+        form_data: dict,
+        ai_service,
         initial_fps: float = 1.0,
         max_retry_fps: float = 0.3,
     ) -> dict[str, Any]:
@@ -291,11 +294,11 @@ class LabelVerificationVideoService:
             # 选择关键帧：第一帧、中间帧、最后帧，尽量覆盖不同内容
             selected_frames = self._select_key_frames(frames, max_count=12)
 
-            # 调用系统统一 LLM 视觉模型进行对比分析
+            # 调用 AI 进行对比分析
             prompt = self._build_detailed_prompt(form_data)
 
             try:
-                raw_response = await llm_client.chat_vision(prompt, selected_frames)
+                raw_response = await ai_service.chat_vision(prompt, selected_frames)
                 result = self._parse_ai_response(raw_response)
             except Exception as e:
                 logger.warning(f"AI 分析失败 (FPS={current_fps}): {e}")

@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
-import { Table, Input, Select, DatePicker, Button, Space, Tag, Card, Statistic, Row, Col, Modal, App, Form, InputNumber, Checkbox, Upload, Progress, Alert, Descriptions } from 'antd'
-import { SearchOutlined, CheckCircleOutlined, CloseCircleOutlined, BarChartOutlined, PlusOutlined, UploadOutlined, LoadingOutlined, RobotOutlined, EyeOutlined } from '@ant-design/icons'
+import {Table, Input, Select, DatePicker, Button, Space, Tag, Card, Statistic, Row, Col, Modal, App, Form, InputNumber, Checkbox, Upload, Alert, Descriptions} from 'antd'
+import {SearchOutlined, CheckCircleOutlined, CloseCircleOutlined, BarChartOutlined, PlusOutlined, UploadOutlined, LoadingOutlined, RobotOutlined,} from '@ant-design/icons'
 import { LabelVerification, LabelVerificationCreateInput } from '@/types/label-verification'
 import { fetchLabelVerifications, fetchLabelVerificationStatistics, createLabelVerification, autoCompareVideo, AutoCompareResult } from '@/lib/api/label-verification'
 import dayjs from 'dayjs'
@@ -13,13 +13,11 @@ const { Option } = Select
 interface LabelVerificationClientProps {
   initialVerifications: LabelVerification[]
   initialTotal: number
-  initialError?: string
 }
 
 export default function LabelVerificationClient({
   initialVerifications,
   initialTotal,
-  initialError,
 }: LabelVerificationClientProps) {
   const { message } = App.useApp()
 
@@ -59,11 +57,11 @@ export default function LabelVerificationClient({
       setVerifications(res.data)
       setTotal(res.meta?.total || 0)
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '加载数据失败')
+      message.error(err.message || '加载数据失败')
     } finally {
       setLoading(false)
     }
-  }, [batchNumber, productName, filterStatus, dateRange, page, pageSize])
+  }, [batchNumber, productName, filterStatus, dateRange, page, pageSize]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadStatistics = useCallback(async () => {
     try {
@@ -75,7 +73,7 @@ export default function LabelVerificationClient({
   }, [])
 
   useEffect(() => {
-    loadData()
+    loadData() // eslint-disable-line react-hooks/set-state-in-effect
     loadStatistics()
   }, [loadData, loadStatistics])
 
@@ -101,7 +99,7 @@ export default function LabelVerificationClient({
       })
       message.success('视频上传成功')
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '上传失败')
+      message.error(err.message || '上传失败')
     } finally {
       setVideoUploading(false)
     }
@@ -172,7 +170,7 @@ export default function LabelVerificationClient({
     }
   }
 
-  const handleCreate = async (values: any) => {
+  const handleCreate = async (values: Omit<LabelVerificationCreateInput, 'production_date' | 'expiry_date' | 'verification_date' | 'verification_time'> & { production_date: dayjs.Dayjs; expiry_date: dayjs.Dayjs; verification_date: dayjs.Dayjs; verification_time: dayjs.Dayjs }) => {
     try {
       const data: LabelVerificationCreateInput = {
         batch_number: values.batch_number,
@@ -209,7 +207,7 @@ export default function LabelVerificationClient({
       loadData()
       loadStatistics()
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '创建失败')
+      message.error(err.message || '创建失败')
     }
   }
 
@@ -360,13 +358,13 @@ export default function LabelVerificationClient({
         </Descriptions>
 
         {result.notes && (
-          <Alert type="info" message={result.notes} style={{ marginTop: 8 }} showIcon />
+          <Alert type="info" title={result.notes} style={{ marginTop: 8 }} showIcon />
         )}
 
         {result.confidence < 70 && (
           <Alert
             type="warning"
-            message="置信度较低，建议人工复核"
+            title="置信度较低，建议人工复核"
             description="AI 识别不够清晰，已自动降低帧率多次尝试，但仍建议人工确认结果。"
             style={{ marginTop: 8 }}
             showIcon
@@ -378,14 +376,6 @@ export default function LabelVerificationClient({
 
   return (
     <div className="space-y-4">
-      {initialError && (
-        <Alert
-          type="warning"
-          showIcon
-          message="标签复核数据暂时无法加载"
-          description={initialError}
-        />
-      )}
       {/* 统计卡片 */}
       {statistics && (
         <Row gutter={16}>

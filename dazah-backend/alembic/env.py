@@ -34,7 +34,6 @@ LEGACY_SERVER_DEFAULT_COLUMNS = frozenset(
         ("production", "feishu_read_sync_runs", "started_at"),
         ("production", "feishu_sync_bindings", "field_mapping"),
         ("production", "feishu_sync_runs", "started_at"),
-        ("production", "migration_runs", "input_counts"),
         ("production", "migration_runs", "inserted_count"),
         ("production", "migration_runs", "updated_count"),
         ("production", "migration_runs", "skipped_count"),
@@ -42,6 +41,10 @@ LEGACY_SERVER_DEFAULT_COLUMNS = frozenset(
         ("production", "migration_runs", "report"),
         ("production", "process_execution_records", "recorded_at"),
         ("production", "process_execution_records", "data"),
+        ("production", "ceramic_equipment_logs", "workshop"),
+        ("production", "ceramic_material_separations", "workshop"),
+        ("production", "ceramic_membrane_cleans", "workshop"),
+        ("production", "ceramic_membrane_ops", "workshop"),
         ("quality", "feishu_read_records", "synced_at"),
         ("quality", "feishu_read_sync_runs", "started_at"),
         ("warehouse", "feishu_tables", "business_domain"),
@@ -120,6 +123,22 @@ def include_object(
         and compare_to is None
         and type_ == "foreign_key_constraint"
         and {column.name for column in object_.columns} <= AUDIT_USER_COLUMNS
+    ):
+        return False
+
+    # 血链表与收发任务表由 fa/mc lineage 模块以原生 SQL 即时创建并引用，
+    # 无 ORM 模型（仅 SQLAlchemy text() 访问）。量纲漂移时不应自动施加移除。
+    if (
+        type_ == "table"
+        and reflected
+        and object_.name
+        in {
+            "batch_lineage",
+            "fa_batch_lineage",
+            "receiving_task",
+            "fa_intermediate_records",
+        }
+        and object_.schema == "production"
     ):
         return False
 

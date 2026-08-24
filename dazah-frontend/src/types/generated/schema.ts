@@ -8754,7 +8754,7 @@ export interface paths {
             cookie?: never;
         };
         /** 生产管理模块信息 */
-        get: operations["read_module_api_v1_production__get"];
+        get: operations["read_production_module_api_v1_production__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -8770,7 +8770,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** 获取批次全貌 */
+        /**
+         * 批次全貌 — 按批号聚合所有模块记录
+         * @description 根据批号查询所有关联数据：菌种、发酵、非密事件
+         */
         get: operations["get_batch_profile_api_v1_production_batch_profile__batch_no__get"];
         put?: never;
         post?: never;
@@ -8787,8 +8790,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** 获取批次工序进度总览 */
-        get: operations["get_batch_progress_api_v1_production_batch_progress_get"];
+        /**
+         * 批次进度总览
+         * @description 一次查询13张表，返回批次进度矩阵 + 概览统计 + 卡点分析
+         */
+        get: operations["batch_progress_api_v1_production_batch_progress_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -8867,7 +8873,11 @@ export interface paths {
          */
         put: operations["update_material_balance_api_v1_production_batches__batch_id__balance_put"];
         post?: never;
-        delete?: never;
+        /**
+         * 删除物料平衡
+         * @description 软删除物料平衡
+         */
+        delete: operations["delete_material_balance_api_v1_production_batches__batch_id__balance_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -8957,25 +8967,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/production/execution-plans": {
+    "/api/v1/production/broth-receives": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** 获取车间生产执行计划 */
-        get: operations["get_execution_plans_api_v1_production_execution_plans_get"];
+        /** 发酵液接收记录列表 */
+        get: operations["list_broth_receives_api_v1_production_broth_receives_get"];
         put?: never;
-        /** 创建车间生产执行计划 */
-        post: operations["create_execution_plan_api_v1_production_execution_plans_post"];
+        /** 创建发酵液接收记录 */
+        post: operations["create_broth_receive_api_v1_production_broth_receives_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/production/execution-plans/{plan_id}": {
+    "/api/v1/production/broth-receives/{record_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -8983,52 +8993,385 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** 更新车间生产执行计划 */
-        put: operations["update_execution_plan_api_v1_production_execution_plans__plan_id__put"];
+        /** 更新发酵液接收记录 */
+        put: operations["update_broth_receive_api_v1_production_broth_receives__record_id__put"];
         post?: never;
-        /** 删除车间生产执行计划 */
-        delete: operations["delete_execution_plan_api_v1_production_execution_plans__plan_id__delete"];
+        /** 删除发酵液接收记录 */
+        delete: operations["delete_broth_receive_api_v1_production_broth_receives__record_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/production/feishu-config": {
+    "/api/v1/production/centrifuge1": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /**
-         * 获取生产飞书配置
-         * @description 获取生产飞书配置
-         */
-        get: operations["get_production_feishu_config_api_v1_production_feishu_config_get"];
-        /**
-         * 保存生产飞书配置
-         * @description 保存生产飞书配置
-         */
-        put: operations["save_production_feishu_config_api_v1_production_feishu_config_put"];
-        post?: never;
+        /** 一次离心列表 */
+        get: operations["_list_api_v1_production_centrifuge1_get"];
+        put?: never;
+        /** 创建一次离心 */
+        post: operations["_create_api_v1_production_centrifuge1_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/production/feishu-config/records": {
+    "/api/v1/production/centrifuge1/{rid}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /**
-         * 读取生产飞书多维表格数据
-         * @description 读取生产飞书多维表格数据
-         */
-        get: operations["get_production_feishu_records_api_v1_production_feishu_config_records_get"];
+        get?: never;
+        /** 更新一次离心 */
+        put: operations["_update_api_v1_production_centrifuge1__rid__put"];
+        post?: never;
+        /** 删除一次离心 */
+        delete: operations["_delete_api_v1_production_centrifuge1__rid__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/centrifuge2": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 二次离心列表 */
+        get: operations["_list_api_v1_production_centrifuge2_get"];
+        put?: never;
+        /** 创建二次离心 */
+        post: operations["_create_api_v1_production_centrifuge2_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/centrifuge2/{rid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 更新二次离心 */
+        put: operations["_update_api_v1_production_centrifuge2__rid__put"];
+        post?: never;
+        /** 删除二次离心 */
+        delete: operations["_delete_api_v1_production_centrifuge2__rid__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/ceramic-equipment-logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** ceramic-equipment-logs列表 */
+        get: operations["_list_api_v1_production_ceramic_equipment_logs_get"];
+        put?: never;
+        /** 创建ceramic-equipment-logs */
+        post: operations["_create_api_v1_production_ceramic_equipment_logs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/ceramic-equipment-logs/{rid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 更新ceramic-equipment-logs */
+        put: operations["_update_api_v1_production_ceramic_equipment_logs__rid__put"];
+        post?: never;
+        /** 删除ceramic-equipment-logs */
+        delete: operations["_delete_api_v1_production_ceramic_equipment_logs__rid__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/ceramic-feeds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** ceramic-feeds列表 */
+        get: operations["_list_api_v1_production_ceramic_feeds_get"];
+        put?: never;
+        /** 创建ceramic-feeds */
+        post: operations["_create_api_v1_production_ceramic_feeds_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/ceramic-feeds/{rid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 更新ceramic-feeds */
+        put: operations["_update_api_v1_production_ceramic_feeds__rid__put"];
+        post?: never;
+        /** 删除ceramic-feeds */
+        delete: operations["_delete_api_v1_production_ceramic_feeds__rid__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/ceramic-material-separations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** ceramic-material-separations列表 */
+        get: operations["_list_api_v1_production_ceramic_material_separations_get"];
+        put?: never;
+        /** 创建ceramic-material-separations */
+        post: operations["_create_api_v1_production_ceramic_material_separations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/ceramic-material-separations/{rid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 更新ceramic-material-separations */
+        put: operations["_update_api_v1_production_ceramic_material_separations__rid__put"];
+        post?: never;
+        /** 删除ceramic-material-separations */
+        delete: operations["_delete_api_v1_production_ceramic_material_separations__rid__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/ceramic-membrane-cleans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** ceramic-membrane-cleans列表 */
+        get: operations["_list_api_v1_production_ceramic_membrane_cleans_get"];
+        put?: never;
+        /** 创建ceramic-membrane-cleans */
+        post: operations["_create_api_v1_production_ceramic_membrane_cleans_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/ceramic-membrane-cleans/{rid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 更新ceramic-membrane-cleans */
+        put: operations["_update_api_v1_production_ceramic_membrane_cleans__rid__put"];
+        post?: never;
+        /** 删除ceramic-membrane-cleans */
+        delete: operations["_delete_api_v1_production_ceramic_membrane_cleans__rid__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/ceramic-membrane-ops": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** ceramic-membrane-ops列表 */
+        get: operations["_list_api_v1_production_ceramic_membrane_ops_get"];
+        put?: never;
+        /** 创建ceramic-membrane-ops */
+        post: operations["_create_api_v1_production_ceramic_membrane_ops_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/ceramic-membrane-ops/{rid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 更新ceramic-membrane-ops */
+        put: operations["_update_api_v1_production_ceramic_membrane_ops__rid__put"];
+        post?: never;
+        /** 删除ceramic-membrane-ops */
+        delete: operations["_delete_api_v1_production_ceramic_membrane_ops__rid__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/conc1": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 一次浓缩列表 */
+        get: operations["_list_api_v1_production_conc1_get"];
+        put?: never;
+        /** 创建一次浓缩 */
+        post: operations["_create_api_v1_production_conc1_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/conc1/{rid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 更新一次浓缩 */
+        put: operations["_update_api_v1_production_conc1__rid__put"];
+        post?: never;
+        /** 删除一次浓缩 */
+        delete: operations["_delete_api_v1_production_conc1__rid__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/conc2": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 二次浓缩列表 */
+        get: operations["_list_api_v1_production_conc2_get"];
+        put?: never;
+        /** 创建二次浓缩 */
+        post: operations["_create_api_v1_production_conc2_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/conc2/{rid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 更新二次浓缩 */
+        put: operations["_update_api_v1_production_conc2__rid__put"];
+        post?: never;
+        /** 删除二次浓缩 */
+        delete: operations["_delete_api_v1_production_conc2__rid__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/decolor1": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 一次脱色列表 */
+        get: operations["_list_api_v1_production_decolor1_get"];
+        put?: never;
+        /** 创建一次脱色 */
+        post: operations["_create_api_v1_production_decolor1_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/decolor1/{rid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 更新一次脱色 */
+        put: operations["_update_api_v1_production_decolor1__rid__put"];
+        post?: never;
+        /** 删除一次脱色 */
+        delete: operations["_delete_api_v1_production_decolor1__rid__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/dr/dashboard/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** DR 仪表盘汇总数据 */
+        get: operations["get_dr_dashboard_api_v1_production_dr_dashboard_summary_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -9037,7 +9380,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/production/feishu-config/tables": {
+    "/api/v1/production/dr/extraction/full": {
         parameters: {
             query?: never;
             header?: never;
@@ -9045,10 +9388,11 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * 读取生产飞书多维表格数据表列表
-         * @description 读取生产飞书多维表格数据表列表
+         * DR 萃取工段完整嵌套数据
+         * @description 返回 批次→发酵罐→萃取→滤液 四级嵌套结构，供前端 DRTable 组件直接渲染。
+         *     支持按年份/月份筛选（基于 tank_date 接罐日期字段）。
          */
-        get: operations["list_production_feishu_tables_api_v1_production_feishu_config_tables_get"];
+        get: operations["get_dr_extraction_full_api_v1_production_dr_extraction_full_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -9057,7 +9401,378 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/production/feishu-config/test": {
+    "/api/v1/production/dr/extraction/years": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * DR 萃取工段可用年份列表
+         * @description 返回发酵批次 tank_date 中出现过的年份（升序），供前端动态生成年份下拉框。
+         */
+        get: operations["get_dr_extraction_years_api_v1_production_dr_extraction_years_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/dr/extractions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 添加萃取批次 */
+        post: operations["create_dr_extraction_api_v1_production_dr_extractions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/dr/extractions/{extraction_id}/filtrates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 某萃取批次下的滤液列表 */
+        get: operations["list_dr_filtrates_api_v1_production_dr_extractions__extraction_id__filtrates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/dr/extractions/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 更新萃取批次 */
+        put: operations["update_dr_extraction_api_v1_production_dr_extractions__record_id__put"];
+        post?: never;
+        /** 删除萃取批次 */
+        delete: operations["delete_dr_extraction_api_v1_production_dr_extractions__record_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/dr/fermentation-batches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** DR 发酵批次列表 */
+        get: operations["list_dr_batches_api_v1_production_dr_fermentation_batches_get"];
+        put?: never;
+        /** 创建 DR 发酵批次 */
+        post: operations["create_dr_batch_api_v1_production_dr_fermentation_batches_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/dr/fermentation-batches/{batch_id}/tanks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 某批次下的发酵罐列表 */
+        get: operations["list_dr_tanks_api_v1_production_dr_fermentation_batches__batch_id__tanks_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/dr/fermentation-batches/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 更新 DR 发酵批次 */
+        put: operations["update_dr_batch_api_v1_production_dr_fermentation_batches__record_id__put"];
+        post?: never;
+        /** 删除 DR 发酵批次 */
+        delete: operations["delete_dr_batch_api_v1_production_dr_fermentation_batches__record_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/dr/fermentation-tanks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 添加发酵罐 */
+        post: operations["create_dr_tank_api_v1_production_dr_fermentation_tanks_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/dr/fermentation-tanks/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 更新发酵罐 */
+        put: operations["update_dr_tank_api_v1_production_dr_fermentation_tanks__record_id__put"];
+        post?: never;
+        /** 删除发酵罐 */
+        delete: operations["delete_dr_tank_api_v1_production_dr_fermentation_tanks__record_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/dr/filtrates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 添加滤液记录 */
+        post: operations["create_dr_filtrate_api_v1_production_dr_filtrates_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/dr/filtrates/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 更新滤液记录 */
+        put: operations["update_dr_filtrate_api_v1_production_dr_filtrates__record_id__put"];
+        post?: never;
+        /** 删除滤液记录 */
+        delete: operations["delete_dr_filtrate_api_v1_production_dr_filtrates__record_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/dr/lineage/coverage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** DR 覆盖完整性与断链清单 */
+        get: operations["dr_coverage_api_v1_production_dr_lineage_coverage_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/dr/lineage/loss-funnel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** DR 单批全程损耗漏斗（层析湿粉→干粉，逐段对账） */
+        get: operations["dr_loss_funnel_api_v1_production_dr_lineage_loss_funnel_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/dr/lineage/loss-stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** DR 损耗统计（按工段×月平均收率 + 未闭合投料） */
+        get: operations["dr_loss_stats_api_v1_production_dr_lineage_loss_stats_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/dr/lineage/material-reuse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** DR 物料复用（被多个下游批复用的投料） */
+        get: operations["dr_material_reuse_api_v1_production_dr_lineage_material_reuse_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/dr/lineage/trace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** DR 批次全链路追溯（主链+跨批投料全显示） */
+        get: operations["dr_lineage_trace_api_v1_production_dr_lineage_trace_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/dr/lineage/yield-distribution": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** DR 收率分布（按工段箱线统计） */
+        get: operations["dr_yield_distribution_api_v1_production_dr_lineage_yield_distribution_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/dr/records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** DR 通用台账记录查询 */
+        get: operations["get_dr_records_api_v1_production_dr_records_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/dr/records/years": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * DR 台账可用年份列表
+         * @description 返回台账表 production_date 中出现过的年份（升序），供前端动态生成年份下拉框。
+         */
+        get: operations["get_dr_record_years_api_v1_production_dr_records_years_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/dr/schedule/dump-plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** DR 排产放罐计划（接罐计划） */
+        get: operations["dr_dump_plans_api_v1_production_dr_schedule_dump_plans_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/dr/schedule/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * DR 接罐任务列表（对账/管理）
+         * @description 接罐任务明细列表：排产解析自动生成，确认/延期/审批在此更新。
+         */
+        get: operations["dr_receiving_tasks_api_v1_production_dr_schedule_tasks_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/dr/schedule/tasks/{batch_no}/approve": {
         parameters: {
             query?: never;
             header?: never;
@@ -9067,10 +9782,533 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * 测试生产飞书配置
-         * @description 测试生产飞书配置
+         * 班组长审批接罐
+         * @description 班组长对「待审批」的接罐确认进行批准/驳回。
          */
-        post: operations["test_production_feishu_config_api_v1_production_feishu_config_test_post"];
+        post: operations["approve_receiving_api_v1_production_dr_schedule_tasks__batch_no__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/dr/schedule/tasks/{batch_no}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 确认接罐
+         * @description 现场接罐确认。
+         *
+         *     - 默认 status=confirmed（记 actual_time / confirmed_by / actual_tank_no）
+         *     - 开启资质校验且当前用户无该罐资质 → 转 pending_approval 待班组长审批
+         */
+        post: operations["confirm_receiving_api_v1_production_dr_schedule_tasks__batch_no__confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/dr/schedule/tasks/{batch_no}/delay": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 填报延期原因
+         * @description 未接罐批次填报延期原因（等料/等水/等蒸汽/人员不足/设备问题/其他）。
+         */
+        post: operations["delay_receiving_api_v1_production_dr_schedule_tasks__batch_no__delay_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/dr/schedule/upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * DR 排产 Excel 上传更新（替代手动替换文件）
+         * @description 计划员在系统内上传最新排产 Excel → 保存到 schedule_data/。
+         *
+         *     直接使用原文件名保存（同名覆盖，与「手动替换文件」语义一致）；
+         *     dump-plans 按文件名取最新（sorted(glob)[-1]）→ 上传即生效。
+         */
+        post: operations["dr_schedule_upload_api_v1_production_dr_schedule_upload_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/dr/tanks/{tank_id}/extractions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 某罐下的萃取批次列表 */
+        get: operations["list_dr_extractions_api_v1_production_dr_tanks__tank_id__extractions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/dry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 烘干列表 */
+        get: operations["_list_api_v1_production_dry_get"];
+        put?: never;
+        /** 创建烘干 */
+        post: operations["_create_api_v1_production_dry_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/dry/{rid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 更新烘干 */
+        put: operations["_update_api_v1_production_dry__rid__put"];
+        post?: never;
+        /** 删除烘干 */
+        delete: operations["_delete_api_v1_production_dry__rid__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/fa/acidification/flat-list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 酸化过滤 — 平铺列表
+         * @description 返回平铺列表，_is_first 标记 rowSpan 起始行
+         */
+        get: operations["list_acidification_api_v1_production_fa_acidification_flat_list_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/fa/chat/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 获取会话历史消息
+         * @description 获取指定会话的全部消息
+         */
+        get: operations["fa_chat_history_api_v1_production_fa_chat_history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/fa/chat/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 发送对话消息（SSE流式）
+         * @description 发送消息，返回 SSE 流
+         */
+        post: operations["fa_chat_send_api_v1_production_fa_chat_send_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/fa/dashboard/batch-params": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * FA 批次参数对比诊断
+         * @description 查询指定批次的10个关键参数，与黄金均值对比，给出逐阶段纠正建议
+         */
+        get: operations["fa_batch_params_api_v1_production_fa_dashboard_batch_params_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/fa/dashboard/golden-batches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * FA 黄金批次推荐
+         * @description 按评分标准找出最近3个月最优批次，提取关键工艺参数范围
+         *     - stability: 离心离散度越低越优（操作稳定性）
+         *     - quality: 累计收率 × 碳后含量（产量+质量双维度）
+         *     - filtered: 排除酸化收率>110%后按累计收率排
+         */
+        get: operations["fa_golden_batches_api_v1_production_fa_dashboard_golden_batches_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/fa/dashboard/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** FA 仪表盘汇总数据 */
+        get: operations["get_fa_dashboard_api_v1_production_fa_dashboard_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/fa/dashboard/yield-chain": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * FA 收率全链路看板
+         * @description 返回 FA 收率全链路数据：各阶段收率 + 批次明细 + 汇总
+         */
+        get: operations["fa_yield_chain_api_v1_production_fa_dashboard_yield_chain_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/fa/decolor-centrifuge/list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 脱色离心 — 列表 */
+        get: operations["list_decolor_centrifuge_api_v1_production_fa_decolor_centrifuge_list_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/fa/decolor1/list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 一次脱色过滤 — 列表 */
+        get: operations["list_decolor1_api_v1_production_fa_decolor1_list_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/fa/fermentation/batches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 发酵液放罐 — 主批列表（含子批）
+         * @description 返回主批列表，每条主批包含 C/D 子批数据
+         */
+        get: operations["list_batches_api_v1_production_fa_fermentation_batches_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/fa/fermentation/batches/{tank_no}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 发酵液放罐 — 主批详情 */
+        get: operations["get_batch_api_v1_production_fa_fermentation_batches__tank_no__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/fa/fermentation/flat-list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 发酵液放罐 — 平铺列表（飞书原表格式）
+         * @description 返回平铺列表：每行=一个子批+主批所有字段，_is_first 标记 rowSpan 起始行
+         */
+        get: operations["list_flat_api_v1_production_fa_fermentation_flat_list_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/fa/fermentation/sub-batches/{sub_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 更新子批记录 */
+        put: operations["update_sub_batch_api_v1_production_fa_fermentation_sub_batches__sub_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/fa/intermediate/list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 母液中间体 — 列表 */
+        get: operations["list_intermediate_api_v1_production_fa_intermediate_list_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/fa/lineage/ai-analysis": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** FA 批次 AI 分析 */
+        get: operations["fa_ai_analysis_api_v1_production_fa_lineage_ai_analysis_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/fa/lineage/ai-analysis-stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** FA 批次 AI 分析（SSE 流式，展示思考过程） */
+        get: operations["fa_ai_analysis_stream_api_v1_production_fa_lineage_ai_analysis_stream_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/fa/lineage/trace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** FA 批次全链路追溯 */
+        get: operations["fa_lineage_trace_api_v1_production_fa_lineage_trace_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/fa/monthly-averages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 月度平均值 */
+        get: operations["monthly_averages_api_v1_production_fa_monthly_averages_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/fa/mother-liquor/list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 母液溶粉 — 列表 */
+        get: operations["list_mother_liquor_api_v1_production_fa_mother_liquor_list_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/fa/mvr/list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** MVR浓缩 — 列表 */
+        get: operations["list_mvr_api_v1_production_fa_mvr_list_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/fa/plate-recovery/list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 板框回收 — 列表 */
+        get: operations["list_plate_recovery_api_v1_production_fa_plate_recovery_list_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/fa/sync/trigger": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 手动触发 FA 飞书同步
+         * @description 同 MC 的 /mc/sync/trigger
+         */
+        post: operations["trigger_fa_sync_api_v1_production_fa_sync_trigger_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -9084,12 +10322,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * 获取生产飞书配置列表
-         * @description 获取生产飞书配置列表
-         */
-        get: operations["list_production_feishu_configs_api_v1_production_feishu_configs_get"];
-        put?: never;
+        /** 飞书配置列表 */
+        get: operations["list_feishu_configs_api_v1_production_feishu_configs_get"];
+        /** 创建或更新飞书配置 */
+        put: operations["upsert_feishu_config_api_v1_production_feishu_configs_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -9097,41 +10333,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/production/feishu-read/page-bindings/{page_key}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Replace Read Bindings */
-        put: operations["replace_read_bindings_api_v1_production_feishu_read_page_bindings__page_key__put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/production/feishu-read/resources": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Read Resources */
-        get: operations["list_read_resources_api_v1_production_feishu_read_resources_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/production/feishu-read/resources/{resource_id}/sync": {
+    "/api/v1/production/feishu-configs/test": {
         parameters: {
             query?: never;
             header?: never;
@@ -9140,33 +10342,66 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Sync Read Resource */
-        post: operations["sync_read_resource_api_v1_production_feishu_read_resources__resource_id__sync_post"];
+        /** 测试飞书连通性 */
+        post: operations["test_feishu_config_api_v1_production_feishu_configs_test_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/production/feishu-read/roots": {
+    "/api/v1/production/feishu/tables": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** List Read Roots */
-        get: operations["list_read_roots_api_v1_production_feishu_read_roots_get"];
+        /** 已发现的数据表 */
+        get: operations["list_feishu_tables_api_v1_production_feishu_tables_get"];
         put?: never;
-        /** Create Read Root */
-        post: operations["create_read_root_api_v1_production_feishu_read_roots_post"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/production/feishu-read/roots/{root_id}": {
+    "/api/v1/production/feishu/tables/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 刷新表目录 */
+        post: operations["refresh_feishu_tables_api_v1_production_feishu_tables_refresh_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/feishu/tables/{table_id}/data": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查看同步表数据 */
+        get: operations["get_table_data_api_v1_production_feishu_tables__table_id__data_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/feishu/tables/{table_id}/enabled": {
         parameters: {
             query?: never;
             header?: never;
@@ -9176,84 +10411,22 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Delete Read Root */
-        delete: operations["delete_read_root_api_v1_production_feishu_read_roots__root_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/production/feishu-read/roots/{root_id}/discover": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Discover Read Root */
-        post: operations["discover_read_root_api_v1_production_feishu_read_roots__root_id__discover_post"];
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /** 启停数据表 */
+        patch: operations["toggle_feishu_table_api_v1_production_feishu_tables__table_id__enabled_patch"];
         trace?: never;
     };
-    "/api/v1/production/feishu-sync-bindings": {
+    "/api/v1/production/feishu/tables/{table_id}/fields": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /**
-         * 获取生产飞书同步绑定
-         * @description 获取绑定配置；本接口不会读取或写入飞书。
-         */
-        get: operations["list_production_feishu_sync_bindings_api_v1_production_feishu_sync_bindings_get"];
-        put?: never;
-        /**
-         * 创建生产飞书同步绑定
-         * @description 创建同步绑定；实际同步能力须由业务字段映射确认后单独启用。
-         */
-        post: operations["create_production_feishu_sync_binding_api_v1_production_feishu_sync_bindings_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/production/feishu-sync-bindings/{binding_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** 更新生产飞书同步绑定 */
-        put: operations["update_production_feishu_sync_binding_api_v1_production_feishu_sync_bindings__binding_id__put"];
-        post?: never;
-        /** 删除生产飞书同步绑定 */
-        delete: operations["delete_production_feishu_sync_binding_api_v1_production_feishu_sync_bindings__binding_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/production/feishu-sync-bindings/{binding_id}/preview": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * 预览飞书同步绑定数据
-         * @description 读取绑定表的样本数据，不写入平台业务数据。
-         */
-        get: operations["preview_production_feishu_sync_binding_api_v1_production_feishu_sync_bindings__binding_id__preview_get"];
+        /** 获取数据表字段映射 */
+        get: operations["get_table_fields_api_v1_production_feishu_tables__table_id__fields_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -9262,24 +10435,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/production/feishu-sync-bindings/{binding_id}/runs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** 获取飞书同步运行记录 */
-        get: operations["list_production_feishu_sync_runs_api_v1_production_feishu_sync_bindings__binding_id__runs_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/production/feishu-sync-bindings/{binding_id}/sync": {
+    "/api/v1/production/feishu/tables/{table_id}/sync": {
         parameters: {
             query?: never;
             header?: never;
@@ -9288,36 +10444,15 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * 预览或执行飞书销售执行同步
-         * @description 默认 dry-run；执行模式按飞书 record_id 对销售执行明细幂等 upsert。
-         */
-        post: operations["execute_production_feishu_sync_binding_api_v1_production_feishu_sync_bindings__binding_id__sync_post"];
+        /** 同步数据表 */
+        post: operations["sync_feishu_table_api_v1_production_feishu_tables__table_id__sync_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/production/fermentations": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Fermentations */
-        get: operations["list_fermentations_api_v1_production_fermentations_get"];
-        put?: never;
-        /** Create Fermentation */
-        post: operations["create_fermentation_api_v1_production_fermentations_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/production/fermentations/{record_id}": {
+    "/api/v1/production/feishu/ws/restart": {
         parameters: {
             query?: never;
             header?: never;
@@ -9325,11 +10460,170 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Update Fermentation */
-        put: operations["update_fermentation_api_v1_production_fermentations__record_id__put"];
+        put?: never;
+        /** 重启飞书长连接 */
+        post: operations["restart_feishu_ws_api_v1_production_feishu_ws_restart_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/feishu/ws/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 飞书长连接状态 */
+        get: operations["get_feishu_ws_status_api_v1_production_feishu_ws_status_get"];
+        put?: never;
         post?: never;
-        /** Delete Fermentation */
-        delete: operations["delete_fermentation_api_v1_production_fermentations__record_id__delete"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/fermentation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 发酵记录列表 */
+        get: operations["list_fermentation_records_api_v1_production_fermentation_get"];
+        put?: never;
+        /** 创建发酵记录 */
+        post: operations["create_fermentation_record_api_v1_production_fermentation_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/fermentation/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 发酵记录详情 */
+        get: operations["get_fermentation_record_api_v1_production_fermentation__record_id__get"];
+        /** 更新发酵记录 */
+        put: operations["update_fermentation_record_api_v1_production_fermentation__record_id__put"];
+        post?: never;
+        /** 删除发酵记录 */
+        delete: operations["delete_fermentation_record_api_v1_production_fermentation__record_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/fermentation/{record_id}/related-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查询批次相关的非密事件 */
+        get: operations["get_related_events_api_v1_production_fermentation__record_id__related_events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/fermentation/{record_id}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 更新发酵状态 */
+        put: operations["update_fermentation_status_api_v1_production_fermentation__record_id__status_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/filter1": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 一次板框过滤列表 */
+        get: operations["_list_api_v1_production_filter1_get"];
+        put?: never;
+        /** 创建一次板框过滤 */
+        post: operations["_create_api_v1_production_filter1_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/filter1/{rid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 更新一次板框过滤 */
+        put: operations["_update_api_v1_production_filter1__rid__put"];
+        post?: never;
+        /** 删除一次板框过滤 */
+        delete: operations["_delete_api_v1_production_filter1__rid__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/filter2": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 二次板框过滤列表 */
+        get: operations["_list_api_v1_production_filter2_get"];
+        put?: never;
+        /** 创建二次板框过滤 */
+        post: operations["_create_api_v1_production_filter2_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/filter2/{rid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 更新二次板框过滤 */
+        put: operations["_update_api_v1_production_filter2__rid__put"];
+        post?: never;
+        /** 删除二次板框过滤 */
+        delete: operations["_delete_api_v1_production_filter2__rid__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -9359,6 +10653,933 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/production/mc/anomaly/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 手动触发MC收率异常自动检测
+         * @description 无需等待飞书同步，手动触发一次收率异常检测。
+         *     返回扫描批次数、检测到的异常数(high/medium)、跳过的正常批次数。
+         */
+        post: operations["trigger_anomaly_detection_api_v1_production_mc_anomaly_run_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/mc/anomaly/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 查看最近一次自动检测结果
+         * @description 返回最近一次异常检测的运行时间和汇总结果（内存缓存）。
+         */
+        get: operations["get_anomaly_detection_status_api_v1_production_mc_anomaly_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/mc/ba-records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 丁酯台账交叉表数据
+         * @description 返回丁酯交叉表数据：日期列、设备行、消耗/入库值矩阵
+         */
+        get: operations["get_ba_records_api_v1_production_mc_ba_records_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/mc/blending-inputs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 添加混粉投入 */
+        post: operations["create_blending_input_api_v1_production_mc_blending_inputs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/mc/blending-inputs/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** 删除混粉投入 */
+        delete: operations["delete_blending_input_api_v1_production_mc_blending_inputs__record_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/mc/blending-records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 混粉记录列表 */
+        get: operations["list_blending_api_v1_production_mc_blending_records_get"];
+        put?: never;
+        /** 创建混粉记录 */
+        post: operations["create_blending_api_v1_production_mc_blending_records_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/mc/blending-records/full-list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 混粉台账完整数据（含投入明细）
+         * @description 返回混粉记录+投入明细的嵌套结构
+         */
+        get: operations["full_list_blending_api_v1_production_mc_blending_records_full_list_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/mc/blending-records/{batch_no}/calculate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 加权杂质计算
+         * @description 根据投入明细计算加权平均杂质（5个RRT点位 + 总杂 + 含量）
+         */
+        post: operations["calculate_blending_impurities_api_v1_production_mc_blending_records__batch_no__calculate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/mc/blending-records/{batch_no}/inputs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 混粉投入明细 */
+        get: operations["list_blending_inputs_api_v1_production_mc_blending_records__batch_no__inputs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/mc/blending-records/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 更新混粉记录 */
+        put: operations["update_blending_api_v1_production_mc_blending_records__record_id__put"];
+        post?: never;
+        /** 删除混粉记录 */
+        delete: operations["delete_blending_api_v1_production_mc_blending_records__record_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/mc/chat/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 获取会话历史消息
+         * @description 获取指定会话的全部消息
+         */
+        get: operations["chat_history_api_v1_production_mc_chat_history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/mc/chat/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 发送对话消息（SSE流式）
+         * @description 发送消息，返回 SSE 流
+         */
+        post: operations["chat_send_api_v1_production_mc_chat_send_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/mc/crude-extract/acid-steps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 添加酸化步骤 */
+        post: operations["create_acid_api_v1_production_mc_crude_extract_acid_steps_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/mc/crude-extract/acid-steps/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 更新酸化步骤 */
+        put: operations["update_acid_api_v1_production_mc_crude_extract_acid_steps__record_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/mc/crude-extract/fermentation-liquids": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 发酵液列表 */
+        get: operations["list_fl_api_v1_production_mc_crude_extract_fermentation_liquids_get"];
+        put?: never;
+        /** 创建发酵液 */
+        post: operations["create_fl_api_v1_production_mc_crude_extract_fermentation_liquids_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/mc/crude-extract/full-list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 粗提台账完整嵌套数据 */
+        get: operations["full_list_api_v1_production_mc_crude_extract_full_list_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/mc/crude-extract/refining-batches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 创建提炼批次（自动创建分罐-1/-2） */
+        post: operations["create_rb_api_v1_production_mc_crude_extract_refining_batches_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/mc/crude-extract/refining-batches/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** 删除提炼批次 */
+        delete: operations["delete_rb_api_v1_production_mc_crude_extract_refining_batches__record_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/mc/crude-extract/sodium-steps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 添加钠化步骤 */
+        post: operations["create_sodium_api_v1_production_mc_crude_extract_sodium_steps_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/mc/crude-extract/sodium-steps/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 更新钠化步骤 */
+        put: operations["update_sodium_api_v1_production_mc_crude_extract_sodium_steps__record_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/mc/crude-extract/sub-tank-records/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 更新分罐记录 */
+        put: operations["update_st_api_v1_production_mc_crude_extract_sub_tank_records__record_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/mc/dashboard/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** MC 仪表盘汇总数据 */
+        get: operations["get_mc_dashboard_api_v1_production_mc_dashboard_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/mc/extraction-inputs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 添加提取投入明细 */
+        post: operations["create_extraction_input_api_v1_production_mc_extraction_inputs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/mc/extraction-inputs/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 更新提取投入明细 */
+        put: operations["update_extraction_input_api_v1_production_mc_extraction_inputs__record_id__put"];
+        post?: never;
+        /** 删除提取投入明细 */
+        delete: operations["delete_extraction_input_api_v1_production_mc_extraction_inputs__record_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/mc/extraction-records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 提取记录列表 */
+        get: operations["list_extraction_records_api_v1_production_mc_extraction_records_get"];
+        put?: never;
+        /** 创建提取记录 */
+        post: operations["create_extraction_record_api_v1_production_mc_extraction_records_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/mc/extraction-records/full-list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 提取台账完整数据（含投入明细）
+         * @description 返回提取记录+投入明细的嵌套结构，用于台账页面
+         */
+        get: operations["full_list_extraction_records_api_v1_production_mc_extraction_records_full_list_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/mc/extraction-records/{batch_no}/inputs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 提取投入明细列表 */
+        get: operations["list_extraction_inputs_api_v1_production_mc_extraction_records__batch_no__inputs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/mc/extraction-records/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 更新提取记录 */
+        put: operations["update_extraction_record_api_v1_production_mc_extraction_records__record_id__put"];
+        post?: never;
+        /** 删除提取记录 */
+        delete: operations["delete_extraction_record_api_v1_production_mc_extraction_records__record_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/mc/lineage/ai-analysis": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** AI 分析追溯链路 */
+        get: operations["ai_analyze_api_v1_production_mc_lineage_ai_analysis_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/mc/lineage/ai-analysis-stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** AI 分析（SSE 流式，展示思考过程） */
+        get: operations["ai_analyze_stream_api_v1_production_mc_lineage_ai_analysis_stream_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/mc/lineage/ai-history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 查询批次 AI 分析历史
+         * @description 返回同批次同工段的历史分析记录（仅 seq=0 的首条报告）。
+         *     兼容 MC- 前缀有无、阶段别名（如 na_batch→sub_tank）。
+         */
+        get: operations["ai_history_api_v1_production_mc_lineage_ai_history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/mc/lineage/coverage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 覆盖完整性 */
+        get: operations["lineage_coverage_api_v1_production_mc_lineage_coverage_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/mc/lineage/material-reuse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 物料复用 */
+        get: operations["lineage_material_reuse_api_v1_production_mc_lineage_material_reuse_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/mc/lineage/trace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 批次全链路追溯 */
+        get: operations["lineage_trace_api_v1_production_mc_lineage_trace_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/mc/lineage/yield-distribution": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 收率分布 */
+        get: operations["lineage_yield_distribution_api_v1_production_mc_lineage_yield_distribution_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/mc/qc-inputs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 添加QC投入明细 */
+        post: operations["create_qc_input_api_v1_production_mc_qc_inputs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/mc/qc-inputs/{qc_batch}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** QC投入明细列表 */
+        get: operations["list_qc_inputs_api_v1_production_mc_qc_inputs__qc_batch__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/mc/qc-inputs/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 更新QC投入明细 */
+        put: operations["update_qc_input_api_v1_production_mc_qc_inputs__record_id__put"];
+        post?: never;
+        /** 删除QC投入明细 */
+        delete: operations["delete_qc_input_api_v1_production_mc_qc_inputs__record_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/mc/qc-inspection-items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 添加QC检验项目 */
+        post: operations["create_qc_item_api_v1_production_mc_qc_inspection_items_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/mc/qc-inspections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** QC检验列表 */
+        get: operations["list_qc_api_v1_production_mc_qc_inspections_get"];
+        put?: never;
+        /** 创建QC检验单 */
+        post: operations["create_qc_api_v1_production_mc_qc_inspections_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/mc/qc-inspections/full-list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * QC台账完整数据（含投入明细）
+         * @description 返回QC检验+投入明细的嵌套结构
+         */
+        get: operations["full_list_qc_api_v1_production_mc_qc_inspections_full_list_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/mc/qc-inspections/{qc_id}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** QC检验明细 */
+        get: operations["list_qc_items_api_v1_production_mc_qc_inspections__qc_id__items_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/mc/qc-inspections/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 更新QC检验单 */
+        put: operations["update_qc_api_v1_production_mc_qc_inspections__record_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/mc/refinement-inputs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 添加MC精制投入明细 */
+        post: operations["create_mc_refinement_input_api_v1_production_mc_refinement_inputs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/mc/refinement-inputs/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 更新MC精制投入明细 */
+        put: operations["update_mc_refinement_input_api_v1_production_mc_refinement_inputs__record_id__put"];
+        post?: never;
+        /** 删除MC精制投入明细 */
+        delete: operations["delete_mc_refinement_input_api_v1_production_mc_refinement_inputs__record_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/mc/refinement-records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** MC二次精制记录列表 */
+        get: operations["list_mc_refinement_records_api_v1_production_mc_refinement_records_get"];
+        put?: never;
+        /** 创建MC二次精制记录 */
+        post: operations["create_mc_refinement_record_api_v1_production_mc_refinement_records_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/mc/refinement-records/full-list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * MC精制台账完整数据（含投入明细）
+         * @description 返回MC精制记录+投入明细的嵌套结构，用于台账页面
+         */
+        get: operations["full_list_mc_refinement_records_api_v1_production_mc_refinement_records_full_list_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/mc/refinement-records/{batch_no}/inputs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** MC精制投入明细列表 */
+        get: operations["list_mc_refinement_inputs_api_v1_production_mc_refinement_records__batch_no__inputs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/mc/refinement-records/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 更新MC二次精制记录 */
+        put: operations["update_mc_refinement_record_api_v1_production_mc_refinement_records__record_id__put"];
+        post?: never;
+        /** 删除MC二次精制记录 */
+        delete: operations["delete_mc_refinement_record_api_v1_production_mc_refinement_records__record_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/mc/sync/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 查看MC飞书同步状态
+         * @description 返回各模块的上次同步时间
+         */
+        get: operations["get_mc_sync_status_api_v1_production_mc_sync_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/mc/sync/trigger": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 从飞书电子表格同步MC台账数据
+         * @description 触发从飞书电子表格 "2026年生产台账-mc" 同步数据到本地数据库。
+         *
+         *     支持的模块:
+         *     - crude: 粗提
+         *     - extraction: 提取
+         *     - refinement: 二次精制
+         *     - blending: 混粉杂质计算
+         *     - qc: 混粉入库
+         *     - ba: 丁酯盘点
+         */
+        post: operations["trigger_mc_sync_api_v1_production_mc_sync_trigger_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/production/non-conforming-events": {
         parameters: {
             query?: never;
@@ -9366,11 +11587,28 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Events */
-        get: operations["list_events_api_v1_production_non_conforming_events_get"];
+        /** 非密事件列表 */
+        get: operations["list_nce_api_v1_production_non_conforming_events_get"];
         put?: never;
-        /** Create Event */
-        post: operations["create_event_api_v1_production_non_conforming_events_post"];
+        /** 创建非密事件 */
+        post: operations["create_nce_api_v1_production_non_conforming_events_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/non-conforming-events/{event_id}/affected-batches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查询非密事件关联的批次 */
+        get: operations["get_affected_batches_api_v1_production_non_conforming_events__event_id__affected_batches_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -9385,17 +11623,35 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Update Event */
-        put: operations["update_event_api_v1_production_non_conforming_events__record_id__put"];
+        /** 更新非密事件 */
+        put: operations["update_nce_api_v1_production_non_conforming_events__record_id__put"];
         post?: never;
-        /** Delete Event */
-        delete: operations["delete_event_api_v1_production_non_conforming_events__record_id__delete"];
+        /** 删除非密事件 */
+        delete: operations["delete_nce_api_v1_production_non_conforming_events__record_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/production/non-conforming-events/{record_id}/close": {
+    "/api/v1/production/pack": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 包装列表 */
+        get: operations["_list_api_v1_production_pack_get"];
+        put?: never;
+        /** 创建包装 */
+        post: operations["_create_api_v1_production_pack_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/pack/{rid}": {
         parameters: {
             query?: never;
             header?: never;
@@ -9403,61 +11659,11 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        put?: never;
-        /** Close Event */
-        post: operations["close_event_api_v1_production_non_conforming_events__record_id__close_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/production/page-data/{page_key}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Read Page */
-        get: operations["get_read_page_api_v1_production_page_data__page_key__get"];
-        put?: never;
+        /** 更新包装 */
+        put: operations["_update_api_v1_production_pack__rid__put"];
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/production/page-data/{page_key}/{binding_id}/record/{record_id}/attachments/{field_id}/{file_token}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Download Read Attachment */
-        get: operations["download_read_attachment_api_v1_production_page_data__page_key___binding_id__record__record_id__attachments__field_id___file_token__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/production/page-data/{page_key}/{binding_id}/records": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Read Page Records */
-        get: operations["get_read_page_records_api_v1_production_page_data__page_key___binding_id__records_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
+        /** 删除包装 */
+        delete: operations["_delete_api_v1_production_pack__rid__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -9491,7 +11697,11 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        put?: never;
+        /**
+         * 更新工艺参数
+         * @description 更新工艺参数
+         */
+        put: operations["update_process_parameter_api_v1_production_parameters__param_id__put"];
         post?: never;
         /**
          * 删除工艺参数
@@ -9550,26 +11760,6 @@ export interface paths {
          * @description 删除生产计划
          */
         delete: operations["delete_plan_api_v1_production_plans__plan_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/production/plans/{plan_id}/tasks": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * 获取计划任务列表
-         * @description 获取计划任务列表
-         */
-        get: operations["get_plan_tasks_api_v1_production_plans__plan_id__tasks_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -10059,42 +12249,25 @@ export interface paths {
         patch: operations["audit_record_api_v1_production_pressure_records__record_id__audit_patch"];
         trace?: never;
     };
-    "/api/v1/production/process-catalog": {
+    "/api/v1/production/pretreatments": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** 获取 203 车间工序与字段目录 */
-        get: operations["get_process_catalog_api_v1_production_process_catalog_get"];
+        /** 预处理记录列表 */
+        get: operations["list_pretreatments_api_v1_production_pretreatments_get"];
         put?: never;
-        post?: never;
+        /** 创建预处理记录 */
+        post: operations["create_pretreatment_api_v1_production_pretreatments_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/production/process-records": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** 获取生产工序执行记录 */
-        get: operations["list_process_execution_records_api_v1_production_process_records_get"];
-        put?: never;
-        /** 创建生产工序执行记录 */
-        post: operations["create_process_execution_record_api_v1_production_process_records_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/production/process-records/{record_id}": {
+    "/api/v1/production/pretreatments/{record_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -10102,28 +12275,11 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** 更新生产工序执行记录 */
-        put: operations["update_process_execution_record_api_v1_production_process_records__record_id__put"];
+        /** 更新预处理记录 */
+        put: operations["update_pretreatment_api_v1_production_pretreatments__record_id__put"];
         post?: never;
-        /** 删除生产工序执行记录 */
-        delete: operations["delete_process_execution_record_api_v1_production_process_records__record_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/production/process-records/{record_id}/complete": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** 完成生产工序执行记录 */
-        post: operations["complete_process_execution_record_api_v1_production_process_records__record_id__complete_post"];
-        delete?: never;
+        /** 删除预处理记录 */
+        delete: operations["delete_pretreatment_api_v1_production_pretreatments__record_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -10245,6 +12401,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/production/recrystallize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 二次重结晶脱色列表 */
+        get: operations["_list_api_v1_production_recrystallize_get"];
+        put?: never;
+        /** 创建二次重结晶脱色 */
+        post: operations["_create_api_v1_production_recrystallize_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/recrystallize/{rid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 更新二次重结晶脱色 */
+        put: operations["_update_api_v1_production_recrystallize__rid__put"];
+        post?: never;
+        /** 删除二次重结晶脱色 */
+        delete: operations["_delete_api_v1_production_recrystallize__rid__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/production/sales-plan-details": {
         parameters: {
             query?: never;
@@ -10252,16 +12444,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * 获取销售执行明细列表
-         * @description 获取销售执行明细列表。
-         */
+        /** 获取销售计划明细列表 */
         get: operations["get_sales_plan_details_api_v1_production_sales_plan_details_get"];
         put?: never;
-        /**
-         * 创建销售执行明细
-         * @description 创建销售执行明细。
-         */
+        /** 创建销售计划明细 */
         post: operations["create_sales_plan_detail_api_v1_production_sales_plan_details_post"];
         delete?: never;
         options?: never;
@@ -10276,21 +12462,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * 获取销售执行明细
-         * @description 获取单条销售执行明细。
-         */
-        get: operations["get_sales_plan_detail_api_v1_production_sales_plan_details__detail_id__get"];
-        /**
-         * 更新销售执行明细
-         * @description 更新销售执行明细。
-         */
+        get?: never;
+        /** 更新销售计划明细 */
         put: operations["update_sales_plan_detail_api_v1_production_sales_plan_details__detail_id__put"];
         post?: never;
-        /**
-         * 删除销售执行明细
-         * @description 删除销售执行明细。
-         */
+        /** 删除销售计划明细 */
         delete: operations["delete_sales_plan_detail_api_v1_production_sales_plan_details__detail_id__delete"];
         options?: never;
         head?: never;
@@ -10304,10 +12480,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Seed Cultures */
+        /** 种子培养记录列表 */
         get: operations["list_seed_cultures_api_v1_production_seed_cultures_get"];
         put?: never;
-        /** Create Seed Culture */
+        /** 创建种子培养记录 */
         post: operations["create_seed_culture_api_v1_production_seed_cultures_post"];
         delete?: never;
         options?: never;
@@ -10322,11 +12498,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
-        /** Update Seed Culture */
+        /** 种子培养记录详情 */
+        get: operations["get_seed_culture_api_v1_production_seed_cultures__record_id__get"];
+        /** 更新种子培养记录 */
         put: operations["update_seed_culture_api_v1_production_seed_cultures__record_id__put"];
         post?: never;
-        /** Delete Seed Culture */
+        /** 删除种子培养记录 */
         delete: operations["delete_seed_culture_api_v1_production_seed_cultures__record_id__delete"];
         options?: never;
         head?: never;
@@ -10340,11 +12517,45 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Handovers */
-        get: operations["list_handovers_api_v1_production_shift_handovers_get"];
+        /** 班组交接记录列表 */
+        get: operations["list_shift_handovers_api_v1_production_shift_handovers_get"];
         put?: never;
-        /** Create Handover */
-        post: operations["create_handover_api_v1_production_shift_handovers_post"];
+        /** 创建班组交接记录 */
+        post: operations["create_shift_handover_api_v1_production_shift_handovers_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/shift-handovers/positions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 获取所有岗位列表 */
+        get: operations["get_positions_api_v1_production_shift_handovers_positions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/shift-handovers/search-users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 搜索企业用户 */
+        get: operations["search_users_api_v1_production_shift_handovers_search_users_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -10358,12 +12569,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
-        /** Update Handover */
-        put: operations["update_handover_api_v1_production_shift_handovers__record_id__put"];
+        /** 班组交接记录详情 */
+        get: operations["get_shift_handover_api_v1_production_shift_handovers__record_id__get"];
+        /** 更新班组交接记录 */
+        put: operations["update_shift_handover_api_v1_production_shift_handovers__record_id__put"];
         post?: never;
-        /** Delete Handover */
-        delete: operations["delete_handover_api_v1_production_shift_handovers__record_id__delete"];
+        /** 删除班组交接记录 */
+        delete: operations["delete_shift_handover_api_v1_production_shift_handovers__record_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -10378,8 +12590,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Confirm Handover */
-        post: operations["confirm_handover_api_v1_production_shift_handovers__record_id__confirm_post"];
+        /** 确认接班 */
+        post: operations["confirm_shift_handover_api_v1_production_shift_handovers__record_id__confirm_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -10393,10 +12605,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Shift Logs */
+        /** 生产日志列表 */
         get: operations["list_shift_logs_api_v1_production_shift_logs_get"];
         put?: never;
-        /** Create Shift Log */
+        /** 创建生产日志 */
         post: operations["create_shift_log_api_v1_production_shift_logs_post"];
         delete?: never;
         options?: never;
@@ -10411,11 +12623,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
-        /** Update Shift Log */
+        /** 生产日志详情 */
+        get: operations["get_shift_log_api_v1_production_shift_logs__record_id__get"];
+        /** 更新生产日志 */
         put: operations["update_shift_log_api_v1_production_shift_logs__record_id__put"];
         post?: never;
-        /** Delete Shift Log */
+        /** 删除生产日志 */
         delete: operations["delete_shift_log_api_v1_production_shift_logs__record_id__delete"];
         options?: never;
         head?: never;
@@ -10481,50 +12694,6 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/production/tasks": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * 创建计划任务
-         * @description 创建计划任务
-         */
-        post: operations["create_task_api_v1_production_tasks_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/production/tasks/{task_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * 更新计划任务
-         * @description 更新计划任务
-         */
-        put: operations["update_task_api_v1_production_tasks__task_id__put"];
-        post?: never;
-        /**
-         * 删除计划任务
-         * @description 删除计划任务
-         */
-        delete: operations["delete_task_api_v1_production_tasks__task_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -22191,6 +24360,36 @@ export interface components {
              */
             verified_by_name?: string | null;
         };
+        /** AcidStepCreate */
+        AcidStepCreate: {
+            /** Acid Filter Content */
+            acid_filter_content?: number | null;
+            /** Acid Filter Volume */
+            acid_filter_volume?: number | null;
+            /** Acid Potency */
+            acid_potency?: number | null;
+            /** Acid Product Qty */
+            acid_product_qty?: number | null;
+            /** Acid Usage */
+            acid_usage?: number | null;
+            /** Filter Subtotal */
+            filter_subtotal?: number | null;
+            /** Filter Total */
+            filter_total?: number | null;
+            /** Monthly Cumulative Yield */
+            monthly_cumulative_yield?: number | null;
+            /** Na To Fermentation Yield */
+            na_to_fermentation_yield?: number | null;
+            /** Ph Value */
+            ph_value?: number | null;
+            /**
+             * Seq No
+             * @default 1
+             */
+            seq_no: number;
+            /** Sub Tank Id */
+            sub_tank_id: string;
+        };
         /**
          * AgencySummary
          * @description 按付款方汇总。
@@ -25118,6 +27317,16 @@ export interface components {
             /** Deadline Days */
             deadline_days?: number | null;
         };
+        /** ApproveBody */
+        ApproveBody: {
+            /**
+             * Approve
+             * @default true
+             */
+            approve: boolean;
+            /** Operator */
+            operator?: string | null;
+        };
         /**
          * ApproveEhsChangeRequest
          * @description 审批EHS变更请求
@@ -26162,60 +28371,6 @@ export interface components {
              */
             unit?: string | null;
         };
-        /** BatchProfileResponse */
-        BatchProfileResponse: {
-            /** Batch */
-            batch: {
-                [key: string]: unknown;
-            } | null;
-            /** Batch No */
-            batch_no: string;
-            progress: components["schemas"]["BatchProgressItem"] | null;
-            /** Records */
-            records: {
-                [key: string]: components["schemas"]["ProcessExecutionRecordResponse"][];
-            };
-        };
-        /** BatchProgressItem */
-        BatchProgressItem: {
-            /** Batch No */
-            batch_no: string;
-            /** Completed */
-            completed: number;
-            /** Progress Percent */
-            progress_percent: number;
-            /** Steps */
-            steps: components["schemas"]["ProcessStepProgress"][];
-            /** Total */
-            total: number;
-            /** Workshop Code */
-            workshop_code: string;
-        };
-        /** BatchProgressResponse */
-        BatchProgressResponse: {
-            /** Batches */
-            batches: components["schemas"]["BatchProgressItem"][];
-            /** Steps */
-            steps: {
-                [key: string]: unknown;
-            }[];
-            summary: components["schemas"]["BatchProgressSummary"];
-        };
-        /** BatchProgressSummary */
-        BatchProgressSummary: {
-            /** Bottlenecks */
-            bottlenecks: components["schemas"]["ProcessBottleneck"][];
-            /** Completed */
-            completed: number;
-            /** In Progress */
-            in_progress: number;
-            /** Monthly Output Kg */
-            monthly_output_kg: number;
-            /** Today Pack Count */
-            today_pack_count: number;
-            /** Total Batches */
-            total_batches: number;
-        };
         /**
          * BatchStatus
          * @description 批次状态枚举
@@ -26439,6 +28594,14 @@ export interface components {
              * @description JSON: [{name, header_row, mapping}]
              */
             sheets: string;
+        };
+        /** Body_dr_schedule_upload_api_v1_production_dr_schedule_upload_post */
+        Body_dr_schedule_upload_api_v1_production_dr_schedule_upload_post: {
+            /**
+             * File
+             * @description 最新排产 Excel（.xlsx）
+             */
+            file: string;
         };
         /** Body_edbo_generate_scope_api_v1_research_edbo_generate_scope_post */
         Body_edbo_generate_scope_api_v1_research_edbo_generate_scope_post: {
@@ -26918,6 +29081,357 @@ export interface components {
         Body_upload_workflow_attachment_api_v1_safety_ai_workflow_configs_attachments_upload_post: {
             /** File */
             file: string;
+        };
+        /** BrothReceiveCreate */
+        BrothReceiveCreate: {
+            /**
+             * Amino Nitrogen
+             * @description 氨基氮
+             */
+            amino_nitrogen?: number | null;
+            /**
+             * Broth Od
+             * @description 发酵液OD
+             */
+            broth_od?: number | null;
+            /**
+             * Broth Ph
+             * @description 发酵液pH
+             */
+            broth_ph?: number | null;
+            /**
+             * Fermentation Batch
+             * @description 发酵批号
+             */
+            fermentation_batch?: string | null;
+            /**
+             * Fermenter No
+             * @description 发酵罐号
+             */
+            fermenter_no?: string | null;
+            /**
+             * Inspection Result
+             * @description 检验结果
+             */
+            inspection_result?: string | null;
+            /**
+             * Mycelium Concentration
+             * @description 菌丝浓度
+             */
+            mycelium_concentration?: number | null;
+            /**
+             * Pipeline Leak Record
+             * @description 输送管路跑冒滴漏记录
+             */
+            pipeline_leak_record?: string | null;
+            /**
+             * Qualified
+             * @description 合格判定
+             */
+            qualified?: string | null;
+            /**
+             * Receive Loss
+             * @description 接收损耗量
+             */
+            receive_loss?: number | null;
+            /**
+             * Receive Time
+             * @description 进厂/接收时间
+             */
+            receive_time?: string | null;
+            /**
+             * Received Batch
+             * @description 接收批次
+             */
+            received_batch: string;
+            /**
+             * Received Volume
+             * @description 接收体积/重量
+             */
+            received_volume?: string | null;
+            /**
+             * Residual Sugar
+             * @description 残糖
+             */
+            residual_sugar?: number | null;
+            /**
+             * Sample No
+             * @description 取样编号
+             */
+            sample_no?: string | null;
+            /**
+             * Sample Time
+             * @description 取样时间
+             */
+            sample_time?: string | null;
+            /**
+             * Seq No
+             * @description 序号
+             */
+            seq_no?: number | null;
+            /**
+             * Supplier Team
+             * @description 供方班组
+             */
+            supplier_team?: string | null;
+            /**
+             * Tank Bottom Residue
+             * @description 罐底渣量
+             */
+            tank_bottom_residue?: number | null;
+            /**
+             * Temperature
+             * @description 温度
+             */
+            temperature?: number | null;
+            /**
+             * Titer Mg L
+             * @description 效价(mg/L)
+             */
+            titer_mg_l?: number | null;
+            /**
+             * Titer U Ml
+             * @description 效价(u/mL)
+             */
+            titer_u_ml?: number | null;
+        };
+        /** BrothReceiveUpdate */
+        BrothReceiveUpdate: {
+            /**
+             * Amino Nitrogen
+             * @description 氨基氮
+             */
+            amino_nitrogen?: number | null;
+            /**
+             * Broth Od
+             * @description 发酵液OD
+             */
+            broth_od?: number | null;
+            /**
+             * Broth Ph
+             * @description 发酵液pH
+             */
+            broth_ph?: number | null;
+            /**
+             * Fermentation Batch
+             * @description 发酵批号
+             */
+            fermentation_batch?: string | null;
+            /**
+             * Fermenter No
+             * @description 发酵罐号
+             */
+            fermenter_no?: string | null;
+            /**
+             * Inspection Result
+             * @description 检验结果
+             */
+            inspection_result?: string | null;
+            /**
+             * Mycelium Concentration
+             * @description 菌丝浓度
+             */
+            mycelium_concentration?: number | null;
+            /**
+             * Pipeline Leak Record
+             * @description 输送管路跑冒滴漏记录
+             */
+            pipeline_leak_record?: string | null;
+            /**
+             * Qualified
+             * @description 合格判定
+             */
+            qualified?: string | null;
+            /**
+             * Receive Loss
+             * @description 接收损耗量
+             */
+            receive_loss?: number | null;
+            /**
+             * Receive Time
+             * @description 进厂/接收时间
+             */
+            receive_time?: string | null;
+            /**
+             * Received Batch
+             * @description 接收批次
+             */
+            received_batch?: string | null;
+            /**
+             * Received Volume
+             * @description 接收体积/重量
+             */
+            received_volume?: string | null;
+            /**
+             * Residual Sugar
+             * @description 残糖
+             */
+            residual_sugar?: number | null;
+            /**
+             * Sample No
+             * @description 取样编号
+             */
+            sample_no?: string | null;
+            /**
+             * Sample Time
+             * @description 取样时间
+             */
+            sample_time?: string | null;
+            /**
+             * Seq No
+             * @description 序号
+             */
+            seq_no?: number | null;
+            /**
+             * Supplier Team
+             * @description 供方班组
+             */
+            supplier_team?: string | null;
+            /**
+             * Tank Bottom Residue
+             * @description 罐底渣量
+             */
+            tank_bottom_residue?: number | null;
+            /**
+             * Temperature
+             * @description 温度
+             */
+            temperature?: number | null;
+            /**
+             * Titer Mg L
+             * @description 效价(mg/L)
+             */
+            titer_mg_l?: number | null;
+            /**
+             * Titer U Ml
+             * @description 效价(u/mL)
+             */
+            titer_u_ml?: number | null;
+        };
+        /** C0 */
+        C0: {
+            /** Batch No */
+            batch_no: string;
+            /** Feed Concentration */
+            feed_concentration?: number | null;
+            /** Feed Date */
+            feed_date?: string | null;
+            /** Feed Temp */
+            feed_temp?: number | null;
+            /** Feed Volume */
+            feed_volume?: number | null;
+            /** Material Name */
+            material_name?: string | null;
+            /** Operator */
+            operator?: string | null;
+            /** Ph Value */
+            ph_value?: number | null;
+            /** Remarks */
+            remarks?: string | null;
+            /** Seq No */
+            seq_no?: number | null;
+            /** Tank No */
+            tank_no?: string | null;
+        };
+        /** C1 */
+        C1: {
+            /** Clean Date */
+            clean_date?: string | null;
+            /** Clean Pressure */
+            clean_pressure?: number | null;
+            /** Clean Temp */
+            clean_temp?: number | null;
+            /** Clean Time */
+            clean_time?: number | null;
+            /** Cleaner Concentration */
+            cleaner_concentration?: number | null;
+            /** Cleaner Type */
+            cleaner_type?: string | null;
+            /** Flux Recovery */
+            flux_recovery?: number | null;
+            /** Membrane No */
+            membrane_no?: string | null;
+            /** Operator */
+            operator?: string | null;
+            /** Remarks */
+            remarks?: string | null;
+            /** Seq No */
+            seq_no?: number | null;
+        };
+        /** C2 */
+        C2: {
+            /** Batch No */
+            batch_no: string;
+            /** Membrane No */
+            membrane_no?: string | null;
+            /** Membrane Velocity */
+            membrane_velocity?: number | null;
+            /** Operator */
+            operator?: string | null;
+            /** Permeate Flux */
+            permeate_flux?: number | null;
+            /** Remarks */
+            remarks?: string | null;
+            /** Run Date */
+            run_date?: string | null;
+            /** Run Pressure */
+            run_pressure?: number | null;
+            /** Run Temp */
+            run_temp?: number | null;
+            /** Seq No */
+            seq_no?: number | null;
+            /** Tmp */
+            tmp?: number | null;
+        };
+        /** C3 */
+        C3: {
+            /** Abnormal Desc */
+            abnormal_desc?: string | null;
+            /** Abnormal Type */
+            abnormal_type?: string | null;
+            /** Action Result */
+            action_result?: string | null;
+            /** Action Taken */
+            action_taken?: string | null;
+            /** Equipment No */
+            equipment_no?: string | null;
+            /** Handler */
+            handler?: string | null;
+            /** Record Date */
+            record_date?: string | null;
+            /** Remarks */
+            remarks?: string | null;
+            /** Restore Time */
+            restore_time?: string | null;
+            /** Run Status */
+            run_status?: string | null;
+            /** Seq No */
+            seq_no?: number | null;
+        };
+        /** C4 */
+        C4: {
+            /** Batch No */
+            batch_no: string;
+            /** Concentration Factor */
+            concentration_factor?: number | null;
+            /** Operator */
+            operator?: string | null;
+            /** Permeate Concentration */
+            permeate_concentration?: number | null;
+            /** Permeate Volume */
+            permeate_volume?: number | null;
+            /** Remarks */
+            remarks?: string | null;
+            /** Retentate Concentration */
+            retentate_concentration?: number | null;
+            /** Retentate Volume */
+            retentate_volume?: number | null;
+            /** Sep Date */
+            sep_date?: string | null;
+            /** Separation Stage */
+            separation_stage?: string | null;
+            /** Seq No */
+            seq_no?: number | null;
         };
         /**
          * CalibrationPlanCreate
@@ -28743,6 +31257,15 @@ export interface components {
          * @enum {string}
          */
         CompletionMethod: "normal" | "early_termination";
+        /** ConfirmBody */
+        ConfirmBody: {
+            /** Actual Tank No */
+            actual_tank_no?: string | null;
+            /** Note */
+            note?: string | null;
+            /** Operator */
+            operator?: string | null;
+        };
         /**
          * ConfirmCheckRequest
          * @description 确认检查请求
@@ -31857,6 +34380,15 @@ export interface components {
              * @description 工作簿名称
              */
             workbook_name: string;
+        };
+        /** DelayBody */
+        DelayBody: {
+            /** Delay Reason */
+            delay_reason: string;
+            /** Note */
+            note?: string | null;
+            /** Operator */
+            operator?: string | null;
         };
         /** DeleteMergedRowRequest */
         DeleteMergedRowRequest: {
@@ -35788,6 +38320,201 @@ export interface components {
              */
             updated_at: string;
         };
+        /** ExtractionInputCreate */
+        ExtractionInputCreate: {
+            /**
+             * Converted Qty
+             * @description 折合产品重量(kg)
+             */
+            converted_qty?: number | null;
+            /**
+             * Crude Batch No
+             * @description 粗品批号
+             */
+            crude_batch_no: string;
+            /**
+             * Crude Content
+             * @description 含量(%)
+             */
+            crude_content: number;
+            /**
+             * Crude Moisture
+             * @description 水分(%)
+             */
+            crude_moisture: number;
+            /**
+             * Crude Weight
+             * @description 粗品重量(kg)
+             */
+            crude_weight: number;
+            /**
+             * Extraction Batch
+             * @description 提取批号
+             */
+            extraction_batch: string;
+            /**
+             * Seq No
+             * @description 投入顺序号
+             * @default 1
+             */
+            seq_no: number;
+        };
+        /** ExtractionInputUpdate */
+        ExtractionInputUpdate: {
+            /** Converted Qty */
+            converted_qty?: number | null;
+            /** Crude Batch No */
+            crude_batch_no?: string | null;
+            /** Crude Content */
+            crude_content?: number | null;
+            /** Crude Moisture */
+            crude_moisture?: number | null;
+            /** Crude Weight */
+            crude_weight?: number | null;
+            /** Seq No */
+            seq_no?: number | null;
+        };
+        /** ExtractionRecordCreate */
+        ExtractionRecordCreate: {
+            /**
+             * Batch No
+             * @description 提取批号（MC-260129）
+             */
+            batch_no: string;
+            /**
+             * Carbon Usage
+             * @description 用碳量(kg)
+             */
+            carbon_usage?: number | null;
+            /**
+             * Dry Loss
+             * @description 干燥失重(%)
+             */
+            dry_loss?: number | null;
+            /**
+             * Dry Weight
+             * @description 折干产量(kg)
+             */
+            dry_weight?: number | null;
+            /** Extract Date */
+            extract_date?: string | null;
+            /**
+             * Filter Potency
+             * @description 滤液效价(mg/L)
+             */
+            filter_potency?: number | null;
+            /**
+             * Filter Product Qty
+             * @description 滤液产品量(kg)
+             */
+            filter_product_qty?: number | null;
+            /**
+             * Filter Volume
+             * @description 滤液体积(m³)
+             */
+            filter_volume?: number | null;
+            /**
+             * Mother Content
+             * @description 母液含量(mg/L)
+             */
+            mother_content?: number | null;
+            /**
+             * Mother Loss
+             * @description 母液损失量(kg)
+             */
+            mother_loss?: number | null;
+            /**
+             * Mother Volume
+             * @description 母液体积(kL)
+             */
+            mother_volume?: number | null;
+            /** Remarks */
+            remarks?: string | null;
+            /**
+             * Status
+             * @description 状态
+             * @default 0
+             */
+            status: number;
+            /**
+             * Total Converted Qty
+             * @description 折纯总量(kg)
+             */
+            total_converted_qty?: number | null;
+            /**
+             * Total Crude Weight
+             * @description 粗品总投入量(kg)
+             */
+            total_crude_weight?: number | null;
+            /**
+             * Wet Content
+             * @description 湿粉含量(%)
+             */
+            wet_content?: number | null;
+            /**
+             * Wet Weight
+             * @description 湿粉毛重(kg)
+             */
+            wet_weight?: number | null;
+            /**
+             * Workshop
+             * @default 201-2
+             */
+            workshop: string;
+            /**
+             * Yield Rate
+             * @description 单步收率(%)
+             */
+            yield_rate?: number | null;
+            /**
+             * Yield To Filter
+             * @description 对滤液收率(%)
+             */
+            yield_to_filter?: number | null;
+        };
+        /** ExtractionRecordUpdate */
+        ExtractionRecordUpdate: {
+            /** Batch No */
+            batch_no?: string | null;
+            /** Carbon Usage */
+            carbon_usage?: number | null;
+            /** Dry Loss */
+            dry_loss?: number | null;
+            /** Dry Weight */
+            dry_weight?: number | null;
+            /** Extract Date */
+            extract_date?: string | null;
+            /** Filter Potency */
+            filter_potency?: number | null;
+            /** Filter Product Qty */
+            filter_product_qty?: number | null;
+            /** Filter Volume */
+            filter_volume?: number | null;
+            /** Mother Content */
+            mother_content?: number | null;
+            /** Mother Loss */
+            mother_loss?: number | null;
+            /** Mother Volume */
+            mother_volume?: number | null;
+            /** Remarks */
+            remarks?: string | null;
+            /** Status */
+            status?: number | null;
+            /** Total Converted Qty */
+            total_converted_qty?: number | null;
+            /** Total Crude Weight */
+            total_crude_weight?: number | null;
+            /** Wet Content */
+            wet_content?: number | null;
+            /** Wet Weight */
+            wet_weight?: number | null;
+            /** Workshop */
+            workshop?: string | null;
+            /** Yield Rate */
+            yield_rate?: number | null;
+            /** Yield To Filter */
+            yield_to_filter?: number | null;
+        };
         /**
          * FailureCodeCreate
          * @description 创建故障代码请求
@@ -36690,124 +39417,188 @@ export interface components {
         };
         /** FermentationCreate */
         FermentationCreate: {
-            /** Attachment */
+            /**
+             * Attachment
+             * @description 附件
+             */
             attachment?: string | null;
-            /** Batch No */
+            /**
+             * Batch No
+             * @description 批号
+             */
             batch_no: string;
-            /** Cycle Data */
-            cycle_data?: {
-                [key: string]: unknown;
-            };
-            /** Discharge Date */
+            /**
+             * Cycle 1
+             * @description 周期1
+             */
+            cycle_1?: number | null;
+            /**
+             * Cycle 2
+             * @description 周期2
+             */
+            cycle_2?: number | null;
+            /**
+             * Cycle 3
+             * @description 周期3
+             */
+            cycle_3?: number | null;
+            /**
+             * Cycle 4
+             * @description 周期4
+             */
+            cycle_4?: number | null;
+            /**
+             * Cycle 5
+             * @description 周期5
+             */
+            cycle_5?: number | null;
+            /**
+             * Cycle 6
+             * @description 周期6
+             */
+            cycle_6?: number | null;
+            /**
+             * Discharge Date
+             * @description 放罐日期
+             */
             discharge_date?: string | null;
             /**
              * Entry Date
              * Format: date
+             * @description 进罐日期
              */
             entry_date: string;
-            /** Fermenter */
+            /**
+             * Fermenter
+             * @description 发酵罐
+             */
             fermenter: string;
             /**
              * Product Name
+             * @description 产品名称
              * @default L-苯丙氨酸
              */
             product_name: string;
-            /** Remarks */
+            /**
+             * Remarks
+             * @description 备注
+             */
             remarks?: string | null;
             /**
-             * Source
-             * @default manual
-             */
-            source: string;
-            /** Source Record Id */
-            source_record_id?: string | null;
-            /**
              * Status
+             * @description 状态
              * @default in_progress
              */
             status: string;
-            /** Tank Yield */
+            /**
+             * Tank Yield
+             * @description 罐产
+             */
             tank_yield?: number | null;
         };
-        /** FermentationResponse */
-        FermentationResponse: {
-            /** Attachment */
-            attachment?: string | null;
+        /** FermentationLiquidCreate */
+        FermentationLiquidCreate: {
+            /** Annual Seq */
+            annual_seq?: number | null;
             /** Batch No */
             batch_no: string;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /** Cycle Data */
-            cycle_data?: {
-                [key: string]: unknown;
-            };
-            /** Discharge Date */
-            discharge_date?: string | null;
-            /**
-             * Entry Date
-             * Format: date
-             */
-            entry_date: string;
-            /** Fermenter */
-            fermenter: string;
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /**
-             * Product Name
-             * @default L-苯丙氨酸
-             */
-            product_name: string;
+            /** Create Date */
+            create_date?: string | null;
+            /** Input Volume */
+            input_volume?: number | null;
+            /** Potency */
+            potency?: number | null;
+            /** Product Qty */
+            product_qty?: number | null;
             /** Remarks */
             remarks?: string | null;
             /**
-             * Source
-             * @default manual
+             * Workshop
+             * @default 101
              */
-            source: string;
-            /** Source Record Id */
-            source_record_id?: string | null;
+            workshop: string;
+            /** Year */
+            year: number;
+        };
+        /** FermentationStatusUpdate */
+        FermentationStatusUpdate: {
             /**
              * Status
-             * @default in_progress
+             * @description 新状态
              */
             status: string;
-            /** Tank Yield */
-            tank_yield?: number | null;
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
         };
         /** FermentationUpdate */
         FermentationUpdate: {
-            /** Attachment */
+            /**
+             * Attachment
+             * @description 附件
+             */
             attachment?: string | null;
-            /** Batch No */
+            /**
+             * Batch No
+             * @description 批号
+             */
             batch_no?: string | null;
-            /** Cycle Data */
-            cycle_data?: {
-                [key: string]: unknown;
-            } | null;
-            /** Discharge Date */
+            /**
+             * Cycle 1
+             * @description 周期1
+             */
+            cycle_1?: number | null;
+            /**
+             * Cycle 2
+             * @description 周期2
+             */
+            cycle_2?: number | null;
+            /**
+             * Cycle 3
+             * @description 周期3
+             */
+            cycle_3?: number | null;
+            /**
+             * Cycle 4
+             * @description 周期4
+             */
+            cycle_4?: number | null;
+            /**
+             * Cycle 5
+             * @description 周期5
+             */
+            cycle_5?: number | null;
+            /**
+             * Cycle 6
+             * @description 周期6
+             */
+            cycle_6?: number | null;
+            /**
+             * Discharge Date
+             * @description 放罐日期
+             */
             discharge_date?: string | null;
-            /** Entry Date */
+            /**
+             * Entry Date
+             * @description 进罐日期
+             */
             entry_date?: string | null;
-            /** Fermenter */
+            /**
+             * Fermenter
+             * @description 发酵罐
+             */
             fermenter?: string | null;
-            /** Product Name */
-            product_name?: string | null;
-            /** Remarks */
+            /**
+             * Remarks
+             * @description 备注
+             */
             remarks?: string | null;
-            /** Status */
+            /**
+             * Status
+             * @description 状态
+             */
             status?: string | null;
-            /** Tank Yield */
+            /**
+             * Tank Yield
+             * @description 罐产
+             */
             tank_yield?: number | null;
         };
         /**
@@ -40437,6 +43228,193 @@ export interface components {
              */
             synced_count: number;
         };
+        /** McRefinementInputCreate */
+        McRefinementInputCreate: {
+            /**
+             * Content
+             * @description 含量(%)
+             */
+            content: number;
+            /**
+             * Input Weight
+             * @description 重量(kg)
+             */
+            input_weight: number;
+            /**
+             * Moisture
+             * @description 水分(%)
+             */
+            moisture: number;
+            /**
+             * Pure Qty
+             * @description 折纯量(kg)
+             */
+            pure_qty?: number | null;
+            /**
+             * Refinement Batch
+             * @description 二次结晶批号
+             */
+            refinement_batch: string;
+            /**
+             * Wet Batch No
+             * @description 上游湿粉批号（6位日期）
+             */
+            wet_batch_no: string;
+        };
+        /** McRefinementInputUpdate */
+        McRefinementInputUpdate: {
+            /** Content */
+            content?: number | null;
+            /** Input Weight */
+            input_weight?: number | null;
+            /** Moisture */
+            moisture?: number | null;
+            /** Pure Qty */
+            pure_qty?: number | null;
+            /** Wet Batch No */
+            wet_batch_no?: string | null;
+        };
+        /** McRefinementRecordCreate */
+        McRefinementRecordCreate: {
+            /**
+             * Batch No
+             * @description 二次结晶批号（MC-F2-260101）
+             */
+            batch_no: string;
+            /**
+             * Butyl Acetate Volume
+             * @description 加入丁酯量(m³)
+             */
+            butyl_acetate_volume?: number | null;
+            /**
+             * Crystallization Tank
+             * @description 结晶用罐
+             */
+            crystallization_tank?: string | null;
+            /**
+             * Cumulative Dry Product
+             * @description 累计折干产品量(kg)
+             */
+            cumulative_dry_product?: number | null;
+            /**
+             * Cumulative Dry Weight
+             * @description 累计干粉重量(kg)
+             */
+            cumulative_dry_weight?: number | null;
+            /**
+             * Cumulative Yield
+             * @description 二次结晶累计收率(%)
+             */
+            cumulative_yield?: number | null;
+            /**
+             * Dissolution Tank
+             * @description 溶解用罐
+             */
+            dissolution_tank?: string | null;
+            /**
+             * Dry Product Total
+             * @description 折干产品总量(kg)
+             */
+            dry_product_total?: number | null;
+            /**
+             * Dry Weight
+             * @description 干粉重量(kg)
+             */
+            dry_weight?: number | null;
+            /** Input Date */
+            input_date?: string | null;
+            /**
+             * Mother Liquid Content
+             * @description 二次母液含量(mg/L)
+             */
+            mother_liquid_content?: number | null;
+            /**
+             * Mother Liquid Loss
+             * @description 母液损失量(kg)
+             */
+            mother_liquid_loss?: number | null;
+            /**
+             * Mother Liquid Volume
+             * @description 二次母液体积(m³)
+             */
+            mother_liquid_volume?: number | null;
+            /** Remarks */
+            remarks?: string | null;
+            /**
+             * Single Step Yield
+             * @description 单步收率(%)
+             */
+            single_step_yield?: number | null;
+            /**
+             * Status
+             * @description 状态
+             * @default 0
+             */
+            status: number;
+            /**
+             * Total Input Weight
+             * @description 总重(kg)
+             */
+            total_input_weight?: number | null;
+            /**
+             * Total Pure Qty
+             * @description 折纯量(kg)
+             */
+            total_pure_qty?: number | null;
+            /**
+             * Wet Weight
+             * @description 湿粉重量(kg)
+             */
+            wet_weight?: number | null;
+            /**
+             * Workshop
+             * @default 201-2
+             */
+            workshop: string;
+        };
+        /** McRefinementRecordUpdate */
+        McRefinementRecordUpdate: {
+            /** Batch No */
+            batch_no?: string | null;
+            /** Butyl Acetate Volume */
+            butyl_acetate_volume?: number | null;
+            /** Crystallization Tank */
+            crystallization_tank?: string | null;
+            /** Cumulative Dry Product */
+            cumulative_dry_product?: number | null;
+            /** Cumulative Dry Weight */
+            cumulative_dry_weight?: number | null;
+            /** Cumulative Yield */
+            cumulative_yield?: number | null;
+            /** Dissolution Tank */
+            dissolution_tank?: string | null;
+            /** Dry Product Total */
+            dry_product_total?: number | null;
+            /** Dry Weight */
+            dry_weight?: number | null;
+            /** Input Date */
+            input_date?: string | null;
+            /** Mother Liquid Content */
+            mother_liquid_content?: number | null;
+            /** Mother Liquid Loss */
+            mother_liquid_loss?: number | null;
+            /** Mother Liquid Volume */
+            mother_liquid_volume?: number | null;
+            /** Remarks */
+            remarks?: string | null;
+            /** Single Step Yield */
+            single_step_yield?: number | null;
+            /** Status */
+            status?: number | null;
+            /** Total Input Weight */
+            total_input_weight?: number | null;
+            /** Total Pure Qty */
+            total_pure_qty?: number | null;
+            /** Wet Weight */
+            wet_weight?: number | null;
+            /** Workshop */
+            workshop?: string | null;
+        };
         /** MenuCreateRequest */
         MenuCreateRequest: {
             /** Component Path */
@@ -40539,6 +43517,103 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /** NCECreate */
+        NCECreate: {
+            /**
+             * Action Taken
+             * @description 处理措施
+             */
+            action_taken?: string | null;
+            /**
+             * Description
+             * @description 事件描述
+             */
+            description?: string | null;
+            /**
+             * Event Time
+             * Format: date-time
+             * @description 发生时间
+             */
+            event_time: string;
+            /**
+             * Event Type
+             * @description 事件类型
+             */
+            event_type: string;
+            /**
+             * Impact Duration
+             * @description 影响时间
+             */
+            impact_duration?: string | null;
+            /**
+             * Impact Scope
+             * @description 影响范围
+             */
+            impact_scope?: string | null;
+            /**
+             * Remarks
+             * @description 备注
+             */
+            remarks?: string | null;
+            /**
+             * Restore Time
+             * @description 恢复正常时间
+             */
+            restore_time?: string | null;
+            /**
+             * Workshop
+             * @description 车间
+             */
+            workshop: string;
+        };
+        /** NCEUpdate */
+        NCEUpdate: {
+            /**
+             * Action Taken
+             * @description 处理措施
+             */
+            action_taken?: string | null;
+            /**
+             * Description
+             * @description 事件描述
+             */
+            description?: string | null;
+            /**
+             * Event Time
+             * @description 发生时间
+             */
+            event_time?: string | null;
+            /**
+             * Event Type
+             * @description 事件类型
+             */
+            event_type?: string | null;
+            /**
+             * Impact Duration
+             * @description 影响时间
+             */
+            impact_duration?: string | null;
+            /**
+             * Impact Scope
+             * @description 影响范围
+             */
+            impact_scope?: string | null;
+            /**
+             * Remarks
+             * @description 备注
+             */
+            remarks?: string | null;
+            /**
+             * Restore Time
+             * @description 恢复正常时间
+             */
+            restore_time?: string | null;
+            /**
+             * Workshop
+             * @description 车间
+             */
+            workshop?: string | null;
         };
         /**
          * NewEmployeeTrainingItemAdd
@@ -40716,108 +43791,6 @@ export interface components {
              * @description 勾选的计划项ID（≤5个）
              */
             item_ids: string[];
-        };
-        /** NonConformingEventCreate */
-        NonConformingEventCreate: {
-            /** Action Taken */
-            action_taken?: string | null;
-            /** Description */
-            description?: string | null;
-            /**
-             * Event Time
-             * Format: date-time
-             */
-            event_time: string;
-            /** Event Type */
-            event_type: string;
-            /** Impact Duration */
-            impact_duration?: string | null;
-            /** Impact Scope */
-            impact_scope?: string | null;
-            /** Related Batch Nos */
-            related_batch_nos?: string[];
-            /** Remarks */
-            remarks?: string | null;
-            /** Restore Time */
-            restore_time?: string | null;
-            /**
-             * Status
-             * @default open
-             */
-            status: string;
-            /** Workshop */
-            workshop: string;
-        };
-        /** NonConformingEventResponse */
-        NonConformingEventResponse: {
-            /** Action Taken */
-            action_taken?: string | null;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /** Description */
-            description?: string | null;
-            /**
-             * Event Time
-             * Format: date-time
-             */
-            event_time: string;
-            /** Event Type */
-            event_type: string;
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Impact Duration */
-            impact_duration?: string | null;
-            /** Impact Scope */
-            impact_scope?: string | null;
-            /** Related Batch Nos */
-            related_batch_nos?: string[];
-            /** Remarks */
-            remarks?: string | null;
-            /** Restore Time */
-            restore_time?: string | null;
-            /**
-             * Status
-             * @default open
-             */
-            status: string;
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
-            /** Workshop */
-            workshop: string;
-        };
-        /** NonConformingEventUpdate */
-        NonConformingEventUpdate: {
-            /** Action Taken */
-            action_taken?: string | null;
-            /** Description */
-            description?: string | null;
-            /** Event Time */
-            event_time?: string | null;
-            /** Event Type */
-            event_type?: string | null;
-            /** Impact Duration */
-            impact_duration?: string | null;
-            /** Impact Scope */
-            impact_scope?: string | null;
-            /** Related Batch Nos */
-            related_batch_nos?: string[] | null;
-            /** Remarks */
-            remarks?: string | null;
-            /** Restore Time */
-            restore_time?: string | null;
-            /** Status */
-            status?: string | null;
-            /** Workshop */
-            workshop?: string | null;
         };
         /** OffboardingRecordCreate */
         OffboardingRecordCreate: {
@@ -42614,96 +45587,6 @@ export interface components {
             /** Title */
             title?: string | null;
         };
-        /**
-         * PlanStatus
-         * @description 计划状态枚举
-         * @enum {string}
-         */
-        PlanStatus: "draft" | "approved" | "executing" | "completed";
-        /**
-         * PlanTaskCreate
-         * @description 创建计划任务
-         */
-        PlanTaskCreate: {
-            /**
-             * Assigned To
-             * @description 负责人
-             */
-            assigned_to?: string | null;
-            /**
-             * Batch Qty
-             * @description 批次数量
-             */
-            batch_qty?: number | null;
-            /**
-             * Due Date
-             * @description 计划完成日期
-             */
-            due_date?: string | null;
-            /**
-             * Notes
-             * @description 备注
-             */
-            notes?: string | null;
-            /**
-             * Plan Id
-             * Format: uuid
-             */
-            plan_id: string;
-            /**
-             * Product Code
-             * @description 产品编码
-             */
-            product_code: string;
-            /**
-             * Product Name
-             * @description 产品名称
-             */
-            product_name?: string | null;
-        };
-        /**
-         * PlanTaskUpdate
-         * @description 更新计划任务
-         */
-        PlanTaskUpdate: {
-            /**
-             * Assigned To
-             * @description 负责人
-             */
-            assigned_to?: string | null;
-            /**
-             * Assigned To Name
-             * @description 负责人姓名
-             */
-            assigned_to_name?: string | null;
-            /**
-             * Batch Qty
-             * @description 批次数量
-             */
-            batch_qty?: number | null;
-            /**
-             * Due Date
-             * @description 计划完成日期
-             */
-            due_date?: string | null;
-            /**
-             * Notes
-             * @description 备注
-             */
-            notes?: string | null;
-            /**
-             * Product Code
-             * @description 产品编码
-             */
-            product_code?: string | null;
-            /**
-             * Product Name
-             * @description 产品名称
-             */
-            product_name?: string | null;
-            /** @description 状态 */
-            status?: components["schemas"]["TaskStatus"] | null;
-        };
         /** PlanTrackingRecordCreate */
         PlanTrackingRecordCreate: {
             /**
@@ -43316,156 +46199,103 @@ export interface components {
              */
             name: string;
         };
-        /** ProcessBottleneck */
-        ProcessBottleneck: {
-            /** Has More */
-            has_more: boolean;
-            /** Process Code */
-            process_code: string;
-            /** Process Label */
-            process_label: string;
-            /** Stuck Batches */
-            stuck_batches: string[];
-            /** Stuck Count */
-            stuck_count: number;
+        /** PretreatmentCreate */
+        PretreatmentCreate: {
+            /** Acid Amount */
+            acid_amount?: string | null;
+            /** Acid Type */
+            acid_type?: string | null;
+            /** Broth Volume */
+            broth_volume?: string | null;
+            /** Dilution Ratio */
+            dilution_ratio?: string | null;
+            /** Dilution Water Volume */
+            dilution_water_volume?: string | null;
+            /** Holding Time */
+            holding_time?: string | null;
+            /** Impurity Content */
+            impurity_content?: number | null;
+            /** Loss */
+            loss?: number | null;
+            /** Neutralize Ph */
+            neutralize_ph?: number | null;
+            /** Received Batch */
+            received_batch: string;
+            /** Residue Titer */
+            residue_titer?: number | null;
+            /** Sediment Weight */
+            sediment_weight?: string | null;
+            /** Seq No */
+            seq_no?: number | null;
+            /** Settling Temp */
+            settling_temp?: number | null;
+            /** Settling Time */
+            settling_time?: string | null;
+            /** Stirring Speed */
+            stirring_speed?: string | null;
+            /** Stirring Time */
+            stirring_time?: string | null;
+            /** Supernatant Volume */
+            supernatant_volume?: string | null;
+            /** Target Temp */
+            target_temp?: number | null;
+            /** Temp Curve */
+            temp_curve?: string | null;
+            /** Titer After */
+            titer_after?: number | null;
+            /** Titer Before */
+            titer_before?: number | null;
+            /** Yield Rate */
+            yield_rate?: number | null;
         };
-        /** ProcessDefinition */
-        ProcessDefinition: {
-            /** Code */
-            code: string;
-            /** Fields */
-            fields: components["schemas"]["ProcessFieldDefinition"][];
-            /** Label */
-            label: string;
-            /** Sequence */
-            sequence: number;
-            /** Short */
-            short: string;
-        };
-        /** ProcessExecutionRecordCreate */
-        ProcessExecutionRecordCreate: {
-            /** Batch Id */
-            batch_id?: string | null;
-            /** Batch No */
-            batch_no: string;
-            /** Data */
-            data?: {
-                [key: string]: unknown;
-            };
-            /** Process Code */
-            process_code: string;
-            /**
-             * Recorded At
-             * Format: date-time
-             */
-            recorded_at: string;
-            /** Remarks */
-            remarks?: string | null;
-            /**
-             * Source
-             * @default manual
-             */
-            source: string;
-            /** Source Record Id */
-            source_record_id?: string | null;
-            /**
-             * Status
-             * @default draft
-             * @enum {string}
-             */
-            status: "draft" | "in_progress" | "completed";
-            /**
-             * Workshop Code
-             * @default 203
-             */
-            workshop_code: string;
-        };
-        /** ProcessExecutionRecordResponse */
-        ProcessExecutionRecordResponse: {
-            /** Batch Id */
-            batch_id?: string | null;
-            /** Batch No */
-            batch_no: string;
-            /** Completed At */
-            completed_at?: string | null;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /** Data */
-            data?: {
-                [key: string]: unknown;
-            };
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Process Code */
-            process_code: string;
-            /**
-             * Recorded At
-             * Format: date-time
-             */
-            recorded_at: string;
-            /** Remarks */
-            remarks?: string | null;
-            /**
-             * Source
-             * @default manual
-             */
-            source: string;
-            /** Source Record Id */
-            source_record_id?: string | null;
-            /**
-             * Status
-             * @default draft
-             * @enum {string}
-             */
-            status: "draft" | "in_progress" | "completed";
-            /** Step Sequence */
-            step_sequence: number;
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
-            /**
-             * Workshop Code
-             * @default 203
-             */
-            workshop_code: string;
-        };
-        /** ProcessExecutionRecordUpdate */
-        ProcessExecutionRecordUpdate: {
-            /** Data */
-            data?: {
-                [key: string]: unknown;
-            } | null;
-            /** Recorded At */
-            recorded_at?: string | null;
-            /** Remarks */
-            remarks?: string | null;
-            /** Status */
-            status?: ("draft" | "in_progress" | "completed") | null;
-        };
-        /** ProcessFieldDefinition */
-        ProcessFieldDefinition: {
-            /**
-             * Kind
-             * @enum {string}
-             */
-            kind: "text" | "textarea" | "number" | "date" | "boolean" | "select";
-            /** Label */
-            label: string;
-            /** Name */
-            name: string;
-            /**
-             * Required
-             * @default false
-             */
-            required: boolean;
+        /** PretreatmentUpdate */
+        PretreatmentUpdate: {
+            /** Acid Amount */
+            acid_amount?: string | null;
+            /** Acid Type */
+            acid_type?: string | null;
+            /** Broth Volume */
+            broth_volume?: string | null;
+            /** Dilution Ratio */
+            dilution_ratio?: string | null;
+            /** Dilution Water Volume */
+            dilution_water_volume?: string | null;
+            /** Holding Time */
+            holding_time?: string | null;
+            /** Impurity Content */
+            impurity_content?: number | null;
+            /** Loss */
+            loss?: number | null;
+            /** Neutralize Ph */
+            neutralize_ph?: number | null;
+            /** Received Batch */
+            received_batch?: string | null;
+            /** Residue Titer */
+            residue_titer?: number | null;
+            /** Sediment Weight */
+            sediment_weight?: string | null;
+            /** Seq No */
+            seq_no?: number | null;
+            /** Settling Temp */
+            settling_temp?: number | null;
+            /** Settling Time */
+            settling_time?: string | null;
+            /** Stirring Speed */
+            stirring_speed?: string | null;
+            /** Stirring Time */
+            stirring_time?: string | null;
+            /** Supernatant Volume */
+            supernatant_volume?: string | null;
+            /** Target Temp */
+            target_temp?: number | null;
+            /** Temp Curve */
+            temp_curve?: string | null;
+            /** Titer After */
+            titer_after?: number | null;
+            /** Titer Before */
+            titer_before?: number | null;
+            /** Yield Rate */
+            yield_rate?: number | null;
         };
         /**
          * ProcessParameterCreate
@@ -43513,6 +46343,57 @@ export interface components {
              * Format: uuid
              */
             step_id: string;
+            /**
+             * Target Value
+             * @description 目标值
+             */
+            target_value?: number | null;
+            /**
+             * Unit
+             * @description 单位
+             */
+            unit?: string | null;
+        };
+        /**
+         * ProcessParameterUpdate
+         * @description 更新工艺参数
+         */
+        ProcessParameterUpdate: {
+            /**
+             * Data Type
+             * @description 数据类型
+             */
+            data_type?: string | null;
+            /**
+             * Is Critical
+             * @description 是否关键参数
+             */
+            is_critical?: boolean | null;
+            /**
+             * Max Value
+             * @description 最大值
+             */
+            max_value?: number | null;
+            /**
+             * Min Value
+             * @description 最小值
+             */
+            min_value?: number | null;
+            /**
+             * Notes
+             * @description 备注
+             */
+            notes?: string | null;
+            /**
+             * Param Code
+             * @description 参数编码
+             */
+            param_code?: string | null;
+            /**
+             * Param Name
+             * @description 参数名称
+             */
+            param_name?: string | null;
             /**
              * Target Value
              * @description 目标值
@@ -43685,23 +46566,6 @@ export interface components {
              * @description 步骤序号
              */
             step_no: number;
-        };
-        /** ProcessStepProgress */
-        ProcessStepProgress: {
-            /** Code */
-            code: string;
-            /** Completed */
-            completed: boolean;
-            /** Has Record */
-            has_record: boolean;
-            /** Label */
-            label: string;
-            /** Record Count */
-            record_count: number;
-            /** Sequence */
-            sequence: number;
-            /** Short */
-            short: string;
         };
         /**
          * ProcessStepUpdate
@@ -44416,986 +47280,50 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** ProductionApiResponse[BatchProfileResponse] */
-        ProductionApiResponse_BatchProfileResponse_: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            data?: components["schemas"]["BatchProfileResponse"] | null;
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            /** Meta */
-            meta?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** ProductionApiResponse[BatchProgressResponse] */
-        ProductionApiResponse_BatchProgressResponse_: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            data?: components["schemas"]["BatchProgressResponse"] | null;
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            /** Meta */
-            meta?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** ProductionApiResponse[FermentationResponse] */
-        ProductionApiResponse_FermentationResponse_: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            data?: components["schemas"]["FermentationResponse"] | null;
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            /** Meta */
-            meta?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** ProductionApiResponse[NonConformingEventResponse] */
-        ProductionApiResponse_NonConformingEventResponse_: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            data?: components["schemas"]["NonConformingEventResponse"] | null;
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            /** Meta */
-            meta?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** ProductionApiResponse[NoneType] */
-        ProductionApiResponse_NoneType_: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            /** Data */
-            data?: null;
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            /** Meta */
-            meta?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** ProductionApiResponse[ProcessExecutionRecordResponse] */
-        ProductionApiResponse_ProcessExecutionRecordResponse_: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            data?: components["schemas"]["ProcessExecutionRecordResponse"] | null;
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            /** Meta */
-            meta?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** ProductionApiResponse[ProductionExecutionPlanResponse] */
-        ProductionApiResponse_ProductionExecutionPlanResponse_: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            data?: components["schemas"]["ProductionExecutionPlanResponse"] | null;
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            /** Meta */
-            meta?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** ProductionApiResponse[ProductionFeishuSyncBindingResponse] */
-        ProductionApiResponse_ProductionFeishuSyncBindingResponse_: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            data?: components["schemas"]["ProductionFeishuSyncBindingResponse"] | null;
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            /** Meta */
-            meta?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** ProductionApiResponse[ProductionFeishuSyncRunResponse] */
-        ProductionApiResponse_ProductionFeishuSyncRunResponse_: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            data?: components["schemas"]["ProductionFeishuSyncRunResponse"] | null;
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            /** Meta */
-            meta?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** ProductionApiResponse[ProductionFeishuTablePreviewResponse] */
-        ProductionApiResponse_ProductionFeishuTablePreviewResponse_: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            data?: components["schemas"]["ProductionFeishuTablePreviewResponse"] | null;
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            /** Meta */
-            meta?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** ProductionApiResponse[SalesPlanDetailResponse] */
-        ProductionApiResponse_SalesPlanDetailResponse_: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            data?: components["schemas"]["SalesPlanDetailResponse"] | null;
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            /** Meta */
-            meta?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** ProductionApiResponse[SeedCultureResponse] */
-        ProductionApiResponse_SeedCultureResponse_: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            data?: components["schemas"]["SeedCultureResponse"] | null;
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            /** Meta */
-            meta?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** ProductionApiResponse[ShiftHandoverResponse] */
-        ProductionApiResponse_ShiftHandoverResponse_: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            data?: components["schemas"]["ShiftHandoverResponse"] | null;
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            /** Meta */
-            meta?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** ProductionApiResponse[ShiftLogResponse] */
-        ProductionApiResponse_ShiftLogResponse_: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            data?: components["schemas"]["ShiftLogResponse"] | null;
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            /** Meta */
-            meta?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** ProductionApiResponse[list[FermentationResponse]] */
-        ProductionApiResponse_list_FermentationResponse__: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            /** Data */
-            data?: components["schemas"]["FermentationResponse"][] | null;
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            /** Meta */
-            meta?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** ProductionApiResponse[list[NonConformingEventResponse]] */
-        ProductionApiResponse_list_NonConformingEventResponse__: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            /** Data */
-            data?: components["schemas"]["NonConformingEventResponse"][] | null;
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            /** Meta */
-            meta?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** ProductionApiResponse[list[ProcessDefinition]] */
-        ProductionApiResponse_list_ProcessDefinition__: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            /** Data */
-            data?: components["schemas"]["ProcessDefinition"][] | null;
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            /** Meta */
-            meta?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** ProductionApiResponse[list[ProcessExecutionRecordResponse]] */
-        ProductionApiResponse_list_ProcessExecutionRecordResponse__: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            /** Data */
-            data?: components["schemas"]["ProcessExecutionRecordResponse"][] | null;
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            /** Meta */
-            meta?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** ProductionApiResponse[list[ProductionExecutionPlanResponse]] */
-        ProductionApiResponse_list_ProductionExecutionPlanResponse__: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            /** Data */
-            data?: components["schemas"]["ProductionExecutionPlanResponse"][] | null;
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            /** Meta */
-            meta?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** ProductionApiResponse[list[ProductionFeishuSyncBindingResponse]] */
-        ProductionApiResponse_list_ProductionFeishuSyncBindingResponse__: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            /** Data */
-            data?: components["schemas"]["ProductionFeishuSyncBindingResponse"][] | null;
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            /** Meta */
-            meta?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** ProductionApiResponse[list[ProductionFeishuSyncRunResponse]] */
-        ProductionApiResponse_list_ProductionFeishuSyncRunResponse__: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            /** Data */
-            data?: components["schemas"]["ProductionFeishuSyncRunResponse"][] | null;
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            /** Meta */
-            meta?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** ProductionApiResponse[list[SalesPlanDetailResponse]] */
-        ProductionApiResponse_list_SalesPlanDetailResponse__: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            /** Data */
-            data?: components["schemas"]["SalesPlanDetailResponse"][] | null;
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            /** Meta */
-            meta?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** ProductionApiResponse[list[SeedCultureResponse]] */
-        ProductionApiResponse_list_SeedCultureResponse__: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            /** Data */
-            data?: components["schemas"]["SeedCultureResponse"][] | null;
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            /** Meta */
-            meta?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** ProductionApiResponse[list[ShiftHandoverResponse]] */
-        ProductionApiResponse_list_ShiftHandoverResponse__: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            /** Data */
-            data?: components["schemas"]["ShiftHandoverResponse"][] | null;
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            /** Meta */
-            meta?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** ProductionApiResponse[list[ShiftLogResponse]] */
-        ProductionApiResponse_list_ShiftLogResponse__: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            /** Data */
-            data?: components["schemas"]["ShiftLogResponse"][] | null;
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            /** Meta */
-            meta?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /**
-         * ProductionExecutionPlanCreate
-         * @description 创建车间日生产执行计划。
-         */
-        ProductionExecutionPlanCreate: {
-            /**
-             * Actual Completion
-             * @description 实际完成
-             */
-            actual_completion?: number | null;
-            /**
-             * Completion Rate
-             * @description 完成率(%)
-             */
-            completion_rate?: number | null;
-            /**
-             * Plan Date
-             * @description 计划日期
-             */
-            plan_date?: string | null;
-            /**
-             * Planned Yield
-             * @description 计划产量
-             */
-            planned_yield?: number | null;
-            /**
-             * Product Name
-             * @description 产品名称
-             */
-            product_name: string;
-            /**
-             * Quality Status
-             * @description 质量情况
-             */
-            quality_status?: string | null;
-            /**
-             * Remarks
-             * @description 备注
-             */
-            remarks?: string | null;
-            /**
-             * Safety Status
-             * @description 安环情况
-             */
-            safety_status?: string | null;
-            /**
-             * Source
-             * @description 数据来源
-             * @default manual
-             */
-            source: string;
-            /**
-             * Source Record Id
-             * @description 来源系统记录标识
-             */
-            source_record_id?: string | null;
-            /**
-             * Unit
-             * @description 单位
-             */
-            unit?: string | null;
-            /**
-             * Workshop
-             * @description 车间
-             */
-            workshop?: string | null;
-        };
-        /**
-         * ProductionExecutionPlanResponse
-         * @description 车间日生产执行计划响应。
-         */
-        ProductionExecutionPlanResponse: {
-            /**
-             * Actual Completion
-             * @description 实际完成
-             */
-            actual_completion?: number | null;
-            /**
-             * Completion Rate
-             * @description 完成率(%)
-             */
-            completion_rate?: number | null;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /**
-             * Plan Date
-             * @description 计划日期
-             */
-            plan_date?: string | null;
-            /**
-             * Planned Yield
-             * @description 计划产量
-             */
-            planned_yield?: number | null;
-            /**
-             * Product Name
-             * @description 产品名称
-             */
-            product_name: string;
-            /**
-             * Quality Status
-             * @description 质量情况
-             */
-            quality_status?: string | null;
-            /**
-             * Remarks
-             * @description 备注
-             */
-            remarks?: string | null;
-            /**
-             * Safety Status
-             * @description 安环情况
-             */
-            safety_status?: string | null;
-            /**
-             * Source
-             * @description 数据来源
-             * @default manual
-             */
-            source: string;
-            /**
-             * Source Record Id
-             * @description 来源系统记录标识
-             */
-            source_record_id?: string | null;
-            /**
-             * Unit
-             * @description 单位
-             */
-            unit?: string | null;
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
-            /**
-             * Workshop
-             * @description 车间
-             */
-            workshop?: string | null;
-        };
-        /**
-         * ProductionExecutionPlanUpdate
-         * @description 更新车间日生产执行计划。
-         */
-        ProductionExecutionPlanUpdate: {
-            /** Actual Completion */
-            actual_completion?: number | null;
-            /** Completion Rate */
-            completion_rate?: number | null;
-            /** Plan Date */
-            plan_date?: string | null;
-            /** Planned Yield */
-            planned_yield?: number | null;
-            /** Product Name */
-            product_name?: string | null;
-            /** Quality Status */
-            quality_status?: string | null;
-            /** Remarks */
-            remarks?: string | null;
-            /** Safety Status */
-            safety_status?: string | null;
-            /** Unit */
-            unit?: string | null;
-            /** Workshop */
-            workshop?: string | null;
-        };
-        /**
-         * ProductionFeishuConfigUpsert
-         * @description 保存生产飞书配置
-         */
+        /** ProductionFeishuConfigUpsert */
         ProductionFeishuConfigUpsert: {
             /**
              * App Id
-             * @description 飞书应用 App ID
+             * @default
              */
             app_id: string;
             /**
              * App Secret
-             * @description 飞书应用 App Secret
+             * @default
              */
-            app_secret?: string | null;
+            app_secret: string;
             /**
              * Bitable App Token
-             * @description 兼容旧同步的多维表格 App Token
              * @default
              */
             bitable_app_token: string;
             /**
-             * Config Name
-             * @description 配置名称
+             * Is Active
+             * @default true
+             */
+            is_active: boolean;
+            /**
+             * Name
              * @default 生产飞书配置
              */
-            config_name: string;
-            /**
-             * Daily Sync Time
-             * @description 每日同步时间
-             * @default 02:00
-             */
-            daily_sync_time: string;
-            /**
-             * Id
-             * @description 配置ID，留空则新增
-             */
-            id?: string | null;
-            /**
-             * Is Active
-             * @description 是否启用
-             * @default true
-             */
-            is_active: boolean;
-            /**
-             * Remark
-             * @description 备注
-             */
-            remark?: string | null;
-            /**
-             * Table Id
-             * @description 默认多维表格数据表 Table ID
-             */
-            table_id?: string | null;
-            /**
-             * Timezone
-             * @description 同步时区
-             * @default Asia/Shanghai
-             */
-            timezone: string;
-        };
-        /**
-         * ProductionFeishuFieldPreview
-         * @description 飞书多维表格字段预览
-         */
-        ProductionFeishuFieldPreview: {
-            /** Field Id */
-            field_id: string;
-            /** Field Name */
-            field_name: string;
-            /** Property */
-            property?: {
-                [key: string]: unknown;
-            } | null;
-            /** Type */
-            type?: number | null;
-        };
-        /**
-         * ProductionFeishuRecordPreview
-         * @description 飞书多维表格记录预览
-         */
-        ProductionFeishuRecordPreview: {
-            /** Created Time */
-            created_time?: number | null;
-            /** Fields */
-            fields: {
-                [key: string]: unknown;
-            };
-            /** Last Modified Time */
-            last_modified_time?: number | null;
-            /** Record Id */
-            record_id: string;
-        };
-        /**
-         * ProductionFeishuSyncBindingCreate
-         * @description 创建生产飞书同步绑定。
-         */
-        ProductionFeishuSyncBindingCreate: {
-            /**
-             * Binding Name
-             * @description 绑定名称
-             */
-            binding_name: string;
-            /**
-             * Config Id
-             * Format: uuid
-             * @description 生产飞书配置 ID
-             */
-            config_id: string;
-            /**
-             * Field Mapping
-             * @description 平台字段到飞书字段的映射
-             */
-            field_mapping?: {
-                [key: string]: string;
-            };
-            /**
-             * Is Active
-             * @description 是否允许进入同步队列
-             * @default false
-             */
-            is_active: boolean;
+            name: string;
             /**
              * Product Name
-             * @description 适用产品
+             * @default
              */
-            product_name?: string | null;
-            /**
-             * Remark
-             * @description 备注
-             */
-            remark?: string | null;
-            /**
-             * Sync Target
-             * @description 同步业务目标
-             */
-            sync_target: string;
-            /**
-             * Table Id
-             * @description 飞书多维表格数据表 Table ID
-             */
-            table_id: string;
-            /**
-             * Workshop Code
-             * @description 适用车间或生产线编码
-             */
-            workshop_code?: string | null;
-        };
-        /**
-         * ProductionFeishuSyncBindingResponse
-         * @description 生产飞书同步绑定响应。
-         */
-        ProductionFeishuSyncBindingResponse: {
-            /**
-             * Binding Name
-             * @description 绑定名称
-             */
-            binding_name: string;
-            /**
-             * Config Id
-             * Format: uuid
-             * @description 生产飞书配置 ID
-             */
-            config_id: string;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /**
-             * Field Mapping
-             * @description 平台字段到飞书字段的映射
-             */
-            field_mapping?: {
-                [key: string]: string;
-            };
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /**
-             * Is Active
-             * @description 是否允许进入同步队列
-             * @default false
-             */
-            is_active: boolean;
-            /** Last Error */
-            last_error?: string | null;
-            /** Last Run At */
-            last_run_at?: string | null;
-            /** Last Status */
-            last_status: string;
-            /**
-             * Product Name
-             * @description 适用产品
-             */
-            product_name?: string | null;
-            /**
-             * Remark
-             * @description 备注
-             */
-            remark?: string | null;
-            /**
-             * Sync Target
-             * @description 同步业务目标
-             */
-            sync_target: string;
-            /**
-             * Table Id
-             * @description 飞书多维表格数据表 Table ID
-             */
-            table_id: string;
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
-            /**
-             * Workshop Code
-             * @description 适用车间或生产线编码
-             */
-            workshop_code?: string | null;
-        };
-        /**
-         * ProductionFeishuSyncBindingUpdate
-         * @description 更新生产飞书同步绑定。
-         */
-        ProductionFeishuSyncBindingUpdate: {
-            /** Binding Name */
-            binding_name?: string | null;
-            /** Config Id */
-            config_id?: string | null;
-            /** Field Mapping */
-            field_mapping?: {
-                [key: string]: string;
-            } | null;
-            /** Is Active */
-            is_active?: boolean | null;
-            /** Product Name */
-            product_name?: string | null;
+            product_name: string;
             /** Remark */
             remark?: string | null;
-            /** Sync Target */
-            sync_target?: string | null;
-            /** Table Id */
-            table_id?: string | null;
-            /** Workshop Code */
-            workshop_code?: string | null;
-        };
-        /**
-         * ProductionFeishuSyncExecuteRequest
-         * @description 执行或预览飞书同步请求。
-         */
-        ProductionFeishuSyncExecuteRequest: {
             /**
-             * Dry Run
-             * @description 仅预览和校验，不写入业务表
-             * @default true
+             * Sync Target
+             * @default batch
              */
-            dry_run: boolean;
+            sync_target: string;
             /**
-             * Idempotency Key
-             * @description 调用方幂等标识
+             * Table Id
+             * @default
              */
-            idempotency_key?: string | null;
-        };
-        /**
-         * ProductionFeishuSyncRunResponse
-         * @description 生产飞书同步运行记录响应。
-         */
-        ProductionFeishuSyncRunResponse: {
-            /**
-             * Binding Id
-             * Format: uuid
-             */
-            binding_id: string;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /** Created Count */
-            created_count: number;
-            /** Error Summary */
-            error_summary?: string | null;
-            /** Failed Count */
-            failed_count: number;
-            /** Finished At */
-            finished_at?: string | null;
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Idempotency Key */
-            idempotency_key: string;
-            /** Run Mode */
-            run_mode: string;
-            /** Skipped Count */
-            skipped_count: number;
-            /**
-             * Started At
-             * Format: date-time
-             */
-            started_at: string;
-            /** Status */
-            status: string;
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
-            /** Updated Count */
-            updated_count: number;
-        };
-        /**
-         * ProductionFeishuTablePreviewResponse
-         * @description 生产飞书多维表格预览响应
-         */
-        ProductionFeishuTablePreviewResponse: {
-            /** App Token */
-            app_token: string;
-            /** Fields */
-            fields: components["schemas"]["ProductionFeishuFieldPreview"][];
-            /**
-             * Has More
-             * @default false
-             */
-            has_more: boolean;
-            /**
-             * Page Size
-             * @default 20
-             */
-            page_size: number;
-            /** Page Token */
-            page_token?: string | null;
-            /** Records */
-            records: components["schemas"]["ProductionFeishuRecordPreview"][];
-            /** Table Id */
             table_id: string;
-            /** Total */
-            total?: number | null;
         };
         /**
          * ProductionPlanCreate
@@ -45403,30 +47331,55 @@ export interface components {
          */
         ProductionPlanCreate: {
             /**
-             * Notes
+             * Actual Completion
+             * @description 实际完成
+             */
+            actual_completion?: number | null;
+            /**
+             * Completion Rate
+             * @description 完成率
+             */
+            completion_rate?: number | null;
+            /**
+             * Plan Date
+             * @description 日期
+             */
+            plan_date?: string | null;
+            /**
+             * Planned Yield
+             * @description 计划产量
+             */
+            planned_yield?: number | null;
+            /**
+             * Product Name
+             * @description 产品
+             */
+            product_name: string;
+            /**
+             * Quality Status
+             * @description 质量情况
+             */
+            quality_status?: string | null;
+            /**
+             * Remarks
              * @description 备注
              */
-            notes?: string | null;
+            remarks?: string | null;
             /**
-             * Plan Month
-             * @description 计划月份
+             * Safety Status
+             * @description 安环情况
              */
-            plan_month?: string | null;
+            safety_status?: string | null;
             /**
-             * Plan Name
-             * @description 计划名称
+             * Unit
+             * @description 单位
              */
-            plan_name?: string | null;
+            unit?: string | null;
             /**
-             * Plan No
-             * @description 计划编号
+             * Workshop
+             * @description 车间
              */
-            plan_no: string;
-            /**
-             * Plan Type
-             * @description 计划类型
-             */
-            plan_type?: string | null;
+            workshop?: string | null;
         };
         /**
          * ProductionPlanUpdate
@@ -45434,32 +47387,55 @@ export interface components {
          */
         ProductionPlanUpdate: {
             /**
-             * Notes
+             * Actual Completion
+             * @description 实际完成
+             */
+            actual_completion?: number | null;
+            /**
+             * Completion Rate
+             * @description 完成率
+             */
+            completion_rate?: number | null;
+            /**
+             * Plan Date
+             * @description 日期
+             */
+            plan_date?: string | null;
+            /**
+             * Planned Yield
+             * @description 计划产量
+             */
+            planned_yield?: number | null;
+            /**
+             * Product Name
+             * @description 产品
+             */
+            product_name?: string | null;
+            /**
+             * Quality Status
+             * @description 质量情况
+             */
+            quality_status?: string | null;
+            /**
+             * Remarks
              * @description 备注
              */
-            notes?: string | null;
+            remarks?: string | null;
             /**
-             * Plan Month
-             * @description 计划月份
+             * Safety Status
+             * @description 安环情况
              */
-            plan_month?: string | null;
+            safety_status?: string | null;
             /**
-             * Plan Name
-             * @description 计划名称
+             * Unit
+             * @description 单位
              */
-            plan_name?: string | null;
+            unit?: string | null;
             /**
-             * Plan No
-             * @description 计划编号
+             * Workshop
+             * @description 车间
              */
-            plan_no?: string | null;
-            /**
-             * Plan Type
-             * @description 计划类型
-             */
-            plan_type?: string | null;
-            /** @description 状态 */
-            status?: components["schemas"]["PlanStatus"] | null;
+            workshop?: string | null;
         };
         /**
          * ProductionRecordCreate
@@ -47059,6 +49035,28 @@ export interface components {
             /** Usage Scope */
             usage_scope?: string | null;
         };
+        /** RefiningBatchCreate */
+        RefiningBatchCreate: {
+            /** Batch No */
+            batch_no: string;
+            /** Fermentation No */
+            fermentation_no: string;
+            /** Month */
+            month: number;
+            /** Monthly Seq */
+            monthly_seq?: number | null;
+            /** Produce Date */
+            produce_date?: string | null;
+            /** Remarks */
+            remarks?: string | null;
+            /**
+             * Workshop
+             * @default 201-2
+             */
+            workshop: string;
+            /** Year */
+            year: number;
+        };
         /**
          * RegulationRevisionCreate
          * @description 创建修订记录
@@ -47989,10 +49987,7 @@ export interface components {
             /** @description 培训类型 */
             training_type?: components["schemas"]["TrainingType"] | null;
         };
-        /**
-         * SalesPlanDetailCreate
-         * @description 创建销售执行明细。
-         */
+        /** SalesPlanDetailCreate */
         SalesPlanDetailCreate: {
             /**
              * Current Year Delivered
@@ -48001,7 +49996,7 @@ export interface components {
             current_year_delivered?: number | null;
             /**
              * Delivery Completion Rate
-             * @description 本月发货完成率(%)
+             * @description 本月发货完成率
              */
             delivery_completion_rate?: number | null;
             /**
@@ -48055,17 +50050,6 @@ export interface components {
              */
             remarks?: string | null;
             /**
-             * Source
-             * @description 数据来源
-             * @default manual
-             */
-            source: string;
-            /**
-             * Source Record Id
-             * @description 来源系统记录标识
-             */
-            source_record_id?: string | null;
-            /**
              * Undelivered Qty
              * @description 未发货量
              */
@@ -48076,112 +50060,7 @@ export interface components {
              */
             unit?: string | null;
         };
-        /**
-         * SalesPlanDetailResponse
-         * @description 销售执行明细响应。
-         */
-        SalesPlanDetailResponse: {
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /**
-             * Current Year Delivered
-             * @description 当年当月发货量
-             */
-            current_year_delivered?: number | null;
-            /**
-             * Delivery Completion Rate
-             * @description 本月发货完成率(%)
-             */
-            delivery_completion_rate?: number | null;
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /**
-             * Invoiced Qty
-             * @description 已开票量
-             */
-            invoiced_qty?: number | null;
-            /**
-             * Last Month Delivered Uninvoiced
-             * @description 上月已发货未开票
-             */
-            last_month_delivered_uninvoiced?: number | null;
-            /**
-             * Last Month End Inventory
-             * @description 上月底库存
-             */
-            last_month_end_inventory?: number | null;
-            /**
-             * Month Delivered Qty
-             * @description 本月已发货量
-             */
-            month_delivered_qty?: number | null;
-            /**
-             * Month End Inventory
-             * @description 本月底库存
-             */
-            month_end_inventory?: number | null;
-            /**
-             * Month Planned Capacity
-             * @description 本月预计产能
-             */
-            month_planned_capacity?: number | null;
-            /**
-             * Month Planned Delivery
-             * @description 本月计划发货量
-             */
-            month_planned_delivery?: number | null;
-            /**
-             * Month Planned Invoice
-             * @description 本月预计开票量
-             */
-            month_planned_invoice?: number | null;
-            /**
-             * Product Name
-             * @description 产品名称
-             */
-            product_name: string;
-            /**
-             * Remarks
-             * @description 备注
-             */
-            remarks?: string | null;
-            /**
-             * Source
-             * @description 数据来源
-             * @default manual
-             */
-            source: string;
-            /**
-             * Source Record Id
-             * @description 来源系统记录标识
-             */
-            source_record_id?: string | null;
-            /**
-             * Undelivered Qty
-             * @description 未发货量
-             */
-            undelivered_qty?: number | null;
-            /**
-             * Unit
-             * @description 单位
-             */
-            unit?: string | null;
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
-        };
-        /**
-         * SalesPlanDetailUpdate
-         * @description 更新销售执行明细。
-         */
+        /** SalesPlanDetailUpdate */
         SalesPlanDetailUpdate: {
             /** Current Year Delivered */
             current_year_delivered?: number | null;
@@ -48324,125 +50203,390 @@ export interface components {
         };
         /** SeedCultureCreate */
         SeedCultureCreate: {
-            /** Batch No */
+            /**
+             * Amino Nitrogen
+             * @description 氨基氮
+             */
+            amino_nitrogen?: number | null;
+            /**
+             * Ammonium Sulfate Batch
+             * @description 硫酸铵/批号
+             */
+            ammonium_sulfate_batch?: string | null;
+            /**
+             * Batch No
+             * @description 摇瓶批号
+             */
             batch_no: string;
-            /** Materials */
-            materials?: {
-                [key: string]: unknown;
-            };
-            /** Operation Data */
-            operation_data?: {
-                [key: string]: unknown;
-            };
-            /** Prepare Date */
+            /**
+             * Calcium Carbonate Batch
+             * @description 碳酸钙/批号
+             */
+            calcium_carbonate_batch?: string | null;
+            /**
+             * Corn Starch Batch
+             * @description 玉米淀粉/批号
+             */
+            corn_starch_batch?: string | null;
+            /**
+             * Corn Syrup Batch
+             * @description 玉米浆/批号
+             */
+            corn_syrup_batch?: string | null;
+            /**
+             * Cylinder No
+             * @description 钢瓶编号
+             */
+            cylinder_no?: string | null;
+            /**
+             * Glucose Batch
+             * @description 葡萄糖/批号
+             */
+            glucose_batch?: string | null;
+            /**
+             * Inoculation Operator
+             * @description 接种人员/复核人
+             */
+            inoculation_operator?: string | null;
+            /**
+             * Merge Amino Nitrogen
+             * @description 并瓶氨基氮
+             */
+            merge_amino_nitrogen?: number | null;
+            /**
+             * Merge Bacteria Density
+             * @description 并瓶菌浓
+             */
+            merge_bacteria_density?: number | null;
+            /**
+             * Merge Count
+             * @description 并瓶数量(瓶)
+             */
+            merge_count?: number | null;
+            /**
+             * Merge Cycle
+             * @description 并瓶周期
+             */
+            merge_cycle?: string | null;
+            /**
+             * Merge Operator
+             * @description 并瓶操作人/复核人
+             */
+            merge_operator?: string | null;
+            /**
+             * Merge Ph
+             * @description 并瓶PH
+             */
+            merge_ph?: number | null;
+            /**
+             * Merge Reducing Sugar
+             * @description 并瓶还原糖
+             */
+            merge_reducing_sugar?: number | null;
+            /**
+             * Merge Time
+             * @description 并瓶时间
+             */
+            merge_time?: string | null;
+            /**
+             * Merge Total Sugar
+             * @description 并瓶总糖
+             */
+            merge_total_sugar?: number | null;
+            /**
+             * Ph After Adjust
+             * @description 调后PH
+             */
+            ph_after_adjust?: number | null;
+            /**
+             * Ph After Sterilization
+             * @description 消后PH
+             */
+            ph_after_sterilization?: number | null;
+            /**
+             * Ph Before Adjust
+             * @description 调前PH
+             */
+            ph_before_adjust?: number | null;
+            /**
+             * Prepare Date
+             * @description 配制日期
+             */
             prepare_date?: string | null;
             /**
+             * Prepare Operator
+             * @description 配制操作人/复核人
+             */
+            prepare_operator?: string | null;
+            /**
              * Product Name
+             * @description 产品名称
              * @default
              */
             product_name: string;
-            /** Quality Data */
-            quality_data?: {
-                [key: string]: unknown;
-            };
-            /** Remarks */
+            /**
+             * Reducing Sugar
+             * @description 还原糖
+             */
+            reducing_sugar?: number | null;
+            /**
+             * Remarks
+             * @description 备注
+             */
             remarks?: string | null;
             /**
-             * Source
-             * @default manual
+             * Shaker No
+             * @description 摇床编号
              */
-            source: string;
-            /** Source Record Id */
-            source_record_id?: string | null;
+            shaker_no?: string | null;
             /**
-             * Status
-             * @default in_progress
+             * Shaker Setup Operator
+             * @description 上摇床摆东西人员
              */
-            status: string;
-            /** Tank Yield */
-            tank_yield?: number | null;
-        };
-        /** SeedCultureResponse */
-        SeedCultureResponse: {
-            /** Batch No */
-            batch_no: string;
+            shaker_setup_operator?: string | null;
             /**
-             * Created At
-             * Format: date-time
+             * Shaker Start Date
+             * @description 上摇床日期
              */
-            created_at: string;
+            shaker_start_date?: string | null;
             /**
-             * Id
-             * Format: uuid
+             * Soybean Meal Batch
+             * @description 黄豆饼粉/批号
              */
-            id: string;
-            /** Materials */
-            materials?: {
-                [key: string]: unknown;
-            };
-            /** Operation Data */
-            operation_data?: {
-                [key: string]: unknown;
-            };
-            /** Prepare Date */
-            prepare_date?: string | null;
+            soybean_meal_batch?: string | null;
             /**
-             * Product Name
-             * @default
+             * Sterilization Operator
+             * @description 种子消毒人员
              */
-            product_name: string;
-            /** Quality Data */
-            quality_data?: {
-                [key: string]: unknown;
-            };
-            /** Remarks */
-            remarks?: string | null;
+            sterilization_operator?: string | null;
             /**
-             * Source
-             * @default manual
+             * Strain Tube No
+             * @description 冻管菌号
              */
-            source: string;
-            /** Source Record Id */
-            source_record_id?: string | null;
+            strain_tube_no?: string | null;
             /**
-             * Status
-             * @default in_progress
+             * Tank Remarks
+             * @description 备注（罐号）
              */
-            status: string;
-            /** Tank Yield */
+            tank_remarks?: string | null;
+            /**
+             * Tank Setup Operator
+             * @description 进罐摆东西人员
+             */
+            tank_setup_operator?: string | null;
+            /**
+             * Tank Yield
+             * @description 罐产
+             */
             tank_yield?: number | null;
             /**
-             * Updated At
-             * Format: date-time
+             * Tool No
+             * @description 用具编号
              */
-            updated_at: string;
+            tool_no?: string | null;
+            /**
+             * Total Sugar
+             * @description 总糖
+             */
+            total_sugar?: number | null;
+            /**
+             * Workshop Inoculation Operator
+             * @description 车间接种人员
+             */
+            workshop_inoculation_operator?: string | null;
         };
         /** SeedCultureUpdate */
         SeedCultureUpdate: {
-            /** Batch No */
+            /**
+             * Amino Nitrogen
+             * @description 氨基氮
+             */
+            amino_nitrogen?: number | null;
+            /**
+             * Ammonium Sulfate Batch
+             * @description 硫酸铵/批号
+             */
+            ammonium_sulfate_batch?: string | null;
+            /**
+             * Batch No
+             * @description 摇瓶批号
+             */
             batch_no?: string | null;
-            /** Materials */
-            materials?: {
-                [key: string]: unknown;
-            } | null;
-            /** Operation Data */
-            operation_data?: {
-                [key: string]: unknown;
-            } | null;
-            /** Prepare Date */
+            /**
+             * Calcium Carbonate Batch
+             * @description 碳酸钙/批号
+             */
+            calcium_carbonate_batch?: string | null;
+            /**
+             * Corn Starch Batch
+             * @description 玉米淀粉/批号
+             */
+            corn_starch_batch?: string | null;
+            /**
+             * Corn Syrup Batch
+             * @description 玉米浆/批号
+             */
+            corn_syrup_batch?: string | null;
+            /**
+             * Cylinder No
+             * @description 钢瓶编号
+             */
+            cylinder_no?: string | null;
+            /**
+             * Glucose Batch
+             * @description 葡萄糖/批号
+             */
+            glucose_batch?: string | null;
+            /**
+             * Inoculation Operator
+             * @description 接种人员/复核人
+             */
+            inoculation_operator?: string | null;
+            /**
+             * Merge Amino Nitrogen
+             * @description 并瓶氨基氮
+             */
+            merge_amino_nitrogen?: number | null;
+            /**
+             * Merge Bacteria Density
+             * @description 并瓶菌浓
+             */
+            merge_bacteria_density?: number | null;
+            /**
+             * Merge Count
+             * @description 并瓶数量(瓶)
+             */
+            merge_count?: number | null;
+            /**
+             * Merge Cycle
+             * @description 并瓶周期
+             */
+            merge_cycle?: string | null;
+            /**
+             * Merge Operator
+             * @description 并瓶操作人/复核人
+             */
+            merge_operator?: string | null;
+            /**
+             * Merge Ph
+             * @description 并瓶PH
+             */
+            merge_ph?: number | null;
+            /**
+             * Merge Reducing Sugar
+             * @description 并瓶还原糖
+             */
+            merge_reducing_sugar?: number | null;
+            /**
+             * Merge Time
+             * @description 并瓶时间
+             */
+            merge_time?: string | null;
+            /**
+             * Merge Total Sugar
+             * @description 并瓶总糖
+             */
+            merge_total_sugar?: number | null;
+            /**
+             * Ph After Adjust
+             * @description 调后PH
+             */
+            ph_after_adjust?: number | null;
+            /**
+             * Ph After Sterilization
+             * @description 消后PH
+             */
+            ph_after_sterilization?: number | null;
+            /**
+             * Ph Before Adjust
+             * @description 调前PH
+             */
+            ph_before_adjust?: number | null;
+            /**
+             * Prepare Date
+             * @description 配制日期
+             */
             prepare_date?: string | null;
-            /** Product Name */
+            /**
+             * Prepare Operator
+             * @description 配制操作人/复核人
+             */
+            prepare_operator?: string | null;
+            /**
+             * Product Name
+             * @description 产品名称
+             */
             product_name?: string | null;
-            /** Quality Data */
-            quality_data?: {
-                [key: string]: unknown;
-            } | null;
-            /** Remarks */
+            /**
+             * Reducing Sugar
+             * @description 还原糖
+             */
+            reducing_sugar?: number | null;
+            /**
+             * Remarks
+             * @description 备注
+             */
             remarks?: string | null;
-            /** Status */
-            status?: string | null;
-            /** Tank Yield */
+            /**
+             * Shaker No
+             * @description 摇床编号
+             */
+            shaker_no?: string | null;
+            /**
+             * Shaker Setup Operator
+             * @description 上摇床摆东西人员
+             */
+            shaker_setup_operator?: string | null;
+            /**
+             * Shaker Start Date
+             * @description 上摇床日期
+             */
+            shaker_start_date?: string | null;
+            /**
+             * Soybean Meal Batch
+             * @description 黄豆饼粉/批号
+             */
+            soybean_meal_batch?: string | null;
+            /**
+             * Sterilization Operator
+             * @description 种子消毒人员
+             */
+            sterilization_operator?: string | null;
+            /**
+             * Strain Tube No
+             * @description 冻管菌号
+             */
+            strain_tube_no?: string | null;
+            /**
+             * Tank Remarks
+             * @description 备注（罐号）
+             */
+            tank_remarks?: string | null;
+            /**
+             * Tank Setup Operator
+             * @description 进罐摆东西人员
+             */
+            tank_setup_operator?: string | null;
+            /**
+             * Tank Yield
+             * @description 罐产
+             */
             tank_yield?: number | null;
+            /**
+             * Tool No
+             * @description 用具编号
+             */
+            tool_no?: string | null;
+            /**
+             * Total Sugar
+             * @description 总糖
+             */
+            total_sugar?: number | null;
+            /**
+             * Workshop Inoculation Operator
+             * @description 车间接种人员
+             */
+            workshop_inoculation_operator?: string | null;
         };
         /**
          * SendNoticeRequest
@@ -48512,207 +50656,271 @@ export interface components {
         };
         /** ShiftHandoverCreate */
         ShiftHandoverCreate: {
-            /** Equipment Inspection */
+            /**
+             * Equipment Inspection
+             * @description 设备巡检情况
+             */
             equipment_inspection?: string | null;
-            /** Equipment Status */
+            /**
+             * Equipment Status
+             * @description 设备运行情况
+             */
             equipment_status?: string | null;
-            /** Fire Emergency */
+            /**
+             * Fire Emergency
+             * @description 消防、应急器材情况
+             */
             fire_emergency?: string | null;
-            /** Handover From */
+            /**
+             * Handover From
+             * @description 交班人
+             */
             handover_from: string;
             /**
              * Handover Time
              * Format: date-time
+             * @description 交接时间
              */
             handover_time: string;
-            /** Handover To */
-            handover_to: string;
-            /** Position */
-            position: string;
-            /** Ppe Status */
-            ppe_status?: string | null;
-            /** Production Status */
-            production_status?: string | null;
-            /** Remarks */
-            remarks?: string | null;
-            /** Shift */
-            shift: string;
-            /** Tools Handover */
-            tools_handover?: string | null;
-            /** Workshop */
-            workshop: string;
-        };
-        /** ShiftHandoverResponse */
-        ShiftHandoverResponse: {
-            /** Confirmed At */
-            confirmed_at?: string | null;
-            /** Confirmed By */
-            confirmed_by?: string | null;
             /**
-             * Created At
-             * Format: date-time
+             * Handover To
+             * @description 接班人
              */
-            created_at: string;
-            /** Equipment Inspection */
-            equipment_inspection?: string | null;
-            /** Equipment Status */
-            equipment_status?: string | null;
-            /** Fire Emergency */
-            fire_emergency?: string | null;
-            /** Handover From */
-            handover_from: string;
-            /**
-             * Handover Time
-             * Format: date-time
-             */
-            handover_time: string;
-            /** Handover To */
             handover_to: string;
             /**
-             * Id
-             * Format: uuid
+             * Position
+             * @description 岗位
              */
-            id: string;
-            /** Position */
             position: string;
-            /** Ppe Status */
+            /**
+             * Ppe Status
+             * @description 人员劳动防护用品穿戴
+             */
             ppe_status?: string | null;
-            /** Production Status */
+            /**
+             * Production Status
+             * @description 生产工艺运行情况
+             */
             production_status?: string | null;
-            /** Remarks */
+            /**
+             * Remarks
+             * @description 备注
+             */
             remarks?: string | null;
-            /** Shift */
+            /**
+             * Shift
+             * @description 班次
+             */
             shift: string;
-            /** Status */
-            status: string;
-            /** Tools Handover */
+            /**
+             * Tools Handover
+             * @description 工、器具移交
+             */
             tools_handover?: string | null;
             /**
-             * Updated At
-             * Format: date-time
+             * Workshop
+             * @description 车间
              */
-            updated_at: string;
-            /** Workshop */
             workshop: string;
         };
         /** ShiftHandoverUpdate */
         ShiftHandoverUpdate: {
-            /** Equipment Inspection */
+            /**
+             * Equipment Inspection
+             * @description 设备巡检情况
+             */
             equipment_inspection?: string | null;
-            /** Equipment Status */
+            /**
+             * Equipment Status
+             * @description 设备运行情况
+             */
             equipment_status?: string | null;
-            /** Fire Emergency */
+            /**
+             * Fire Emergency
+             * @description 消防、应急器材情况
+             */
             fire_emergency?: string | null;
-            /** Handover From */
+            /**
+             * Handover From
+             * @description 交班人
+             */
             handover_from?: string | null;
-            /** Handover Time */
+            /**
+             * Handover Time
+             * @description 交接时间
+             */
             handover_time?: string | null;
-            /** Handover To */
+            /**
+             * Handover To
+             * @description 接班人
+             */
             handover_to?: string | null;
-            /** Position */
+            /**
+             * Position
+             * @description 岗位
+             */
             position?: string | null;
-            /** Ppe Status */
+            /**
+             * Ppe Status
+             * @description 人员劳动防护用品穿戴
+             */
             ppe_status?: string | null;
-            /** Production Status */
+            /**
+             * Production Status
+             * @description 生产工艺运行情况
+             */
             production_status?: string | null;
-            /** Remarks */
+            /**
+             * Remarks
+             * @description 备注
+             */
             remarks?: string | null;
-            /** Shift */
+            /**
+             * Shift
+             * @description 班次
+             */
             shift?: string | null;
-            /** Tools Handover */
+            /**
+             * Tools Handover
+             * @description 工、器具移交
+             */
             tools_handover?: string | null;
-            /** Workshop */
+            /**
+             * Workshop
+             * @description 车间
+             */
             workshop?: string | null;
         };
         /** ShiftLogCreate */
         ShiftLogCreate: {
-            /** Abnormal Events */
+            /**
+             * Abnormal Events
+             * @description 异常情况
+             */
             abnormal_events?: string | null;
-            /** Equipment Status */
+            /**
+             * Equipment Status
+             * @description 设备运行状况
+             */
             equipment_status?: string | null;
-            /** Handover From */
+            /**
+             * Handover From
+             * @description 交班人
+             */
             handover_from: string;
-            /** Handover To */
+            /**
+             * Handover To
+             * @description 接班人
+             */
             handover_to: string;
             /**
              * Log Date
              * Format: date
+             * @description 日期
              */
             log_date: string;
-            /** Pending Tasks */
+            /**
+             * Pending Tasks
+             * @description 待办事项交接
+             */
             pending_tasks?: string | null;
-            /** Production Summary */
+            /**
+             * Production Summary
+             * @description 本班生产情况
+             */
             production_summary?: string | null;
-            /** Remarks */
+            /**
+             * Remarks
+             * @description 备注
+             */
             remarks?: string | null;
-            /** Shift */
-            shift: string;
-            /** Workshop */
-            workshop: string;
-        };
-        /** ShiftLogResponse */
-        ShiftLogResponse: {
-            /** Abnormal Events */
-            abnormal_events?: string | null;
             /**
-             * Created At
-             * Format: date-time
+             * Shift
+             * @description 班次（morning/afternoon/night）
              */
-            created_at: string;
-            /** Equipment Status */
-            equipment_status?: string | null;
-            /** Handover From */
-            handover_from: string;
-            /** Handover To */
-            handover_to: string;
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /**
-             * Log Date
-             * Format: date
-             */
-            log_date: string;
-            /** Pending Tasks */
-            pending_tasks?: string | null;
-            /** Production Summary */
-            production_summary?: string | null;
-            /** Remarks */
-            remarks?: string | null;
-            /** Shift */
             shift: string;
             /**
-             * Updated At
-             * Format: date-time
+             * Workshop
+             * @description 车间
              */
-            updated_at: string;
-            /** Workshop */
             workshop: string;
         };
         /** ShiftLogUpdate */
         ShiftLogUpdate: {
-            /** Abnormal Events */
+            /**
+             * Abnormal Events
+             * @description 异常情况
+             */
             abnormal_events?: string | null;
-            /** Equipment Status */
+            /**
+             * Equipment Status
+             * @description 设备运行状况
+             */
             equipment_status?: string | null;
-            /** Handover From */
+            /**
+             * Handover From
+             * @description 交班人
+             */
             handover_from?: string | null;
-            /** Handover To */
+            /**
+             * Handover To
+             * @description 接班人
+             */
             handover_to?: string | null;
-            /** Log Date */
+            /**
+             * Log Date
+             * @description 日期
+             */
             log_date?: string | null;
-            /** Pending Tasks */
+            /**
+             * Pending Tasks
+             * @description 待办事项交接
+             */
             pending_tasks?: string | null;
-            /** Production Summary */
+            /**
+             * Production Summary
+             * @description 本班生产情况
+             */
             production_summary?: string | null;
-            /** Remarks */
+            /**
+             * Remarks
+             * @description 备注
+             */
             remarks?: string | null;
-            /** Shift */
+            /**
+             * Shift
+             * @description 班次
+             */
             shift?: string | null;
-            /** Workshop */
+            /**
+             * Workshop
+             * @description 车间
+             */
             workshop?: string | null;
+        };
+        /** SodiumStepCreate */
+        SodiumStepCreate: {
+            /** Alkali Usage */
+            alkali_usage?: number | null;
+            /** Na After Volume */
+            na_after_volume?: number | null;
+            /** Na Before Volume */
+            na_before_volume?: number | null;
+            /** Na Potency */
+            na_potency?: number | null;
+            /** Na Product Qty */
+            na_product_qty?: number | null;
+            /** Ph Value */
+            ph_value?: number | null;
+            /**
+             * Seq No
+             * @default 1
+             */
+            seq_no: number;
+            /** Sodium Total */
+            sodium_total?: number | null;
+            /** Sub Tank Id */
+            sub_tank_id: string;
         };
         /**
          * SopContentUpdate
@@ -48729,6 +50937,15 @@ export interface components {
              * @description 新状态（可选）
              */
             status?: string | null;
+        };
+        /** SourceRootInput */
+        SourceRootInput: {
+            /** Name */
+            name: string;
+            /** Source Type */
+            source_type: string;
+            /** Source Url */
+            source_url: string;
         };
         /**
          * SparePartCreate
@@ -49466,6 +51683,37 @@ export interface components {
              */
             warehouse_location?: string | null;
         };
+        /** SubTankRecordUpdate */
+        SubTankRecordUpdate: {
+            /** Bag Weight */
+            bag_weight?: number | null;
+            /** Crude Content */
+            crude_content?: number | null;
+            /** Crude Moisture */
+            crude_moisture?: number | null;
+            /** Crude Product Qty */
+            crude_product_qty?: number | null;
+            /** Crude Weight */
+            crude_weight?: number | null;
+            /** Cumulative Crude Qty */
+            cumulative_crude_qty?: number | null;
+            /** Cumulative Crude Yield */
+            cumulative_crude_yield?: number | null;
+            /** Cumulative Qty */
+            cumulative_qty?: number | null;
+            /** Fl Potency */
+            fl_potency?: number | null;
+            /** Fl Product Qty */
+            fl_product_qty?: number | null;
+            /** Fl Volume */
+            fl_volume?: number | null;
+            /** Remarks */
+            remarks?: string | null;
+            /** Total Input */
+            total_input?: number | null;
+            /** Yield Rate */
+            yield_rate?: number | null;
+        };
         /** SubmitInvestigationRequest */
         SubmitInvestigationRequest: {
             /** Capa Proposals */
@@ -49866,12 +52114,27 @@ export interface components {
              */
             updated_at?: string | null;
         };
-        /**
-         * TaskStatus
-         * @description 任务状态枚举
-         * @enum {string}
-         */
-        TaskStatus: "pending" | "assigned" | "in_progress" | "completed";
+        /** SyncTriggerRequest */
+        SyncTriggerRequest: {
+            /**
+             * Modules
+             * @description 要同步的模块列表
+             * @default [
+             *       "crude",
+             *       "extraction",
+             *       "refinement",
+             *       "blending",
+             *       "qc",
+             *       "ba"
+             *     ]
+             */
+            modules: string[];
+        };
+        /** TableEnabledPayload */
+        TableEnabledPayload: {
+            /** Is Enabled */
+            is_enabled: boolean;
+        };
         /** TeamCreate */
         TeamCreate: {
             /**
@@ -54200,16 +56463,389 @@ export interface components {
              */
             template_item_id: string;
         };
-        /** SourceRootInput */
-        app__modules__production__read_mirror_api__SourceRootInput: {
-            /** Config Id */
-            config_id?: string | null;
-            /** Name */
-            name: string;
-            /** Source Type */
-            source_type: string;
-            /** Source Url */
-            source_url: string;
+        /** CD */
+        app__modules__production__centrifuge1_api__CD: {
+            /** Batch No */
+            batch_no: string;
+            /** Centrifuge Duration */
+            centrifuge_duration?: number | null;
+            /** Centrifuge Yield */
+            centrifuge_yield?: number | null;
+            /** Feed Flow */
+            feed_flow?: number | null;
+            /** Feed Temp */
+            feed_temp?: number | null;
+            /** Feed Volume */
+            feed_volume?: string | null;
+            /** Remarks */
+            remarks?: string | null;
+            /** Rotation Speed */
+            rotation_speed?: number | null;
+            /** Sep Temp */
+            sep_temp?: number | null;
+            /** Seq No */
+            seq_no?: number | null;
+            /** Solid Content */
+            solid_content?: number | null;
+            /** Solid Waste Output */
+            solid_waste_output?: string | null;
+            /** Solid Waste Weight */
+            solid_waste_weight?: string | null;
+            /** Supernatant Titer */
+            supernatant_titer?: number | null;
+            /** Supernatant Volume */
+            supernatant_volume?: string | null;
+            /** Waste Moisture */
+            waste_moisture?: number | null;
+            /** Waste Titer */
+            waste_titer?: number | null;
+        };
+        /** CD */
+        app__modules__production__centrifuge2_api__CD: {
+            /** Batch No */
+            batch_no: string;
+            /** Crystal Moisture */
+            crystal_moisture?: number | null;
+            /** Crystal Wet Weight */
+            crystal_wet_weight?: string | null;
+            /** Crystal Yield */
+            crystal_yield?: number | null;
+            /** Feed Flow */
+            feed_flow?: number | null;
+            /** Feed Volume */
+            feed_volume?: string | null;
+            /** Liquor Recovery */
+            liquor_recovery?: string | null;
+            /** Mother Liquor Titer */
+            mother_liquor_titer?: number | null;
+            /** Remarks */
+            remarks?: string | null;
+            /** Rotation Speed */
+            rotation_speed?: number | null;
+            /** Sep Duration */
+            sep_duration?: number | null;
+            /** Seq No */
+            seq_no?: number | null;
+            /** Waste Liquor Volume */
+            waste_liquor_volume?: string | null;
+        };
+        /** CD */
+        app__modules__production__conc1_api__CD: {
+            /** Batch No */
+            batch_no: string;
+            /** Conc Duration */
+            conc_duration?: number | null;
+            /** Conc Factor */
+            conc_factor?: number | null;
+            /** Conc Titer */
+            conc_titer?: number | null;
+            /** Conc Volume */
+            conc_volume?: string | null;
+            /** Conc Weight */
+            conc_weight?: string | null;
+            /** Conc Yield */
+            conc_yield?: number | null;
+            /** Condensate Volume */
+            condensate_volume?: string | null;
+            /** Endpoint Density */
+            endpoint_density?: number | null;
+            /** Endpoint Refraction */
+            endpoint_refraction?: number | null;
+            /** Endpoint Volume */
+            endpoint_volume?: string | null;
+            /** Evap Loss */
+            evap_loss?: string | null;
+            /** Evap Temp */
+            evap_temp?: number | null;
+            /** Feed Temp */
+            feed_temp?: number | null;
+            /** Feed Titer */
+            feed_titer?: number | null;
+            /** Feed Volume */
+            feed_volume?: string | null;
+            /** Remarks */
+            remarks?: string | null;
+            /** Seq No */
+            seq_no?: number | null;
+            /** Steam Pressure */
+            steam_pressure?: number | null;
+            /** Vacuum Degree */
+            vacuum_degree?: number | null;
+            /** Wall Residue */
+            wall_residue?: string | null;
+        };
+        /** CD */
+        app__modules__production__conc2_api__CD: {
+            /** Batch No */
+            batch_no: string;
+            /** Bottom Residue */
+            bottom_residue?: string | null;
+            /** Conc Factor */
+            conc_factor?: number | null;
+            /** Conc Titer */
+            conc_titer?: number | null;
+            /** Conc Volume */
+            conc_volume?: string | null;
+            /** Conc Yield */
+            conc_yield?: number | null;
+            /** Condensate Volume */
+            condensate_volume?: string | null;
+            /** Endpoint Density */
+            endpoint_density?: number | null;
+            /** Endpoint Refraction */
+            endpoint_refraction?: number | null;
+            /** Evap Loss Rate */
+            evap_loss_rate?: number | null;
+            /** Evap Temp */
+            evap_temp?: number | null;
+            /** Feed Volume */
+            feed_volume?: string | null;
+            /** Remarks */
+            remarks?: string | null;
+            /** Seq No */
+            seq_no?: number | null;
+            /** Steam Pressure */
+            steam_pressure?: number | null;
+            /** Vacuum Degree */
+            vacuum_degree?: number | null;
+        };
+        /** CD */
+        app__modules__production__decolor1_api__CD: {
+            /** Batch No */
+            batch_no: string;
+            /** Carbon Residue */
+            carbon_residue?: string | null;
+            /** Carbon Type */
+            carbon_type?: string | null;
+            /** Color After */
+            color_after?: string | null;
+            /** Color Before */
+            color_before?: string | null;
+            /** Color Removal Rate */
+            color_removal_rate?: number | null;
+            /** Decolor Temp */
+            decolor_temp?: number | null;
+            /** Decolor Volume */
+            decolor_volume?: string | null;
+            /** Dosage */
+            dosage?: string | null;
+            /** Endpoint Transmittance */
+            endpoint_transmittance?: string | null;
+            /** Feed Titer */
+            feed_titer?: number | null;
+            /** Feed Volume */
+            feed_volume?: string | null;
+            /** Heavy Metal */
+            heavy_metal?: string | null;
+            /** Holding Time */
+            holding_time?: number | null;
+            /** Protein Impurity */
+            protein_impurity?: string | null;
+            /** Seq No */
+            seq_no?: number | null;
+            /** Stirring Speed */
+            stirring_speed?: number | null;
+            /** Transmittance Data */
+            transmittance_data?: string | null;
+        };
+        /** CD */
+        app__modules__production__dry_api__CD: {
+            /** Air Flow */
+            air_flow?: number | null;
+            /** Batch No */
+            batch_no: string;
+            /** Dry Duration */
+            dry_duration?: number | null;
+            /** Dry Purity */
+            dry_purity?: number | null;
+            /** Dry Titer */
+            dry_titer?: number | null;
+            /** Dry Weight */
+            dry_weight?: string | null;
+            /** Dry Yield */
+            dry_yield?: number | null;
+            /** Endpoint Moisture */
+            endpoint_moisture?: number | null;
+            /** Feed Weight */
+            feed_weight?: string | null;
+            /** Oven Temp */
+            oven_temp?: number | null;
+            /** Powder Loss */
+            powder_loss?: string | null;
+            /** Remarks */
+            remarks?: string | null;
+            /** Seq No */
+            seq_no?: number | null;
+            /** Tray Residue */
+            tray_residue?: string | null;
+            /** Turn Interval */
+            turn_interval?: number | null;
+            /** Vacuum Degree */
+            vacuum_degree?: number | null;
+            /** Wet Moisture */
+            wet_moisture?: number | null;
+        };
+        /** CD */
+        app__modules__production__filter1_api__CD: {
+            /** Batch No */
+            batch_no: string;
+            /** Cake Dry Weight */
+            cake_dry_weight?: string | null;
+            /** Cake Moisture */
+            cake_moisture?: number | null;
+            /** Cake Residue Titer */
+            cake_residue_titer?: number | null;
+            /** Cake Wet Weight */
+            cake_wet_weight?: string | null;
+            /** Cloth No */
+            cloth_no?: string | null;
+            /** Feed Flow */
+            feed_flow?: number | null;
+            /** Feed Ph */
+            feed_ph?: number | null;
+            /** Feed Temp */
+            feed_temp?: number | null;
+            /** Feed Titer */
+            feed_titer?: number | null;
+            /** Feed Volume */
+            feed_volume?: string | null;
+            /** Filter Duration */
+            filter_duration?: number | null;
+            /** Filter Pressure */
+            filter_pressure?: number | null;
+            /** Filter Yield */
+            filter_yield?: number | null;
+            /** Filtrate Titer */
+            filtrate_titer?: number | null;
+            /** Filtrate Volume */
+            filtrate_volume?: string | null;
+            /** Pipe Residue */
+            pipe_residue?: string | null;
+            /** Remarks */
+            remarks?: string | null;
+            /** Seq No */
+            seq_no?: number | null;
+        };
+        /** CD */
+        app__modules__production__filter2_api__CD: {
+            /** Batch No */
+            batch_no: string;
+            /** Cake Dry Weight */
+            cake_dry_weight?: string | null;
+            /** Cake Wet Weight */
+            cake_wet_weight?: string | null;
+            /** Cloth Type */
+            cloth_type?: string | null;
+            /** Combined Liquor */
+            combined_liquor?: string | null;
+            /** Crystal Purity */
+            crystal_purity?: number | null;
+            /** Crystal Titer */
+            crystal_titer?: number | null;
+            /** Feed Volume */
+            feed_volume?: string | null;
+            /** Filter Duration */
+            filter_duration?: number | null;
+            /** Filter Pressure */
+            filter_pressure?: number | null;
+            /** Filtrate Volume */
+            filtrate_volume?: string | null;
+            /** Mother Liquor Titer */
+            mother_liquor_titer?: number | null;
+            /** Remarks */
+            remarks?: string | null;
+            /** Seq No */
+            seq_no?: number | null;
+            /** Wash Loss */
+            wash_loss?: number | null;
+            /** Wash Water */
+            wash_water?: string | null;
+        };
+        /** CD */
+        app__modules__production__pack_api__CD: {
+            /** Barrel Count */
+            barrel_count?: number | null;
+            /** Batch No */
+            batch_no: string;
+            /** Feed Weight */
+            feed_weight?: string | null;
+            /** Impurity Report */
+            impurity_report?: string | null;
+            /** Incoming Batch */
+            incoming_batch?: string | null;
+            /** Incoming Moisture */
+            incoming_moisture?: number | null;
+            /** Incoming Titer */
+            incoming_titer?: number | null;
+            /** Operator */
+            operator?: string | null;
+            /** Outer Pack No */
+            outer_pack_no?: string | null;
+            /** Pack Date */
+            pack_date?: string | null;
+            /** Pack Spec */
+            pack_spec?: string | null;
+            /** Per Barrel Weight */
+            per_barrel_weight?: string | null;
+            /** Reject Weight */
+            reject_weight?: string | null;
+            /** Remarks */
+            remarks?: string | null;
+            /** Retain Weight */
+            retain_weight?: string | null;
+            /** Sample Weight */
+            sample_weight?: string | null;
+            /** Screen Loss */
+            screen_loss?: string | null;
+            /** Seq No */
+            seq_no?: number | null;
+            /** Spill Loss */
+            spill_loss?: string | null;
+            /** Total Net Weight */
+            total_net_weight?: string | null;
+            /** Total Yield */
+            total_yield?: number | null;
+            /** Warehouse Qty */
+            warehouse_qty?: string | null;
+        };
+        /** CD */
+        app__modules__production__recrystallize_api__CD: {
+            /** Batch No */
+            batch_no: string;
+            /** Carbon Dosage */
+            carbon_dosage?: number | null;
+            /** Color Hazen */
+            color_hazen?: number | null;
+            /** Cooling Rate */
+            cooling_rate?: number | null;
+            /** Crystal Size */
+            crystal_size?: number | null;
+            /** Crystal Temp */
+            crystal_temp?: number | null;
+            /** Crystal Time */
+            crystal_time?: number | null;
+            /** Dissolve Temp */
+            dissolve_temp?: number | null;
+            /** Feed Titer */
+            feed_titer?: number | null;
+            /** Feed Volume */
+            feed_volume?: string | null;
+            /** Holding Time */
+            holding_time?: number | null;
+            /** Mother Liquor Titer */
+            mother_liquor_titer?: number | null;
+            /** Remarks */
+            remarks?: string | null;
+            /** Seq No */
+            seq_no?: number | null;
+            /** Solvent Amount */
+            solvent_amount?: string | null;
+            /** Solvent Ratio */
+            solvent_ratio?: string | null;
+            /** Transmittance */
+            transmittance?: number | null;
+            /** Water Amount */
+            water_amount?: string | null;
         };
         /**
          * OperationType
@@ -54217,15 +56853,6 @@ export interface components {
          * @enum {string}
          */
         app__modules__production__schemas__OperationType: "material_add" | "transfer" | "sampling" | "equipment_check" | "parameter_record" | "packaging";
-        /** SourceRootInput */
-        app__modules__quality__api__read_mirror__SourceRootInput: {
-            /** Name */
-            name: string;
-            /** Source Type */
-            source_type: string;
-            /** Source Url */
-            source_url: string;
-        };
         /** CreateSupplierQualificationRequest */
         app__modules__quality__schemas__external_quality__CreateSupplierQualificationRequest: {
             /**
@@ -76134,7 +78761,7 @@ export interface operations {
             };
         };
     };
-    read_module_api_v1_production__get: {
+    read_production_module_api_v1_production__get: {
         parameters: {
             query?: never;
             header?: never;
@@ -76186,7 +78813,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProductionApiResponse_BatchProfileResponse_"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -76200,11 +78827,11 @@ export interface operations {
             };
         };
     };
-    get_batch_progress_api_v1_production_batch_progress_get: {
+    batch_progress_api_v1_production_batch_progress_get: {
         parameters: {
             query?: {
-                workshop_code?: string;
                 batch_no?: string | null;
+                workshop?: string;
             };
             header?: never;
             path?: never;
@@ -76220,7 +78847,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProductionApiResponse_BatchProgressResponse_"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -76241,9 +78868,7 @@ export interface operations {
                 page_size?: number;
                 status?: string | null;
                 product_code?: string | null;
-                product_name?: string | null;
                 batch_no?: string | null;
-                production_line?: string | null;
                 /** @description 是否排除已取消的批次，传入 'true' 或 'false' */
                 exclude_cancelled?: string | null;
             };
@@ -76483,6 +79108,39 @@ export interface operations {
             };
         };
     };
+    delete_material_balance_api_v1_production_batches__batch_id__balance_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batch_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     calculate_material_balance_api_v1_production_batches__batch_id__balance_calculate_post: {
         parameters: {
             query?: {
@@ -76661,13 +79319,13 @@ export interface operations {
             };
         };
     };
-    get_execution_plans_api_v1_production_execution_plans_get: {
+    list_broth_receives_api_v1_production_broth_receives_get: {
         parameters: {
             query?: {
                 page?: number;
                 page_size?: number;
-                workshop?: string | null;
-                product_name?: string | null;
+                received_batch?: string | null;
+                workshop?: string;
             };
             header?: never;
             path?: never;
@@ -76683,7 +79341,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProductionApiResponse_list_ProductionExecutionPlanResponse__"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -76697,7 +79355,7 @@ export interface operations {
             };
         };
     };
-    create_execution_plan_api_v1_production_execution_plans_post: {
+    create_broth_receive_api_v1_production_broth_receives_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -76708,7 +79366,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ProductionExecutionPlanCreate"];
+                "application/json": components["schemas"]["BrothReceiveCreate"];
             };
         };
         responses: {
@@ -76718,7 +79376,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProductionApiResponse_ProductionExecutionPlanResponse_"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -76732,12 +79390,12 @@ export interface operations {
             };
         };
     };
-    update_execution_plan_api_v1_production_execution_plans__plan_id__put: {
+    update_broth_receive_api_v1_production_broth_receives__record_id__put: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                plan_id: string;
+                record_id: string;
             };
             cookie?: {
                 auth_token?: string | null;
@@ -76745,7 +79403,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ProductionExecutionPlanUpdate"];
+                "application/json": components["schemas"]["BrothReceiveUpdate"];
             };
         };
         responses: {
@@ -76755,7 +79413,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProductionApiResponse_ProductionExecutionPlanResponse_"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -76769,12 +79427,12 @@ export interface operations {
             };
         };
     };
-    delete_execution_plan_api_v1_production_execution_plans__plan_id__delete: {
+    delete_broth_receive_api_v1_production_broth_receives__record_id__delete: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                plan_id: string;
+                record_id: string;
             };
             cookie?: {
                 auth_token?: string | null;
@@ -76788,7 +79446,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProductionApiResponse_NoneType_"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -76802,7 +79460,2059 @@ export interface operations {
             };
         };
     };
-    get_production_feishu_config_api_v1_production_feishu_config_get: {
+    _list_api_v1_production_centrifuge1_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                ps?: number;
+                batch_no?: string | null;
+                workshop?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _create_api_v1_production_centrifuge1_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["app__modules__production__centrifuge1_api__CD"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _update_api_v1_production_centrifuge1__rid__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rid: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["app__modules__production__centrifuge1_api__CD"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _delete_api_v1_production_centrifuge1__rid__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rid: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _list_api_v1_production_centrifuge2_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                ps?: number;
+                batch_no?: string | null;
+                workshop?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _create_api_v1_production_centrifuge2_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["app__modules__production__centrifuge2_api__CD"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _update_api_v1_production_centrifuge2__rid__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rid: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["app__modules__production__centrifuge2_api__CD"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _delete_api_v1_production_centrifuge2__rid__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rid: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _list_api_v1_production_ceramic_equipment_logs_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                ps?: number;
+                equipment_no?: string | null;
+                workshop?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _create_api_v1_production_ceramic_equipment_logs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["C3"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _update_api_v1_production_ceramic_equipment_logs__rid__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rid: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["C3"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _delete_api_v1_production_ceramic_equipment_logs__rid__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rid: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _list_api_v1_production_ceramic_feeds_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                ps?: number;
+                batch_no?: string | null;
+                workshop?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _create_api_v1_production_ceramic_feeds_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["C0"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _update_api_v1_production_ceramic_feeds__rid__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rid: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["C0"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _delete_api_v1_production_ceramic_feeds__rid__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rid: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _list_api_v1_production_ceramic_material_separations_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                ps?: number;
+                batch_no?: string | null;
+                workshop?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _create_api_v1_production_ceramic_material_separations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["C4"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _update_api_v1_production_ceramic_material_separations__rid__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rid: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["C4"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _delete_api_v1_production_ceramic_material_separations__rid__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rid: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _list_api_v1_production_ceramic_membrane_cleans_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                ps?: number;
+                membrane_no?: string | null;
+                workshop?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _create_api_v1_production_ceramic_membrane_cleans_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["C1"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _update_api_v1_production_ceramic_membrane_cleans__rid__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rid: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["C1"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _delete_api_v1_production_ceramic_membrane_cleans__rid__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rid: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _list_api_v1_production_ceramic_membrane_ops_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                ps?: number;
+                batch_no?: string | null;
+                workshop?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _create_api_v1_production_ceramic_membrane_ops_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["C2"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _update_api_v1_production_ceramic_membrane_ops__rid__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rid: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["C2"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _delete_api_v1_production_ceramic_membrane_ops__rid__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rid: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _list_api_v1_production_conc1_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                ps?: number;
+                batch_no?: string | null;
+                workshop?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _create_api_v1_production_conc1_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["app__modules__production__conc1_api__CD"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _update_api_v1_production_conc1__rid__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rid: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["app__modules__production__conc1_api__CD"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _delete_api_v1_production_conc1__rid__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rid: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _list_api_v1_production_conc2_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                ps?: number;
+                batch_no?: string | null;
+                workshop?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _create_api_v1_production_conc2_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["app__modules__production__conc2_api__CD"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _update_api_v1_production_conc2__rid__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rid: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["app__modules__production__conc2_api__CD"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _delete_api_v1_production_conc2__rid__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rid: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _list_api_v1_production_decolor1_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                ps?: number;
+                batch_no?: string | null;
+                workshop?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _create_api_v1_production_decolor1_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["app__modules__production__decolor1_api__CD"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _update_api_v1_production_decolor1__rid__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rid: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["app__modules__production__decolor1_api__CD"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _delete_api_v1_production_decolor1__rid__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rid: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_dr_dashboard_api_v1_production_dr_dashboard_summary_get: {
+        parameters: {
+            query?: {
+                month?: string;
+                workshop?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_dr_extraction_full_api_v1_production_dr_extraction_full_get: {
+        parameters: {
+            query?: {
+                workshop?: string;
+                /** @description 筛选年份 */
+                year?: number | null;
+                /** @description 筛选月份 */
+                month?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_dr_extraction_years_api_v1_production_dr_extraction_years_get: {
+        parameters: {
+            query?: {
+                workshop?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_dr_extraction_api_v1_production_dr_extractions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_dr_filtrates_api_v1_production_dr_extractions__extraction_id__filtrates_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                extraction_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_dr_extraction_api_v1_production_dr_extractions__record_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_dr_extraction_api_v1_production_dr_extractions__record_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_dr_batches_api_v1_production_dr_fermentation_batches_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                batch_no?: string | null;
+                workshop?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_dr_batch_api_v1_production_dr_fermentation_batches_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_dr_tanks_api_v1_production_dr_fermentation_batches__batch_id__tanks_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batch_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_dr_batch_api_v1_production_dr_fermentation_batches__record_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_dr_batch_api_v1_production_dr_fermentation_batches__record_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_dr_tank_api_v1_production_dr_fermentation_tanks_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_dr_tank_api_v1_production_dr_fermentation_tanks__record_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_dr_tank_api_v1_production_dr_fermentation_tanks__record_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_dr_filtrate_api_v1_production_dr_filtrates_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_dr_filtrate_api_v1_production_dr_filtrates__record_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_dr_filtrate_api_v1_production_dr_filtrates__record_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dr_coverage_api_v1_production_dr_lineage_coverage_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -76819,7 +81529,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ApiResponse"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -76833,7 +81543,1433 @@ export interface operations {
             };
         };
     };
-    save_production_feishu_config_api_v1_production_feishu_config_put: {
+    dr_loss_funnel_api_v1_production_dr_lineage_loss_funnel_get: {
+        parameters: {
+            query: {
+                batch_no: string;
+                /** @description 工段：fermentation/extraction/chromatography/first_refinement/second_refinement/third_refinement/fourth_refinement */
+                stage?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dr_loss_stats_api_v1_production_dr_lineage_loss_stats_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dr_material_reuse_api_v1_production_dr_lineage_material_reuse_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dr_lineage_trace_api_v1_production_dr_lineage_trace_get: {
+        parameters: {
+            query: {
+                batch_no: string;
+                /** @description 工段：fermentation/extraction/chromatography/first_refinement/second_refinement/third_refinement/fourth_refinement */
+                stage?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dr_yield_distribution_api_v1_production_dr_lineage_yield_distribution_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_dr_records_api_v1_production_dr_records_get: {
+        parameters: {
+            query: {
+                /** @description 表名，如 dr_chromatography_crystal */
+                table: string;
+                page?: number;
+                page_size?: number;
+                /** @description 按生产日期筛选年份 */
+                year?: number | null;
+                /** @description 按生产日期筛选月份 */
+                month?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_dr_record_years_api_v1_production_dr_records_years_get: {
+        parameters: {
+            query?: {
+                /** @description 表名 */
+                table?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dr_dump_plans_api_v1_production_dr_schedule_dump_plans_get: {
+        parameters: {
+            query?: {
+                /** @description 起始日期 YYYY-MM-DD，空则全部 */
+                from_date?: string;
+                /** @description 截止日期 YYYY-MM-DD，空则全部 */
+                to_date?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dr_receiving_tasks_api_v1_production_dr_schedule_tasks_get: {
+        parameters: {
+            query?: {
+                /** @description 月份 YYYY-MM，空则全部 */
+                month?: string;
+                /** @description pending/confirmed/delayed/pending_approval/cancelled，空则全部 */
+                status?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_receiving_api_v1_production_dr_schedule_tasks__batch_no__approve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batch_no: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApproveBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_receiving_api_v1_production_dr_schedule_tasks__batch_no__confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batch_no: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delay_receiving_api_v1_production_dr_schedule_tasks__batch_no__delay_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batch_no: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DelayBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dr_schedule_upload_api_v1_production_dr_schedule_upload_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_dr_schedule_upload_api_v1_production_dr_schedule_upload_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_dr_extractions_api_v1_production_dr_tanks__tank_id__extractions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tank_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _list_api_v1_production_dry_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                ps?: number;
+                batch_no?: string | null;
+                workshop?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _create_api_v1_production_dry_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["app__modules__production__dry_api__CD"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _update_api_v1_production_dry__rid__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rid: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["app__modules__production__dry_api__CD"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _delete_api_v1_production_dry__rid__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rid: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_acidification_api_v1_production_fa_acidification_flat_list_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                /** @description 批号筛选 */
+                batch_no?: string | null;
+                month?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fa_chat_history_api_v1_production_fa_chat_history_get: {
+        parameters: {
+            query: {
+                session_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fa_chat_send_api_v1_production_fa_chat_send_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fa_batch_params_api_v1_production_fa_dashboard_batch_params_get: {
+        parameters: {
+            query: {
+                batch_no: string;
+                score?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fa_golden_batches_api_v1_production_fa_dashboard_golden_batches_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                /** @description 评分模式: stability/quality/filtered */
+                score?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_fa_dashboard_api_v1_production_fa_dashboard_summary_get: {
+        parameters: {
+            query?: {
+                /** @description 筛选月份 (YYYY-MM)，默认当前月 */
+                month?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fa_yield_chain_api_v1_production_fa_dashboard_yield_chain_get: {
+        parameters: {
+            query?: {
+                /** @description 月份，格式 YYYY-MM */
+                month?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_decolor_centrifuge_api_v1_production_fa_decolor_centrifuge_list_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                month?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_decolor1_api_v1_production_fa_decolor1_list_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                month?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_batches_api_v1_production_fa_fermentation_batches_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                /** @description 罐号筛选 */
+                tank_no?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_batch_api_v1_production_fa_fermentation_batches__tank_no__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tank_no: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_flat_api_v1_production_fa_fermentation_flat_list_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                /** @description 罐号筛选 */
+                tank_no?: string | null;
+                month?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_sub_batch_api_v1_production_fa_fermentation_sub_batches__sub_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sub_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_intermediate_api_v1_production_fa_intermediate_list_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                month?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fa_ai_analysis_api_v1_production_fa_lineage_ai_analysis_get: {
+        parameters: {
+            query: {
+                batch_no: string;
+                stage?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fa_ai_analysis_stream_api_v1_production_fa_lineage_ai_analysis_stream_get: {
+        parameters: {
+            query: {
+                batch_no: string;
+                stage?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fa_lineage_trace_api_v1_production_fa_lineage_trace_get: {
+        parameters: {
+            query: {
+                batch_no: string;
+                stage: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    monthly_averages_api_v1_production_fa_monthly_averages_get: {
+        parameters: {
+            query: {
+                /** @description 表名 */
+                table: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_mother_liquor_api_v1_production_fa_mother_liquor_list_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                month?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_mvr_api_v1_production_fa_mvr_list_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                month?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_plate_recovery_api_v1_production_fa_plate_recovery_list_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                month?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    trigger_fa_sync_api_v1_production_fa_sync_trigger_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_feishu_configs_api_v1_production_feishu_configs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upsert_feishu_config_api_v1_production_feishu_configs_put: {
         parameters: {
             query?: never;
             header?: never;
@@ -76854,7 +82990,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ApiResponse"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -76868,276 +83004,7 @@ export interface operations {
             };
         };
     };
-    get_production_feishu_records_api_v1_production_feishu_config_records_get: {
-        parameters: {
-            query?: {
-                config_id?: string | null;
-                table_id?: string | null;
-                page_size?: number;
-                page_token?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_production_feishu_tables_api_v1_production_feishu_config_tables_get: {
-        parameters: {
-            query?: {
-                config_id?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    test_production_feishu_config_api_v1_production_feishu_config_test_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["ProductionFeishuConfigUpsert"] | null;
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_production_feishu_configs_api_v1_production_feishu_configs_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    replace_read_bindings_api_v1_production_feishu_read_page_bindings__page_key__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                page_key: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["BindingReplace"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_read_resources_api_v1_production_feishu_read_resources_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    sync_read_resource_api_v1_production_feishu_read_resources__resource_id__sync_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                resource_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_read_roots_api_v1_production_feishu_read_roots_get: {
-        parameters: {
-            query?: {
-                config_id?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_read_root_api_v1_production_feishu_read_roots_post: {
+    test_feishu_config_api_v1_production_feishu_configs_test_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -77148,7 +83015,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["app__modules__production__read_mirror_api__SourceRootInput"];
+                "application/json": components["schemas"]["ProductionFeishuConfigUpsert"];
             };
         };
         responses: {
@@ -77158,7 +83025,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ApiResponse"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -77172,13 +83039,11 @@ export interface operations {
             };
         };
     };
-    delete_read_root_api_v1_production_feishu_read_roots__root_id__delete: {
+    list_feishu_tables_api_v1_production_feishu_tables_get: {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                root_id: string;
-            };
+            path?: never;
             cookie?: {
                 auth_token?: string | null;
             };
@@ -77191,7 +83056,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ApiResponse"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -77205,44 +83070,9 @@ export interface operations {
             };
         };
     };
-    discover_read_root_api_v1_production_feishu_read_roots__root_id__discover_post: {
+    refresh_feishu_tables_api_v1_production_feishu_tables_refresh_post: {
         parameters: {
             query?: never;
-            header?: never;
-            path: {
-                root_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_production_feishu_sync_bindings_api_v1_production_feishu_sync_bindings_get: {
-        parameters: {
-            query?: {
-                config_id?: string | null;
-            };
             header?: never;
             path?: never;
             cookie?: {
@@ -77257,7 +83087,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProductionApiResponse_list_ProductionFeishuSyncBindingResponse__"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -77271,225 +83101,220 @@ export interface operations {
             };
         };
     };
-    create_production_feishu_sync_binding_api_v1_production_feishu_sync_bindings_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ProductionFeishuSyncBindingCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProductionApiResponse_ProductionFeishuSyncBindingResponse_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_production_feishu_sync_binding_api_v1_production_feishu_sync_bindings__binding_id__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                binding_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ProductionFeishuSyncBindingUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProductionApiResponse_ProductionFeishuSyncBindingResponse_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_production_feishu_sync_binding_api_v1_production_feishu_sync_bindings__binding_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                binding_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProductionApiResponse_NoneType_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    preview_production_feishu_sync_binding_api_v1_production_feishu_sync_bindings__binding_id__preview_get: {
-        parameters: {
-            query?: {
-                page_size?: number;
-            };
-            header?: never;
-            path: {
-                binding_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProductionApiResponse_ProductionFeishuTablePreviewResponse_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_production_feishu_sync_runs_api_v1_production_feishu_sync_bindings__binding_id__runs_get: {
-        parameters: {
-            query?: {
-                limit?: number;
-            };
-            header?: never;
-            path: {
-                binding_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProductionApiResponse_list_ProductionFeishuSyncRunResponse__"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    execute_production_feishu_sync_binding_api_v1_production_feishu_sync_bindings__binding_id__sync_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                binding_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ProductionFeishuSyncExecuteRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProductionApiResponse_ProductionFeishuSyncRunResponse_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_fermentations_api_v1_production_fermentations_get: {
+    get_table_data_api_v1_production_feishu_tables__table_id__data_get: {
         parameters: {
             query?: {
                 page?: number;
                 page_size?: number;
+            };
+            header?: never;
+            path: {
+                table_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    toggle_feishu_table_api_v1_production_feishu_tables__table_id__enabled_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                table_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TableEnabledPayload"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_table_fields_api_v1_production_feishu_tables__table_id__fields_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                table_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sync_feishu_table_api_v1_production_feishu_tables__table_id__sync_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                table_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restart_feishu_ws_api_v1_production_feishu_ws_restart_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_feishu_ws_status_api_v1_production_feishu_ws_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_fermentation_records_api_v1_production_fermentation_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                /** @description 产品名称 */
+                product_name?: string | null;
+                /** @description 批号搜索 */
                 batch_no?: string | null;
+                /** @description 状态 */
                 status?: string | null;
+                /** @description 发酵罐搜索 */
+                fermenter?: string | null;
             };
             header?: never;
             path?: never;
@@ -77505,7 +83330,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProductionApiResponse_list_FermentationResponse__"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -77519,7 +83344,7 @@ export interface operations {
             };
         };
     };
-    create_fermentation_api_v1_production_fermentations_post: {
+    create_fermentation_record_api_v1_production_fermentation_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -77540,7 +83365,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProductionApiResponse_FermentationResponse_"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -77554,7 +83379,40 @@ export interface operations {
             };
         };
     };
-    update_fermentation_api_v1_production_fermentations__record_id__put: {
+    get_fermentation_record_api_v1_production_fermentation__record_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_fermentation_record_api_v1_production_fermentation__record_id__put: {
         parameters: {
             query?: never;
             header?: never;
@@ -77577,7 +83435,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProductionApiResponse_FermentationResponse_"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -77591,7 +83449,7 @@ export interface operations {
             };
         };
     };
-    delete_fermentation_api_v1_production_fermentations__record_id__delete: {
+    delete_fermentation_record_api_v1_production_fermentation__record_id__delete: {
         parameters: {
             query?: never;
             header?: never;
@@ -77610,7 +83468,359 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProductionApiResponse_NoneType_"];
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_related_events_api_v1_production_fermentation__record_id__related_events_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_fermentation_status_api_v1_production_fermentation__record_id__status_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FermentationStatusUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _list_api_v1_production_filter1_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                ps?: number;
+                batch_no?: string | null;
+                workshop?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _create_api_v1_production_filter1_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["app__modules__production__filter1_api__CD"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _update_api_v1_production_filter1__rid__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rid: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["app__modules__production__filter1_api__CD"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _delete_api_v1_production_filter1__rid__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rid: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _list_api_v1_production_filter2_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                ps?: number;
+                batch_no?: string | null;
+                workshop?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _create_api_v1_production_filter2_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["app__modules__production__filter2_api__CD"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _update_api_v1_production_filter2__rid__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rid: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["app__modules__production__filter2_api__CD"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _delete_api_v1_production_filter2__rid__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rid: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -77694,14 +83904,40 @@ export interface operations {
             };
         };
     };
-    list_events_api_v1_production_non_conforming_events_get: {
+    trigger_anomaly_detection_api_v1_production_mc_anomaly_run_post: {
         parameters: {
-            query?: {
-                page?: number;
-                page_size?: number;
-                workshop?: string | null;
-                status?: string | null;
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
             };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_anomaly_detection_status_api_v1_production_mc_anomaly_status_get: {
+        parameters: {
+            query?: never;
             header?: never;
             path?: never;
             cookie?: {
@@ -77716,7 +83952,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProductionApiResponse_list_NonConformingEventResponse__"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -77730,7 +83966,38 @@ export interface operations {
             };
         };
     };
-    create_event_api_v1_production_non_conforming_events_post: {
+    get_ba_records_api_v1_production_mc_ba_records_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_blending_input_api_v1_production_mc_blending_inputs_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -77741,7 +84008,9 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["NonConformingEventCreate"];
+                "application/json": {
+                    [key: string]: unknown;
+                };
             };
         };
         responses: {
@@ -77751,7 +84020,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProductionApiResponse_NonConformingEventResponse_"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -77765,152 +84034,12 @@ export interface operations {
             };
         };
     };
-    update_event_api_v1_production_non_conforming_events__record_id__put: {
+    delete_blending_input_api_v1_production_mc_blending_inputs__record_id__delete: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 record_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["NonConformingEventUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProductionApiResponse_NonConformingEventResponse_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_event_api_v1_production_non_conforming_events__record_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                record_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProductionApiResponse_NoneType_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    close_event_api_v1_production_non_conforming_events__record_id__close_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                record_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProductionApiResponse_NonConformingEventResponse_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_read_page_api_v1_production_page_data__page_key__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                page_key: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    download_read_attachment_api_v1_production_page_data__page_key___binding_id__record__record_id__attachments__field_id___file_token__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                page_key: string;
-                binding_id: string;
-                record_id: string;
-                field_id: string;
-                file_token: string;
             };
             cookie?: {
                 auth_token?: string | null;
@@ -77938,17 +84067,120 @@ export interface operations {
             };
         };
     };
-    get_read_page_records_api_v1_production_page_data__page_key___binding_id__records_get: {
+    list_blending_api_v1_production_mc_blending_records_get: {
         parameters: {
             query?: {
                 page?: number;
                 page_size?: number;
-                keyword?: string | null;
+                batch_no?: string | null;
+                workshop?: string;
             };
             header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_blending_api_v1_production_mc_blending_records_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    full_list_blending_api_v1_production_mc_blending_records_full_list_get: {
+        parameters: {
+            query?: {
+                workshop?: string;
+                /** @description 筛选月份 (1-12)，按批号 MC-YYMMxx 的 MM 位匹配 */
+                month?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    calculate_blending_impurities_api_v1_production_mc_blending_records__batch_no__calculate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
             path: {
-                page_key: string;
-                binding_id: string;
+                batch_no: string;
             };
             cookie?: {
                 auth_token?: string | null;
@@ -77962,7 +84194,2164 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ApiResponse"];
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_blending_inputs_api_v1_production_mc_blending_records__batch_no__inputs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batch_no: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_blending_api_v1_production_mc_blending_records__record_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_blending_api_v1_production_mc_blending_records__record_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    chat_history_api_v1_production_mc_chat_history_get: {
+        parameters: {
+            query: {
+                session_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    chat_send_api_v1_production_mc_chat_send_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_acid_api_v1_production_mc_crude_extract_acid_steps_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AcidStepCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_acid_api_v1_production_mc_crude_extract_acid_steps__record_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_fl_api_v1_production_mc_crude_extract_fermentation_liquids_get: {
+        parameters: {
+            query?: {
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_fl_api_v1_production_mc_crude_extract_fermentation_liquids_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FermentationLiquidCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    full_list_api_v1_production_mc_crude_extract_full_list_get: {
+        parameters: {
+            query?: {
+                workshop?: string;
+                month?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_rb_api_v1_production_mc_crude_extract_refining_batches_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefiningBatchCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_rb_api_v1_production_mc_crude_extract_refining_batches__record_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_sodium_api_v1_production_mc_crude_extract_sodium_steps_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SodiumStepCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_sodium_api_v1_production_mc_crude_extract_sodium_steps__record_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_st_api_v1_production_mc_crude_extract_sub_tank_records__record_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubTankRecordUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_mc_dashboard_api_v1_production_mc_dashboard_summary_get: {
+        parameters: {
+            query?: {
+                /** @description 筛选月份 (YYYY-MM)，默认当前月 */
+                month?: string;
+                /** @description 车间编号 */
+                workshop?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_extraction_input_api_v1_production_mc_extraction_inputs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExtractionInputCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_extraction_input_api_v1_production_mc_extraction_inputs__record_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExtractionInputUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_extraction_input_api_v1_production_mc_extraction_inputs__record_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_extraction_records_api_v1_production_mc_extraction_records_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                batch_no?: string | null;
+                workshop?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_extraction_record_api_v1_production_mc_extraction_records_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExtractionRecordCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    full_list_extraction_records_api_v1_production_mc_extraction_records_full_list_get: {
+        parameters: {
+            query?: {
+                workshop?: string;
+                month?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_extraction_inputs_api_v1_production_mc_extraction_records__batch_no__inputs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batch_no: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_extraction_record_api_v1_production_mc_extraction_records__record_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExtractionRecordUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_extraction_record_api_v1_production_mc_extraction_records__record_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ai_analyze_api_v1_production_mc_lineage_ai_analysis_get: {
+        parameters: {
+            query: {
+                batch_no: string;
+                stage: string;
+                include_siblings?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ai_analyze_stream_api_v1_production_mc_lineage_ai_analysis_stream_get: {
+        parameters: {
+            query: {
+                batch_no: string;
+                stage: string;
+                include_siblings?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ai_history_api_v1_production_mc_lineage_ai_history_get: {
+        parameters: {
+            query: {
+                batch_no: string;
+                stage: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    lineage_coverage_api_v1_production_mc_lineage_coverage_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    lineage_material_reuse_api_v1_production_mc_lineage_material_reuse_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    lineage_trace_api_v1_production_mc_lineage_trace_get: {
+        parameters: {
+            query: {
+                batch_no: string;
+                stage: string;
+                include_siblings?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    lineage_yield_distribution_api_v1_production_mc_lineage_yield_distribution_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_qc_input_api_v1_production_mc_qc_inputs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_qc_inputs_api_v1_production_mc_qc_inputs__qc_batch__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                qc_batch: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_qc_input_api_v1_production_mc_qc_inputs__record_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_qc_input_api_v1_production_mc_qc_inputs__record_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_qc_item_api_v1_production_mc_qc_inspection_items_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_qc_api_v1_production_mc_qc_inspections_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_qc_api_v1_production_mc_qc_inspections_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    full_list_qc_api_v1_production_mc_qc_inspections_full_list_get: {
+        parameters: {
+            query?: {
+                month?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_qc_items_api_v1_production_mc_qc_inspections__qc_id__items_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                qc_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_qc_api_v1_production_mc_qc_inspections__record_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_mc_refinement_input_api_v1_production_mc_refinement_inputs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["McRefinementInputCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_mc_refinement_input_api_v1_production_mc_refinement_inputs__record_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["McRefinementInputUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_mc_refinement_input_api_v1_production_mc_refinement_inputs__record_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_mc_refinement_records_api_v1_production_mc_refinement_records_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                batch_no?: string | null;
+                workshop?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_mc_refinement_record_api_v1_production_mc_refinement_records_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["McRefinementRecordCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    full_list_mc_refinement_records_api_v1_production_mc_refinement_records_full_list_get: {
+        parameters: {
+            query?: {
+                workshop?: string;
+                month?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_mc_refinement_inputs_api_v1_production_mc_refinement_records__batch_no__inputs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batch_no: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_mc_refinement_record_api_v1_production_mc_refinement_records__record_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["McRefinementRecordUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_mc_refinement_record_api_v1_production_mc_refinement_records__record_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_mc_sync_status_api_v1_production_mc_sync_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    trigger_mc_sync_api_v1_production_mc_sync_trigger_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SyncTriggerRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_nce_api_v1_production_non_conforming_events_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                workshop?: string | null;
+                event_type?: string | null;
+                date_from?: string | null;
+                date_to?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_nce_api_v1_production_non_conforming_events_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NCECreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_affected_batches_api_v1_production_non_conforming_events__event_id__affected_batches_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                event_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_nce_api_v1_production_non_conforming_events__record_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NCEUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_nce_api_v1_production_non_conforming_events__record_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _list_api_v1_production_pack_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                ps?: number;
+                batch_no?: string | null;
+                workshop?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _create_api_v1_production_pack_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["app__modules__production__pack_api__CD"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _update_api_v1_production_pack__rid__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rid: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["app__modules__production__pack_api__CD"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _delete_api_v1_production_pack__rid__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rid: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -77988,6 +86377,43 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ProcessParameterCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_process_parameter_api_v1_production_parameters__param_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                param_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProcessParameterUpdate"];
             };
         };
         responses: {
@@ -78049,8 +86475,8 @@ export interface operations {
             query?: {
                 page?: number;
                 page_size?: number;
-                status?: string | null;
-                plan_month?: string | null;
+                product_name?: string | null;
+                workshop?: string | null;
             };
             header?: never;
             path?: never;
@@ -78186,39 +86612,6 @@ export interface operations {
         };
     };
     delete_plan_api_v1_production_plans__plan_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                plan_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_plan_tasks_api_v1_production_plans__plan_id__tasks_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -79509,46 +87902,13 @@ export interface operations {
             };
         };
     };
-    get_process_catalog_api_v1_production_process_catalog_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProductionApiResponse_list_ProcessDefinition__"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_process_execution_records_api_v1_production_process_records_get: {
+    list_pretreatments_api_v1_production_pretreatments_get: {
         parameters: {
             query?: {
                 page?: number;
                 page_size?: number;
-                batch_no?: string | null;
-                workshop_code?: string | null;
-                process_code?: string | null;
-                status?: string | null;
+                received_batch?: string | null;
+                workshop?: string;
             };
             header?: never;
             path?: never;
@@ -79564,7 +87924,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProductionApiResponse_list_ProcessExecutionRecordResponse__"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -79578,7 +87938,7 @@ export interface operations {
             };
         };
     };
-    create_process_execution_record_api_v1_production_process_records_post: {
+    create_pretreatment_api_v1_production_pretreatments_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -79589,7 +87949,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ProcessExecutionRecordCreate"];
+                "application/json": components["schemas"]["PretreatmentCreate"];
             };
         };
         responses: {
@@ -79599,7 +87959,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProductionApiResponse_ProcessExecutionRecordResponse_"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -79613,7 +87973,7 @@ export interface operations {
             };
         };
     };
-    update_process_execution_record_api_v1_production_process_records__record_id__put: {
+    update_pretreatment_api_v1_production_pretreatments__record_id__put: {
         parameters: {
             query?: never;
             header?: never;
@@ -79626,7 +87986,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ProcessExecutionRecordUpdate"];
+                "application/json": components["schemas"]["PretreatmentUpdate"];
             };
         };
         responses: {
@@ -79636,7 +87996,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProductionApiResponse_ProcessExecutionRecordResponse_"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -79650,7 +88010,7 @@ export interface operations {
             };
         };
     };
-    delete_process_execution_record_api_v1_production_process_records__record_id__delete: {
+    delete_pretreatment_api_v1_production_pretreatments__record_id__delete: {
         parameters: {
             query?: never;
             header?: never;
@@ -79669,40 +88029,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProductionApiResponse_NoneType_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    complete_process_execution_record_api_v1_production_process_records__record_id__complete_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                record_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProductionApiResponse_ProcessExecutionRecordResponse_"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -80028,6 +88355,147 @@ export interface operations {
             };
         };
     };
+    _list_api_v1_production_recrystallize_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                ps?: number;
+                batch_no?: string | null;
+                workshop?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _create_api_v1_production_recrystallize_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["app__modules__production__recrystallize_api__CD"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _update_api_v1_production_recrystallize__rid__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rid: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["app__modules__production__recrystallize_api__CD"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    _delete_api_v1_production_recrystallize__rid__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rid: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_sales_plan_details_api_v1_production_sales_plan_details_get: {
         parameters: {
             query?: {
@@ -80049,7 +88517,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProductionApiResponse_list_SalesPlanDetailResponse__"];
+                    "application/json": components["schemas"]["ApiResponse"];
                 };
             };
             /** @description Validation Error */
@@ -80084,40 +88552,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProductionApiResponse_SalesPlanDetailResponse_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_sales_plan_detail_api_v1_production_sales_plan_details__detail_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                detail_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProductionApiResponse_SalesPlanDetailResponse_"];
+                    "application/json": components["schemas"]["ApiResponse"];
                 };
             };
             /** @description Validation Error */
@@ -80154,7 +88589,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProductionApiResponse_SalesPlanDetailResponse_"];
+                    "application/json": components["schemas"]["ApiResponse"];
                 };
             };
             /** @description Validation Error */
@@ -80187,7 +88622,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProductionApiResponse_NoneType_"];
+                    "application/json": components["schemas"]["ApiResponse"];
                 };
             };
             /** @description Validation Error */
@@ -80206,8 +88641,10 @@ export interface operations {
             query?: {
                 page?: number;
                 page_size?: number;
+                /** @description 摇瓶批号搜索 */
                 batch_no?: string | null;
-                status?: string | null;
+                /** @description 产品名称 */
+                product_name?: string | null;
             };
             header?: never;
             path?: never;
@@ -80223,7 +88660,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProductionApiResponse_list_SeedCultureResponse__"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -80258,7 +88695,40 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProductionApiResponse_SeedCultureResponse_"];
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_seed_culture_api_v1_production_seed_cultures__record_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -80295,7 +88765,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProductionApiResponse_SeedCultureResponse_"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -80328,7 +88798,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProductionApiResponse_NoneType_"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -80342,13 +88812,19 @@ export interface operations {
             };
         };
     };
-    list_handovers_api_v1_production_shift_handovers_get: {
+    list_shift_handovers_api_v1_production_shift_handovers_get: {
         parameters: {
             query?: {
                 page?: number;
                 page_size?: number;
+                /** @description 岗位 */
+                position?: string | null;
+                /** @description 车间 */
                 workshop?: string | null;
-                status?: string | null;
+                /** @description 开始日期 */
+                date_from?: string | null;
+                /** @description 结束日期 */
+                date_to?: string | null;
             };
             header?: never;
             path?: never;
@@ -80364,7 +88840,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProductionApiResponse_list_ShiftHandoverResponse__"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -80378,7 +88854,7 @@ export interface operations {
             };
         };
     };
-    create_handover_api_v1_production_shift_handovers_post: {
+    create_shift_handover_api_v1_production_shift_handovers_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -80399,7 +88875,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProductionApiResponse_ShiftHandoverResponse_"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -80413,7 +88889,105 @@ export interface operations {
             };
         };
     };
-    update_handover_api_v1_production_shift_handovers__record_id__put: {
+    get_positions_api_v1_production_shift_handovers_positions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    search_users_api_v1_production_shift_handovers_search_users_get: {
+        parameters: {
+            query?: {
+                /** @description 搜索关键词 */
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_shift_handover_api_v1_production_shift_handovers__record_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_shift_handover_api_v1_production_shift_handovers__record_id__put: {
         parameters: {
             query?: never;
             header?: never;
@@ -80436,7 +89010,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProductionApiResponse_ShiftHandoverResponse_"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -80450,7 +89024,7 @@ export interface operations {
             };
         };
     };
-    delete_handover_api_v1_production_shift_handovers__record_id__delete: {
+    delete_shift_handover_api_v1_production_shift_handovers__record_id__delete: {
         parameters: {
             query?: never;
             header?: never;
@@ -80469,7 +89043,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProductionApiResponse_NoneType_"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -80483,7 +89057,7 @@ export interface operations {
             };
         };
     };
-    confirm_handover_api_v1_production_shift_handovers__record_id__confirm_post: {
+    confirm_shift_handover_api_v1_production_shift_handovers__record_id__confirm_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -80502,7 +89076,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProductionApiResponse_ShiftHandoverResponse_"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -80521,8 +89095,14 @@ export interface operations {
             query?: {
                 page?: number;
                 page_size?: number;
+                /** @description 车间 */
                 workshop?: string | null;
+                /** @description 班次 */
                 shift?: string | null;
+                /** @description 开始日期 */
+                date_from?: string | null;
+                /** @description 结束日期 */
+                date_to?: string | null;
             };
             header?: never;
             path?: never;
@@ -80538,7 +89118,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProductionApiResponse_list_ShiftLogResponse__"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -80573,7 +89153,40 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProductionApiResponse_ShiftLogResponse_"];
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_shift_log_api_v1_production_shift_logs__record_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -80610,7 +89223,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProductionApiResponse_ShiftLogResponse_"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -80643,7 +89256,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProductionApiResponse_NoneType_"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -80768,111 +89381,6 @@ export interface operations {
             header?: never;
             path: {
                 step_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_task_api_v1_production_tasks_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PlanTaskCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_task_api_v1_production_tasks__task_id__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                task_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PlanTaskUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_task_api_v1_production_tasks__task_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                task_id: string;
             };
             cookie?: {
                 auth_token?: string | null;
@@ -86786,7 +95294,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["app__modules__quality__api__read_mirror__SourceRootInput"];
+                "application/json": components["schemas"]["SourceRootInput"];
             };
         };
         responses: {

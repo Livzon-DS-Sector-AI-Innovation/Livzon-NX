@@ -40,7 +40,7 @@ export async function analyzeDeviation(
     }
     return null;
   } catch (err) {
-    if ((err instanceof Error ? err.name : '') === 'AbortError') {
+    if (err?.name === 'AbortError') {
       throw new Error(`AI分析超时（${AI_TIMEOUT_MS / 1000}秒）`);
     }
     throw new Error((err instanceof Error ? err.message : '') || 'AI分析失败');

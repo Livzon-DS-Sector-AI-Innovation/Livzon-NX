@@ -18,6 +18,7 @@ import {
   AuthorizationLedgerUpdateCreateInput,
   AuthorizationLedgerUpdateUpdateInput,
   AuthorizationLetterCreateInput,
+  AuthorizationLetter,
   CertificateEntryInput,
   CertificateWorkbookImportResult,
   DeclarationProgressEntryInput,
@@ -36,6 +37,7 @@ import {
   KnowledgeCommentUpdate,
   ProjectLedgerEntryInput,
   ProjectLedgerWorkbookImportResult,
+  ProductInfo,
   ReferenceStandardListItem,
   SupplementaryReplyListItem,
 } from '@/types/registration'
@@ -63,6 +65,26 @@ export async function fetchReferenceStandardsServer(params?: {
   search.set('page', String(params?.page || 1))
   search.set('page_size', String(params?.page_size || 20))
   return serverApiGet<ReferenceStandardListItem[]>(`/api/v1/registration/reference-standards?${search}`)
+}
+
+export async function fetchAuthorizationLettersServer(params: {
+  page: number
+  page_size: number
+}): Promise<PaginatedServerResult<AuthorizationLetter>> {
+  const search = new URLSearchParams({
+    page: String(params.page),
+    page_size: String(params.page_size),
+  })
+  return serverApiGet<AuthorizationLetter[]>(
+    `/api/v1/registration/authorization-letters?${search}`,
+  )
+}
+
+export async function fetchProductsServer(): Promise<ProductInfo[]> {
+  const result = await serverApiGet<ProductInfo[]>(
+    '/api/v1/registration/authorization-letters/products',
+  )
+  return result.data
 }
 
 export async function generateReferenceStandard(formData: FormData, data: Record<string, unknown>) {

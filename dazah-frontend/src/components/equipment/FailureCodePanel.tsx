@@ -35,7 +35,7 @@ export function FailureCodePanel({ onRefresh }: FailureCodePanelProps) {
           message.success('删除成功')
           onRefresh?.()
         } catch (error) {
-          message.error((error instanceof Error ? error.message : '') || '删除失败')
+          message.error(error?.message || '删除失败')
         }
       },
     })

@@ -196,7 +196,7 @@ export function CategoryTree({ categories, onRefresh }: CategoryTreeProps) {
       message.success('删除分类成功')
       onRefresh?.()
     } catch (error) {
-      message.error((error instanceof Error ? error.message : '') || '删除分类失败')
+      message.error(error?.message || '删除分类失败')
     }
   }
 

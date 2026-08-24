@@ -1069,3 +1069,47 @@ async def test_submit_purchase_request_rejects_total_amount_mismatch() -> None:
 
     request = FakePurchaseRequestRepository.requests[created.id]
     assert request.status == PurchaseRequestStatus.draft
+
+
+
+def test_count_current_round_approvals_ignores_same_timestamp_ambiguity() -> None:
+    """同刻时间戳下，会签计数基于审批记录顺序而非时间比较。"""
+    from datetime import UTC, datetime
+
+    from app.modules.procurement.models import PurchaseRequestApproval
+    from app.modules.procurement.service import _count_current_round_approvals
+
+    same_time = datetime.now(UTC)
+
+    def make(role: str, result: str) -> PurchaseRequestApproval:
+        return PurchaseRequestApproval(
+            purchase_request_id="req-1",
+            approval_role=role,
+            result=result,
+            opinion="",
+            approver_name="tester",
+            approval_time=same_time,
+        )
+
+    approvals = [
+        make(PurchaseApprovalRole.hardware_warehouse.value, PurchaseApprovalResult.approved.value),  # noqa: E501
+        make(PurchaseApprovalRole.equipment_power.value, PurchaseApprovalResult.approved.value),  # noqa: E501
+        make(PurchaseApprovalRole.equipment_power.value, PurchaseApprovalResult.rejected.value),  # noqa: E501
+        make(PurchaseApprovalRole.hardware_warehouse.value, PurchaseApprovalResult.approved.value),  # noqa: E501
+    ]
+    # 最近驳回后的 hardware_warehouse 审批只有 1 条（同刻也不受时间比较影响）
+    assert (
+        _count_current_round_approvals(
+            approvals,
+            approval_role=PurchaseApprovalRole.hardware_warehouse,
+        )
+        == 1
+    )
+    # 最近驳回后的 equipment_power 审批为 0（驳回后无人通过）
+    assert (
+        _count_current_round_approvals(
+            approvals,
+            approval_role=PurchaseApprovalRole.equipment_power,
+        )
+        == 0
+    )

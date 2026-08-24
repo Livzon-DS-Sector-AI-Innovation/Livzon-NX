@@ -99,7 +99,7 @@ export function WorkOrderDetailDrawer({ onRefresh }: WorkOrderDetailDrawerProps)
           message.success('指派成功')
           await refreshDetail(wo.id)
         } catch (error) {
-          message.error((error instanceof Error ? error.message : '') || '指派失败')
+          message.error(error?.message || '指派失败')
           throw error
         }
       },
@@ -112,7 +112,7 @@ export function WorkOrderDetailDrawer({ onRefresh }: WorkOrderDetailDrawerProps)
       message.success('已开始维修')
       await refreshDetail(wo.id)
     } catch (error) {
-      message.error((error instanceof Error ? error.message : '') || '操作失败')
+      message.error(error?.message || '操作失败')
     }
   }
 
@@ -141,7 +141,7 @@ export function WorkOrderDetailDrawer({ onRefresh }: WorkOrderDetailDrawerProps)
           message.success('已提交验收')
           await refreshDetail(wo.id)
         } catch (error) {
-          message.error((error instanceof Error ? error.message : '') || '操作失败')
+          message.error(error?.message || '操作失败')
           throw error
         }
       },
@@ -172,7 +172,7 @@ export function WorkOrderDetailDrawer({ onRefresh }: WorkOrderDetailDrawerProps)
           message.success(result === '合格' ? '验收通过' : '已打回重修')
           await refreshDetail(wo.id)
         } catch (error) {
-          message.error((error instanceof Error ? error.message : '') || '操作失败')
+          message.error(error?.message || '操作失败')
           throw error
         }
       },
@@ -185,7 +185,7 @@ export function WorkOrderDetailDrawer({ onRefresh }: WorkOrderDetailDrawerProps)
       message.success('工单已关闭')
       await refreshDetail(wo.id)
     } catch (error) {
-      message.error((error instanceof Error ? error.message : '') || '操作失败')
+      message.error(error?.message || '操作失败')
     }
   }
 
@@ -195,7 +195,7 @@ export function WorkOrderDetailDrawer({ onRefresh }: WorkOrderDetailDrawerProps)
       message.success('抢单成功')
       await refreshDetail(wo.id)
     } catch (error) {
-      message.error((error instanceof Error ? error.message : '') || '抢单失败')
+      message.error(error?.message || '抢单失败')
     }
   }
 

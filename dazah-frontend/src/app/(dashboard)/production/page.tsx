@@ -25,6 +25,7 @@ import {
   HistoryOutlined,
   BarChartOutlined,
   ArrowRightOutlined,
+  ExperimentOutlined,
 } from '@ant-design/icons'
 import { getBatches } from '@/actions/production'
 import { BatchStatus } from '@/types/production'
@@ -53,6 +54,13 @@ const menuItems = [
     description: '批次档案管理、状态流转',
     icon: <AppstoreOutlined />,
     color: '#5645d4',
+  },
+  {
+    key: '/production/fermentation',
+    title: '发酵记录',
+    description: '发酵批次记录与周期管理',
+    icon: <ExperimentOutlined />,
+    color: '#1976d2',
   },
   {
     key: '/production/plan',
@@ -256,7 +264,7 @@ export default function ProductionDashboard() {
                     size="small"
                     pagination={false}
                     className="cursor-pointer"
-                    onRow={(record) => ({
+                    onRow={() => ({
                       onClick: () => router.push('/production/batches'),
                     })}
                   />

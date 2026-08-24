@@ -79,7 +79,7 @@ export function RepairDrawer({ equipments, symptoms, onRefresh }: RepairDrawerPr
       closeRepairDrawer()
       onRefresh?.()
     } catch (error) {
-      if ((error instanceof Error ? error.message : '')) message.error((error instanceof Error ? error.message : ''))
+      if (error?.message) message.error(error.message)
     } finally {
       setSubmitting(false)
     }

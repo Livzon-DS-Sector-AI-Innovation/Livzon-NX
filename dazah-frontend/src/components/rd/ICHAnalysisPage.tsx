@@ -194,7 +194,7 @@ export function ICHAnalysisPage() {
       message.success('ICH Q3C/Q3D 杂质识别完成，已保存')
       loadHistory(historyPage)
     } catch (error) {
-      message.error((error instanceof Error ? error.message : '') || '分析失败')
+      message.error(error.message || '分析失败')
     } finally {
       setLoading(false)
     }

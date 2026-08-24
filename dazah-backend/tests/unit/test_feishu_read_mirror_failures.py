@@ -13,7 +13,7 @@ from app.platform.integrations.feishu import read_mirror
 from app.platform.integrations.feishu.read_mirror import (
     ModuleFeishuReadMirrorService,
 )
-from app.platform.integrations.feishu.read_scheduler import PRODUCTION_MODELS
+from app.platform.integrations.feishu.read_scheduler import QUALITY_MODELS
 
 SimpleNamespace: Any = _SimpleNamespace
 
@@ -37,10 +37,10 @@ def _service(
 ) -> Any:
     return ModuleFeishuReadMirrorService(
         session or _session(),
-        module_code="production",
+        module_code="quality",
         app_id=app_id,
         app_secret=app_secret,
-        models=PRODUCTION_MODELS,
+        models=QUALITY_MODELS,
     )
 
 

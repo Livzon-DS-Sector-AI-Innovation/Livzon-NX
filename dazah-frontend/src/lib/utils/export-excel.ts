@@ -12,7 +12,7 @@ export function exportToExcel(
 ) {
   // 转换数据为简单格式
   const exportData = data.map(row => {
-    const newRow: Record<string, any> = {}
+    const newRow: Record<string, unknown> = {}
     columns.forEach(col => {
       newRow[col.header] = row[col.key]
     })
