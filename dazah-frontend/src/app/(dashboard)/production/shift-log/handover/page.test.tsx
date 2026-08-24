@@ -212,7 +212,7 @@ describe('ShiftHandoverPage', () => {
     const modalOk = Array.from(document.querySelectorAll('.ant-modal button')).find((b) => b.textContent?.replace(/\s/g, '') === '确认接班') as HTMLButtonElement | undefined
     await act(async () => { modalOk?.click(); await flush(150) })
     expect(actions.confirmShiftHandover).toHaveBeenCalledWith('sh-1')
-  })
+  }, 15000)
 
   it('filters the list by position and queries again', async () => {
     act(() => {

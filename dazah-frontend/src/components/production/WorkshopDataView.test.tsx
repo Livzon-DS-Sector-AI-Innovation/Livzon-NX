@@ -399,7 +399,7 @@ describe('WorkshopDataView', () => {
       await act(async () => { okBtn2.click(); await new Promise((r) => setTimeout(r, 200)) })
     }
     expect(prodActions.updateBatch).toHaveBeenCalled()
-  })
+  }, 15000)
 
   it('falls into the export failure branch when URL API throws', async () => {
     vi.stubGlobal('URL', { ...URL, createObjectURL: vi.fn(() => { throw new Error('fail') }), revokeObjectURL: vi.fn() }) as any

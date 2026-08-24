@@ -5,6 +5,9 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }))
+vi.mock('next/headers', () => ({
+  cookies: vi.fn(async () => ({ get: vi.fn(() => undefined) })),
+}))
 
 import {
   createEmployee,
@@ -14,7 +17,7 @@ import {
   updateCandidateAction,
 } from './hr'
 
-const API_BASE = process.env.API_BASE_URL || 'http://localhost:8000'
+const API_BASE = process.env.API_BASE_URL || 'http://dazah-backend-app-1:8000'
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -71,10 +74,14 @@ describe('hr actions', () => {
     expect(fetchMock).toHaveBeenCalled()
   })
 
-  it('candidate action stubs do not throw', async () => {
+  it('updates a candidate through the action', async () => {
     const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: null }))
     vi.stubGlobal('fetch', fetchMock)
 
-    await expect(updateCandidateAction('c-1', { note: 'x' })).rejects.toThrow('功能尚未实现')
+    await updateCandidateAction('c-1', { note: 'x' })
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${API_BASE}/api/v1/hr/candidates/c-1`,
+      expect.objectContaining({ method: 'PUT', body: JSON.stringify({ note: 'x' }) }),
+    )
   })
 })
