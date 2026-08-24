@@ -621,3 +621,54 @@ async def test_mc_sync_refinement_and_ba():
         stats2 = await sync._sync_ba(session2, "tok", "app", "sec")
     assert stats2["created_records"] >= 1
     assert stats2["skipped"] == 0
+
+
+# ═══════════ dr_feishu_sync.run_dr_sync / 调度器 ═══════════
+
+
+@pytest.mark.anyio
+async def test_run_dr_sync_no_config():
+    """run_dr_sync: 无配置 → 返回 error。"""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from app.modules.production import dr_feishu_sync as drsync
+
+    session = AsyncMock()
+    result = MagicMock()
+    result.scalars.return_value.all.return_value = []
+    session.execute.return_value = result
+    res = await drsync.run_dr_sync(session)
+    assert "error" in res
+
+
+@pytest.mark.anyio
+async def test_run_dr_sync_with_config():
+    """run_dr_sync: 有配置 → 调用 sync_config_by_target（注入）。"""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from app.modules.production import dr_feishu_sync as drsync
+
+    session = AsyncMock()
+    result = MagicMock()
+    cfg = SimpleNamespace(sync_target="extraction")
+    result.scalars.return_value.all.return_value = [cfg]
+    session.execute.return_value = result
+
+    with patch(
+        "app.modules.production.production_plan_service.sync_config_by_target",
+        new=AsyncMock(return_value={"created": 5}),
+    ):
+        res = await drsync.run_dr_sync(session)
+    assert res["extraction"] == {"created": 5}
+
+
+@pytest.mark.anyio
+async def test_dr_sync_scheduler_start_stop():
+    """启动/停止 DR 飞书同步定时任务。"""
+    from app.modules.production import dr_feishu_sync as drsync
+
+    drsync._dr_sync_scheduler = None
+    drsync.start_dr_sync_scheduler()
+    assert drsync._dr_sync_scheduler is not None
+    drsync.stop_dr_sync_scheduler()
+    assert drsync._dr_sync_scheduler is None
