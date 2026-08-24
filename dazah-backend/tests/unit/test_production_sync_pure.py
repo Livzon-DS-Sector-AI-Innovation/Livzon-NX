@@ -580,3 +580,36 @@ def test_fa_scheduler_p():
     assert fas._p("-") == "NULL"
     assert fas._p("") == "NULL"
     assert fas._p("invalid") == "'invalid'"
+
+
+# ═══════════ fa_ai_analysis_api 纯函数 ═══════════
+
+
+def test_fa_ai_analysis_parse_json():
+    """_parse_json: 从 LLM 回复中提取 JSON。"""
+    from app.modules.production import fa_ai_analysis_api as faai
+
+    # 普通 JSON
+    assert faai._parse_json('{"key": "value"}') == {"key": "value"}
+
+    # Markdown 代码块中的 JSON
+    raw = """```json
+{"key": "value"}
+```"""
+    assert faai._parse_json(raw) == {"key": "value"}
+
+    # 没有 json 标记的代码块
+    raw = """```
+{"key": "value"}
+```"""
+    assert faai._parse_json(raw) == {"key": "value"}
+
+    # 无效 JSON，尝试提取 { ... }
+    raw = """Some text before
+{"key": "value"}
+Some text after"""
+    assert faai._parse_json(raw) == {"key": "value"}
+
+    # 完全无效 JSON
+    assert faai._parse_json("invalid json") == {}
+    assert faai._parse_json("") == {}
