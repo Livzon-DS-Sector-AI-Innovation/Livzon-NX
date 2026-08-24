@@ -104,6 +104,8 @@ def read_changed_lines(
         "-c",
         "core.quotePath=false",
         "diff",
+        "--no-ext-diff",
+        "--no-textconv",
         "--unified=0",
         "--diff-filter=ACMR",
         base,
@@ -113,12 +115,21 @@ def read_changed_lines(
     ]
     completed = subprocess.run(
         command,
-        check=True,
+        # ``git diff`` returns 1 when differences exist.  That is the normal
+        # input for this checker, so only command errors should abort it.
+        check=False,
         capture_output=True,
         text=True,
         encoding="utf-8",
         cwd=repository_root(),
     )
+    if completed.returncode not in (0, 1):
+        raise subprocess.CalledProcessError(
+            completed.returncode,
+            command,
+            output=completed.stdout,
+            stderr=completed.stderr,
+        )
     changed: dict[str, set[int]] = defaultdict(set)
     current_file: str | None = None
     for raw_line in completed.stdout.splitlines():
