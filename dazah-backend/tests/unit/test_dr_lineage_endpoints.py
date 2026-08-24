@@ -361,3 +361,122 @@ async def test_resolve_not_found():
         stage, batch = await dr._resolve(session, "", "DR-UNKNOWN")
         assert stage is None
         assert batch is None
+
+
+# ═══════════ fa_lineage_api._node_info ═══════════
+
+
+@pytest.mark.anyio
+async def test_fa_lineage_node_info_fermentation():
+    """_node_info: fermentation 工段返回发酵数据。"""
+    from app.modules.production import fa_lineage_api as fa
+
+    session = AsyncMock()
+    result = MagicMock()
+    result.fetchone.return_value = SimpleNamespace(quantity=100.0)
+    session.execute.return_value = result
+
+    # Mock 发酵批次查询
+    ferment_result = MagicMock()
+    ferment_result.fetchone.return_value = SimpleNamespace(
+        汇总总量_kg=500.0, 放罐体积_kl=200.0
+    )
+
+    def execute_side_effect(query, params=None):
+        sql_str = str(query)
+        if "fa_batch_lineage" in sql_str:
+            return result
+        elif "fa_fermentation_batches" in sql_str:
+            return ferment_result
+        return MagicMock(fetchone=lambda: None)
+
+    session.execute.side_effect = execute_side_effect
+
+    detail, yr, qty = await fa._node_info(session, "fermentation", "FA-EX1")
+    assert "100kg" in detail  # quantity from lineage
+    assert "200kl" in detail  # 放罐体积
+    assert qty == 100.0
+
+
+@pytest.mark.anyio
+async def test_fa_lineage_node_info_acidification():
+    """_node_info: acidification 工段返回酸化数据。"""
+    from app.modules.production import fa_lineage_api as fa
+
+    session = AsyncMock()
+    result = MagicMock()
+    result.fetchone.return_value = SimpleNamespace(quantity=80.0)
+
+    acid_result = MagicMock()
+    acid_result.fetchone.return_value = SimpleNamespace(max_qty=300.0)
+
+    def execute_side_effect(query, params=None):
+        sql_str = str(query)
+        if "fa_batch_lineage" in sql_str:
+            return result
+        elif "fa_acidification_records" in sql_str:
+            return acid_result
+        return MagicMock(fetchone=lambda: None)
+
+    session.execute.side_effect = execute_side_effect
+
+    detail, yr, qty = await fa._node_info(session, "acidification", "FA-EX1")
+    assert "膜滤300kg" in detail
+    assert qty == 80.0
+
+
+@pytest.mark.anyio
+async def test_fa_lineage_node_info_decolor1():
+    """_node_info: decolor1 工段返回脱色数据。"""
+    from app.modules.production import fa_lineage_api as fa
+
+    session = AsyncMock()
+    result = MagicMock()
+    result.fetchone.return_value = SimpleNamespace(quantity=60.0)
+
+    decolor_result = MagicMock()
+    decolor_result.fetchone.return_value = (150.0, 25.5)  # 体积, 碳后含量
+
+    def execute_side_effect(query, params=None):
+        sql_str = str(query)
+        if "fa_batch_lineage" in sql_str:
+            return result
+        elif "fa_decolor1_records" in sql_str:
+            return decolor_result
+        return MagicMock(fetchone=lambda: None)
+
+    session.execute.side_effect = execute_side_effect
+
+    detail, yr, qty = await fa._node_info(session, "decolor1", "FA-EX1")
+    assert "150kl" in detail
+    assert "碳后25.5g/L" in detail
+    assert qty == 60.0
+
+
+@pytest.mark.anyio
+async def test_fa_lineage_node_info_decolor_centrifuge():
+    """_node_info: decolor_centrifuge 工段返回离心数据。"""
+    from app.modules.production import fa_lineage_api as fa
+
+    session = AsyncMock()
+    result = MagicMock()
+    result.fetchone.return_value = SimpleNamespace(quantity=50.0)
+
+    centrifuge_result = MagicMock()
+    centrifuge_result.fetchone.return_value = (120.0, 0.95)  # 进料体积, 收率
+
+    def execute_side_effect(query, params=None):
+        sql_str = str(query)
+        if "fa_batch_lineage" in sql_str:
+            return result
+        elif "fa_decolor_centrifuge_records" in sql_str:
+            return centrifuge_result
+        return MagicMock(fetchone=lambda: None)
+
+    session.execute.side_effect = execute_side_effect
+
+    detail, yr, qty = await fa._node_info(session, "decolor_centrifuge", "FA-EX1")
+    assert "120kl" in detail
+    assert "收率95.0%" in detail
+    assert yr == 95.0
+    assert qty == 50.0
