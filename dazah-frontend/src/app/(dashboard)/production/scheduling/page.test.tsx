@@ -115,13 +115,14 @@ describe('SchedulingPage upload & merge rendering', () => {
     ])
 
     // Mock FileReader
-    const FileReaderMock = vi.fn(() => ({
+    const mockReader = {
       onload: null as ((e: { target: { result: string | ArrayBuffer | null } }) => void) | null,
       onerror: null as (() => void) | null,
-      readAsBinaryString: vi.fn(function () {
+      readAsBinaryString: vi.fn(function (this: typeof mockReader) {
         this.onload?.({ target: { result: 'fake-binary' } })
       }),
-    }))
+    }
+    const FileReaderMock = vi.fn(() => mockReader)
     vi.stubGlobal('FileReader', FileReaderMock)
 
     container = document.createElement('div')
