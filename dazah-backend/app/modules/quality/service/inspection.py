@@ -7,7 +7,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import DuplicateException, NotFoundException
-from app.modules.quality.models.inspection import (
+from app.modules.quality.models import (
     FinishedProductInspection,
     InspectionRecord,
     LabInstrument,

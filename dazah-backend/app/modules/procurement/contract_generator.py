@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
 from io import BytesIO
 from pathlib import Path
+from typing import Any
 
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -176,9 +177,7 @@ def generate_contract(payload: ContractGenerateRequest) -> tuple[BytesIO, str, s
     return buffer, filename, media_type
 
 
-def _fill_raw_material_contract(
-    doc: Document, payload: ContractGenerateRequest
-) -> None:
+def _fill_raw_material_contract(doc: Any, payload: ContractGenerateRequest) -> None:
     _replace_red_groups(
         _find_paragraph(doc, "签订日期"),
         [_date_cn(payload.contract_date), payload.contract_number],
@@ -273,7 +272,7 @@ def _fill_raw_material_contract(
     _fill_raw_material_party_table(doc.tables[1], payload.seller)
 
 
-def _fill_consumables_contract(doc: Document, payload: ContractGenerateRequest) -> None:
+def _fill_consumables_contract(doc: Any, payload: ContractGenerateRequest) -> None:
     _replace_red_groups(
         _find_paragraph(doc, "签订日期"),
         [_date_plain_cn(payload.contract_date), payload.contract_number],
@@ -328,7 +327,7 @@ def _fill_consumables_contract(doc: Document, payload: ContractGenerateRequest) 
     _fill_consumables_buyer_delivery_table(doc.tables[1], payload)
 
 
-def _fill_hardware_contract(doc: Document, payload: ContractGenerateRequest) -> None:
+def _fill_hardware_contract(doc: Any, payload: ContractGenerateRequest) -> None:
     _replace_red_groups(
         _find_paragraph(doc, "签订日期"),
         [_date_plain_cn(payload.contract_date), payload.contract_number],
@@ -375,7 +374,7 @@ def _fill_hardware_contract(doc: Document, payload: ContractGenerateRequest) -> 
     _fill_simple_party_table(doc.tables[1], payload.seller, include_postal_code=True)
 
 
-def _fill_fixed_asset_contract(doc: Document, payload: ContractGenerateRequest) -> None:
+def _fill_fixed_asset_contract(doc: Any, payload: ContractGenerateRequest) -> None:
     _replace_red_groups(_find_paragraph(doc, "合同编号"), [payload.contract_number])
     _replace_red_groups(
         _find_paragraph(doc, "卖方在交货时应附上"),
@@ -528,7 +527,7 @@ def _summary_text(summary: AmountSummary, tax_rate: Decimal) -> str:
     )
 
 
-def _fill_raw_material_party_table(table, seller: ContractPartyInfo) -> None:
+def _fill_raw_material_party_table(table: Any, seller: ContractPartyInfo) -> None:
     _set_cell_text(table.rows[0].cells[0], f"卖方（必须盖章）：{seller.name}")
     _set_cell_text(table.rows[1].cells[0], f"地址：{seller.address}")
     _set_cell_text(table.rows[1].cells[1], f"开户行：{seller.bank_name}")
@@ -542,7 +541,7 @@ def _fill_raw_material_party_table(table, seller: ContractPartyInfo) -> None:
 
 
 def _fill_simple_party_table(
-    table,
+    table: Any,
     seller: ContractPartyInfo,
     *,
     include_postal_code: bool = False,
@@ -570,7 +569,7 @@ def _fill_simple_party_table(
 
 
 def _fill_consumables_buyer_delivery_table(
-    table, payload: ContractGenerateRequest
+    table: Any, payload: ContractGenerateRequest
 ) -> None:
     address = "宁夏石嘴山市平罗太沙工业园丽珠制药"
     _set_cell_text(
@@ -585,7 +584,7 @@ def _fill_consumables_buyer_delivery_table(
     )
 
 
-def _fill_fixed_asset_party_table(table, seller: ContractPartyInfo) -> None:
+def _fill_fixed_asset_party_table(table: Any, seller: ContractPartyInfo) -> None:
     _set_cell_text(
         table.rows[0].cells[1],
         f"卖方：{seller.name}\n"
@@ -599,7 +598,7 @@ def _fill_fixed_asset_party_table(table, seller: ContractPartyInfo) -> None:
     )
 
 
-def _replace_red_groups(paragraph, replacements: Iterable[str]) -> None:
+def _replace_red_groups(paragraph: Any, replacements: Iterable[str]) -> None:
     if paragraph is None:
         return
     replacement_iter = iter(replacements)
@@ -620,7 +619,7 @@ def _replace_red_groups(paragraph, replacements: Iterable[str]) -> None:
             active_run = None
 
 
-def _is_red_run(run) -> bool:
+def _is_red_run(run: Any) -> bool:
     rpr = run._element.rPr
     if rpr is None:
         return False
@@ -639,11 +638,11 @@ def _is_red_run(run) -> bool:
     return value in {"FF0000", "C00000"}
 
 
-def _set_run_black(run) -> None:
+def _set_run_black(run: Any) -> None:
     run.font.color.rgb = RGBColor(0, 0, 0)
 
 
-def _clear_remaining_red_runs(doc: Document) -> None:
+def _clear_remaining_red_runs(doc: Any) -> None:
     for paragraph in doc.paragraphs:
         for run in paragraph.runs:
             if _is_red_run(run):
@@ -657,14 +656,14 @@ def _clear_remaining_red_runs(doc: Document) -> None:
                             _set_run_black(run)
 
 
-def _find_paragraph(doc: Document, contains: str):
+def _find_paragraph(doc: Any, contains: str) -> Any:
     for paragraph in doc.paragraphs:
         if contains in paragraph.text:
             return paragraph
     return None
 
 
-def _find_paragraph_after(doc: Document, after_contains: str, contains: str):
+def _find_paragraph_after(doc: Any, after_contains: str, contains: str) -> Any:
     matched_anchor = False
     for paragraph in doc.paragraphs:
         if matched_anchor and contains in paragraph.text:
@@ -674,7 +673,7 @@ def _find_paragraph_after(doc: Document, after_contains: str, contains: str):
     return None
 
 
-def _remove_placeholder_underscores(paragraph, value: str, *, suffix: str) -> None:
+def _remove_placeholder_underscores(paragraph: Any, value: str, *, suffix: str) -> None:
     if paragraph is None:
         return
     text = paragraph.text
@@ -693,7 +692,7 @@ def _remove_placeholder_underscores(paragraph, value: str, *, suffix: str) -> No
 
 
 def _ensure_rows_before(
-    table, *, template_row_index: int, insert_before_index: int, count: int
+    table: Any, *, template_row_index: int, insert_before_index: int, count: int
 ) -> None:
     existing_count = insert_before_index - template_row_index
     if count <= existing_count:
@@ -706,7 +705,7 @@ def _ensure_rows_before(
 
 
 def _fit_detail_rows(
-    table,
+    table: Any,
     *,
     template_row_index: int,
     first_detail_index: int,
@@ -731,26 +730,26 @@ def _fit_detail_rows(
     return first_detail_index + count
 
 
-def _insert_row_before(table, row_index: int, row_element) -> None:
+def _insert_row_before(table: Any, row_index: int, row_element: Any) -> None:
     if row_index >= len(table.rows):
         table._tbl.append(row_element)
         return
     table.rows[row_index]._tr.addprevious(row_element)
 
 
-def _set_cells(cells, values: list[str]) -> None:
+def _set_cells(cells: Any, values: list[str]) -> None:
     for cell, value in zip(cells, values, strict=False):
         _set_cell_text(cell, value)
 
 
-def _set_cell_text(cell, value: str) -> None:
+def _set_cell_text(cell: Any, value: str) -> None:
     cell.text = value or ""
     for paragraph in cell.paragraphs:
         for run in paragraph.runs:
             run.font.color.rgb = RGBColor(0, 0, 0)
 
 
-def _center_cells(cells) -> None:
+def _center_cells(cells: Any) -> None:
     for cell in cells:
         for paragraph in cell.paragraphs:
             paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -781,11 +780,11 @@ def _delivery_text(payload: ContractGenerateRequest) -> str:
     return "按买方电话通知送货"
 
 
-def _date_cn(value) -> str:
+def _date_cn(value: Any) -> str:
     return f"{value.year} 年{value.month:02d}月{value.day:02d}日"
 
 
-def _date_plain_cn(value) -> str:
+def _date_plain_cn(value: Any) -> str:
     return f"{value.year}年{value.month:02d}月{value.day:02d}日"
 
 

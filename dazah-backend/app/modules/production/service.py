@@ -86,7 +86,9 @@ class ProductionService:
         batch_data = data.model_dump()
         return await self.repo.create_batch(batch_data)
 
-    async def update_batch(self, batch_id: uuid.UUID, data: BatchUpdate) -> Batch | None:
+    async def update_batch(
+        self, batch_id: uuid.UUID, data: BatchUpdate
+    ) -> Batch | None:
         """更新批次"""
         update_data = {k: v for k, v in data.model_dump().items() if v is not None}
         return await self.repo.update_batch(batch_id, update_data)
@@ -100,7 +102,7 @@ class ProductionService:
             return None
 
         # 状态流转校验
-        valid_transitions = {
+        valid_transitions: dict[BatchStatus, list[BatchStatus]] = {
             BatchStatus.DRAFT: [BatchStatus.RELEASED, BatchStatus.CANCELLED],
             BatchStatus.RELEASED: [BatchStatus.IN_PROGRESS, BatchStatus.CANCELLED],
             BatchStatus.IN_PROGRESS: [BatchStatus.COMPLETED, BatchStatus.CANCELLED],
@@ -108,15 +110,19 @@ class ProductionService:
             BatchStatus.CANCELLED: [],
         }
 
-        if data.status not in valid_transitions.get(batch.status, []):
-            raise ValueError(f"无效的状态转换: {batch.status.value} -> {data.status.value}")
+        current_status = BatchStatus(batch.status)
+        next_status = BatchStatus(data.status.value)
+        if next_status not in valid_transitions.get(current_status, []):
+            raise ValueError(
+                f"无效的状态转换: {current_status.value} -> {next_status.value}"
+            )
 
         # 处理状态变更的副作用
-        update_data: dict[str, Any] = {"status": data.status}
+        update_data: dict[str, Any] = {"status": next_status.value}
 
-        if data.status == BatchStatus.IN_PROGRESS and not batch.start_time:
+        if next_status == BatchStatus.IN_PROGRESS and not batch.start_time:
             update_data["start_time"] = datetime.now()
-        elif data.status == BatchStatus.COMPLETED:
+        elif next_status == BatchStatus.COMPLETED:
             update_data["end_time"] = datetime.now()
 
         return await self.repo.update_batch(batch_id, update_data)
@@ -210,9 +216,7 @@ class ProductionService:
         workshop: str | None = None,
         product_name: str | None = None,
     ) -> tuple[list[ProductionExecutionPlan], int]:
-        return await self.repo.get_execution_plans(
-            skip, limit, workshop, product_name
-        )
+        return await self.repo.get_execution_plans(skip, limit, workshop, product_name)
 
     async def create_execution_plan(
         self, data: ProductionExecutionPlanCreate
@@ -263,7 +267,9 @@ class ProductionService:
         task_data = data.model_dump()
         return await self.repo.create_task(task_data)
 
-    async def update_task(self, task_id: uuid.UUID, data: PlanTaskUpdate) -> PlanTask | None:
+    async def update_task(
+        self, task_id: uuid.UUID, data: PlanTaskUpdate
+    ) -> PlanTask | None:
         """更新计划任务"""
         update_data = {k: v for k, v in data.model_dump().items() if v is not None}
         return await self.repo.update_task(task_id, update_data)
@@ -417,7 +423,9 @@ class ProductionService:
 
     # ============ ProductionRecord Operations ============
 
-    async def get_records(self, batch_id: uuid.UUID, skip: int = 0, limit: int = 100) -> list[ProductionRecord]:
+    async def get_records(
+        self, batch_id: uuid.UUID, skip: int = 0, limit: int = 100
+    ) -> list[ProductionRecord]:
         """获取生产记录列表"""
         return await self.repo.get_records_by_batch(batch_id, skip, limit)
 
@@ -458,6 +466,7 @@ class ProductionService:
             if r.operation_type == "material_add" and r.parameters:
                 try:
                     import json
+
                     params = json.loads(r.parameters)
                     if "quantity" in params:
                         total_input += params["quantity"]
@@ -470,6 +479,7 @@ class ProductionService:
             if r.operation_type == "packaging" and r.parameters:
                 try:
                     import json
+
                     params = json.loads(r.parameters)
                     if "quantity" in params:
                         total_output += params["quantity"]
@@ -518,6 +528,7 @@ class ProductionService:
             if r.operation_type == "material_add" and r.parameters:
                 try:
                     import json
+
                     params = json.loads(r.parameters)
                     if "quantity" in params:
                         record_input += params["quantity"]
@@ -526,6 +537,7 @@ class ProductionService:
             elif r.operation_type == "packaging" and r.parameters:
                 try:
                     import json
+
                     params = json.loads(r.parameters)
                     if "quantity" in params:
                         record_output += params["quantity"]
@@ -572,7 +584,6 @@ class ProductionService:
         # 重新计算平衡
         if "input_qty" in data or "output_qty" in data:
             return await self.calculate_material_balance(
-                batch_id,
-                data.get("min_balance_rate", 95.0)
+                batch_id, data.get("min_balance_rate", 95.0)
             )
         return await self.repo.update_material_balance(batch_id, data)

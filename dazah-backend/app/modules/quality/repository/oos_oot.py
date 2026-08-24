@@ -3,14 +3,11 @@
 import uuid
 from typing import Any
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import ColumnElement, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.quality.models.oos_oot import (
-    OosOotRecord,
-    OotLimitItem,
-    OotLimitProduct,
-)
+from app.modules.quality.models.oos_oot import OosOotRecord
+from app.modules.quality.models.oot_limit import OotLimitItem, OotLimitProduct
 
 
 def _escape_like(value: str) -> str:
@@ -51,7 +48,7 @@ async def list_oos_oot_records(
     page: int,
     page_size: int,
 ) -> tuple[list[OosOotRecord], int]:
-    conditions = [OosOotRecord.is_deleted.is_(False)]
+    conditions: list[ColumnElement[bool]] = [OosOotRecord.is_deleted.is_(False)]
     if record_type:
         conditions.append(OosOotRecord.record_type == record_type)
     if status:
@@ -63,7 +60,7 @@ async def list_oos_oot_records(
                 OosOotRecord.record_code.ilike(pattern, escape="\\"),
                 OosOotRecord.title.ilike(pattern, escape="\\"),
                 OosOotRecord.product_name.ilike(pattern, escape="\\"),
-                OosOotRecord.batch_no.ilike(pattern, escape="\\"),
+                OosOotRecord.batch_number.ilike(pattern, escape="\\"),
                 OosOotRecord.test_item.ilike(pattern, escape="\\"),
             )
         )
@@ -75,7 +72,7 @@ async def list_oos_oot_records(
     rows = await db.execute(
         select(OosOotRecord)
         .where(*conditions)
-        .order_by(OosOotRecord.discovered_date.desc(), OosOotRecord.created_at.desc())
+        .order_by(OosOotRecord.discovery_date.desc(), OosOotRecord.created_at.desc())
         .offset((page - 1) * page_size)
         .limit(page_size)
     )
@@ -100,7 +97,10 @@ async def soft_delete_oos_oot_record(db: AsyncSession, record: OosOotRecord) -> 
 async def create_oot_limit_product(
     db: AsyncSession, data: dict[str, Any]
 ) -> OotLimitProduct:
-    product = OotLimitProduct(**data)
+    normalized = dict(data)
+    normalized.setdefault("document_no", normalized.get("document_title") or None)
+    normalized.setdefault("document_version", normalized.get("version_label"))
+    product = OotLimitProduct(**normalized)
     db.add(product)
     await db.flush()
     return product
@@ -127,7 +127,7 @@ async def get_oot_limit_product_by_code(
 async def list_oot_limit_products(
     db: AsyncSession, *, keyword: str | None
 ) -> list[OotLimitProduct]:
-    conditions = [OotLimitProduct.is_deleted.is_(False)]
+    conditions: list[ColumnElement[bool]] = [OotLimitProduct.is_deleted.is_(False)]
     if keyword and keyword.strip():
         pattern = f"%{_escape_like(keyword.strip())}%"
         conditions.append(
@@ -163,7 +163,10 @@ async def soft_delete_oot_limit_product(
 
 
 async def create_oot_limit_item(db: AsyncSession, data: dict[str, Any]) -> OotLimitItem:
-    item = OotLimitItem(**data)
+    normalized = dict(data)
+    normalized.setdefault("specification", normalized.get("standard_value") or "")
+    normalized.setdefault("oot_limit", normalized.get("oot_limit_value") or "")
+    item = OotLimitItem(**normalized)
     db.add(item)
     await db.flush()
     return item

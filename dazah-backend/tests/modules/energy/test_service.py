@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime
 from decimal import Decimal
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
+from typing import Any, cast
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
@@ -27,11 +28,13 @@ from app.modules.energy.schemas import (
 )
 from app.modules.energy.wiki_service import CST, EnergyWikiService
 
+SimpleNamespace: Any = _SimpleNamespace
+
 
 @pytest.mark.asyncio
 async def test_overview_aggregates_published_page_bindings_without_field_mapping(
-    db_session,
-):
+    db_session: Any,
+) -> Any:
     run_id = uuid4()
     daily_sheet = EnergyWorkbookSheet(
         id=uuid4(),
@@ -161,19 +164,19 @@ async def test_overview_aggregates_published_page_bindings_without_field_mapping
 
 
 @pytest.mark.asyncio
-async def test_create_source_root_accepts_direct_spreadsheet_link():
+async def test_create_source_root_accepts_direct_spreadsheet_link() -> Any:
     class FakeSession:
-        async def commit(self):
+        async def commit(self: Any) -> Any:
             return None
 
-    async def save_root(root):
+    async def save_root(root: Any) -> Any:
         root.id = uuid4()
         return root
 
-    service = EnergyWikiService(FakeSession())  # type: ignore[arg-type]
-    service.repo.get_config = AsyncMock(return_value=SimpleNamespace(id=uuid4()))
-    service.repo.list_source_roots = AsyncMock(return_value=[])
-    service.repo.save_source_root = AsyncMock(side_effect=save_root)
+    service = EnergyWikiService(cast(Any, FakeSession)())
+    service.repo.get_config = AsyncMock(return_value=SimpleNamespace(id=uuid4()))  # type: ignore[method-assign]
+    service.repo.list_source_roots = AsyncMock(return_value=[])  # type: ignore[method-assign]
+    service.repo.save_source_root = AsyncMock(side_effect=save_root)  # type: ignore[method-assign]
 
     root = await service.create_source_root(
         EnergyFeishuSourceRootInput(
@@ -188,30 +191,32 @@ async def test_create_source_root_accepts_direct_spreadsheet_link():
 
 
 @pytest.mark.asyncio
-async def test_connectivity_lists_direct_spreadsheet_sheets_without_wiki_lookup():
+async def test_connectivity_lists_direct_spreadsheet_sheets_without_wiki_lookup() -> (
+    Any
+):
     class FakeSheetClient:
-        async def list_workbook_sheets(self, spreadsheet_token):
+        async def list_workbook_sheets(self: Any, spreadsheet_token: Any) -> Any:
             assert spreadsheet_token == "shtcnExample"
             return [
                 {"sheet_id": "sheet-a", "title": "电力"},
                 {"sheet_id": "sheet-b", "title": "蒸汽"},
             ]
 
-        async def get_wiki_node(self, _root_token):
+        async def get_wiki_node(self: Any, _root_token: Any) -> Any:
             raise AssertionError("直连电子表格不应调用 Wiki 节点接口")
 
-    root = SimpleNamespace(
+    root: Any = SimpleNamespace(
         is_active=True,
         source_type="wiki",
         source_url="https://example.feishu.cn/sheets/shtcnExample",
         root_token="shtcnExample",
     )
     service = EnergyWikiService(object())  # type: ignore[arg-type]
-    service.repo.get_config = AsyncMock(
+    service.repo.get_config = AsyncMock(  # type: ignore[method-assign]
         return_value=SimpleNamespace(id=uuid4())
     )
-    service.repo.list_source_roots = AsyncMock(return_value=[root])
-    service._client_for = lambda _config: FakeSheetClient()  # type: ignore[method-assign]
+    service.repo.list_source_roots = AsyncMock(return_value=[root])  # type: ignore[method-assign]
+    service._client_for = lambda _config: FakeSheetClient()  # type: ignore[method-assign, assignment, return-value]
 
     result = await service.test_connectivity()
 
@@ -221,16 +226,14 @@ async def test_connectivity_lists_direct_spreadsheet_sheets_without_wiki_lookup(
 
 
 @pytest.mark.asyncio
-async def test_create_source_root_rejects_duplicate_with_conflict():
+async def test_create_source_root_rejects_duplicate_with_conflict() -> Any:
     config_id = uuid4()
     service = EnergyWikiService(object())  # type: ignore[arg-type]
-    service.repo.get_config = AsyncMock(
+    service.repo.get_config = AsyncMock(  # type: ignore[method-assign]
         return_value=SimpleNamespace(id=config_id)
     )
-    service.repo.list_source_roots = AsyncMock(
-        return_value=[
-            SimpleNamespace(source_type="wiki", root_token="wikcnExample")
-        ]
+    service.repo.list_source_roots = AsyncMock(  # type: ignore[method-assign]
+        return_value=[SimpleNamespace(source_type="wiki", root_token="wikcnExample")]
     )
 
     with pytest.raises(AppException) as exc_info:
@@ -247,19 +250,19 @@ async def test_create_source_root_rejects_duplicate_with_conflict():
 
 
 @pytest.mark.asyncio
-async def test_delete_source_root_rolls_back_integrity_conflict():
-    root = SimpleNamespace(is_deleted=False, is_active=True)
+async def test_delete_source_root_rolls_back_integrity_conflict() -> Any:
+    root: Any = SimpleNamespace(is_deleted=False, is_active=True)
     integrity_error = IntegrityError(
         "UPDATE energy.feishu_source_roots",
         {},
         Exception("duplicate"),
     )
-    session = SimpleNamespace(
+    session: Any = SimpleNamespace(
         commit=AsyncMock(side_effect=integrity_error),
         rollback=AsyncMock(),
     )
-    service = EnergyWikiService(session)  # type: ignore[arg-type]
-    service.repo.get_source_root = AsyncMock(return_value=root)
+    service = EnergyWikiService(session)
+    service.repo.get_source_root = AsyncMock(return_value=root)  # type: ignore[method-assign]
 
     with pytest.raises(AppException) as exc_info:
         await service.delete_source_root(uuid4())
@@ -272,10 +275,10 @@ async def test_delete_source_root_rolls_back_integrity_conflict():
 
 
 @pytest.mark.asyncio
-async def test_update_source_root_reparses_source_and_resets_discovery():
+async def test_update_source_root_reparses_source_and_resets_discovery() -> Any:
     config_id = uuid4()
     root_id = uuid4()
-    root = SimpleNamespace(
+    root: Any = SimpleNamespace(
         id=root_id,
         config_id=config_id,
         name="旧入口",
@@ -287,14 +290,14 @@ async def test_update_source_root_reparses_source_and_resets_discovery():
         discovery_error="旧错误",
         last_discovered_at=datetime.now(UTC),
     )
-    session = SimpleNamespace(commit=AsyncMock(), rollback=AsyncMock())
-    service = EnergyWikiService(session)  # type: ignore[arg-type]
-    service.repo.get_config = AsyncMock(
+    session: Any = SimpleNamespace(commit=AsyncMock(), rollback=AsyncMock())
+    service = EnergyWikiService(session)
+    service.repo.get_config = AsyncMock(  # type: ignore[method-assign]
         return_value=SimpleNamespace(id=config_id)
     )
-    service.repo.get_source_root = AsyncMock(return_value=root)
-    service.repo.list_source_roots = AsyncMock(return_value=[root])
-    service.repo.save_source_root = AsyncMock(side_effect=lambda item: item)
+    service.repo.get_source_root = AsyncMock(return_value=root)  # type: ignore[method-assign]
+    service.repo.list_source_roots = AsyncMock(return_value=[root])  # type: ignore[method-assign]
+    service.repo.save_source_root = AsyncMock(side_effect=lambda item: item)  # type: ignore[method-assign]
 
     result = await service.update_source_root(
         root_id,
@@ -315,10 +318,10 @@ async def test_update_source_root_reparses_source_and_resets_discovery():
 
 
 @pytest.mark.asyncio
-async def test_update_source_root_rejects_duplicate_target():
+async def test_update_source_root_rejects_duplicate_target() -> Any:
     config_id = uuid4()
     root_id = uuid4()
-    root = SimpleNamespace(
+    root: Any = SimpleNamespace(
         id=root_id,
         config_id=config_id,
         name="旧入口",
@@ -327,17 +330,17 @@ async def test_update_source_root_rejects_duplicate_target():
         root_token="wikcnOld",
         is_active=True,
     )
-    duplicate = SimpleNamespace(
+    duplicate: Any = SimpleNamespace(
         id=uuid4(),
         source_type="base",
         root_token="bascnDuplicate",
     )
     service = EnergyWikiService(object())  # type: ignore[arg-type]
-    service.repo.get_config = AsyncMock(
+    service.repo.get_config = AsyncMock(  # type: ignore[method-assign]
         return_value=SimpleNamespace(id=config_id)
     )
-    service.repo.get_source_root = AsyncMock(return_value=root)
-    service.repo.list_source_roots = AsyncMock(
+    service.repo.get_source_root = AsyncMock(return_value=root)  # type: ignore[method-assign]
+    service.repo.list_source_roots = AsyncMock(  # type: ignore[method-assign]
         return_value=[root, duplicate]
     )
 
@@ -356,8 +359,8 @@ async def test_update_source_root_rejects_duplicate_target():
 
 @pytest.mark.asyncio
 async def test_overview_uses_latest_snapshot_and_combines_direct_and_cumulative_values(
-    db_session,
-):
+    db_session: Any,
+) -> Any:
     config = EnergyFeishuConfig(
         id=uuid4(),
         app_id="cli_energy_test",
@@ -534,7 +537,9 @@ async def test_overview_uses_latest_snapshot_and_combines_direct_and_cumulative_
 
 
 @pytest.mark.asyncio
-async def test_overview_excludes_daily_and_energy_summary_sources(db_session):
+async def test_overview_excludes_daily_and_energy_summary_sources(
+    db_session: Any,
+) -> Any:
     run_id = uuid4()
     detail_sheet = EnergyWorkbookSheet(
         id=uuid4(),
@@ -697,12 +702,10 @@ async def test_overview_excludes_daily_and_energy_summary_sources(db_session):
     )
     assert daily.source_scope == "daily_summary"
     assert [
-        (item.metric_key, item.total_value, item.unit)
-        for item in daily.metrics
+        (item.metric_key, item.total_value, item.unit) for item in daily.metrics
     ] == [("电日用量", 888.0, "kWh")]
     assert ("外供蒸汽占比", 12.5, "%") in [
-        (item.metric_key, item.value, item.unit)
-        for item in daily.latest_metrics
+        (item.metric_key, item.value, item.unit) for item in daily.latest_metrics
     ]
     assert daily.last_observed_at == datetime(2026, 7, 1, tzinfo=UTC)
 
@@ -732,18 +735,18 @@ async def test_overview_excludes_daily_and_energy_summary_sources(db_session):
 
 @pytest.mark.asyncio
 async def test_sync_document_deduplicates_snapshots_and_inherits_matching_mapping(
-    db_session,
-):
+    db_session: Any,
+) -> Any:
     """A same-schema monthly sheet inherits its mapping but archives only changes."""
 
     class FakeSheetClient:
-        def __init__(self, values: list[list[str]]) -> None:
+        def __init__(self: Any, values: list[list[str]]) -> None:
             self.values = values
 
-        async def list_workbook_sheets(self, _document_token: str):
+        async def list_workbook_sheets(self: Any, _document_token: str) -> Any:
             return [{"sheet_id": "month-sheet", "title": "电力明细", "index": 0}]
 
-        async def read_sheet_values(self, **_kwargs):
+        async def read_sheet_values(self: Any, **_kwargs: Any) -> Any:
             return self.values, "revision-1"
 
     service = EnergyWikiService(db_session)
@@ -821,20 +824,20 @@ async def test_sync_document_deduplicates_snapshots_and_inherits_matching_mappin
     )
     await db_session.flush()
 
-    client = FakeSheetClient([["日期", "用量"], ["2026-07-01", "10"]])
+    client: Any = FakeSheetClient([["日期", "用量"], ["2026-07-01", "10"]])
     first = await service._sync_document(
-        client=client,  # type: ignore[arg-type]
+        client=client,
         document=document,
         run=run,
     )
     second = await service._sync_document(
-        client=client,  # type: ignore[arg-type]
+        client=client,
         document=document,
         run=run,
     )
     client.values = [["日期", "用量"], ["2026-07-01", "11"]]
     third = await service._sync_document(
-        client=client,  # type: ignore[arg-type]
+        client=client,
         document=document,
         run=run,
     )
@@ -858,7 +861,9 @@ async def test_sync_document_deduplicates_snapshots_and_inherits_matching_mappin
 
 
 @pytest.mark.asyncio
-async def test_scheduled_sync_skips_a_completed_run_for_the_same_day(db_session):
+async def test_scheduled_sync_skips_a_completed_run_for_the_same_day(
+    db_session: Any,
+) -> Any:
     """The idempotency key prevents a recovered scheduler from executing twice."""
 
     config = EnergyFeishuConfig(

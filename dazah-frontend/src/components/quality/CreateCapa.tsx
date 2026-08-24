@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { App, Card, Form, Input, Select, Button, DatePicker, Space } from 'antd'
 import { ArrowLeftOutlined } from '@ant-design/icons'
-import { createCapa } from '@/actions/quality'
+import { createCapa } from '@/actions/quality-capa'
 
 export function CreateCapa() {
   const router = useRouter()
@@ -18,8 +18,8 @@ export function CreateCapa() {
       })
       message.success('创建成功')
       router.push('/quality/capas')
-    } catch (error: any) {
-      message.error(error?.message || '创建失败')
+    } catch (error) {
+      message.error((error instanceof Error ? error.message : '') || '创建失败')
     }
   }
 

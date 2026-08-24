@@ -1,15 +1,17 @@
-import { fetchCandidates } from '@/actions/hr'
+import { fetchJobPostingsServer } from '@/actions/hr'
+import { HrQueryProvider } from '@/components/hr'
 import RecruitmentClient from '@/components/hr/RecruitmentClient'
 
 export const dynamic = 'force-dynamic'
 
 export default async function RecruitmentPage() {
-  const res = await fetchCandidates({ page: 1, page_size: 20 })
+  const jobsRes = await fetchJobPostingsServer({ page: 1, page_size: 100 })
 
   return (
-    <RecruitmentClient
-      initialCandidates={res.data}
-      initialTotal={res.meta?.total || 0}
-    />
+    <HrQueryProvider>
+      <RecruitmentClient
+        initialJobs={jobsRes.data || []}
+      />
+    </HrQueryProvider>
   )
 }

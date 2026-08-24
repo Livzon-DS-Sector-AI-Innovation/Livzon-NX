@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -35,9 +36,9 @@ def test_duplicate_source_record_is_rejected() -> None:
 
 
 @pytest.mark.anyio
-async def test_empty_import_run_and_reconcile(db_session) -> None:
+async def test_empty_import_run_and_reconcile(db_session: Any) -> None:
     service = ProductionMigrationService(db_session)
-    bundle = {entity: [] for entity in ENTITY_DEFINITIONS}
+    bundle = {entity: [] for entity in ENTITY_DEFINITIONS}  # type: ignore[var-annotated]
 
     run = await service.execute(
         bundle=bundle,
@@ -53,7 +54,7 @@ async def test_empty_import_run_and_reconcile(db_session) -> None:
 
 
 @pytest.mark.anyio
-async def test_import_is_idempotent_and_rollback_is_audited(db_session) -> None:
+async def test_import_is_idempotent_and_rollback_is_audited(db_session: Any) -> None:
     service = ProductionMigrationService(db_session)
     bundle = {
         "fermentation_records": [

@@ -52,5 +52,3 @@ class SafetyKnowledgeArticleResponse(SafetyKnowledgeArticleBase):
 
     class Config:
         from_attributes = True
-
-

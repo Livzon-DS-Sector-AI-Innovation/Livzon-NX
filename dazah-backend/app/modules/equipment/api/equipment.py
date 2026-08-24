@@ -11,6 +11,7 @@ from app.core.deps import CurrentUser
 from app.core.response import paginated_response, success_response
 from app.modules.equipment import repository as repo
 from app.modules.equipment import service
+from app.modules.equipment.models.equipment import Equipment
 from app.modules.equipment.schemas import (
     EquipmentCategoryCreate,
     EquipmentCategoryResponse,
@@ -29,12 +30,16 @@ from app.modules.equipment.schemas import (
 router = APIRouter()
 
 
-async def _equipment_to_response(equipment, db=None) -> EquipmentResponse:
+async def _equipment_to_response(
+    equipment: Equipment, db: AsyncSession | None = None
+) -> EquipmentResponse:
     """将 ORM Equipment 转为响应对象，填充多分类信息及部门信息"""
     resp = EquipmentResponse.model_validate(equipment)
     links = getattr(equipment, "category_links", []) or []
     resp.category_ids = [link.category_id for link in links if not link.is_deleted]
-    names = [link.category.name for link in links if not link.is_deleted and link.category]
+    names = [
+        link.category.name for link in links if not link.is_deleted and link.category
+    ]
     resp.category_names = "、".join(names) if names else None
     resp.location_name = equipment.location.name if equipment.location else None
     # 填充部门信息

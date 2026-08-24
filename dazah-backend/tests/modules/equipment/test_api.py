@@ -1,6 +1,7 @@
 """Equipment API integration tests."""
 
 import uuid
+from typing import Any
 
 from httpx import AsyncClient
 
@@ -10,7 +11,7 @@ def _uid() -> str:
     return uuid.uuid4().hex[:6].upper()
 
 
-async def test_create_equipment_category(client: AsyncClient):
+async def test_create_equipment_category(client: AsyncClient) -> Any:
     """测试创建设备分类"""
     code = f"RF-{_uid()}"
     response = await client.post(
@@ -28,7 +29,7 @@ async def test_create_equipment_category(client: AsyncClient):
     assert data["data"]["code"] == code
 
 
-async def test_get_equipment_categories(client: AsyncClient):
+async def test_get_equipment_categories(client: AsyncClient) -> Any:
     """测试获取设备分类列表"""
     uid = _uid()
     await client.post(
@@ -47,7 +48,7 @@ async def test_get_equipment_categories(client: AsyncClient):
     assert len(data["data"]) >= 2
 
 
-async def test_get_equipment_category_by_id(client: AsyncClient):
+async def test_get_equipment_category_by_id(client: AsyncClient) -> Any:
     """测试根据ID获取设备分类"""
     code = f"RF-{_uid()}"
     create_response = await client.post(
@@ -62,7 +63,7 @@ async def test_get_equipment_category_by_id(client: AsyncClient):
     assert data["data"]["name"] == "反应釜"
 
 
-async def test_update_equipment_category(client: AsyncClient):
+async def test_update_equipment_category(client: AsyncClient) -> Any:
     """测试更新设备分类"""
     code = f"RF-{_uid()}"
     create_response = await client.post(
@@ -80,7 +81,7 @@ async def test_update_equipment_category(client: AsyncClient):
     assert data["data"]["name"] == "大型反应釜"
 
 
-async def test_delete_equipment_category(client: AsyncClient):
+async def test_delete_equipment_category(client: AsyncClient) -> Any:
     """测试删除设备分类"""
     code = f"RF-{_uid()}"
     create_response = await client.post(
@@ -93,7 +94,7 @@ async def test_delete_equipment_category(client: AsyncClient):
     assert response.status_code == 200
 
 
-async def test_create_location(client: AsyncClient):
+async def test_create_location(client: AsyncClient) -> Any:
     """测试创建位置"""
     code = f"WS-{_uid()}"
     response = await client.post(
@@ -109,7 +110,7 @@ async def test_create_location(client: AsyncClient):
     assert data["data"]["name"] == "一车间"
 
 
-async def test_create_equipment(client: AsyncClient):
+async def test_create_equipment(client: AsyncClient) -> Any:
     """测试创建设备"""
     uid = _uid()
     cat_code = f"RF-{uid}"
@@ -147,7 +148,7 @@ async def test_create_equipment(client: AsyncClient):
     assert data["data"]["name"] == "R-101反应釜"
 
 
-async def test_get_equipments(client: AsyncClient):
+async def test_get_equipments(client: AsyncClient) -> Any:
     """测试获取设备列表"""
     uid = _uid()
     cat_code = f"RF-{uid}"
@@ -193,7 +194,7 @@ async def test_get_equipments(client: AsyncClient):
     assert len(data["data"]) >= 2
 
 
-async def test_get_equipment_statistics(client: AsyncClient):
+async def test_get_equipment_statistics(client: AsyncClient) -> Any:
     """测试获取设备统计"""
     response = await client.get("/api/v1/equipment/equipments/statistics")
     assert response.status_code == 200

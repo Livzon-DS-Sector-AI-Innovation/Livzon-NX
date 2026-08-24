@@ -1,5 +1,7 @@
 """巡检照片 AI 分析提示词模板。"""
 
+from typing import Any
+
 SYSTEM_PROMPT = """你是一个设备巡检数据提取助手，服务于原料药生产企业的设备巡检工作。
 
 用户会上传一张巡检照片，并提供一份检查项列表。照片类型多样：
@@ -21,7 +23,7 @@ SYSTEM_PROMPT = """你是一个设备巡检数据提取助手，服务于原料�
 6. 只返回 JSON，不要输出任何其他内容"""
 
 
-def build_user_prompt(items: list[dict]) -> str:
+def build_user_prompt(items: list[dict[str, Any]]) -> str:
     """构建用户提示词。
 
     Args:
@@ -30,7 +32,8 @@ def build_user_prompt(items: list[dict]) -> str:
     import json
 
     items_text = json.dumps(items, ensure_ascii=False, indent=2)
-    return f"""请分析上传的设备巡检照片，针对以下 **{len(items)} 个检查项**逐一给出结果：
+    return f"""请分析上传的设备巡检照片，针对以下 **{len(items)} 个检查项**逐一\
+给出结果：
 
 检查项列表：
 {items_text}
@@ -78,7 +81,7 @@ CORRECTION_SYSTEM_PROMPT = (
 
 
 def build_correction_user_prompt(
-    current_results: list[dict], user_text: str
+    current_results: list[dict[str, Any]], user_text: str
 ) -> str:
     """构建修正用户提示词。
 
@@ -137,17 +140,17 @@ MANUAL_SUBMIT_SYSTEM_PROMPT = (
     "1. 用户可能逐项列出结果，也可能只描述异常项\n"
     "2. 用户提到的第N项、编号、序号等，对应检查项在列表中的位置（从1开始）\n"
     '3. result 只允许三个值："正常"、"异常"、"跳过"\n'
-    "4. 如果用户未明确说明某项的结果，默认为\"正常\"\n"
+    '4. 如果用户未明确说明某项的结果，默认为"正常"\n'
     "5. 从文本中提取实际值和备注信息\n"
     "6. 必须返回所有检查项（包括未提到的），不能遗漏\n"
     "7. 只返回 JSON，不要输出任何其他内容\n"
     "8. 注意识别中英文数字混合、带单位的数值（如 66.5℃、0.42MPa）\n"
-    "9. 如果用户先说\"提交\"或设备名，忽略，专注于检查结果内容"
+    '9. 如果用户先说"提交"或设备名，忽略，专注于检查结果内容'
 )
 
 
 def build_manual_submit_user_prompt(
-    items: list[dict], user_text: str, equipment_name: str = ""
+    items: list[dict[str, Any]], user_text: str, equipment_name: str = ""
 ) -> str:
     """构建手动提交解析提示词。
 
@@ -197,4 +200,3 @@ def build_manual_submit_user_prompt(
 - 必须返回所有检查项，用户未提到的默认为"正常"
 - 用户说"第2项异常"指的是 index=2 的项
 - 数值和单位尽量保留用户原文"""
-

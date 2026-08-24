@@ -1,27 +1,41 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { App, Card, Descriptions, Tag, Button, Space, Modal, Form, Input, Select } from 'antd'
 import { ArrowLeftOutlined, EditOutlined, DeleteOutlined, CheckCircleOutlined, SendOutlined, RedoOutlined, PlusOutlined, MinusCircleOutlined } from '@ant-design/icons'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import dayjs from 'dayjs'
-import { fetchCapa } from '@/lib/api/quality'
-import {
-  updateCapa,
-  deleteCapa,
-  submitCapa,
-  approveCapa,
-  resubmitCapa,
-  addExecutionTrack,
-  deleteExecutionTrack,
-  confirmExecution,
-  submitEvaluation,
-  completeCapaPart,
-  confirmDeptHead,
-} from '@/actions/quality'
-import type { CapaDetail as CapaDetailType, CapaWorkflowStatus } from '@/types/quality'
+import { fetchCapa } from '@/lib/api/client/quality'
+
+import { updateCapa, deleteCapa, submitCapa, approveCapa, resubmitCapa, addExecutionTrack, deleteExecutionTrack, confirmExecution, submitEvaluation, completeCapaPart, confirmDeptHead } from '@/actions/quality-capa'
+import type { CapaDetail, CapaItem, CapaWorkflowStatus, DeptHeadConfirmation } from '@/types/quality'
 
 const { TextArea } = Input
+
+/** CAPA 项目视图：表单写入的 JSON 可能含 camelCase 字段，此处宽松扩展 generated 类型 */
+type CapaItemView = CapaItem & {
+  executors?: string | string[] | null
+  expectedCompletionDate?: string | null
+}
+
+/** 执行跟踪视图：后端 JSON 字段命名不统一（execution_status/executionStatus），此处宽松声明 */
+interface ExecutionTrackView {
+  id?: string
+  content?: string | null
+  executor?: string | null
+  execution_date?: string | null
+  executionStatus?: string | null
+  execution_notes?: string | null
+  attachments?: string[] | null
+}
+
+/** JSON 列视图类型：后端以 JSON 存储（generated 类型为 unknown[]），此处补充视图层类型 */
+type CapaJsonView = Omit<CapaDetail, 'capa_items' | 'dept_head_confirmations' | 'execution_tracks'> & {
+  capa_items?: CapaItemView[] | null
+  dept_head_confirmations?: DeptHeadConfirmation[] | null
+  execution_tracks?: ExecutionTrackView[] | null
+}
 
 const STATUS_LABELS: Record<CapaWorkflowStatus, string> = {
   draft: '草稿',
@@ -91,9 +105,15 @@ export function CapaDetail() {
   const router = useRouter()
   const params = useParams()
   const { message, modal } = App.useApp()
+  const queryClient = useQueryClient()
+  const id = params.id as string
 
-  const [capa, setCapa] = useState<CapaDetailType | null>(null)
-  const [loading, setLoading] = useState(true)
+  const { data: capaData, isLoading: loading, error } = useQuery({
+    queryKey: ['quality-capa', 'detail', id],
+    queryFn: () => fetchCapa(id),
+  })
+  const capa = capaData as CapaJsonView | undefined
+
   const [editMode, setEditMode] = useState(false)
   const [editForm] = Form.useForm()
 
@@ -110,36 +130,12 @@ export function CapaDetail() {
   const [executionModalOpen, setExecutionModalOpen] = useState(false)
   const [executionForm] = Form.useForm()
 
-  const loadData = useCallback(async () => {
-    try {
-      const data = await fetchCapa(params.id as string)
-      setCapa(data)
-    } catch (error: unknown) {
+  useEffect(() => {
+    if (error) {
       message.error(getErrorMessage(error, '加载失败'))
       router.push('/quality/capas')
-    } finally {
-      setLoading(false)
     }
-  }, [params.id, message, router])
-
-  useEffect(() => {
-    let cancelled = false
-    const load = async () => {
-      try {
-        const data = await fetchCapa(params.id as string)
-        if (!cancelled) setCapa(data)
-      } catch (error: unknown) {
-        if (!cancelled) {
-          message.error(getErrorMessage(error, '加载失败'))
-          router.push('/quality/capas')
-        }
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-    load()
-    return () => { cancelled = true }
-  }, [params.id, message, router])
+  }, [error, message, router])
 
   const handleEdit = () => {
     if (!capa) return
@@ -166,7 +162,7 @@ export function CapaDetail() {
       })
       message.success('保存成功')
       setEditMode(false)
-      loadData()
+      queryClient.invalidateQueries({ queryKey: ['quality-capa', 'detail', id] })
     } catch (error: unknown) {
       message.error(getErrorMessage(error, '保存失败'))
     }
@@ -199,7 +195,7 @@ export function CapaDetail() {
       message.success('CAPA项目已添加')
       setCapaItemModalOpen(false)
       capaItemForm.resetFields()
-      loadData()
+      queryClient.invalidateQueries({ queryKey: ['quality-capa', 'detail', id] })
     } catch (error: unknown) {
       message.error(getErrorMessage(error, '添加 CAPA 项目失败'))
     }
@@ -209,7 +205,7 @@ export function CapaDetail() {
     const newItems = capa!.capa_items!.filter((_, i) => i !== index)
     await updateCapa(capa!.id, { capa_items: newItems })
     message.success('CAPA项目已删除')
-    loadData()
+    queryClient.invalidateQueries({ queryKey: ['quality-capa', 'detail', id] })
   }
 
   const handleOpenReview = (step: string) => {
@@ -229,7 +225,7 @@ export function CapaDetail() {
       message.success('审核意见已提交')
       setReviewModalOpen(false)
       reviewForm.resetFields()
-      loadData()
+      queryClient.invalidateQueries({ queryKey: ['quality-capa', 'detail', id] })
     } catch (error: unknown) {
       message.error(getErrorMessage(error, '提交审核意见失败'))
     }
@@ -253,7 +249,7 @@ export function CapaDetail() {
       message.success('效果评价已提交，CAPA已关闭')
       setEvaluationModalOpen(false)
       evaluationForm.resetFields()
-      loadData()
+      queryClient.invalidateQueries({ queryKey: ['quality-capa', 'detail', id] })
     } catch (error: unknown) {
       message.error(getErrorMessage(error, '提交效果评价失败'))
     }
@@ -268,15 +264,14 @@ export function CapaDetail() {
     try {
       const values = await executionForm.validateFields()
       await addExecutionTrack(capa!.id, {
-        content: values.content,
-        executor: values.executor || null,
-        execution_date: values.execution_date || null,
-        attachments: [],
+        execution_status: values.execution_status,
+        qa_confirmer: values.qa_confirmer || '',
+        qa_confirm_date: values.qa_confirm_date ? new Date(values.qa_confirm_date).toISOString() : new Date().toISOString(),
       })
       message.success('执行记录已添加')
       setExecutionModalOpen(false)
       executionForm.resetFields()
-      loadData()
+      queryClient.invalidateQueries({ queryKey: ['quality-capa', 'detail', id] })
     } catch (error: unknown) {
       message.error(getErrorMessage(error, '添加执行记录失败'))
     }
@@ -286,7 +281,7 @@ export function CapaDetail() {
     try {
       await deleteExecutionTrack(capa!.id, index)
       message.success('执行记录已删除')
-      loadData()
+      queryClient.invalidateQueries({ queryKey: ['quality-capa', 'detail', id] })
     } catch (error: unknown) {
       message.error(getErrorMessage(error, '删除执行记录失败'))
     }
@@ -302,7 +297,7 @@ export function CapaDetail() {
         opinion: '',
       })
       message.success('确认意见已提交')
-      loadData()
+      queryClient.invalidateQueries({ queryKey: ['quality-capa', 'detail', id] })
     } catch (error: unknown) {
       message.error(getErrorMessage(error, '提交确认意见失败'))
     }
@@ -318,7 +313,7 @@ export function CapaDetail() {
         try {
           await resubmitCapa(capa!.id)
           message.success('已重新提交')
-          loadData()
+          queryClient.invalidateQueries({ queryKey: ['quality-capa', 'detail', id] })
         } catch (error: unknown) {
           message.error(getErrorMessage(error, '重新提交失败'))
         }
@@ -336,7 +331,7 @@ export function CapaDetail() {
         try {
           await submitCapa(capa!.id)
           message.success('已提交审核')
-          loadData()
+          queryClient.invalidateQueries({ queryKey: ['quality-capa', 'detail', id] })
         } catch (error: unknown) {
           message.error(getErrorMessage(error, '提交失败'))
         }
@@ -348,7 +343,7 @@ export function CapaDetail() {
     try {
       await completeCapaPart(capa!.id, part)
       message.success(`Part ${part.toUpperCase()} 已完成`)
-      loadData()
+      queryClient.invalidateQueries({ queryKey: ['quality-capa', 'detail', id] })
     } catch (error: unknown) {
       message.error(getErrorMessage(error, `Part ${part.toUpperCase()} 完成失败`))
     }
@@ -364,7 +359,7 @@ export function CapaDetail() {
         try {
           await confirmExecution(capa!.id)
           message.success('执行已确认')
-          loadData()
+          queryClient.invalidateQueries({ queryKey: ['quality-capa', 'detail', id] })
         } catch (error: unknown) {
           message.error(getErrorMessage(error, '确认失败'))
         }
@@ -391,8 +386,8 @@ export function CapaDetail() {
               返回
             </Button>
             <h2 style={{ margin: 0 }}>{capa.capa_code}</h2>
-            <Tag color={STATUS_COLORS[capa.status]}>
-              {STATUS_LABELS[capa.status]}
+            <Tag color={STATUS_COLORS[capa.status as CapaWorkflowStatus]}>
+              {STATUS_LABELS[capa.status as CapaWorkflowStatus]}
               {capa.status === 'returned' && capa.returned_step && ` (${capa.returned_step})`}
             </Tag>
           </Space>
@@ -565,8 +560,8 @@ export function CapaDetail() {
                   <div>
                     <div style={{ fontWeight: 500, marginBottom: 4 }}>{item.content}</div>
                     <div style={{ color: '#787671' }}>
-                      {`执行人: ${item.responsible_person || '-'} | 预期完成: ${
-                        item.deadline ? dayjs(item.deadline).format('YYYY-MM-DD') : '-'
+                      {`执行人: ${item.executors || '-'} | 预期完成: ${
+                        item.expectedCompletionDate ? dayjs(item.expectedCompletionDate).format('YYYY-MM-DD') : '-'
                       }`}
                     </div>
                   </div>
@@ -658,7 +653,7 @@ export function CapaDetail() {
             <div style={{ display: 'grid', gap: 16 }}>
               {capa.execution_tracks.map((track, index) => (
                 <div
-                  key={`${track.content}-${index}`}
+                  key={track.id}
                   style={{
                     display: 'flex',
                     justifyContent: 'space-between',
@@ -670,11 +665,11 @@ export function CapaDetail() {
                 >
                   <div>
                     <div style={{ fontWeight: 500, marginBottom: 8 }}>{`记录 ${index + 1}`}</div>
-                    <div>执行内容: {track.content}</div>
-                    {track.executor ? <div>执行人: {track.executor}</div> : null}
+                    <div>执行状态: {track.executionStatus}</div>
                     {track.execution_date ? (
                       <div>执行日期: {dayjs(track.execution_date).format('YYYY-MM-DD')}</div>
                     ) : null}
+                    {track.execution_notes ? <div>执行备注: {track.execution_notes}</div> : null}
                   </div>
                   {capa.status === 'executing' ? (
                     <Button
@@ -777,13 +772,17 @@ export function CapaDetail() {
           width={600}
         >
           <Form form={executionForm} layout="vertical">
-            <Form.Item name="content" label="执行内容" rules={[{ required: true, message: "请输入执行内容" }]}>
-              <Input.TextArea rows={3} />
+            <Form.Item name="execution_status" label="执行状态" rules={[{ required: true, message: "请输入执行状态" }]}>
+              <Select>
+                <Select.Option value="in_progress">进行中</Select.Option>
+                <Select.Option value="completed">已完成</Select.Option>
+                <Select.Option value="delayed">延迟</Select.Option>
+              </Select>
             </Form.Item>
-            <Form.Item name="executor" label="执行人">
+            <Form.Item name="qa_confirmer" label="QA确认人">
               <Input />
             </Form.Item>
-            <Form.Item name="execution_date" label="执行日期">
+            <Form.Item name="qa_confirm_date" label="QA确认日期">
               <Input type="date" />
             </Form.Item>
           </Form>

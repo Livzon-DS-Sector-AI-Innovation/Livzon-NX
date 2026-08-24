@@ -2,9 +2,11 @@
 
 import uuid
 from datetime import datetime
-from sqlalchemy import String, Integer, Text, DateTime, ForeignKey
+
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from app.shared.base_model import BaseModel
 
 
@@ -19,9 +21,7 @@ class SyncJobPage(BaseModel):
         ForeignKey("regulatory_tracker.sync_jobs.id", ondelete="CASCADE"),
         nullable=False,
     )
-    page_number: Mapped[int] = mapped_column(
-        Integer, nullable=False, comment="页码"
-    )
+    page_number: Mapped[int] = mapped_column(Integer, nullable=False, comment="页码")
     page_size: Mapped[int] = mapped_column(
         Integer, nullable=False, server_default="10", comment="每页条数"
     )
@@ -34,8 +34,12 @@ class SyncJobPage(BaseModel):
     status: Mapped[str] = mapped_column(
         String(50), nullable=False, comment="pending/synced/failed"
     )
-    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Relationships

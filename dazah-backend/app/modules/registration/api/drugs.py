@@ -8,7 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.response import success_response
-from app.modules.registration import service
 from app.modules.registration.models.review import ReviewNode
 from app.modules.registration.schemas.drug import (
     DrugCreate,
@@ -17,6 +16,7 @@ from app.modules.registration.schemas.drug import (
     DrugWithNodesResponse,
 )
 from app.modules.registration.schemas.review import ReviewNodeConfig
+from app.modules.registration.service import drug as service
 
 router = APIRouter()
 

@@ -1,5 +1,9 @@
-import { CreateCapa } from '@/components/quality'
+import { CreateCapa, ErrorBoundary } from '@/components/quality'
 
 export default function NewCapaPage() {
-  return <CreateCapa />
+  return (
+    <ErrorBoundary>
+      <CreateCapa />
+    </ErrorBoundary>
+  )
 }

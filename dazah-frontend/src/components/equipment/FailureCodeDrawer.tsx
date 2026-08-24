@@ -62,8 +62,8 @@ export function FailureCodeDrawer({ onRefresh }: FailureCodeDrawerProps) {
       }
       closeFailureCodeDrawer()
       onRefresh?.()
-    } catch (error: any) {
-      if (error?.message) message.error(error.message)
+    } catch (error) {
+      if ((error instanceof Error ? error.message : '')) message.error((error instanceof Error ? error.message : ''))
     }
   }
 

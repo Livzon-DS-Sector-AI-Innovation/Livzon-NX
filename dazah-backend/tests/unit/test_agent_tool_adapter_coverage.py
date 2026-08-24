@@ -4,7 +4,7 @@ import types
 import uuid
 from datetime import UTC, date, datetime
 from enum import Enum
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
 from typing import Any, Literal, Union, get_args, get_origin
 from unittest.mock import AsyncMock
 
@@ -19,6 +19,8 @@ from app.modules.warehouse import agent_tools as warehouse_tools
 from app.modules.warehouse import ws_client as warehouse_ws_client
 from app.platform.identity import agent_tools as identity_tools
 
+SimpleNamespace: Any = _SimpleNamespace
+
 
 class _EmptyResult(BaseModel):
     pass
@@ -31,11 +33,11 @@ class _EmptyInput(BaseModel):
 class _ServiceDouble:
     """Return service-shaped empty values while recording every adapter call."""
 
-    def __init__(self, *, tuple_sizes: dict[str, int] | None = None) -> None:
+    def __init__(self: Any, *, tuple_sizes: dict[str, int] | None = None) -> None:
         self.calls: list[tuple[str, tuple[Any, ...], dict[str, Any]]] = []
         self.tuple_sizes = tuple_sizes or {}
 
-    def __getattr__(self, name: str) -> Any:
+    def __getattr__(self: Any, name: str) -> Any:
         async def _call(*args: Any, **kwargs: Any) -> Any:
             self.calls.append((name, args, kwargs))
             tuple_size = self.tuple_sizes.get(name)
@@ -96,7 +98,7 @@ def _required_value(annotation: Any, field_name: str) -> Any:
 
 
 def _build_input(model: type[BaseModel]) -> BaseModel:
-    values: dict[str, Any] = {}
+    values: dict[Any, Any] = {}
     for name, field in model.model_fields.items():
         if field.is_required():
             values[name] = _required_value(field.annotation, name)
@@ -196,7 +198,7 @@ async def test_energy_agent_tool_adapters_cover_paging_and_sync_paths(
         "energy.test_feishu_connectivity",
         "energy.trigger_sync",
     }
-    invoked = []
+    invoked: list[Any] = []
     for spec in _specs("energy", excluded):
         tool_input = _build_input(spec.input_model)
         if spec.name == "energy.update_feishu_source_root":
@@ -232,7 +234,7 @@ async def test_warehouse_agent_tool_adapters_cover_inventory_and_feishu_paths(
         AsyncMock(return_value=_EmptyResult()),
     )
 
-    invoked = []
+    invoked: list[Any] = []
     for spec in _specs("warehouse"):
         result = await spec.handler(_context(), _build_input(spec.input_model))
         assert result is not None
@@ -267,7 +269,7 @@ async def test_procurement_read_agent_tool_adapters_cover_all_list_shapes(
         "procurement.submit_purchase_request",
         "procurement.update_purchase_request",
     }
-    invoked = []
+    invoked: list[Any] = []
     for spec in _specs("procurement", excluded):
         result = await spec.handler(_context(), _build_input(spec.input_model))
         assert result is not None
@@ -322,14 +324,16 @@ async def test_identity_agent_tool_adapters_cover_tree_search_and_delivery(
     ]
 
     class _DepartmentRepo:
-        async def list_all(self, _db: Any) -> list[Any]:
+        async def list_all(self: Any, _db: Any) -> list[Any]:
             return departments
 
     class _UserRepo:
-        async def list_all(self, *args: Any, **kwargs: Any) -> tuple[list[Any], int]:
+        async def list_all(
+            self: Any, *args: Any, **kwargs: Any
+        ) -> tuple[list[Any], int]:
             return [], 0
 
-        async def get_by_id(self, _db: Any, requested_user_id: uuid.UUID) -> Any:
+        async def get_by_id(self: Any, _db: Any, requested_user_id: uuid.UUID) -> Any:
             assert requested_user_id == user_id
             return SimpleNamespace(
                 id=user_id,
@@ -338,20 +342,20 @@ async def test_identity_agent_tool_adapters_cover_tree_search_and_delivery(
                 feishu_open_id="ou_001",
             )
 
-    response = SimpleNamespace(
+    response: Any = SimpleNamespace(
         raise_for_status=lambda: None,
         json=lambda: {"id": "delivery-1", "status": "queued"},
     )
-    post = AsyncMock(return_value=response)
+    post: Any = AsyncMock(return_value=response)
 
     class _HttpClient:
-        def __init__(self, *args: Any, **kwargs: Any) -> None:
+        def __init__(self: Any, *args: Any, **kwargs: Any) -> None:
             pass
 
-        async def __aenter__(self) -> Any:
+        async def __aenter__(self: Any) -> Any:
             return SimpleNamespace(post=post)
 
-        async def __aexit__(self, *args: Any) -> None:
+        async def __aexit__(self: Any, *args: Any) -> None:
             return None
 
     monkeypatch.setattr(identity_tools, "DepartmentRepository", _DepartmentRepo)
@@ -369,7 +373,7 @@ async def test_identity_agent_tool_adapters_cover_tree_search_and_delivery(
             HERMES_INTERNAL_TOKEN="test-token",
         ),
     )
-    monkeypatch.setattr(identity_tools.httpx, "AsyncClient", _HttpClient)
+    monkeypatch.setattr(identity_tools.httpx, "AsyncClient", _HttpClient)  # type: ignore[attr-defined]
 
     context = _context()
     tree = await identity_tools.get_department_tree(context, _EmptyInput())

@@ -177,9 +177,7 @@ def main() -> int:
         return 0
 
     uncovered = [
-        f"{filename}:{line}"
-        for filename, line, hits in executable
-        if not hits
+        f"{filename}:{line}" for filename, line, hits in executable if not hits
     ]
     print("Uncovered changed executable lines:", file=sys.stderr)
     for item in uncovered[:50]:

@@ -2,11 +2,12 @@ import base64
 import hashlib
 import uuid
 from io import BytesIO
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
+from typing import Any, cast
 
 import pytest
 from fastapi import HTTPException
-from openpyxl import Workbook, load_workbook
+from openpyxl import Workbook, load_workbook  # type: ignore[import-untyped]
 from pydantic import BaseModel
 
 from app.modules.agent import agent_tools
@@ -14,14 +15,16 @@ from app.modules.agent.attachment_service import AgentAttachmentService
 from app.modules.agent.service import AgentService
 from app.modules.agent.tools import ToolContext
 
+SimpleNamespace: Any = _SimpleNamespace
+
 
 class FakeDb:
-    async def flush(self) -> None:
+    async def flush(self: Any) -> None:
         return None
 
 
 class FailingDb:
-    async def flush(self) -> None:
+    async def flush(self: Any) -> None:
         raise RuntimeError("database flush failed")
 
 
@@ -30,12 +33,12 @@ class EmptyInput(BaseModel):
 
 
 class FakeRepo:
-    def __init__(self) -> None:
+    def __init__(self: Any) -> None:
         self.items: list[SimpleNamespace] = []
 
-    async def create_attachment(self, _db, **values):
+    async def create_attachment(self: Any, _db: Any, **values: Any) -> Any:
         attachment_id = values.pop("attachment_id")
-        item = SimpleNamespace(
+        item: Any = SimpleNamespace(
             id=attachment_id,
             **values,
             version=1,
@@ -45,7 +48,9 @@ class FakeRepo:
         self.items.append(item)
         return item
 
-    async def list_session_attachments(self, _db, *, session_id, user_id, limit=50):
+    async def list_session_attachments(
+        self: Any, _db: Any, *, session_id: Any, user_id: Any, limit: Any = 50
+    ) -> Any:
         return [
             item
             for item in self.items
@@ -54,7 +59,9 @@ class FakeRepo:
             and not item.is_deleted
         ][:limit]
 
-    async def get_session_attachment(self, _db, *, session_id, user_id, attachment_ref):
+    async def get_session_attachment(
+        self: Any, _db: Any, *, session_id: Any, user_id: Any, attachment_ref: Any
+    ) -> Any:
         for item in reversed(self.items):
             if (
                 item.session_id == session_id
@@ -86,7 +93,9 @@ async def test_persist_cleans_up_object_when_database_flush_fails(
 
     objects: dict[str, tuple[bytes, str]] = {}
 
-    def upload_object(_module, key, data, _length, content_type):
+    def upload_object(
+        _module: Any, key: Any, data: Any, _length: Any, content_type: Any
+    ) -> Any:
         objects[key] = (data, content_type)
 
     monkeypatch.setattr(module, "is_enabled", lambda: True)
@@ -97,8 +106,8 @@ async def test_persist_cleans_up_object_when_database_flush_fails(
     )
 
     with pytest.raises(RuntimeError, match="database flush failed"):
-        await AgentAttachmentService(FakeRepo()).persist(
-            FailingDb(),
+        await AgentAttachmentService(cast(Any, FakeRepo)()).persist(
+            FailingDb(),  # type: ignore[arg-type]
             session_id=uuid.uuid4(),
             message_id=uuid.uuid4(),
             user_id=uuid.uuid4(),
@@ -128,14 +137,16 @@ async def test_persisted_attachment_can_be_read_mutated_and_deleted(
 
     objects: dict[str, tuple[bytes, str]] = {}
 
-    def upload_object(_module, key, data, _length, content_type):
+    def upload_object(
+        _module: Any, key: Any, data: Any, _length: Any, content_type: Any
+    ) -> Any:
         objects[key] = (data, content_type)
         return key
 
-    def get_object(_module, key):
+    def get_object(_module: Any, key: Any) -> Any:
         return objects.get(key)
 
-    def delete_object(_module, key):
+    def delete_object(_module: Any, key: Any) -> Any:
         objects.pop(key, None)
 
     monkeypatch.setattr(module, "is_enabled", lambda: True)
@@ -143,9 +154,9 @@ async def test_persisted_attachment_can_be_read_mutated_and_deleted(
     monkeypatch.setattr(module, "get_object", get_object)
     monkeypatch.setattr(module, "delete_object", delete_object)
 
-    repo = FakeRepo()
+    repo: Any = cast(Any, FakeRepo)()
     service = AgentAttachmentService(repo)
-    db = FakeDb()
+    db: Any = cast(Any, FakeDb)()
     session_id = uuid.uuid4()
     user_id = uuid.uuid4()
     attachment_id = uuid.uuid4()
@@ -236,7 +247,9 @@ async def test_mutation_restores_object_when_database_flush_fails(
 
     objects: dict[str, tuple[bytes, str]] = {}
 
-    def upload_object(_module, key, data, _length, content_type):
+    def upload_object(
+        _module: Any, key: Any, data: Any, _length: Any, content_type: Any
+    ) -> Any:
         objects[key] = (data, content_type)
 
     monkeypatch.setattr(module, "is_enabled", lambda: True)
@@ -246,13 +259,13 @@ async def test_mutation_restores_object_when_database_flush_fails(
         module, "delete_object", lambda _module, key: objects.pop(key, None)
     )
 
-    repo = FakeRepo()
+    repo: Any = cast(Any, FakeRepo)()
     service = AgentAttachmentService(repo)
     session_id = uuid.uuid4()
     user_id = uuid.uuid4()
     raw = _xlsx_bytes()
     [attachment] = await service.persist(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         session_id=session_id,
         message_id=uuid.uuid4(),
         user_id=user_id,
@@ -272,7 +285,7 @@ async def test_mutation_restores_object_when_database_flush_fails(
 
     with pytest.raises(RuntimeError, match="database flush failed"):
         await service.mutate_tabular(
-            FailingDb(),
+            FailingDb(),  # type: ignore[arg-type]
             session_id=session_id,
             user_id=user_id,
             attachment_ref=str(attachment.id),
@@ -295,7 +308,9 @@ async def test_delete_restores_object_when_database_flush_fails(
 
     objects: dict[str, tuple[bytes, str]] = {}
 
-    def upload_object(_module, key, data, _length, content_type):
+    def upload_object(
+        _module: Any, key: Any, data: Any, _length: Any, content_type: Any
+    ) -> Any:
         objects[key] = (data, content_type)
 
     monkeypatch.setattr(module, "is_enabled", lambda: True)
@@ -305,13 +320,13 @@ async def test_delete_restores_object_when_database_flush_fails(
         module, "delete_object", lambda _module, key: objects.pop(key, None)
     )
 
-    repo = FakeRepo()
+    repo: Any = cast(Any, FakeRepo)()
     service = AgentAttachmentService(repo)
     session_id = uuid.uuid4()
     user_id = uuid.uuid4()
     raw = _xlsx_bytes()
     [attachment] = await service.persist(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         session_id=session_id,
         message_id=uuid.uuid4(),
         user_id=user_id,
@@ -331,7 +346,7 @@ async def test_delete_restores_object_when_database_flush_fails(
 
     with pytest.raises(RuntimeError, match="database flush failed"):
         await service.delete(
-            FailingDb(),
+            FailingDb(),  # type: ignore[arg-type]
             session_id=session_id,
             user_id=user_id,
             attachment_ref=str(attachment.id),
@@ -342,7 +357,7 @@ async def test_delete_restores_object_when_database_flush_fails(
 
 
 def test_follow_up_restores_named_or_recent_attachment() -> None:
-    attachment = SimpleNamespace(
+    attachment: Any = SimpleNamespace(
         id=uuid.uuid4(),
         filename="销售数据.xlsx",
         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -367,7 +382,7 @@ async def test_follow_up_materializes_persisted_image_bytes(
     import app.modules.agent.attachment_service as module
 
     raw = b"\x89PNG\r\n\x1a\nimage"
-    attachment = SimpleNamespace(
+    attachment: Any = SimpleNamespace(
         id=uuid.uuid4(),
         filename="现场照片.png",
         content_type="image/png",
@@ -398,7 +413,7 @@ async def test_persist_rejects_unavailable_storage_and_invalid_bytes(
 ) -> None:
     import app.modules.agent.attachment_service as module
 
-    service = AgentAttachmentService(FakeRepo())
+    service = AgentAttachmentService(cast(Any, FakeRepo)())
     kwargs = {
         "session_id": uuid.uuid4(),
         "message_id": uuid.uuid4(),
@@ -416,12 +431,12 @@ async def test_persist_rejects_unavailable_storage_and_invalid_bytes(
 
     monkeypatch.setattr(module, "is_enabled", lambda: False)
     with pytest.raises(HTTPException) as unavailable:
-        await service.persist(FakeDb(), **kwargs)
+        await service.persist(cast(Any, FakeDb)(), **kwargs)  # type: ignore[arg-type]
     assert unavailable.value.status_code == 503
 
     monkeypatch.setattr(module, "is_enabled", lambda: True)
     with pytest.raises(TypeError, match="must be bytes"):
-        await service.persist(FakeDb(), **kwargs)
+        await service.persist(cast(Any, FakeDb)(), **kwargs)  # type: ignore[arg-type]
 
 
 @pytest.mark.anyio
@@ -446,8 +461,8 @@ async def test_persist_reports_readback_failure_and_attempts_cleanup(
     )
 
     with pytest.raises(HTTPException) as exc_info:
-        await AgentAttachmentService(FakeRepo()).persist(
-            FakeDb(),
+        await AgentAttachmentService(cast(Any, FakeRepo)()).persist(
+            cast(Any, FakeDb)(),
             session_id=uuid.uuid4(),
             message_id=None,
             user_id=uuid.uuid4(),
@@ -474,7 +489,7 @@ async def test_materialize_rejects_missing_or_tampered_images_and_bounds_text(
 ) -> None:
     import app.modules.agent.attachment_service as module
 
-    image = SimpleNamespace(
+    image: Any = SimpleNamespace(
         id=uuid.uuid4(),
         filename="photo.png",
         content_type="image/png",
@@ -497,7 +512,7 @@ async def test_materialize_rejects_missing_or_tampered_images_and_bounds_text(
     with pytest.raises(HTTPException, match="校验失败"):
         await AgentAttachmentService().materialize_for_context([image], text_limit=10)
 
-    text_attachment = SimpleNamespace(
+    text_attachment: Any = SimpleNamespace(
         id=uuid.uuid4(),
         filename="empty.txt",
         content_type="text/plain",
@@ -521,11 +536,11 @@ async def test_attachment_lookup_and_storage_failure_boundaries(
 ) -> None:
     import app.modules.agent.attachment_service as module
 
-    repo = FakeRepo()
+    repo: Any = cast(Any, FakeRepo)()
     service = AgentAttachmentService(repo)
     with pytest.raises(HTTPException) as no_session:
         await service.require(
-            FakeDb(),
+            cast(Any, FakeDb)(),
             session_id=None,
             user_id=uuid.uuid4(),
             attachment_ref="missing",
@@ -534,14 +549,14 @@ async def test_attachment_lookup_and_storage_failure_boundaries(
 
     with pytest.raises(HTTPException) as not_found:
         await service.require(
-            FakeDb(),
+            cast(Any, FakeDb)(),
             session_id=uuid.uuid4(),
             user_id=uuid.uuid4(),
             attachment_ref="missing",
         )
     assert not_found.value.status_code == 404
 
-    attachment = SimpleNamespace(
+    attachment: Any = SimpleNamespace(
         id=uuid.uuid4(),
         filename="notes.txt",
         content_type="text/plain",
@@ -561,7 +576,7 @@ async def test_attachment_lookup_and_storage_failure_boundaries(
 
     with pytest.raises(HTTPException) as mutate_missing:
         await service.mutate_tabular(
-            FakeDb(),
+            cast(Any, FakeDb)(),
             session_id=attachment.session_id,
             user_id=attachment.user_id,
             attachment_ref=str(attachment.id),
@@ -579,7 +594,7 @@ async def test_attachment_lookup_and_storage_failure_boundaries(
     )
     with pytest.raises(HTTPException) as unsupported:
         await service.mutate_tabular(
-            FakeDb(),
+            cast(Any, FakeDb)(),
             session_id=attachment.session_id,
             user_id=attachment.user_id,
             attachment_ref=str(attachment.id),
@@ -593,7 +608,7 @@ async def test_attachment_lookup_and_storage_failure_boundaries(
     monkeypatch.setattr(module, "get_object", lambda *_args: None)
     with pytest.raises(HTTPException) as delete_missing:
         await service.delete(
-            FakeDb(),
+            cast(Any, FakeDb)(),
             session_id=attachment.session_id,
             user_id=attachment.user_id,
             attachment_ref=str(attachment.id),
@@ -695,10 +710,10 @@ def test_tabular_mutation_validation_and_csv_operations() -> None:
 async def test_agent_attachment_tool_handlers_enforce_context_and_delegate(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    user = SimpleNamespace(id=uuid.uuid4())
+    user: Any = SimpleNamespace(id=uuid.uuid4())
     session_id = uuid.uuid4()
     calls: list[tuple[str, dict[str, object]]] = []
-    item = SimpleNamespace(
+    item: Any = SimpleNamespace(
         id=uuid.uuid4(),
         filename="data.csv",
         content_type="text/csv",
@@ -708,32 +723,32 @@ async def test_agent_attachment_tool_handlers_enforce_context_and_delegate(
     )
 
     class FakeAttachmentService:
-        async def list_for_session(self, _db, **kwargs):
+        async def list_for_session(self: Any, _db: Any, **kwargs: Any) -> Any:
             calls.append(("list", kwargs))
             return [item]
 
-        async def read(self, _db, **kwargs):
+        async def read(self: Any, _db: Any, **kwargs: Any) -> Any:
             calls.append(("read", kwargs))
             return {"content": "row"}
 
-        async def mutate_tabular(self, _db, **kwargs):
+        async def mutate_tabular(self: Any, _db: Any, **kwargs: Any) -> Any:
             calls.append(("mutate", kwargs))
             return {"version": 4}
 
-        async def delete(self, _db, **kwargs):
+        async def delete(self: Any, _db: Any, **kwargs: Any) -> Any:
             calls.append(("delete", kwargs))
             return {"deleted": True}
 
     monkeypatch.setattr(agent_tools, "AgentAttachmentService", FakeAttachmentService)
 
-    def context(*, active_user=user, active_session=session_id):
+    def context(*, active_user: Any = user, active_session: Any = session_id) -> Any:
         return ToolContext(
             db=object(),  # type: ignore[arg-type]
             session_id=active_session,
             user_id=getattr(active_user, "id", None),
-            user=active_user,  # type: ignore[arg-type]
+            user=active_user,
             reason=None,
-            raw_request=SimpleNamespace(operation="agent.list_attachments"),  # type: ignore[arg-type]
+            raw_request=SimpleNamespace(operation="agent.list_attachments"),
         )
 
     with pytest.raises(HTTPException) as unauthenticated:

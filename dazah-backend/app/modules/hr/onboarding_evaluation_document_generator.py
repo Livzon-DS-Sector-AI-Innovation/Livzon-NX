@@ -1,46 +1,34 @@
 """员工上岗评估表 文档生成器."""
 
-from datetime import date
+import logging
 from io import BytesIO
-from pathlib import Path
 from typing import Any
 
-from openpyxl import Workbook
-from openpyxl.styles import Alignment, Border, Side, Font
-from docx import Document
+from openpyxl import Workbook  # type: ignore[import-untyped]
+from openpyxl.styles import (  # type: ignore[import-untyped]
+    Alignment,
+    Border,
+    Font,
+    Side,
+)
 
+from app.modules.hr.date_format import HR_EXPORT_DATE_FORMAT
 from app.modules.hr.models import Employee
 from app.modules.hr.schemas import OnboardingEvaluationInput
 
-
-NEW_TEMPLATE_NAME = "R-GN-2002 E 员工上岗评估表.docx"
-
-
-def _find_new_template() -> Path:
-    """Locate the new factory docx template."""
-    candidates = [
-        Path("新厂人员培训管理规程") / NEW_TEMPLATE_NAME,
-        Path("../新厂人员培训管理规程") / NEW_TEMPLATE_NAME,
-        Path(__file__).resolve().parent.parent.parent.parent
-        / "新厂人员培训管理规程"
-        / NEW_TEMPLATE_NAME,
-    ]
-    for p in candidates:
-        if p.exists():
-            return p
-    raise FileNotFoundError(f"模板文件未找到: {NEW_TEMPLATE_NAME}")
+logger = logging.getLogger(__name__)
 
 
-def _cell_border():
+def _cell_border() -> Any:
     thin = Side(style="thin")
     return Border(left=thin, right=thin, top=thin, bottom=thin)
 
 
-def _center_align():
+def _center_align() -> Any:
     return Alignment(horizontal="center", vertical="center", wrap_text=True)
 
 
-def _left_align():
+def _left_align() -> Any:
     return Alignment(horizontal="left", vertical="center", wrap_text=True)
 
 
@@ -120,7 +108,9 @@ def _generate_old(data: OnboardingEvaluationInput) -> BytesIO:
     ws["A6"].alignment = _center_align()
     ws["A6"].border = _cell_border()
     ws["A6"].font = Font(bold=True)
-    hire_date_str = data.hire_date.strftime("%Y-%m-%d") if data.hire_date else ""
+    hire_date_str = (
+        data.hire_date.strftime(HR_EXPORT_DATE_FORMAT) if data.hire_date else ""
+    )
     ws["B6"] = hire_date_str
     ws["B6"].alignment = _center_align()
     ws["B6"].border = _cell_border()
@@ -135,7 +125,11 @@ def _generate_old(data: OnboardingEvaluationInput) -> BytesIO:
     ws["E6"].alignment = _center_align()
     ws["E6"].border = _cell_border()
     ws["E6"].font = Font(bold=True)
-    reg_date_str = data.regularization_date.strftime("%Y-%m-%d") if data.regularization_date else ""
+    reg_date_str = (
+        data.regularization_date.strftime(HR_EXPORT_DATE_FORMAT)
+        if data.regularization_date
+        else ""
+    )
     ws["F6"] = reg_date_str
     ws["F6"].alignment = _center_align()
     ws["F6"].border = _cell_border()
@@ -155,7 +149,9 @@ def _generate_old(data: OnboardingEvaluationInput) -> BytesIO:
     for i in range(6):
         row = 8 + i
         ws.merge_cells(f"A{row}:F{row}")
-        content = data.assessment_contents[i] if i < len(data.assessment_contents) else ""
+        content = (
+            data.assessment_contents[i] if i < len(data.assessment_contents) else ""
+        )
         ws[f"A{row}"] = content
         ws[f"A{row}"].alignment = _left_align()
         ws[f"A{row}"].border = _cell_border()
@@ -186,7 +182,10 @@ def _generate_old(data: OnboardingEvaluationInput) -> BytesIO:
     ws.merge_cells("A16:F16")
     position = data.assigned_position or "____"
     agree_str = "☑" if data.is_qualified is True else "□"
-    ws["A16"] = f" {agree_str}经考核该员工培训期表现优秀/确认，同意该员工正式上岗，担任{position}岗位。"
+    ws["A16"] = (
+        f" {agree_str}经考核该员工培训期表现优秀/确认，"
+        f"同意该员工正式上岗，担任{position}岗位。"
+    )
     ws["A16"].alignment = _left_align()
     ws["A16"].border = _cell_border()
     for col in ["B", "C", "D", "E", "F"]:
@@ -210,7 +209,7 @@ def _generate_old(data: OnboardingEvaluationInput) -> BytesIO:
         "实操": "□理论 ☑实操 □现场",
         "现场": "□理论 □实操 ☑现场",
     }
-    method_str = method_map.get(data.assessment_method, "□理论 □实操 □现场")
+    method_str = method_map.get(data.assessment_method or "", "□理论 □实操 □现场")
     ws["A18"] = f" 考核方式：{method_str}"
     ws["A18"].alignment = _left_align()
     ws["A18"].border = _cell_border()
@@ -220,8 +219,15 @@ def _generate_old(data: OnboardingEvaluationInput) -> BytesIO:
 
     # R19: 部门负责人签名 / 日期
     ws.merge_cells("A19:F19")
-    sig_date = data.signature_date.strftime("%Y年%m月%d日") if data.signature_date else ""
-    ws["A19"] = f" 部门负责人签名：{data.dept_manager_signature or ''}                   日期：{sig_date}"
+    sig_date = (
+        data.signature_date.strftime(HR_EXPORT_DATE_FORMAT)
+        if data.signature_date
+        else ""
+    )
+    ws["A19"] = (
+        f" 部门负责人签名：{data.dept_manager_signature or ''}"
+        f"                   日期：{sig_date}"
+    )
     ws["A19"].alignment = _left_align()
     ws["A19"].border = _cell_border()
     for col in ["B", "C", "D", "E", "F"]:
@@ -256,7 +262,13 @@ def _generate_old(data: OnboardingEvaluationInput) -> BytesIO:
     for i, (title, name, agree) in enumerate(approvals):
         row = 22 + i
         ws.merge_cells(f"A{row}:B{row}")
-        agree_str = "☑同意  □不同意" if agree is True else "□同意  ☑不同意" if agree is False else "□同意  □不同意"
+        agree_str = (
+            "☑同意  □不同意"
+            if agree is True
+            else "□同意  ☑不同意"
+            if agree is False
+            else "□同意  □不同意"
+        )
         ws[f"A{row}"] = agree_str
         ws[f"A{row}"].alignment = _center_align()
         ws[f"A{row}"].border = _cell_border()
@@ -276,7 +288,11 @@ def _generate_old(data: OnboardingEvaluationInput) -> BytesIO:
         ws[f"E{row}"].border = _cell_border()
         ws[f"E{row}"].font = Font(bold=True)
 
-        app_date = data.approval_date.strftime("%Y-%m-%d") if data.approval_date else ""
+        app_date = (
+            data.approval_date.strftime(HR_EXPORT_DATE_FORMAT)
+            if data.approval_date
+            else ""
+        )
         ws[f"F{row}"] = app_date
         ws[f"F{row}"].alignment = _center_align()
         ws[f"F{row}"].border = _cell_border()
@@ -289,54 +305,19 @@ def _generate_old(data: OnboardingEvaluationInput) -> BytesIO:
     return buffer
 
 
-def _generate_new(employee: Employee) -> BytesIO:
-    """Fill the new factory onboarding evaluation docx template."""
-    template_path = _find_new_template()
-    doc = Document(str(template_path))
-
-    if not doc.tables:
-        raise ValueError("模板中未找到表格")
-
-    table = doc.tables[0]
-
-    # Row 0: [姓名] [] [部门] [] [工作卡号] []
-    table.rows[0].cells[1].text = employee.name or ""
-    table.rows[0].cells[3].text = employee.department or ""
-    table.rows[0].cells[5].text = employee.employee_number or ""
-
-    # Row 1: [学历] [] [专业] [] [毕业时间] []
-    table.rows[1].cells[1].text = employee.education or ""
-    table.rows[1].cells[3].text = employee.major or ""
-    grad_date_str = str(employee.graduation_date) if employee.graduation_date else ""
-    table.rows[1].cells[5].text = grad_date_str
-
-    # Row 2: [报到日期] [] [考核人] [] [考核时间] []
-    hire_date_str = str(employee.hire_date) if employee.hire_date else ""
-    table.rows[2].cells[1].text = hire_date_str
-    table.rows[2].cells[3].text = ""
-    table.rows[2].cells[5].text = ""
-
-    buffer = BytesIO()
-    doc.save(buffer)
-    buffer.seek(0)
-    return buffer
-
-
-def generate_onboarding_evaluation(data: Any, factory: str = "old") -> BytesIO:
+def generate_onboarding_evaluation(data: Any) -> BytesIO:
     """根据员工数据或填写的评估信息生成上岗评估表文档.
 
     Returns a BytesIO buffer containing the generated document.
     """
-    if factory == "new":
-        if isinstance(data, Employee):
-            return _generate_new(data)
-        raise ValueError("新厂上岗评估表需要 Employee 对象")
     if isinstance(data, Employee):
         input_data = OnboardingEvaluationInput(
             employee_name=data.name,
             employee_number=data.employee_number,
             gender=data.gender,
-            department_position=f"{data.department}/{data.position}" if data.department or data.position else None,
+            department_position=f"{data.department}/{data.position}"
+            if data.department or data.position
+            else None,
             hire_date=data.hire_date,
         )
         return _generate_old(input_data)

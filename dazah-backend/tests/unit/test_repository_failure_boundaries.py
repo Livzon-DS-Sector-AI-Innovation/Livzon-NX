@@ -1,6 +1,7 @@
 """Repository empty-result, locking, and persistence failure contracts."""
 
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
@@ -15,8 +16,10 @@ from app.platform.identity.repository import (
     UserRepository,
 )
 
+SimpleNamespace: Any = _SimpleNamespace
 
-def _empty_result():
+
+def _empty_result() -> Any:
     return SimpleNamespace(
         scalar_one_or_none=lambda: None,
         scalars=lambda: SimpleNamespace(all=lambda: []),
@@ -25,7 +28,7 @@ def _empty_result():
 
 @pytest.mark.asyncio
 async def test_identity_repository_rejects_invalid_identifiers_without_query() -> None:
-    session = SimpleNamespace(execute=AsyncMock())
+    session: Any = SimpleNamespace(execute=AsyncMock())
     users = UserRepository()
     tokens = FeishuUserTokenRepository()
 
@@ -44,7 +47,7 @@ async def test_identity_repository_rejects_invalid_identifiers_without_query() -
 
 @pytest.mark.asyncio
 async def test_identity_repository_returns_none_for_missing_rows() -> None:
-    session = SimpleNamespace(execute=AsyncMock(return_value=_empty_result()))
+    session: Any = SimpleNamespace(execute=AsyncMock(return_value=_empty_result()))
     users = UserRepository()
     user_id = uuid4()
 
@@ -59,7 +62,7 @@ async def test_identity_repository_returns_none_for_missing_rows() -> None:
 @pytest.mark.asyncio
 async def test_identity_repository_propagates_database_unavailability() -> None:
     failure = OperationalError("SELECT", {}, Exception("database unavailable"))
-    session = SimpleNamespace(execute=AsyncMock(side_effect=failure))
+    session: Any = SimpleNamespace(execute=AsyncMock(side_effect=failure))
     with pytest.raises(OperationalError):
         await UserRepository().get_by_username(session, "user")
 
@@ -67,7 +70,7 @@ async def test_identity_repository_propagates_database_unavailability() -> None:
 @pytest.mark.asyncio
 async def test_identity_create_propagates_integrity_error_to_owner() -> None:
     failure = IntegrityError("INSERT", {}, Exception("duplicate username"))
-    session = SimpleNamespace(
+    session: Any = SimpleNamespace(
         add=lambda _value: None,
         flush=AsyncMock(side_effect=failure),
         rollback=AsyncMock(),
@@ -86,21 +89,21 @@ async def test_external_identity_binding_repository_lifecycle() -> None:
     binding_id = uuid4()
     local_user_id = uuid4()
     actor_id = uuid4()
-    result_binding = SimpleNamespace(
+    result_binding: Any = SimpleNamespace(
         id=binding_id,
         external_user_id="user",
         external_open_id="open",
         external_union_id=None,
     )
-    scalar_rows = SimpleNamespace(all=lambda: [result_binding])
+    scalar_rows: Any = SimpleNamespace(all=lambda: [result_binding])
     scalar_rows.unique = lambda: scalar_rows
-    query_result = SimpleNamespace(
+    query_result: Any = SimpleNamespace(
         scalar_one_or_none=lambda: result_binding,
         scalars=lambda: scalar_rows,
         all=lambda: [(result_binding, SimpleNamespace(name="张三"))],
     )
     added: list[object] = []
-    session = SimpleNamespace(
+    session: Any = SimpleNamespace(
         add=added.append,
         flush=AsyncMock(),
         refresh=AsyncMock(),
@@ -179,7 +182,7 @@ async def test_external_identity_binding_repository_lifecycle() -> None:
 
 @pytest.mark.asyncio
 async def test_identity_config_queries_handle_empty_values() -> None:
-    session = SimpleNamespace(
+    session: Any = SimpleNamespace(
         execute=AsyncMock(return_value=_empty_result()),
         flush=AsyncMock(),
     )
@@ -193,7 +196,7 @@ async def test_identity_config_queries_handle_empty_values() -> None:
 
 @pytest.mark.asyncio
 async def test_warehouse_repository_empty_queries_and_database_failure() -> None:
-    session = SimpleNamespace(execute=AsyncMock(return_value=_empty_result()))
+    session: Any = SimpleNamespace(execute=AsyncMock(return_value=_empty_result()))
     repository = WarehouseRepository(session)
     identifier = uuid4()
 
@@ -225,7 +228,7 @@ async def test_warehouse_repository_empty_queries_and_database_failure() -> None
 @pytest.mark.asyncio
 async def test_warehouse_save_propagates_integrity_error_without_rollback() -> None:
     failure = IntegrityError("INSERT", {}, Exception("duplicate import key"))
-    session = SimpleNamespace(
+    session: Any = SimpleNamespace(
         add=lambda _value: None,
         flush=AsyncMock(side_effect=failure),
         rollback=AsyncMock(),
@@ -242,8 +245,8 @@ async def test_warehouse_claim_marks_rows_running_and_uses_flush() -> None:
         SimpleNamespace(status="queued"),
         SimpleNamespace(status="queued"),
     ]
-    result = SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: queued))
-    session = SimpleNamespace(
+    result: Any = SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: queued))
+    session: Any = SimpleNamespace(
         execute=AsyncMock(return_value=result),
         flush=AsyncMock(),
     )
@@ -256,8 +259,8 @@ async def test_warehouse_claim_marks_rows_running_and_uses_flush() -> None:
 @pytest.mark.asyncio
 async def test_warehouse_binding_replace_propagates_flush_failure() -> None:
     failure = IntegrityError("INSERT", {}, Exception("duplicate binding"))
-    added = []
-    session = SimpleNamespace(
+    added: list[Any] = []
+    session: Any = SimpleNamespace(
         execute=AsyncMock(),
         add=added.append,
         flush=AsyncMock(side_effect=failure),

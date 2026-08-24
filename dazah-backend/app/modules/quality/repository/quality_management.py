@@ -1,12 +1,13 @@
 """Quality management database queries."""
 
 import uuid
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from typing import Any
 
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import NotFoundException
 from app.modules.quality.models import (
     CAPA,
     AttachmentReview,
@@ -18,6 +19,7 @@ from app.modules.quality.models import (
     Deviation,
     DeviationInvestigationPushRecord,
 )
+from app.platform.identity.data_scope import DepartmentScope, department_in_clause
 
 
 def _escape_like(value: str) -> str:
@@ -30,7 +32,7 @@ async def exists_by_deviation_code(
 ) -> bool:
     query = select(Deviation.id).where(
         Deviation.deviation_code == deviation_code,
-        Deviation.is_deleted == False,
+        Deviation.is_deleted.is_(False),
     )
     if exclude_id:
         query = query.where(Deviation.id != exclude_id)
@@ -45,22 +47,36 @@ async def create_deviation(db: AsyncSession, data: dict[str, Any]) -> Deviation:
     return deviation
 
 
-async def get_deviation_by_id(db: AsyncSession, deviation_id: uuid.UUID) -> Deviation | None:
+async def get_deviation_by_id(
+    db: AsyncSession, deviation_id: uuid.UUID
+) -> Deviation | None:
     result = await db.execute(
         select(Deviation).where(
             Deviation.id == deviation_id,
-            Deviation.is_deleted == False,
+            Deviation.is_deleted.is_(False),
         )
     )
     return result.scalar_one_or_none()
 
 
-async def get_deviation_by_code(db: AsyncSession, deviation_code: str) -> Deviation | None:
+async def get_deviation_by_code(
+    db: AsyncSession, deviation_code: str
+) -> Deviation | None:
     result = await db.execute(
         select(Deviation).where(
             Deviation.deviation_code == deviation_code,
-            Deviation.is_deleted == False,
+            Deviation.is_deleted.is_(False),
         )
+    )
+    return result.scalar_one_or_none()
+
+
+async def get_deviation_by_code_include_deleted(
+    db: AsyncSession, deviation_code: str
+) -> Deviation | None:
+    """查找偏差（含软删除记录），避免导入时唯一约束冲突。"""
+    result = await db.execute(
+        select(Deviation).where(Deviation.deviation_code == deviation_code)
     )
     return result.scalar_one_or_none()
 
@@ -74,10 +90,10 @@ async def get_deviations_by_codes(
     result = await db.execute(
         select(Deviation).where(
             Deviation.deviation_code.in_(normalized_codes),
-            Deviation.is_deleted == False,
+            Deviation.is_deleted.is_(False),
         )
     )
-    return result.scalars().all()
+    return list(result.scalars().all())
 
 
 async def get_deviations(
@@ -97,10 +113,13 @@ async def get_deviations(
     investigation_completed_to: datetime | None = None,
     root_cause_keyword: str | None = None,
     corrective_actions_keyword: str | None = None,
+    scope: DepartmentScope | None = None,
 ) -> tuple[list[Deviation], int]:
-    query = select(Deviation).where(Deviation.is_deleted == False)
-    count_query = select(func.count()).select_from(Deviation).where(
-        Deviation.is_deleted == False
+    query = select(Deviation).where(Deviation.is_deleted.is_(False))
+    count_query = (
+        select(func.count())
+        .select_from(Deviation)
+        .where(Deviation.is_deleted.is_(False))
     )
 
     filters = []
@@ -112,6 +131,10 @@ async def get_deviations(
         filters.append(Deviation.department == department)
     if reporter_id:
         filters.append(Deviation.reporter_id == reporter_id)
+    # 部门数据隔离（后台可配置可见部门范围）
+    scope_clause = department_in_clause(Deviation.department, scope) if scope else None
+    if scope_clause is not None:
+        filters.append(scope_clause)
     if keyword:
         pattern = f"%{_escape_like(keyword)}%"
         filters.append(
@@ -137,9 +160,7 @@ async def get_deviations(
         filters.append(Deviation.has_occurred_before == has_occurred_before)
     if is_closed is not None:
         filters.append(
-            Deviation.status == "closed"
-            if is_closed
-            else Deviation.status != "closed"
+            Deviation.status == "closed" if is_closed else Deviation.status != "closed"
         )
     if investigation_completed_from:
         filters.append(
@@ -151,9 +172,7 @@ async def get_deviations(
         )
     if root_cause_keyword:
         filters.append(
-            Deviation.root_cause_analysis.ilike(
-                f"%{_escape_like(root_cause_keyword)}%"
-            )
+            Deviation.root_cause_analysis.ilike(f"%{_escape_like(root_cause_keyword)}%")
         )
     if corrective_actions_keyword:
         filters.append(
@@ -168,11 +187,13 @@ async def get_deviations(
 
     total = (await db.execute(count_query)).scalar_one()
 
-    query = query.order_by(Deviation.updated_at.desc()).offset(
-        (page - 1) * page_size
-    ).limit(page_size)
+    query = (
+        query.order_by(Deviation.deviation_code.asc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
     result = await db.execute(query)
-    return result.scalars().all(), total
+    return list(result.scalars().all()), total
 
 
 async def update_deviation(
@@ -195,7 +216,7 @@ async def exists_by_capa_code(
 ) -> bool:
     query = select(CAPA.id).where(
         CAPA.capa_code == capa_code,
-        CAPA.is_deleted == False,
+        CAPA.is_deleted.is_(False),
     )
     if exclude_id:
         query = query.where(CAPA.id != exclude_id)
@@ -212,14 +233,14 @@ async def create_capa(db: AsyncSession, data: dict[str, Any]) -> CAPA:
 
 async def get_capa_by_id(db: AsyncSession, capa_id: uuid.UUID) -> CAPA | None:
     result = await db.execute(
-        select(CAPA).where(CAPA.id == capa_id, CAPA.is_deleted == False)
+        select(CAPA).where(CAPA.id == capa_id, CAPA.is_deleted.is_(False))
     )
     return result.scalar_one_or_none()
 
 
 async def get_capa_by_code(db: AsyncSession, capa_code: str) -> CAPA | None:
     result = await db.execute(
-        select(CAPA).where(CAPA.capa_code == capa_code, CAPA.is_deleted == False)
+        select(CAPA).where(CAPA.capa_code == capa_code, CAPA.is_deleted.is_(False))
     )
     return result.scalar_one_or_none()
 
@@ -241,9 +262,12 @@ async def get_capas(
     qa_confirmer: str | None = None,
     page: int = 1,
     page_size: int = 20,
+    scope: DepartmentScope | None = None,
 ) -> tuple[list[CAPA], int]:
-    query = select(CAPA).where(CAPA.is_deleted == False)
-    count_query = select(func.count()).select_from(CAPA).where(CAPA.is_deleted == False)
+    query = select(CAPA).where(CAPA.is_deleted.is_(False))
+    count_query = (
+        select(func.count()).select_from(CAPA).where(CAPA.is_deleted.is_(False))
+    )
 
     filters = []
     if status:
@@ -256,23 +280,29 @@ async def get_capas(
         filters.append(CAPA.deviation_id == deviation_id)
     if keyword:
         pattern = f"%{_escape_like(keyword)}%"
-        filters.append(
-            or_(CAPA.capa_code.ilike(pattern), CAPA.title.ilike(pattern))
-        )
+        filters.append(or_(CAPA.capa_code.ilike(pattern), CAPA.title.ilike(pattern)))
     if capa_code:
         filters.append(CAPA.capa_code.ilike(f"%{_escape_like(capa_code)}%"))
     if affected_product:
-        filters.append(CAPA.affected_product.ilike(f"%{_escape_like(affected_product)}%"))
+        filters.append(
+            CAPA.affected_product.ilike(f"%{_escape_like(affected_product)}%")
+        )
     if source_code:
         filters.append(CAPA.source_code.ilike(f"%{_escape_like(source_code)}%"))
     if evaluation_result:
-        filters.append(CAPA.evaluation_result.ilike(f"%{_escape_like(evaluation_result)}%"))
+        filters.append(
+            CAPA.evaluation_result.ilike(f"%{_escape_like(evaluation_result)}%")
+        )
     if closure_date_from:
         filters.append(CAPA.closure_date >= closure_date_from)
     if closure_date_to:
         filters.append(CAPA.closure_date < closure_date_to)
     if department:
         filters.append(CAPA.department.ilike(f"%{_escape_like(department)}%"))
+    # 部门数据隔离（后台可配置可见部门范围）
+    scope_clause = department_in_clause(CAPA.department, scope) if scope else None
+    if scope_clause is not None:
+        filters.append(scope_clause)
     if qa_confirmer:
         filters.append(CAPA.qa_confirmer.ilike(f"%{_escape_like(qa_confirmer)}%"))
 
@@ -282,11 +312,13 @@ async def get_capas(
 
     total = (await db.execute(count_query)).scalar_one()
 
-    query = query.order_by(CAPA.updated_at.desc()).offset(
-        (page - 1) * page_size
-    ).limit(page_size)
+    query = (
+        query.order_by(CAPA.updated_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
     result = await db.execute(query)
-    return result.scalars().all(), total
+    return list(result.scalars().all()), total
 
 
 async def update_capa(db: AsyncSession, capa: CAPA, data: dict[str, Any]) -> CAPA:
@@ -307,12 +339,22 @@ async def exists_by_change_code(
 ) -> bool:
     query = select(ChangeControl.id).where(
         ChangeControl.change_code == change_code,
-        ChangeControl.is_deleted == False,
+        ChangeControl.is_deleted.is_(False),
     )
     if exclude_id:
         query = query.where(ChangeControl.id != exclude_id)
     result = await db.execute(query.limit(1))
     return result.scalar_one_or_none() is not None
+
+
+async def list_change_codes_by_prefix(db: AsyncSession, prefix: str) -> list[str]:
+    """Return all persisted change codes matching the generated-code prefix."""
+    result = await db.execute(
+        select(ChangeControl.change_code).where(
+            ChangeControl.change_code.like(f"{_escape_like(prefix)}%", escape="\\")
+        )
+    )
+    return [code for code in result.scalars().all() if code]
 
 
 async def create_change(db: AsyncSession, data: dict[str, Any]) -> ChangeControl:
@@ -328,7 +370,7 @@ async def get_change_by_id(
     result = await db.execute(
         select(ChangeControl).where(
             ChangeControl.id == change_id,
-            ChangeControl.is_deleted == False,
+            ChangeControl.is_deleted.is_(False),
         )
     )
     return result.scalar_one_or_none()
@@ -340,26 +382,30 @@ async def get_change_by_code(
     result = await db.execute(
         select(ChangeControl).where(
             ChangeControl.change_code == change_code,
-            ChangeControl.is_deleted == False,
+            ChangeControl.is_deleted.is_(False),
         )
     )
     return result.scalar_one_or_none()
 
 
-async def list_change_codes_by_prefix(
-    db: AsyncSession, change_code_prefix: str
-) -> list[str]:
+async def get_change_by_code_include_deleted(
+    db: AsyncSession, change_code: str
+) -> ChangeControl | None:
+    """Find a change by code regardless of soft-delete status.
+
+    导入等场景需要检测软删除记录，避免唯一约束冲突：
+    软删除行仍占用 change_code 的唯一索引，直接 INSERT 会违反唯一约束。
+    """
     result = await db.execute(
-        select(ChangeControl.change_code).where(
-            ChangeControl.change_code.like(f"{change_code_prefix}%")
-        )
+        select(ChangeControl).where(ChangeControl.change_code == change_code)
     )
-    return [row[0] for row in result.all() if row[0]]
+    return result.scalar_one_or_none()
 
 
 async def get_changes(
     db: AsyncSession,
     change_code: str | None = None,
+    change_type: str | None = None,
     applicant_department: str | None = None,
     change_object: str | None = None,
     change_level: str | None = None,
@@ -374,13 +420,18 @@ async def get_changes(
     content_keyword: str | None = None,
     page: int = 1,
     page_size: int = 20,
+    scope: DepartmentScope | None = None,
 ) -> tuple[list[ChangeControl], int]:
-    query = select(ChangeControl).where(ChangeControl.is_deleted == False)
-    count_query = select(func.count()).select_from(ChangeControl).where(
-        ChangeControl.is_deleted == False
+    query = select(ChangeControl).where(ChangeControl.is_deleted.is_(False))
+    count_query = (
+        select(func.count())
+        .select_from(ChangeControl)
+        .where(ChangeControl.is_deleted.is_(False))
     )
 
     filters = []
+    if change_type:
+        filters.append(ChangeControl.change_type == change_type)
     if change_code:
         filters.append(
             ChangeControl.change_code.ilike(f"%{_escape_like(change_code)}%")
@@ -391,6 +442,14 @@ async def get_changes(
                 f"%{_escape_like(applicant_department)}%"
             )
         )
+    # 部门数据隔离（后台可配置可见部门范围）
+    scope_clause = (
+        department_in_clause(ChangeControl.applicant_department, scope)
+        if scope
+        else None
+    )
+    if scope_clause is not None:
+        filters.append(scope_clause)
     if change_object:
         filters.append(
             ChangeControl.change_object.ilike(f"%{_escape_like(change_object)}%")
@@ -406,9 +465,7 @@ async def get_changes(
             ChangeControl.planned_approval_date >= planned_approval_date_from
         )
     if planned_approval_date_to:
-        filters.append(
-            ChangeControl.planned_approval_date <= planned_approval_date_to
-        )
+        filters.append(ChangeControl.planned_approval_date <= planned_approval_date_to)
     if execution_date_from:
         filters.append(ChangeControl.execution_date >= execution_date_from)
     if execution_date_to:
@@ -428,11 +485,13 @@ async def get_changes(
 
     total = (await db.execute(count_query)).scalar_one()
 
-    query = query.order_by(ChangeControl.updated_at.desc()).offset(
-        (page - 1) * page_size
-    ).limit(page_size)
+    query = (
+        query.order_by(ChangeControl.updated_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
     result = await db.execute(query)
-    return result.scalars().all(), total
+    return list(result.scalars().all()), total
 
 
 async def update_change(
@@ -462,7 +521,7 @@ async def get_change_action_plan_counts_by_change_ids(
         )
         .where(
             ChangeActionPlan.change_id.in_(change_ids),
-            ChangeActionPlan.is_deleted == False,
+            ChangeActionPlan.is_deleted.is_(False),
         )
         .group_by(ChangeActionPlan.change_id)
     )
@@ -485,7 +544,7 @@ async def get_change_action_plan_by_id(
     result = await db.execute(
         select(ChangeActionPlan).where(
             ChangeActionPlan.id == plan_id,
-            ChangeActionPlan.is_deleted == False,
+            ChangeActionPlan.is_deleted.is_(False),
         )
     )
     return result.scalar_one_or_none()
@@ -497,7 +556,7 @@ async def get_change_action_plan_by_feishu_record_id(
     result = await db.execute(
         select(ChangeActionPlan).where(
             ChangeActionPlan.feishu_record_id == feishu_record_id,
-            ChangeActionPlan.is_deleted == False,
+            ChangeActionPlan.is_deleted.is_(False),
         )
     )
     return result.scalar_one_or_none()
@@ -515,7 +574,7 @@ async def get_change_action_plan_by_match_fields(
             ChangeActionPlan.change_code == change_code,
             ChangeActionPlan.project_name == project_name,
             ChangeActionPlan.related_work == related_work,
-            ChangeActionPlan.is_deleted == False,
+            ChangeActionPlan.is_deleted.is_(False),
         )
     )
     return result.scalar_one_or_none()
@@ -538,9 +597,11 @@ async def get_change_action_plans(
     page: int = 1,
     page_size: int = 20,
 ) -> tuple[list[ChangeActionPlan], int]:
-    query = select(ChangeActionPlan).where(ChangeActionPlan.is_deleted == False)
-    count_query = select(func.count()).select_from(ChangeActionPlan).where(
-        ChangeActionPlan.is_deleted == False
+    query = select(ChangeActionPlan).where(ChangeActionPlan.is_deleted.is_(False))
+    count_query = (
+        select(func.count())
+        .select_from(ChangeActionPlan)
+        .where(ChangeActionPlan.is_deleted.is_(False))
     )
 
     filters = []
@@ -582,11 +643,13 @@ async def get_change_action_plans(
         count_query = count_query.where(filter_condition)
 
     total = (await db.execute(count_query)).scalar_one()
-    query = query.order_by(ChangeActionPlan.updated_at.desc()).offset(
-        (page - 1) * page_size
-    ).limit(page_size)
+    query = (
+        query.order_by(ChangeActionPlan.updated_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
     result = await db.execute(query)
-    return result.scalars().all(), total
+    return list(result.scalars().all()), total
 
 
 async def update_change_action_plan(
@@ -598,9 +661,7 @@ async def update_change_action_plan(
     return plan
 
 
-async def delete_change_action_plan(
-    db: AsyncSession, plan: ChangeActionPlan
-) -> None:
+async def delete_change_action_plan(db: AsyncSession, plan: ChangeActionPlan) -> None:
     plan.is_deleted = True
     await db.flush()
 
@@ -620,7 +681,7 @@ async def get_deviation_investigation_push_record_by_id(
     result = await db.execute(
         select(DeviationInvestigationPushRecord).where(
             DeviationInvestigationPushRecord.id == record_id,
-            DeviationInvestigationPushRecord.is_deleted == False,
+            DeviationInvestigationPushRecord.is_deleted.is_(False),
         )
     )
     return result.scalar_one_or_none()
@@ -642,11 +703,13 @@ async def get_deviation_investigation_push_records(
     page_size: int = 20,
 ) -> tuple[list[DeviationInvestigationPushRecord], int]:
     query = select(DeviationInvestigationPushRecord).where(
-        DeviationInvestigationPushRecord.is_deleted == False
+        DeviationInvestigationPushRecord.is_deleted.is_(False)
     )
-    count_query = select(func.count()).select_from(
-        DeviationInvestigationPushRecord
-    ).where(DeviationInvestigationPushRecord.is_deleted == False)
+    count_query = (
+        select(func.count())
+        .select_from(DeviationInvestigationPushRecord)
+        .where(DeviationInvestigationPushRecord.is_deleted.is_(False))
+    )
 
     filters = []
     if deviation_id:
@@ -677,7 +740,9 @@ async def get_deviation_investigation_push_records(
             DeviationInvestigationPushRecord.qa_head_result == qa_head_result
         )
     if submitted_at_from:
-        filters.append(DeviationInvestigationPushRecord.submitted_at >= submitted_at_from)
+        filters.append(
+            DeviationInvestigationPushRecord.submitted_at >= submitted_at_from
+        )
     if submitted_at_to:
         filters.append(DeviationInvestigationPushRecord.submitted_at < submitted_at_to)
 
@@ -691,7 +756,7 @@ async def get_deviation_investigation_push_records(
         .offset((page - 1) * page_size)
         .limit(page_size)
     )
-    return result.scalars().all(), total
+    return list(result.scalars().all()), total
 
 
 async def get_latest_deviation_investigation_push_records_by_deviation_ids(
@@ -704,7 +769,7 @@ async def get_latest_deviation_investigation_push_records_by_deviation_ids(
     result = await db.execute(
         select(DeviationInvestigationPushRecord)
         .where(
-            DeviationInvestigationPushRecord.is_deleted == False,
+            DeviationInvestigationPushRecord.is_deleted.is_(False),
             DeviationInvestigationPushRecord.deviation_id.in_(deviation_ids),
         )
         .order_by(
@@ -733,7 +798,7 @@ async def get_deviation_investigation_push_record_by_deviation_and_round(
 ) -> DeviationInvestigationPushRecord | None:
     result = await db.execute(
         select(DeviationInvestigationPushRecord).where(
-            DeviationInvestigationPushRecord.is_deleted == False,
+            DeviationInvestigationPushRecord.is_deleted.is_(False),
             DeviationInvestigationPushRecord.deviation_id == deviation_id,
             DeviationInvestigationPushRecord.push_round == push_round,
         )
@@ -749,11 +814,11 @@ async def get_deviation_investigation_push_records_by_codes(
         return []
     result = await db.execute(
         select(DeviationInvestigationPushRecord).where(
-            DeviationInvestigationPushRecord.is_deleted == False,
+            DeviationInvestigationPushRecord.is_deleted.is_(False),
             DeviationInvestigationPushRecord.deviation_code.in_(deviation_codes),
         )
     )
-    return result.scalars().all()
+    return list(result.scalars().all())
 
 
 async def update_deviation_investigation_push_record(
@@ -763,7 +828,7 @@ async def update_deviation_investigation_push_record(
 ) -> DeviationInvestigationPushRecord:
     for key, value in data.items():
         setattr(record, key, value)
-    record.updated_at = datetime.now(timezone.utc)
+    record.updated_at = datetime.now(UTC)
     await db.flush()
     return record
 
@@ -777,13 +842,22 @@ async def create_capa_plan_track(
     return record
 
 
+async def delete_capa_plan_track(db: AsyncSession, track_id: uuid.UUID) -> None:
+    """软删除 CAPA 计划跟踪"""
+    record = await get_capa_plan_track_by_id(db, track_id)
+    if not record or record.is_deleted:
+        raise NotFoundException(resource="CAPA计划跟踪", resource_id=str(track_id))
+    record.is_deleted = True
+    await db.flush()
+
+
 async def get_capa_plan_track_by_id(
     db: AsyncSession, track_id: uuid.UUID
 ) -> CapaPlanTrack | None:
     result = await db.execute(
         select(CapaPlanTrack).where(
             CapaPlanTrack.id == track_id,
-            CapaPlanTrack.is_deleted == False,
+            CapaPlanTrack.is_deleted.is_(False),
         )
     )
     return result.scalar_one_or_none()
@@ -802,9 +876,11 @@ async def get_capa_plan_tracks(
     page: int = 1,
     page_size: int = 20,
 ) -> tuple[list[CapaPlanTrack], int]:
-    query = select(CapaPlanTrack).where(CapaPlanTrack.is_deleted == False)
-    count_query = select(func.count()).select_from(CapaPlanTrack).where(
-        CapaPlanTrack.is_deleted == False
+    query = select(CapaPlanTrack).where(CapaPlanTrack.is_deleted.is_(False))
+    count_query = (
+        select(func.count())
+        .select_from(CapaPlanTrack)
+        .where(CapaPlanTrack.is_deleted.is_(False))
     )
 
     filters = []
@@ -833,7 +909,7 @@ async def get_capa_plan_tracks(
         .offset((page - 1) * page_size)
         .limit(page_size)
     )
-    return result.scalars().all(), total
+    return list(result.scalars().all()), total
 
 
 async def get_capa_plan_tracks_by_capa_ids(
@@ -842,15 +918,16 @@ async def get_capa_plan_tracks_by_capa_ids(
 ) -> list[CapaPlanTrack]:
     if not capa_ids:
         return []
+
     result = await db.execute(
         select(CapaPlanTrack)
         .where(
-            CapaPlanTrack.is_deleted == False,
             CapaPlanTrack.capa_id.in_(capa_ids),
+            CapaPlanTrack.is_deleted.is_(False),
         )
-        .order_by(CapaPlanTrack.updated_at.desc())
+        .order_by(CapaPlanTrack.updated_at.desc(), CapaPlanTrack.created_at.desc())
     )
-    return result.scalars().all()
+    return list(result.scalars().all())
 
 
 async def update_capa_plan_track(
@@ -860,7 +937,7 @@ async def update_capa_plan_track(
 ) -> CapaPlanTrack:
     for key, value in data.items():
         setattr(track, key, value)
-    track.updated_at = datetime.now(timezone.utc)
+    track.updated_at = datetime.now(UTC)
     await db.flush()
     return track
 
@@ -872,7 +949,7 @@ async def get_department_contact_by_id(
     result = await db.execute(
         select(DepartmentContact).where(
             DepartmentContact.id == contact_id,
-            DepartmentContact.is_deleted == False,
+            DepartmentContact.is_deleted.is_(False),
         )
     )
     return result.scalar_one_or_none()
@@ -884,29 +961,41 @@ async def get_department_contact_by_department(
     result = await db.execute(
         select(DepartmentContact).where(
             DepartmentContact.department == department,
-            DepartmentContact.is_deleted == False,
+            DepartmentContact.is_deleted.is_(False),
         )
     )
     return result.scalar_one_or_none()
 
 
 async def get_department_contacts(
-    db: AsyncSession, page: int = 1, page_size: int = 20
+    db: AsyncSession,
+    page: int = 1,
+    page_size: int = 20,
+    scope: DepartmentScope | None = None,
 ) -> tuple[list[DepartmentContact], int]:
-    query = select(DepartmentContact).where(DepartmentContact.is_deleted == False)
+    query = select(DepartmentContact).where(DepartmentContact.is_deleted.is_(False))
     count_query = (
         select(func.count())
         .select_from(DepartmentContact)
-        .where(DepartmentContact.is_deleted == False)
+        .where(DepartmentContact.is_deleted.is_(False))
     )
+    # 部门数据隔离（后台可配置可见部门范围）
+    scope_clause = (
+        department_in_clause(DepartmentContact.department, scope) if scope else None
+    )
+    if scope_clause is not None:
+        query = query.where(scope_clause)
+        count_query = count_query.where(scope_clause)
 
     total = (await db.execute(count_query)).scalar_one()
 
-    query = query.order_by(DepartmentContact.department).offset(
-        (page - 1) * page_size
-    ).limit(page_size)
+    query = (
+        query.order_by(DepartmentContact.department)
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
     result = await db.execute(query)
-    return result.scalars().all(), total
+    return list(result.scalars().all()), total
 
 
 async def create_department_contact(
@@ -941,7 +1030,7 @@ async def get_weekly_confirmation_by_id(
     result = await db.execute(
         select(DepartmentWeeklyConfirmation).where(
             DepartmentWeeklyConfirmation.id == confirmation_id,
-            DepartmentWeeklyConfirmation.is_deleted == False,
+            DepartmentWeeklyConfirmation.is_deleted.is_(False),
         )
     )
     return result.scalar_one_or_none()
@@ -954,7 +1043,7 @@ async def get_weekly_confirmation_by_department_week(
         select(DepartmentWeeklyConfirmation).where(
             DepartmentWeeklyConfirmation.department == department,
             DepartmentWeeklyConfirmation.week_key == week_key,
-            DepartmentWeeklyConfirmation.is_deleted == False,
+            DepartmentWeeklyConfirmation.is_deleted.is_(False),
         )
     )
     return result.scalar_one_or_none()
@@ -968,12 +1057,12 @@ async def get_weekly_confirmations(
     page_size: int = 20,
 ) -> tuple[list[DepartmentWeeklyConfirmation], int]:
     query = select(DepartmentWeeklyConfirmation).where(
-        DepartmentWeeklyConfirmation.is_deleted == False
+        DepartmentWeeklyConfirmation.is_deleted.is_(False)
     )
     count_query = (
         select(func.count())
         .select_from(DepartmentWeeklyConfirmation)
-        .where(DepartmentWeeklyConfirmation.is_deleted == False)
+        .where(DepartmentWeeklyConfirmation.is_deleted.is_(False))
     )
 
     if department:
@@ -989,11 +1078,13 @@ async def get_weekly_confirmations(
 
     total = (await db.execute(count_query)).scalar_one()
 
-    query = query.order_by(DepartmentWeeklyConfirmation.confirmed_at.desc()).offset(
-        (page - 1) * page_size
-    ).limit(page_size)
+    query = (
+        query.order_by(DepartmentWeeklyConfirmation.confirmed_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
     result = await db.execute(query)
-    return result.scalars().all(), total
+    return list(result.scalars().all()), total
 
 
 async def create_weekly_confirmation(
@@ -1030,7 +1121,7 @@ async def get_attachment_review_by_id(
     result = await db.execute(
         select(AttachmentReview).where(
             AttachmentReview.id == review_id,
-            AttachmentReview.is_deleted == False,
+            AttachmentReview.is_deleted.is_(False),
         )
     )
     return result.scalar_one_or_none()
@@ -1044,11 +1135,11 @@ async def get_attachment_reviews(
     page: int = 1,
     page_size: int = 20,
 ) -> tuple[list[AttachmentReview], int]:
-    query = select(AttachmentReview).where(AttachmentReview.is_deleted == False)
+    query = select(AttachmentReview).where(AttachmentReview.is_deleted.is_(False))
     count_query = (
         select(func.count())
         .select_from(AttachmentReview)
-        .where(AttachmentReview.is_deleted == False)
+        .where(AttachmentReview.is_deleted.is_(False))
     )
 
     if deviation_id:
@@ -1065,11 +1156,13 @@ async def get_attachment_reviews(
 
     total = (await db.execute(count_query)).scalar_one()
 
-    query = query.order_by(AttachmentReview.review_time.desc()).offset(
-        (page - 1) * page_size
-    ).limit(page_size)
+    query = (
+        query.order_by(AttachmentReview.review_time.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
     result = await db.execute(query)
-    return result.scalars().all(), total
+    return list(result.scalars().all()), total
 
 
 async def create_attachment_review(
@@ -1090,9 +1183,7 @@ async def update_attachment_review(
     return review
 
 
-async def delete_attachment_review(
-    db: AsyncSession, review: AttachmentReview
-) -> None:
+async def delete_attachment_review(db: AsyncSession, review: AttachmentReview) -> None:
     review.is_deleted = True
     await db.flush()
 
@@ -1124,7 +1215,7 @@ async def get_related_capas_for_deviation(
     )
     query = (
         select(CAPA)
-        .where(CAPA.is_deleted == False)
+        .where(CAPA.is_deleted.is_(False))
         .where(
             or_(
                 CAPA.deviation_id == deviation_id,
@@ -1135,4 +1226,4 @@ async def get_related_capas_for_deviation(
         .order_by(priority.asc(), CAPA.updated_at.desc())
     )
     result = await db.execute(query)
-    return result.scalars().all()
+    return list(result.scalars().all())

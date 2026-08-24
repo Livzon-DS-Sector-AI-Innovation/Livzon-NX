@@ -7,7 +7,6 @@ import argparse
 import os
 from pathlib import Path
 
-
 EXCLUDED_DIRECTORIES = {
     ".git",
     ".mypy_cache",
@@ -45,8 +44,7 @@ def _instruction_files(root: Path, filename: str) -> list[Path]:
 
 def _imports_agents(claude_file: Path) -> bool:
     return IMPORT_LINE in {
-        line.strip()
-        for line in claude_file.read_text(encoding="utf-8").splitlines()
+        line.strip() for line in claude_file.read_text(encoding="utf-8").splitlines()
     }
 
 
@@ -71,7 +69,10 @@ def validate_bridges(root: Path) -> list[str]:
         agents_file = claude_file.with_name("AGENTS.md")
         if not agents_file.is_file():
             relative_claude = claude_file.relative_to(root).as_posix()
-            errors.append(f"{relative_claude}: imports missing same-directory AGENTS.md")
+            errors.append(
+                f"{relative_claude}: imports missing same-directory "
+                "AGENTS.md"
+            )
 
     return errors
 

@@ -33,7 +33,7 @@ class AIFillService:
         self.llm = llm_client
         self.extractor = AssetTextExtractor()
 
-    async def get_asset_categories(self, chapter_code: str) -> list[dict]:
+    async def get_asset_categories(self, chapter_code: str) -> list[dict[str, Any]]:
         """获取章节的素材分类列表"""
         stmt = (
             select(AssetCategory)
@@ -106,7 +106,10 @@ class AIFillService:
         if False:  # Config check handled by core.llm
             return {"success": False, "message": "LLM 服务未配置"}
 
-        mappings = await self.get_field_mappings(chapter.chapter_code)
+        chapter_code = chapter.chapter_code
+        if not chapter_code:
+            return {"success": False, "message": "章节编号为空"}
+        mappings = await self.get_field_mappings(chapter_code)
         if not mappings:
             return {
                 "success": False,
@@ -122,7 +125,7 @@ class AIFillService:
         fixed_fields = [m for m in mappings if m.source_type == "fixed"]
         image_fields = [m for m in mappings if m.source_type == "asset_image"]
 
-        results = []
+        results: list[dict[str, Any]] = []
 
         # 处理固定值字段
         for m in fixed_fields:
@@ -305,6 +308,8 @@ class AIFillService:
         user_confirmed_fields: list[dict[str, Any]],
     ) -> dict[str, Any]:
         """用户确认后，将字段值写入文档"""
+        if not dossier.working_path or not chapter.working_file:
+            return {"success": False, "message": "工作副本路径未配置"}
         working_path = Path(dossier.working_path) / chapter.working_file
         if not working_path.exists():
             return {
@@ -315,14 +320,14 @@ class AIFillService:
         doc = Document(str(working_path))
 
         # 获取模板结构（段落和表格）
-        template_paragraphs = [
+        template_paragraphs: list[dict[str, Any]] = [
             {"index": i, "text": p.text.strip()}
             for i, p in enumerate(doc.paragraphs)
             if p.text.strip()
         ]
-        template_tables = []
+        template_tables: list[dict[str, Any]] = []
         for t_idx, table in enumerate(doc.tables):
-            rows_data = [
+            rows_data: list[list[str]] = [
                 [cell.text.strip()[:30] for cell in row.cells] for row in table.rows[:5]
             ]
             template_tables.append(
@@ -341,7 +346,7 @@ class AIFillService:
             if f.get("value") is not None and f.get("field_type") != "image_appendix"
         ]
 
-        fill_instructions = []
+        fill_instructions: list[dict[str, Any]] = []
         if text_fields:
             _logger.info(
                 f"[Fill] Template has {len(template_paragraphs)} paragraphs, "
@@ -365,7 +370,12 @@ class AIFillService:
             )
             try:
                 parsed_result = await self.llm.chat_json(messages)
-                fill_instructions = parsed_result.get("fills", [])
+                fills_raw = parsed_result.get("fills", [])
+                fill_instructions = (
+                    [item for item in fills_raw if isinstance(item, dict)]
+                    if isinstance(fills_raw, list)
+                    else []
+                )
                 _logger.info(
                     f"[Fill] AI returned {len(fill_instructions)} fill instructions:"
                 )
@@ -467,7 +477,10 @@ class AIFillService:
         doc.save(str(working_path))
 
         # 保存填充结果到数据库
-        mappings = await self.get_field_mappings(chapter.chapter_code)
+        chapter_code = chapter.chapter_code
+        if not chapter_code:
+            return {"success": False, "message": "章节编号为空"}
+        mappings = await self.get_field_mappings(chapter_code)
         mapping_map = {str(m.id): m for m in mappings}
 
         for field_data in user_confirmed_fields:
@@ -528,7 +541,8 @@ class AIFillService:
         except LLMError as e:
             return {"success": False, "message": f"AI 拆分失败: {e}"}
 
-        pages = parsed_result.get("pages", [])
+        pages_raw = parsed_result.get("pages", [])
+        pages = pages_raw if isinstance(pages_raw, list) else []
 
         # 保存拆分结果到数据库
         for page_info in pages:
@@ -563,6 +577,8 @@ class AIFillService:
         splits: list[dict[str, Any]],
     ) -> dict[str, Any]:
         """用户确认页拆分后，将各页转为图片插入模板"""
+        if not dossier.working_path or not chapter.working_file:
+            return {"success": False, "message": "工作副本路径未配置"}
         working_path = Path(dossier.working_path) / chapter.working_file
         if not working_path.exists():
             return {"success": False, "message": "工作副本不存在"}
@@ -576,7 +592,7 @@ class AIFillService:
             asset_id = split_data.get("asset_id")
             page_number = split_data.get("page_number")
 
-            if not appendix_slot or not asset_id:
+            if not appendix_slot or not asset_id or not isinstance(page_number, int):
                 continue
 
             # 获取素材文件路径
@@ -731,7 +747,7 @@ class AIFillService:
 
         return None
 
-    def _execute_fill(self, doc: Document, instruction: dict, value: Any) -> bool:
+    def _execute_fill(self, doc: Any, instruction: dict[str, Any], value: Any) -> bool:
         """执行单个字段的文档填充"""
         action = instruction.get("fill_action")
         target = instruction.get("target", {})
@@ -748,7 +764,9 @@ class AIFillService:
         except Exception:
             return False
 
-    def _fill_paragraph_replace(self, doc: Document, target: dict, value: str) -> bool:
+    def _fill_paragraph_replace(
+        self, doc: Any, target: dict[str, Any], value: str
+    ) -> bool:
         """替换段落中冒号后的内容"""
         para_idx = target.get("paragraph_index")
         keyword = target.get("keyword", "")
@@ -784,7 +802,7 @@ class AIFillService:
                     return True
         return False
 
-    def _fill_table_cell(self, doc: Document, target: dict, value: str) -> bool:
+    def _fill_table_cell(self, doc: Any, target: dict[str, Any], value: str) -> bool:
         """填充表格中关键词对应的单元格"""
         table_idx = target.get("table_index", 0)
         keyword = target.get("keyword", "")
@@ -800,7 +818,7 @@ class AIFillService:
         table = tables[table_idx]
         return self._fill_in_table(table, keyword, str(value))
 
-    def _fill_in_table(self, table, keyword: str, value: str) -> bool:
+    def _fill_in_table(self, table: Any, keyword: str, value: str) -> bool:
         """在表格中查找关键词并填充下一个单元格"""
         for row in table.rows:
             cells = list(row.cells)
@@ -818,7 +836,7 @@ class AIFillService:
                     return True
         return False
 
-    def _fill_table_rows(self, doc: Document, target: dict, value: Any) -> bool:
+    def _fill_table_rows(self, doc: Any, target: dict[str, Any], value: Any) -> bool:
         """替换表格数据行（用于完整表格字段）"""
         from copy import deepcopy
 
@@ -907,10 +925,10 @@ class AIFillService:
         return True
 
     def _fallback_fill(
-        self, doc: Document, field_name: str, value: Any, field_type: str
+        self, doc: Any, field_name: str, value: Any, field_type: str
     ) -> bool:
         """Fallback 填充策略：当 AI 未返回填充指令时，按关键词在文档中查找"""
-        str_value = str(value) if not isinstance(value, (list, dict)) else value
+        str_value = str(value)
 
         if field_type == "table" and isinstance(value, list):
             # 尝试在所有表格中查找
@@ -945,7 +963,7 @@ class AIFillService:
 
     async def _auto_insert_image(
         self,
-        doc: Document,
+        doc: Any,
         field_name: str,
         field_data: dict[str, Any],
         chapter: DossierChapter,
@@ -1067,7 +1085,7 @@ class AIFillService:
         return success
 
     def _insert_image_at_appendix(
-        self, doc: Document, appendix_slot: str, img_path: Path
+        self, doc: Any, appendix_slot: str, img_path: Path
     ) -> bool:
         """在模板的附录位置插入图片"""
         from docx.shared import Cm

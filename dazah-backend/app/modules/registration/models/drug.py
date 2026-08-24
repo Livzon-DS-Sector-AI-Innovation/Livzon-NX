@@ -3,7 +3,14 @@
 import uuid
 from datetime import date
 
-from sqlalchemy import CheckConstraint, Date, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import (
+    CheckConstraint,
+    Date,
+    ForeignKey,
+    Integer,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.shared.base_model import BaseModel
@@ -21,15 +28,11 @@ class Drug(BaseModel):
         {"schema": "registration"},
     )
 
-    name: Mapped[str] = mapped_column(
-        String(255), comment="药品名称"
-    )
+    name: Mapped[str] = mapped_column(String(255), comment="药品名称")
     type: Mapped[str] = mapped_column(
         String(20), comment="药品类型：仿制药/创新药/原料药"
     )
-    acceptance_date: Mapped[date] = mapped_column(
-        Date, comment="受理日期"
-    )
+    acceptance_date: Mapped[date] = mapped_column(Date, comment="受理日期")
     current_node: Mapped[int] = mapped_column(
         Integer, default=0, comment="当前审评节点"
     )
@@ -48,7 +51,9 @@ class DrugNode(BaseModel):
     __tablename__ = "drug_nodes"
     __table_args__ = (
         UniqueConstraint(
-            "drug_id", "node_index", "is_deleted",
+            "drug_id",
+            "node_index",
+            "is_deleted",
             name="uq_drug_nodes_drug_node",
         ),
         {"schema": "registration"},
@@ -58,9 +63,7 @@ class DrugNode(BaseModel):
         ForeignKey("registration.drugs.id", ondelete="CASCADE"),
         comment="药品ID",
     )
-    node_index: Mapped[int] = mapped_column(
-        Integer, comment="节点序号（1-10）"
-    )
+    node_index: Mapped[int] = mapped_column(Integer, comment="节点序号（1-10）")
     actual_date: Mapped[date | None] = mapped_column(
         Date, nullable=True, comment="实际完成日期"
     )
@@ -84,12 +87,8 @@ class Holiday(BaseModel):
         {"schema": "registration"},
     )
 
-    year: Mapped[int] = mapped_column(
-        Integer, comment="年份"
-    )
-    date: Mapped[date] = mapped_column(
-        Date, comment="日期"
-    )
+    year: Mapped[int] = mapped_column(Integer, comment="年份")
+    date: Mapped[date] = mapped_column(Date, comment="日期")
     type: Mapped[str] = mapped_column(
         String(20), comment="类型：holiday(节假日)/makeup(补班日)"
     )

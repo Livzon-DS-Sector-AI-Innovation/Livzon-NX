@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -11,6 +12,10 @@ class QualityFeishuAppSettingsDetail(BaseModel):
     app_id: str = ""
     app_secret_masked: str | None = None
     is_enabled: bool = False
+    deviation_report_form_url: str | None = None
+    deviation_investigation_push_form_url: str | None = None
+    oos_oot_report_form_url: str | None = None
+    oos_oot_investigation_push_form_url: str | None = None
     last_test_status: str | None = None
     last_test_error: str | None = None
     last_tested_at: datetime | None = None
@@ -20,6 +25,10 @@ class UpdateQualityFeishuAppSettingsRequest(BaseModel):
     app_id: str = ""
     app_secret: str = ""
     is_enabled: bool = True
+    deviation_report_form_url: str | None = None
+    deviation_investigation_push_form_url: str | None = None
+    oos_oot_report_form_url: str | None = None
+    oos_oot_investigation_push_form_url: str | None = None
 
 
 class QualityFeishuEntitySettingItem(BaseModel):
@@ -33,7 +42,7 @@ class QualityFeishuEntitySettingItem(BaseModel):
     is_enabled: bool = False
     enable_push_to_feishu: bool = False
     enable_pull_from_feishu: bool = False
-    field_mappings: list["QualityFeishuFieldMappingItem"] = Field(default_factory=list)
+    field_mappings: list[QualityFeishuFieldMappingItem] = Field(default_factory=list)
     sort_order: int = 0
     last_sync_status: str | None = None
     last_sync_error: str | None = None
@@ -42,7 +51,7 @@ class QualityFeishuEntitySettingItem(BaseModel):
     @field_validator("field_mappings", mode="before")
     @classmethod
     def _normalize_field_mappings(
-        cls,
+        cls: Any,
         value: object,
     ) -> list[object]:
         if value is None:

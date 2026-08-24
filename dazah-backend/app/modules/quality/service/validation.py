@@ -2,25 +2,25 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
-from datetime import date, timedelta
 from typing import Any
 
-from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import NotFoundException
 from app.modules.quality.repository import validation as repository
 from app.modules.quality.repository import validation_execution as execution_repository
-from app.modules.quality.models.validation_record import ValidationRecord
 from app.modules.quality.schemas.validation import (
     CreateValidationRequest,
+    UpdateValidationExecutionRequest,
     UpdateValidationRequest,
     ValidationDetail,
     ValidationExecutionListItem,
     ValidationListItem,
-    UpdateValidationExecutionRequest,
 )
-from app.modules.quality.schemas import ValidationStatistics
+
+logger = logging.getLogger(__name__)
 
 
 def _build_validation_payload(record: Any) -> dict[str, Any]:
@@ -90,7 +90,10 @@ async def get_validation_list(
         page_size=page_size,
     )
     return {
-        "items": [ValidationListItem(**_build_validation_payload(item)).model_dump() for item in items],
+        "items": [
+            ValidationListItem(**_build_validation_payload(item)).model_dump()
+            for item in items
+        ],
         "total": total,
         "page": page,
         "page_size": page_size,
@@ -122,11 +125,8 @@ async def create_validation(
 
     record = await repository.create_validation(db, payload)
     await execution_repository.upsert_execution_record_from_master(db, record)
-    record_id = record.id
     await db.commit()
-    record = await repository.get_validation_by_id(db, record_id)
-    if not record:
-        raise ValueError(f"Validation {record_id} not found")
+
     return ValidationDetail(**_build_validation_payload(record)).model_dump()
 
 
@@ -153,15 +153,9 @@ async def update_validation(
         payload["updated_by"] = uuid.UUID(user_id)
 
     updated = await repository.update_validation(db, record, payload)
-    updated = await repository.get_validation_by_id(db, updated.id)
-    if not updated:
-        raise ValueError(f"Validation {validation_id} not found")
     await execution_repository.upsert_execution_record_from_master(db, updated)
-    updated_id = updated.id
     await db.commit()
-    updated = await repository.get_validation_by_id(db, updated_id)
-    if not updated:
-        raise ValueError(f"Validation {updated_id} not found")
+
     return ValidationDetail(**_build_validation_payload(updated)).model_dump()
 
 
@@ -181,6 +175,7 @@ async def batch_delete_validations(
     for record in records:
         await execution_repository.delete_execution_records_for_master(db, record.id)
     await db.commit()
+
     return {"deleted": len(records)}
 
 
@@ -195,6 +190,7 @@ async def delete_validation(
     await repository.delete_validation(db, record)
     await execution_repository.delete_execution_records_for_master(db, validation_id)
     await db.commit()
+
     return {"success": True}
 
 
@@ -269,9 +265,11 @@ async def update_validation_execution(
     data: UpdateValidationExecutionRequest,
     user_id: str,
 ) -> dict[str, Any]:
-    record = await execution_repository.get_execution_record(db, validation_type, record_id)
+    record = await execution_repository.get_execution_record(
+        db, validation_type, record_id
+    )
     if not record:
-        raise ValueError(f"Validation execution {record_id} not found")
+        raise NotFoundException(resource="验证执行记录", resource_id=str(record_id))
 
     update_data = data.model_dump(exclude_unset=True)
     if user_id != "system":
@@ -283,85 +281,48 @@ async def update_validation_execution(
         record,
         update_data,
     )
-    updated_id = updated.id
-    master_validation_id = updated.master_validation_id
     await db.commit()
-    updated = await execution_repository.get_execution_record(
-        db,
-        validation_type,
-        updated_id,
+    master_record = await repository.get_validation_by_id(
+        db, updated.master_validation_id
     )
-    if not updated:
-        raise ValueError(f"Validation execution {updated_id} not found")
-    master_record = await repository.get_validation_by_id(db, master_validation_id)
     if not master_record:
-        raise ValueError(f"Validation {master_validation_id} not found")
+        raise NotFoundException(
+            resource="验证记录", resource_id=str(updated.master_validation_id)
+        )
     return ValidationExecutionListItem(
         **_build_execution_payload(updated, master_record)
     ).model_dump()
 
 
-async def get_validation_statistics(db: AsyncSession) -> ValidationStatistics:
-    total = (
-        await db.execute(
-            select(func.count())
-            .select_from(ValidationRecord)
-            .where(ValidationRecord.is_deleted == False)
-        )
-    ).scalar_one()
+async def get_validation_statistics(
+    db: AsyncSession,
+) -> dict[str, Any]:
+    """Return basic validation statistics from local database."""
+    from sqlalchemy import func, select
 
-    type_rows = (
+    from app.modules.quality.models.validation_record import ValidationRecord
+
+    base = select(ValidationRecord).where(ValidationRecord.is_deleted.is_(False))
+    total = (
+        await db.execute(select(func.count()).select_from(base.subquery()))
+    ).scalar_one()
+    by_type_rows = (
         await db.execute(
             select(ValidationRecord.record_type, func.count())
-            .where(ValidationRecord.is_deleted == False)
+            .where(ValidationRecord.is_deleted.is_(False))
             .group_by(ValidationRecord.record_type)
         )
     ).all()
-    type_distribution = [
-        {"validation_type": row[0] or "unknown", "count": row[1]}
-        for row in type_rows
-    ]
-
-    status_rows = (
+    by_status_rows = (
         await db.execute(
             select(ValidationRecord.status, func.count())
-            .where(ValidationRecord.is_deleted == False)
+            .where(ValidationRecord.is_deleted.is_(False))
             .group_by(ValidationRecord.status)
         )
     ).all()
-    status_distribution = [
-        {"status": row[0] or "unknown", "count": row[1]}
-        for row in status_rows
-    ]
 
-    execution_distribution: list[dict[str, Any]] = []
-    for validation_type, model in execution_repository.EXECUTION_MODEL_MAP.items():
-        count = (
-            await db.execute(
-                select(func.count())
-                .select_from(model)
-                .where(model.is_deleted == False)
-            )
-        ).scalar_one()
-        execution_distribution.append({"validation_type": validation_type, "count": count})
-
-    upcoming_deadline = date.today() + timedelta(days=30)
-    revalidation_upcoming = (
-        await db.execute(
-            select(func.count())
-            .select_from(ValidationRecord)
-            .where(
-                ValidationRecord.is_deleted == False,
-                ValidationRecord.planned_end_date.is_not(None),
-                ValidationRecord.planned_end_date <= upcoming_deadline,
-            )
-        )
-    ).scalar_one()
-
-    return ValidationStatistics(
-        total=total,
-        typeDistribution=type_distribution,
-        statusDistribution=status_distribution,
-        executionDistribution=execution_distribution,
-        revalidationUpcoming=revalidation_upcoming,
-    )
+    return {
+        "total": total,
+        "by_type": {row[0]: row[1] for row in by_type_rows},
+        "by_status": {row[0] or "未设置": row[1] for row in by_status_rows},
+    }

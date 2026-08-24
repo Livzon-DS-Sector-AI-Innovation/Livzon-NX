@@ -10,6 +10,8 @@ export type LLMConfig = components['schemas']['LLMConfigResponse']
 export type LLMConfigFormData = components['schemas']['LLMConfigCreate']
 export type LLMConfigUpdate = components['schemas']['LLMConfigUpdate']
 export type LLMCapabilityDetection = components['schemas']['LLMCapabilityDetectionResponse']
+export type LLMConfigProbeRequest = components['schemas']['LLMConfigProbeRequest']
+export type LLMConfigProbeResponse = components['schemas']['LLMConfigProbeResponse']
 export type FeishuConfig = components['schemas']['FeishuConfigResponse']
 export type FeishuConfigUpsert = components['schemas']['FeishuConfigUpsert']
 export type AgentMemoryTenantPolicy =
@@ -234,6 +236,13 @@ export async function testLLMConnection() {
 export async function testLLMConfig(id: string) {
   return fetchApi<LLMCapabilityDetection>(`/llm/configs/${id}/test`, {
     method: 'POST',
+  })
+}
+
+export async function probeLLMConfig(data: LLMConfigProbeRequest) {
+  return fetchApi<LLMConfigProbeResponse>('/llm/configs/probe', {
+    method: 'POST',
+    body: JSON.stringify(data),
   })
 }
 

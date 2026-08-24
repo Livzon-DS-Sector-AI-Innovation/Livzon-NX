@@ -1,12 +1,16 @@
 import type { components } from '@/types/generated/schema'
+import type {
+  OosOotRecordListResponse as LocalOosOotRecordListResponse,
+  OotLimitProductListResponse as LocalOotLimitProductListResponse,
+  OotLimitItemListResponse as LocalOotLimitItemListResponse,
+} from '@/types/quality'
 
 export type OosOotRecord = components['schemas']['OosOotRecordOut']
-export type OosOotRecordListResponse = components['schemas']['OosOotRecordListResponse']
+export type OosOotRecordListResponse = LocalOosOotRecordListResponse
 export type OotLimitProduct = components['schemas']['OotLimitProductOut']
-export type OotLimitProductListResponse =
-  components['schemas']['OotLimitProductListResponse']
+export type OotLimitProductListResponse = LocalOotLimitProductListResponse
 export type OotLimitItem = components['schemas']['OotLimitItemOut']
-export type OotLimitItemListResponse = components['schemas']['OotLimitItemListResponse']
+export type OotLimitItemListResponse = LocalOotLimitItemListResponse
 
 async function oosOotGet<T>(path: string): Promise<T> {
   const response = await fetch(path, { cache: 'no-store' })

@@ -2,12 +2,13 @@
 
 import uuid
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
+from typing import Any
 
 from pydantic import BaseModel, Field
 
 
-class ContractorStatus(str, Enum):
+class ContractorStatus(StrEnum):
     """承包商状态枚举"""
 
     ACTIVE = "active"
@@ -22,7 +23,7 @@ CONTRACTOR_STATUS_OPTIONS = [
 ]
 
 
-class QualificationTypeEnum(str, Enum):
+class QualificationTypeEnum(StrEnum):
     """承包资质类型枚举"""
 
     CONSTRUCTION = "construction"
@@ -43,7 +44,7 @@ QUALIFICATION_TYPE_OPTIONS = [
 ]
 
 
-class QualificationLevelEnum(str, Enum):
+class QualificationLevelEnum(StrEnum):
     """资质等级枚举"""
 
     GRADE_A = "grade_a"
@@ -58,7 +59,7 @@ QUALIFICATION_LEVEL_OPTIONS = [
 ]
 
 
-class ContractorTrainingStatusEnum(str, Enum):
+class ContractorTrainingStatusEnum(StrEnum):
     """承包商培训状态枚举"""
 
     UNTRAINED = "untrained"
@@ -68,14 +69,22 @@ class ContractorTrainingStatusEnum(str, Enum):
 
 
 CONTRACTOR_TRAINING_STATUS_OPTIONS = [
-    {"value": ContractorTrainingStatusEnum.UNTRAINED, "label": "未培训", "color": "default"},
-    {"value": ContractorTrainingStatusEnum.IN_PROGRESS, "label": "培训中", "color": "processing"},
+    {
+        "value": ContractorTrainingStatusEnum.UNTRAINED,
+        "label": "未培训",
+        "color": "default",
+    },
+    {
+        "value": ContractorTrainingStatusEnum.IN_PROGRESS,
+        "label": "培训中",
+        "color": "processing",
+    },
     {"value": ContractorTrainingStatusEnum.PASSED, "label": "已通过", "color": "green"},
     {"value": ContractorTrainingStatusEnum.EXPIRED, "label": "已过期", "color": "red"},
 ]
 
 
-class WorkRecordStatusEnum(str, Enum):
+class WorkRecordStatusEnum(StrEnum):
     """施工记录状态枚举"""
 
     IN_PROGRESS = "in_progress"
@@ -84,7 +93,11 @@ class WorkRecordStatusEnum(str, Enum):
 
 
 WORK_RECORD_STATUS_OPTIONS = [
-    {"value": WorkRecordStatusEnum.IN_PROGRESS, "label": "施工中", "color": "processing"},
+    {
+        "value": WorkRecordStatusEnum.IN_PROGRESS,
+        "label": "施工中",
+        "color": "processing",
+    },
     {"value": WorkRecordStatusEnum.COMPLETED, "label": "已完成", "color": "green"},
     {"value": WorkRecordStatusEnum.EVALUATED, "label": "已评价", "color": "blue"},
 ]
@@ -98,26 +111,43 @@ class ContractorBase(BaseModel):
 
     contractor_no: str = Field(..., max_length=64, description="承包商编号")
     company_name: str = Field(..., max_length=255, description="公司名称")
-    legal_representative: str | None = Field(None, max_length=100, description="法定代表人")
+    legal_representative: str | None = Field(
+        None, max_length=100, description="法定代表人"
+    )
     contact_person: str = Field(..., max_length=100, description="联系人")
     contact_phone: str | None = Field(None, max_length=20, description="联系电话")
     business_scope: str | None = Field(None, description="经营范围")
-    qualification_type: QualificationTypeEnum = Field(QualificationTypeEnum.OTHER, description="资质类型")
-    qualification_level: QualificationLevelEnum | None = Field(None, description="资质等级")
-    qualification_cert_no: str | None = Field(None, max_length=100, description="资质证书编号")
+    qualification_type: QualificationTypeEnum = Field(
+        QualificationTypeEnum.OTHER, description="资质类型"
+    )
+    qualification_level: QualificationLevelEnum | None = Field(
+        None, description="资质等级"
+    )
+    qualification_cert_no: str | None = Field(
+        None, max_length=100, description="资质证书编号"
+    )
     qualification_expiry: datetime | None = Field(None, description="资质有效期至")
-    safety_license_no: str | None = Field(None, max_length=100, description="安全生产许可证编号")
-    safety_license_expiry: datetime | None = Field(None, description="安全生产许可证有效期")
+    safety_license_no: str | None = Field(
+        None, max_length=100, description="安全生产许可证编号"
+    )
+    safety_license_expiry: datetime | None = Field(
+        None, description="安全生产许可证有效期"
+    )
     insurance_info: str | None = Field(None, description="保险信息")
     insurance_expiry: datetime | None = Field(None, description="保险有效期至")
-    safety_officer_name: str | None = Field(None, max_length=100, description="安全负责人")
-    safety_officer_phone: str | None = Field(None, max_length=20, description="安全负责人电话")
-    special_op_personnel: list | None = Field(None, description="特种作业人员列表")
+    safety_officer_name: str | None = Field(
+        None, max_length=100, description="安全负责人"
+    )
+    safety_officer_phone: str | None = Field(
+        None, max_length=20, description="安全负责人电话"
+    )
+    special_op_personnel: list[Any] | None = Field(None, description="特种作业人员列表")
     notes: str | None = Field(None, description="备注")
 
 
 class ContractorCreate(ContractorBase):
     """创建承包商"""
+
     pass
 
 
@@ -126,24 +156,44 @@ class ContractorUpdate(BaseModel):
 
     contractor_no: str | None = Field(None, max_length=64, description="承包商编号")
     company_name: str | None = Field(None, max_length=255, description="公司名称")
-    legal_representative: str | None = Field(None, max_length=100, description="法定代表人")
+    legal_representative: str | None = Field(
+        None, max_length=100, description="法定代表人"
+    )
     contact_person: str | None = Field(None, max_length=100, description="联系人")
     contact_phone: str | None = Field(None, max_length=20, description="联系电话")
     business_scope: str | None = Field(None, description="经营范围")
-    qualification_type: QualificationTypeEnum | None = Field(None, description="资质类型")
-    qualification_level: QualificationLevelEnum | None = Field(None, description="资质等级")
-    qualification_cert_no: str | None = Field(None, max_length=100, description="资质证书编号")
+    qualification_type: QualificationTypeEnum | None = Field(
+        None, description="资质类型"
+    )
+    qualification_level: QualificationLevelEnum | None = Field(
+        None, description="资质等级"
+    )
+    qualification_cert_no: str | None = Field(
+        None, max_length=100, description="资质证书编号"
+    )
     qualification_expiry: datetime | None = Field(None, description="资质有效期至")
-    safety_license_no: str | None = Field(None, max_length=100, description="安全生产许可证编号")
-    safety_license_expiry: datetime | None = Field(None, description="安全生产许可证有效期")
+    safety_license_no: str | None = Field(
+        None, max_length=100, description="安全生产许可证编号"
+    )
+    safety_license_expiry: datetime | None = Field(
+        None, description="安全生产许可证有效期"
+    )
     insurance_info: str | None = Field(None, description="保险信息")
     insurance_expiry: datetime | None = Field(None, description="保险有效期至")
-    safety_officer_name: str | None = Field(None, max_length=100, description="安全负责人")
-    safety_officer_phone: str | None = Field(None, max_length=20, description="安全负责人电话")
-    special_op_personnel: list | None = Field(None, description="特种作业人员列表")
-    training_status: ContractorTrainingStatusEnum | None = Field(None, description="培训状态")
+    safety_officer_name: str | None = Field(
+        None, max_length=100, description="安全负责人"
+    )
+    safety_officer_phone: str | None = Field(
+        None, max_length=20, description="安全负责人电话"
+    )
+    special_op_personnel: list[Any] | None = Field(None, description="特种作业人员列表")
+    training_status: ContractorTrainingStatusEnum | None = Field(
+        None, description="培训状态"
+    )
     training_date: datetime | None = Field(None, description="最近培训日期")
-    safety_performance_score: int | None = Field(None, ge=0, le=100, description="安全绩效评分")
+    safety_performance_score: int | None = Field(
+        None, ge=0, le=100, description="安全绩效评分"
+    )
     status: ContractorStatus | None = Field(None, description="状态")
     notes: str | None = Field(None, description="备注")
 
@@ -180,13 +230,14 @@ class ContractorWorkRecordBase(BaseModel):
     leading_person: str | None = Field(None, max_length=100, description="带班负责人")
     worker_count: int | None = Field(None, ge=0, description="施工人数")
     safety_briefing_done: bool = Field(False, description="安全交底确认")
-    violations: list | None = Field(None, description="违章记录")
-    evaluation: dict | None = Field(None, description="评价")
+    violations: list[Any] | None = Field(None, description="违章记录")
+    evaluation: dict[str, Any] | None = Field(None, description="评价")
     notes: str | None = Field(None, description="备注")
 
 
 class ContractorWorkRecordCreate(ContractorWorkRecordBase):
     """创建施工记录"""
+
     pass
 
 
@@ -200,7 +251,7 @@ class ContractorWorkRecordUpdate(BaseModel):
     leading_person: str | None = Field(None, max_length=100, description="带班负责人")
     worker_count: int | None = Field(None, ge=0, description="施工人数")
     safety_briefing_done: bool | None = Field(None, description="安全交底确认")
-    violations: list | None = Field(None, description="违章记录")
+    violations: list[Any] | None = Field(None, description="违章记录")
     status: WorkRecordStatusEnum | None = Field(None, description="状态")
     notes: str | None = Field(None, description="备注")
 
@@ -224,5 +275,3 @@ class EvaluateWorkRecordRequest(BaseModel):
     score: int = Field(..., ge=0, le=100, description="评分")
     comments: str | None = Field(None, description="评价意见")
     evaluator: str | None = Field(None, max_length=100, description="评价人")
-
-

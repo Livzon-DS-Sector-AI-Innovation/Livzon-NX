@@ -5,17 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import (
-    Boolean,
-    Date,
-    DateTime,
-    Index,
-    String,
-    Text,
-    UniqueConstraint,
-    Uuid,
-    true,
-)
+from sqlalchemy import Boolean, Date, DateTime, String, Text, Uuid, true
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.shared.base_model import BaseModel
@@ -23,20 +13,13 @@ from app.shared.base_model import BaseModel
 
 class ChangeActionPlan(BaseModel):
     __tablename__ = "quality_change_action_plans"
-    __table_args__ = (
-        Index("ix_quality_change_action_plans_change_code", "change_code"),
-        UniqueConstraint(
-            "feishu_record_id",
-            name="uq_quality_change_action_plans_feishu_record_id",
-        ),
-        {"schema": "quality"},
-    )
+    __table_args__ = {"schema": "quality"}
 
     change_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True),
         nullable=True,
     )
-    change_code: Mapped[str] = mapped_column(String(100), nullable=False)
+    change_code: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     project_name: Mapped[str] = mapped_column(String(255), nullable=False)
     related_work: Mapped[str | None] = mapped_column(Text, nullable=True)
     owner_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
@@ -50,6 +33,7 @@ class ChangeActionPlan(BaseModel):
     feishu_record_id: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
+        unique=True,
     )
     sync_status: Mapped[str] = mapped_column(
         String(20),

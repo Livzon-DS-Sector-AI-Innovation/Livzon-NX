@@ -1,7 +1,8 @@
 """Unit tests for the shared scheduler primitives and execution engine."""
 
 from datetime import UTC, datetime, timedelta
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
+from typing import Any
 
 import pytest
 
@@ -18,6 +19,8 @@ from app.platform.scheduler.registry import (
 )
 from app.platform.scheduler.strategies import is_due
 
+SimpleNamespace: Any = _SimpleNamespace
+
 
 async def _noop() -> None:
     return None
@@ -26,21 +29,21 @@ async def _noop() -> None:
 class FakeGenerator(TaskGenerator):
     name = "fake-generator"
 
-    def __init__(self, items: list[str] | None = None) -> None:
+    def __init__(self: Any, items: list[str] | None = None) -> None:
         self.items = items or []
         self.executed: list[str] = []
 
-    async def find_due(self, _session):
+    async def find_due(self: Any, _session: Any) -> Any:
         return self.items
 
-    async def execute_one(self, _session, item) -> None:
+    async def execute_one(self: Any, _session: Any, item: Any) -> None:
         self.executed.append(item)
 
 
 def test_registry_rejects_duplicates_and_returns_copies() -> None:
     registry = SchedulerRegistry()
     task = TaskDefinition("task", ScheduleConfig(), _noop)
-    generator = FakeGenerator()
+    generator: Any = FakeGenerator()
     registry.register_task(task)
     registry.register_generator(generator)
 
@@ -115,7 +118,9 @@ def test_action_handler_registry() -> None:
         ),
     ],
 )
-def test_schedule_strategies(schedule, last_run, now, expected) -> None:
+def test_schedule_strategies(
+    schedule: Any, last_run: Any, now: Any, expected: Any
+) -> None:
     assert is_due(schedule, last_run, now) is expected
 
 
@@ -130,7 +135,7 @@ def test_engine_tick_interval_validation_and_stop() -> None:
 
 
 @pytest.mark.asyncio
-async def test_engine_runs_due_task_and_honors_switches(monkeypatch) -> None:
+async def test_engine_runs_due_task_and_honors_switches(monkeypatch: Any) -> None:
     calls: list[str] = []
 
     async def record() -> None:
@@ -175,24 +180,24 @@ async def test_engine_contains_task_failures() -> None:
 
 
 @pytest.mark.asyncio
-async def test_engine_processes_generator_items_and_commits(monkeypatch) -> None:
+async def test_engine_processes_generator_items_and_commits(monkeypatch: Any) -> None:
     class Session:
         committed = False
 
-        async def commit(self) -> None:
+        async def commit(self: Any) -> None:
             self.committed = True
 
     session = Session()
 
     class SessionContext:
-        async def __aenter__(self):
+        async def __aenter__(self: Any) -> Any:
             return session
 
-        async def __aexit__(self, *_args):
+        async def __aexit__(self: Any, *_args: Any) -> Any:
             return False
 
     monkeypatch.setattr(engine_module, "async_session_factory", SessionContext)
-    generator = FakeGenerator(["a", "b"])
+    generator: Any = FakeGenerator(["a", "b"])
     engine = SchedulerEngine(SchedulerRegistry())
     await engine._maybe_run_generator(generator, SimpleNamespace())
 
@@ -201,22 +206,22 @@ async def test_engine_processes_generator_items_and_commits(monkeypatch) -> None
 
 
 @pytest.mark.asyncio
-async def test_engine_generator_switches_and_item_failure(monkeypatch) -> None:
+async def test_engine_generator_switches_and_item_failure(monkeypatch: Any) -> None:
     class FailingGenerator(FakeGenerator):
-        async def execute_one(self, _session, item) -> None:
+        async def execute_one(self: Any, _session: Any, item: Any) -> None:
             if item == "bad":
                 raise RuntimeError("bad item")
             await super().execute_one(_session, item)
 
     class Session:
-        async def commit(self) -> None:
+        async def commit(self: Any) -> None:
             return None
 
     class SessionContext:
-        async def __aenter__(self):
+        async def __aenter__(self: Any) -> Any:
             return Session()
 
-        async def __aexit__(self, *_args):
+        async def __aexit__(self: Any, *_args: Any) -> Any:
             return False
 
     monkeypatch.setattr(engine_module, "async_session_factory", SessionContext)
@@ -234,27 +239,27 @@ async def test_engine_generator_switches_and_item_failure(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_engine_run_completes_one_tick_and_stops(monkeypatch) -> None:
+async def test_engine_run_completes_one_tick_and_stops(monkeypatch: Any) -> None:
     engine = SchedulerEngine(SchedulerRegistry())
 
-    async def stop_on_wait(awaitable, *, timeout):
+    async def stop_on_wait(awaitable: Any, *, timeout: Any) -> Any:
         awaitable.close()
         engine.stop()
 
-    monkeypatch.setattr(engine_module.asyncio, "wait_for", stop_on_wait)
+    monkeypatch.setattr(engine_module.asyncio, "wait_for", stop_on_wait)  # type: ignore[attr-defined]
     await engine.run()
 
 
 @pytest.mark.asyncio
-async def test_engine_contains_task_timeout(monkeypatch) -> None:
+async def test_engine_contains_task_timeout(monkeypatch: Any) -> None:
     async def never_finishes() -> None:
         return None
 
-    async def timeout(awaitable, *, timeout):
+    async def timeout(awaitable: Any, *, timeout: Any) -> Any:
         awaitable.close()
         raise TimeoutError
 
-    monkeypatch.setattr(engine_module.asyncio, "wait_for", timeout)
+    monkeypatch.setattr(engine_module.asyncio, "wait_for", timeout)  # type: ignore[attr-defined]
     engine = SchedulerEngine(SchedulerRegistry())
     await engine._maybe_run_task(
         TaskDefinition("timeout", ScheduleConfig(), never_finishes),
@@ -265,17 +270,17 @@ async def test_engine_contains_task_timeout(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_engine_contains_generator_find_and_commit_failures(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     class Session:
-        async def commit(self) -> None:
+        async def commit(self: Any) -> None:
             raise RuntimeError("commit failed")
 
     class SessionContext:
-        async def __aenter__(self):
+        async def __aenter__(self: Any) -> Any:
             return Session()
 
-        async def __aexit__(self, *_args):
+        async def __aexit__(self: Any, *_args: Any) -> Any:
             return False
 
     monkeypatch.setattr(engine_module, "async_session_factory", SessionContext)
@@ -284,34 +289,34 @@ async def test_engine_contains_generator_find_and_commit_failures(
     class FindFailure(FakeGenerator):
         name = "find-failure"
 
-        async def find_due(self, _session):
+        async def find_due(self: Any, _session: Any) -> Any:
             raise RuntimeError("query failed")
 
     await engine._maybe_run_generator(FindFailure(), SimpleNamespace())
 
-    commit_failure = FakeGenerator(["item"])
+    commit_failure: Any = FakeGenerator(["item"])
     commit_failure.name = "commit-failure"
     await engine._maybe_run_generator(commit_failure, SimpleNamespace())
     assert commit_failure.executed == ["item"]
 
 
 @pytest.mark.asyncio
-async def test_engine_contains_generator_timeouts(monkeypatch) -> None:
+async def test_engine_contains_generator_timeouts(monkeypatch: Any) -> None:
     class Session:
-        async def commit(self) -> None:
+        async def commit(self: Any) -> None:
             return None
 
     class SessionContext:
-        async def __aenter__(self):
+        async def __aenter__(self: Any) -> Any:
             return Session()
 
-        async def __aexit__(self, *_args):
+        async def __aexit__(self: Any, *_args: Any) -> Any:
             return False
 
     monkeypatch.setattr(engine_module, "async_session_factory", SessionContext)
     calls = 0
 
-    async def timeout_find_then_first_item(awaitable, *, timeout):
+    async def timeout_find_then_first_item(awaitable: Any, *, timeout: Any) -> Any:
         nonlocal calls
         calls += 1
         if calls in {1, 3}:
@@ -320,16 +325,16 @@ async def test_engine_contains_generator_timeouts(monkeypatch) -> None:
         return await awaitable
 
     monkeypatch.setattr(
-        engine_module.asyncio,
+        engine_module.asyncio,  # type: ignore[attr-defined]
         "wait_for",
         timeout_find_then_first_item,
     )
     engine = SchedulerEngine(SchedulerRegistry())
-    find_timeout = FakeGenerator(["unused"])
+    find_timeout: Any = FakeGenerator(["unused"])
     find_timeout.name = "find-timeout"
     await engine._maybe_run_generator(find_timeout, SimpleNamespace())
 
-    item_timeout = FakeGenerator(["slow", "good"])
+    item_timeout: Any = FakeGenerator(["slow", "good"])
     item_timeout.name = "item-timeout"
     await engine._maybe_run_generator(item_timeout, SimpleNamespace())
     assert item_timeout.executed == ["good"]

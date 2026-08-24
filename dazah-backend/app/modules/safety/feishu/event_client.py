@@ -9,6 +9,7 @@ import json
 import logging
 import ssl
 import time
+from collections.abc import Awaitable, Callable
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
@@ -23,9 +24,10 @@ from app.modules.safety.feishu.client import (
 logger = logging.getLogger(__name__)
 
 # 事件类型 → 处理器列表
-_handlers: dict[str, list] = {}
+EventHandler = Callable[[dict[str, Any]], Awaitable[Any]]
+_handlers: dict[str, list[EventHandler]] = {}
 _stop: asyncio.Event | None = None
-_ws_task: asyncio.Task | None = None
+_ws_task: asyncio.Task[Any] | None = None
 
 # 长连接重试上限
 _MAX_RECONNECT_ATTEMPTS = 3
@@ -38,12 +40,14 @@ WS_ENDPOINT_URL = f"{FEISHU_DOMAIN}/callback/ws/endpoint"
 _ping_interval: int = 120
 
 
-def on_event(event_type: str):
+def on_event(event_type: str) -> Callable[[EventHandler], EventHandler]:
     """装饰器：注册安全模块事件处理器。"""
-    def decorator(func):
+
+    def decorator(func: EventHandler) -> EventHandler:
         _handlers.setdefault(event_type, []).append(func)
         logger.info("注册安全飞书事件: type=%s handler=%s", event_type, func.__name__)
         return func
+
     return decorator
 
 
@@ -60,8 +64,12 @@ async def _dispatch(event_type: str, event_data: dict[str, Any]) -> Any:
                 logger.exception("事件处理器异常: %s", handler.__name__)
         return result
     logger.warning(
-        "安全飞书未注册的 event_type=%s (data_keys=%s)，请检查是否已添加 @on_event 处理器",
-        event_type, list(event_data.keys())[:10],
+        (
+            "安全飞书未注册的 event_type=%s (data_keys=%s)，请检查是否已添加 "
+            "@on_event 处理器"
+        ),
+        event_type,
+        list(event_data.keys())[:10],
     )
     return None
 
@@ -97,12 +105,14 @@ async def _get_ws_url_and_config() -> tuple[str | None, int]:
                         _ping_interval = interval
                 logger.info(
                     "安全飞书 WS URL 获取成功, service_id=%s, ping_interval=%s",
-                    service_id, _ping_interval,
+                    service_id,
+                    _ping_interval,
                 )
                 return url, service_id
             logger.error(
                 "安全飞书获取 WS URL 失败: code=%s msg=%s",
-                data.get("code"), data.get("msg"),
+                data.get("code"),
+                data.get("msg"),
             )
         else:
             logger.error("安全飞书获取 WS URL HTTP 错误: %s", resp.status_code)
@@ -114,9 +124,9 @@ async def _get_ws_url_and_config() -> tuple[str | None, int]:
 
 def _build_ping_frame(service_id: int) -> bytes:
     """构建 protobuf PING 帧（携带 service_id，飞书据此路由事件）。"""
-    from lark_oapi.ws.const import HEADER_TYPE
-    from lark_oapi.ws.enum import FrameType, MessageType
-    from lark_oapi.ws.pb.pbbp2_pb2 import Frame
+    from lark_oapi.ws.const import HEADER_TYPE  # type: ignore[import-untyped]
+    from lark_oapi.ws.enum import FrameType, MessageType  # type: ignore[import-untyped]
+    from lark_oapi.ws.pb.pbbp2_pb2 import Frame  # type: ignore[import-untyped]
 
     frame = Frame()
     header = frame.headers.add()
@@ -126,10 +136,10 @@ def _build_ping_frame(service_id: int) -> bytes:
     frame.method = FrameType.CONTROL.value
     frame.SeqID = 0
     frame.LogID = 0
-    return frame.SerializeToString()
+    return bytes(frame.SerializeToString())
 
 
-def _build_ack_frame(frame, biz_rt: int) -> bytes:
+def _build_ack_frame(frame: Any, biz_rt: int) -> bytes:
     """构建 DATA 帧的 ACK 回复（飞书协议要求收到事件后必须回复 ACK）。
 
     注意：不覆盖 frame.payload —— 调用方（如 card.action.trigger 处理）可能
@@ -141,12 +151,15 @@ def _build_ack_frame(frame, biz_rt: int) -> bytes:
     header.key = HEADER_BIZ_RT
     header.value = str(biz_rt)
 
-    return frame.SerializeToString()
+    return bytes(frame.SerializeToString())
 
 
-async def _ping_loop(ws, service_id: int) -> None:
+async def _ping_loop(ws: Any, service_id: int) -> None:
     """定期发送 protobuf PING 帧保持连接和事件路由。"""
-    while not _stop.is_set():
+    stop_event = _stop
+    if stop_event is None:
+        return
+    while not stop_event.is_set():
         try:
             ping_data = _build_ping_frame(service_id)
             await ws.send(ping_data)
@@ -155,7 +168,7 @@ async def _ping_loop(ws, service_id: int) -> None:
             logger.warning("安全飞书 PING 失败: %s", e)
             return
         try:
-            await asyncio.wait_for(_stop.wait(), timeout=_ping_interval)
+            await asyncio.wait_for(stop_event.wait(), timeout=_ping_interval)
             return
         except TimeoutError:
             pass
@@ -165,19 +178,25 @@ async def _ping_loop(ws, service_id: int) -> None:
 
 
 # 帧活动计数器（用于诊断连接是否存活）
-_frame_count: dict[str, int] = {"received": 0, "control": 0, "data": 0, "event": 0, "error": 0}
+_frame_count: dict[str, int] = {
+    "received": 0,
+    "control": 0,
+    "data": 0,
+    "event": 0,
+    "error": 0,
+}
 
 
-def _get_frame_stats() -> dict:
+def _get_frame_stats() -> dict[str, int]:
     """返回帧活动统计。"""
     return dict(_frame_count)
 
 
-async def _handle_binary_message(ws, message: bytes) -> None:
+async def _handle_binary_message(ws: Any, message: bytes) -> None:
     """处理 protobuf 帧（区分 CONTROL 和 DATA）。"""
     _frame_count["received"] += 1
     try:
-        from lark_oapi.ws.client import _get_by_key
+        from lark_oapi.ws.client import _get_by_key  # type: ignore[import-untyped]
         from lark_oapi.ws.const import HEADER_TYPE
         from lark_oapi.ws.enum import FrameType, MessageType
         from lark_oapi.ws.pb.pbbp2_pb2 import Frame
@@ -193,11 +212,21 @@ async def _handle_binary_message(ws, message: bytes) -> None:
                 type_val = _get_by_key(frame.headers, HEADER_TYPE)
                 msg_type = MessageType(type_val)
                 if msg_type == MessageType.PONG:
-                    logger.info("安全飞书 ← PONG (连接存活, 共收到 %d 帧)", _frame_count["received"])
+                    logger.info(
+                        "安全飞书 ← PONG (连接存活, 共收到 %d 帧)",
+                        _frame_count["received"],
+                    )
                 else:
-                    logger.info("安全飞书 CONTROL 帧: %s (共 %d 帧)", msg_type, _frame_count["received"])
+                    logger.info(
+                        "安全飞书 CONTROL 帧: %s (共 %d 帧)",
+                        msg_type,
+                        _frame_count["received"],
+                    )
             except Exception:
-                logger.info("安全飞书 CONTROL 帧(无 type header, 共 %d 帧)", _frame_count["received"])
+                logger.info(
+                    "安全飞书 CONTROL 帧(无 type header, 共 %d 帧)",
+                    _frame_count["received"],
+                )
             return
 
         if ft == FrameType.DATA:
@@ -218,20 +247,25 @@ async def _handle_binary_message(ws, message: bytes) -> None:
                 if event_type == "card.action.trigger":
                     try:
                         card_resp = await asyncio.wait_for(
-                            _dispatch_event(event), timeout=2.9,
+                            _dispatch_event(event),
+                            timeout=2.9,
                         )
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         logger.warning("卡片操作超时，返回通用 ACK")
                         card_resp = None
                     # ── 构建飞书 WS 协议要求的 Response 信封 ──
-                    # lark_oapi 格式：{"code": 200, "data": "<base64 编码的卡片更新 JSON>"}
+                    # lark_oapi 格式：{"code": 200, "data":
+                    # "<base64 编码的卡片更新 JSON>"}
                     # 卡片内容必须 base64 编码后放在 data 字段，不能直接作为 payload
                     if card_resp and isinstance(card_resp, dict):
                         import base64 as _b64
+
                         card_json = json.dumps(card_resp, ensure_ascii=False)
                         resp = {
                             "code": 200,
-                            "data": _b64.b64encode(card_json.encode("utf-8")).decode("ascii"),
+                            "data": _b64.b64encode(card_json.encode("utf-8")).decode(
+                                "ascii"
+                            ),
                         }
                     else:
                         resp = {"code": 200}
@@ -242,7 +276,11 @@ async def _handle_binary_message(ws, message: bytes) -> None:
                     resp = {"code": 200}
                 frame.payload = json.dumps(resp, ensure_ascii=False).encode("utf-8")
             else:
-                logger.info("安全飞书 DATA 帧: type=%s (共 %d 帧)", msg_type, _frame_count["received"])
+                logger.info(
+                    "安全飞书 DATA 帧: type=%s (共 %d 帧)",
+                    msg_type,
+                    _frame_count["received"],
+                )
 
             # 发送 ACK（飞书要求 3 秒内回复，现在立即发送）
             end_ms = int(round(time.time() * 1000))
@@ -265,13 +303,15 @@ async def start_ws() -> None:
 
     if not SAFETY_FEISHU_APP_ID or not SAFETY_FEISHU_APP_SECRET:
         logger.warning(
-            "安全模块飞书配置缺失（SAFETY_FEISHU_APP_ID / SAFETY_FEISHU_APP_SECRET），跳过事件订阅"
+            "安全模块飞书配置缺失（SAFETY_FEISHU_APP_ID / "
+            "SAFETY_FEISHU_APP_SECRET），跳过事件订阅"
         )
         return
 
     logger.info(
         "启动安全模块飞书事件订阅 (app_id=%s, 最大重试=%d)",
-        SAFETY_FEISHU_APP_ID, _MAX_RECONNECT_ATTEMPTS,
+        SAFETY_FEISHU_APP_ID,
+        _MAX_RECONNECT_ATTEMPTS,
     )
 
     attempt = 0
@@ -283,7 +323,8 @@ async def start_ws() -> None:
                 attempt += 1
                 logger.error(
                     "安全飞书无法获取 WebSocket URL，%d/%d 次重试",
-                    attempt, _MAX_RECONNECT_ATTEMPTS,
+                    attempt,
+                    _MAX_RECONNECT_ATTEMPTS,
                 )
                 await asyncio.sleep(10)
                 continue
@@ -293,8 +334,8 @@ async def start_ws() -> None:
             async with websockets.connect(
                 ws_url,
                 ssl=ssl_context,
-                max_size=2 ** 23,
-                ping_interval=None,   # 禁用 WS 级 ping，使用 protobuf PING
+                max_size=2**23,
+                ping_interval=None,  # 禁用 WS 级 ping，使用 protobuf PING
                 ping_timeout=None,
                 close_timeout=5,
             ) as ws:
@@ -333,11 +374,17 @@ async def start_ws() -> None:
                                 else:
                                     logger.info(
                                         "安全飞书收到文本事件: type=%s",
-                                        msg_type or event.get("header", {}).get("event_type", "?"),
+                                        msg_type
+                                        or event.get("header", {}).get(
+                                            "event_type", "?"
+                                        ),
                                     )
                                     await _dispatch_event(event)
                             except json.JSONDecodeError:
-                                logger.debug("安全飞书收到非 JSON 文本消息: %s", str(message)[:100])
+                                logger.debug(
+                                    "安全飞书收到非 JSON 文本消息: %s",
+                                    str(message)[:100],
+                                )
                 finally:
                     ping_task.cancel()
 
@@ -347,13 +394,16 @@ async def start_ws() -> None:
             attempt += 1
             logger.warning(
                 "安全飞书 WebSocket 连接关闭: %s，%d/%d 次重试",
-                e, attempt, _MAX_RECONNECT_ATTEMPTS,
+                e,
+                attempt,
+                _MAX_RECONNECT_ATTEMPTS,
             )
         except Exception:
             attempt += 1
             logger.exception(
                 "安全飞书 WebSocket 异常，%d/%d 次重试",
-                attempt, _MAX_RECONNECT_ATTEMPTS,
+                attempt,
+                _MAX_RECONNECT_ATTEMPTS,
             )
 
         if attempt < _MAX_RECONNECT_ATTEMPTS:
@@ -366,7 +416,8 @@ async def start_ws() -> None:
         logger.error(
             "安全飞书 WebSocket 重试次数已达上限 (%d/%d)，已停止。"
             "可通过 POST /api/v1/safety/feishu/ws/restart 手动恢复",
-            attempt, _MAX_RECONNECT_ATTEMPTS,
+            attempt,
+            _MAX_RECONNECT_ATTEMPTS,
         )
     else:
         logger.info("安全飞书 WebSocket 客户端已停止")
@@ -387,7 +438,9 @@ async def _dispatch_event(event: dict[str, Any]) -> Any:
         event_data = event.get("event", event)
         return await _dispatch(event_type, event_data)
     else:
-        logger.debug("安全飞书无法确定事件类型: %s", json.dumps(event, ensure_ascii=False)[:200])
+        logger.debug(
+            "安全飞书无法确定事件类型: %s", json.dumps(event, ensure_ascii=False)[:200]
+        )
         return None
 
 
@@ -398,7 +451,7 @@ async def stop_ws() -> None:
         _stop.set()
 
 
-async def restart_ws() -> dict:
+async def restart_ws() -> dict[str, Any]:
     """手动恢复 WS 连接（重试次数耗尽后调用）。"""
     global _stop, _ws_task
 
@@ -421,7 +474,7 @@ async def restart_ws() -> dict:
     }
 
 
-async def get_ws_status() -> dict:
+async def get_ws_status() -> dict[str, Any]:
     """查询当前 WS 连接状态。"""
     task_alive = _ws_task is not None and not _ws_task.done()
     return {

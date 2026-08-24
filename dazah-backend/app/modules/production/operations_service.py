@@ -30,7 +30,7 @@ from app.modules.production.operations_schemas import (
 
 
 class OperationsService:
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession) -> None:
         self.repo = OperationsRepository(session)
 
     @staticmethod
@@ -44,7 +44,7 @@ class OperationsService:
 
     async def list_fermentations(
         self, *, skip: int, limit: int, batch_no: str | None, status: str | None
-    ):
+    ) -> Any:
         return await self.repo.list_records(
             FermentationRecord,
             skip=skip,
@@ -56,7 +56,7 @@ class OperationsService:
 
     async def create_fermentation(
         self, payload: FermentationCreate, actor_id: uuid.UUID | None
-    ):
+    ) -> Any:
         self._validate_fermentation(payload.entry_date, payload.discharge_date)
         return await self.repo.create(
             FermentationRecord,
@@ -68,7 +68,7 @@ class OperationsService:
         record_id: uuid.UUID,
         payload: FermentationUpdate,
         actor_id: uuid.UUID | None,
-    ):
+    ) -> Any:
         current = await self.repo.get(FermentationRecord, record_id)
         if not current:
             return None
@@ -83,7 +83,7 @@ class OperationsService:
 
     async def list_seed_cultures(
         self, *, skip: int, limit: int, batch_no: str | None, status: str | None
-    ):
+    ) -> Any:
         return await self.repo.list_records(
             SeedCultureRecord,
             skip=skip,
@@ -95,7 +95,7 @@ class OperationsService:
 
     async def create_seed_culture(
         self, payload: SeedCultureCreate, actor_id: uuid.UUID | None
-    ):
+    ) -> Any:
         return await self.repo.create(
             SeedCultureRecord,
             self._audit(payload.model_dump(), actor_id, create=True),
@@ -106,7 +106,7 @@ class OperationsService:
         record_id: uuid.UUID,
         payload: SeedCultureUpdate,
         actor_id: uuid.UUID | None,
-    ):
+    ) -> Any:
         return await self.repo.update(
             SeedCultureRecord,
             record_id,
@@ -115,7 +115,7 @@ class OperationsService:
 
     async def list_events(
         self, *, skip: int, limit: int, workshop: str | None, status: str | None
-    ):
+    ) -> Any:
         return await self.repo.list_records(
             NonConformingEvent,
             skip=skip,
@@ -126,7 +126,7 @@ class OperationsService:
 
     async def create_event(
         self, payload: NonConformingEventCreate, actor_id: uuid.UUID | None
-    ):
+    ) -> Any:
         data = payload.model_dump()
         self._set_impact_duration(data)
         return await self.repo.create(
@@ -138,7 +138,7 @@ class OperationsService:
         record_id: uuid.UUID,
         payload: NonConformingEventUpdate,
         actor_id: uuid.UUID | None,
-    ):
+    ) -> Any:
         current = await self.repo.get(NonConformingEvent, record_id)
         if not current:
             return None
@@ -154,7 +154,9 @@ class OperationsService:
             NonConformingEvent, record_id, self._audit(data, actor_id, create=False)
         )
 
-    async def close_event(self, record_id: uuid.UUID, actor_id: uuid.UUID | None):
+    async def close_event(
+        self, record_id: uuid.UUID, actor_id: uuid.UUID | None
+    ) -> Any:
         current = await self.repo.get(NonConformingEvent, record_id)
         if not current:
             return None
@@ -169,7 +171,7 @@ class OperationsService:
 
     async def list_shift_logs(
         self, *, skip: int, limit: int, workshop: str | None, shift: str | None
-    ):
+    ) -> Any:
         return await self.repo.list_records(
             ShiftLog,
             skip=skip,
@@ -180,14 +182,14 @@ class OperationsService:
 
     async def create_shift_log(
         self, payload: ShiftLogCreate, actor_id: uuid.UUID | None
-    ):
+    ) -> Any:
         return await self.repo.create(
             ShiftLog, self._audit(payload.model_dump(), actor_id, create=True)
         )
 
     async def update_shift_log(
         self, record_id: uuid.UUID, payload: ShiftLogUpdate, actor_id: uuid.UUID | None
-    ):
+    ) -> Any:
         return await self.repo.update(
             ShiftLog,
             record_id,
@@ -196,7 +198,7 @@ class OperationsService:
 
     async def list_handovers(
         self, *, skip: int, limit: int, workshop: str | None, status: str | None
-    ):
+    ) -> Any:
         return await self.repo.list_records(
             ShiftHandover,
             skip=skip,
@@ -207,7 +209,7 @@ class OperationsService:
 
     async def create_handover(
         self, payload: ShiftHandoverCreate, actor_id: uuid.UUID | None
-    ):
+    ) -> Any:
         return await self.repo.create(
             ShiftHandover, self._audit(payload.model_dump(), actor_id, create=True)
         )
@@ -217,14 +219,16 @@ class OperationsService:
         record_id: uuid.UUID,
         payload: ShiftHandoverUpdate,
         actor_id: uuid.UUID | None,
-    ):
+    ) -> Any:
         return await self.repo.update(
             ShiftHandover,
             record_id,
             self._audit(payload.model_dump(exclude_unset=True), actor_id, create=False),
         )
 
-    async def confirm_handover(self, record_id: uuid.UUID, actor_id: uuid.UUID | None):
+    async def confirm_handover(
+        self, record_id: uuid.UUID, actor_id: uuid.UUID | None
+    ) -> Any:
         current = await self.repo.get(ShiftHandover, record_id)
         if not current:
             return None
@@ -254,11 +258,11 @@ class OperationsService:
             | ShiftHandover
         ],
         record_id: uuid.UUID,
-    ):
+    ) -> Any:
         return await self.repo.soft_delete(model, record_id)
 
     @staticmethod
-    def _validate_fermentation(entry_date, discharge_date) -> None:
+    def _validate_fermentation(entry_date: Any, discharge_date: Any) -> None:
         if discharge_date and discharge_date < entry_date:
             raise AppException(status_code=400, message="放罐日期不能早于进罐日期")
 

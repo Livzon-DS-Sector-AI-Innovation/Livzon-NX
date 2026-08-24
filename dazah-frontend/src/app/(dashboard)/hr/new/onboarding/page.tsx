@@ -1,8 +1,8 @@
-import { fetchNewOnboardingRecords } from '@/lib/api/hr'
+import { fetchNewOnboardingRecordsServer } from '@/lib/api/server/hr'
 import { OnboardingClient } from '@/components/hr'
 
 export default async function NewOnboardingPage() {
-  const res = await fetchNewOnboardingRecords({ page: 1, page_size: 20 })
+  const res = await fetchNewOnboardingRecordsServer({ page: 1, page_size: 20 })
 
   return (
     <div className="space-y-4">

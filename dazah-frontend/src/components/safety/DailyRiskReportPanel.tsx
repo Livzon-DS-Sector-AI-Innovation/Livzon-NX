@@ -95,7 +95,7 @@ export default function DailyRiskReportPanel() {
   }
 
   useEffect(() => {
-    loadData()
+    queueMicrotask(loadData)
   }, [dailyRiskReportQueryParams.page, dailyRiskReportQueryParams.page_size, statusFilter, deptFilter])
 
   const handleSearch = () => {

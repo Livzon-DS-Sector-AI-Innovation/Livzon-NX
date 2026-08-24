@@ -4,7 +4,9 @@ import json
 import re
 import tempfile
 from pathlib import Path
+from typing import Any
 
+Document: Any
 try:
     from docx import Document
 except ImportError:
@@ -15,30 +17,33 @@ except ImportError:
 DATA_DIR = Path(__file__).parent / "data"
 
 
-def load_q3d_elements() -> dict:
+def load_q3d_elements() -> dict[str, Any]:
     """加载 Q3D 元素数据库"""
     q3d_path = DATA_DIR / "q3d_elements.json"
     if q3d_path.exists():
         with open(q3d_path, encoding="utf-8") as f:
-            return json.load(f)
+            loaded = json.load(f)
+            return loaded if isinstance(loaded, dict) else {}
     return {}
 
 
-def load_q3c_solvents() -> dict:
+def load_q3c_solvents() -> dict[str, Any]:
     """加载 Q3C 溶剂数据库"""
     q3c_path = DATA_DIR / "ich-q3c-full.json"
     if q3c_path.exists():
         with open(q3c_path, encoding="utf-8") as f:
-            return json.load(f)
+            loaded = json.load(f)
+            return loaded if isinstance(loaded, dict) else {}
     return {}
 
 
-def load_solvent_synonyms() -> dict:
+def load_solvent_synonyms() -> dict[str, Any]:
     """加载溶剂同义词数据库"""
     syn_path = DATA_DIR / "solvent-synonyms.json"
     if syn_path.exists():
         with open(syn_path, encoding="utf-8") as f:
-            return json.load(f)
+            loaded = json.load(f)
+            return loaded if isinstance(loaded, dict) else {}
     return {}
 
 
@@ -64,7 +69,7 @@ def extract_text_from_docx(file_content: bytes) -> str:
         Path(tmp_path).unlink(missing_ok=True)
 
 
-def parse_process_steps(text: str) -> list[dict]:
+def parse_process_steps(text: str) -> list[dict[str, Any]]:
     """解析工艺步骤
 
     支持的格式：
@@ -126,7 +131,7 @@ def remove_concentration_prefix(solvent_name: str) -> str:
     return solvent_name.strip()
 
 
-def get_element_data(symbol: str) -> dict:
+def get_element_data(symbol: str) -> dict[str, Any]:
     """获取元素数据"""
     for class_name, class_data in Q3D_DATA.get("classes", {}).items():
         elements = class_data.get("elements", {})
@@ -135,7 +140,7 @@ def get_element_data(symbol: str) -> dict:
     return {}
 
 
-def get_all_mandatory_elements() -> dict:
+def get_all_mandatory_elements() -> dict[str, dict[str, Any]]:
     """Get all elements that must be assessed per ICH Q3D(R2) Table 5.1."""
     mandatory = {}
     for class_name, class_data in Q3D_DATA.get("classes", {}).items():
@@ -170,13 +175,15 @@ def get_all_mandatory_elements() -> dict:
     return mandatory
 
 
-def get_option1_concentrations(symbol: str) -> dict:
+def get_option1_concentrations(symbol: str) -> dict[str, Any]:
     """Get Option 1 permitted concentrations for an element (ICH Q3D Table 1)."""
     option1_data = Q3D_DATA.get("option_1_concentrations", {})
-    return option1_data.get("elements", {}).get(symbol, {})
+    elements = option1_data.get("elements", {})
+    value = elements.get(symbol, {}) if isinstance(elements, dict) else {}
+    return value if isinstance(value, dict) else {}
 
 
-def identify_elements(llm_response: dict) -> dict:
+def identify_elements(llm_response: dict[str, Any]) -> dict[str, dict[str, Any]]:
     """Build element assessment from LLM-identified elements + Q3D rules.
 
     LLM only needs to identify:
@@ -259,7 +266,7 @@ def identify_elements(llm_response: dict) -> dict:
     return elements_found
 
 
-def generate_report(process_text: str, elements: dict) -> str:
+def generate_report(process_text: str, elements: dict[str, dict[str, Any]]) -> str:
     """Generate ICH Q3D report from skill's generate_report, returns markdown string."""
     from datetime import datetime
 
@@ -361,32 +368,34 @@ def generate_report(process_text: str, elements: dict) -> str:
         report.append("")
 
         # PDE values
-        oral = data.get("oral_pde")
-        parenteral = data.get("parenteral_pde")
-        inhalation = data.get("inhalation_pde")
-        cutaneous = data.get("cutaneous_pde")
+        oral_pde = data.get("oral_pde")
+        parenteral_pde = data.get("parenteral_pde")
+        inhalation_pde = data.get("inhalation_pde")
+        cutaneous_pde = data.get("cutaneous_pde")
 
         option1 = get_option1_concentrations(symbol)
-        cutaneous_option1 = cutaneous / 10 if cutaneous is not None else None
+        cutaneous_option1 = (
+            cutaneous_pde / 10 if isinstance(cutaneous_pde, (int, float)) else None
+        )
 
         report.append("**PDE值与选项1限度**")
         report.append("")
         report.append("| 途径 | PDE (μg/天) | 选项1限度 (μg/g) |")
         report.append("|------|-------------|------------------|")
         report.append(
-            f"| 口服 | {oral if oral is not None else '未建立'} |"
+            f"| 口服 | {oral_pde if oral_pde is not None else '未建立'} |"
             f" {option1.get('oral', 'N/A') if option1 else 'N/A'} |"
         )
         report.append(
-            f"| 注射 | {parenteral if parenteral is not None else '未建立'} |"
+            f"| 注射 | {parenteral_pde if parenteral_pde is not None else '未建立'} |"
             f" {option1.get('parenteral', 'N/A') if option1 else 'N/A'} |"
         )
         report.append(
-            f"| 吸入 | {inhalation if inhalation is not None else '未建立'} |"
+            f"| 吸入 | {inhalation_pde if inhalation_pde is not None else '未建立'} |"
             f" {option1.get('inhalation', 'N/A') if option1 else 'N/A'} |"
         )
         report.append(
-            f"| 皮肤 | {cutaneous if cutaneous is not None else '未建立'} |"
+            f"| 皮肤 | {cutaneous_pde if cutaneous_pde is not None else '未建立'} |"
             f" {cutaneous_option1 if cutaneous_option1 is not None else 'N/A'} |"
         )
         report.append("")
@@ -396,14 +405,14 @@ def generate_report(process_text: str, elements: dict) -> str:
         if ctcl:
             report.append("**皮肤途径**")
             report.append("")
-            report.append(f"- 皮肤PDE = {cutaneous} μg/天（Table A.5.1）")
+            report.append(f"- 皮肤PDE = {cutaneous_pde} μg/天（Table A.5.1）")
             report.append(f"- 皮肤选项1限度 = {cutaneous_option1} μg/g")
             report.append(f"- 皮肤毒性浓度限度（CTCL）= {ctcl} μg/g")
             report.append("")
-        elif cutaneous is not None and q3d_class != "Other":
+        elif cutaneous_pde is not None and q3d_class != "Other":
             report.append("**皮肤途径**")
             report.append("")
-            report.append(f"- 皮肤PDE = {cutaneous} μg/天（Table A.5.1）")
+            report.append(f"- 皮肤PDE = {cutaneous_pde} μg/天（Table A.5.1）")
             report.append(f"- 皮肤选项1限度 = {cutaneous_option1} μg/g")
             report.append("")
 
@@ -517,7 +526,9 @@ def generate_report(process_text: str, elements: dict) -> str:
     return "\n".join(report)
 
 
-def _add_frontend_fields(elements: dict, llm_response: dict) -> dict:
+def _add_frontend_fields(
+    elements: dict[str, dict[str, Any]], llm_response: dict[str, Any]
+) -> dict[str, dict[str, Any]]:
     """Add fields needed by frontend table display.
 
     The skill's identify_elements returns dict keyed by symbol,
@@ -570,7 +581,7 @@ def _add_frontend_fields(elements: dict, llm_response: dict) -> dict:
     return elements
 
 
-async def analyze_ich_q3d_with_llm(file_content: bytes) -> dict:
+async def analyze_ich_q3d_with_llm(file_content: bytes) -> dict[str, Any]:
     """Analyze ICH Q3D elemental impurities using LLM.
 
     LLM only identifies elements (symbol, source, intentionally_added).
@@ -633,7 +644,7 @@ async def analyze_ich_q3d_with_llm(file_content: bytes) -> dict:
     }
 
 
-async def analyze_ich_q3c_with_llm(file_content: bytes) -> dict:
+async def analyze_ich_q3c_with_llm(file_content: bytes) -> dict[str, Any]:
     """Analyze ICH Q3C solvent residues using LLM (skill's pipeline).
 
     LLM extracts AND classifies solvents using the full ICH Q3C database.
@@ -660,15 +671,15 @@ async def analyze_ich_q3c_with_llm(file_content: bytes) -> dict:
     solvent_index = build_solvent_index(ich_data, synonyms)
 
     # 4. Process each step's solvents
-    step_analysis = []
-    all_solvents = {}
+    step_analysis: list[dict[str, Any]] = []
+    all_solvents: dict[str, dict[str, Any]] = {}
 
     for step_data in llm_result.get("steps", []):
         step_number = step_data.get("step_number", "")
         step_title = step_data.get("step_title", "")
 
         # Collect solvents for this step
-        raw_solvents = []
+        raw_solvents: list[dict[str, Any]] = []
         for solvent_info in step_data.get("solvents", []):
             matched_name = solvent_info.get("matched_name") or solvent_info.get(
                 "original_name", ""
@@ -722,7 +733,7 @@ async def analyze_ich_q3c_with_llm(file_content: bytes) -> dict:
     )
 
     # 7. Convert to frontend format (flat list)
-    solvents_list = []
+    solvents_list: list[dict[str, Any]] = []
     for solvent_name, data in all_solvents.items():
         solvents_list.append(
             {
@@ -738,7 +749,12 @@ async def analyze_ich_q3c_with_llm(file_content: bytes) -> dict:
         )
 
     # 8. Compute summary
-    summary = {"class_1": 0, "class_2": 0, "class_3": 0, "unknown": 0}
+    summary: dict[str, int] = {
+        "class_1": 0,
+        "class_2": 0,
+        "class_3": 0,
+        "unknown": 0,
+    }
     for solv in solvents_list:
         cls = solv.get("class", "")
         if "1" in str(cls):

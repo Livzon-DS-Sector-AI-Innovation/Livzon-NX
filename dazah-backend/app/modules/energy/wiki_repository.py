@@ -66,9 +66,7 @@ class EnergyWikiRepository:
                 EnergyFeishuPageBinding.is_deleted == False,  # noqa: E712
             )
         )
-        existing_by_sheet = {
-            item.sheet_id: item for item in result.scalars().all()
-        }
+        existing_by_sheet = {item.sheet_id: item for item in result.scalars().all()}
         new_bindings: list[EnergyFeishuPageBinding] = []
         for binding in bindings:
             existing = existing_by_sheet.pop(binding.sheet_id, None)

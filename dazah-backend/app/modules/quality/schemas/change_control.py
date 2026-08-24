@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict
 class ChangeListItem(BaseModel):
     id: uuid.UUID
     serial_number: str | None = None
+    change_type: str | None = None
     change_code: str
     applicant_department: str | None = None
     change_object: str | None = None
@@ -35,6 +36,7 @@ class ChangeDetail(ChangeListItem):
 
 class CreateChangeRequest(BaseModel):
     serial_number: str | None = None
+    change_type: str = "technical"
     change_code: str | None = None
     applicant_department: str | None = None
     change_object: str | None = None
@@ -49,6 +51,7 @@ class CreateChangeRequest(BaseModel):
 
 class UpdateChangeRequest(BaseModel):
     serial_number: str | None = None
+    change_type: str | None = None
     change_code: str | None = None
     applicant_department: str | None = None
     change_object: str | None = None

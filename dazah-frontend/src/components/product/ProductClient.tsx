@@ -46,16 +46,15 @@ export default function ProductClient({ initialProducts, initialTotal }: Product
       })
       setProducts(res.data)
       setTotal(res.meta?.total || 0)
-    } catch (err: any) {
-      message.error(err.message || '加载数据失败')
+    } catch (err) {
+      message.error((err instanceof Error ? err.message : '') || '加载数据失败')
     } finally {
       setLoading(false)
     }
   }, [keyword, filterCategory, filterType, page, pageSize])
 
   useEffect(() => {
-    loadData()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    queueMicrotask(loadData)
   }, [keyword, filterCategory, filterType, page, pageSize, loadData])
 
   const handlePageChange = (newPage: number, newPageSize: number) => {
@@ -69,8 +68,8 @@ export default function ProductClient({ initialProducts, initialTotal }: Product
       const res = await syncProductsFromFeishu()
       message.success(res.message)
       loadData()
-    } catch (err: any) {
-      message.error(err.message || '同步失败')
+    } catch (err) {
+      message.error((err instanceof Error ? err.message : '') || '同步失败')
     } finally {
       setSyncing(false)
     }
@@ -110,9 +109,9 @@ export default function ProductClient({ initialProducts, initialTotal }: Product
       }
       setModalOpen(false)
       loadData()
-    } catch (err: any) {
-      if (err.errorFields) return
-      message.error(err.message || '操作失败')
+    } catch (err) {
+      if ((typeof err === 'object' && err !== null && 'errorFields' in err)) return
+      message.error((err instanceof Error ? err.message : '') || '操作失败')
     } finally {
       setSaving(false)
     }

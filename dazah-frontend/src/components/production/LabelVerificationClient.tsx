@@ -58,8 +58,8 @@ export default function LabelVerificationClient({
       })
       setVerifications(res.data)
       setTotal(res.meta?.total || 0)
-    } catch (err: any) {
-      message.error(err.message || '加载数据失败')
+    } catch (err) {
+      message.error((err instanceof Error ? err.message : '') || '加载数据失败')
     } finally {
       setLoading(false)
     }
@@ -69,7 +69,7 @@ export default function LabelVerificationClient({
     try {
       const res = await fetchLabelVerificationStatistics()
       setStatistics(res.data)
-    } catch (err: any) {
+    } catch (err) {
       console.error('加载统计数据失败', err)
     }
   }, [])
@@ -100,8 +100,8 @@ export default function LabelVerificationClient({
         video_file_name: result.data.file_name,
       })
       message.success('视频上传成功')
-    } catch (err: any) {
-      message.error(err.message || '上传失败')
+    } catch (err) {
+      message.error((err instanceof Error ? err.message : '') || '上传失败')
     } finally {
       setVideoUploading(false)
     }
@@ -160,12 +160,12 @@ export default function LabelVerificationClient({
       } else {
         message.warning(`对比完成但置信度较低 (${compareData.confidence}%)，建议人工复核`)
       }
-    } catch (err: any) {
+    } catch (err) {
       setAutoCompareProgress('')
-      if (err.errorFields) {
+      if ((typeof err === 'object' && err !== null && 'errorFields' in err)) {
         message.warning('请先填写表单基本信息并上传视频')
       } else {
-        message.error(err.message || '自动对比失败')
+        message.error((err instanceof Error ? err.message : '') || '自动对比失败')
       }
     } finally {
       setAutoComparing(false)
@@ -208,8 +208,8 @@ export default function LabelVerificationClient({
       setAutoCompareResult(null)
       loadData()
       loadStatistics()
-    } catch (err: any) {
-      message.error(err.message || '创建失败')
+    } catch (err) {
+      message.error((err instanceof Error ? err.message : '') || '创建失败')
     }
   }
 

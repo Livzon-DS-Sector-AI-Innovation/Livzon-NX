@@ -7,6 +7,7 @@
 """
 
 import logging
+from typing import Any, cast
 
 from starlette.middleware import Middleware
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -27,13 +28,13 @@ class MCPAuthMiddleware(BaseHTTPMiddleware):
     请求结束后 commit（成功）或 rollback（失败），然后清理资源。
     """
 
-    def __init__(self, app, valid_keys: set[str]):
+    def __init__(self, app: Any, valid_keys: set[str]):
         super().__init__(app)
         self._valid_keys = set(valid_keys)
 
-    async def dispatch(self, request: Request, call_next) -> Response:
+    async def dispatch(self, request: Request, call_next: Any) -> Response:
         if not request.url.path.startswith("/mcp"):
-            return await call_next(request)
+            return cast(Response, await call_next(request))
 
         # 1. 验证 API Key
         api_key = request.headers.get("API-Key", "")
@@ -61,7 +62,7 @@ class MCPAuthMiddleware(BaseHTTPMiddleware):
         try:
             response = await call_next(request)
             await db.commit()
-            return response
+            return cast(Response, response)
         except Exception:
             await db.rollback()
             raise
@@ -70,7 +71,7 @@ class MCPAuthMiddleware(BaseHTTPMiddleware):
             reset_context(db_token, user_token)
 
 
-def build_mcp_middleware() -> list:
+def build_mcp_middleware() -> list[Middleware]:
     """构建 MCP 应用的中间件列表，供 FastMCP http_app 使用。"""
     settings = get_settings()
     raw = settings.MCP_AGENT_API_KEYS

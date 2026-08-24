@@ -3,11 +3,11 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from alembic import command
 from alembic.config import Config
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from alembic import command
 from app.modules.quality.models.validation_record import ValidationRecord
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -34,13 +34,15 @@ async def reset_validation_records_table(db_session: AsyncSession) -> None:
     ensure_validation_records_migrated()
     for table_name in _EXECUTION_TABLES:
         await db_session.execute(text(f"DELETE FROM {table_name}"))
-    await db_session.execute(ValidationRecord.__table__.delete())
+    await db_session.execute(ValidationRecord.__table__.delete())  # type: ignore[attr-defined]
     await db_session.commit()
 
 
 async def assert_validation_migration_state(db_session: AsyncSession) -> None:
     table_name = (
-        await db_session.execute(text("SELECT to_regclass('quality.validation_records')"))
+        await db_session.execute(
+            text("SELECT to_regclass('quality.validation_records')")
+        )
     ).scalar_one()
     execution_tables = [
         (

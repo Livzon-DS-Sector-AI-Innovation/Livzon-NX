@@ -157,7 +157,7 @@ class RespondComplaintRequest(BaseModel):
     response_date: date = Field(default_factory=date.today, description="回复日期")
 
 
-class ComplaintOut(ComplaintBase, ExternalQualityEntityOut):
+class ExternalComplaintOut(ComplaintBase, ExternalQualityEntityOut):
     investigation_result: str | None
     response_content: str | None
     response_date: date | None
@@ -208,11 +208,17 @@ class CompleteReturnRecallRequest(BaseModel):
     completion_date: date = Field(default_factory=date.today, description="完成日期")
 
 
-class ReturnRecallOut(ReturnRecallBase, ExternalQualityEntityOut):
+class ExternalReturnRecallOut(ReturnRecallBase, ExternalQualityEntityOut):
     assessment_date: date | None
     disposition: str | None
     completion_date: date | None
     status: ReturnRecallStatus
+
+
+# Backward-compatible import aliases. The underlying Pydantic class names stay
+# unique so OpenAPI does not prefix the migrated complaint/return schemas.
+ComplaintOut = ExternalComplaintOut
+ReturnRecallOut = ExternalReturnRecallOut
 
 
 class ProductQualityRecordBase(BaseModel):
@@ -363,26 +369,26 @@ class SupplierQualificationListResponse(BaseModel):
 class ComplaintResponse(BaseModel):
     code: int
     message: str
-    data: ComplaintOut
+    data: ExternalComplaintOut
 
 
 class ComplaintListResponse(BaseModel):
     code: int
     message: str
-    data: list[ComplaintOut]
+    data: list[ExternalComplaintOut]
     meta: ExternalQualityPageMeta
 
 
 class ReturnRecallResponse(BaseModel):
     code: int
     message: str
-    data: ReturnRecallOut
+    data: ExternalReturnRecallOut
 
 
 class ReturnRecallListResponse(BaseModel):
     code: int
     message: str
-    data: list[ReturnRecallOut]
+    data: list[ExternalReturnRecallOut]
     meta: ExternalQualityPageMeta
 
 

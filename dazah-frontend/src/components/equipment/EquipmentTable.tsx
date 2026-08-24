@@ -83,8 +83,8 @@ export function EquipmentTable({ loading = false, onPageChange, resetKey }: Equi
           await deleteEquipment(record.id)
           message.success('删除设备成功')
           onPageChange(localPage, localPageSize)
-        } catch (error: any) {
-          message.error(error?.message || '删除设备失败')
+        } catch (error) {
+          message.error((error instanceof Error ? error.message : '') || '删除设备失败')
         }
       },
     })

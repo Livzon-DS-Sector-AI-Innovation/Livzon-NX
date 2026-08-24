@@ -19,10 +19,10 @@ from app.modules.safety.ai_hazard_identification.plugin import (
     IdentificationError,
 )
 from app.modules.safety.ai_hazard_identification.prompts import (
+    build_context_text,
+    build_full_prompt,
     get_db_seed_config,
     get_expected_keys,
-    build_full_prompt,
-    build_context_text,
 )
 from app.modules.safety.ai_hazard_identification.rules import (
     RuleEngine,

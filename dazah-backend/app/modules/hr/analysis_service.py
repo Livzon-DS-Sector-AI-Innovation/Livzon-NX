@@ -2,6 +2,7 @@
 
 from collections import Counter
 from datetime import date, timedelta
+from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,9 +13,13 @@ from app.modules.hr.analysis_schemas import (
     TurnoverMetrics,
     TurnoverRawData,
 )
-from app.modules.hr.models import DepartureRecord, OnboardingRecord
+from app.modules.hr.legacy_models import (
+    DepartureRecord,
+    OnboardingRecord,
+)
 
-_TURNOVER_SYSTEM_PROMPT = """你是一位人力资源数据分析顾问，擅长从人员流动数据中发现管理问题并提供针对性建议。
+_TURNOVER_SYSTEM_PROMPT = """你是一位人力资源数据分析顾问，
+擅长从人员流动数据中发现管理问题并提供针对性建议。
 
 【任务要求】
 用户消息中提供了统计周期的真实数据，请基于这些数据，严格按照以下四部分结构输出分析报告，不要添加其他内容。
@@ -55,7 +60,9 @@ class TurnoverAnalysisService:
         self.ai_service = ai_service
 
     async def analyze(self) -> TurnoverAnalysisResponse:
-        """Run full turnover analysis: fetch data, compute metrics, generate AI report."""
+        """Run full turnover analysis: fetch data, compute metrics,
+        generate AI report.
+        """
         end_date = date.today()
         start_date = end_date - timedelta(days=180)
 
@@ -87,7 +94,7 @@ class TurnoverAnalysisService:
             ai_suggestions=ai_result["suggestions"],
         )
 
-    async def _fetch_all_data(self, start_date: date, end_date: date) -> dict:
+    async def _fetch_all_data(self, start_date: date, end_date: date) -> dict[str, Any]:
         """Fetch onboarding, departure and headcount data."""
         onboarding_data = await self._fetch_onboarding_data(start_date, end_date)
         departure_data = await self._fetch_departure_data(start_date, end_date)
@@ -99,7 +106,9 @@ class TurnoverAnalysisService:
             "current_headcount": headcount,
         }
 
-    async def _fetch_onboarding_data(self, start_date: date, end_date: date) -> dict:
+    async def _fetch_onboarding_data(
+        self, start_date: date, end_date: date
+    ) -> dict[str, Any]:
         """Fetch onboarding records within the period."""
         total_stmt = (
             select(func.count())
@@ -156,7 +165,9 @@ class TurnoverAnalysisService:
             "onboarding_by_education": by_education,
         }
 
-    async def _fetch_departure_data(self, start_date: date, end_date: date) -> dict:
+    async def _fetch_departure_data(
+        self, start_date: date, end_date: date
+    ) -> dict[str, Any]:
         """Fetch departure records within the period."""
         total_stmt = (
             select(func.count())
@@ -194,16 +205,13 @@ class TurnoverAnalysisService:
         jc_result = await self.session.execute(jc_stmt)
         by_job_category = {row[0]: row[1] for row in jc_result.all() if row[0]}
 
-        reason_stmt = (
-            select(
-                DepartureRecord.offboarding_reason,
-                DepartureRecord.offboarding_reason_2,
-            )
-            .where(
-                DepartureRecord.offboarding_date >= start_date,
-                DepartureRecord.offboarding_date <= end_date,
-                DepartureRecord.is_deleted.is_(False),
-            )
+        reason_stmt = select(
+            DepartureRecord.offboarding_reason,
+            DepartureRecord.offboarding_reason_2,
+        ).where(
+            DepartureRecord.offboarding_date >= start_date,
+            DepartureRecord.offboarding_date <= end_date,
+            DepartureRecord.is_deleted.is_(False),
         )
         reason_result = await self.session.execute(reason_stmt)
         reason_counter: Counter[str] = Counter()
@@ -234,7 +242,7 @@ class TurnoverAnalysisService:
         return result.scalar() or 0
 
     @staticmethod
-    def _calculate_metrics(raw_data: dict) -> TurnoverMetrics:
+    def _calculate_metrics(raw_data: dict[str, Any]) -> TurnoverMetrics:
         """Calculate turnover metrics from raw data."""
         onboarding_count = raw_data["onboarding_count"]
         departure_count = raw_data["departure_count"]
@@ -256,8 +264,8 @@ class TurnoverAnalysisService:
         )
 
     async def _generate_ai_analysis(
-        self, raw_data: dict, metrics: TurnoverMetrics
-    ) -> dict:
+        self, raw_data: dict[str, Any], metrics: TurnoverMetrics
+    ) -> dict[str, Any]:
         """Generate AI analysis report."""
         start = raw_data.get("period_start")
         end = raw_data.get("period_end")
@@ -303,7 +311,7 @@ class TurnoverAnalysisService:
             }
 
     @staticmethod
-    def _parse_ai_response(text: str) -> dict:
+    def _parse_ai_response(text: str) -> dict[str, Any]:
         """Parse AI text response into structured data."""
         return {
             "summary": text.strip(),

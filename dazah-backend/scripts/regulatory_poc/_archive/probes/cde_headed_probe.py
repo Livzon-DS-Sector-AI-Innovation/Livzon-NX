@@ -4,18 +4,16 @@ CDE 有头浏览器探测脚本
 在真实浏览器窗口环境下监听 getDomesticGuideList 接口
 """
 
-import os
-import sys
 import json
+import os
 import time
 from datetime import datetime
-from urllib.parse import urlparse, parse_qs
+from typing import Any
 
 os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "/tmp/playwright-browsers"
 # DISPLAY is set by xvfb-run
 
 from playwright.sync_api import sync_playwright
-
 
 LAUNCH_ARGS = [
     "--no-sandbox",
@@ -25,8 +23,8 @@ LAUNCH_ARGS = [
 ]
 
 
-def probe():
-    report = {
+def probe() -> Any:
+    report: dict[str, Any] = {
         "timestamp": datetime.now().isoformat(),
         "mode": "headed (Xvfb)",
         "display": os.environ.get("DISPLAY"),
@@ -65,12 +63,16 @@ def probe():
 
     context = browser.new_context(
         viewport={"width": 1920, "height": 1080},
-        user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        user_agent=(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        ),
     )
     page = context.new_page()
 
     # 记录所有请求和响应
-    def on_request(request):
+    def on_request(request: Any) -> Any:
         url = request.url
         if "cde.org.cn" in url:
             entry = {
@@ -81,10 +83,14 @@ def probe():
                 "timestamp": datetime.now().isoformat(),
             }
             report["captured_requests"].append(entry)
-            rtype = "API" if request.resource_type in ("xhr", "fetch") else request.resource_type[:3].upper()
+            rtype = (
+                "API"
+                if request.resource_type in ("xhr", "fetch")
+                else request.resource_type[:3].upper()
+            )
             print(f"   [REQ {rtype}] {request.method} {url[:130]}")
 
-    def on_response(response):
+    def on_response(response: Any) -> Any:
         url = response.url
         if "cde.org.cn" not in url:
             return
@@ -110,7 +116,9 @@ def probe():
                                 if isinstance(v, list):
                                     entry[f"field_{k}_len"] = len(v)
                                     if v and isinstance(v[0], dict):
-                                        entry[f"field_{k}_item_keys"] = list(v[0].keys())
+                                        entry[f"field_{k}_item_keys"] = list(
+                                            v[0].keys()
+                                        )
                                 else:
                                     entry[f"field_{k}"] = v
                         entry["body_preview"] = body[:3000]
@@ -127,7 +135,7 @@ def probe():
         # 检查是否是目标 API
         if "getDomesticGuideList" in url:
             report["api_found"] = True
-            print(f"\n   🎯🎯🎯 捕获到 getDomesticGuideList!")
+            print("\n   🎯🎯🎯 捕获到 getDomesticGuideList!")
             print(f"       状态: {response.status}")
             if entry.get("is_json"):
                 print(f"       JSON keys: {entry.get('json_keys')}")
@@ -137,7 +145,7 @@ def probe():
                     print(f"       total: {entry['field_total']}")
                 report["api_data"] = entry
             else:
-                print(f"       非 JSON 响应")
+                print("       非 JSON 响应")
 
     page.on("request", on_request)
     page.on("response", on_response)
@@ -145,7 +153,11 @@ def probe():
     # Step 2: 加载页面
     print("\n[2] 加载 CDE 指导原则页面...")
     try:
-        page.goto("https://www.cde.org.cn/zdyz/index", timeout=30000, wait_until="domcontentloaded")
+        page.goto(
+            "https://www.cde.org.cn/zdyz/index",
+            timeout=30000,
+            wait_until="domcontentloaded",
+        )
         print(f"   初始标题: '{page.title()}'")
     except Exception as e:
         print(f"   页面导航异常: {e}")
@@ -157,7 +169,9 @@ def probe():
         title = page.title()
         url = page.url
         cookies = context.cookies()
-        print(f"   [{(i+1)*2}s] title='{title}' url={url[:80]} cookies={len(cookies)}")
+        print(
+            f"   [{(i + 1) * 2}s] title='{title}' url={url[:80]} cookies={len(cookies)}"
+        )
 
         if title and len(title) > 2:
             print(f"   ✅ 页面标题出现: {title}")
@@ -171,12 +185,21 @@ def probe():
     print("\n[4] Cookie 快照...")
     cookies = context.cookies()
     report["cookies_after"] = [
-        {"name": c["name"], "domain": c["domain"], "expires": c.get("expires", -1),
-         "httpOnly": c.get("httpOnly", False), "value_preview": c["value"][:80]}
+        {
+            "name": c["name"],
+            "domain": c["domain"],
+            "expires": c.get("expires", -1),
+            "httpOnly": c.get("httpOnly", False),
+            "value_preview": c["value"][:80],
+        }
         for c in cookies
     ]
     for c in report["cookies_after"]:
-        exp = datetime.fromtimestamp(c["expires"]).isoformat() if c["expires"] > 0 else "Session"
+        exp = (
+            datetime.fromtimestamp(c["expires"]).isoformat()
+            if c["expires"] > 0
+            else "Session"
+        )
         print(f"   {c['name']} @ {c['domain']} expires={exp}")
 
     # Step 5: 如果 WAF 通过了但 API 还没触发，等待更久或滚动触发
@@ -203,7 +226,8 @@ def probe():
         try:
             fetch_result = page.evaluate("""async () => {
                 try {
-                    const resp = await fetch('/zdyz/getDomesticGuideList?pageNum=1&pageSize=10', {
+                    const resp = await fetch(
+                        '/zdyz/getDomesticGuideList?pageNum=1&pageSize=10', {
                         method: 'GET',
                         credentials: 'include',
                         headers: {
@@ -241,7 +265,9 @@ def probe():
                 if "records" in data:
                     report["api_data"]["field_records_len"] = len(data["records"])
                     if data["records"]:
-                        report["api_data"]["field_records_item_keys"] = list(data["records"][0].keys())
+                        report["api_data"]["field_records_item_keys"] = list(
+                            data["records"][0].keys()
+                        )
                         report["api_data"]["first_record"] = data["records"][0]
                 for k in ("total", "pages", "current"):
                     if k in data:
@@ -266,7 +292,7 @@ def probe():
     return report
 
 
-def main():
+def main() -> Any:
     report = probe()
 
     # 保存结果
@@ -275,9 +301,9 @@ def main():
         json.dump(report, f, ensure_ascii=False, indent=2)
 
     # 打印汇总
-    print(f"\n\n{'='*70}")
+    print(f"\n\n{'=' * 70}")
     print("探测结果汇总")
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
     print(f"  模式: {report['mode']}")
     print(f"  WAF 通过: {'✅' if report['waf_passed'] else '❌'}")
     print(f"  API 捕获: {'✅' if report['api_found'] else '❌'}")
@@ -287,20 +313,25 @@ def main():
     print(f"  Cookie 数: {len(report['cookies_after'])}")
 
     if report["api_data"]:
-        print(f"\n  API 数据:")
+        print("\n  API 数据:")
         print(f"    URL: {report['api_data'].get('url', 'N/A')}")
         print(f"    Status: {report['api_data'].get('status')}")
-        if report['api_data'].get('is_json'):
+        if report["api_data"].get("is_json"):
             print(f"    JSON keys: {report['api_data'].get('json_keys')}")
-            if 'field_records_len' in report['api_data']:
+            if "field_records_len" in report["api_data"]:
                 print(f"    records: {report['api_data']['field_records_len']} 条")
-            if 'field_total' in report['api_data']:
+            if "field_total" in report["api_data"]:
                 print(f"    total: {report['api_data']['field_total']}")
-            if 'first_record' in report['api_data']:
-                print(f"    首条记录: {json.dumps(report['api_data']['first_record'], ensure_ascii=False)[:300]}")
+            if "first_record" in report["api_data"]:
+                first_record = json.dumps(
+                    report["api_data"]["first_record"], ensure_ascii=False
+                )[:300]
+                print(
+                    f"    首条记录: {first_record}"
+                )
 
     if report["errors"]:
-        print(f"\n  错误:")
+        print("\n  错误:")
         for e in report["errors"]:
             print(f"    - {e}")
 

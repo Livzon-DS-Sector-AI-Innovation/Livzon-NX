@@ -278,7 +278,5 @@ def downgrade() -> None:
     op.drop_index(
         "ix_core_agent_skills_status", table_name="agent_skills", schema="core"
     )
-    op.drop_index(
-        "ix_core_agent_skills_name", table_name="agent_skills", schema="core"
-    )
+    op.drop_index("ix_core_agent_skills_name", table_name="agent_skills", schema="core")
     op.drop_table("agent_skills", schema="core")

@@ -24,7 +24,7 @@ export function QualityAiResultCard({
   const [selectedFields, setSelectedFields] = useState<string[]>([])
 
   useEffect(() => {
-    setSelectedFields(payload?.applicable_fields.map((field) => field.field_key) || [])
+    setSelectedFields((payload?.applicable_fields ?? []).map((field) => field.field_key) || [])
   }, [payload])
 
   return (
@@ -37,7 +37,7 @@ export function QualityAiResultCard({
         </Space>
       }
       extra={
-        payload && payload.applicable_fields.length > 0 ? (
+        payload && (payload.applicable_fields ?? []).length > 0 ? (
           <Button
             size="small"
             type="primary"
@@ -65,23 +65,23 @@ export function QualityAiResultCard({
           ) : null}
           <Paragraph>
             <Text strong>风险：</Text>
-            {payload.risks.join('；') || '-'}
+            {(payload.risks ?? []).join('；') || '-'}
           </Paragraph>
           <Paragraph>
             <Text strong>建议：</Text>
-            {payload.suggestions.join('；') || '-'}
+            {(payload.suggestions ?? []).join('；') || '-'}
           </Paragraph>
           <Paragraph>
             <Text strong>待补信息：</Text>
-            {payload.missing_info.join('；') || '-'}
+            {(payload.missing_info ?? []).join('；') || '-'}
           </Paragraph>
           {payload.disclaimer ? (
-            <Alert showIcon type="info" style={{ marginBottom: 12 }} message={payload.disclaimer} />
+            <Alert showIcon type="info" style={{ marginBottom: 12 }} title={payload.disclaimer} />
           ) : null}
-          {payload.applicable_fields.length > 0 ? (
+          {(payload.applicable_fields ?? []).length > 0 ? (
             <Checkbox.Group value={selectedFields} onChange={(values) => setSelectedFields(values as string[])}>
               <div style={{ display: 'grid', gap: 8 }}>
-                {payload.applicable_fields.map((field) => (
+                {(payload.applicable_fields ?? []).map((field) => (
                   <Checkbox key={field.field_key} value={field.field_key}>
                     {field.label}
                   </Checkbox>

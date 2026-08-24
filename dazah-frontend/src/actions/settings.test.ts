@@ -25,6 +25,7 @@ import {
   getExternalIdentityConflicts,
   getFeishuAuthorizations,
   getLivzonFeishuGatewayStatus,
+  probeLLMConfig,
   restartLivzonFeishuGateway,
   revokeFeishuAuthorization,
   setAgentToolEnabled,
@@ -37,6 +38,55 @@ describe('settings Agent and Feishu actions', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
     vi.clearAllMocks()
+  })
+
+  it('sends unsaved LLM connectivity probes through the backend', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            status: 'ok',
+            probe_type: 'model',
+            config_type: 'text',
+            capabilities: ['text', 'document'],
+            detail: '模型连通正常',
+          }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ detail: '模型认证失败' }), { status: 400 }),
+      )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await probeLLMConfig({
+      probe_type: 'model',
+      api_base_url: 'https://llm.example/v1',
+      api_key: 'test-key',
+      model_name: 'test-model',
+      timeout_seconds: 30,
+    })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://backend.test/api/v1/llm/configs/probe',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          probe_type: 'model',
+          api_base_url: 'https://llm.example/v1',
+          api_key: 'test-key',
+          model_name: 'test-model',
+          timeout_seconds: 30,
+        }),
+      }),
+    )
+
+    await expect(probeLLMConfig({
+      probe_type: 'url',
+      api_base_url: 'https://llm.example/v1',
+      api_key: 'bad-key',
+      timeout_seconds: 30,
+    })).rejects.toThrow('模型认证失败')
   })
 
   it('unwraps the Hermes gateway status envelope', async () => {

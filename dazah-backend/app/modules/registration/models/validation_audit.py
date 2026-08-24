@@ -33,8 +33,10 @@ class ValidationAuditTask(BaseModel):
         String(30), nullable=False, comment="审核模式: protocol/report/protocol_report"
     )
     status: Mapped[str] = mapped_column(
-        String(30), nullable=False, server_default="draft",
-        comment="状态: draft/uploaded/parsing/auditing/completed/failed"
+        String(30),
+        nullable=False,
+        server_default="draft",
+        comment="状态: draft/uploaded/parsing/auditing/completed/failed",
     )
     conclusion: Mapped[str | None] = mapped_column(
         String(30), nullable=True, comment="审核结论: pass/conditional_pass/fail"
@@ -87,8 +89,10 @@ class ValidationAuditFile(BaseModel):
         Integer, nullable=False, server_default="0", comment="文件大小(字节)"
     )
     parse_status: Mapped[str] = mapped_column(
-        String(30), nullable=False, server_default="pending",
-        comment="解析状态: pending/parsing/completed/failed"
+        String(30),
+        nullable=False,
+        server_default="pending",
+        comment="解析状态: pending/parsing/completed/failed",
     )
     parsed_text: Mapped[str | None] = mapped_column(
         Text, nullable=True, comment="解析后的文本内容"
@@ -120,9 +124,7 @@ class ValidationAuditIssue(BaseModel):
     check_item: Mapped[str] = mapped_column(
         String(200), nullable=False, comment="检查项"
     )
-    description: Mapped[str] = mapped_column(
-        Text, nullable=False, comment="问题描述"
-    )
+    description: Mapped[str] = mapped_column(Text, nullable=False, comment="问题描述")
     suggestion: Mapped[str | None] = mapped_column(
         Text, nullable=True, comment="修改建议"
     )

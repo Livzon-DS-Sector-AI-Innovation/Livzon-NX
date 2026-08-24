@@ -7,14 +7,13 @@ export type ReturnRecall = components['schemas']['ReturnRecallOut']
 export type ProductQualityRecord = components['schemas']['ProductQualityRecordOut']
 export type ProductQualityStandardItem = components['schemas']['ProductQualityStandardItemOut']
 
-export type SupplierListResponse =
-  components['schemas']['app__modules__quality__schemas__external_quality__SupplierListResponse']
+type ListEnvelope<T> = { code?: number; message?: string; data: T[]; meta?: { total?: number; page?: number; page_size?: number } }
+export type SupplierListResponse = ListEnvelope<Supplier>
 export type SupplierQualificationListResponse =
   components['schemas']['SupplierQualificationListResponse']
-export type ComplaintListResponse = components['schemas']['ComplaintListResponse']
-export type ReturnRecallListResponse = components['schemas']['ReturnRecallListResponse']
-export type ProductQualityRecordListResponse =
-  components['schemas']['ProductQualityRecordListResponse']
+export type ComplaintListResponse = ListEnvelope<Complaint>
+export type ReturnRecallListResponse = ListEnvelope<ReturnRecall>
+export type ProductQualityRecordListResponse = ListEnvelope<ProductQualityRecord>
 export type ProductQualityStandardItemListResponse =
   components['schemas']['ProductQualityStandardItemListResponse']
 

@@ -1,4 +1,5 @@
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
@@ -8,15 +9,17 @@ from fastapi import HTTPException
 from app.modules.agent import agent_tools, automation_runner
 from app.modules.agent.repository import AgentRepository
 
+SimpleNamespace: Any = _SimpleNamespace
+
 
 class _RepositoryDb:
-    def __init__(self) -> None:
+    def __init__(self: Any) -> None:
         self.added = None
 
-    def add(self, value) -> None:
+    def add(self: Any, value: Any) -> None:
         self.added = value
 
-    async def flush(self) -> None:
+    async def flush(self: Any) -> None:
         return None
 
 
@@ -26,7 +29,7 @@ async def test_tool_call_uses_top_level_trace_id_as_correlation() -> None:
     db = _RepositoryDb()
 
     call = await AgentRepository().create_tool_call(
-        db,
+        db,  # type: ignore[arg-type]
         session_id=None,
         operation="agent.get_current_time",
         request_payload={"trace_id": str(trace_id)},
@@ -36,12 +39,12 @@ async def test_tool_call_uses_top_level_trace_id_as_correlation() -> None:
 
 
 @pytest.mark.anyio
-async def test_retry_automation_run_creates_a_new_run(monkeypatch) -> None:
+async def test_retry_automation_run_creates_a_new_run(monkeypatch: Any) -> None:
     source_run_id = uuid4()
     automation_id = uuid4()
     new_run_id = uuid4()
-    user = SimpleNamespace(id=uuid4())
-    service = SimpleNamespace(
+    user: Any = SimpleNamespace(id=uuid4())
+    service: Any = SimpleNamespace(
         get_run=AsyncMock(
             side_effect=[
                 {
@@ -54,7 +57,7 @@ async def test_retry_automation_run_creates_a_new_run(monkeypatch) -> None:
         ),
         _require_owner=AsyncMock(),
     )
-    execute_manual = AsyncMock(return_value=SimpleNamespace(id=new_run_id))
+    execute_manual: Any = AsyncMock(return_value=SimpleNamespace(id=new_run_id))
     monkeypatch.setattr(agent_tools, "_automation_service", lambda context: service)
     monkeypatch.setattr(
         automation_runner.AgentAutomationRunner,
@@ -77,8 +80,8 @@ async def test_retry_automation_run_creates_a_new_run(monkeypatch) -> None:
 
 
 @pytest.mark.anyio
-async def test_retry_automation_run_rejects_non_failed_state(monkeypatch) -> None:
-    service = SimpleNamespace(
+async def test_retry_automation_run_rejects_non_failed_state(monkeypatch: Any) -> None:
+    service: Any = SimpleNamespace(
         get_run=AsyncMock(
             return_value={
                 "id": str(uuid4()),

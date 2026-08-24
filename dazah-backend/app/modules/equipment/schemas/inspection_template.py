@@ -105,6 +105,7 @@ class InspectionTemplateResponse(BaseModel):
 # ==================== 巡检记录 ====================
 class InspectionRecordItem(BaseModel):
     """巡检记录项"""
+
     template_item_id: uuid.UUID = Field(..., description="检查项ID")
     result: str = Field(..., description="结果：正常/异常/跳过")
     actual_value: str | None = Field(default=None, description="实际值")
@@ -113,6 +114,7 @@ class InspectionRecordItem(BaseModel):
 
 class InspectionCompleteRequest(BaseModel):
     """巡检完成请求（提交所有检查项结果）"""
+
     records: list[InspectionRecordItem] = Field(
         ..., min_length=1, description="检查项结果列表"
     )
@@ -120,6 +122,7 @@ class InspectionCompleteRequest(BaseModel):
 
 class InspectionRecordResponse(BaseModel):
     """巡检记录响应"""
+
     id: uuid.UUID
     work_order_id: uuid.UUID
     template_item_id: uuid.UUID

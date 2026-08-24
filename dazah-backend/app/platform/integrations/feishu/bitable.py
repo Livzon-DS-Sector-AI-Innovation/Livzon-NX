@@ -26,7 +26,7 @@ def _to_ms_timestamp(value: date | datetime | str | None) -> int | str:
         try:
             value = datetime.strptime(value, "%Y-%m-%d").date()
         except ValueError:
-            return value
+            return str(value)
     if isinstance(value, (date, datetime)):
         if isinstance(value, date) and not isinstance(value, datetime):
             dt = datetime(value.year, value.month, value.day, tzinfo=UTC)
@@ -50,11 +50,11 @@ class BitableClient:
         base = f"/bitable/v1/apps/{self.app_token}/tables/{table_id}"
         return f"{base}{suffix}"
 
-    async def list_tables(self, page_size: int = 100) -> list[dict]:
+    async def list_tables(self, page_size: int = 100) -> list[dict[str, Any]]:
         """List tables in the configured Bitable app."""
         if not self.app_token:
             raise RuntimeError("Bitable app_token not configured")
-        items: list[dict] = []
+        items: list[dict[str, Any]] = []
         page_token: str | None = None
         while True:
             params: dict[str, object] = {"page_size": page_size}
@@ -75,7 +75,9 @@ class BitableClient:
                 break
         return items
 
-    async def create_record(self, table_id: str, fields: dict) -> dict:
+    async def create_record(
+        self, table_id: str, fields: dict[str, Any]
+    ) -> dict[str, Any]:
         """Create a single record."""
         if not self.app_token or not table_id:
             raise RuntimeError("Bitable app_token or table_id not configured")
@@ -84,11 +86,12 @@ class BitableClient:
             self._path(table_id, "/records"),
             json={"fields": fields},
         )
-        return data.get("record", {})
+        record = data.get("record", {})
+        return record if isinstance(record, dict) else {}
 
     async def update_record(
-        self, table_id: str, record_id: str, fields: dict
-    ) -> dict:
+        self, table_id: str, record_id: str, fields: dict[str, Any]
+    ) -> dict[str, Any]:
         """Update a single record."""
         if not self.app_token or not table_id:
             raise RuntimeError("Bitable app_token or table_id not configured")
@@ -97,7 +100,8 @@ class BitableClient:
             self._path(table_id, f"/records/{record_id}"),
             json={"fields": fields},
         )
-        return data.get("record", {})
+        record = data.get("record", {})
+        return record if isinstance(record, dict) else {}
 
     async def delete_record(self, table_id: str, record_id: str) -> None:
         """Delete a single record."""
@@ -108,11 +112,57 @@ class BitableClient:
             self._path(table_id, f"/records/{record_id}"),
         )
 
-    async def list_fields(self, table_id: str, page_size: int = 500) -> list[dict]:
+    async def get_record(self, table_id: str, record_id: str) -> dict[str, Any]:
+        """Fetch one Bitable record.
+
+        The migrated quality and registration integrations use this small
+        compatibility operation in addition to the original CRUD methods.
+        Return an empty mapping for a response without a record so callers do
+        not accidentally treat the whole API envelope as field data.
+        """
+        if not self.app_token or not table_id or not record_id:
+            raise RuntimeError(
+                "Bitable app_token, table_id or record_id not configured"
+            )
+        data = await self.client.request(
+            "GET",
+            self._path(table_id, f"/records/{record_id}"),
+        )
+        record = data.get("record")
+        return record if isinstance(record, dict) else {}
+
+    async def list_all_records(
+        self,
+        table_id: str,
+        *,
+        page_size: int = 500,
+        automatic_fields: bool = False,
+        timeout: float | None = None,
+    ) -> list[dict[str, Any]]:
+        """Read all records while following Feishu pagination tokens."""
+        records: list[dict[str, Any]] = []
+        page_token: str | None = None
+        while True:
+            page = await self.search_records_page(
+                table_id,
+                page_size=page_size,
+                page_token=page_token,
+                automatic_fields=automatic_fields,
+                timeout=timeout,
+            )
+            records.extend(page["items"])
+            if not page["has_more"] or not page["page_token"]:
+                break
+            page_token = page["page_token"]
+        return records
+
+    async def list_fields(
+        self, table_id: str, page_size: int = 500
+    ) -> list[dict[str, Any]]:
         """List fields for a table."""
         if not self.app_token or not table_id:
             raise RuntimeError("Bitable app_token or table_id not configured")
-        items: list[dict] = []
+        items: list[dict[str, Any]] = []
         page_token: str | None = None
         while True:
             params: dict[str, object] = {"page_size": page_size}
@@ -224,9 +274,7 @@ class BitableClient:
         return {
             "items": [item for item in items if isinstance(item, dict)],
             "has_more": bool(data.get("has_more")),
-            "page_token": (
-                str(raw_page_token) if raw_page_token is not None else None
-            ),
+            "page_token": (str(raw_page_token) if raw_page_token is not None else None),
             "total": int(raw_total) if isinstance(raw_total, (int, float)) else None,
         }
 
@@ -246,7 +294,7 @@ class FeishuBitableSync:
 
     # ─── Department ───
 
-    async def sync_department_created(self, dept: dict) -> None:
+    async def sync_department_created(self, dept: dict[str, Any]) -> None:
         if not self._is_enabled() or not self.department_table:
             return
         fields = {
@@ -265,7 +313,7 @@ class FeishuBitableSync:
             logger.error("Failed to sync department to Feishu: %s", e)
             raise
 
-    async def sync_department_updated(self, dept: dict) -> None:
+    async def sync_department_updated(self, dept: dict[str, Any]) -> None:
         if not self._is_enabled() or not self.department_table:
             return
         record_id = dept.get("_feishu_record_id") or await self._find_department_record(
@@ -308,8 +356,8 @@ class FeishuBitableSync:
 
     # ─── Employee ───
 
-    def _build_employee_fields(self, emp: dict) -> dict:
-        fields: dict = {
+    def _build_employee_fields(self, emp: dict[str, Any]) -> dict[str, Any]:
+        fields: dict[str, Any] = {
             "工号": emp.get("employee_number"),
             "姓名": emp.get("name"),
             "部门": emp.get("department") or "",
@@ -337,7 +385,7 @@ class FeishuBitableSync:
             fields["合同结束日期"] = contract_end
         return fields
 
-    async def sync_employee_created(self, emp: dict) -> None:
+    async def sync_employee_created(self, emp: dict[str, Any]) -> None:
         if not self._is_enabled() or not self.employee_table:
             return
         fields = self._build_employee_fields(emp)
@@ -352,7 +400,7 @@ class FeishuBitableSync:
             logger.error("Failed to sync employee to Feishu: %s", e)
             raise
 
-    async def sync_employee_updated(self, emp: dict) -> None:
+    async def sync_employee_updated(self, emp: dict[str, Any]) -> None:
         if not self._is_enabled() or not self.employee_table:
             return
         record_id = emp.get("_feishu_record_id") or await self._find_employee_record(
@@ -391,7 +439,7 @@ class FeishuBitableSync:
 
     # ─── Offboarding ───
 
-    async def sync_offboarding_created(self, record: dict) -> None:
+    async def sync_offboarding_created(self, record: dict[str, Any]) -> None:
         if not self._is_enabled() or not self.offboarding_table:
             return
         employee = record.get("employee") or {}
@@ -415,7 +463,7 @@ class FeishuBitableSync:
             logger.error("Failed to sync offboarding to Feishu: %s", e)
             raise
 
-    async def sync_offboarding_updated(self, record: dict) -> None:
+    async def sync_offboarding_updated(self, record: dict[str, Any]) -> None:
         if not self._is_enabled() or not self.offboarding_table:
             return
         record_id = record.get("_feishu_record_id")
@@ -440,7 +488,7 @@ class FeishuBitableSync:
 
     # ─── Approval ───
 
-    async def sync_approval_created(self, emp: dict) -> None:
+    async def sync_approval_created(self, emp: dict[str, Any]) -> None:
         if not self._is_enabled() or not self.approval_table:
             return
         fields = {
@@ -469,4 +517,5 @@ class FeishuBitableSync:
             return None
         # 取最新的一条
         latest = max(items, key=lambda x: x.get("created_time", ""))
-        return latest.get("fields", {}).get("审批情况")
+        status = latest.get("fields", {}).get("审批情况")
+        return status if isinstance(status, str) else None

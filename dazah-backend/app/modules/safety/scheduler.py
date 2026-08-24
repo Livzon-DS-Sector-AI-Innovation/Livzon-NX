@@ -1,10 +1,17 @@
 """Scheduled task engine — asyncio loop for cron-based task execution."""
 
+from __future__ import annotations
+
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, cast
 
-from croniter import croniter
+from croniter import croniter  # type: ignore[import-untyped]  # no published stubs
+
+if TYPE_CHECKING:
+    from app.modules.safety.models import ScheduledTask
+    from app.modules.safety.repository import SafetyRepository
 
 logger = logging.getLogger(__name__)
 
@@ -15,18 +22,22 @@ stop_scheduled_task_flag = asyncio.Event()
 TICK_INTERVAL = 30
 
 
-def compute_next_run(cron_expression: str, from_time: datetime | None = None) -> datetime:
+def compute_next_run(
+    cron_expression: str, from_time: datetime | None = None
+) -> datetime:
     """Compute the next run time from a cron expression."""
-    base = from_time or datetime.now(timezone.utc)
+    base = from_time or datetime.now(UTC)
     # croniter expects naive datetime; we use local time for cron scheduling
     local_base = base.astimezone()
     cron = croniter(cron_expression, local_base.replace(tzinfo=None))
-    next_run_naive = cron.get_next(datetime)
+    next_run_naive = cast(datetime, cron.get_next(datetime))
     # Return as the same timezone-aware datetime
     return next_run_naive.replace(tzinfo=local_base.tzinfo)
 
 
-async def execute_single_task(task, safety_repo) -> None:
+async def execute_single_task(
+    task: ScheduledTask, safety_repo: SafetyRepository
+) -> None:
     """Execute one scheduled task: fetch data, build card, send to Feishu."""
     from app.modules.safety.card_builder import (
         build_card_json,
@@ -34,7 +45,7 @@ async def execute_single_task(task, safety_repo) -> None:
         render_template,
     )
 
-    task_start = datetime.now(timezone.utc)
+    task_start = datetime.now(UTC)
 
     # Create execution log
     log_data = {
@@ -83,7 +94,7 @@ async def execute_single_task(task, safety_repo) -> None:
             header_template=task.header_color or "blue",
         )
 
-        completed_at = datetime.now(timezone.utc)
+        completed_at = datetime.now(UTC)
         duration_ms = int((completed_at - task_start).total_seconds() * 1000)
 
         # Update log
@@ -110,10 +121,14 @@ async def execute_single_task(task, safety_repo) -> None:
             },
         )
 
-        logger.info("Scheduled task '%s' executed successfully, duration=%dms", task.name, duration_ms)
+        logger.info(
+            "Scheduled task '%s' executed successfully, duration=%dms",
+            task.name,
+            duration_ms,
+        )
 
     except Exception as e:
-        completed_at = datetime.now(timezone.utc)
+        completed_at = datetime.now(UTC)
         duration_ms = int((completed_at - task_start).total_seconds() * 1000)
         error_msg = str(e)
 
@@ -148,7 +163,7 @@ async def execute_single_task(task, safety_repo) -> None:
             logger.exception("Failed to update task status for '%s'", task.name)
 
 
-async def scheduled_task_loop():
+async def scheduled_task_loop() -> None:
     """Main scheduler loop — checks for due tasks every TICK_INTERVAL seconds.
 
     Launched in the FastAPI lifespan, runs until stop_scheduled_task_flag is set.
@@ -167,7 +182,11 @@ async def scheduled_task_loop():
                 due_tasks = await repo.get_due_scheduled_tasks()
 
                 for task in due_tasks:
-                    logger.info("Executing scheduled task: %s (chat=%s)", task.name, task.feishu_chat_id)
+                    logger.info(
+                        "Executing scheduled task: %s (chat=%s)",
+                        task.name,
+                        task.feishu_chat_id,
+                    )
                     await execute_single_task(task, repo)
 
                 await db.commit()
@@ -177,8 +196,10 @@ async def scheduled_task_loop():
 
         # Wait for next tick or stop signal
         try:
-            await asyncio.wait_for(stop_scheduled_task_flag.wait(), timeout=TICK_INTERVAL)
-        except asyncio.TimeoutError:
+            await asyncio.wait_for(
+                stop_scheduled_task_flag.wait(), timeout=TICK_INTERVAL
+            )
+        except TimeoutError:
             pass  # Normal tick timeout, loop continues
 
     logger.info("Scheduled task loop stopped")

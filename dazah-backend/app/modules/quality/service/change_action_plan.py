@@ -4,20 +4,20 @@ from __future__ import annotations
 
 import ast
 import html
-import json
 import logging
 import uuid
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.core.exceptions import AppException, NotFoundException
 from app.modules.quality import repository
 from app.modules.quality.models import ChangeActionPlan
 from app.modules.quality.schemas.change_action_plan import (
     ChangeActionPlanDetail,
-    ChangeActionPlanListItem,
     ChangeActionPlanPersonOption,
     ChangeActionPlanReminderConfirmResult,
     ChangeActionPlanReminderRunResult,
@@ -25,19 +25,19 @@ from app.modules.quality.schemas.change_action_plan import (
     CreateChangeActionPlanRequest,
     UpdateChangeActionPlanRequest,
 )
-from app.platform.integrations.feishu.auth import FeishuAuth
-from app.platform.integrations.feishu.bitable import _to_ms_timestamp
+from app.platform.integrations.feishu.bitable import BitableClient, _to_ms_timestamp
 from app.platform.integrations.feishu.contact import get_all_users
-from app.platform.integrations.feishu.im import (
-    send_feishu_message,
-    update_feishu_message,
+from app.platform.integrations.feishu.notification import (
+    send_user_card_with_message_id,
+    update_card,
 )
-from app.platform.integrations.feishu.utils import build_bitable_client
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
 _FINISHED_STATUSES = {"已完成", "已关闭", "已确认"}
+
+
 def _parse_date_value(value: Any) -> date | None:
     if value in (None, "", []):
         return None
@@ -64,9 +64,7 @@ def _extract_user_info(value: Any) -> tuple[str | None, str | None]:
         first = value[0]
         if isinstance(first, dict):
             return (
-                first.get("name")
-                or first.get("en_name")
-                or first.get("display_name"),
+                first.get("name") or first.get("en_name") or first.get("display_name"),
                 first.get("id")
                 or first.get("user_id")
                 or first.get("open_id")
@@ -107,7 +105,9 @@ def _normalize_feishu_text(value: Any) -> str | None:
         text_value = value.get("text")
         if isinstance(text_value, str) and text_value.strip():
             return text_value.strip()
-        name_value = value.get("name") or value.get("display_name") or value.get("en_name")
+        name_value = (
+            value.get("name") or value.get("display_name") or value.get("en_name")
+        )
         if isinstance(name_value, str) and name_value.strip():
             return name_value.strip()
         if "link" in value and isinstance(value["link"], str) and value["link"].strip():
@@ -128,9 +128,11 @@ async def _resolve_bitable_user_id(
     if not normalized_user_id.startswith("ou_"):
         return normalized_user_id
 
-    from app.modules.quality.service import quality_management as quality_management_service
+    from app.modules.quality.service.department_contacts import (
+        get_department_contact_list_from_feishu,
+    )
 
-    contacts = await quality_management_service.get_department_contact_list_from_feishu(
+    contacts = await get_department_contact_list_from_feishu(
         db,
         page=1,
         page_size=1000,
@@ -140,8 +142,13 @@ async def _resolve_bitable_user_id(
             bitable_user_id = str(contact.get("bitable_user_id") or "").strip()
             if bitable_user_id:
                 return bitable_user_id
-        if str(contact.get("department_head_open_id") or "").strip() == normalized_user_id:
-            bitable_user_id = str(contact.get("department_head_bitable_user_id") or "").strip()
+        if (
+            str(contact.get("department_head_open_id") or "").strip()
+            == normalized_user_id
+        ):
+            bitable_user_id = str(
+                contact.get("department_head_bitable_user_id") or ""
+            ).strip()
             if bitable_user_id:
                 return bitable_user_id
     return normalized_user_id
@@ -227,17 +234,23 @@ async def search_change_action_plan_person_options(
 
 class ChangeActionPlanFeishuSync:
     async def _resolve_runtime(
-        self,
-        db: AsyncSession,
-    ) -> tuple[Any, str] | tuple[None, None]:
-        from app.modules.quality.service import quality_feishu_sync as feishu_sync_service
+        self, db: AsyncSession
+    ) -> tuple[BitableClient, str] | tuple[None, None]:
+        from app.modules.quality.service import (
+            quality_feishu_sync as feishu_sync_service,
+        )
 
         runtime = await feishu_sync_service.feishu_sync._resolve_runtime(db)
         entity = runtime.get_entity_config("change_action_plan", direction="push")
-        if not runtime.is_enabled() or not entity or not entity.app_token or not entity.table_id:
+        if (
+            not runtime.is_enabled()
+            or not entity
+            or not entity.app_token
+            or not entity.table_id
+        ):
             return None, None
         return (
-            build_bitable_client(
+            BitableClient(
                 app_token=entity.app_token,
                 app_id=runtime.app_id,
                 app_secret=runtime.app_secret,
@@ -309,10 +322,12 @@ class ChangeActionPlanFeishuSync:
                 plan.feishu_record_id,
                 fields,
             )
-            return record.get("record_id") or plan.feishu_record_id
+            record_id = record.get("record_id")
+            return str(record_id) if record_id else plan.feishu_record_id
 
         record = await client.create_record(table_id, fields)
-        return record.get("record_id", "")
+        record_id = record.get("record_id", "")
+        return str(record_id)
 
     async def delete_record(self, db: AsyncSession, record_id: str) -> None:
         client, table_id = await self._resolve_runtime(db)
@@ -432,38 +447,30 @@ def _build_reminder_card_payload(
     }
 
 
-async def _get_quality_tenant_access_token(db: AsyncSession) -> str:
-    from app.modules.quality.service import quality_feishu_sync as feishu_sync_service
-
-    runtime = await feishu_sync_service.feishu_sync._resolve_runtime(db)
-    if not runtime.is_available:
-        raise RuntimeError("质量模块飞书应用配置缺失或未启用，无法发送提醒")
-    return await FeishuAuth.get_tenant_access_token(
-        app_id=runtime.app_id,
-        app_secret=runtime.app_secret,
-    )
-
-
-async def _send_reminder_card(db: AsyncSession, plan: ChangeActionPlan) -> str:
+async def _send_reminder_card(plan: ChangeActionPlan) -> str | None:
     recipient_open_id, _ = _get_reminder_recipient(plan)
     if not recipient_open_id:
-        raise RuntimeError("变更计划未配置负责人飞书账号，无法发送提醒")
+        logger.warning("变更计划 %s 未配置负责人飞书账号，无法发送提醒", plan.id)
+        return None
 
     card = _build_reminder_card_payload(plan, confirmed=False)
-    token = await _get_quality_tenant_access_token(db)
-    result = await send_feishu_message(
-        tenant_access_token=token,
-        receive_id=recipient_open_id,
-        receive_id_type="open_id",
-        msg_type="interactive",
-        content=json.dumps(card, ensure_ascii=False),
-    )
-    if not result.ok or not result.message_id:
-        raise RuntimeError(result.error_message or "飞书提醒发送失败")
-    return result.message_id
+    try:
+        message_id = await send_user_card_with_message_id(
+            recipient_open_id,
+            title="变更计划到期提醒",
+            content=_build_reminder_markdown(plan),
+            elements=card["elements"][1:],
+        )
+        if not message_id:
+            logger.warning("变更计划 %s 飞书提醒发送失败（机器人可能无权限）", plan.id)
+            return None
+        return message_id
+    except Exception as e:
+        logger.warning("变更计划 %s 飞书提醒发送异常: %s", plan.id, e)
+        return None
 
 
-async def _patch_confirmation_card(db: AsyncSession, plan: ChangeActionPlan) -> None:
+async def _patch_confirmation_card(plan: ChangeActionPlan) -> None:
     if not plan.reminder_message_id:
         return
     card = _build_reminder_card_payload(
@@ -471,14 +478,7 @@ async def _patch_confirmation_card(db: AsyncSession, plan: ChangeActionPlan) -> 
         confirmed=True,
         confirmed_by=plan.reminder_confirmed_by,
     )
-    token = await _get_quality_tenant_access_token(db)
-    result = await update_feishu_message(
-        tenant_access_token=token,
-        message_id=plan.reminder_message_id,
-        content=json.dumps(card, ensure_ascii=False),
-    )
-    if not result.ok:
-        raise RuntimeError(result.error_message or "飞书提醒卡片更新失败")
+    await update_card(plan.reminder_message_id, card)
 
 
 async def _resolve_change_id(
@@ -508,36 +508,6 @@ def _serialize_plan(plan: ChangeActionPlan) -> dict[str, Any]:
     ):
         data[field_name] = _normalize_feishu_text(data.get(field_name))
     return data
-
-
-async def _get_plan_after_commit(
-    db: AsyncSession,
-    plan_id: uuid.UUID,
-) -> ChangeActionPlan:
-    plan = await repository.get_change_action_plan_by_id(db, plan_id)
-    if not plan:
-        raise ValueError(f"Change action plan {plan_id} not found")
-    return plan
-
-
-async def _send_reminder_card_compat(
-    db: AsyncSession,
-    plan: ChangeActionPlan,
-) -> str:
-    try:
-        return await _send_reminder_card(db, plan)
-    except TypeError:
-        return await _send_reminder_card(plan)  # type: ignore[misc,call-arg]
-
-
-async def _patch_confirmation_card_compat(
-    db: AsyncSession,
-    plan: ChangeActionPlan,
-) -> None:
-    try:
-        await _patch_confirmation_card(db, plan)
-    except TypeError:
-        await _patch_confirmation_card(plan)  # type: ignore[misc,call-arg]
 
 
 async def find_due_change_action_plan_reminders(
@@ -570,20 +540,28 @@ async def send_change_action_plan_reminder(
     plan: ChangeActionPlan,
     *,
     force: bool = False,
-) -> str:
+) -> str | None:
     today = datetime.now(UTC).date()
     if not plan.reminder_enabled:
-        raise RuntimeError("当前变更计划未启用提醒")
+        logger.warning("变更计划 %s 未启用提醒", plan.id)
+        return None
     if plan.reminder_confirmed_at is not None:
-        raise RuntimeError("当前变更计划已确认，无需重复提醒")
+        logger.info("变更计划 %s 已确认，跳过提醒", plan.id)
+        return None
     if _is_finished(plan):
-        raise RuntimeError("当前变更计划已完成，无需发送提醒")
+        logger.info("变更计划 %s 已完成，跳过提醒", plan.id)
+        return None
     if not force and not _is_due_for_reminder(plan, today=today):
-        raise RuntimeError("当前变更计划尚未进入到期前 3 天提醒窗口")
+        logger.debug("变更计划 %s 尚未进入到期前 3 天提醒窗口", plan.id)
+        return None
     if not force and _was_reminded_today(plan, today=today):
-        raise RuntimeError("当前变更计划今日已发送提醒")
+        logger.debug("变更计划 %s 今日已发送提醒", plan.id)
+        return None
 
-    message_id = await _send_reminder_card_compat(db, plan)
+    message_id = await _send_reminder_card(plan)
+    if not message_id:
+        return None
+
     await repository.update_change_action_plan(
         db,
         plan,
@@ -631,12 +609,15 @@ async def send_change_action_plan_reminder_for_plan(
 ) -> dict[str, Any]:
     plan = await repository.get_change_action_plan_by_id(db, plan_id)
     if not plan:
-        raise ValueError(f"Change action plan {plan_id} not found")
+        raise NotFoundException(resource="变更行动计划", resource_id=str(plan_id))
 
     await send_change_action_plan_reminder(db, plan, force=True)
-    plan_id = plan.id
     await db.commit()
-    return _serialize_plan(await _get_plan_after_commit(db, plan_id))
+    result = await db.execute(
+        select(ChangeActionPlan).where(ChangeActionPlan.id == plan.id)
+    )
+    plan = result.scalar_one()
+    return _serialize_plan(plan)
 
 
 async def confirm_change_action_plan_reminder(
@@ -647,7 +628,7 @@ async def confirm_change_action_plan_reminder(
 ) -> ChangeActionPlanReminderConfirmResult:
     plan = await repository.get_change_action_plan_by_id(db, plan_id)
     if not plan:
-        raise ValueError(f"Change action plan {plan_id} not found")
+        raise NotFoundException(resource="变更行动计划", resource_id=str(plan_id))
 
     if plan.reminder_confirmed_at is None:
         confirmed_at = datetime.now(UTC)
@@ -660,10 +641,12 @@ async def confirm_change_action_plan_reminder(
                 "reminder_confirmed_by": confirmed_by,
             },
         )
-        plan_id = plan.id
         await db.commit()
-        plan = await _get_plan_after_commit(db, plan_id)
-        await _patch_confirmation_card_compat(db, plan)
+        result = await db.execute(
+            select(ChangeActionPlan).where(ChangeActionPlan.id == plan.id)
+        )
+        plan = result.scalar_one()
+        await _patch_confirmation_card(plan)
 
     return ChangeActionPlanReminderConfirmResult(
         success=True,
@@ -771,11 +754,13 @@ async def _sync_plan_to_feishu(db: AsyncSession, plan: ChangeActionPlan) -> None
         await _mark_sync_success(db, plan, record_id)
     except Exception as exc:  # noqa: BLE001
         if (
-            (plan.owner_user_id or plan.director_user_id)
-            and _should_retry_without_user_fields(exc)
-        ):
+            plan.owner_user_id or plan.director_user_id
+        ) and _should_retry_without_user_fields(exc):
             logger.warning(
-                "Change action plan sync failed with user fields, retrying without users: %s",
+                (
+                    "Change action plan sync failed with user"
+                    " fields, retrying without users: %s"
+                ),
                 exc,
             )
             try:
@@ -788,7 +773,10 @@ async def _sync_plan_to_feishu(db: AsyncSession, plan: ChangeActionPlan) -> None
                 return
             except Exception as retry_exc:  # noqa: BLE001
                 logger.warning(
-                    "Retrying change action plan sync without user fields still failed: %s",
+                    (
+                        "Retrying change action plan sync without"
+                        " user fields still failed: %s"
+                    ),
                     retry_exc,
                 )
                 await _mark_sync_failed(db, plan, retry_exc)
@@ -866,9 +854,12 @@ async def create_change_action_plan_record(
         payload["updated_by"] = uuid.UUID(user_id)
     plan = await repository.create_change_action_plan(db, payload)
     await _sync_plan_to_feishu(db, plan)
-    plan_id = plan.id
     await db.commit()
-    return _serialize_plan(await _get_plan_after_commit(db, plan_id))
+    result = await db.execute(
+        select(ChangeActionPlan).where(ChangeActionPlan.id == plan.id)
+    )
+    plan = result.scalar_one()
+    return _serialize_plan(plan)
 
 
 async def update_change_action_plan_record(
@@ -879,7 +870,7 @@ async def update_change_action_plan_record(
 ) -> dict[str, Any]:
     plan = await repository.get_change_action_plan_by_id(db, plan_id)
     if not plan:
-        raise ValueError(f"Change action plan {plan_id} not found")
+        raise NotFoundException(resource="变更行动计划", resource_id=str(plan_id))
 
     update_data = data.model_dump(exclude_unset=True)
     person_fields = {
@@ -888,9 +879,8 @@ async def update_change_action_plan_record(
         "director_name",
         "director_user_id",
     }
-    if (
-        person_fields.intersection(update_data)
-        and (plan.feishu_record_id or plan.owner_user_id or plan.director_user_id)
+    if person_fields.intersection(update_data) and (
+        plan.feishu_record_id or plan.owner_user_id or plan.director_user_id
     ):
         raise ValueError("负责人/部门总监请在飞书多维表中维护")
     target_change_code = update_data.get("change_code", plan.change_code)
@@ -904,9 +894,12 @@ async def update_change_action_plan_record(
         update_data["updated_by"] = uuid.UUID(user_id)
     await repository.update_change_action_plan(db, plan, update_data)
     await _sync_plan_to_feishu(db, plan)
-    plan_id = plan.id
     await db.commit()
-    return _serialize_plan(await _get_plan_after_commit(db, plan_id))
+    result = await db.execute(
+        select(ChangeActionPlan).where(ChangeActionPlan.id == plan.id)
+    )
+    plan = result.scalar_one()
+    return _serialize_plan(plan)
 
 
 async def delete_change_action_plan_record(
@@ -915,7 +908,7 @@ async def delete_change_action_plan_record(
 ) -> dict[str, bool]:
     plan = await repository.get_change_action_plan_by_id(db, plan_id)
     if not plan:
-        raise ValueError(f"Change action plan {plan_id} not found")
+        raise NotFoundException(resource="变更行动计划", resource_id=str(plan_id))
 
     if plan.feishu_record_id:
         try:
@@ -934,12 +927,15 @@ async def sync_change_action_plan_to_feishu(
 ) -> dict[str, Any]:
     plan = await repository.get_change_action_plan_by_id(db, plan_id)
     if not plan:
-        raise ValueError(f"Change action plan {plan_id} not found")
+        raise NotFoundException(resource="变更行动计划", resource_id=str(plan_id))
 
     await _sync_plan_to_feishu(db, plan)
-    plan_id = plan.id
     await db.commit()
-    return _serialize_plan(await _get_plan_after_commit(db, plan_id))
+    result = await db.execute(
+        select(ChangeActionPlan).where(ChangeActionPlan.id == plan.id)
+    )
+    plan = result.scalar_one()
+    return _serialize_plan(plan)
 
 
 async def run_change_action_plan_reminders_now(
@@ -963,7 +959,7 @@ async def sync_change_action_plans_from_feishu(
             project_name = _normalize_feishu_text(fields.get("项目名称")) or ""
             related_work = _normalize_feishu_text(fields.get("涉及工作"))
             if not change_code or not project_name:
-                raise ValueError("飞书记录缺少变更控制号或项目名称")
+                raise AppException(message="飞书记录缺少变更控制号或项目名称")
 
             owner_name, owner_user_id = _extract_user_info(fields.get("总负责人"))
             director_value = fields.get("部门负责人")

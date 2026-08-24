@@ -1,6 +1,7 @@
 """Tests for maintenance repository layer."""
 
 import uuid
+from typing import Any
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,31 +32,37 @@ from app.platform.identity.models import User
 
 
 @pytest.fixture
-def symptom_data() -> dict:
+def symptom_data() -> dict[str, Any]:
     return {
-        "code": "NOISE", "name": "异响",
-        "description": "设备运行时发出异常声音", "sort_order": 1,
+        "code": "NOISE",
+        "name": "异响",
+        "description": "设备运行时发出异常声音",
+        "sort_order": 1,
     }
 
 
 @pytest.fixture
-def cause_data() -> dict:
+def cause_data() -> dict[str, Any]:
     return {
-        "code": "WEAR", "name": "轴承磨损",
-        "description": "轴承因长期使用磨损", "sort_order": 1,
+        "code": "WEAR",
+        "name": "轴承磨损",
+        "description": "轴承因长期使用磨损",
+        "sort_order": 1,
     }
 
 
 @pytest.fixture
-def action_data() -> dict:
+def action_data() -> dict[str, Any]:
     return {
-        "code": "REPLACE", "name": "更换部件",
-        "description": "更换损坏的部件", "sort_order": 1,
+        "code": "REPLACE",
+        "name": "更换部件",
+        "description": "更换损坏的部件",
+        "sort_order": 1,
     }
 
 
 async def test_create_failure_code_symptom(
-    db_session: AsyncSession, symptom_data: dict
+    db_session: AsyncSession, symptom_data: dict[str, Any]
 ) -> None:
     """测试创建故障现象"""
     result = await create_failure_code(db_session, FailureSymptom, symptom_data)
@@ -65,7 +72,7 @@ async def test_create_failure_code_symptom(
 
 
 async def test_create_failure_code_cause(
-    db_session: AsyncSession, cause_data: dict
+    db_session: AsyncSession, cause_data: dict[str, Any]
 ) -> None:
     """测试创建故障原因"""
     result = await create_failure_code(db_session, FailureCause, cause_data)
@@ -74,7 +81,7 @@ async def test_create_failure_code_cause(
 
 
 async def test_create_failure_code_action(
-    db_session: AsyncSession, action_data: dict
+    db_session: AsyncSession, action_data: dict[str, Any]
 ) -> None:
     """测试创建维修措施"""
     result = await create_failure_code(db_session, FailureAction, action_data)
@@ -83,7 +90,7 @@ async def test_create_failure_code_action(
 
 
 async def test_get_failure_code_by_id(
-    db_session: AsyncSession, symptom_data: dict
+    db_session: AsyncSession, symptom_data: dict[str, Any]
 ) -> None:
     """测试根据ID获取故障代码"""
     created = await create_failure_code(db_session, FailureSymptom, symptom_data)
@@ -115,7 +122,7 @@ async def test_get_failure_codes(
 
 
 async def test_exists_failure_code_by_code(
-    db_session: AsyncSession, symptom_data: dict
+    db_session: AsyncSession, symptom_data: dict[str, Any]
 ) -> None:
     """测试检查故障代码是否存在"""
     await create_failure_code(db_session, FailureSymptom, symptom_data)
@@ -126,7 +133,7 @@ async def test_exists_failure_code_by_code(
 
 
 async def test_exists_failure_code_by_code_exclude_id(
-    db_session: AsyncSession, symptom_data: dict
+    db_session: AsyncSession, symptom_data: dict[str, Any]
 ) -> None:
     """测试排除自身检查故障代码是否存在"""
     created = await create_failure_code(db_session, FailureSymptom, symptom_data)
@@ -139,7 +146,7 @@ async def test_exists_failure_code_by_code_exclude_id(
 
 
 async def test_update_failure_code(
-    db_session: AsyncSession, symptom_data: dict
+    db_session: AsyncSession, symptom_data: dict[str, Any]
 ) -> None:
     """测试更新故障代码"""
     created = await create_failure_code(db_session, FailureSymptom, symptom_data)
@@ -151,7 +158,7 @@ async def test_update_failure_code(
 
 
 async def test_delete_failure_code(
-    db_session: AsyncSession, symptom_data: dict
+    db_session: AsyncSession, symptom_data: dict[str, Any]
 ) -> None:
     """测试删除故障代码（软删除）"""
     created = await create_failure_code(db_session, FailureSymptom, symptom_data)
@@ -191,14 +198,17 @@ async def test_create_work_order(db_session: AsyncSession) -> None:
     )
     await db_session.flush()
 
-    wo = await repo_create_work_order(db_session, {
-        "work_order_no": "WO-20260603-0001",
-        "equipment_id": equipment.id,
-        "order_type": "故障维修",
-        "priority": "中",
-        "status": "待处理",
-        "reporter_id": user.id,
-    })
+    wo = await repo_create_work_order(
+        db_session,
+        {
+            "work_order_no": "WO-20260603-0001",
+            "equipment_id": equipment.id,
+            "order_type": "故障维修",
+            "priority": "中",
+            "status": "待处理",
+            "reporter_id": user.id,
+        },
+    )
     assert wo.work_order_no == "WO-20260603-0001"
     assert wo.status == "待处理"
 
@@ -213,7 +223,5 @@ async def test_count_open_work_orders_by_equipment(
     db_session: AsyncSession,
 ) -> None:
     """测试统计设备未关闭工单数"""
-    count = await count_open_work_orders_by_equipment(
-        db_session, uuid.uuid4()
-    )
+    count = await count_open_work_orders_by_equipment(db_session, uuid.uuid4())
     assert count == 0

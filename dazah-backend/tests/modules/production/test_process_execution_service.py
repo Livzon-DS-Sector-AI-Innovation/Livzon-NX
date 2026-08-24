@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from typing import Any
 
 import pytest
 
@@ -46,7 +47,7 @@ def test_extracts_packaging_output_number() -> None:
 
 
 @pytest.mark.anyio
-async def test_process_steps_require_completed_predecessor(db_session) -> None:
+async def test_process_steps_require_completed_predecessor(db_session: Any) -> None:
     service = ProcessExecutionService(db_session)
     with pytest.raises(AppException, match="前序工序"):
         await service.create_record(
@@ -86,7 +87,7 @@ async def test_process_steps_require_completed_predecessor(db_session) -> None:
 
 
 @pytest.mark.anyio
-async def test_completed_process_record_is_locked(db_session) -> None:
+async def test_completed_process_record_is_locked(db_session: Any) -> None:
     service = ProcessExecutionService(db_session)
     record = await service.create_record(
         ProcessExecutionRecordCreate(

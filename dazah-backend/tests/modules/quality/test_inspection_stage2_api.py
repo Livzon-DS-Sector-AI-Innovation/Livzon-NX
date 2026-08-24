@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from datetime import date
+from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
@@ -30,13 +32,13 @@ _MEASUREMENT_MODELS = (
 
 
 @pytest.fixture(autouse=True)
-async def _clean_measurement_records(db_session: AsyncSession) -> None:
+async def _clean_measurement_records(db_session: AsyncSession) -> AsyncIterator[Any]:
     for model in _MEASUREMENT_MODELS:
-        await db_session.execute(model.__table__.delete())
+        await db_session.execute(model.__table__.delete())  # type: ignore[attr-defined]
     await db_session.commit()
     yield
     for model in _MEASUREMENT_MODELS:
-        await db_session.execute(model.__table__.delete())
+        await db_session.execute(model.__table__.delete())  # type: ignore[attr-defined]
     await db_session.commit()
 
 
@@ -146,12 +148,12 @@ async def test_single_inspection_record_can_be_explicitly_pushed_to_feishu(
         },
     )
     monkeypatch.setattr(
-        inspection_feishu.feishu_sync,
+        inspection_feishu.feishu_sync,  # type: ignore[attr-defined]
         "_resolve_runtime",
         AsyncMock(return_value=runtime),
     )
-    upsert = AsyncMock(return_value=("rec_finished_001", "tbl_test"))
-    monkeypatch.setattr(inspection_feishu.feishu_sync, "_upsert_record", upsert)
+    upsert: Any = AsyncMock(return_value=("rec_finished_001", "tbl_test"))
+    monkeypatch.setattr(inspection_feishu.feishu_sync, "_upsert_record", upsert)  # type: ignore[attr-defined]
 
     response = await client.post(
         "/api/v1/quality/inspection-resources/"
@@ -186,8 +188,7 @@ async def test_inspection_feishu_entities_default_to_push_only(
     assert set(inspection_defaults) == expected_entity_codes
     assert all(item.enable_push_to_feishu for item in inspection_defaults.values())
     assert all(
-        not item.enable_pull_from_feishu
-        for item in inspection_defaults.values()
+        not item.enable_pull_from_feishu for item in inspection_defaults.values()
     )
 
     response = await client.get("/api/v1/quality/feishu-settings/entities")

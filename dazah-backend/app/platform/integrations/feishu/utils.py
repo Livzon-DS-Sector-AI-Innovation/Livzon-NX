@@ -2,6 +2,7 @@
 
 import re
 from dataclasses import dataclass
+from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 import httpx
@@ -10,6 +11,11 @@ from app.core.redis import cache_get, cache_set
 
 OPEN_API_BASE_URL = "https://open.feishu.cn/open-apis"
 FEISHU_BITABLE_RECORD_CHANGED_EVENT = "feishu.bitable_record_changed"
+
+
+def _first_query_value(query: dict[str, list[str]], key: str) -> str | None:
+    values = query.get(key)
+    return values[0] if values else None
 
 
 @dataclass(frozen=True)
@@ -49,8 +55,8 @@ def parse_bitable_url(value: str | None) -> BitableReference:
 
     return BitableReference(
         app_token=app_token,
-        table_id=(query.get("table") or [None])[0],
-        view_id=(query.get("view") or [None])[0],
+        table_id=_first_query_value(query, "table"),
+        view_id=_first_query_value(query, "view"),
     )
 
 
@@ -144,7 +150,7 @@ def build_bitable_client(
     app_token: str | None,
     app_id: str | None,
     app_secret: str | None,
-):
+) -> Any:
     """Build a Bitable client after applying the shared Feishu reference parser."""
     from app.platform.integrations.feishu.bitable import BitableClient
 
@@ -186,7 +192,7 @@ async def get_tenant_access_token(
         raise RuntimeError(body.get("msg") or str(body))
 
     token = body.get("tenant_access_token")
-    if not token:
+    if not isinstance(token, str) or not token:
         raise RuntimeError("tenant_access_token 响应为空")
 
     if cache_key:

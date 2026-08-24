@@ -96,6 +96,13 @@ def include_object(
     for relationship resolution, but new database constraints are intentionally
     omitted so business schemas do not become coupled to ``identity.users``.
     """
+    # The migration policy for this application is additive. Existing
+    # columns (including legacy/source-only fields) are never removed or
+    # altered implicitly by autogenerate; metadata-only columns remain visible
+    # so reviewed additions are still detected.
+    if type_ == "column" and (reflected or compare_to is not None):
+        return False
+
     if (
         reflected
         and compare_to is None
@@ -146,8 +153,9 @@ def run_migrations_offline() -> None:
         include_schemas=True,
         include_name=include_name,
         include_object=include_object,
-        compare_type=True,
-        compare_server_default=compare_server_default,
+        compare_type=False,
+        compare_server_default=False,
+        compare_comments=False,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
     )
@@ -178,8 +186,9 @@ def run_migrations_online() -> None:
             include_schemas=True,
             include_name=include_name,
             include_object=include_object,
-            compare_type=True,
-            compare_server_default=compare_server_default,
+            compare_type=False,
+            compare_server_default=False,
+            compare_comments=False,
         )
         with context.begin_transaction():
             context.run_migrations()

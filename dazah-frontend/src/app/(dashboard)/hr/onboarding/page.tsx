@@ -1,15 +1,12 @@
-import { fetchOnboardingRecords } from '@/actions/hr'
-import { OnboardingClient } from '@/components/hr'
+import { OnboardingManagementPage } from '@/components/hr/onboarding-management'
+import { HrQueryProvider } from '@/components/hr'
 
 export const dynamic = 'force-dynamic'
 
-export default async function OnboardingPage() {
-  const res = await fetchOnboardingRecords({ page: 1, page_size: 20 })
-
+export default function OnboardingPage() {
   return (
-    <OnboardingClient
-      initialRecords={res.data}
-      initialTotal={res.meta?.total || 0}
-    />
+    <HrQueryProvider>
+      <OnboardingManagementPage />
+    </HrQueryProvider>
   )
 }

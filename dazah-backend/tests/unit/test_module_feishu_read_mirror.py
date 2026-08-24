@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
@@ -13,8 +14,10 @@ from app.modules.production.models import (
     ProductionFeishuReadSourceRoot,
     ProductionFeishuReadSyncRun,
 )
-from app.platform.integrations.feishu.read_mirror import ModuleFeishuReadMirrorService, ReadMirrorModels
-
+from app.platform.integrations.feishu.read_mirror import (
+    ModuleFeishuReadMirrorService,
+    ReadMirrorModels,
+)
 
 MODELS = ReadMirrorModels(
     root=ProductionFeishuReadSourceRoot,
@@ -27,14 +30,16 @@ MODELS = ReadMirrorModels(
 
 
 class PagedClient:
-    def __init__(self, *, broken: bool = False) -> None:
+    def __init__(self: Any, *, broken: bool = False) -> None:
         self.broken = broken
 
-    async def list_fields(self, _table_id: str, *, page_size: int = 100):
+    async def list_fields(self: Any, _table_id: str, *, page_size: int = 100) -> Any:
         assert page_size == 100
         return [{"field_id": "fld_name", "field_name": "名称", "type": 1}]
 
-    async def search_records(self, _table_id: str, *, page_size: int, page_token: str | None):
+    async def search_records(
+        self: Any, _table_id: str, *, page_size: int, page_token: str | None
+    ) -> Any:
         assert page_size == 500
         if page_token is None:
             return {
@@ -55,7 +60,7 @@ class PagedClient:
         }
 
 
-async def _resource(db_session) -> ProductionFeishuReadResource:
+async def _resource(db_session: Any) -> ProductionFeishuReadResource:
     root = ProductionFeishuReadSourceRoot(
         config_id=uuid4(),
         name="测试 Base",
@@ -78,7 +83,9 @@ async def _resource(db_session) -> ProductionFeishuReadResource:
 
 
 @pytest.mark.asyncio
-async def test_read_mirror_stitches_all_pages_and_publishes_only_complete_version(db_session, monkeypatch):
+async def test_read_mirror_stitches_all_pages_and_publishes_only_complete_version(
+    db_session: Any, monkeypatch: Any
+) -> Any:
     resource = await _resource(db_session)
     service = ModuleFeishuReadMirrorService(
         db_session,
@@ -93,7 +100,9 @@ async def test_read_mirror_stitches_all_pages_and_publishes_only_complete_versio
 
     await db_session.refresh(resource)
     count = await db_session.scalar(
-        select(func.count()).select_from(ProductionFeishuReadRecord).where(
+        select(func.count())
+        .select_from(ProductionFeishuReadRecord)
+        .where(
             ProductionFeishuReadRecord.resource_id == resource.id,
             ProductionFeishuReadRecord.mirror_version == resource.active_mirror_version,
         )
@@ -125,7 +134,9 @@ async def test_read_mirror_stitches_all_pages_and_publishes_only_complete_versio
 
 
 @pytest.mark.asyncio
-async def test_read_mirror_rejects_broken_page_chain_without_switching_version(db_session, monkeypatch):
+async def test_read_mirror_rejects_broken_page_chain_without_switching_version(
+    db_session: Any, monkeypatch: Any
+) -> Any:
     resource = await _resource(db_session)
     old_version = uuid4()
     resource.active_mirror_version = old_version

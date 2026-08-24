@@ -24,12 +24,13 @@ SyncStats = dict[str, int]
 
 async def run_sync(
     *,
-    fetch_records: Callable[[], Coroutine[Any, Any, list[dict]]],
-    parse_record: Callable[[dict], dict | None],
-    upsert_record: Callable[[dict], Coroutine[Any, Any, None]],
+    fetch_records: Callable[[], Coroutine[Any, Any, list[dict[str, Any]]]],
+    parse_record: Callable[[dict[str, Any]], dict[str, Any] | None],
+    upsert_record: Callable[[dict[str, Any]], Coroutine[Any, Any, None]],
     get_existing: Callable[[str], Coroutine[Any, Any, Any | None]],
-    get_record_id: Callable[[dict], str | None],
-    post_process: Callable[[Any, dict], Coroutine[Any, Any, None]] | None = None,
+    get_record_id: Callable[[dict[str, Any]], str | None],
+    post_process: Callable[[Any, dict[str, Any]], Coroutine[Any, Any, None]]
+    | None = None,
 ) -> SyncStats:
     """Generic sync orchestrator: fetch -> parse -> upsert -> stats.
 
@@ -94,10 +95,10 @@ def _is_newly_created(existing: Any) -> bool:
         return False
     if created_at.tzinfo is None:
         created_at = created_at.replace(tzinfo=UTC)
-    return (datetime.now(UTC) - created_at).total_seconds() < 60
+    return bool((datetime.now(UTC) - created_at).total_seconds() < 60)
 
 
-def _parse_user_record(rec: dict) -> dict | None:
+def _parse_user_record(rec: dict[str, Any]) -> dict[str, Any] | None:
     open_id = rec.get("open_id")
     if not open_id:
         return None
@@ -118,7 +119,7 @@ def _parse_user_record(rec: dict) -> dict | None:
     }
 
 
-async def _upsert_user(parsed: dict) -> None:
+async def _upsert_user(parsed: dict[str, Any]) -> None:
     from app.platform.identity.models import User
 
     async with async_session_factory() as db:
@@ -140,29 +141,29 @@ async def _upsert_user(parsed: dict) -> None:
             if not existing.feishu_user_id:
                 existing.feishu_user_id = parsed["user_id"]
         else:
-            db.add(User(
-                name=parsed["name"],
-                en_name=parsed["en_name"],
-                feishu_user_id=parsed["user_id"],
-                feishu_open_id=parsed["open_id"],
-                employee_no=parsed["employee_no"],
-                email=parsed["email"],
-                mobile=parsed["mobile"],
-                department=parsed["department"],
-                position=parsed["position"],
-                avatar_url=parsed["avatar_url"],
-                feishu_department_ids=parsed["feishu_department_ids"],
-            ))
+            db.add(
+                User(
+                    name=parsed["name"],
+                    en_name=parsed["en_name"],
+                    feishu_user_id=parsed["user_id"],
+                    feishu_open_id=parsed["open_id"],
+                    employee_no=parsed["employee_no"],
+                    email=parsed["email"],
+                    mobile=parsed["mobile"],
+                    department=parsed["department"],
+                    position=parsed["position"],
+                    avatar_url=parsed["avatar_url"],
+                    feishu_department_ids=parsed["feishu_department_ids"],
+                )
+            )
         await db.commit()
 
 
-async def _get_existing_user(open_id: str):
+async def _get_existing_user(open_id: str) -> Any:
     from app.platform.identity.models import User
 
     async with async_session_factory() as db:
-        result = await db.execute(
-            select(User).where(User.feishu_open_id == open_id)
-        )
+        result = await db.execute(select(User).where(User.feishu_open_id == open_id))
         return result.scalar_one_or_none()
 
 
@@ -174,7 +175,7 @@ async def sync_departments(
     *,
     app_id: str | None = None,
     app_secret: str | None = None,
-) -> dict:
+) -> dict[str, Any]:
     """Sync department structure from Feishu starting at root_dept_id.
 
     Uses BFS to fetch all departments under root, then upserts into
@@ -188,14 +189,14 @@ async def sync_departments(
     t0 = time.time()
     logger.info("sync_departments starting (root=%s)", root_dept_id)
 
-    async def fetch_depts() -> list[dict]:
+    async def fetch_depts() -> list[dict[str, Any]]:
         return await get_all_departments(
             root_department_id=root_dept_id or "0",
             app_id=app_id,
             app_secret=app_secret,
         )
 
-    def parse_dept(rec: dict) -> dict | None:
+    def parse_dept(rec: dict[str, Any]) -> dict[str, Any] | None:
         dept_id = rec.get("department_id")
         if not dept_id:
             return None
@@ -209,7 +210,7 @@ async def sync_departments(
             "order": rec.get("order", 0),
         }
 
-    async def upsert_dept(parsed: dict) -> None:
+    async def upsert_dept(parsed: dict[str, Any]) -> None:
         async with async_session_factory() as db:
             result = await db.execute(
                 select(Department).where(
@@ -225,23 +226,23 @@ async def sync_departments(
                 existing.status_is_deleted = parsed["status_is_deleted"]
                 existing.order = parsed["order"]
             else:
-                db.add(Department(
-                    feishu_department_id=parsed["department_id"],
-                    name=parsed["name"],
-                    parent_feishu_department_id=parsed["parent_department_id"],
-                    leader_user_id=parsed["leader_user_id"],
-                    member_count=parsed["member_count"],
-                    status_is_deleted=parsed["status_is_deleted"],
-                    order=parsed["order"],
-                ))
+                db.add(
+                    Department(
+                        feishu_department_id=parsed["department_id"],
+                        name=parsed["name"],
+                        parent_feishu_department_id=parsed["parent_department_id"],
+                        leader_user_id=parsed["leader_user_id"],
+                        member_count=parsed["member_count"],
+                        status_is_deleted=parsed["status_is_deleted"],
+                        order=parsed["order"],
+                    )
+                )
             await db.commit()
 
-    async def get_existing(dept_id: str):
+    async def get_existing(dept_id: str) -> Any:
         async with async_session_factory() as db:
             result = await db.execute(
-                select(Department).where(
-                    Department.feishu_department_id == dept_id
-                )
+                select(Department).where(Department.feishu_department_id == dept_id)
             )
             return result.scalar_one_or_none()
 
@@ -256,7 +257,10 @@ async def sync_departments(
     elapsed = time.time() - t0
     logger.info(
         "sync_departments done: %d depts (%d created, %d updated) in %.1fs",
-        stats["total"], stats["created"], stats["updated"], elapsed,
+        stats["total"],
+        stats["created"],
+        stats["updated"],
+        elapsed,
     )
     return {"dept_count": stats["total"], "elapsed": round(elapsed, 1)}
 
@@ -269,7 +273,7 @@ async def sync_members(
     *,
     app_id: str | None = None,
     app_secret: str | None = None,
-) -> dict:
+) -> dict[str, Any]:
     """Sync all members under target_dept_id from Feishu.
 
     BFS fetches all departments under target, then fetches all users
@@ -299,10 +303,11 @@ async def sync_members(
     dept_ids.extend(d["department_id"] for d in all_depts)
     dept_ids = list(dict.fromkeys(dept_ids))
 
-    async def fetch_users() -> list[dict]:
+    fetch_errors: list[str] = []
+
+    async def fetch_users() -> list[dict[str, Any]]:
         """Fetch all users from all departments."""
-        all_users = []
-        fetch_users.errors = []
+        all_users: list[dict[str, Any]] = []
         for dept_id in dept_ids:
             try:
                 users = await find_users_by_department(
@@ -321,10 +326,8 @@ async def sync_members(
                 all_users.extend(users)
             except Exception as exc:
                 logger.exception("Failed to fetch users from dept %s", dept_id)
-                fetch_users.errors.append(f"{dept_id}: {exc}")
+                fetch_errors.append(f"{dept_id}: {exc}")
         return all_users
-
-    fetch_users.errors = []
 
     stats = await run_sync(
         fetch_records=fetch_users,
@@ -337,12 +340,16 @@ async def sync_members(
     elapsed = time.time() - t0
     logger.info(
         "sync_members done: %d users from %d depts (%d created, %d updated) in %.1fs",
-        stats["total"], len(dept_ids), stats["created"], stats["updated"], elapsed,
+        stats["total"],
+        len(dept_ids),
+        stats["created"],
+        stats["updated"],
+        elapsed,
     )
     return {
         "user_count": stats["total"],
         "dept_count": len(dept_ids),
-        "errors": fetch_users.errors,
+        "errors": fetch_errors,
         "elapsed": round(elapsed, 1),
     }
 
@@ -353,7 +360,7 @@ async def sync_users_by_ids(
     user_id_type: str = "user_id",
     app_id: str | None = None,
     app_secret: str | None = None,
-) -> dict:
+) -> dict[str, Any]:
     """Sync explicitly authorized Feishu users by user ID/open ID."""
     from app.platform.integrations.feishu.contact import get_user_detail
 
@@ -361,8 +368,8 @@ async def sync_users_by_ids(
     unique_user_ids = [uid for uid in dict.fromkeys(user_ids) if uid]
     logger.info("sync_users_by_ids starting (%d users)", len(unique_user_ids))
 
-    async def fetch_users() -> list[dict]:
-        users: list[dict] = []
+    async def fetch_users() -> list[dict[str, Any]]:
+        users: list[dict[str, Any]] = []
         for user_id in unique_user_ids:
             try:
                 user = await get_user_detail(
@@ -388,6 +395,9 @@ async def sync_users_by_ids(
     elapsed = time.time() - t0
     logger.info(
         "sync_users_by_ids done: %d users (%d created, %d updated) in %.1fs",
-        stats["total"], stats["created"], stats["updated"], elapsed,
+        stats["total"],
+        stats["created"],
+        stats["updated"],
+        elapsed,
     )
     return {"user_count": stats["total"], "elapsed": round(elapsed, 1)}

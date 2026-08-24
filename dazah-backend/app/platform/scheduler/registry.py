@@ -13,7 +13,7 @@ from typing import Any
 # ═══════════════════════════════════════════════════════════════
 
 
-class ScheduleStrategy(str, enum.Enum):
+class ScheduleStrategy(enum.StrEnum):
     """How a scheduled task determines its next fire time."""
 
     CRON = "cron"
@@ -64,7 +64,9 @@ class TaskDefinition:
     # Zero-argument async callable.  Tasks that need a DB session
     # acquire one internally via ``async_session_factory()``.
     coro: Callable[[], Awaitable[None]] = field(
-        compare=False, hash=False, repr=False,
+        compare=False,
+        hash=False,
+        repr=False,
     )
     settings_toggle_key: str = ""
     timeout_seconds: int = 300
@@ -90,7 +92,8 @@ class TaskGenerator(ABC):
 
     name: str = ""
     schedule: ScheduleConfig = ScheduleConfig(
-        strategy=ScheduleStrategy.INTERVAL, interval_seconds=30,
+        strategy=ScheduleStrategy.INTERVAL,
+        interval_seconds=30,
     )
     settings_toggle_key: str = ""
     timeout_seconds: int = 300
@@ -159,16 +162,15 @@ _ACTION_HANDLERS: dict[str, Callable[..., Awaitable[Any]]] = {}
 
 
 def register_action_handler(
-    action_type: str, handler: Callable[..., Awaitable[Any]],
+    action_type: str,
+    handler: Callable[..., Awaitable[Any]],
 ) -> None:
     """Register a named action handler for DB-driven scheduled jobs.
 
     Raises ValueError if *action_type* is already registered.
     """
     if action_type in _ACTION_HANDLERS:
-        raise ValueError(
-            f"Action handler '{action_type}' is already registered"
-        )
+        raise ValueError(f"Action handler '{action_type}' is already registered")
     _ACTION_HANDLERS[action_type] = handler
 
 

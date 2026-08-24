@@ -6,11 +6,8 @@ from datetime import UTC, datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import DuplicateException, NotFoundException
-from app.modules.quality.models.oos_oot import (
-    OosOotRecord,
-    OotLimitItem,
-    OotLimitProduct,
-)
+from app.modules.quality.models.oos_oot import OosOotRecord
+from app.modules.quality.models.oot_limit import OotLimitItem, OotLimitProduct
 from app.modules.quality.repository import oos_oot as repository
 
 
@@ -173,7 +170,8 @@ async def create_oot_limit_item(
     db: AsyncSession, product_id: uuid.UUID, data: dict[str, object]
 ) -> OotLimitItem:
     await _get_product(db, product_id)
-    display_order = int(data.get("display_order", 1))
+    raw_display_order = data.get("display_order", 1)
+    display_order = int(str(raw_display_order))
     if await repository.get_oot_limit_item_by_order(db, product_id, display_order):
         raise DuplicateException("OOT限度项目显示顺序", str(display_order))
     return await repository.create_oot_limit_item(
@@ -187,7 +185,7 @@ async def update_oot_limit_item(
     item = await _get_item(db, item_id)
     display_order = data.get("display_order")
     if display_order is not None and await repository.get_oot_limit_item_by_order(
-        db, item.product_id, int(display_order), exclude_id=item_id
+        db, item.product_id, int(str(display_order)), exclude_id=item_id
     ):
         raise DuplicateException("OOT限度项目显示顺序", str(display_order))
     return await repository.update_oot_limit_item(db, item, data)

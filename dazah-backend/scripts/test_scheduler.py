@@ -4,13 +4,14 @@ import asyncio
 import logging
 import os
 import sys
+from typing import Any
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.platform.identity.models import User  # noqa: F401
 from app.core.database import async_session_factory
 from app.modules.regulatory_tracker import repository as repo
 from app.modules.regulatory_tracker.tasks.sync_tasks import daily_sync_job
+from app.platform.identity.models import User  # noqa: F401
 
 logging.basicConfig(
     level=logging.INFO,
@@ -19,7 +20,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-async def main():
+async def main() -> Any:
     logger.info("=" * 60)
     logger.info("测试 scheduler daily_sync_job")
     logger.info("=" * 60)
@@ -34,7 +35,9 @@ async def main():
             logger.error("CDE 数据源不存在")
             return
 
-        channel = await repo.get_channel_by_code(db, source.id, "cde_domestic_guideline")
+        channel = await repo.get_channel_by_code(
+            db, source.id, "cde_domestic_guideline"
+        )
         if not channel:
             logger.error("栏目不存在")
             return

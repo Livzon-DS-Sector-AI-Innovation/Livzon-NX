@@ -17,7 +17,6 @@ from app.modules.equipment.schemas import (
     StockAdjustRequest,
     StockInboundRequest,
     StockResponse,
-    StockWarningResponse,
 )
 
 router = APIRouter()
@@ -43,12 +42,18 @@ async def list_spare_parts(
     db: AsyncSession = Depends(get_db),
 ) -> JSONResponse:
     spare_parts, total = await service.get_spare_parts(
-        db, category=category, keyword=keyword,
-        is_active=is_active, page=page, page_size=page_size,
+        db,
+        category=category,
+        keyword=keyword,
+        is_active=is_active,
+        page=page,
+        page_size=page_size,
     )
     return paginated_response(
         data=[SparePartResponse.model_validate(sp) for sp in spare_parts],
-        page=page, page_size=page_size, total=total,
+        page=page,
+        page_size=page_size,
+        total=total,
     )
 
 
@@ -58,14 +63,7 @@ async def get_stock_warnings(
 ) -> JSONResponse:
     warnings = await service.get_stock_warnings(db)
     return success_response(
-        data=[
-            StockWarningResponse(
-                spare_part=SparePartResponse.model_validate(w["spare_part"]),
-                stock=StockResponse.model_validate(w["stock"]),
-                shortage=w["shortage"],
-            )
-            for w in warnings
-        ]
+        data=[warning.model_dump(mode="json") for warning in warnings]
     )
 
 

@@ -46,7 +46,7 @@ export default function ManualInputPage() {
     loadPoints()
   }, [area])
 
-  const loadPoints = async () => {
+  async function loadPoints() {
     setLoading(true)
     try {
       const res = await getPointMappings({ area, page_size: 200 })

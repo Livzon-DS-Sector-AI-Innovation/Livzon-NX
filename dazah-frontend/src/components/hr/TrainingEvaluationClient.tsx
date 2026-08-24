@@ -19,7 +19,9 @@ import {
   CheckCircleOutlined
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
-import { generateTrainingEvaluation } from '@/lib/api/hr'
+import { HR_DISPLAY_DATE_FORMAT } from '@/lib/dayjs-config'
+import { generateTrainingEvaluation } from '@/actions/hr'
+import { downloadBytes } from '@/lib/download'
 
 export default function TrainingEvaluationClient() {
   const { message } = App.useApp()
@@ -71,10 +73,11 @@ export default function TrainingEvaluationClient() {
           : undefined,
         remarks: values.remarks
       }
-      await generateTrainingEvaluation(payload)
+      const { bytes, filename } = await generateTrainingEvaluation(payload)
+      downloadBytes(bytes, filename)
       message.success('培训效果评估表已生成')
-    } catch (err: any) {
-      message.error(err.message || '生成失败')
+    } catch (err) {
+      message.error((err instanceof Error ? err.message : '') || '生成失败')
     } finally {
       setSubmitting(false)
     }
@@ -115,13 +118,13 @@ export default function TrainingEvaluationClient() {
   const orgDateValue = formValues?.organizer_date
   const remarksValue = formValues?.remarks || ''
 
-  const dateStr = dateValue ? dateValue.format('YYYY年MM月DD日') : '____年__月__日'
+  const dateStr = dateValue ? dateValue.format(HR_DISPLAY_DATE_FORMAT) : '____年__月__日'
   const timeStr =
     timeValue
       ? `${dayjs(timeValue[0]).format('HH:mm')} ~ ${dayjs(timeValue[1]).format('HH:mm')}`
       : ''
   const orgDateStr = orgDateValue
-    ? orgDateValue.format('YYYY年MM月DD日')
+    ? orgDateValue.format(HR_DISPLAY_DATE_FORMAT)
     : '____年__月__日'
 
   const methodMap: Record<string, string> = {

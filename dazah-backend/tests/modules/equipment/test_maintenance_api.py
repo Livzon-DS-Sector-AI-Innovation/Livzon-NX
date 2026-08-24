@@ -1,6 +1,7 @@
 """Maintenance API integration tests."""
 
 import uuid
+from typing import Any
 
 from httpx import AsyncClient
 
@@ -11,7 +12,7 @@ def _uid() -> str:
     return uuid.uuid4().hex[:6].upper()
 
 
-async def test_create_failure_symptom(client: AsyncClient):
+async def test_create_failure_symptom(client: AsyncClient) -> Any:
     """测试创建故障现象"""
     code = f"NOISE-{_uid()}"
     response = await client.post(
@@ -25,7 +26,7 @@ async def test_create_failure_symptom(client: AsyncClient):
     assert data["data"]["name"] == "异响"
 
 
-async def test_list_failure_symptoms(client: AsyncClient):
+async def test_list_failure_symptoms(client: AsyncClient) -> Any:
     """测试查询故障现象列表"""
     uid = _uid()
     await client.post(
@@ -36,15 +37,13 @@ async def test_list_failure_symptoms(client: AsyncClient):
         "/api/v1/equipment/maintenance/failure-codes/symptoms",
         json={"code": f"LEAK-{uid}", "name": "泄漏"},
     )
-    response = await client.get(
-        "/api/v1/equipment/maintenance/failure-codes/symptoms"
-    )
+    response = await client.get("/api/v1/equipment/maintenance/failure-codes/symptoms")
     assert response.status_code == 200
     data = response.json()
     assert len(data["data"]) >= 2
 
 
-async def test_update_failure_symptom(client: AsyncClient):
+async def test_update_failure_symptom(client: AsyncClient) -> Any:
     """测试修改故障现象"""
     code = f"NOISE-{_uid()}"
     create_resp = await client.post(
@@ -61,7 +60,7 @@ async def test_update_failure_symptom(client: AsyncClient):
     assert response.json()["data"]["name"] == "异常噪音"
 
 
-async def test_delete_failure_symptom(client: AsyncClient):
+async def test_delete_failure_symptom(client: AsyncClient) -> Any:
     """测试删除故障现象"""
     code = f"NOISE-{_uid()}"
     create_resp = await client.post(
@@ -76,7 +75,7 @@ async def test_delete_failure_symptom(client: AsyncClient):
     assert response.status_code == 200
 
 
-async def test_create_failure_cause(client: AsyncClient):
+async def test_create_failure_cause(client: AsyncClient) -> Any:
     """测试创建故障原因"""
     code = f"WEAR-{_uid()}"
     response = await client.post(
@@ -87,7 +86,7 @@ async def test_create_failure_cause(client: AsyncClient):
     assert response.json()["data"]["name"] == "轴承磨损"
 
 
-async def test_create_failure_action(client: AsyncClient):
+async def test_create_failure_action(client: AsyncClient) -> Any:
     """测试创建维修措施"""
     code = f"REPLACE-{_uid()}"
     response = await client.post(
@@ -120,10 +119,10 @@ async def _create_test_equipment(client: AsyncClient) -> str:
             "location_id": loc_id,
         },
     )
-    return eq_resp.json()["data"]["id"]
+    return eq_resp.json()["data"]["id"]  # type: ignore[no-any-return]
 
 
-async def test_create_work_order(client: AsyncClient):
+async def test_create_work_order(client: AsyncClient) -> Any:
     """测试创建工单"""
     equipment_id = await _create_test_equipment(client)
     response = await client.post(
@@ -143,7 +142,7 @@ async def test_create_work_order(client: AsyncClient):
 
 async def test_work_order_full_lifecycle(
     client: AsyncClient, test_assignee: User
-):
+) -> Any:
     """测试工单完整生命周期"""
     equipment_id = await _create_test_equipment(client)
 
@@ -189,7 +188,7 @@ async def test_work_order_full_lifecycle(
     assert close_resp.json()["data"]["status"] == "已关闭"
 
 
-async def test_work_order_list(client: AsyncClient):
+async def test_work_order_list(client: AsyncClient) -> Any:
     """测试工单列表"""
     equipment_id = await _create_test_equipment(client)
     await client.post(
@@ -201,11 +200,9 @@ async def test_work_order_list(client: AsyncClient):
     assert len(response.json()["data"]) >= 1
 
 
-async def test_work_order_statistics(client: AsyncClient):
+async def test_work_order_statistics(client: AsyncClient) -> Any:
     """测试工单统计"""
-    response = await client.get(
-        "/api/v1/equipment/maintenance/work-orders/statistics"
-    )
+    response = await client.get("/api/v1/equipment/maintenance/work-orders/statistics")
     assert response.status_code == 200
     data = response.json()["data"]
     assert "total" in data
@@ -215,7 +212,7 @@ async def test_work_order_statistics(client: AsyncClient):
 # ==================== Calibration API Tests ====================
 
 
-async def test_create_calibration_plan(client: AsyncClient):
+async def test_create_calibration_plan(client: AsyncClient) -> Any:
     """测试创建校准计划"""
     equipment_id = await _create_test_equipment(client)
     response = await client.post(
@@ -233,7 +230,7 @@ async def test_create_calibration_plan(client: AsyncClient):
     assert data["data"]["next_calibration_date"] == "2026-07-01"
 
 
-async def test_calibration_plan_crud(client: AsyncClient):
+async def test_calibration_plan_crud(client: AsyncClient) -> Any:
     """测试校准计划 CRUD"""
     equipment_id = await _create_test_equipment(client)
 
@@ -272,7 +269,7 @@ async def test_calibration_plan_crud(client: AsyncClient):
     assert del_resp.status_code == 200
 
 
-async def test_create_calibration_record(client: AsyncClient):
+async def test_create_calibration_record(client: AsyncClient) -> Any:
     """测试创建校准记录"""
     equipment_id = await _create_test_equipment(client)
 
@@ -305,15 +302,13 @@ async def test_create_calibration_record(client: AsyncClient):
     assert data["data"]["next_due_date"] == "2027-01-01"
 
 
-async def test_calibration_records_list(client: AsyncClient):
+async def test_calibration_records_list(client: AsyncClient) -> Any:
     """测试校准记录列表"""
-    response = await client.get(
-        "/api/v1/equipment/maintenance/calibration/records"
-    )
+    response = await client.get("/api/v1/equipment/maintenance/calibration/records")
     assert response.status_code == 200
 
 
-async def test_calibration_plan_overdue(client: AsyncClient):
+async def test_calibration_plan_overdue(client: AsyncClient) -> Any:
     """测试查询到期/逾期的校准计划"""
     equipment_id = await _create_test_equipment(client)
 

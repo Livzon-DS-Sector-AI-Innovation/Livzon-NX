@@ -1,6 +1,7 @@
 import uuid
 from datetime import UTC, datetime
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
+from typing import Any, cast
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,17 +26,19 @@ from app.modules.agent.tool_registration import ensure_agent_tools_registered
 from app.modules.agent.tools import tool_registry
 from app.platform.identity.models import User
 
+SimpleNamespace: Any = _SimpleNamespace
+
 
 class AllowAllAccessScopeService:
-    async def require_tool_access(self, *args, **kwargs):
+    async def require_tool_access(self: Any, *args: Any, **kwargs: Any) -> Any:
         return None
 
 
 class FakeDb:
-    async def flush(self) -> None:
+    async def flush(self: Any) -> None:
         return None
 
-    async def commit(self) -> None:
+    async def commit(self: Any) -> None:
         return None
 
 
@@ -47,9 +50,9 @@ def test_legacy_update_workflow_tool_is_not_exposed() -> None:
 
 
 @pytest.mark.anyio
-async def test_update_workflow_changes_editable_fields(monkeypatch) -> None:
+async def test_update_workflow_changes_editable_fields(monkeypatch: Any) -> None:
     user_id = uuid.uuid4()
-    workflow = SimpleNamespace(
+    workflow: Any = SimpleNamespace(
         id=uuid.uuid4(),
         name="原工作流",
         description="原说明",
@@ -58,17 +61,17 @@ async def test_update_workflow_changes_editable_fields(monkeypatch) -> None:
     )
     service = AgentService(settings=SimpleNamespace())
 
-    async def fake_get(*args, **kwargs):
+    async def fake_get(*args: Any, **kwargs: Any) -> Any:
         return workflow
 
-    async def fake_refetch(*args, **kwargs):
+    async def fake_refetch(*args: Any, **kwargs: Any) -> Any:
         return workflow
 
     monkeypatch.setattr(service, "_get_user_workflow", fake_get)
     monkeypatch.setattr(service, "_refetch_workflow", fake_refetch)
 
     result = await service._update_workflow_from_request(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         workflow_id=workflow.id,
         request=AgentWorkflowUpdate(
             name="新工作流",
@@ -85,7 +88,7 @@ async def test_update_workflow_changes_editable_fields(monkeypatch) -> None:
 
 
 class FakeSkillWorkflowRepository:
-    def __init__(self) -> None:
+    def __init__(self: Any) -> None:
         now = datetime.now(UTC)
         self.skill = SimpleNamespace(
             id=uuid.uuid4(),
@@ -100,26 +103,26 @@ class FakeSkillWorkflowRepository:
             created_at=now,
             updated_at=now,
         )
-        self.workflows = []
+        self.workflows = []  # type: ignore[var-annotated]
 
-    async def list_active_skills(self, db):
+    async def list_active_skills(self: Any, db: Any) -> Any:
         return [self.skill]
 
     async def create_workflow(
-        self,
-        db,
+        self: Any,
+        db: Any,
         *,
-        user_id,
-        session_id,
-        name,
-        description,
-        trigger_phrases,
-        steps,
-        source_skill,
-        source_request,
-    ):
+        user_id: Any,
+        session_id: Any,
+        name: Any,
+        description: Any,
+        trigger_phrases: Any,
+        steps: Any,
+        source_skill: Any,
+        source_request: Any,
+    ) -> Any:
         now = datetime.now(UTC)
-        workflow = SimpleNamespace(
+        workflow: Any = SimpleNamespace(
             id=uuid.uuid4(),
             user_id=user_id,
             session_id=session_id,
@@ -141,18 +144,19 @@ class FakeSkillWorkflowRepository:
         self.workflows.append(workflow)
         return workflow
 
-    async def list_workflows(self, db, *, user_id):
+    async def list_workflows(self: Any, db: Any, *, user_id: Any) -> Any:
         return [workflow for workflow in self.workflows if workflow.user_id == user_id]
 
 
 @pytest.mark.anyio
 async def test_skill_resolver_matches_workflow_keyword() -> None:
     service = AgentService(
-        settings=SimpleNamespace(), repo=FakeSkillWorkflowRepository()
+        settings=SimpleNamespace(),
+        repo=FakeSkillWorkflowRepository(),  # type: ignore[arg-type]
     )
 
     response = await service.resolve_skills(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         request=AgentSkillResolveRequest(message="帮我创建一个采购合同生成工作流"),
     )
 
@@ -164,11 +168,12 @@ async def test_skill_resolver_matches_workflow_keyword() -> None:
 @pytest.mark.anyio
 async def test_skill_resolver_ignores_unrelated_message() -> None:
     service = AgentService(
-        settings=SimpleNamespace(), repo=FakeSkillWorkflowRepository()
+        settings=SimpleNamespace(),
+        repo=FakeSkillWorkflowRepository(),  # type: ignore[arg-type]
     )
 
     response = await service.resolve_skills(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         request=AgentSkillResolveRequest(message="查询原辅料库存"),
     )
 
@@ -238,8 +243,8 @@ def test_workflow_create_normalizes_title_and_rejects_missing_path_params() -> N
 
     error = service._tool_request_validation_error(request)
 
-    assert request.body["name"] == "采购申请批量提交"
-    assert request.body["source_request"] == "创建采购申请批量提交工作流"
+    assert request.body["name"] == "采购申请批量提交"  # type: ignore[index]
+    assert request.body["source_request"] == "创建采购申请批量提交工作流"  # type: ignore[index]
     assert error is not None
     assert "request_id" in error
     assert "不支持把上一步查询结果自动批量映射到写操作" in error
@@ -248,12 +253,13 @@ def test_workflow_create_normalizes_title_and_rejects_missing_path_params() -> N
 @pytest.mark.anyio
 async def test_workflow_creation_rejects_high_risk_step() -> None:
     service = AgentService(
-        settings=SimpleNamespace(), repo=FakeSkillWorkflowRepository()
+        settings=SimpleNamespace(),
+        repo=FakeSkillWorkflowRepository(),  # type: ignore[arg-type]
     )
 
     with pytest.raises(Exception) as exc_info:
         await service._create_workflow_from_request(
-            FakeDb(),
+            cast(Any, FakeDb)(),
             request=AgentWorkflowCreate(
                 name="审批工作流",
                 steps=[
@@ -274,7 +280,7 @@ async def test_workflow_creation_rejects_high_risk_step() -> None:
 
 @pytest.mark.anyio
 async def test_workflow_creation_stores_user_scoped_workflow() -> None:
-    repo = FakeSkillWorkflowRepository()
+    repo: Any = FakeSkillWorkflowRepository()
     service = AgentService(
         settings=SimpleNamespace(),
         repo=repo,
@@ -283,7 +289,7 @@ async def test_workflow_creation_stores_user_scoped_workflow() -> None:
     user_id = uuid.uuid4()
 
     workflow = await service._create_workflow_from_request(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         request=AgentWorkflowCreate(
             name="采购合同模板查询工作流",
             trigger_phrases=["合同模板"],
@@ -300,8 +306,10 @@ async def test_workflow_creation_stores_user_scoped_workflow() -> None:
         session_id=uuid.uuid4(),
     )
 
-    workflows = await repo.list_workflows(FakeDb(), user_id=user_id)
-    other_user_workflows = await repo.list_workflows(FakeDb(), user_id=uuid.uuid4())
+    workflows = await repo.list_workflows(cast(Any, FakeDb)(), user_id=user_id)
+    other_user_workflows = await repo.list_workflows(
+        cast(Any, FakeDb)(), user_id=uuid.uuid4()
+    )
 
     assert workflow.user_id == user_id
     assert workflows == [workflow]

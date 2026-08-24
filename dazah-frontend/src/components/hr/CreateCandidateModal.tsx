@@ -55,8 +55,8 @@ export default function CreateCandidateModal({
       setPreviewData(res.data)
       setParsed(true)
       message.success('简历解析完成，请确认以下信息')
-    } catch (err: any) {
-      message.error(err.message || '解析失败')
+    } catch (err) {
+      message.error((err instanceof Error ? err.message : '') || '解析失败')
     } finally {
       setParsing(false)
     }
@@ -89,8 +89,8 @@ export default function CreateCandidateModal({
       message.success('候选人创建成功')
       onSuccess()
       handleReset()
-    } catch (err: any) {
-      message.error(err.message || '创建失败')
+    } catch (err) {
+      message.error((err instanceof Error ? err.message : '') || '创建失败')
     } finally {
       setCreating(false)
     }

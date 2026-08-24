@@ -1,0 +1,187 @@
+"""ESG 培训报表 Service."""
+
+from typing import Any
+from uuid import UUID
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.exceptions import NotFoundException
+from app.modules.hr.esg_repository import EsgTrainingRecordRepository
+from app.modules.hr.models import EsgTrainingRecord
+from app.modules.hr.schemas import EsgTrainingRecordCreate, EsgTrainingRecordUpdate
+
+
+class EsgTrainingRecordService:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+        self.repo = EsgTrainingRecordRepository(session)
+
+    async def get_record(self, record_id: UUID) -> EsgTrainingRecord:
+        record = await self.repo.get_by_id(record_id)
+        if not record:
+            raise NotFoundException("ESG培训记录", str(record_id))
+        return record
+
+    async def create_record(self, data: EsgTrainingRecordCreate) -> EsgTrainingRecord:
+        record = EsgTrainingRecord(**data.model_dump())
+        return await self.repo.create(record)
+
+    async def update_record(
+        self, record_id: UUID, data: EsgTrainingRecordUpdate
+    ) -> EsgTrainingRecord:
+        record = await self.get_record(record_id)
+        update_data = data.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(record, field, value)
+        return await self.repo.update(record)
+
+    async def delete_record(self, record_id: UUID) -> None:
+        record = await self.get_record(record_id)
+        await self.repo.soft_delete(record)
+
+    async def list_by_department(
+        self,
+        department: str,
+        page: int = 1,
+        page_size: int = 200,
+    ) -> tuple[list[EsgTrainingRecord], int]:
+        return await self.repo.list_by_department(
+            department=department, page=page, page_size=page_size
+        )
+
+    async def sync_from_ledger(self, department: str) -> dict[str, Any]:
+        """从培训台账同步生成 ESG 培训报表记录（按选中部门口径）.
+
+        台账口径与培训台账页面列表一致：按归属部门(ledger_department)筛选，
+        存量归属部门为空时回退授课部门(teaching_dept)。不再按涉及部门
+        (involved_depts)匹配，避免全厂性培训的多部门副本被重复计入选中部门。
+        参训人员按姓名匹配员工档案，且仅录入归一后归属部门等于选中部门的人员
+        （跨部门参训人员不计入本部门报表，与其他培训页面的人员归属口径一致）。
+        ESG 记录的 department 即选中部门。
+
+        集团 ESG 报表填报口径（按桌面《ESG培训报表.xlsx》模板）：
+        培训方式=线下、口径=部门组织、身份所属地=中国大陆、层级留空。
+        """
+        from datetime import date as date_type
+
+        from sqlalchemy import and_, or_, select
+
+        from app.modules.hr.models import Employee, TrainingLedger
+
+        # 1. 查询选中部门归属的未删除培训台账（口径同台账页面列表；
+        #    201二车间 家族 MC/DR 不互见；有拆分副本时隐藏裸名总副本）
+        from app.modules.hr.repository import TrainingLedgerRepository
+        from app.modules.hr.training_dept_resolver import (
+            ledger_dept_read_family,
+            resolve_training_department,
+        )
+
+        dept_values = await ledger_dept_read_family(self.session, department)
+        stmt = select(TrainingLedger).where(
+            or_(
+                TrainingLedger.ledger_department.in_(dept_values),
+                and_(
+                    TrainingLedger.ledger_department.is_(None),
+                    TrainingLedger.teaching_dept.in_(dept_values),
+                ),
+            ),
+            TrainingLedger.is_deleted.is_(False),
+        )
+        if department in ("201二车间（MC）", "201二车间（DR）"):
+            stmt = stmt.where(TrainingLedgerRepository.bare201_hidden_when_split())
+        ledgers_result = await self.session.execute(stmt)
+        ledgers = ledgers_result.scalars().all()
+
+        # 选中部门归一（培训规范名幂等），供重名时区分比较
+        norm_dept = await resolve_training_department(self.session, department)
+
+        created = 0
+        skipped_existing = 0
+        skipped_unmatched = 0
+        skipped_other_dept = 0
+        current_year = date_type.today().year
+
+        for ledger in ledgers:
+            if not ledger.trainees or not ledger.training_date:
+                continue
+
+            # 2. 拆分参训人员
+            names = [n.strip() for n in ledger.trainees.split("、") if n.strip()]
+
+            for name in names:
+                # 3. 查找已存在的 ESG 记录（去重键：培训日期+培训名称+姓名）
+                existing = await self.repo.get_by_key(
+                    ledger.training_date, ledger.training_subject or "", name
+                )
+
+                # 4. 按姓名查找员工档案
+                emp_result = await self.session.execute(
+                    select(Employee).where(
+                        Employee.name == name,
+                        Employee.is_deleted.is_(False),
+                    )
+                )
+                emps = list(emp_result.scalars().all())
+
+                # 5. 员工档案匹配：仅录入归一后归属部门等于选中部门的人员
+                #    （resolve_training_department 为 async，需显式循环）
+                emp = None
+                for e in emps:
+                    resolved = await resolve_training_department(
+                        self.session, e.department, e.sub_department
+                    )
+                    if resolved == norm_dept:
+                        emp = e
+                        break
+                if emp is None:
+                    if emps:
+                        # 档案存在但归属其他部门：跨部门参训不计入本部门报表
+                        skipped_other_dept += 1
+                    else:
+                        skipped_unmatched += 1
+                    continue
+
+                # 6. 已存在记录：更新档案相关字段（年龄/层级等随飞书同步保
+                # 持最新），不重复创建
+                if existing is not None:
+                    existing.employee_level = emp.level
+                    existing.age = emp.age or (
+                        (current_year - emp.birth_year) if emp.birth_year else None
+                    )
+                    existing.gender = emp.gender
+                    existing.employee_account = emp.domain_account
+                    skipped_existing += 1
+                    continue
+
+                # 7. 构建 ESG 记录（department 即选中部门；按集团报表口径固定：
+                # 培训方式=线下、口径=部门组织、身份所属地=中国大陆；层级取自员工档案）
+                esg = EsgTrainingRecord(
+                    training_date=ledger.training_date,
+                    training_name=ledger.training_subject or "",
+                    training_method="线下",
+                    caliber="部门组织",
+                    training_type=ledger.training_type,
+                    employee_name=name,
+                    employee_account=emp.domain_account,
+                    location_address="中国大陆",
+                    department=department,
+                    employee_level=emp.level,
+                    gender=emp.gender,
+                    # 年龄优先取员工档案 age 字段（飞书公式），无则按出生年份计算
+                    age=emp.age
+                    or ((current_year - emp.birth_year) if emp.birth_year else None),
+                    duration=ledger.duration_hours,
+                    remarks=None,
+                    apply_company="丽珠集团（宁夏）制药有限公司",
+                    apply_company_no=None,
+                )
+                await self.repo.create(esg)
+                created += 1
+
+        return {
+            "created": created,
+            "skipped": skipped_existing + skipped_unmatched + skipped_other_dept,
+            "skipped_existing": skipped_existing,
+            "skipped_unmatched": skipped_unmatched,
+            "skipped_other_dept": skipped_other_dept,
+        }

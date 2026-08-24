@@ -1,4 +1,5 @@
 from datetime import date
+from typing import Any
 
 import pytest
 
@@ -18,7 +19,7 @@ def test_execution_plan_completion_rate_is_derived() -> None:
 
 
 @pytest.mark.anyio
-async def test_execution_plan_crud_uses_soft_delete(db_session) -> None:
+async def test_execution_plan_crud_uses_soft_delete(db_session: Any) -> None:
     service = ProductionService(db_session)
     plan = await service.create_execution_plan(
         ProductionExecutionPlanCreate(

@@ -18,13 +18,9 @@ class InspectionTemplate(BaseModel):
     """巡检模板表"""
 
     __tablename__ = "inspection_templates"
-    __table_args__ = (
-        {"schema": "equipment"},
-    )
+    __table_args__ = ({"schema": "equipment"},)
 
-    name: Mapped[str] = mapped_column(
-        String(200), comment="模板名称"
-    )
+    name: Mapped[str] = mapped_column(String(200), comment="模板名称")
     description: Mapped[str | None] = mapped_column(
         Text, nullable=True, comment="模板描述"
     )
@@ -44,8 +40,11 @@ class InspectionTemplate(BaseModel):
         "InspectionTemplateItem",
         back_populates="template",
         order_by="InspectionTemplateItem.sort_order",
-        primaryjoin="and_(InspectionTemplate.id == foreign(InspectionTemplateItem.template_id), "
-                     "InspectionTemplateItem.is_deleted == False)",
+        primaryjoin=(
+            "and_(InspectionTemplate.id == foreign("
+            "InspectionTemplateItem.template_id), "
+            "InspectionTemplateItem.is_deleted == False)"
+        ),
     )
 
 
@@ -53,17 +52,13 @@ class InspectionTemplateItem(BaseModel):
     """巡检模板检查项表"""
 
     __tablename__ = "inspection_template_items"
-    __table_args__ = (
-        {"schema": "equipment"},
-    )
+    __table_args__ = ({"schema": "equipment"},)
 
     template_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("equipment.inspection_templates.id"),
         comment="模板ID",
     )
-    item_name: Mapped[str] = mapped_column(
-        String(200), comment="检查项名称"
-    )
+    item_name: Mapped[str] = mapped_column(String(200), comment="检查项名称")
     item_description: Mapped[str | None] = mapped_column(
         Text, nullable=True, comment="检查项说明"
     )
@@ -88,9 +83,7 @@ class InspectionRecord(BaseModel):
     """巡检记录明细表"""
 
     __tablename__ = "inspection_records"
-    __table_args__ = (
-        {"schema": "equipment"},
-    )
+    __table_args__ = ({"schema": "equipment"},)
 
     task_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("equipment.inspection_tasks.id"),
@@ -110,15 +103,11 @@ class InspectionRecord(BaseModel):
         ForeignKey("equipment.inspection_template_items.id"),
         comment="检查项ID",
     )
-    result: Mapped[str] = mapped_column(
-        String(20), comment="结果：正常/异常/跳过"
-    )
+    result: Mapped[str] = mapped_column(String(20), comment="结果：正常/异常/跳过")
     actual_value: Mapped[str | None] = mapped_column(
         String(200), nullable=True, comment="实际值"
     )
-    remark: Mapped[str | None] = mapped_column(
-        Text, nullable=True, comment="备注"
-    )
+    remark: Mapped[str | None] = mapped_column(Text, nullable=True, comment="备注")
 
     # 关系
     template_item: Mapped[InspectionTemplateItem] = relationship(

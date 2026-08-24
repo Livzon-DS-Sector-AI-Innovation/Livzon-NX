@@ -1,3 +1,4 @@
+from typing import Any
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
@@ -45,7 +46,7 @@ def _config(field_type: int | None = 1) -> MaterialSourceConfig:
 
 
 @pytest.mark.anyio
-async def test_probe_accepts_legacy_specification_field(monkeypatch) -> None:
+async def test_probe_accepts_legacy_specification_field(monkeypatch: Any) -> None:
     monkeypatch.setattr(
         material_source,
         "get_platform_feishu_app_credentials",
@@ -53,11 +54,11 @@ async def test_probe_accepts_legacy_specification_field(monkeypatch) -> None:
     )
 
     class FakeBitableClient:
-        def __init__(self, **kwargs) -> None:
+        def __init__(self: Any, **kwargs: Any) -> None:
             assert kwargs["app_id"] == "app-id"
             assert kwargs["app_secret"] == "app-secret"
 
-        async def list_fields(self, table_id):
+        async def list_fields(self: Any, table_id: Any) -> Any:
             assert table_id == "tbl123456"
             return [
                 {"field_name": "物料编码", "type": 1},
@@ -76,7 +77,7 @@ async def test_probe_accepts_legacy_specification_field(monkeypatch) -> None:
 
 @pytest.mark.anyio
 async def test_list_material_options_converts_field_shapes_and_keeps_duplicates(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     config = _config()
     monkeypatch.setattr(
@@ -89,16 +90,16 @@ async def test_list_material_options_converts_field_shapes_and_keeps_duplicates(
         "_get_credentials",
         AsyncMock(return_value=FeishuAppCredentials("app-id", "app-secret")),
     )
-    cache_get = AsyncMock(return_value=None)
-    cache_set = AsyncMock()
+    cache_get: Any = AsyncMock(return_value=None)
+    cache_set: Any = AsyncMock()
     monkeypatch.setattr(material_source, "cache_get", cache_get)
     monkeypatch.setattr(material_source, "cache_set", cache_set)
 
     class FakeBitableClient:
-        def __init__(self, **_kwargs) -> None:
+        def __init__(self: Any, **_kwargs: Any) -> None:
             pass
 
-        async def search_records(self, table_id, **kwargs):
+        async def search_records(self: Any, table_id: Any, **kwargs: Any) -> Any:
             assert table_id == "tbl123456"
             assert kwargs["view_id"] == "vew123456"
             condition = kwargs["filter_info"]["conditions"][0]
@@ -171,7 +172,7 @@ async def test_list_material_options_converts_field_shapes_and_keeps_duplicates(
 
 @pytest.mark.anyio
 async def test_number_material_code_uses_paginated_client_filter(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     config = _config(field_type=None)
     monkeypatch.setattr(
@@ -222,17 +223,17 @@ async def test_number_material_code_uses_paginated_client_filter(
     ]
 
     class FakeBitableClient:
-        def __init__(self, **_kwargs) -> None:
+        def __init__(self: Any, **_kwargs: Any) -> None:
             pass
 
-        async def list_fields(self, table_id):
+        async def list_fields(self: Any, table_id: Any) -> Any:
             assert table_id == "tbl123456"
             return [{"field_name": "物料编码", "type": 2}]
 
-        async def search_records(self, *_args, **_kwargs):
+        async def search_records(self: Any, *_args: Any, **_kwargs: Any) -> Any:
             raise AssertionError("number fields must not use contains")
 
-        async def search_records_page(self, table_id, **kwargs):
+        async def search_records_page(self: Any, table_id: Any, **kwargs: Any) -> Any:
             assert table_id == "tbl123456"
             assert kwargs["view_id"] == "vew123456"
             assert kwargs["field_names"] == [
@@ -250,7 +251,7 @@ async def test_number_material_code_uses_paginated_client_filter(
             return pages.pop(0)
 
     monkeypatch.setattr(material_source, "BitableClient", FakeBitableClient)
-    db = AsyncMock()
+    db: Any = AsyncMock()
     options = await material_source.list_material_options(
         db,
         keyword="5",
@@ -287,7 +288,7 @@ async def test_number_material_code_uses_paginated_client_filter(
     db.flush.assert_awaited_once()
 
 
-def _material_options_harness(monkeypatch, field_type: int | None = 1):
+def _material_options_harness(monkeypatch: Any, field_type: int | None = 1) -> Any:
     config = _config(field_type=field_type)
     monkeypatch.setattr(
         material_source,
@@ -304,7 +305,9 @@ def _material_options_harness(monkeypatch, field_type: int | None = 1):
     return config
 
 
-def _option_record(record_id: str, code: str, description: str = "物料") -> dict:
+def _option_record(
+    record_id: str, code: str, description: str = "物料"
+) -> dict[str, Any]:
     return {
         "record_id": record_id,
         "fields": {
@@ -322,7 +325,7 @@ def _option_record(record_id: str, code: str, description: str = "物料") -> di
 
 @pytest.mark.anyio
 async def test_text_options_keep_exact_match_above_limit_truncation(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     _material_options_harness(monkeypatch)
 
@@ -335,10 +338,10 @@ async def test_text_options_keep_exact_match_above_limit_truncation(
     records.append(_option_record("rec-exact", "MAT-001", "精确物料"))
 
     class FakeBitableClient:
-        def __init__(self, **_kwargs) -> None:
+        def __init__(self: Any, **_kwargs: Any) -> None:
             pass
 
-        async def search_records(self, table_id, **kwargs):
+        async def search_records(self: Any, table_id: Any, **kwargs: Any) -> Any:
             assert table_id == "tbl123456"
             operator = kwargs["filter_info"]["conditions"][0]["operator"]
             if operator == "is":
@@ -371,7 +374,7 @@ async def test_text_options_keep_exact_match_above_limit_truncation(
 
 
 @pytest.mark.anyio
-async def test_options_prefer_exact_then_prefix_then_contains(monkeypatch) -> None:
+async def test_options_prefer_exact_then_prefix_then_contains(monkeypatch: Any) -> None:
     _material_options_harness(monkeypatch)
 
     records = [
@@ -382,10 +385,10 @@ async def test_options_prefer_exact_then_prefix_then_contains(monkeypatch) -> No
     ]
 
     class FakeBitableClient:
-        def __init__(self, **_kwargs) -> None:
+        def __init__(self: Any, **_kwargs: Any) -> None:
             pass
 
-        async def search_records(self, table_id, **kwargs):
+        async def search_records(self: Any, table_id: Any, **kwargs: Any) -> Any:
             assert table_id == "tbl123456"
             operator = kwargs["filter_info"]["conditions"][0]["operator"]
             if operator == "is":
@@ -407,36 +410,36 @@ async def test_options_prefer_exact_then_prefix_then_contains(monkeypatch) -> No
 
 
 @pytest.mark.anyio
-async def test_number_options_keep_exact_match_across_pages(monkeypatch) -> None:
+async def test_number_options_keep_exact_match_across_pages(monkeypatch: Any) -> None:
     config = _material_options_harness(monkeypatch, field_type=None)
     pages = [
         {
             "items": [
-                _option_record(f"rec-broad-{i}", 500 + i, f"扩展{i}")
+                _option_record(f"rec-broad-{i}", 500 + i, f"扩展{i}")  # type: ignore[arg-type]
                 for i in range(5)
             ],
             "has_more": True,
             "page_token": "next-page",
         },
         {
-            "items": [_option_record("rec-exact", 50, "精确物料")],
+            "items": [_option_record("rec-exact", 50, "精确物料")],  # type: ignore[arg-type]
             "has_more": False,
             "page_token": None,
         },
     ]
 
     class FakeBitableClient:
-        def __init__(self, **_kwargs) -> None:
+        def __init__(self: Any, **_kwargs: Any) -> None:
             pass
 
-        async def list_fields(self, table_id):
+        async def list_fields(self: Any, table_id: Any) -> Any:
             assert table_id == "tbl123456"
             return [{"field_name": "物料编码", "type": 2}]
 
-        async def search_records(self, *_args, **_kwargs):
+        async def search_records(self: Any, *_args: Any, **_kwargs: Any) -> Any:
             raise AssertionError("number fields must not use contains")
 
-        async def search_records_page(self, table_id, **kwargs):
+        async def search_records_page(self: Any, table_id: Any, **kwargs: Any) -> Any:
             assert table_id == "tbl123456"
             assert kwargs["view_id"] == "vew123456"
             assert kwargs["field_names"] == [
@@ -467,37 +470,37 @@ async def test_number_options_keep_exact_match_across_pages(monkeypatch) -> None
 
 @pytest.mark.anyio
 async def test_number_options_exact_match_survives_fuzzy_collect_fill(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     config = _material_options_harness(monkeypatch, field_type=None)
     pages = [
         {
             "items": [
-                _option_record(f"rec-fuzzy-{i}", 5000 + i, f"模糊{i}")
+                _option_record(f"rec-fuzzy-{i}", 5000 + i, f"模糊{i}")  # type: ignore[arg-type]
                 for i in range(100)
             ],
             "has_more": True,
             "page_token": "next-page",
         },
         {
-            "items": [_option_record("rec-exact", 50, "精确物料")],
+            "items": [_option_record("rec-exact", 50, "精确物料")],  # type: ignore[arg-type]
             "has_more": False,
             "page_token": None,
         },
     ]
 
     class FakeBitableClient:
-        def __init__(self, **_kwargs) -> None:
+        def __init__(self: Any, **_kwargs: Any) -> None:
             pass
 
-        async def list_fields(self, table_id):
+        async def list_fields(self: Any, table_id: Any) -> Any:
             assert table_id == "tbl123456"
             return [{"field_name": "物料编码", "type": 2}]
 
-        async def search_records(self, *_args, **_kwargs):
+        async def search_records(self: Any, *_args: Any, **_kwargs: Any) -> Any:
             raise AssertionError("number fields must not use contains")
 
-        async def search_records_page(self, table_id, **kwargs):
+        async def search_records_page(self: Any, table_id: Any, **kwargs: Any) -> Any:
             assert table_id == "tbl123456"
             expected_token = None if len(pages) == 2 else "next-page"
             assert kwargs["page_token"] == expected_token
@@ -520,14 +523,14 @@ async def test_number_options_exact_match_survives_fuzzy_collect_fill(
 
 
 @pytest.mark.anyio
-async def test_text_options_fall_back_when_exact_lookup_fails(monkeypatch) -> None:
+async def test_text_options_fall_back_when_exact_lookup_fails(monkeypatch: Any) -> None:
     _material_options_harness(monkeypatch)
 
     class FakeBitableClient:
-        def __init__(self, **_kwargs) -> None:
+        def __init__(self: Any, **_kwargs: Any) -> None:
             pass
 
-        async def search_records(self, table_id, **kwargs):
+        async def search_records(self: Any, table_id: Any, **kwargs: Any) -> Any:
             assert table_id == "tbl123456"
             operator = kwargs["filter_info"]["conditions"][0]["operator"]
             if operator == "is":
@@ -547,7 +550,7 @@ async def test_text_options_fall_back_when_exact_lookup_fails(monkeypatch) -> No
 
 @pytest.mark.anyio
 async def test_material_options_uses_cache_and_survives_redis_failure(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     config = _config()
     options = [
@@ -571,15 +574,15 @@ async def test_material_options_uses_cache_and_survives_redis_failure(
     monkeypatch.setattr(
         material_source,
         "cache_get",
-        AsyncMock(return_value=material_source.json.dumps(options)),
+        AsyncMock(return_value=material_source.json.dumps(options)),  # type: ignore[attr-defined]
     )
-    cached_search_records = AsyncMock()
+    cached_search_records: Any = AsyncMock()
 
     class FakeBitableClient:
-        def __init__(self, **_kwargs) -> None:
+        def __init__(self: Any, **_kwargs: Any) -> None:
             pass
 
-        async def search_records(self, *_args, **_kwargs):
+        async def search_records(self: Any, *_args: Any, **_kwargs: Any) -> Any:
             return await cached_search_records()
 
     monkeypatch.setattr(material_source, "BitableClient", FakeBitableClient)
@@ -589,17 +592,17 @@ async def test_material_options_uses_cache_and_survives_redis_failure(
     )
     cached_search_records.assert_not_awaited()
 
-    async def redis_down(_key):
+    async def redis_down(_key: Any) -> Any:
         raise RuntimeError("redis unavailable")
 
     monkeypatch.setattr(material_source, "cache_get", redis_down)
-    search_records = AsyncMock(return_value=[])
+    search_records: Any = AsyncMock(return_value=[])
 
     class SearchableBitableClient:
-        def __init__(self, **_kwargs) -> None:
+        def __init__(self: Any, **_kwargs: Any) -> None:
             pass
 
-        async def search_records(self, *_args, **_kwargs):
+        async def search_records(self: Any, *_args: Any, **_kwargs: Any) -> Any:
             return await search_records()
 
     monkeypatch.setattr(material_source, "BitableClient", SearchableBitableClient)
@@ -610,7 +613,7 @@ async def test_material_options_uses_cache_and_survives_redis_failure(
 
 @pytest.mark.anyio
 async def test_external_errors_are_mapped_without_raw_response() -> None:
-    async def timeout():
+    async def timeout() -> Any:
         raise httpx.ReadTimeout("secret response should not leak")
 
     with pytest.raises(MaterialSourceTimeoutError, match="请求超时"):
@@ -619,7 +622,7 @@ async def test_external_errors_are_mapped_without_raw_response() -> None:
     request = httpx.Request("GET", "https://example.invalid")
     response = httpx.Response(403, request=request)
 
-    async def forbidden():
+    async def forbidden() -> Any:
         raise httpx.HTTPStatusError(
             "raw third party body",
             request=request,
@@ -630,21 +633,21 @@ async def test_external_errors_are_mapped_without_raw_response() -> None:
         await material_source._run_feishu("fields", forbidden)
     assert "raw third party body" not in str(exc_info.value)
 
-    async def no_credentials(_db):
+    async def no_credentials(_db: Any) -> Any:
         raise RuntimeError("decrypt failed")
 
-    original = material_source.get_platform_feishu_app_credentials
-    material_source.get_platform_feishu_app_credentials = no_credentials
+    original = material_source.get_platform_feishu_app_credentials  # type: ignore[attr-defined]
+    material_source.get_platform_feishu_app_credentials = no_credentials  # type: ignore[attr-defined, assignment]
     try:
         with pytest.raises(MaterialSourceCredentialsError):
             await material_source._get_credentials(AsyncMock())
     finally:
-        material_source.get_platform_feishu_app_credentials = original
+        material_source.get_platform_feishu_app_credentials = original  # type: ignore[attr-defined]
 
 
 @pytest.mark.anyio
 async def test_feishu_api_business_errors_are_mapped_as_retryable() -> None:
-    async def feishu_fail():
+    async def feishu_fail() -> Any:
         raise RuntimeError(
             "Feishu API error: code=1254002, msg=Fail, "
             "path=/bitable/v1/apps/x/tables/y/records/search"
@@ -655,7 +658,7 @@ async def test_feishu_api_business_errors_are_mapped_as_retryable() -> None:
     assert "1254002" not in str(exc_info.value)
     assert "Fail" not in str(exc_info.value)
 
-    async def rate_limited():
+    async def rate_limited() -> Any:
         raise RuntimeError(
             "Feishu API error: code=99991600, msg=Rate limit, "
             "path=/bitable/v1/apps/x/tables/y/records/search"
@@ -664,7 +667,7 @@ async def test_feishu_api_business_errors_are_mapped_as_retryable() -> None:
     with pytest.raises(MaterialSourceUpstreamError, match="暂时繁忙"):
         await material_source._run_feishu("search", rate_limited)
 
-    async def other_business_error():
+    async def other_business_error() -> Any:
         raise RuntimeError(
             "Feishu API error: code=91402, msg=permission denied, "
             "path=/bitable/v1/apps/x/tables/y/records/search"
@@ -676,7 +679,7 @@ async def test_feishu_api_business_errors_are_mapped_as_retryable() -> None:
 
 @pytest.mark.anyio
 async def test_sync_backfills_optional_fields_for_legacy_config(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     """存量配置没有可选字段映射时，同步自动补全并继续，不要求重新保存。"""
     config = _config()
@@ -698,10 +701,10 @@ async def test_sync_backfills_optional_fields_for_legacy_config(
     upserted: list[dict[str, object]] = []
 
     class FakeBitableClient:
-        def __init__(self, **_kwargs) -> None:
+        def __init__(self: Any, **_kwargs: Any) -> None:
             pass
 
-        async def list_fields(self, table_id):
+        async def list_fields(self: Any, table_id: Any) -> Any:
             assert table_id == config.table_id
             return [
                 {"field_name": "物料编码", "type": 1},
@@ -714,7 +717,7 @@ async def test_sync_backfills_optional_fields_for_legacy_config(
                 {"field_name": "物料成本大类", "type": 1},
             ]
 
-        async def search_records_page(self, table_id, **kwargs):
+        async def search_records_page(self: Any, table_id: Any, **kwargs: Any) -> Any:
             assert table_id == config.table_id
             return {
                 "items": [
@@ -740,17 +743,19 @@ async def test_sync_backfills_optional_fields_for_legacy_config(
     monkeypatch.setattr(material_source, "BitableClient", FakeBitableClient)
 
     class FakeCatalogRepository:
-        def __init__(self, _db) -> None:
+        def __init__(self: Any, _db: Any) -> None:
             pass
 
-        async def list_feishu_record_ids(self, source_config_id):
+        async def list_feishu_record_ids(self: Any, source_config_id: Any) -> Any:
             return set()
 
-        async def bulk_upsert(self, records):
+        async def bulk_upsert(self: Any, records: Any) -> Any:
             upserted.extend(records)
             return len(records)
 
-        async def deactivate_missing(self, source_config_id, missing_record_ids):
+        async def deactivate_missing(
+            self: Any, source_config_id: Any, missing_record_ids: Any
+        ) -> Any:
             return 0
 
     monkeypatch.setattr(
@@ -773,7 +778,7 @@ async def test_sync_backfills_optional_fields_for_legacy_config(
 
 @pytest.mark.anyio
 async def test_sync_reads_all_pages_and_updates_the_local_material_mirror(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     config = _config()
     monkeypatch.setattr(
@@ -788,10 +793,10 @@ async def test_sync_reads_all_pages_and_updates_the_local_material_mirror(
     )
 
     class FakeBitableClient:
-        def __init__(self, **_kwargs) -> None:
+        def __init__(self: Any, **_kwargs: Any) -> None:
             pass
 
-        async def list_fields(self, table_id):
+        async def list_fields(self: Any, table_id: Any) -> Any:
             assert table_id == config.table_id
             return [
                 {"field_name": "物料编码", "type": 1},
@@ -804,7 +809,7 @@ async def test_sync_reads_all_pages_and_updates_the_local_material_mirror(
                 {"field_name": "物料成本大类", "type": 1},
             ]
 
-        async def search_records_page(self, table_id, **kwargs):
+        async def search_records_page(self: Any, table_id: Any, **kwargs: Any) -> Any:
             assert table_id == config.table_id
             assert kwargs["field_names"] == [
                 "物料编码",
@@ -865,21 +870,23 @@ async def test_sync_reads_all_pages_and_updates_the_local_material_mirror(
 
     monkeypatch.setattr(material_source, "BitableClient", FakeBitableClient)
 
-    upserted = []
-    deactivated = AsyncMock(return_value=0)
+    upserted: list[Any] = []
+    deactivated: Any = AsyncMock(return_value=0)
 
     class FakeCatalogRepository:
-        def __init__(self, _db) -> None:
+        def __init__(self: Any, _db: Any) -> None:
             pass
 
-        async def list_feishu_record_ids(self, source_config_id):
+        async def list_feishu_record_ids(self: Any, source_config_id: Any) -> Any:
             assert source_config_id == config.id
             return {"rec-0"}
 
-        async def bulk_upsert(self, records):
+        async def bulk_upsert(self: Any, records: Any) -> Any:
             upserted.extend(records)
 
-        async def deactivate_missing(self, source_config_id, missing_record_ids):
+        async def deactivate_missing(
+            self: Any, source_config_id: Any, missing_record_ids: Any
+        ) -> Any:
             await deactivated(source_config_id, missing_record_ids)
             return 0
 
@@ -888,7 +895,7 @@ async def test_sync_reads_all_pages_and_updates_the_local_material_mirror(
         "MaterialCatalogRepository",
         FakeCatalogRepository,
     )
-    db = AsyncMock()
+    db: Any = AsyncMock()
 
     result = await material_source.sync_material_source(db, user_id=uuid4())
 
@@ -903,8 +910,7 @@ async def test_sync_reads_all_pages_and_updates_the_local_material_mirror(
         ("rec-2", "MAT-002"),
     ]
     assert [
-        (item["material_unit"], item["material_cost_category"])
-        for item in upserted
+        (item["material_unit"], item["material_cost_category"]) for item in upserted
     ] == [
         ("件", "成本A"),
         ("箱", "成本B"),
@@ -916,7 +922,9 @@ async def test_sync_reads_all_pages_and_updates_the_local_material_mirror(
 
 
 @pytest.mark.anyio
-async def test_sync_publishes_progress_after_each_fetched_page(monkeypatch) -> None:
+async def test_sync_publishes_progress_after_each_fetched_page(
+    monkeypatch: Any,
+) -> None:
     config = _config()
     monkeypatch.setattr(
         material_source,
@@ -981,10 +989,10 @@ async def test_sync_publishes_progress_after_each_fetched_page(monkeypatch) -> N
     observed: list[tuple[int, int | None]] = []
 
     class FakeBitableClient:
-        def __init__(self, **_kwargs) -> None:
+        def __init__(self: Any, **_kwargs: Any) -> None:
             pass
 
-        async def list_fields(self, table_id):
+        async def list_fields(self: Any, table_id: Any) -> Any:
             assert table_id == config.table_id
             return [
                 {"field_name": "物料编码", "type": 1},
@@ -997,27 +1005,29 @@ async def test_sync_publishes_progress_after_each_fetched_page(monkeypatch) -> N
                 {"field_name": "物料成本大类", "type": 1},
             ]
 
-        async def search_records_page(self, table_id, **kwargs):
+        async def search_records_page(self: Any, table_id: Any, **kwargs: Any) -> Any:
             assert table_id == config.table_id
             assert (
                 kwargs["timeout"] == material_source.MATERIAL_SYNC_PAGE_TIMEOUT_SECONDS
             )
-            observed.append((config.sync_fetched_count, config.sync_total_records))
+            observed.append((config.sync_fetched_count, config.sync_total_records))  # type: ignore[arg-type]
             return pages.pop(0)
 
     monkeypatch.setattr(material_source, "BitableClient", FakeBitableClient)
 
     class FakeCatalogRepository:
-        def __init__(self, _db) -> None:
+        def __init__(self: Any, _db: Any) -> None:
             pass
 
-        async def list_feishu_record_ids(self, source_config_id):
+        async def list_feishu_record_ids(self: Any, source_config_id: Any) -> Any:
             return set()
 
-        async def bulk_upsert(self, records):
+        async def bulk_upsert(self: Any, records: Any) -> Any:
             return len(records)
 
-        async def deactivate_missing(self, source_config_id, missing_record_ids):
+        async def deactivate_missing(
+            self: Any, source_config_id: Any, missing_record_ids: Any
+        ) -> Any:
             return 0
 
     monkeypatch.setattr(
@@ -1025,7 +1035,7 @@ async def test_sync_publishes_progress_after_each_fetched_page(monkeypatch) -> N
         "MaterialCatalogRepository",
         FakeCatalogRepository,
     )
-    db = AsyncMock()
+    db: Any = AsyncMock()
     await material_source.sync_material_source(db, user_id=uuid4())
 
     assert observed == [(0, None), (2, 6), (4, 6)]
@@ -1035,15 +1045,15 @@ async def test_sync_publishes_progress_after_each_fetched_page(monkeypatch) -> N
 
 
 @pytest.mark.anyio
-async def test_reset_interrupted_syncs_marks_stale_as_error(monkeypatch) -> None:
+async def test_reset_interrupted_syncs_marks_stale_as_error(monkeypatch: Any) -> None:
     config = _config()
     config.sync_status = "syncing"
 
     class FakeConfigRepository:
-        def __init__(self, _db) -> None:
+        def __init__(self: Any, _db: Any) -> None:
             pass
 
-        async def get(self):
+        async def get(self: Any) -> Any:
             return config
 
     monkeypatch.setattr(
@@ -1051,7 +1061,7 @@ async def test_reset_interrupted_syncs_marks_stale_as_error(monkeypatch) -> None
         "MaterialSourceConfigRepository",
         FakeConfigRepository,
     )
-    db = AsyncMock()
+    db: Any = AsyncMock()
     await material_source.reset_interrupted_syncs(db)
 
     assert config.sync_status == "error"
@@ -1061,16 +1071,16 @@ async def test_reset_interrupted_syncs_marks_stale_as_error(monkeypatch) -> None
 
 @pytest.mark.anyio
 async def test_reset_interrupted_syncs_leaves_finished_or_missing_config(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     config = _config()
     config.sync_status = "success"
 
     class FakeConfigRepository:
-        def __init__(self, _db) -> None:
+        def __init__(self: Any, _db: Any) -> None:
             pass
 
-        async def get(self):
+        async def get(self: Any) -> Any:
             return config
 
     monkeypatch.setattr(
@@ -1078,16 +1088,16 @@ async def test_reset_interrupted_syncs_leaves_finished_or_missing_config(
         "MaterialSourceConfigRepository",
         FakeConfigRepository,
     )
-    db = AsyncMock()
+    db: Any = AsyncMock()
     await material_source.reset_interrupted_syncs(db)
     assert config.sync_status == "success"
     db.commit.assert_not_awaited()
 
     class MissingRepository:
-        def __init__(self, _db) -> None:
+        def __init__(self: Any, _db: Any) -> None:
             pass
 
-        async def get(self):
+        async def get(self: Any) -> Any:
             return None
 
     monkeypatch.setattr(
@@ -1100,11 +1110,11 @@ async def test_reset_interrupted_syncs_leaves_finished_or_missing_config(
 
 
 @pytest.mark.anyio
-async def test_sync_rejects_incomplete_feishu_pagination(monkeypatch) -> None:
+async def test_sync_rejects_incomplete_feishu_pagination(monkeypatch: Any) -> None:
     config = _config()
 
     class BrokenClient:
-        async def search_records_page(self, *_args, **_kwargs):
+        async def search_records_page(self: Any, *_args: Any, **_kwargs: Any) -> Any:
             return {
                 "items": [{"record_id": "rec-1", "fields": {}}],
                 "has_more": True,
@@ -1113,18 +1123,18 @@ async def test_sync_rejects_incomplete_feishu_pagination(monkeypatch) -> None:
             }
 
     with pytest.raises(MaterialSourcePermissionError, match="分页数据异常"):
-        await material_source._list_all_material_records(BrokenClient(), config)
+        await material_source._list_all_material_records(BrokenClient(), config)  # type: ignore[arg-type]
 
 
 @pytest.mark.anyio
 async def test_sync_page_fetch_retries_after_timeout_and_succeeds(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
-    sleep = AsyncMock()
-    monkeypatch.setattr(material_source.asyncio, "sleep", sleep)
+    sleep: Any = AsyncMock()
+    monkeypatch.setattr(material_source.asyncio, "sleep", sleep)  # type: ignore[attr-defined]
     attempts = 0
 
-    async def fetch_page():
+    async def fetch_page() -> Any:
         nonlocal attempts
         attempts += 1
         if attempts < 3:
@@ -1139,11 +1149,11 @@ async def test_sync_page_fetch_retries_after_timeout_and_succeeds(
 
 
 @pytest.mark.anyio
-async def test_sync_page_fetch_raises_after_max_retries(monkeypatch) -> None:
-    monkeypatch.setattr(material_source.asyncio, "sleep", AsyncMock())
+async def test_sync_page_fetch_raises_after_max_retries(monkeypatch: Any) -> None:
+    monkeypatch.setattr(material_source.asyncio, "sleep", AsyncMock())  # type: ignore[attr-defined]
     attempts = 0
 
-    async def fetch_page():
+    async def fetch_page() -> Any:
         nonlocal attempts
         attempts += 1
         raise MaterialSourceTimeoutError("飞书多维表格请求超时")
@@ -1155,13 +1165,13 @@ async def test_sync_page_fetch_raises_after_max_retries(monkeypatch) -> None:
 
 @pytest.mark.anyio
 async def test_sync_page_fetch_retries_after_upstream_error_and_succeeds(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
-    sleep = AsyncMock()
-    monkeypatch.setattr(material_source.asyncio, "sleep", sleep)
+    sleep: Any = AsyncMock()
+    monkeypatch.setattr(material_source.asyncio, "sleep", sleep)  # type: ignore[attr-defined]
     attempts = 0
 
-    async def fetch_page():
+    async def fetch_page() -> Any:
         nonlocal attempts
         attempts += 1
         if attempts < 3:
@@ -1176,12 +1186,14 @@ async def test_sync_page_fetch_retries_after_upstream_error_and_succeeds(
 
 
 @pytest.mark.anyio
-async def test_sync_page_fetch_does_not_retry_permission_errors(monkeypatch) -> None:
-    sleep = AsyncMock()
-    monkeypatch.setattr(material_source.asyncio, "sleep", sleep)
+async def test_sync_page_fetch_does_not_retry_permission_errors(
+    monkeypatch: Any,
+) -> None:
+    sleep: Any = AsyncMock()
+    monkeypatch.setattr(material_source.asyncio, "sleep", sleep)  # type: ignore[attr-defined]
     attempts = 0
 
-    async def fetch_page():
+    async def fetch_page() -> Any:
         nonlocal attempts
         attempts += 1
         raise MaterialSourcePermissionError("飞书多维表格访问失败")
@@ -1194,16 +1206,16 @@ async def test_sync_page_fetch_does_not_retry_permission_errors(monkeypatch) -> 
 
 @pytest.mark.anyio
 async def test_text_options_pass_short_timeout_to_both_feishu_searches(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     _material_options_harness(monkeypatch)
     calls: list[float] = []
 
     class FakeBitableClient:
-        def __init__(self, **_kwargs) -> None:
+        def __init__(self: Any, **_kwargs: Any) -> None:
             pass
 
-        async def search_records(self, _table_id, **kwargs):
+        async def search_records(self: Any, _table_id: Any, **kwargs: Any) -> Any:
             calls.append(kwargs["timeout"])
             return []
 
@@ -1214,24 +1226,26 @@ async def test_text_options_pass_short_timeout_to_both_feishu_searches(
 
 
 @pytest.mark.anyio
-async def test_text_options_total_timeout_budget_uses_constant(monkeypatch) -> None:
+async def test_text_options_total_timeout_budget_uses_constant(
+    monkeypatch: Any,
+) -> None:
     _material_options_harness(monkeypatch)
 
     class FakeBitableClient:
-        def __init__(self, **_kwargs) -> None:
+        def __init__(self: Any, **_kwargs: Any) -> None:
             pass
 
-        async def search_records(self, _table_id, **kwargs):
+        async def search_records(self: Any, _table_id: Any, **kwargs: Any) -> Any:
             return []
 
     monkeypatch.setattr(material_source, "BitableClient", FakeBitableClient)
     captured: dict[str, object] = {}
 
-    async def fake_wait_for(coro, timeout):
+    async def fake_wait_for(coro: Any, timeout: Any) -> Any:
         captured["timeout"] = timeout
         return await coro
 
-    monkeypatch.setattr(material_source.asyncio, "wait_for", fake_wait_for)
+    monkeypatch.setattr(material_source.asyncio, "wait_for", fake_wait_for)  # type: ignore[attr-defined]
     await material_source.list_material_options(AsyncMock(), keyword="MAT")
 
     assert captured["timeout"] == material_source.MATERIAL_OPTION_TOTAL_TIMEOUT_SECONDS
@@ -1239,15 +1253,15 @@ async def test_text_options_total_timeout_budget_uses_constant(monkeypatch) -> N
 
 @pytest.mark.anyio
 async def test_number_options_timeout_is_mapped_to_material_source_timeout(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     _material_options_harness(monkeypatch, field_type=2)
 
     class FakeBitableClient:
-        def __init__(self, **_kwargs) -> None:
+        def __init__(self: Any, **_kwargs: Any) -> None:
             pass
 
-        async def search_records_page(self, *_args, **_kwargs):
+        async def search_records_page(self: Any, *_args: Any, **_kwargs: Any) -> Any:
             raise httpx.ReadTimeout("upstream timeout")
 
     monkeypatch.setattr(material_source, "BitableClient", FakeBitableClient)
@@ -1257,10 +1271,12 @@ async def test_number_options_timeout_is_mapped_to_material_source_timeout(
 
 
 @pytest.mark.anyio
-async def test_options_prefer_successfully_synced_local_catalog(monkeypatch) -> None:
+async def test_options_prefer_successfully_synced_local_catalog(
+    monkeypatch: Any,
+) -> None:
     config = _config()
     config.sync_status = "success"
-    config.last_synced_at = object()
+    config.last_synced_at = object()  # type: ignore[assignment]
     monkeypatch.setattr(
         material_source,
         "get_material_source_config",
@@ -1281,40 +1297,42 @@ async def test_options_prefer_successfully_synced_local_catalog(monkeypatch) -> 
             "material_cost_category": "成本A",
         },
     )()
-    repository = AsyncMock()
+    repository: Any = AsyncMock()
     repository.list_option_records.return_value = [local_record]
     monkeypatch.setattr(
         material_source,
         "MaterialCatalogRepository",
         lambda _db: repository,
     )
-    client = AsyncMock()
+    client: Any = AsyncMock()
     monkeypatch.setattr(material_source, "BitableClient", lambda **_kwargs: client)
 
     options = await material_source.list_material_options(AsyncMock(), keyword="MAT")
 
-    assert options == [{
-        "record_id": "rec-local",
-        "material_code": "MAT-001",
-        "material_description": "本地镜像",
-        "rule_model": "A",
-        "material_unit": "件",
-        "material_template": "模板A",
-        "material_category": "五金",
-        "material_subcategory": "螺丝",
-        "material_cost_category": "成本A",
-    }]
+    assert options == [
+        {
+            "record_id": "rec-local",
+            "material_code": "MAT-001",
+            "material_description": "本地镜像",
+            "rule_model": "A",
+            "material_unit": "件",
+            "material_template": "模板A",
+            "material_category": "五金",
+            "material_subcategory": "螺丝",
+            "material_cost_category": "成本A",
+        }
+    ]
     client.search_records.assert_not_awaited()
     client.search_records_page.assert_not_awaited()
 
 
 @pytest.mark.anyio
-async def test_options_keep_local_catalog_after_failed_resync(monkeypatch) -> None:
+async def test_options_keep_local_catalog_after_failed_resync(monkeypatch: Any) -> None:
     """同步失败后仍使用最近一次成功同步的本地镜像，不打回慢速飞书实时查询。"""
     config = _config()
     config.sync_status = "error"
     config.sync_error = "飞书多维表格请求超时"
-    config.last_synced_at = object()
+    config.last_synced_at = object()  # type: ignore[assignment]
     monkeypatch.setattr(
         material_source,
         "get_material_source_config",
@@ -1335,28 +1353,30 @@ async def test_options_keep_local_catalog_after_failed_resync(monkeypatch) -> No
             "material_cost_category": "成本A",
         },
     )()
-    repository = AsyncMock()
+    repository: Any = AsyncMock()
     repository.list_option_records.return_value = [local_record]
     monkeypatch.setattr(
         material_source,
         "MaterialCatalogRepository",
         lambda _db: repository,
     )
-    client = AsyncMock()
+    client: Any = AsyncMock()
     monkeypatch.setattr(material_source, "BitableClient", lambda **_kwargs: client)
 
     options = await material_source.list_material_options(AsyncMock(), keyword="MAT")
 
-    assert options == [{
-        "record_id": "rec-local",
-        "material_code": "MAT-001",
-        "material_description": "本地镜像",
-        "rule_model": "A",
-        "material_unit": "件",
-        "material_template": "模板A",
-        "material_category": "五金",
-        "material_subcategory": "螺丝",
-        "material_cost_category": "成本A",
-    }]
+    assert options == [
+        {
+            "record_id": "rec-local",
+            "material_code": "MAT-001",
+            "material_description": "本地镜像",
+            "rule_model": "A",
+            "material_unit": "件",
+            "material_template": "模板A",
+            "material_category": "五金",
+            "material_subcategory": "螺丝",
+            "material_cost_category": "成本A",
+        }
+    ]
     client.search_records.assert_not_awaited()
     client.search_records_page.assert_not_awaited()

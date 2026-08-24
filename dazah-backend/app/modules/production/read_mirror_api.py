@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import CurrentUser, get_current_user
+from app.core.exceptions import AppException
 from app.core.response import ApiResponse
 from app.core.secrets import decrypt_secret
 from app.modules.production.models import (
@@ -20,12 +21,11 @@ from app.modules.production.models import (
     ProductionFeishuReadSyncRun,
 )
 from app.modules.production.repository import ProductionRepository
+from app.platform.integrations.feishu.page_keys import validate_module_page_key
 from app.platform.integrations.feishu.read_mirror import (
     ModuleFeishuReadMirrorService,
     ReadMirrorModels,
 )
-from app.platform.integrations.feishu.page_keys import validate_module_page_key
-from app.core.exceptions import AppException
 
 router = APIRouter()
 MODELS = ReadMirrorModels(
@@ -58,7 +58,9 @@ class BindingReplace(BaseModel):
     bindings: list[BindingItem]
 
 
-async def _service(db: AsyncSession, config_id: uuid.UUID | None = None) -> tuple[ModuleFeishuReadMirrorService, Any]:
+async def _service(
+    db: AsyncSession, config_id: uuid.UUID | None = None
+) -> tuple[ModuleFeishuReadMirrorService, Any]:
     repo = ProductionRepository(db)
     config = (
         await repo.get_feishu_config_by_id(config_id)
@@ -89,7 +91,9 @@ def _root_payload(item: Any) -> dict[str, Any]:
         "root_token": item.root_token,
         "is_active": item.is_active,
         "discovery_status": item.discovery_status,
-        "last_discovered_at": item.last_discovered_at.isoformat() if item.last_discovered_at else None,
+        "last_discovered_at": item.last_discovered_at.isoformat()
+        if item.last_discovered_at
+        else None,
         "discovery_error": item.discovery_error,
     }
 
@@ -104,7 +108,9 @@ def _resource_payload(item: Any) -> dict[str, Any]:
         "source_path": item.source_path,
         "sync_status": item.sync_status,
         "sync_error": item.sync_error,
-        "last_complete_sync_at": item.last_complete_sync_at.isoformat() if item.last_complete_sync_at else None,
+        "last_complete_sync_at": item.last_complete_sync_at.isoformat()
+        if item.last_complete_sync_at
+        else None,
     }
 
 
@@ -117,9 +123,11 @@ async def list_read_roots(
     config_id: uuid.UUID | None = None,
     db: AsyncSession = Depends(get_db),
     _current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     service, config = await _service(db, config_id)
-    return ApiResponse(data=[_root_payload(item) for item in await service.list_roots(config.id)])
+    return ApiResponse(
+        data=[_root_payload(item) for item in await service.list_roots(config.id)]
+    )
 
 
 @router.post("/feishu-read/roots", response_model=ApiResponse)
@@ -127,7 +135,7 @@ async def create_read_root(
     payload: SourceRootInput,
     db: AsyncSession = Depends(get_db),
     _current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     service, config = await _service(db, payload.config_id)
     item = await service.create_root(
         config_id=config.id,
@@ -143,7 +151,7 @@ async def delete_read_root(
     root_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     _current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     service, _ = await _service(db)
     await service.delete_root(root_id)
     return ApiResponse(data={"deleted": True})
@@ -154,18 +162,22 @@ async def discover_read_root(
     root_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     _current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     service, _ = await _service(db)
-    return ApiResponse(data=[_resource_payload(item) for item in await service.discover_root(root_id)])
+    return ApiResponse(
+        data=[_resource_payload(item) for item in await service.discover_root(root_id)]
+    )
 
 
 @router.get("/feishu-read/resources", response_model=ApiResponse)
 async def list_read_resources(
     db: AsyncSession = Depends(get_db),
     _current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     service, _ = await _service(db)
-    return ApiResponse(data=[_resource_payload(item) for item in await service.list_resources()])
+    return ApiResponse(
+        data=[_resource_payload(item) for item in await service.list_resources()]
+    )
 
 
 @router.post("/feishu-read/resources/{resource_id}/sync", response_model=ApiResponse)
@@ -173,7 +185,7 @@ async def sync_read_resource(
     resource_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     _current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     service, _ = await _service(db)
     return ApiResponse(data=await service.sync_resource(resource_id))
 
@@ -184,10 +196,14 @@ async def replace_read_bindings(
     payload: BindingReplace,
     db: AsyncSession = Depends(get_db),
     _current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     _validate_page_key(page_key)
     service, _ = await _service(db)
-    return ApiResponse(data=await service.replace_bindings(page_key, [item.model_dump() for item in payload.bindings]))
+    return ApiResponse(
+        data=await service.replace_bindings(
+            page_key, [item.model_dump() for item in payload.bindings]
+        )
+    )
 
 
 @router.get("/page-data/{page_key}", response_model=ApiResponse)
@@ -195,7 +211,7 @@ async def get_read_page(
     page_key: str,
     db: AsyncSession = Depends(get_db),
     _current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     _validate_page_key(page_key)
     service, _ = await _service(db)
     return ApiResponse(data=await service.page_data(page_key))
@@ -210,13 +226,23 @@ async def get_read_page_records(
     keyword: str | None = None,
     db: AsyncSession = Depends(get_db),
     _current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     _validate_page_key(page_key)
     service, _ = await _service(db)
-    return ApiResponse(data=await service.page_records(page_key=page_key, binding_id=binding_id, page=page, page_size=page_size, keyword=keyword))
+    return ApiResponse(
+        data=await service.page_records(
+            page_key=page_key,
+            binding_id=binding_id,
+            page=page,
+            page_size=page_size,
+            keyword=keyword,
+        )
+    )
 
 
-@router.get("/page-data/{page_key}/{binding_id}/record/{record_id}/attachments/{field_id}/{file_token}")
+@router.get(
+    "/page-data/{page_key}/{binding_id}/record/{record_id}/attachments/{field_id}/{file_token}"
+)
 async def download_read_attachment(
     page_key: str,
     binding_id: uuid.UUID,
@@ -225,7 +251,7 @@ async def download_read_attachment(
     file_token: str,
     db: AsyncSession = Depends(get_db),
     _current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     _validate_page_key(page_key)
     service, _ = await _service(db)
     content, content_type, _disposition = await service.download_attachment(
@@ -238,5 +264,9 @@ async def download_read_attachment(
     return Response(
         content=content,
         media_type=content_type,
-        headers={"Cache-Control": "no-store", "Content-Disposition": "attachment", "X-Content-Type-Options": "nosniff"},
+        headers={
+            "Cache-Control": "no-store",
+            "Content-Disposition": "attachment",
+            "X-Content-Type-Options": "nosniff",
+        },
     )

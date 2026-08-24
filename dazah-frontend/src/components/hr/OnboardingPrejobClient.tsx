@@ -62,12 +62,12 @@ export default function OnboardingPrejobClient() {
         setEmployees(res.data || [])
       })
       .catch((err) => {
-        message.error('加载员工列表失败: ' + (err.message || '未知错误'))
+        message.error('加载员工列表失败: ' + ((err instanceof Error ? err.message : '') || '未知错误'))
       })
       .finally(() => {
         setLoading(false)
       })
-  }, [factory])
+  }, [factory, message])
 
   const selectedEmployee = employees.find((e) => e.id === selectedEmployeeId)
 
@@ -80,8 +80,8 @@ export default function OnboardingPrejobClient() {
     try {
       await fetchOnboardingTrainingRecord(selectedEmployee.id, selectedEmployee.name)
       message.success('入职培训记录已导出')
-    } catch (err: any) {
-      message.error(err.message || '导出失败')
+    } catch (err) {
+      message.error((err instanceof Error ? err.message : '') || '导出失败')
     } finally {
       setDownloadingWord(false)
     }
@@ -96,8 +96,8 @@ export default function OnboardingPrejobClient() {
     try {
       await fetchPrejobTrainingPlan(selectedEmployee.id, selectedEmployee.name)
       message.success('岗前培训计划已导出')
-    } catch (err: any) {
-      message.error(err.message || '导出失败')
+    } catch (err) {
+      message.error((err instanceof Error ? err.message : '') || '导出失败')
     } finally {
       setDownloadingExcel(false)
     }
@@ -115,8 +115,8 @@ export default function OnboardingPrejobClient() {
         selectedEmployee.name,
       )
       message.success('员工上岗评估表已导出')
-    } catch (err: any) {
-      message.error(err.message || '导出失败')
+    } catch (err) {
+      message.error((err instanceof Error ? err.message : '') || '导出失败')
     } finally {
       setDownloadingEval(false)
     }

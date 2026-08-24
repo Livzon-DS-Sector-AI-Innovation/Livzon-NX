@@ -12,9 +12,7 @@ class CpvProduct(BaseModel):
     __tablename__ = "cpv_products"
     __table_args__ = {"schema": "quality", "comment": "CPV产品表"}
 
-    name: Mapped[str] = mapped_column(
-        String(200), nullable=False, comment="产品名称"
-    )
+    name: Mapped[str] = mapped_column(String(200), nullable=False, comment="产品名称")
     specification: Mapped[str | None] = mapped_column(
         String(200), nullable=True, comment="规格"
     )

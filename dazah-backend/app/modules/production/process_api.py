@@ -1,6 +1,7 @@
 """生产工序执行、进度和批次全貌 API。"""
 
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,7 +31,7 @@ router = APIRouter()
 )
 async def get_process_catalog(
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     return ApiResponse(
         data=[ProcessDefinition.model_validate(step) for step in PROCESS_STEPS]
     )
@@ -50,7 +51,7 @@ async def list_process_execution_records(
     status: str | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     records, total = await ProcessExecutionService(db).list_records(
         skip=(page - 1) * page_size,
         limit=page_size,
@@ -76,7 +77,7 @@ async def create_process_execution_record(
     data: ProcessExecutionRecordCreate,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     actor_id = current_user.id if current_user else None
     record = await ProcessExecutionService(db).create_record(data, actor_id)
     await db.commit()
@@ -93,7 +94,7 @@ async def update_process_execution_record(
     data: ProcessExecutionRecordUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     actor_id = current_user.id if current_user else None
     record = await ProcessExecutionService(db).update_record(record_id, data, actor_id)
     if not record:
@@ -111,7 +112,7 @@ async def complete_process_execution_record(
     record_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     actor_id = current_user.id if current_user else None
     record = await ProcessExecutionService(db).complete_record(record_id, actor_id)
     if not record:
@@ -129,7 +130,7 @@ async def delete_process_execution_record(
     record_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     deleted = await ProcessExecutionService(db).delete_record(record_id)
     if not deleted:
         return ApiResponse(code=404, message="工序执行记录不存在")
@@ -147,7 +148,7 @@ async def get_batch_progress(
     batch_no: str | None = Query(None, max_length=128),
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     progress = await ProcessExecutionService(db).get_progress(workshop_code, batch_no)
     return ApiResponse(data=progress)
 
@@ -161,6 +162,6 @@ async def get_batch_profile(
     batch_no: str,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     profile = await ProcessExecutionService(db).get_batch_profile(batch_no)
     return ApiResponse(data=profile)

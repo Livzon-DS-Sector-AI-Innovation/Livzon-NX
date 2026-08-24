@@ -1,5 +1,6 @@
 from pathlib import Path
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
@@ -8,6 +9,8 @@ from docx import Document
 
 from app.modules.dossier_writer.ai_fill_service import AIFillService
 
+SimpleNamespace: Any = _SimpleNamespace
+
 
 def make_service() -> AIFillService:
     return AIFillService(SimpleNamespace())
@@ -15,9 +18,9 @@ def make_service() -> AIFillService:
 
 def test_asset_category_filtering_prefers_exact_matches_and_supports_legacy() -> None:
     service = make_service()
-    quality = SimpleNamespace(_category_name="质量标准")
-    process = SimpleNamespace(_category_name="工艺资料")
-    uncategorized = SimpleNamespace()
+    quality: Any = SimpleNamespace(_category_name="质量标准")
+    process: Any = SimpleNamespace(_category_name="工艺资料")
+    uncategorized: Any = SimpleNamespace()
 
     assets = [quality, process, uncategorized]
     assert service._filter_assets_by_category(assets, "_default") == assets
@@ -41,7 +44,7 @@ def test_docx_resolution_and_table_extraction(tmp_path: Path) -> None:
     table.rows[2].cells[1].text = "白色粉末"
     table.rows[3].cells[0].text = ""
     table.rows[4].cells[0].text = "备注：内部使用"
-    document.save(source)
+    document.save(source)  # type: ignore[arg-type]
 
     assert service._resolve_docx_path(source) == source
     assert service._resolve_docx_path(tmp_path / "missing.docx") is None
@@ -55,9 +58,12 @@ def test_docx_resolution_and_table_extraction(tmp_path: Path) -> None:
         SimpleNamespace(file_path=str(source))
     )
     assert extracted == [["性状", "白色粉末", ""]]
-    assert service._extract_table_from_asset(
-        SimpleNamespace(file_path=str(tmp_path / "missing.docx"))
-    ) is None
+    assert (
+        service._extract_table_from_asset(
+            SimpleNamespace(file_path=str(tmp_path / "missing.docx"))
+        )
+        is None
+    )
 
 
 def test_paragraph_and_table_fill_actions_cover_primary_and_fallback_paths() -> None:
@@ -186,7 +192,7 @@ def test_table_row_replacement_and_fallback_fill() -> None:
 
 @pytest.mark.anyio
 async def test_preview_extraction_combines_fixed_table_ai_missing_and_image_fields(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     service = make_service()
     mappings = [
@@ -241,13 +247,13 @@ async def test_preview_extraction_combines_fixed_table_ai_missing_and_image_fiel
             appendix_slot="附录1",
         ),
     ]
-    quality_asset = SimpleNamespace(
+    quality_asset: Any = SimpleNamespace(
         _category_name="质量标准",
         file_path="/tmp/standard.docx",
         original_filename="standard.docx",
     )
-    service.get_field_mappings = AsyncMock(return_value=mappings)
-    service.get_chapter_assets = AsyncMock(return_value=[quality_asset])
+    service.get_field_mappings = AsyncMock(return_value=mappings)  # type: ignore[method-assign]
+    service.get_chapter_assets = AsyncMock(return_value=[quality_asset])  # type: ignore[method-assign]
     service.extractor = SimpleNamespace(
         extract=lambda path: {"text": "产品名称：阿莫西林"}
     )
@@ -307,9 +313,9 @@ async def test_confirm_and_fill_updates_document_and_records_results(
     working_file = "chapter.docx"
     document = Document()
     document.add_paragraph("产品名称：旧名称")
-    document.save(tmp_path / working_file)
+    document.save(tmp_path / working_file)  # type: ignore[arg-type]
 
-    db = SimpleNamespace(add=lambda value: None, commit=AsyncMock())
+    db: Any = SimpleNamespace(add=lambda value: None, commit=AsyncMock())
     service = AIFillService(db)
     service.llm = SimpleNamespace(
         chat_json=AsyncMock(
@@ -324,10 +330,10 @@ async def test_confirm_and_fill_updates_document_and_records_results(
             }
         )
     )
-    service.get_chapter_assets = AsyncMock(return_value=[])
-    service.get_field_mappings = AsyncMock(return_value=[])
-    dossier = SimpleNamespace(id=uuid4(), working_path=str(tmp_path))
-    chapter = SimpleNamespace(
+    service.get_chapter_assets = AsyncMock(return_value=[])  # type: ignore[method-assign]
+    service.get_field_mappings = AsyncMock(return_value=[])  # type: ignore[method-assign]
+    dossier: Any = SimpleNamespace(id=uuid4(), working_path=str(tmp_path))
+    chapter: Any = SimpleNamespace(
         id=uuid4(),
         working_file=working_file,
         chapter_code="3.2.S.1",
@@ -349,7 +355,7 @@ async def test_confirm_and_fill_updates_document_and_records_results(
 
     assert result["success"] is True
     assert result["message"] == "填充完成: 2/3 个字段"
-    saved = Document(tmp_path / working_file)
+    saved = Document(tmp_path / working_file)  # type: ignore[arg-type]
     assert saved.paragraphs[0].text == "产品名称：新产品"
     db.commit.assert_awaited_once()
 
@@ -367,8 +373,8 @@ async def test_confirm_and_fill_updates_document_and_records_results(
 
 @pytest.mark.anyio
 async def test_preview_page_splits_persists_ai_page_classification() -> None:
-    added = []
-    db = SimpleNamespace(add=added.append, commit=AsyncMock())
+    added: list[Any] = []
+    db: Any = SimpleNamespace(add=added.append, commit=AsyncMock())
     service = AIFillService(db)
     service.extractor = SimpleNamespace(
         extract=lambda path: {
@@ -420,7 +426,7 @@ async def test_preview_page_splits_persists_ai_page_classification() -> None:
 
 @pytest.mark.anyio
 async def test_database_query_helpers_shape_categories_mappings_and_assets() -> None:
-    category = SimpleNamespace(
+    category: Any = SimpleNamespace(
         id=uuid4(),
         category_name="质量标准",
         category_type="document",
@@ -428,8 +434,8 @@ async def test_database_query_helpers_shape_categories_mappings_and_assets() -> 
         description="质量标准资料",
         sort_order=1,
     )
-    mapping = SimpleNamespace(id=uuid4(), field_name="产品名称")
-    asset = SimpleNamespace(id=uuid4())
+    mapping: Any = SimpleNamespace(id=uuid4(), field_name="产品名称")
+    asset: Any = SimpleNamespace(id=uuid4())
     results = [
         SimpleNamespace(
             scalars=lambda: SimpleNamespace(all=lambda: [category]),
@@ -439,7 +445,7 @@ async def test_database_query_helpers_shape_categories_mappings_and_assets() -> 
         ),
         SimpleNamespace(all=lambda: [(asset, "质量标准")]),
     ]
-    db = SimpleNamespace(execute=AsyncMock(side_effect=results))
+    db: Any = SimpleNamespace(execute=AsyncMock(side_effect=results))
     service = AIFillService(db)
 
     categories = await service.get_asset_categories("3.2.S.1")
@@ -464,27 +470,27 @@ async def test_database_query_helpers_shape_categories_mappings_and_assets() -> 
 @pytest.mark.anyio
 async def test_confirm_page_splits_inserts_images_and_updates_split_records(
     tmp_path: Path,
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     working_file = "chapter.docx"
-    Document().save(tmp_path / working_file)
+    Document().save(tmp_path / working_file)  # type: ignore[arg-type]
     asset_id = uuid4()
     split_id = uuid4()
-    asset = SimpleNamespace(id=asset_id, file_path="/tmp/source.pdf")
-    split_record = SimpleNamespace(
+    asset: Any = SimpleNamespace(id=asset_id, file_path="/tmp/source.pdf")
+    split_record: Any = SimpleNamespace(
         appendix_slot=None,
         image_path=None,
         status="pending",
     )
 
-    async def fake_get(model, object_id):
+    async def fake_get(model: Any, object_id: Any) -> Any:
         if object_id == asset_id:
             return asset
         if object_id == split_id:
             return split_record
         return None
 
-    db = SimpleNamespace(get=fake_get, commit=AsyncMock())
+    db: Any = SimpleNamespace(get=fake_get, commit=AsyncMock())
     service = AIFillService(db)
     service.extractor = SimpleNamespace(
         pdf_page_to_image=lambda path, page: Path("/tmp/page-1.png")
@@ -533,13 +539,13 @@ async def test_confirm_page_splits_inserts_images_and_updates_split_records(
 async def test_auto_image_insert_rejects_missing_or_unmatched_assets(
     tmp_path: Path,
 ) -> None:
-    missing_asset = SimpleNamespace(
+    missing_asset: Any = SimpleNamespace(
         _category_name="工艺资料",
         original_filename="missing.pdf",
         file_path=str(tmp_path / "missing.pdf"),
     )
-    mapping = SimpleNamespace(source_category="工艺资料")
-    db = SimpleNamespace(
+    mapping: Any = SimpleNamespace(source_category="工艺资料")
+    db: Any = SimpleNamespace(
         get=AsyncMock(return_value=mapping),
         execute=AsyncMock(
             return_value=SimpleNamespace(
@@ -548,7 +554,7 @@ async def test_auto_image_insert_rejects_missing_or_unmatched_assets(
         ),
     )
     service = AIFillService(db)
-    chapter = SimpleNamespace(chapter_code="3.2.S.2")
+    chapter: Any = SimpleNamespace(chapter_code="3.2.S.2")
 
     assert not await service._auto_insert_image(
         Document(),

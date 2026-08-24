@@ -1,5 +1,9 @@
-import { DeviationDashboardPage } from '@/components/quality'
+import { DeviationDashboardPage, QualityQueryProvider } from '@/components/quality'
 
 export default function DeviationsPage() {
-  return <DeviationDashboardPage />
+  return (
+    <QualityQueryProvider>
+      <DeviationDashboardPage />
+    </QualityQueryProvider>
+  )
 }

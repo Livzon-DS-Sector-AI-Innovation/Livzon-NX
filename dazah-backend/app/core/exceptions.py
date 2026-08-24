@@ -41,3 +41,13 @@ class ForbiddenException(AppException):
             status_code=status.HTTP_403_FORBIDDEN,
             message=message,
         )
+
+
+class RecruitmentNotConfigured(AppException):
+    """招聘功能未配置时阻止写操作。"""
+
+    def __init__(self) -> None:
+        super().__init__(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            message="招聘功能暂未启用，请先配置飞书多维表格",
+        )

@@ -237,6 +237,7 @@ async def get_energy_statistics(
     start_time: datetime,
     end_time: datetime,
 ) -> list[dict[str, Any]]:
+    group_col: Any
     if group_by == "workshop":
         group_col = EnergyDeviceConfig.workshop
     elif group_by == "production_line":
@@ -429,7 +430,9 @@ async def get_collect_log_detail(
         .order_by(EnergyData.timestamp.desc())
     )
     result = await db.execute(query)
-    rows = list(result.all())
+    rows: list[tuple[EnergyData, EnergyDeviceConfig]] = [
+        (row[0], row[1]) for row in result.all()
+    ]
 
     return log, rows
 
@@ -437,9 +440,7 @@ async def get_collect_log_detail(
 # ── 预警规则 ──
 
 
-async def create_alert_rule(
-    db: AsyncSession, data: dict[str, Any]
-) -> EnergyAlertRule:
+async def create_alert_rule(db: AsyncSession, data: dict[str, Any]) -> EnergyAlertRule:
     obj = EnergyAlertRule(**data)
     db.add(obj)
     await db.flush()

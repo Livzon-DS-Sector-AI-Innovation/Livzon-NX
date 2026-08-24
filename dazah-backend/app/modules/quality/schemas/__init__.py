@@ -40,13 +40,10 @@ from app.modules.quality.schemas.contacts import (
     CreateDepartmentContactRequest,
     DepartmentContactOut,
     DepartmentWeeklyConfirmationOut,
+    FeishuDepartmentContactOut,
     UpdateDepartmentContactRequest,
 )
-from app.modules.quality.schemas.cpv_batch import (
-    CpvBatchResponse,
-    CpvBatchWideResponse,
-    DataType,
-)
+from app.modules.quality.schemas.cpv_batch import CpvBatchResponse, CpvBatchWideResponse
 from app.modules.quality.schemas.cpv_import import (
     CpvImportConfirmRequest,
     CpvImportPreviewRequest,
@@ -59,14 +56,12 @@ from app.modules.quality.schemas.cpv_parameter import (
     CpvParameterCreate,
     CpvParameterResponse,
     CpvParameterUpdate,
-    ParameterType,
 )
 from app.modules.quality.schemas.cpv_product import (
     CpvProductCreate,
     CpvProductListResponse,
     CpvProductResponse,
     CpvProductUpdate,
-    ProductStatus,
 )
 from app.modules.quality.schemas.cpv_statistics import (
     CpvStatisticsRequest,
@@ -97,6 +92,12 @@ from app.modules.quality.schemas.deviations import (
     SubmitReviewRequest,
     UpdateDeviationRequest,
 )
+from app.modules.quality.schemas.feishu_capa import (
+    FeishuCapaLedgerCreateRequest,
+    FeishuCapaLedgerUpdateRequest,
+    FeishuCapaPlanTrackCreateRequest,
+    FeishuCapaPlanTrackUpdateRequest,
+)
 from app.modules.quality.schemas.feishu_settings import (
     QualityFeishuAppSettingsDetail,
     QualityFeishuEntityFieldMappingBundle,
@@ -109,75 +110,21 @@ from app.modules.quality.schemas.feishu_settings import (
     UpdateQualityFeishuAppSettingsRequest,
     UpdateQualityFeishuEntitySettingRequest,
 )
-from app.modules.quality.schemas.inspection import (
-    CreateFinishedProductInspectionRequest,
-    CreateInspectionRecordRequest,
-    CreateLabInstrumentRequest,
-    CreateLabItemRequest,
-    CreateLiquidMaterialInspectionRequest,
-    CreateSolidMaterialInspectionRequest,
-    FinishedProductInspectionOut,
-    InspectionRecordOut,
-    LabInstrumentOut,
-    LabItemOut,
-    LiquidMaterialInspectionOut,
-    SolidMaterialInspectionOut,
-    UpdateFinishedProductInspectionRequest,
-    UpdateInspectionRecordRequest,
-    UpdateLabInstrumentRequest,
-    UpdateLabItemRequest,
-    UpdateLiquidMaterialInspectionRequest,
-    UpdateSolidMaterialInspectionRequest,
-)
-from app.modules.quality.schemas.external_quality import (
-    ComplaintOut,
-    CompleteProductQualityRecordRequest,
-    CompleteReturnRecallRequest,
-    CreateComplaintRequest,
-    CreateProductQualityRecordRequest,
-    CreateProductQualityStandardItemRequest,
-    CreateReturnRecallRequest,
-    CreateSupplierQualificationRequest,
-    CreateSupplierRequest,
-    ProductQualityRecordOut,
-    ProductQualityStandardItemOut,
-    RespondComplaintRequest,
-    ReturnRecallOut,
-    SupplierOut,
-    SupplierQualificationOut,
-    UpdateComplaintRequest,
-    UpdateProductQualityRecordRequest,
-    UpdateProductQualityStandardItemRequest,
-    UpdateReturnRecallRequest,
-    UpdateSupplierQualificationRequest,
-    UpdateSupplierRequest,
-)
 from app.modules.quality.schemas.inspection_dashboard import (
-    InspectionDashboardLatestRecord,
-    InspectionDashboardResourceSummary,
+    InspectionDashboardAlert,
+    InspectionDashboardChart,
+    InspectionDashboardChartSummary,
+    InspectionDashboardData,
+    InspectionDashboardMeta,
+    InspectionDashboardPoint,
     InspectionDashboardResponse,
-    InspectionFeishuSyncResponse,
-    InspectionTrendAlert,
-    InspectionTrendPoint,
-    InspectionTrendResponse,
-    InspectionTrendSummary,
+    InspectionDashboardSpecLine,
+    InspectionDashboardSummary,
 )
 from app.modules.quality.schemas.quality_ai import (
     QualityAiAnalysisLogOut,
     QualityAiApplicableField,
     QualityAiApplyRequest,
-)
-from app.modules.quality.schemas.oos_oot import (
-    CloseOosOotRecordRequest,
-    CreateOosOotRecordRequest,
-    CreateOotLimitItemRequest,
-    CreateOotLimitProductRequest,
-    OosOotRecordOut,
-    OotLimitItemOut,
-    OotLimitProductOut,
-    UpdateOosOotRecordRequest,
-    UpdateOotLimitItemRequest,
-    UpdateOotLimitProductRequest,
 )
 from app.modules.quality.schemas.shared import PageParams
 from app.modules.quality.schemas.statistics import (
@@ -209,35 +156,27 @@ from app.modules.quality.schemas.validation import (
 )
 
 __all__ = [
-    # CPV Product
-    "ProductStatus",
-    "CpvProductCreate",
-    "CpvProductUpdate",
-    "CpvProductResponse",
-    "CpvProductListResponse",
-    # CPV Parameter
-    "ParameterType",
-    "CpvParameterCreate",
-    "CpvParameterUpdate",
-    "CpvParameterResponse",
-    # CPV Batch
-    "DataType",
+    # Shared
+    "PageParams",
     "CpvBatchResponse",
     "CpvBatchWideResponse",
-    # CPV Import
-    "ImportMode",
-    "ImportStatus",
+    "CpvParameterCreate",
+    "CpvParameterResponse",
+    "CpvParameterUpdate",
+    "CpvProductCreate",
+    "CpvProductListResponse",
+    "CpvProductResponse",
+    "CpvProductUpdate",
+    "CpvImportConfirmRequest",
     "CpvImportPreviewRequest",
     "CpvImportPreviewResponse",
-    "CpvImportConfirmRequest",
     "CpvImportTaskResponse",
-    # CPV Statistics
+    "ImportMode",
+    "ImportStatus",
     "CpvStatisticsRequest",
     "CpvStatisticsResponse",
     "CpvTrendItem",
     "CpvTrendResponse",
-    # Shared
-    "PageParams",
     # Deviations
     "AiAnalysis",
     "InvestigationRecord",
@@ -298,6 +237,7 @@ __all__ = [
     "UpdateCapaPlanTrackRequest",
     # Department Contacts
     "DepartmentContactOut",
+    "FeishuDepartmentContactOut",
     "CreateDepartmentContactRequest",
     "UpdateDepartmentContactRequest",
     "DepartmentWeeklyConfirmationOut",
@@ -329,65 +269,19 @@ __all__ = [
     "UpdateQualityFeishuEntitySettingRequest",
     "QualityFeishuSettingsTestResult",
     "QualityFeishuTableOption",
-    # Inspection foundation
-    "CreateInspectionRecordRequest",
-    "UpdateInspectionRecordRequest",
-    "InspectionRecordOut",
-    "CreateLabItemRequest",
-    "UpdateLabItemRequest",
-    "LabItemOut",
-    "CreateLabInstrumentRequest",
-    "UpdateLabInstrumentRequest",
-    "LabInstrumentOut",
-    "CreateFinishedProductInspectionRequest",
-    "UpdateFinishedProductInspectionRequest",
-    "FinishedProductInspectionOut",
-    "CreateSolidMaterialInspectionRequest",
-    "UpdateSolidMaterialInspectionRequest",
-    "SolidMaterialInspectionOut",
-    "CreateLiquidMaterialInspectionRequest",
-    "UpdateLiquidMaterialInspectionRequest",
-    "LiquidMaterialInspectionOut",
-    # Inspection dashboard
-    "InspectionDashboardResourceSummary",
-    "InspectionDashboardLatestRecord",
+    # Feishu CAPA
+    "FeishuCapaLedgerCreateRequest",
+    "FeishuCapaLedgerUpdateRequest",
+    "FeishuCapaPlanTrackCreateRequest",
+    "FeishuCapaPlanTrackUpdateRequest",
+    # Inspection Dashboard
+    "InspectionDashboardData",
     "InspectionDashboardResponse",
-    "InspectionTrendPoint",
-    "InspectionTrendAlert",
-    "InspectionTrendSummary",
-    "InspectionTrendResponse",
-    "InspectionFeishuSyncResponse",
-    # OOS/OOT
-    "CreateOosOotRecordRequest",
-    "UpdateOosOotRecordRequest",
-    "CloseOosOotRecordRequest",
-    "OosOotRecordOut",
-    "CreateOotLimitProductRequest",
-    "UpdateOotLimitProductRequest",
-    "OotLimitProductOut",
-    "CreateOotLimitItemRequest",
-    "UpdateOotLimitItemRequest",
-    "OotLimitItemOut",
-    # External quality
-    "CreateSupplierRequest",
-    "UpdateSupplierRequest",
-    "SupplierOut",
-    "CreateSupplierQualificationRequest",
-    "UpdateSupplierQualificationRequest",
-    "SupplierQualificationOut",
-    "CreateComplaintRequest",
-    "UpdateComplaintRequest",
-    "RespondComplaintRequest",
-    "ComplaintOut",
-    "CreateReturnRecallRequest",
-    "UpdateReturnRecallRequest",
-    "CompleteReturnRecallRequest",
-    "ReturnRecallOut",
-    "CreateProductQualityRecordRequest",
-    "UpdateProductQualityRecordRequest",
-    "CompleteProductQualityRecordRequest",
-    "ProductQualityRecordOut",
-    "CreateProductQualityStandardItemRequest",
-    "UpdateProductQualityStandardItemRequest",
-    "ProductQualityStandardItemOut",
+    "InspectionDashboardMeta",
+    "InspectionDashboardChart",
+    "InspectionDashboardAlert",
+    "InspectionDashboardSummary",
+    "InspectionDashboardSpecLine",
+    "InspectionDashboardPoint",
+    "InspectionDashboardChartSummary",
 ]

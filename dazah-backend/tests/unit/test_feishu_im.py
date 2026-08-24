@@ -1,4 +1,5 @@
 import json
+from typing import Any
 
 import httpx
 import pytest
@@ -7,7 +8,7 @@ from app.platform.integrations.feishu import im
 
 
 @pytest.mark.anyio
-async def test_reply_message_uses_feishu_reply_endpoint(monkeypatch) -> None:
+async def test_reply_message_uses_feishu_reply_endpoint(monkeypatch: Any) -> None:
     requests: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -24,10 +25,10 @@ async def test_reply_message_uses_feishu_reply_endpoint(monkeypatch) -> None:
     transport = httpx.MockTransport(handler)
     real_async_client = httpx.AsyncClient
 
-    def fake_async_client(*, timeout: float):
+    def fake_async_client(*, timeout: float) -> Any:
         return real_async_client(transport=transport, timeout=timeout)
 
-    monkeypatch.setattr(im.httpx, "AsyncClient", fake_async_client)
+    monkeypatch.setattr(im.httpx, "AsyncClient", fake_async_client)  # type: ignore[attr-defined]
 
     result = await im.reply_feishu_message(
         tenant_access_token="tenant-token",
@@ -39,9 +40,7 @@ async def test_reply_message_uses_feishu_reply_endpoint(monkeypatch) -> None:
     assert result.ok is True
     assert result.message_id == "om_reply"
     assert requests[0].method == "POST"
-    assert requests[0].url.path == (
-        "/open-apis/im/v1/messages/om_group_message/reply"
-    )
+    assert requests[0].url.path == ("/open-apis/im/v1/messages/om_group_message/reply")
     assert json.loads(requests[0].read()) == {
         "msg_type": "text",
         "content": '{"text":"库存充足"}',
@@ -49,7 +48,7 @@ async def test_reply_message_uses_feishu_reply_endpoint(monkeypatch) -> None:
 
 
 @pytest.mark.anyio
-async def test_get_bot_info_returns_open_id_used_for_mentions(monkeypatch) -> None:
+async def test_get_bot_info_returns_open_id_used_for_mentions(monkeypatch: Any) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(
             200,
@@ -66,10 +65,10 @@ async def test_get_bot_info_returns_open_id_used_for_mentions(monkeypatch) -> No
     transport = httpx.MockTransport(handler)
     real_async_client = httpx.AsyncClient
 
-    def fake_async_client(*, timeout: float):
+    def fake_async_client(*, timeout: float) -> Any:
         return real_async_client(transport=transport, timeout=timeout)
 
-    monkeypatch.setattr(im.httpx, "AsyncClient", fake_async_client)
+    monkeypatch.setattr(im.httpx, "AsyncClient", fake_async_client)  # type: ignore[attr-defined]
 
     result = await im.get_feishu_bot_info(tenant_access_token="tenant-token")
 
@@ -80,7 +79,7 @@ async def test_get_bot_info_returns_open_id_used_for_mentions(monkeypatch) -> No
 
 @pytest.mark.anyio
 async def test_create_message_reaction_uses_feishu_reaction_endpoint(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     requests: list[httpx.Request] = []
 
@@ -98,10 +97,10 @@ async def test_create_message_reaction_uses_feishu_reaction_endpoint(
     transport = httpx.MockTransport(handler)
     real_async_client = httpx.AsyncClient
 
-    def fake_async_client(*, timeout: float):
+    def fake_async_client(*, timeout: float) -> Any:
         return real_async_client(transport=transport, timeout=timeout)
 
-    monkeypatch.setattr(im.httpx, "AsyncClient", fake_async_client)
+    monkeypatch.setattr(im.httpx, "AsyncClient", fake_async_client)  # type: ignore[attr-defined]
 
     result = await im.create_feishu_message_reaction(
         tenant_access_token="tenant-token",
@@ -120,7 +119,7 @@ async def test_create_message_reaction_uses_feishu_reaction_endpoint(
 
 @pytest.mark.anyio
 async def test_create_message_reaction_returns_feishu_api_error(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(
@@ -131,10 +130,10 @@ async def test_create_message_reaction_returns_feishu_api_error(
     transport = httpx.MockTransport(handler)
     real_async_client = httpx.AsyncClient
 
-    def fake_async_client(*, timeout: float):
+    def fake_async_client(*, timeout: float) -> Any:
         return real_async_client(transport=transport, timeout=timeout)
 
-    monkeypatch.setattr(im.httpx, "AsyncClient", fake_async_client)
+    monkeypatch.setattr(im.httpx, "AsyncClient", fake_async_client)  # type: ignore[attr-defined]
 
     result = await im.create_feishu_message_reaction(
         tenant_access_token="tenant-token",
@@ -149,7 +148,7 @@ async def test_create_message_reaction_returns_feishu_api_error(
 
 @pytest.mark.anyio
 async def test_delete_message_reaction_uses_feishu_reaction_endpoint(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     requests: list[httpx.Request] = []
 
@@ -160,10 +159,10 @@ async def test_delete_message_reaction_uses_feishu_reaction_endpoint(
     transport = httpx.MockTransport(handler)
     real_async_client = httpx.AsyncClient
 
-    def fake_async_client(*, timeout: float):
+    def fake_async_client(*, timeout: float) -> Any:
         return real_async_client(transport=transport, timeout=timeout)
 
-    monkeypatch.setattr(im.httpx, "AsyncClient", fake_async_client)
+    monkeypatch.setattr(im.httpx, "AsyncClient", fake_async_client)  # type: ignore[attr-defined]
 
     result = await im.delete_feishu_message_reaction(
         tenant_access_token="tenant-token",

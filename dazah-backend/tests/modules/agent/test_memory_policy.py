@@ -1,5 +1,6 @@
 import uuid
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
@@ -14,6 +15,8 @@ from app.modules.agent.memory_policy import (
     parse_memory_command,
     policy_limitation_sources,
 )
+
+SimpleNamespace: Any = _SimpleNamespace
 
 
 def test_anonymous_scope_ref_is_stable_and_does_not_leak_identity() -> None:
@@ -77,17 +80,20 @@ def test_policy_limitation_sources_identify_the_strictest_upstream_level() -> No
     assert policy_limitation_sources(
         global_mode="disabled", tenant_mode="disabled", user_mode="auto"
     ) == ["全局策略", "租户策略"]
-    assert policy_limitation_sources(
-        global_mode="auto", tenant_mode="auto", user_mode="paused"
-    ) == []
+    assert (
+        policy_limitation_sources(
+            global_mode="auto", tenant_mode="auto", user_mode="paused"
+        )
+        == []
+    )
 
 
 @pytest.mark.anyio
-async def test_effective_policy_uses_the_strictest_level(monkeypatch) -> None:
+async def test_effective_policy_uses_the_strictest_level(monkeypatch: Any) -> None:
     settings = Settings(AGENT_USER_MEMORY_MODE="auto")
     service = AgentMemoryPolicyService(settings)
-    tenant = SimpleNamespace(mode="explicit_only", policy_version=3)
-    preference = SimpleNamespace(
+    tenant: Any = SimpleNamespace(mode="explicit_only", policy_version=3)
+    preference: Any = SimpleNamespace(
         mode="paused",
         preference_version=4,
         notice_sent_version=1,
@@ -95,7 +101,7 @@ async def test_effective_policy_uses_the_strictest_level(monkeypatch) -> None:
     )
     monkeypatch.setattr(service, "_tenant_row", AsyncMock(return_value=tenant))
     monkeypatch.setattr(service, "_preference", AsyncMock(return_value=preference))
-    user = SimpleNamespace(id=uuid.uuid4(), tenant_key="tenant-a")
+    user: Any = SimpleNamespace(id=uuid.uuid4(), tenant_key="tenant-a")
 
     policy = await service.resolve(SimpleNamespace(), user=user)
 
@@ -106,7 +112,7 @@ async def test_effective_policy_uses_the_strictest_level(monkeypatch) -> None:
 @pytest.mark.anyio
 async def test_group_memory_command_is_rejected_before_data_access() -> None:
     service = AgentMemoryPolicyService(Settings())
-    user = SimpleNamespace(id=uuid.uuid4(), tenant_key="tenant-a")
+    user: Any = SimpleNamespace(id=uuid.uuid4(), tenant_key="tenant-a")
 
     result = await service.handle_command(
         SimpleNamespace(),
@@ -119,9 +125,9 @@ async def test_group_memory_command_is_rejected_before_data_access() -> None:
 
 
 @pytest.mark.anyio
-async def test_tenant_policy_cannot_be_relaxed(monkeypatch) -> None:
+async def test_tenant_policy_cannot_be_relaxed(monkeypatch: Any) -> None:
     service = AgentMemoryPolicyService(Settings())
-    row = SimpleNamespace(mode="disabled", policy_version=2)
+    row: Any = SimpleNamespace(mode="disabled", policy_version=2)
     monkeypatch.setattr(service, "_tenant_row", AsyncMock(return_value=row))
 
     with pytest.raises(HTTPException) as error:
@@ -136,10 +142,10 @@ async def test_tenant_policy_cannot_be_relaxed(monkeypatch) -> None:
 
 @pytest.mark.anyio
 async def test_privacy_notice_is_marked_only_by_explicit_delivery_ack(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     service = AgentMemoryPolicyService(Settings(AGENT_USER_MEMORY_NOTICE_VERSION=2))
-    preference = SimpleNamespace(
+    preference: Any = SimpleNamespace(
         mode="auto",
         preference_version=4,
         notice_sent_version=0,
@@ -148,8 +154,8 @@ async def test_privacy_notice_is_marked_only_by_explicit_delivery_ack(
     )
     monkeypatch.setattr(service, "_tenant_row", AsyncMock(return_value=None))
     monkeypatch.setattr(service, "_preference", AsyncMock(return_value=preference))
-    db = SimpleNamespace(flush=AsyncMock())
-    user = SimpleNamespace(id=uuid.uuid4(), tenant_key="tenant-a")
+    db: Any = SimpleNamespace(flush=AsyncMock())
+    user: Any = SimpleNamespace(id=uuid.uuid4(), tenant_key="tenant-a")
 
     policy = await service.resolve(db, user=user)
 
@@ -161,17 +167,17 @@ async def test_privacy_notice_is_marked_only_by_explicit_delivery_ack(
 
 
 @pytest.mark.anyio
-async def test_memory_list_and_forget_result_matrix(monkeypatch) -> None:
+async def test_memory_list_and_forget_result_matrix(monkeypatch: Any) -> None:
     service = AgentMemoryPolicyService(Settings())
-    preference = SimpleNamespace(mode="auto")
+    preference: Any = SimpleNamespace(mode="auto")
     monkeypatch.setattr(service, "_preference", AsyncMock(return_value=preference))
-    control = AsyncMock()
+    control: Any = AsyncMock()
     monkeypatch.setattr(service, "_hermes_control", control)
-    user = SimpleNamespace(id=uuid.uuid4(), tenant_key="tenant-a")
-    db = SimpleNamespace()
+    user: Any = SimpleNamespace(id=uuid.uuid4(), tenant_key="tenant-a")
+    db: Any = SimpleNamespace()
 
     control.return_value = {"items": []}
-    assert "没有保存" in await service.handle_command(
+    assert "没有保存" in await service.handle_command(  # type: ignore[operator]
         db, user=user, message="/memory", private_channel=True
     )
 
@@ -188,7 +194,7 @@ async def test_memory_list_and_forget_result_matrix(monkeypatch) -> None:
             "app.modules.agent.memory_policy.parse_memory_command",
             lambda _message: MemoryCommand("forget"),
         )
-        assert "提供要忘记" in await service.handle_command(
+        assert "提供要忘记" in await service.handle_command(  # type: ignore[operator]
             db, user=user, message="/memory forget", private_channel=True
         )
 
@@ -209,7 +215,7 @@ async def test_memory_list_and_forget_result_matrix(monkeypatch) -> None:
 
 @pytest.mark.anyio
 async def test_memory_commands_fail_safely_when_hermes_is_unavailable(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     service = AgentMemoryPolicyService(Settings())
     monkeypatch.setattr(
@@ -222,7 +228,7 @@ async def test_memory_commands_fail_safely_when_hermes_is_unavailable(
         "_hermes_control",
         AsyncMock(side_effect=RuntimeError("not configured")),
     )
-    user = SimpleNamespace(id=uuid.uuid4(), tenant_key="tenant-a")
+    user: Any = SimpleNamespace(id=uuid.uuid4(), tenant_key="tenant-a")
 
     response = await service.handle_command(
         SimpleNamespace(),

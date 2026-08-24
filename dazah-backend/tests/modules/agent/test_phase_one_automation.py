@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from typing import Any
 
 import pytest
 from fastapi import HTTPException
@@ -28,7 +29,7 @@ def _user(*, role: str = "user") -> User:
     )
 
 
-def _definition(name: str) -> dict:
+def _definition(name: str) -> dict[str, Any]:
     return {
         "name": name,
         "description": "查询质量偏差并保留受控摘要",

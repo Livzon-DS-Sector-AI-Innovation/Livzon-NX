@@ -1,5 +1,6 @@
 import importlib.util
 from pathlib import Path
+from typing import Any
 
 MIGRATION_PATH = (
     Path(__file__).parents[2]
@@ -9,7 +10,7 @@ MIGRATION_PATH = (
 )
 
 
-def _load_migration():
+def _load_migration() -> Any:
     spec = importlib.util.spec_from_file_location(
         "procurement_material_source_migration",
         MIGRATION_PATH,
@@ -21,12 +22,12 @@ def _load_migration():
     return module
 
 
-def test_material_source_migration_creates_expected_table(monkeypatch) -> None:
+def test_material_source_migration_creates_expected_table(monkeypatch: Any) -> None:
     migration = _load_migration()
     created: list[tuple[str, tuple[object, ...], dict[str, object]]] = []
     indexes: list[tuple[str, str, list[str], bool, str]] = []
 
-    def capture_create_table(table_name, *columns, **kwargs):
+    def capture_create_table(table_name: Any, *columns: Any, **kwargs: Any) -> Any:
         created.append((table_name, columns, kwargs))
 
     monkeypatch.setattr(migration.op, "create_table", capture_create_table)
@@ -44,9 +45,7 @@ def test_material_source_migration_creates_expected_table(monkeypatch) -> None:
     table_name, columns, kwargs = created[0]
     assert table_name == "material_source_configs"
     assert kwargs == {"schema": "procurement"}
-    column_names = {
-        column.name for column in columns if hasattr(column, "name")
-    }
+    column_names = {column.name for column in columns if hasattr(column, "name")}
     assert {
         "id",
         "source_url",
@@ -72,7 +71,7 @@ def test_material_source_migration_creates_expected_table(monkeypatch) -> None:
 
 
 def test_material_source_migration_downgrade_drops_index_and_table(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     migration = _load_migration()
     dropped_indexes: list[tuple[str, str, str]] = []

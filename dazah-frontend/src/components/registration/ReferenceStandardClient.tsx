@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect } from 'react'
 import { Table, Input, Button, Space, App, Card, Modal, Form, Upload, Row, Col, Spin, Alert } from 'antd'
-import { UploadOutlined, DownloadOutlined, DeleteOutlined, FileSearchOutlined } from '@ant-design/icons'
+import {  DownloadOutlined, DeleteOutlined, FileSearchOutlined } from '@ant-design/icons'
 import { ReferenceStandardListItem } from '@/types/registration'
 import { fetchReferenceStandards, getReferenceStandardDownloadUrl, parseCOA } from '@/lib/api/registration'
 import { generateReferenceStandard, deleteReferenceStandardAction } from '@/actions/registration'
@@ -41,15 +41,15 @@ export default function ReferenceStandardClient({
       })
       setRecords(res.data)
       setTotal(res.meta?.total || 0)
-    } catch (err: any) {
-      message.error(err.message || '加载数据失败')
+    } catch (err) {
+      message.error((err instanceof Error ? err.message : '') || '加载数据失败')
     } finally {
       setLoading(false)
     }
   }, [drugName, page, pageSize])
 
   useEffect(() => {
-    loadData()
+    queueMicrotask(loadData)
   }, [loadData])
 
   const handlePageChange = (newPage: number, newPageSize: number) => {
@@ -63,7 +63,7 @@ export default function ReferenceStandardClient({
     setParsedInfo('')
     try {
       const result = await parseCOA(file)
-      const meta = result.data.metadata
+      const meta = result.metadata
       
       // 自动填充表单
       const formValues: Record<string, string> = {}
@@ -91,8 +91,8 @@ export default function ReferenceStandardClient({
         setParsedInfo('COA解析完成，但未提取到关键信息，请手动填写')
         message.warning('COA解析完成，但未提取到关键信息，请手动填写')
       }
-    } catch (err: any) {
-      message.error(err.message || 'COA解析失败')
+    } catch (err) {
+      message.error((err instanceof Error ? err.message : '') || 'COA解析失败')
       setParsedInfo('COA解析失败，请手动填写')
     } finally {
       setParsing(false)
@@ -141,8 +141,8 @@ export default function ReferenceStandardClient({
       } else {
         message.error(result.message)
       }
-    } catch (err: any) {
-      message.error(err.message || '生成失败')
+    } catch (err) {
+      message.error((err instanceof Error ? err.message : '') || '生成失败')
     } finally {
       setGenerating(false)
     }
@@ -153,8 +153,8 @@ export default function ReferenceStandardClient({
       await deleteReferenceStandardAction(id)
       message.success('删除成功')
       loadData()
-    } catch (err: any) {
-      message.error(err.message || '删除失败')
+    } catch (err) {
+      message.error((err instanceof Error ? err.message : '') || '删除失败')
     }
   }
 

@@ -35,7 +35,7 @@ class ProcessExecutionRepository:
         process_code: str | None = None,
         status: str | None = None,
     ) -> tuple[list[ProcessExecutionRecord], int]:
-        filters = [ProcessExecutionRecord.is_deleted.is_(False)]
+        filters: list[Any] = [ProcessExecutionRecord.is_deleted.is_(False)]
         if batch_no:
             filters.append(ProcessExecutionRecord.batch_no.ilike(f"%{batch_no}%"))
         if workshop_code:
@@ -113,12 +113,12 @@ class ProcessExecutionRepository:
             )
             .values(is_deleted=True)
         )
-        return (result.rowcount or 0) > 0
+        return bool(getattr(result, "rowcount", 0))
 
     async def records_for_progress(
         self, workshop_code: str, batch_no: str | None = None
     ) -> list[ProcessExecutionRecord]:
-        filters = [
+        filters: list[Any] = [
             ProcessExecutionRecord.is_deleted.is_(False),
             ProcessExecutionRecord.workshop_code == workshop_code,
         ]

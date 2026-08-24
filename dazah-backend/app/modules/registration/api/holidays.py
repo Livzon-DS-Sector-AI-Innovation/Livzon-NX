@@ -8,11 +8,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.response import success_response
-from app.modules.registration import service
 from app.modules.registration.schemas.holiday import (
     HolidayCreate,
     HolidayResponse,
 )
+from app.modules.registration.service import holiday as service
 
 router = APIRouter()
 

@@ -12,7 +12,6 @@ from app.core.deps import CurrentUser
 from app.core.response import paginated_response, success_response
 from app.modules.quality import service
 from app.modules.quality.schemas import (
-    CpvBatchWideResponse,
     CpvParameterCreate,
     CpvParameterResponse,
     CpvParameterUpdate,
@@ -20,8 +19,6 @@ from app.modules.quality.schemas import (
     CpvProductListResponse,
     CpvProductResponse,
     CpvProductUpdate,
-    CpvStatisticsResponse,
-    CpvTrendResponse,
 )
 
 router = APIRouter()
@@ -49,9 +46,9 @@ async def get_products(
 ) -> JSONResponse:
     """获取CPV产品列表（带统计摘要）"""
     from app.modules.quality import repository as repo
-    
+
     products, total = await service.get_products(db, keyword, status, page, page_size)
-    
+
     # 获取每个产品的统计信息
     result = []
     for p in products:
@@ -59,7 +56,7 @@ async def get_products(
         cqa_count = await repo.count_parameters(db, p.id, "CQA")
         cpp_batch_count = await repo.count_batches(db, p.id, "CPP")
         cqa_batch_count = await repo.count_batches(db, p.id, "CQA")
-        
+
         result.append(
             CpvProductListResponse(
                 id=p.id,
@@ -78,7 +75,7 @@ async def get_products(
                 cqa_batch_count=cqa_batch_count,
             )
         )
-    
+
     return paginated_response(data=result, page=page, page_size=page_size, total=total)
 
 
@@ -181,6 +178,7 @@ async def get_batches(
         db, product_id, data_type, batch_no, start_date, end_date, page, page_size
     )
     from app.modules.quality.schemas import CpvBatchResponse
+
     return paginated_response(
         data=[CpvBatchResponse.model_validate(b) for b in batches],
         page=page,

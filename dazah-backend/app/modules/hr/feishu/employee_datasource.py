@@ -35,9 +35,9 @@ FORMULA_FIELDS = {"年龄", "工作年限", "厂龄", "司龄", "入职月份", 
 def _extract_text(value: Any) -> str:
     """Extract plain text from Feishu text-field array format."""
     if isinstance(value, list) and len(value) > 0 and isinstance(value[0], dict):
-        return value[0].get("text", "")
+        return str(value[0].get("text", ""))
     if isinstance(value, dict) and "text" in value:
-        return value.get("text", "")
+        return str(value.get("text", ""))
     if isinstance(value, str):
         return value
     return str(value) if value is not None else ""
@@ -50,9 +50,9 @@ def _extract_number(value: Any) -> int | float | None:
     if isinstance(value, dict) and "value" in value:
         v = value["value"]
         if isinstance(v, list) and len(v) > 0:
-            return v[0]
+            return v[0] if isinstance(v[0], (int, float)) else None
     if isinstance(value, list) and len(value) > 0:
-        return value[0]
+        return value[0] if isinstance(value[0], (int, float)) else None
     return None
 
 
@@ -89,11 +89,11 @@ class EmployeeBitableDataSource:
         })
     """
 
-    def __init__(self) -> None:
-        self.client = BitableClient()
-        # New employee base: https://j0eukrlohu.feishu.cn/base/KHLsboPBGaah6Vs3EpgcpvzsnuH
-        self.client.app_token = _settings.FEISHU_BITABLE_APP_TOKEN or "KHLsboPBGaah6Vs3EpgcpvzsnuH"
-        self.table_id = _settings.FEISHU_BITABLE_EMPLOYEE_TABLE_ID or "tblrcSHfS5ivun7e"
+    def __init__(
+        self, app_token: str | None = None, table_id: str | None = None
+    ) -> None:
+        self.client = BitableClient(app_token=app_token)
+        self.table_id = table_id or _settings.FEISHU_BITABLE_EMPLOYEE_TABLE_ID or ""
 
     def _is_enabled(self) -> bool:
         return bool(self.client.app_token)
@@ -104,6 +104,7 @@ class EmployeeBitableDataSource:
         self,
         *,
         filter_str: str | None = None,
+        filter_obj: dict[str, Any] | None = None,
         page_size: int = 500,
     ) -> list[dict[str, Any]]:
         if not self._is_enabled():
@@ -111,13 +112,14 @@ class EmployeeBitableDataSource:
         return await self.client.search_records(
             self.table_id,
             filter_str=filter_str,
+            filter_obj=filter_obj,
             page_size=page_size,
         )
 
     async def _create(self, fields: dict[str, Any]) -> str:
         """Create raw record, return record_id."""
         record = await self.client.create_record(self.table_id, fields)
-        return record.get("record_id", "")
+        return str(record.get("record_id", ""))
 
     async def _update(self, record_id: str, fields: dict[str, Any]) -> None:
         await self.client.update_record(self.table_id, record_id, fields)
@@ -148,10 +150,21 @@ class EmployeeBitableDataSource:
         items = await self._search(filter_str=filter_str, page_size=page_size)
         return [EmployeeRecord.from_api(item) for item in items]
 
-    async def find_by_employee_number(self, employee_number: str) -> "EmployeeRecord | None":
+    async def find_by_employee_number(
+        self, employee_number: str
+    ) -> "EmployeeRecord | None":
         """Find single employee by employee number (工号)."""
         items = await self._search(
-            filter_str=f'CurrentValue.[工号] = "{employee_number}"'
+            filter_obj={
+                "conjunction": "and",
+                "conditions": [
+                    {
+                        "field_name": "工号",
+                        "operator": "is",
+                        "value": [str(employee_number)],
+                    }
+                ],
+            }
         )
         if not items:
             return None
@@ -160,14 +173,24 @@ class EmployeeBitableDataSource:
     async def find_by_name(self, name: str) -> list["EmployeeRecord"]:
         """Find employees by name (may return multiple)."""
         items = await self._search(
-            filter_str=f'CurrentValue.[姓名] contains "{name}"'
+            filter_obj={
+                "conjunction": "and",
+                "conditions": [
+                    {"field_name": "姓名", "operator": "is", "value": [name]}
+                ],
+            }
         )
         return [EmployeeRecord.from_api(item) for item in items]
 
     async def find_by_domain_account(self, account: str) -> "EmployeeRecord | None":
         """Find by domain account (域账号)."""
         items = await self._search(
-            filter_str=f'CurrentValue.[域账号] = "{account}"'
+            filter_obj={
+                "conjunction": "and",
+                "conditions": [
+                    {"field_name": "域账户", "operator": "is", "value": [account]}
+                ],
+            }
         )
         if not items:
             return None
@@ -249,11 +272,18 @@ class EmployeeBitableDataSource:
             if value is None:
                 continue
             if key in {
-                "参加工作时间", "进厂时间", "入丽珠时间", "毕业时间",
-                "第一次合同起点时间", "第一次合同终止时间",
-                "第二次合同起点时间", "第二次合同终止时间",
-                "第三次合同起点时间", "第三次合同终止时间",
-                "第四次合同起点时间", "第四次合同终止时间",
+                "参加工作时间",
+                "进厂时间",
+                "入丽珠时间",
+                "毕业时间",
+                "第一次合同起点时间",
+                "第一次合同终止时间",
+                "第二次合同起点时间",
+                "第二次合同终止时间",
+                "第三次合同起点时间",
+                "第三次合同终止时间",
+                "第四次合同起点时间",
+                "第四次合同终止时间",
             }:
                 prepared[key] = _to_ms_timestamp(value)
             else:
@@ -296,7 +326,9 @@ class EmployeeRecord:
         self.major: str = _extract_text(fields.get("专业"))
 
         # Career
-        self.qualifications: list[str] = _extract_multi_select(fields.get("职称／职业资格"))
+        self.qualifications: list[str] = _extract_multi_select(
+            fields.get("职称／职业资格")
+        )
         self.qualification_type: str = fields.get("职称类型", "")
         self.classification: str = fields.get("分类", "")
         self.status: str = fields.get("统计类别", "")
@@ -319,7 +351,9 @@ class EmployeeRecord:
 
         # Other
         self.training_id: str = _extract_text(fields.get("培训档案编号"))
-        self.transfer_history: str = _extract_text(fields.get("异动（含曾经工作部门、岗位)"))
+        self.transfer_history: str = _extract_text(
+            fields.get("异动（含曾经工作部门、岗位)")
+        )
         self.remarks: list[str] = _extract_multi_select(fields.get("备注"))
 
         # Formula / computed (read-only)
@@ -329,7 +363,7 @@ class EmployeeRecord:
         self.company_tenure = _extract_text(fields.get("司龄"))
 
     @classmethod
-    def from_api(cls, raw: dict[str, Any]) -> "EmployeeRecord":
+    def from_api(cls: type["EmployeeRecord"], raw: dict[str, Any]) -> "EmployeeRecord":
         return cls(raw)
 
     @property
@@ -383,10 +417,18 @@ class EmployeeRecord:
             "classification": self.classification,
             "status": self.status,
             "contract_type": self.contract_type,
-            "work_start_date": self.work_start_date.isoformat() if self.work_start_date else None,
-            "factory_entry_date": self.factory_entry_date.isoformat() if self.factory_entry_date else None,
-            "livo_entry_date": self.livo_entry_date.isoformat() if self.livo_entry_date else None,
-            "graduation_date": self.graduation_date.isoformat() if self.graduation_date else None,
+            "work_start_date": self.work_start_date.isoformat()
+            if self.work_start_date
+            else None,
+            "factory_entry_date": self.factory_entry_date.isoformat()
+            if self.factory_entry_date
+            else None,
+            "livo_entry_date": self.livo_entry_date.isoformat()
+            if self.livo_entry_date
+            else None,
+            "graduation_date": self.graduation_date.isoformat()
+            if self.graduation_date
+            else None,
             "bank_account": self.bank_account,
             "emergency_contact_phone": self.emergency_contact_phone,
             "emergency_contact": self.emergency_contact,

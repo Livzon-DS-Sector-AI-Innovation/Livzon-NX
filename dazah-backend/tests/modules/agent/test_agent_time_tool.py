@@ -11,7 +11,7 @@ async def test_get_current_time_tool_returns_precise_schedule_time() -> None:
     ensure_agent_tools_registered()
     spec = tool_registry.require("agent.get_current_time")
 
-    result = await spec.handler(object(), spec.input_model())
+    result = await spec.handler(object(), spec.input_model())  # type: ignore[arg-type]
 
     assert spec.write is False
     assert spec.risk_level == "medium"

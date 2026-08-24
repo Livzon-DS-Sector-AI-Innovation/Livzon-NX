@@ -2,6 +2,7 @@
 
 import logging
 import uuid
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -45,16 +46,20 @@ class ScheduledTaskService:
         task_data = data.model_dump()
         # Auto-generate default template if not provided
         if not task_data.get("card_template") and task_data.get("data_sources"):
-            task_data["card_template"] = build_default_template(task_data["data_sources"])
+            task_data["card_template"] = build_default_template(
+                task_data["data_sources"]
+            )
         # Compute initial next_run_at
         if task_data.get("is_enabled", True):
             task_data["next_run_at"] = compute_next_run(task_data["cron_expression"])
         return await self.repo.create_scheduled_task(task_data)
 
-    async def update_task(self, task_id: uuid.UUID, data: ScheduledTaskUpdate) -> ScheduledTask | None:
+    async def update_task(
+        self, task_id: uuid.UUID, data: ScheduledTaskUpdate
+    ) -> ScheduledTask | None:
         from app.modules.safety.scheduler import compute_next_run
 
-        update_data = data.model_dump(exclude_unset=True)
+        update_data: dict[str, Any] = data.model_dump(exclude_unset=True)
         # Recompute next_run_at if cron or enabled changed
         if "cron_expression" in update_data or "is_enabled" in update_data:
             task = await self.repo.get_scheduled_task_by_id(task_id)
@@ -66,13 +71,15 @@ class ScheduledTaskService:
     async def delete_task(self, task_id: uuid.UUID) -> bool:
         return await self.repo.delete_scheduled_task(task_id)
 
-    async def toggle_task(self, task_id: uuid.UUID, enabled: bool) -> ScheduledTask | None:
+    async def toggle_task(
+        self, task_id: uuid.UUID, enabled: bool
+    ) -> ScheduledTask | None:
         from app.modules.safety.scheduler import compute_next_run
 
         task = await self.repo.get_scheduled_task_by_id(task_id)
         if not task:
             return None
-        update_data = {"is_enabled": enabled}
+        update_data: dict[str, Any] = {"is_enabled": enabled}
         if enabled:
             update_data["next_run_at"] = compute_next_run(task.cron_expression)
         else:
@@ -98,12 +105,13 @@ class ScheduledTaskService:
         return await self.repo.get_task_logs(task_id, skip, limit)
 
     @staticmethod
-    def get_data_source_options() -> list[dict]:
+    def get_data_source_options() -> list[dict[str, Any]]:
         from app.modules.safety.card_builder import DATA_SOURCE_DEFINITIONS
+
         return DATA_SOURCE_DEFINITIONS
 
     @staticmethod
-    async def preview_card(data: CardPreviewRequest) -> dict:
+    async def preview_card(data: CardPreviewRequest) -> dict[str, Any]:
         from datetime import datetime as dt
 
         from app.modules.safety.card_builder import (
@@ -112,7 +120,7 @@ class ScheduledTaskService:
             render_template,
         )
 
-        enabled_keys = [ds.key for ds in data.data_sources if ds.enabled]
+        [ds.key for ds in data.data_sources if ds.enabled]
         # Build mock variables
         variables: dict[str, str] = {}
         for ds in data.data_sources:
@@ -129,7 +137,9 @@ class ScheduledTaskService:
         card_json = await build_card_json(
             title="预览",
             rendered_markdown=rendered,
-            header_color=data.header_color.value if hasattr(data.header_color, 'value') else data.header_color,
+            header_color=data.header_color.value
+            if hasattr(data.header_color, "value")
+            else data.header_color,
         )
 
         return {

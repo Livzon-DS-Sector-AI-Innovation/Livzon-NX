@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -23,8 +24,8 @@ class QualityAiAnalysisLogOut(BaseModel):
     entity_type: str
     entity_id: uuid.UUID
     analysis_type: str
-    input_snapshot: dict
-    output_payload: dict | None = None
+    input_snapshot: dict[str, Any]
+    output_payload: dict[str, Any] | None = None
     model_name: str
     status: str
     error_message: str | None = None

@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from datetime import UTC, datetime
+from typing import Any
 from urllib.parse import quote
 from uuid import UUID
 
@@ -136,7 +137,7 @@ def _masked_identifier(value: str | None) -> str | None:
 async def get_material_source_config_record(
     _admin: AdminUser,
     db: AsyncSession = Depends(get_db),
-):
+) -> Any:
     config = await get_material_source_config(db)
     data = (
         MaterialSourceConfigResponse.model_validate(config).model_dump(mode="json")
@@ -156,7 +157,7 @@ async def test_material_source_config_record(
     _admin: AdminUser,
     payload: MaterialSourceConfigUpsert | None = None,
     db: AsyncSession = Depends(get_db),
-):
+) -> Any:
     try:
         probe = await test_material_source_config(db, payload)
     except MaterialSourceError as exc:
@@ -178,7 +179,7 @@ async def save_material_source_config_record(
     payload: MaterialSourceConfigUpsert,
     admin: AdminUser,
     db: AsyncSession = Depends(get_db),
-):
+) -> Any:
     try:
         config = await save_material_source_config(
             db,
@@ -207,7 +208,10 @@ async def save_material_source_config_record(
     )
     # save 内部 flush 后 updated_at 等 onupdate 列已过期，直接序列化会触发
     # 异步 session 的同步懒加载（MissingGreenlet）；重新查询以获取完整属性。
-    config = await get_material_source_config(db)
+    refreshed_config = await get_material_source_config(db)
+    if refreshed_config is None:
+        raise HTTPException(status_code=404, detail="采购物料数据源配置不存在")
+    config = refreshed_config
     return success_response(
         data=MaterialSourceConfigResponse.model_validate(config).model_dump(
             mode="json"
@@ -330,7 +334,7 @@ async def sync_material_source_record(
     admin: AdminUser,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
-):
+) -> Any:
     config = await get_material_source_config(db)
     if config is None:
         raise _material_source_error(
@@ -426,7 +430,7 @@ async def list_material_catalog_records(
     page: int = Query(default=1, ge=1, description="页码"),
     page_size: int = Query(default=20, ge=1, le=100, description="每页数量"),
     db: AsyncSession = Depends(get_db),
-):
+) -> Any:
     try:
         records, total, config = await list_material_catalog(
             db,
@@ -475,7 +479,7 @@ async def list_material_option_records(
     ),
     limit: int = Query(default=20, ge=1, le=20, description="返回数量上限"),
     db: AsyncSession = Depends(get_db),
-):
+) -> Any:
     try:
         options = await list_material_options(db, keyword=keyword, limit=limit)
     except MaterialSourceError as exc:
@@ -496,7 +500,7 @@ async def recognize_invoice(
     include_details: bool = Form(False, description="是否识别发票明细"),
     file: UploadFile = File(..., description="电子发票 PDF 文件"),
     db: AsyncSession = Depends(get_db),
-):
+) -> Any:
     filename = file.filename or ""
     allowed_content_types = {"application/pdf", "application/octet-stream"}
     if file.content_type not in allowed_content_types and not filename.lower().endswith(
@@ -563,7 +567,7 @@ async def list_supplier_records(
     page: int = Query(default=1, ge=1, description="页码"),
     page_size: int = Query(default=20, ge=1, le=100, description="每页条数"),
     db: AsyncSession = Depends(get_db),
-):
+) -> Any:
     suppliers, total, columns = await list_suppliers(
         db,
         keyword=keyword,
@@ -596,7 +600,7 @@ async def list_supplier_records(
 async def import_supplier_records(
     file: UploadFile = File(..., description="供应商清单表格文件"),
     db: AsyncSession = Depends(get_db),
-):
+) -> Any:
     filename = file.filename or ""
     allowed_extensions = (".xlsx", ".xlsm", ".csv", ".tsv")
     if not filename.lower().endswith(allowed_extensions):
@@ -634,7 +638,7 @@ async def list_invoice_records(
     page: int = Query(default=1, ge=1, description="页码"),
     page_size: int = Query(default=20, ge=1, le=100, description="每页条数"),
     db: AsyncSession = Depends(get_db),
-):
+) -> Any:
     records, total = await list_invoice_recognition_records(
         db,
         keyword=keyword,
@@ -659,7 +663,7 @@ async def list_invoice_records(
 async def delete_invoice_record(
     record_id: UUID,
     db: AsyncSession = Depends(get_db),
-):
+) -> Any:
     deleted = await delete_invoice_recognition_record(db, record_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="识别记录不存在或已删除")
@@ -682,7 +686,7 @@ async def delete_invoice_record(
 async def batch_delete_invoice_records(
     payload: InvoiceRecognitionRecordDeleteRequest,
     db: AsyncSession = Depends(get_db),
-):
+) -> Any:
     deleted_count = await batch_delete_invoice_recognition_records(db, payload.ids)
     return success_response(
         data=InvoiceRecognitionRecordDeleteResult(
@@ -706,7 +710,7 @@ async def list_purchase_order_records(
     page: int = Query(default=1, ge=1, description="页码"),
     page_size: int = Query(default=20, ge=1, le=100, description="每页条数"),
     db: AsyncSession = Depends(get_db),
-):
+) -> Any:
     lines, total = await list_purchase_order_lines(
         db,
         category=category.value if category else None,
@@ -729,7 +733,7 @@ async def export_purchase_order_records(
     year: int = Query(..., ge=2000, le=2100, description="年份"),
     month: int = Query(..., ge=1, le=12, description="月份"),
     db: AsyncSession = Depends(get_db),
-):
+) -> Any:
     xlsx_bytes = await export_purchase_order_lines_xlsx(
         db,
         category=category.value if category else None,
@@ -775,7 +779,7 @@ async def list_purchase_request_records(
     page: int = Query(default=1, ge=1, description="页码"),
     page_size: int = Query(default=20, ge=1, le=100, description="每页条数"),
     db: AsyncSession = Depends(get_db),
-):
+) -> Any:
     requests, total = await list_purchase_requests(
         db,
         category=category.value if category else None,
@@ -799,7 +803,7 @@ async def list_purchase_request_records(
 async def create_purchase_request_record(
     payload: PurchaseRequestCreate,
     db: AsyncSession = Depends(get_db),
-):
+) -> Any:
     try:
         request = await create_purchase_request(db, payload)
     except ValueError as exc:
@@ -823,7 +827,7 @@ async def create_purchase_request_record(
 async def import_purchase_request_records(
     file: UploadFile = File(..., description="采购申请表格文件"),
     db: AsyncSession = Depends(get_db),
-):
+) -> Any:
     filename = file.filename or ""
     if not filename.lower().endswith((".xlsx", ".xls", ".csv")):
         raise HTTPException(
@@ -855,7 +859,7 @@ async def import_purchase_request_records(
 async def get_purchase_request_record(
     request_id: UUID,
     db: AsyncSession = Depends(get_db),
-):
+) -> Any:
     try:
         request = await get_purchase_request(db, request_id)
     except ValueError as exc:
@@ -873,7 +877,7 @@ async def update_purchase_request_record(
     request_id: UUID,
     payload: PurchaseRequestUpdate,
     db: AsyncSession = Depends(get_db),
-):
+) -> Any:
     try:
         request = await update_purchase_request(db, request_id, payload)
     except ValueError as exc:
@@ -893,7 +897,7 @@ async def update_purchase_request_record(
 async def delete_purchase_request_record(
     request_id: UUID,
     db: AsyncSession = Depends(get_db),
-):
+) -> Any:
     try:
         deleted = await delete_purchase_request(db, request_id)
     except ValueError as exc:
@@ -916,7 +920,7 @@ async def delete_purchase_request_record(
 async def submit_purchase_request_record(
     request_id: UUID,
     db: AsyncSession = Depends(get_db),
-):
+) -> Any:
     try:
         request = await submit_purchase_request(db, request_id)
     except ValueError as exc:
@@ -936,7 +940,7 @@ async def approve_purchase_request_record(
     request_id: UUID,
     payload: PurchaseApprovalRequest,
     db: AsyncSession = Depends(get_db),
-):
+) -> Any:
     try:
         request = await approve_purchase_request(db, request_id, payload)
     except ValueError as exc:
@@ -953,7 +957,7 @@ async def reject_purchase_request_record(
     request_id: UUID,
     payload: PurchaseApprovalRequest,
     db: AsyncSession = Depends(get_db),
-):
+) -> Any:
     try:
         request = await reject_purchase_request(db, request_id, payload)
     except ValueError as exc:
@@ -972,7 +976,7 @@ async def list_contract_generation_records(
     page: int = Query(default=1, ge=1, description="页码"),
     page_size: int = Query(default=20, ge=1, le=100, description="每页条数"),
     db: AsyncSession = Depends(get_db),
-):
+) -> Any:
     records, total = await list_contract_records(
         db,
         keyword=keyword,
@@ -992,7 +996,7 @@ async def list_contract_generation_records(
     description="返回指定合同分类的可填写字段，用于前端动态展示合同生成表单。",
     response_model=ContractTemplateMetadata,
 )
-async def get_contract_template(category: ContractCategory):
+async def get_contract_template(category: ContractCategory) -> Any:
     metadata = get_contract_template_metadata(category)
     return success_response(data=metadata.model_dump(mode="json"))
 
@@ -1005,7 +1009,7 @@ async def get_contract_template(category: ContractCategory):
 async def create_contract(
     payload: ContractGenerateRequest,
     db: AsyncSession = Depends(get_db),
-):
+) -> Any:
     try:
         buffer, filename, media_type, record = await generate_and_store_contract(
             db,
@@ -1035,7 +1039,7 @@ async def create_contract(
 async def get_contract_generation_record(
     contract_id: UUID,
     db: AsyncSession = Depends(get_db),
-):
+) -> Any:
     try:
         record = await get_contract_record(db, contract_id)
     except ValueError as exc:
@@ -1052,7 +1056,7 @@ async def get_contract_generation_record(
 async def get_contract_file(
     contract_id: UUID,
     db: AsyncSession = Depends(get_db),
-):
+) -> Any:
     try:
         data, content_type, filename = await get_contract_record_file(db, contract_id)
     except ValueError as exc:

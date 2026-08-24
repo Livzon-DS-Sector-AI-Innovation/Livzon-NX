@@ -1,5 +1,7 @@
 """HR turnover analysis API endpoints."""
 
+from typing import Any
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,7 +23,7 @@ def get_turnover_analysis_service(
 @router.get("", summary="人员流动分析")
 async def get_turnover_analysis(
     service: TurnoverAnalysisService = Depends(get_turnover_analysis_service),
-):
+) -> Any:
     """分析最近6个月老厂人员流动数据并生成AI报告."""
     result = await service.analyze()
     return success_response(data=result.model_dump(mode="json"))

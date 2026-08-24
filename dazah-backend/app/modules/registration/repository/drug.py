@@ -1,7 +1,6 @@
 """Drug database queries."""
 
 import uuid
-from datetime import date
 from typing import Any
 
 from sqlalchemy import select
@@ -23,8 +22,8 @@ async def get_drugs(db: AsyncSession) -> list[Drug]:
     """获取所有药品（含节点）"""
     query = (
         select(Drug)
-        .where(Drug.is_deleted == False)  # noqa: E712
-        .options(selectinload(Drug.nodes.and_(DrugNode.is_deleted == False)))
+        .where(Drug.is_deleted.is_(False))
+        .options(selectinload(Drug.nodes.and_(DrugNode.is_deleted.is_(False))))
         .order_by(Drug.created_at)
     )
     result = await db.execute(query)
@@ -35,8 +34,8 @@ async def get_drug_by_id(db: AsyncSession, drug_id: uuid.UUID) -> Drug | None:
     """根据ID获取药品"""
     query = (
         select(Drug)
-        .where(Drug.id == drug_id, Drug.is_deleted == False)  # noqa: E712
-        .options(selectinload(Drug.nodes.and_(DrugNode.is_deleted == False)))
+        .where(Drug.id == drug_id, Drug.is_deleted.is_(False))
+        .options(selectinload(Drug.nodes.and_(DrugNode.is_deleted.is_(False))))
     )
     result = await db.execute(query)
     return result.scalar_one_or_none()
@@ -72,7 +71,7 @@ async def get_drug_nodes(db: AsyncSession, drug_id: uuid.UUID) -> list[DrugNode]
     """获取药品的所有节点"""
     query = (
         select(DrugNode)
-        .where(DrugNode.drug_id == drug_id, DrugNode.is_deleted == False)  # noqa: E712
+        .where(DrugNode.drug_id == drug_id, DrugNode.is_deleted.is_(False))
         .order_by(DrugNode.node_index)
     )
     result = await db.execute(query)
@@ -94,13 +93,10 @@ async def update_drug_node(
     data: dict[str, Any],
 ) -> DrugNode | None:
     """更新药品节点"""
-    query = (
-        select(DrugNode)
-        .where(
-            DrugNode.drug_id == drug_id,
-            DrugNode.node_index == node_index,
-            DrugNode.is_deleted == False,  # noqa: E712
-        )
+    query = select(DrugNode).where(
+        DrugNode.drug_id == drug_id,
+        DrugNode.node_index == node_index,
+        DrugNode.is_deleted.is_(False),
     )
     result = await db.execute(query)
     node = result.scalar_one_or_none()

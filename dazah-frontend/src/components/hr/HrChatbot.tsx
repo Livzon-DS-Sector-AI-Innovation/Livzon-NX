@@ -21,6 +21,8 @@ import {
   AudioOutlined,
   AudioMutedOutlined,
 } from '@ant-design/icons'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { useHrChatStore } from '@/stores/hrChat'
 
 const { TextArea } = Input
@@ -80,12 +82,16 @@ export default function HrChatbot() {
     if (saved) {
       try {
         const pos = JSON.parse(saved)
-        setPosition(pos)
+        queueMicrotask(() => setPosition(pos))
       } catch {
-        setPosition({ x: window.innerWidth - 80, y: window.innerHeight - 80 })
+        queueMicrotask(() =>
+          setPosition({ x: window.innerWidth - 80, y: window.innerHeight - 80 }),
+        )
       }
     } else {
-      setPosition({ x: window.innerWidth - 80, y: window.innerHeight - 80 })
+      queueMicrotask(() =>
+        setPosition({ x: window.innerWidth - 80, y: window.innerHeight - 80 }),
+      )
     }
   }, [])
 
@@ -218,7 +224,7 @@ export default function HrChatbot() {
   useEffect(() => {
     const SpeechRecognition =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-    setSpeechSupported(!!SpeechRecognition)
+    queueMicrotask(() => setSpeechSupported(!!SpeechRecognition))
   }, [])
 
   // Initialize SpeechRecognition
@@ -380,14 +386,93 @@ export default function HrChatbot() {
                   )}
 
                   <div
-                    className={`rounded-lg px-3 py-2 text-sm whitespace-pre-wrap leading-relaxed ${
+                    className={`rounded-lg px-3 py-2 text-sm leading-relaxed ${
                       msg.role === 'user'
                         ? 'bg-blue-500 text-white'
-                        : 'bg-white text-gray-800 shadow-sm border border-gray-100'
+                        : 'bg-white text-gray-800 shadow-sm border border-gray-100 chat-markdown'
                     }`}
                   >
                     {msg.role === 'assistant' && msg.content ? (
-                      <span>{msg.content}</span>
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          // 表格渲染
+                          table: ({ children, ...props }) => (
+                            <div className="overflow-x-auto my-2 rounded-lg border border-gray-200">
+                              <table className="min-w-full text-xs border-collapse" {...props}>
+                                {children}
+                              </table>
+                            </div>
+                          ),
+                          thead: ({ children }) => (
+                            <thead className="bg-blue-50">{children}</thead>
+                          ),
+                          th: ({ children }) => (
+                            <th className="px-2.5 py-2 text-left font-semibold text-gray-700 border-b border-gray-200 whitespace-nowrap">
+                              {children}
+                            </th>
+                          ),
+                          td: ({ children }) => (
+                            <td className="px-2.5 py-1.5 text-gray-600 border-b border-gray-100">
+                              {children}
+                            </td>
+                          ),
+                          tr: ({ children, ...props }: any) => {
+                            // 检测是否是表头行（包含 th）
+                            const isHeader = Array.isArray(children)
+                            return <tr className={isHeader ? '' : 'hover:bg-gray-50'} {...props}>{children}</tr>
+                          },
+                          // 标题样式
+                          h2: ({ children }) => (
+                            <h2 className="text-base font-bold text-gray-800 mt-3 mb-1.5 pb-1 border-b border-gray-200">
+                              {children}
+                            </h2>
+                          ),
+                          h3: ({ children }) => (
+                            <h3 className="text-sm font-semibold text-gray-700 mt-2 mb-1">
+                              {children}
+                            </h3>
+                          ),
+                          // 段落
+                          p: ({ children }) => (
+                            <p className="my-1">{children}</p>
+                          ),
+                          // 加粗
+                          strong: ({ children }) => (
+                            <strong className="font-semibold text-gray-900">{children}</strong>
+                          ),
+                          // 列表
+                          ul: ({ children }) => (
+                            <ul className="list-disc pl-5 my-1 space-y-0.5">{children}</ul>
+                          ),
+                          ol: ({ children }) => (
+                            <ol className="list-decimal pl-5 my-1 space-y-0.5">{children}</ol>
+                          ),
+                          // 代码
+                          code: ({ className, children, ...props }: any) => {
+                            const isInline = !className
+                            return isInline ? (
+                              <code className="bg-gray-100 text-red-600 px-1 py-0.5 rounded text-xs" {...props}>
+                                {children}
+                              </code>
+                            ) : (
+                              <pre className="bg-gray-900 text-green-400 p-3 rounded-lg overflow-x-auto my-2 text-xs">
+                                <code className={className} {...props}>{children}</code>
+                              </pre>
+                            )
+                          },
+                          // 分割线
+                          hr: () => <hr className="my-3 border-gray-200" />,
+                          // 引用
+                          blockquote: ({ children }) => (
+                            <blockquote className="border-l-4 border-blue-400 pl-3 my-2 text-gray-600 italic bg-blue-50/50 py-1 rounded-r">
+                              {children}
+                            </blockquote>
+                          ),
+                        }}
+                      >
+                        {msg.content}
+                      </ReactMarkdown>
                     ) : msg.role === 'user' ? (
                       <span>{msg.content}</span>
                     ) : isLastAssistant && isLoading && !msg.content ? (

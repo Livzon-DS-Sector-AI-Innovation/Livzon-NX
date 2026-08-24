@@ -106,7 +106,7 @@ export default function ScheduledTaskForm({ editData }: ScheduledTaskFormProps) 
   }, [selectedSources, cardTemplate, headerColor])
 
   useEffect(() => {
-    updatePreview()
+    queueMicrotask(updatePreview)
   }, [updatePreview])
 
   const handleSourceToggle = (key: string, checked: boolean) => {

@@ -2,6 +2,7 @@
 
 import json
 import logging
+from typing import Any
 
 from app.core.config import get_settings
 
@@ -9,8 +10,8 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 
-async def _get_feishu_client():
-    import lark_oapi as lark
+async def _get_feishu_client() -> Any:
+    import lark_oapi as lark  # type: ignore[import-untyped]
 
     return (
         lark.Client.builder()
@@ -22,10 +23,10 @@ async def _get_feishu_client():
     )
 
 
-async def _get_tenant_token(client) -> str:
+async def _get_tenant_token(client: Any) -> str:
     import json as _json
 
-    from lark_oapi.api.auth.v3 import (
+    from lark_oapi.api.auth.v3 import (  # type: ignore[import-untyped]
         InternalTenantAccessTokenRequest,
         InternalTenantAccessTokenRequestBody,
     )
@@ -47,7 +48,10 @@ async def _get_tenant_token(client) -> str:
         )
     if resp.raw and resp.raw.content:
         data = _json.loads(resp.raw.content.decode("utf-8"))
-        return data.get("tenant_access_token", "")
+        token = data.get("tenant_access_token", "")
+        if isinstance(token, str) and token:
+            return token
+        raise RuntimeError("Empty tenant token response")
     raise RuntimeError("Empty tenant token response")
 
 
@@ -55,19 +59,19 @@ async def send_group_card(
     chat_id: str,
     title: str,
     content: str,
-    elements: list[dict] | None = None,
+    elements: list[dict[str, Any]] | None = None,
 ) -> bool:
     """发送卡片消息到群聊"""
     try:
         client = await _get_feishu_client()
         token = await _get_tenant_token(client)
 
-        from lark_oapi.api.im.v1 import (
+        from lark_oapi.api.im.v1 import (  # type: ignore[import-untyped]
             CreateMessageRequest,
             CreateMessageRequestBody,
         )
 
-        card = {
+        card: dict[str, Any] = {
             "config": {"wide_screen_mode": True},
             "header": {
                 "title": {"tag": "plain_text", "content": title},
@@ -143,9 +147,7 @@ async def send_work_order_card(
     return await send_group_card(chat_id, title, content, elements)
 
 
-async def send_claim_notification(
-    work_order_no: str, claimer_name: str
-) -> bool:
+async def send_claim_notification(work_order_no: str, claimer_name: str) -> bool:
     """工单被抢后通知群聊"""
     chat_id = settings.FEISHU_EQUIPMENT_CHAT_ID
     if not chat_id:

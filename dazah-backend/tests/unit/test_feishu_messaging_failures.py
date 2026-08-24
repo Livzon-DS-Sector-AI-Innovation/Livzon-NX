@@ -1,34 +1,33 @@
 """Unit tests for Feishu message delivery failure handling."""
 
 import json
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
 
 from app.platform.integrations.feishu import message, notification
 
+SimpleNamespace: Any = _SimpleNamespace
 
-def _token_client(response):
-    token_api = SimpleNamespace(ainternal=AsyncMock(return_value=response))
+
+def _token_client(response: Any) -> Any:
+    token_api: Any = SimpleNamespace(ainternal=AsyncMock(return_value=response))
     return SimpleNamespace(
-        auth=SimpleNamespace(
-            v3=SimpleNamespace(tenant_access_token=token_api)
-        )
+        auth=SimpleNamespace(v3=SimpleNamespace(tenant_access_token=token_api))
     )
 
 
-def _message_client(response):
-    api = SimpleNamespace(acreate=AsyncMock(return_value=response))
-    return SimpleNamespace(
-        im=SimpleNamespace(v1=SimpleNamespace(message=api))
-    )
+def _message_client(response: Any) -> Any:
+    api: Any = SimpleNamespace(acreate=AsyncMock(return_value=response))
+    return SimpleNamespace(im=SimpleNamespace(v1=SimpleNamespace(message=api)))
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("module", [message, notification])
-async def test_tenant_token_rejects_api_and_empty_responses(module) -> None:
-    failed = SimpleNamespace(
+async def test_tenant_token_rejects_api_and_empty_responses(module: Any) -> None:
+    failed: Any = SimpleNamespace(
         success=lambda: False,
         code=999,
         msg="denied",
@@ -37,7 +36,7 @@ async def test_tenant_token_rejects_api_and_empty_responses(module) -> None:
     with pytest.raises(RuntimeError, match="tenant token"):
         await module._get_tenant_token(_token_client(failed))
 
-    empty = SimpleNamespace(
+    empty: Any = SimpleNamespace(
         success=lambda: True,
         code=0,
         msg="",
@@ -49,8 +48,8 @@ async def test_tenant_token_rejects_api_and_empty_responses(module) -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("module", [message, notification])
-async def test_tenant_token_parses_raw_response(module) -> None:
-    response = SimpleNamespace(
+async def test_tenant_token_parses_raw_response(module: Any) -> None:
+    response: Any = SimpleNamespace(
         success=lambda: True,
         code=0,
         msg="",
@@ -78,9 +77,9 @@ async def test_tenant_token_parses_raw_response(module) -> None:
     ],
 )
 async def test_send_user_card_handles_api_outcomes(
-    monkeypatch,
-    response,
-    expected,
+    monkeypatch: Any,
+    response: Any,
+    expected: Any,
 ) -> None:
     client = _message_client(response)
     monkeypatch.setattr(notification, "_get_client", AsyncMock(return_value=client))
@@ -99,7 +98,7 @@ async def test_send_user_card_handles_api_outcomes(
 
 
 @pytest.mark.asyncio
-async def test_send_user_card_contains_client_exception(monkeypatch) -> None:
+async def test_send_user_card_contains_client_exception(monkeypatch: Any) -> None:
     monkeypatch.setattr(
         notification,
         "_get_client",
@@ -131,9 +130,9 @@ async def test_build_card_includes_custom_elements() -> None:
     ],
 )
 async def test_send_group_card_handles_api_outcomes(
-    monkeypatch,
-    response,
-    expected,
+    monkeypatch: Any,
+    response: Any,
+    expected: Any,
 ) -> None:
     client = _message_client(response)
     monkeypatch.setattr(message, "_get_feishu_client", AsyncMock(return_value=client))
@@ -152,7 +151,7 @@ async def test_send_group_card_handles_api_outcomes(
 
 
 @pytest.mark.asyncio
-async def test_send_group_card_contains_token_exception(monkeypatch) -> None:
+async def test_send_group_card_contains_token_exception(monkeypatch: Any) -> None:
     monkeypatch.setattr(message, "_get_feishu_client", AsyncMock(return_value=object()))
     monkeypatch.setattr(
         message,
@@ -163,7 +162,7 @@ async def test_send_group_card_contains_token_exception(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_work_order_notifications_skip_or_delegate(monkeypatch) -> None:
+async def test_work_order_notifications_skip_or_delegate(monkeypatch: Any) -> None:
     monkeypatch.setattr(
         message,
         "settings",
@@ -185,7 +184,7 @@ async def test_work_order_notifications_skip_or_delegate(monkeypatch) -> None:
         "settings",
         SimpleNamespace(FEISHU_EQUIPMENT_CHAT_ID="chat"),
     )
-    send = AsyncMock(return_value=True)
+    send: Any = AsyncMock(return_value=True)
     monkeypatch.setattr(message, "send_group_card", send)
     assert await message.send_work_order_card(
         "WO-1",

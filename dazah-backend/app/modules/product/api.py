@@ -1,3 +1,4 @@
+from typing import Any
 from uuid import UUID
 
 from fastapi import Depends, Query
@@ -24,6 +25,7 @@ def get_product_service(session: AsyncSession = Depends(get_db)) -> ProductServi
 
 # ─── Product Routes ───
 
+
 @router.get("/products", summary="产品列表")
 async def list_products(
     name: str | None = Query(None, description="产品名称筛选"),
@@ -32,7 +34,7 @@ async def list_products(
     keyword: str | None = Query(None, description="名称或料件编号关键词"),
     page_params: PageParams = Depends(),
     service: ProductService = Depends(get_product_service),
-):
+) -> Any:
     products, total = await service.list_products(
         name=name,
         category=category,
@@ -41,10 +43,7 @@ async def list_products(
         page=page_params.page,
         page_size=page_params.page_size,
     )
-    data = [
-        ProductResponse.model_validate(p).model_dump(mode="json")
-        for p in products
-    ]
+    data = [ProductResponse.model_validate(p).model_dump(mode="json") for p in products]
     return paginated_response(
         data=data,
         page=page_params.page,
@@ -57,7 +56,7 @@ async def list_products(
 async def create_product(
     payload: ProductCreate,
     service: ProductService = Depends(get_product_service),
-):
+) -> Any:
     product = await service.create_product(payload)
     return success_response(
         data=ProductResponse.model_validate(product).model_dump(mode="json"),
@@ -70,7 +69,7 @@ async def create_product(
 async def get_product(
     product_id: UUID,
     service: ProductService = Depends(get_product_service),
-):
+) -> Any:
     product = await service.get_product(product_id)
     return success_response(
         data=ProductResponse.model_validate(product).model_dump(mode="json"),
@@ -82,7 +81,7 @@ async def update_product(
     product_id: UUID,
     payload: ProductUpdate,
     service: ProductService = Depends(get_product_service),
-):
+) -> Any:
     product = await service.update_product(product_id, payload)
     return success_response(
         data=ProductResponse.model_validate(product).model_dump(mode="json"),
@@ -94,7 +93,7 @@ async def update_product(
 async def delete_product(
     product_id: UUID,
     service: ProductService = Depends(get_product_service),
-):
+) -> Any:
     await service.delete_product(product_id)
     return success_response(message="产品删除成功")
 
@@ -102,7 +101,7 @@ async def delete_product(
 @router.post("/products/sync-from-feishu", summary="从飞书多维表格同步产品数据")
 async def sync_products_from_feishu(
     service: ProductService = Depends(get_product_service),
-):
+) -> Any:
     """手动触发：从飞书多维表格拉取全部产品数据并 upsert 到本地 PG。"""
     stats = await service.sync_from_feishu()
     msg = (
@@ -120,7 +119,7 @@ async def sync_products_from_feishu(
 @router.get("/products/sync-status", summary="飞书同步状态")
 async def get_product_sync_status(
     service: ProductService = Depends(get_product_service),
-):
+) -> Any:
     """查看本地与飞书的数据同步统计。"""
     status = await service.get_sync_status()
     return success_response(
@@ -132,7 +131,7 @@ async def get_product_sync_status(
 async def sync_product_to_feishu(
     product_id: UUID,
     service: ProductService = Depends(get_product_service),
-):
+) -> Any:
     """将本地单个产品强制同步到飞书多维表格。"""
     record_id = await service.sync_to_feishu(product_id)
     return success_response(

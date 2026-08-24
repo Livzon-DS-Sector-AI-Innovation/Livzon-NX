@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date
+from typing import Any
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,7 +20,7 @@ from tests.modules.quality.validation_migration import reset_validation_records_
 
 
 @pytest.fixture(autouse=True)
-async def _prepare_validation_records_table(db_session: AsyncSession):
+async def _prepare_validation_records_table(db_session: AsyncSession) -> Any:
     await reset_validation_records_table(db_session)
 
     yield

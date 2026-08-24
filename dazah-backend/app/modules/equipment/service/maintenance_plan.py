@@ -124,9 +124,7 @@ async def update_maintenance_plan(
     # 如果更新了频率或上次日期，重新计算下次日期
     frequency = update_data.get("frequency", plan.frequency)
     frequency_unit = update_data.get("frequency_unit", plan.frequency_unit)
-    last_date = update_data.get(
-        "last_maintenance_date", plan.last_maintenance_date
-    )
+    last_date = update_data.get("last_maintenance_date", plan.last_maintenance_date)
 
     # last_maintenance_date 被显式清空时，同步清除 next_maintenance_date
     if "last_maintenance_date" in update_data and last_date is None:
@@ -208,9 +206,7 @@ async def generate_due_work_orders(
             continue
 
         # 检查该计划是否已有未关闭工单（双重保险）
-        has_unclosed = await repo.exists_unclosed_work_order_for_plan(
-            db, plan.id
-        )
+        has_unclosed = await repo.exists_unclosed_work_order_for_plan(db, plan.id)
         if has_unclosed:
             logger.info(
                 "维护计划 %s (%s) 已有未关闭工单，跳过",

@@ -8,6 +8,7 @@ Create Date: 2026-06-30 18:10:00.000000
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+
 from alembic import op
 
 # revision identifiers, used by Alembic.
@@ -39,9 +40,7 @@ def upgrade() -> None:
             server_default="completed",
         ),
         sa.Column("error_message", sa.Text(), nullable=True),
-        sa.Column(
-            "is_applied", sa.Boolean(), nullable=False, server_default="false"
-        ),
+        sa.Column("is_applied", sa.Boolean(), nullable=False, server_default="false"),
         sa.Column("applied_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("applied_by", sa.Uuid(), nullable=True),
         sa.Column("id", sa.Uuid(), nullable=False),

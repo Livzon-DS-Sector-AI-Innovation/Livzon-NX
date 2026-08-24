@@ -7,8 +7,10 @@ Gateway. This dispatcher intentionally registers only Bitable change events.
 import asyncio
 import logging
 
-import lark_oapi as lark
-from lark_oapi.api.drive.v1 import P2DriveFileBitableRecordChangedV1
+import lark_oapi as lark  # type: ignore[import-untyped]
+from lark_oapi.api.drive.v1 import (  # type: ignore[import-untyped]
+    P2DriveFileBitableRecordChangedV1,
+)
 
 from app.core.events import event_bus
 from app.platform.integrations.feishu.utils import FEISHU_BITABLE_RECORD_CHANGED_EVENT
@@ -25,9 +27,7 @@ def set_main_loop(loop: asyncio.AbstractEventLoop) -> None:
 def build_event_handler() -> lark.EventDispatcherHandler:
     return (
         lark.EventDispatcherHandler.builder("", "")
-        .register_p2_drive_file_bitable_record_changed_v1(
-            _on_bitable_record_changed
-        )
+        .register_p2_drive_file_bitable_record_changed_v1(_on_bitable_record_changed)
         .build()
     )
 

@@ -96,8 +96,7 @@ async def resolve_external_identity(
     allowed_groups = {
         item.strip()
         for item in (
-            configured_groups
-            or settings.LIVZON_FEISHU_ALLOWED_GROUPS.split(",")
+            configured_groups or settings.LIVZON_FEISHU_ALLOWED_GROUPS.split(",")
         )
         if item.strip()
     }

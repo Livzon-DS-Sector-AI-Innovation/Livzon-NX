@@ -1,9 +1,10 @@
 """CPV Value database queries."""
 
 import uuid
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy import select
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.quality.models.cpv_value import CpvValue
@@ -17,7 +18,9 @@ async def create_value(db: AsyncSession, data: dict[str, Any]) -> CpvValue:
     return value
 
 
-async def create_values_bulk(db: AsyncSession, data_list: list[dict[str, Any]]) -> list[CpvValue]:
+async def create_values_bulk(
+    db: AsyncSession, data_list: list[dict[str, Any]]
+) -> list[CpvValue]:
     """批量创建参数值"""
     values = [CpvValue(**data) for data in data_list]
     db.add_all(values)
@@ -25,7 +28,9 @@ async def create_values_bulk(db: AsyncSession, data_list: list[dict[str, Any]]) 
     return values
 
 
-async def get_values_by_batch_id(db: AsyncSession, batch_id: uuid.UUID) -> list[CpvValue]:
+async def get_values_by_batch_id(
+    db: AsyncSession, batch_id: uuid.UUID
+) -> list[CpvValue]:
     """根据批次ID获取参数值列表"""
     result = await db.execute(
         select(CpvValue).where(
@@ -43,7 +48,7 @@ async def get_values_by_batch_ids(
     """根据批次ID列表获取参数值"""
     if not batch_ids:
         return []
-    
+
     result = await db.execute(
         select(CpvValue).where(
             CpvValue.batch_id.in_(batch_ids),
@@ -79,10 +84,10 @@ async def update_value(
     value = await get_value(db, batch_id, parameter_id)
     if not value:
         return None
-    
+
     for key, val in data.items():
         setattr(value, key, val)
-    
+
     await db.flush()
     return value
 
@@ -90,13 +95,16 @@ async def update_value(
 async def delete_values_by_batch_id(db: AsyncSession, batch_id: uuid.UUID) -> int:
     """删除批次的所有参数值（软删除）"""
     from sqlalchemy import update
-    
-    result = await db.execute(
-        update(CpvValue)
-        .where(
-            CpvValue.batch_id == batch_id,
-            CpvValue.is_deleted == False,  # noqa: E712
-        )
-        .values(is_deleted=True)
+
+    result = cast(
+        CursorResult[Any],
+        await db.execute(
+            update(CpvValue)
+            .where(
+                CpvValue.batch_id == batch_id,
+                CpvValue.is_deleted == False,  # noqa: E712
+            )
+            .values(is_deleted=True)
+        ),
     )
     return result.rowcount

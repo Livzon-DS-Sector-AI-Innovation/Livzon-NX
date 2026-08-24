@@ -53,8 +53,8 @@ class OperationsRepository:
     ) -> T | None:
         result = await self.session.execute(
             select(model).where(
-                model.source == source,
-                model.source_record_id == source_record_id,
+                getattr(model, "source") == source,
+                getattr(model, "source_record_id") == source_record_id,
                 model.is_deleted.is_(False),
             )
         )
@@ -85,4 +85,4 @@ class OperationsRepository:
             .where(model.id == record_id, model.is_deleted.is_(False))
             .values(is_deleted=True)
         )
-        return (result.rowcount or 0) > 0
+        return bool(getattr(result, "rowcount", 0))

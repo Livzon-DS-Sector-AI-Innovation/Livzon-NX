@@ -49,7 +49,9 @@ class SafetyCheckUpdate(BaseModel):
     result: str | None = Field(None, max_length=32, description="检查结果")
     rectification_required: bool | None = Field(None, description="是否需要整改")
     rectification_deadline: datetime | None = Field(None, description="整改期限")
-    rectification_status: str | None = Field(None, max_length=32, description="整改进度")
+    rectification_status: str | None = Field(
+        None, max_length=32, description="整改进度"
+    )
     inspector_confirmed: bool | None = Field(None, description="检查人员确认")
     safety_officer_confirmed: bool | None = Field(None, description="安全办确认")
     status: str | None = Field(None, max_length=32, description="状态")
@@ -69,5 +71,3 @@ class SafetyCheckResponse(SafetyCheckBase):
 
     class Config:
         from_attributes = True
-
-

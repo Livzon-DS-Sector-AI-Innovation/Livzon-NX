@@ -3,6 +3,7 @@
 import os
 import uuid
 from datetime import datetime
+from typing import Any
 
 from fastapi import APIRouter, Depends, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,7 +21,6 @@ from app.modules.safety.schemas import (
     HazardRiskOption,
 )
 from app.modules.safety.service import (
-    DailyRiskReportService,
     SafetyService,
 )
 
@@ -45,13 +45,21 @@ async def get_hazard_identifications(
     date_to: str | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """获取危险源辨识列表"""
     service = SafetyService(db)
     skip = (page - 1) * page_size
     items, total = await service.get_hazard_identifications(
-        skip, page_size, department, overall_status, ai_node_progress, keyword,
-        position, risk_level, date_from, date_to,
+        skip,
+        page_size,
+        department,
+        overall_status,
+        ai_node_progress,
+        keyword,
+        position,
+        risk_level,
+        date_from,
+        date_to,
     )
     return ApiResponse(
         data=[HazardIdentificationResponse.model_validate(i) for i in items],
@@ -67,7 +75,7 @@ async def get_hazard_identifications(
 async def get_hazard_identification_stats(
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """获取危险源辨识工作流统计（草案/进行中/待审核/已完成）"""
     service = SafetyService(db)
     stats = await service.get_hazard_identification_stats()
@@ -87,11 +95,15 @@ async def get_hazard_identification_ledger_stats(
     date_to: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """获取危险源辨识台账统计（总记录/按风险等级分组）"""
     service = SafetyService(db)
     stats = await service.get_hazard_identification_ledger_stats(
-        department, position, risk_level, date_from, date_to,
+        department,
+        position,
+        risk_level,
+        date_from,
+        date_to,
     )
     return ApiResponse(data=stats)
 
@@ -108,11 +120,13 @@ async def get_hazard_risk_options(
     page_size: int = Query(100, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """返回风险等级为 level_1/level_2 且 overall_status=completed 的危险源辨识项"""
-    service = DailyRiskReportService(db)
+    service = SafetyService(db)
     skip = (page - 1) * page_size
-    items, total = await service.get_hazard_risk_options(department, keyword, skip, page_size)
+    items, total = await service.get_hazard_risk_options(
+        department, keyword, skip, page_size
+    )
     return ApiResponse(
         data=[HazardRiskOption.model_validate(i) for i in items],
         meta={"page": page, "page_size": page_size, "total": total},
@@ -128,7 +142,7 @@ async def get_hazard_identification(
     hid: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """获取危险源辨识详情"""
     service = SafetyService(db)
     item = await service.get_hazard_identification(hid)
@@ -146,7 +160,7 @@ async def create_hazard_identification(
     data: HazardIdentificationCreate,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """创建危险源辨识记录（填写基础信息）"""
     service = SafetyService(db)
     item = await service.create_hazard_identification(data)
@@ -164,7 +178,7 @@ async def update_hazard_identification(
     data: HazardIdentificationUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """更新危险源辨识记录（人工编辑字段）"""
     service = SafetyService(db)
     item = await service.update_hazard_identification(hid, data)
@@ -183,7 +197,7 @@ async def submit_hazard_identification(
     hid: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """提交基础信息 → 进入待AI解析附件阶段"""
     service = SafetyService(db)
     item = await service.submit_hazard_identification(hid)
@@ -203,7 +217,7 @@ async def run_hazard_script(
     data: HazardIdentificationRunScript,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """执行指定编号的AI脚本（脚本1-7）"""
     service = SafetyService(db)
     item = await service.run_script(hid, data.script_number, data.ai_output)
@@ -223,7 +237,7 @@ async def review_hazard_script(
     data: HazardIdentificationReview,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """审核确认或驳回AI脚本输出结果"""
     service = SafetyService(db)
     item = await service.review_script(hid, data.script_number, data.action)
@@ -243,7 +257,7 @@ async def upload_hazard_attachment(
     file: UploadFile,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """上传危险源辨识的岗位资料附件"""
     # 保存到本地 uploads/safety/hazard 目录
 
@@ -259,9 +273,7 @@ async def upload_hazard_attachment(
         f.write(content)
 
     service = SafetyService(db)
-    item = await service.upload_attachment(
-        hid, file.filename or "unknown", file_path
-    )
+    item = await service.upload_attachment(hid, file.filename or "unknown", file_path)
     if not item:
         return ApiResponse(code=404, message="记录不存在")
     await db.commit()
@@ -277,7 +289,7 @@ async def delete_hazard_identification(
     hid: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """删除危险源辨识记录"""
     service = SafetyService(db)
     result = await service.delete_hazard_identification(hid)
@@ -299,7 +311,7 @@ async def parse_hazard_ledger_query(
     data: HazardLedgerExportRequest,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """使用 AI 将自然语言查询解析为结构化的危险源辨识台账筛选条件"""
     service = SafetyService(db)
     if not data.natural_query:
@@ -316,7 +328,7 @@ async def export_hazard_ledger_pdf(
     data: HazardLedgerExportRequest,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """导出危险源辨识台账为 PDF 文件。
 
     流程：
@@ -350,11 +362,9 @@ async def export_hazard_ledger_pdf(
         media_type="application/pdf",
         headers={
             "Content-Disposition": (
-                f"attachment; filename=\"{ascii_filename}\"; "
+                f'attachment; filename="{ascii_filename}"; '
                 f"filename*=UTF-8''{quote(filename)}"
             ),
             "Content-Length": str(len(pdf_bytes)),
         },
     )
-
-

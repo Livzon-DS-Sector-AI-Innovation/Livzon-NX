@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -95,14 +96,14 @@ class EhsChangeBase(BaseModel):
     expected_effect: str | None = Field(None, description="预期效果")
     applicant_name: str | None = Field(None, max_length=100, description="申请人姓名")
     equipment_tags: list[str] | None = Field(None, description="关联设备位号")
-    documents_to_update: list | None = Field(None, description="需更新的文件清单")
-    attachments: list | None = Field(None, description="附件列表")
-    risk_assessments: list | None = Field(None, description="风险评估记录")
-    approval_chain: list | None = Field(None, description="审批链")
-    action_items: list | None = Field(None, description="行动项")
-    pssr_checklist: list | None = Field(None, description="PSSR检查清单")
-    verification: dict | None = Field(None, description="变更验证数据")
-    closure: dict | None = Field(None, description="变更关闭数据")
+    documents_to_update: list[Any] | None = Field(None, description="需更新的文件清单")
+    attachments: list[Any] | None = Field(None, description="附件列表")
+    risk_assessments: list[Any] | None = Field(None, description="风险评估记录")
+    approval_chain: list[Any] | None = Field(None, description="审批链")
+    action_items: list[Any] | None = Field(None, description="行动项")
+    pssr_checklist: list[Any] | None = Field(None, description="PSSR检查清单")
+    verification: dict[str, Any] | None = Field(None, description="变更验证数据")
+    closure: dict[str, Any] | None = Field(None, description="变更关闭数据")
     linked_safety_check_id: uuid.UUID | None = Field(None, description="关联安全检查ID")
     notes: str | None = Field(None, description="备注")
 
@@ -132,14 +133,14 @@ class EhsChangeUpdate(BaseModel):
     expected_effect: str | None = Field(None, description="预期效果")
     applicant_name: str | None = Field(None, max_length=100, description="申请人姓名")
     equipment_tags: list[str] | None = Field(None, description="关联设备位号")
-    documents_to_update: list | None = Field(None, description="需更新的文件清单")
-    attachments: list | None = Field(None, description="附件列表")
-    risk_assessments: list | None = Field(None, description="风险评估记录")
-    approval_chain: list | None = Field(None, description="审批链")
-    action_items: list | None = Field(None, description="行动项")
-    pssr_checklist: list | None = Field(None, description="PSSR检查清单")
-    verification: dict | None = Field(None, description="变更验证数据")
-    closure: dict | None = Field(None, description="变更关闭数据")
+    documents_to_update: list[Any] | None = Field(None, description="需更新的文件清单")
+    attachments: list[Any] | None = Field(None, description="附件列表")
+    risk_assessments: list[Any] | None = Field(None, description="风险评估记录")
+    approval_chain: list[Any] | None = Field(None, description="审批链")
+    action_items: list[Any] | None = Field(None, description="行动项")
+    pssr_checklist: list[Any] | None = Field(None, description="PSSR检查清单")
+    verification: dict[str, Any] | None = Field(None, description="变更验证数据")
+    closure: dict[str, Any] | None = Field(None, description="变更关闭数据")
     linked_safety_check_id: uuid.UUID | None = Field(None, description="关联安全检查ID")
     notes: str | None = Field(None, description="备注")
 
@@ -213,11 +214,15 @@ class DetectionResultItem(BaseModel):
     """检测结果记录"""
 
     factor_name: str = Field(..., description="危害因素名称")
-    factor_category: str = Field(..., description="危害因素类别: dust/chemical/physical")
+    factor_category: str = Field(
+        ..., description="危害因素类别: dust/chemical/physical"
+    )
     detection_value: float = Field(..., description="检测值")
     unit: str | None = Field(None, description="单位（mg/m³, dB(A), °C 等）")
     oel_limit: float | None = Field(None, description="职业接触限值（OEL）")
-    compliance_status: str | None = Field(None, description="合规状态: compliant/exceeding/marginal")
+    compliance_status: str | None = Field(
+        None, description="合规状态: compliant/exceeding/marginal"
+    )
     sampling_method: str | None = Field(None, description="采样方法")
     standard_ref: str | None = Field(None, description="标准参考")
 
@@ -243,5 +248,3 @@ class AbnormalityRecordItem(BaseModel):
     status: str = Field("open", description="状态: open/investigating/corrected/closed")
     completed_at: str | None = Field(None, description="完成时间")
     remarks: str | None = Field(None, description="备注")
-
-

@@ -1,5 +1,9 @@
-import { DeviationAiWorkbenchPage } from '@/components/quality'
+import { DeviationAiWorkbenchPage, QualityQueryProvider } from '@/components/quality'
 
 export default function DeviationAiWorkbenchRoute() {
-  return <DeviationAiWorkbenchPage />
+  return (
+    <QualityQueryProvider>
+      <DeviationAiWorkbenchPage />
+    </QualityQueryProvider>
+  )
 }

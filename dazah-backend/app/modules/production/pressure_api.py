@@ -1,7 +1,7 @@
 """Pressure differential inspection API routes."""
 
-import uuid
 from datetime import date, datetime
+from typing import Any
 from uuid import UUID
 
 from fastapi import Depends, Query
@@ -49,7 +49,7 @@ def get_pressure_service(
 @router.get("/pressure/dashboard", summary="压差统计仪表盘")
 async def get_dashboard(
     service: PressureService = Depends(get_pressure_service),
-):
+) -> Any:
     stats = await service.get_dashboard_stats()
     return success_response(data=stats.model_dump(mode="json"))
 
@@ -65,19 +65,24 @@ async def list_point_mappings(
     keyword: str | None = Query(None, description="位点编号搜索"),
     page_params: PageParams = Depends(),
     service: PressureService = Depends(get_pressure_service),
-):
+) -> Any:
     mappings, total = await service.list_point_mappings(
-        area=area, keyword=keyword, page=page_params.page, page_size=page_params.page_size
+        area=area,
+        keyword=keyword,
+        page=page_params.page,
+        page_size=page_params.page_size,
     )
     data = [m.model_dump(mode="json") for m in mappings]
-    return paginated_response(data=data, page=page_params.page, page_size=page_params.page_size, total=total)
+    return paginated_response(
+        data=data, page=page_params.page, page_size=page_params.page_size, total=total
+    )
 
 
 @router.get("/pressure/point-mappings/check-unique", summary="检查位点编号唯一性")
 async def check_point_id_unique(
     point_id: str = Query(..., description="位点编号"),
     service: PressureService = Depends(get_pressure_service),
-):
+) -> Any:
     result = await service.check_unique(point_id)
     return success_response(data=result.model_dump(mode="json"))
 
@@ -86,16 +91,18 @@ async def check_point_id_unique(
 async def create_point_mapping(
     payload: PointMappingCreate,
     service: PressureService = Depends(get_pressure_service),
-):
+) -> Any:
     mapping = await service.create_point_mapping(payload)
-    return success_response(data=mapping.model_dump(mode="json"), message="位点创建成功", status_code=201)
+    return success_response(
+        data=mapping.model_dump(mode="json"), message="位点创建成功", status_code=201
+    )
 
 
 @router.get("/pressure/point-mappings/{mapping_id}", summary="位点映射详情")
 async def get_point_mapping(
     mapping_id: UUID,
     service: PressureService = Depends(get_pressure_service),
-):
+) -> Any:
     mapping = await service.get_point_mapping(mapping_id)
     return success_response(data=mapping.model_dump(mode="json"))
 
@@ -105,16 +112,18 @@ async def update_point_mapping(
     mapping_id: UUID,
     payload: PointMappingUpdate,
     service: PressureService = Depends(get_pressure_service),
-):
+) -> Any:
     mapping = await service.update_point_mapping(mapping_id, payload)
-    return success_response(data=mapping.model_dump(mode="json"), message="位点更新成功")
+    return success_response(
+        data=mapping.model_dump(mode="json"), message="位点更新成功"
+    )
 
 
 @router.delete("/pressure/point-mappings/{mapping_id}", summary="删除位点映射")
 async def delete_point_mapping(
     mapping_id: UUID,
     service: PressureService = Depends(get_pressure_service),
-):
+) -> Any:
     await service.delete_point_mapping(mapping_id)
     return success_response(message="位点删除成功")
 
@@ -134,7 +143,7 @@ async def list_records(
     end_date: datetime | None = Query(None),
     page_params: PageParams = Depends(),
     service: PressureService = Depends(get_pressure_service),
-):
+) -> Any:
     records, total = await service.list_records(
         area=area,
         point_id=point_id,
@@ -146,7 +155,9 @@ async def list_records(
         page_size=page_params.page_size,
     )
     data = [r.model_dump(mode="json") for r in records]
-    return paginated_response(data=data, page=page_params.page, page_size=page_params.page_size, total=total)
+    return paginated_response(
+        data=data, page=page_params.page, page_size=page_params.page_size, total=total
+    )
 
 
 @router.get("/pressure/records/merged", summary="合并压差记录列表")
@@ -158,7 +169,7 @@ async def list_merged_records(
     end_date: datetime | None = Query(None),
     page_params: PageParams = Depends(),
     service: PressureService = Depends(get_pressure_service),
-):
+) -> Any:
     result = await service.list_merged(
         area=area,
         point_id=point_id,
@@ -183,7 +194,7 @@ async def export_by_area(
     end_date: datetime | None = Query(None),
     point_id: str | None = Query(None),
     service: PressureService = Depends(get_pressure_service),
-):
+) -> Any:
     data = await service.get_export_by_area(
         area=area, start_date=start_date, end_date=end_date, point_id=point_id
     )
@@ -194,7 +205,7 @@ async def export_by_area(
 async def create_manual_record(
     payload: CreateManualRecordRequest,
     service: PressureService = Depends(get_pressure_service),
-):
+) -> Any:
     result = await service.create_manual_record(payload)
     return success_response(data=result, message="记录创建成功", status_code=201)
 
@@ -203,7 +214,7 @@ async def create_manual_record(
 async def create_batch_manual(
     payload: BatchManualEntryRequest,
     service: PressureService = Depends(get_pressure_service),
-):
+) -> Any:
     result = await service.create_batch_manual(payload)
     return success_response(data=result.model_dump(mode="json"), message="批量录入完成")
 
@@ -212,16 +223,18 @@ async def create_batch_manual(
 async def create_ocr_records(
     payload: CreateOcrRecordRequest,
     service: PressureService = Depends(get_pressure_service),
-):
+) -> Any:
     result = await service.create_ocr_records(payload)
-    return success_response(data=result.model_dump(mode="json"), message="OCR 记录提交成功")
+    return success_response(
+        data=result.model_dump(mode="json"), message="OCR 记录提交成功"
+    )
 
 
 @router.post("/pressure/records/merged/delete", summary="删除合并行")
 async def delete_merged_row(
     payload: DeleteMergedRowRequest,
     service: PressureService = Depends(get_pressure_service),
-):
+) -> Any:
     result = await service.delete_merged_row(payload)
     return success_response(data=result)
 
@@ -230,7 +243,7 @@ async def delete_merged_row(
 async def batch_delete_merged_rows(
     payload: BatchDeleteMergedRowsRequest,
     service: PressureService = Depends(get_pressure_service),
-):
+) -> Any:
     result = await service.batch_delete_merged_rows(payload)
     return success_response(data=result)
 
@@ -239,7 +252,7 @@ async def batch_delete_merged_rows(
 async def update_merged_row(
     payload: UpdateMergedRowRequest,
     service: PressureService = Depends(get_pressure_service),
-):
+) -> Any:
     result = await service.update_merged_row(payload)
     return success_response(data=result.model_dump(mode="json"))
 
@@ -248,7 +261,7 @@ async def update_merged_row(
 async def get_record(
     record_id: UUID,
     service: PressureService = Depends(get_pressure_service),
-):
+) -> Any:
     record = await service.get_record(record_id)
     return success_response(data=record.model_dump(mode="json"))
 
@@ -258,7 +271,7 @@ async def audit_record(
     record_id: UUID,
     payload: AuditRequest,
     service: PressureService = Depends(get_pressure_service),
-):
+) -> Any:
     result = await service.audit_record(record_id, payload)
     return success_response(data=result, message="审核完成")
 
@@ -267,7 +280,7 @@ async def audit_record(
 async def batch_audit(
     payload: BatchAuditRequest,
     service: PressureService = Depends(get_pressure_service),
-):
+) -> Any:
     result = await service.batch_audit(payload)
     return success_response(data=result.model_dump(mode="json"), message="批量审核完成")
 
@@ -276,7 +289,7 @@ async def batch_audit(
 async def delete_record(
     record_id: UUID,
     service: PressureService = Depends(get_pressure_service),
-):
+) -> Any:
     await service.delete_record(record_id)
     return success_response(message="记录删除成功")
 
@@ -285,7 +298,7 @@ async def delete_record(
 async def batch_delete_records(
     payload: DeleteRecordsRequest,
     service: PressureService = Depends(get_pressure_service),
-):
+) -> Any:
     result = await service.batch_delete_records(payload.ids)
     return success_response(data=result.model_dump(mode="json"))
 
@@ -298,7 +311,7 @@ async def batch_delete_records(
 @router.get("/pressure/audit/stats", summary="审核统计")
 async def get_audit_stats(
     service: PressureService = Depends(get_pressure_service),
-):
+) -> Any:
     stats = await service.get_audit_stats()
     return success_response(data=stats.model_dump(mode="json"))
 
@@ -313,28 +326,32 @@ async def list_ocr_tasks(
     status: str | None = Query(None),
     page_params: PageParams = Depends(),
     service: PressureService = Depends(get_pressure_service),
-):
+) -> Any:
     tasks, total = await service.list_ocr_tasks(
         status=status, page=page_params.page, page_size=page_params.page_size
     )
     data = [t.model_dump(mode="json") for t in tasks]
-    return paginated_response(data=data, page=page_params.page, page_size=page_params.page_size, total=total)
+    return paginated_response(
+        data=data, page=page_params.page, page_size=page_params.page_size, total=total
+    )
 
 
 @router.post("/pressure/ocr-tasks", summary="创建 OCR 任务")
 async def create_ocr_task(
     payload: CreateOcrTaskRequest,
     service: PressureService = Depends(get_pressure_service),
-):
+) -> Any:
     task = await service.create_ocr_task(payload)
-    return success_response(data=task.model_dump(mode="json"), message="OCR 任务创建成功", status_code=201)
+    return success_response(
+        data=task.model_dump(mode="json"), message="OCR 任务创建成功", status_code=201
+    )
 
 
 @router.get("/pressure/ocr-tasks/{task_id}", summary="OCR 任务详情")
 async def get_ocr_task(
     task_id: UUID,
     service: PressureService = Depends(get_pressure_service),
-):
+) -> Any:
     task = await service.get_ocr_task(task_id)
     return success_response(data=task.model_dump(mode="json"))
 
@@ -344,9 +361,11 @@ async def submit_ocr_task_result(
     task_id: UUID,
     payload: SubmitOcrTaskResultRequest,
     service: PressureService = Depends(get_pressure_service),
-):
+) -> Any:
     result = await service.submit_ocr_task_result(task_id, payload)
-    return success_response(data=result.model_dump(mode="json"), message="OCR 结果提交成功")
+    return success_response(
+        data=result.model_dump(mode="json"), message="OCR 结果提交成功"
+    )
 
 
 # ═══════════════════════════════════════════════════════
@@ -363,7 +382,7 @@ async def list_data_master(
     source: str | None = Query(None),
     page_params: PageParams = Depends(),
     service: PressureService = Depends(get_pressure_service),
-):
+) -> Any:
     items, total = await service.list_data_master(
         material_name=material_name,
         supplier=supplier,
@@ -374,23 +393,27 @@ async def list_data_master(
         page_size=page_params.page_size,
     )
     data = [i.model_dump(mode="json") for i in items]
-    return paginated_response(data=data, page=page_params.page, page_size=page_params.page_size, total=total)
+    return paginated_response(
+        data=data, page=page_params.page, page_size=page_params.page_size, total=total
+    )
 
 
 @router.post("/pressure/data-master", summary="创建数据总表记录")
 async def create_data_master(
     payload: DataMasterCreate,
     service: PressureService = Depends(get_pressure_service),
-):
+) -> Any:
     item = await service.create_data_master(payload)
-    return success_response(data=item.model_dump(mode="json"), message="记录创建成功", status_code=201)
+    return success_response(
+        data=item.model_dump(mode="json"), message="记录创建成功", status_code=201
+    )
 
 
 @router.post("/pressure/data-master/batch", summary="批量创建数据总表记录")
 async def batch_create_data_master(
     payload: BatchCreateDataMasterRequest,
     service: PressureService = Depends(get_pressure_service),
-):
+) -> Any:
     items = await service.batch_create_data_master(payload)
     data = [i.model_dump(mode="json") for i in items]
     return success_response(data=data, message="批量创建成功")
@@ -400,7 +423,7 @@ async def batch_create_data_master(
 async def get_data_master(
     item_id: UUID,
     service: PressureService = Depends(get_pressure_service),
-):
+) -> Any:
     item = await service.get_data_master(item_id)
     return success_response(data=item.model_dump(mode="json"))
 
@@ -410,8 +433,10 @@ async def update_data_master(
     item_id: UUID,
     payload: DataMasterUpdate,
     service: PressureService = Depends(get_pressure_service),
-):
-    item = await service.update_data_master(item_id, payload.model_dump(exclude_unset=True))
+) -> Any:
+    item = await service.update_data_master(
+        item_id, payload.model_dump(exclude_unset=True)
+    )
     return success_response(data=item.model_dump(mode="json"), message="记录更新成功")
 
 
@@ -419,7 +444,7 @@ async def update_data_master(
 async def delete_data_master(
     item_id: UUID,
     service: PressureService = Depends(get_pressure_service),
-):
+) -> Any:
     await service.delete_data_master(item_id)
     return success_response(message="记录删除成功")
 
@@ -428,7 +453,7 @@ async def delete_data_master(
 async def batch_delete_data_master(
     payload: DeleteRecordsRequest,
     service: PressureService = Depends(get_pressure_service),
-):
+) -> Any:
     result = await service.batch_delete_data_master(payload.ids)
     return success_response(data=result.model_dump(mode="json"))
 
@@ -443,7 +468,7 @@ async def list_notifications(
     user_id: str | None = Query(None),
     page_params: PageParams = Depends(),
     service: PressureService = Depends(get_pressure_service),
-):
+) -> Any:
     result = await service.list_notifications(
         user_id=user_id, page=page_params.page, page_size=page_params.page_size
     )
@@ -454,7 +479,7 @@ async def list_notifications(
 async def mark_notification_read(
     notification_id: UUID,
     service: PressureService = Depends(get_pressure_service),
-):
+) -> Any:
     await service.mark_notification_read(notification_id)
     return success_response(message="已标记为已读")
 
@@ -463,6 +488,6 @@ async def mark_notification_read(
 async def mark_all_read(
     user_id: str | None = Query(None),
     service: PressureService = Depends(get_pressure_service),
-):
+) -> Any:
     await service.mark_all_notifications_read(user_id)
     return success_response(message="全部标记已读")

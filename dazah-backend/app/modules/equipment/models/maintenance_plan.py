@@ -46,17 +46,13 @@ class MaintenancePlan(BaseModel):
         ForeignKey("equipment.equipments.id"),
         comment="设备ID",
     )
-    plan_name: Mapped[str] = mapped_column(
-        String(200), comment="计划名称"
-    )
+    plan_name: Mapped[str] = mapped_column(String(200), comment="计划名称")
     plan_type: Mapped[str] = mapped_column(
         String(20),
         default="预防性维护",
         comment="计划类型：预防性维护/预测性维护",
     )
-    frequency: Mapped[int] = mapped_column(
-        Integer, comment="维护频率数值"
-    )
+    frequency: Mapped[int] = mapped_column(Integer, comment="维护频率数值")
     frequency_unit: Mapped[str] = mapped_column(
         String(10), comment="频率单位：天/周/月/年"
     )
@@ -80,9 +76,7 @@ class MaintenancePlan(BaseModel):
         server_default="启用",
         comment="状态：启用/停用/已完成",
     )
-    remark: Mapped[str | None] = mapped_column(
-        Text, nullable=True, comment="备注"
-    )
+    remark: Mapped[str | None] = mapped_column(Text, nullable=True, comment="备注")
     last_generated_date: Mapped[date | None] = mapped_column(
         Date, nullable=True, comment="最后生成工单的周期日期，用于防重"
     )

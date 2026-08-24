@@ -1,6 +1,7 @@
 """Equipment personnel ORM models."""
 
 import uuid as _uuid
+from typing import Any
 
 from sqlalchemy import Boolean, Index, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -62,7 +63,7 @@ class EquipmentPersonnel(BaseModel):
     mobile: Mapped[str | None] = mapped_column(
         String(32), nullable=True, comment="冗余，手机号"
     )
-    extended_attrs: Mapped[dict | None] = mapped_column(
+    extended_attrs: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB, nullable=True, comment="扩展属性槽"
     )
     is_active: Mapped[bool] = mapped_column(
@@ -76,7 +77,8 @@ class EquipmentPersonnelRole(BaseModel):
     __tablename__ = "equipment_personnel_role"
     __table_args__ = (
         UniqueConstraint(
-            "personnel_id", "role_id",
+            "personnel_id",
+            "role_id",
             name="uq_equipment_personnel_role",
         ),
         {"schema": "equipment"},
@@ -96,7 +98,9 @@ class EquipmentPersonnelCategory(BaseModel):
     __tablename__ = "equipment_personnel_category"
     __table_args__ = (
         UniqueConstraint(
-            "personnel_id", "role_id", "category_id",
+            "personnel_id",
+            "role_id",
+            "category_id",
             name="uq_equipment_personnel_category",
         ),
         {"schema": "equipment"},

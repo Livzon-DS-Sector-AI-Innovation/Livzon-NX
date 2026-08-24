@@ -116,9 +116,7 @@ class MaterialCatalogRepository:
                 "material_template": statement.excluded.material_template,
                 "material_category": statement.excluded.material_category,
                 "material_subcategory": statement.excluded.material_subcategory,
-                "material_cost_category": (
-                    statement.excluded.material_cost_category
-                ),
+                "material_cost_category": (statement.excluded.material_cost_category),
                 "feishu_created_time": statement.excluded.feishu_created_time,
                 "feishu_last_modified_time": (
                     statement.excluded.feishu_last_modified_time
@@ -341,7 +339,7 @@ class InvoiceRecognitionRepository:
             .values(is_deleted=True)
         )
         result = await self.session.execute(stmt)
-        return result.rowcount > 0
+        return int(getattr(result, "rowcount", 0) or 0) > 0
 
     async def batch_delete_records(self, record_ids: list[UUID]) -> int:
         if not record_ids:
@@ -356,7 +354,7 @@ class InvoiceRecognitionRepository:
             .values(is_deleted=True)
         )
         result = await self.session.execute(stmt)
-        return result.rowcount
+        return int(getattr(result, "rowcount", 0) or 0)
 
 
 class SupplierRepository:
@@ -754,7 +752,7 @@ class PurchaseRequestRepository:
             .values(is_deleted=True)
         )
         result = await self.session.execute(stmt)
-        if result.rowcount == 0:
+        if int(getattr(result, "rowcount", 0) or 0) == 0:
             return False
         request_id_str = str(request_id)
         await self.session.execute(

@@ -13,6 +13,7 @@ Ref: https://open.feishu.cn/document/uAjLw4CM/ukTMukTMukTM/reference/authen-v1/l
 
 from __future__ import annotations
 
+from typing import Any
 from urllib.parse import urlencode
 
 import httpx
@@ -24,7 +25,10 @@ _TOKEN_URL = "https://open.feishu.cn/open-apis/authen/v2/oauth/token"
 _USER_INFO_URL = "https://open.feishu.cn/open-apis/authen/v1/user_info"
 
 
-def _normalize_oauth_token_response(data: dict) -> dict:
+JsonObject = dict[str, Any]
+
+
+def _normalize_oauth_token_response(data: JsonObject) -> JsonObject:
     """Return the token payload regardless of Feishu response envelope shape."""
     if data.get("code", 0) != 0:
         raise OAuthError(
@@ -47,7 +51,7 @@ class FeishuOAuthClient:
         app_secret: str,
         redirect_uri: str,
         scopes: str,
-    ):
+    ) -> None:
         self.app_id = app_id
         self.app_secret = app_secret
         self.redirect_uri = redirect_uri
@@ -78,7 +82,7 @@ class FeishuOAuthClient:
 
     # ── Token operations ────────────────────────────────────────────
 
-    async def exchange_code(self, code: str) -> dict:
+    async def exchange_code(self, code: str) -> JsonObject:
         """Exchange an authorization code for tokens.
 
         Returns dict with keys: access_token, token_type, expires_in,
@@ -101,9 +105,12 @@ class FeishuOAuthClient:
             resp.raise_for_status()
             data = resp.json()
 
+        if not isinstance(data, dict):
+            raise OAuthError("OAuth token response was not a JSON object")
+
         return _normalize_oauth_token_response(data)
 
-    async def refresh_access_token(self, refresh_token: str) -> dict:
+    async def refresh_access_token(self, refresh_token: str) -> JsonObject:
         """Refresh a user_access_token using a refresh_token."""
         payload = {
             "grant_type": "refresh_token",
@@ -121,11 +128,14 @@ class FeishuOAuthClient:
             resp.raise_for_status()
             data = resp.json()
 
+        if not isinstance(data, dict):
+            raise OAuthError("OAuth refresh response was not a JSON object")
+
         return _normalize_oauth_token_response(data)
 
     # ── User info ───────────────────────────────────────────────────
 
-    async def get_user_info(self, user_access_token: str) -> dict:
+    async def get_user_info(self, user_access_token: str) -> JsonObject:
         """Fetch the authenticated user's profile from Feishu.
 
         Returns dict with keys: name, en_name, avatar_url, avatar_thumb,
@@ -135,17 +145,22 @@ class FeishuOAuthClient:
         headers = {"Authorization": f"Bearer {user_access_token}"}
         async with httpx.AsyncClient() as client:
             resp = await client.get(
-                _USER_INFO_URL, headers=headers, timeout=10.0,
+                _USER_INFO_URL,
+                headers=headers,
+                timeout=10.0,
             )
             resp.raise_for_status()
             data = resp.json()
 
+        if not isinstance(data, dict):
+            raise OAuthError("Feishu user info response was not a JSON object")
+
         if data.get("code") != 0:
             raise OAuthError(
-                f"get_user_info failed: code={data.get('code')}, "
-                f"msg={data.get('msg')}",
+                f"get_user_info failed: code={data.get('code')}, msg={data.get('msg')}",
             )
-        return data.get("data", {})
+        payload = data.get("data", {})
+        return payload if isinstance(payload, dict) else {}
 
 
 class OAuthError(Exception):

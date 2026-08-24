@@ -164,9 +164,7 @@ async def deliver_feishu_message(
             else:
                 card: dict[str, Any] = {
                     "schema": "2.0",
-                    "header": {
-                        "title": {"tag": "plain_text", "content": data.title}
-                    },
+                    "header": {"title": {"tag": "plain_text", "content": data.title}},
                     "body": {
                         "elements": [{"tag": "markdown", "content": data.markdown}]
                     },

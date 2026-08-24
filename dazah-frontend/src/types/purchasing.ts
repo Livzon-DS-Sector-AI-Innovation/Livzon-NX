@@ -68,5 +68,5 @@ export type MaterialSourceSyncResult = components['schemas']['MaterialSourceSync
 export type MaterialSourceSyncApiResponse = components['schemas']['MaterialSourceSyncApiResponse']
 export type SupplierImportResponse = components['schemas']['SupplierImportResponse']
 export type SupplierImportResult = components['schemas']['SupplierImportResult']
-export type SupplierListResponse = components['schemas']['app__modules__procurement__schemas__SupplierListResponse']
-export type SupplierResponse = components['schemas']['app__modules__procurement__schemas__SupplierResponse']
+export type SupplierListResponse = components['schemas']['SupplierListResponse']
+export type SupplierResponse = components['schemas']['SupplierResponse']

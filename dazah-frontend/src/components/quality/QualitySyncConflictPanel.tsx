@@ -1,10 +1,10 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Alert, Button, Card, List, Space, Tag, Typography } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
-import { fetchQualitySyncConflicts } from '@/lib/api/quality'
+import { useQuery } from '@tanstack/react-query'
+import { fetchQualitySyncConflicts } from '@/lib/api/client/quality'
 import type { QualitySyncConflictItem } from '@/types/quality'
 
 function formatDateTime(value: string | null | undefined): string {
@@ -19,33 +19,19 @@ function renderDirection(value: string | null | undefined): React.ReactNode {
 }
 
 export function QualitySyncConflictPanel() {
-  const [items, setItems] = useState<QualitySyncConflictItem[]>([])
-  const [loading, setLoading] = useState(false)
-  const [loadError, setLoadError] = useState<string | null>(null)
+  const { data, isLoading: loading, error, refetch } = useQuery({
+    queryKey: ['quality-sync', 'conflicts'],
+    queryFn: () => fetchQualitySyncConflicts({ limit: 10 }),
+  })
 
-  const loadData = useCallback(async () => {
-    try {
-      setLoading(true)
-      setLoadError(null)
-      const result = await fetchQualitySyncConflicts({ limit: 10 })
-      setItems(result.items)
-    } catch (error) {
-      setLoadError(error instanceof Error ? error.message : '加载同步冲突失败')
-      setItems([])
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    void loadData()
-  }, [loadData])
+  const loadError = error ? (error instanceof Error ? error.message : '加载同步冲突失败') : null
+  const items: QualitySyncConflictItem[] = loadError ? [] : (data?.items ?? [])
 
   return (
     <Card
       title="飞书同步冲突"
       extra={(
-        <Button icon={<ReloadOutlined />} onClick={() => void loadData()} loading={loading}>
+        <Button icon={<ReloadOutlined />} onClick={() => void refetch()} loading={loading}>
           刷新
         </Button>
       )}
@@ -82,7 +68,7 @@ export function QualitySyncConflictPanel() {
                   </Space>
                 )}
                 description={(
-                  <Space direction="vertical" size={2}>
+                  <Space orientation="vertical" size={2}>
                     <Typography.Text>{item.record_title || '未命名记录'}</Typography.Text>
                     <Typography.Text type="secondary">
                       飞书更新时间：{formatDateTime(item.feishu_source_updated_at)}

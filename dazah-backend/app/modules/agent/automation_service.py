@@ -21,6 +21,7 @@ from app.modules.agent.automation_schema import (
     AutomationDefinitionV1,
     AutomationErrorCode,
     AutomationStatus,
+    ToolStep,
     compile_automation_definition,
 )
 from app.modules.agent.models import (
@@ -335,7 +336,11 @@ class AgentAutomationService:
                 },
                 "recipients": [
                     [rule.model_dump(mode="json") for rule in step.recipients]
-                    for step in [*notify_steps, *collect_steps]
+                    for step in notify_steps
+                ]
+                + [
+                    [rule.model_dump(mode="json") for rule in step.recipients]
+                    for step in collect_steps
                 ],
             },
             authorized_at=datetime.now(UTC),
@@ -427,12 +432,15 @@ class AgentAutomationService:
                 {
                     "step_key": step.key,
                     "type": step.type,
-                    "operation": getattr(step, "operation", None),
+                    "operation": (
+                        step.operation if isinstance(step, ToolStep) else None
+                    ),
                     "input_summary": redact_sensitive(getattr(step, "input", {}) or {}),
                     "suppressed": (
                         step.type in {"notify", "collect"}
                         or bool(
-                            tool_registry.get(getattr(step, "operation", ""))
+                            isinstance(step, ToolStep)
+                            and tool_registry.get(step.operation)
                             and tool_registry.require(step.operation).write
                         )
                     ),

@@ -5,6 +5,7 @@ import asyncio
 import os
 import uuid
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -69,7 +70,7 @@ WORKFLOWS = (
 )
 
 
-def automation_definition(name: str, description: str) -> dict:
+def automation_definition(name: str, description: str) -> dict[Any, Any]:
     return {
         "schema_version": "1.0",
         "name": name,
@@ -167,7 +168,7 @@ async def seed(user_id: uuid.UUID, database_url: str) -> tuple[int, int, int]:
     return created_automations, created_workflows, created_scheduled
 
 
-async def automation_exists(db, user_id: uuid.UUID, name: str) -> bool:
+async def automation_exists(db: Any, user_id: uuid.UUID, name: str) -> bool:
     return bool(
         await db.scalar(
             select(AgentAutomation.id).where(
@@ -180,7 +181,7 @@ async def automation_exists(db, user_id: uuid.UUID, name: str) -> bool:
 
 
 async def add_automation(
-    db,
+    db: Any,
     *,
     user_id: uuid.UUID,
     name: str,

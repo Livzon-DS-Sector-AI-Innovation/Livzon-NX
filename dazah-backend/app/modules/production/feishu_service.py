@@ -118,7 +118,10 @@ class ProductionFeishuService:
         except SQLAlchemyError as exc:
             raise AppException(
                 status_code=500,
-                message="飞书同步绑定表不可用，请先执行数据库迁移：alembic upgrade head",
+                message=(
+                    "飞书同步绑定表不可用，请先执行数据库迁移："
+                    "alembic upgrade head"
+                ),
                 detail=str(exc.__class__.__name__),
             ) from exc
         return [self._to_sync_binding_response(binding) for binding in bindings]
@@ -190,7 +193,10 @@ class ProductionFeishuService:
         except SQLAlchemyError as exc:
             raise AppException(
                 status_code=500,
-                message="飞书同步运行记录表不可用，请先执行数据库迁移：alembic upgrade head",
+                message=(
+                    "飞书同步运行记录表不可用，请先执行数据库迁移："
+                    "alembic upgrade head"
+                ),
                 detail=str(exc.__class__.__name__),
             ) from exc
         return [ProductionFeishuSyncRunResponse.model_validate(run) for run in runs]
@@ -425,20 +431,26 @@ class ProductionFeishuService:
                 table_id=first_table.table_id,
             )
 
+        resolved_app_token = reference.app_token
+        resolved_table_id = reference.table_id
+        if not resolved_app_token or not resolved_table_id:
+            raise AppException(message="生产飞书数据表引用未配置完整")
+
         normalized_page_size = max(1, min(page_size, 100))
         fields, records_body = await self._fetch_bitable_preview(
             token=token,
-            app_token=reference.app_token,
-            table_id=reference.table_id,
+            app_token=resolved_app_token,
+            table_id=resolved_table_id,
             page_size=normalized_page_size,
             page_token=page_token,
         )
 
         data = records_body.get("data") if isinstance(records_body, dict) else {}
-        records = data.get("items") if isinstance(data, dict) else []
+        records_value = data.get("items") if isinstance(data, dict) else []
+        records = records_value if isinstance(records_value, list) else []
         return ProductionFeishuTablePreviewResponse(
-            app_token=reference.app_token,
-            table_id=reference.table_id or "",
+            app_token=resolved_app_token,
+            table_id=resolved_table_id,
             fields=[self._field_from_raw(item) for item in fields],
             records=[self._record_from_raw(item) for item in records],
             page_size=normalized_page_size,
@@ -624,11 +636,11 @@ class ProductionFeishuService:
             return "created"
 
         if target == "production_plan":
-            current = await self.repo.get_execution_plan_by_source_record(
+            execution_plan = await self.repo.get_execution_plan_by_source_record(
                 "feishu", source_record_id
             )
-            if current:
-                update = ProductionExecutionPlanUpdate(
+            if execution_plan:
+                execution_update = ProductionExecutionPlanUpdate(
                     **{
                         key: value
                         for key, value in mapped.items()
@@ -636,29 +648,29 @@ class ProductionFeishuService:
                     }
                 )
                 await self.repo.update_execution_plan(
-                    current.id, update.model_dump(exclude_unset=True)
+                    execution_plan.id, execution_update.model_dump(exclude_unset=True)
                 )
                 return "updated"
             await self.repo.create_execution_plan(mapped)
             return "created"
 
         if target == "batch":
-            current = await self.repo.get_batch_by_no(mapped["batch_no"])
-            if current:
-                update = BatchUpdate(**mapped)
+            batch = await self.repo.get_batch_by_no(mapped["batch_no"])
+            if batch:
+                batch_update = BatchUpdate(**mapped)
                 await self.repo.update_batch(
-                    current.id, update.model_dump(exclude_unset=True)
+                    batch.id, batch_update.model_dump(exclude_unset=True)
                 )
                 return "updated"
             await self.repo.create_batch(mapped)
             return "created"
 
         if target in {"fermentation_record", "fermentation"}:
-            current = await self.operations_repo.get_by_source(
+            fermentation = await self.operations_repo.get_by_source(
                 FermentationRecord, "feishu", source_record_id
             )
-            if current:
-                update = FermentationUpdate(
+            if fermentation:
+                fermentation_update = FermentationUpdate(
                     **{
                         key: value
                         for key, value in mapped.items()
@@ -667,19 +679,19 @@ class ProductionFeishuService:
                 )
                 await self.operations_repo.update(
                     FermentationRecord,
-                    current.id,
-                    update.model_dump(exclude_unset=True),
+                    fermentation.id,
+                    fermentation_update.model_dump(exclude_unset=True),
                 )
                 return "updated"
             await self.operations_repo.create(FermentationRecord, mapped)
             return "created"
 
         if target == "seed_culture":
-            current = await self.operations_repo.get_by_source(
+            seed_culture = await self.operations_repo.get_by_source(
                 SeedCultureRecord, "feishu", source_record_id
             )
-            if current:
-                update = SeedCultureUpdate(
+            if seed_culture:
+                seed_update = SeedCultureUpdate(
                     **{
                         key: value
                         for key, value in mapped.items()
@@ -688,27 +700,27 @@ class ProductionFeishuService:
                 )
                 await self.operations_repo.update(
                     SeedCultureRecord,
-                    current.id,
-                    update.model_dump(exclude_unset=True),
+                    seed_culture.id,
+                    seed_update.model_dump(exclude_unset=True),
                 )
                 return "updated"
             await self.operations_repo.create(SeedCultureRecord, mapped)
             return "created"
 
         process_code = mapped["process_code"]
-        current = await self.process_service.repo.get_record_by_source(
+        process_record = await self.process_service.repo.get_record_by_source(
             process_code, "feishu", source_record_id
         )
-        if current:
-            if current.status == "completed":
+        if process_record:
+            if process_record.status == "completed":
                 return "skipped"
-            update = ProcessExecutionRecordUpdate(
+            process_update = ProcessExecutionRecordUpdate(
                 status=mapped["status"],
                 recorded_at=mapped["recorded_at"],
                 data=mapped["data"],
                 remarks=mapped.get("remarks"),
             )
-            await self.process_service.update_record(current.id, update)
+            await self.process_service.update_record(process_record.id, process_update)
             return "updated"
         await self.process_service.create_record(ProcessExecutionRecordCreate(**mapped))
         return "created"
@@ -801,8 +813,11 @@ class ProductionFeishuService:
                         )
                     )
                 data = body.get("data") if isinstance(body, dict) else {}
-                page_items = data.get("items") if isinstance(data, dict) else []
-                items.extend(page_items)
+                page_items_value = data.get("items") if isinstance(data, dict) else []
+                page_items = (
+                    page_items_value if isinstance(page_items_value, list) else []
+                )
+                items.extend(item for item in page_items if isinstance(item, dict))
                 if not isinstance(data, dict) or not data.get("has_more"):
                     break
                 page_token = str(data.get("page_token") or "")
@@ -872,7 +887,12 @@ class ProductionFeishuService:
                 )
 
         fields_data = fields_body.get("data") if isinstance(fields_body, dict) else {}
-        fields = fields_data.get("items") if isinstance(fields_data, dict) else []
+        fields_value = fields_data.get("items") if isinstance(fields_data, dict) else []
+        fields = (
+            [item for item in fields_value if isinstance(item, dict)]
+            if isinstance(fields_value, list)
+            else []
+        )
         return fields, records_body
 
     async def _resolve_config(
@@ -916,7 +936,10 @@ class ProductionFeishuService:
         except SQLAlchemyError as exc:
             raise AppException(
                 status_code=500,
-                message="生产飞书配置表不可用，请先执行数据库迁移：alembic upgrade head",
+                message=(
+                    "生产飞书配置表不可用，请先执行数据库迁移："
+                    "alembic upgrade head"
+                ),
                 detail=str(exc.__class__.__name__),
             ) from exc
 
@@ -938,7 +961,10 @@ class ProductionFeishuService:
         except SQLAlchemyError as exc:
             raise AppException(
                 status_code=500,
-                message="飞书同步绑定表不可用，请先执行数据库迁移：alembic upgrade head",
+                message=(
+                    "飞书同步绑定表不可用，请先执行数据库迁移："
+                    "alembic upgrade head"
+                ),
                 detail=str(exc.__class__.__name__),
             ) from exc
         if not binding:
@@ -958,7 +984,10 @@ class ProductionFeishuService:
         except SQLAlchemyError as exc:
             raise AppException(
                 status_code=500,
-                message="生产飞书配置表不可用，请先执行数据库迁移：alembic upgrade head",
+                message=(
+                    "生产飞书配置表不可用，请先执行数据库迁移："
+                    "alembic upgrade head"
+                ),
                 detail=str(exc.__class__.__name__),
             ) from exc
 
@@ -968,7 +997,10 @@ class ProductionFeishuService:
         except SQLAlchemyError as exc:
             raise AppException(
                 status_code=500,
-                message="生产飞书配置表不可用，请先执行数据库迁移：alembic upgrade head",
+                message=(
+                    "生产飞书配置表不可用，请先执行数据库迁移："
+                    "alembic upgrade head"
+                ),
                 detail=str(exc.__class__.__name__),
             ) from exc
 
@@ -978,7 +1010,10 @@ class ProductionFeishuService:
         except SQLAlchemyError as exc:
             raise AppException(
                 status_code=500,
-                message="生产飞书配置表不可用，请先执行数据库迁移：alembic upgrade head",
+                message=(
+                    "生产飞书配置表不可用，请先执行数据库迁移："
+                    "alembic upgrade head"
+                ),
                 detail=str(exc.__class__.__name__),
             ) from exc
         if not config:
@@ -1096,7 +1131,10 @@ class ProductionFeishuService:
 
     @staticmethod
     def _record_from_raw(item: dict[str, Any]) -> ProductionFeishuRecordPreview:
-        raw_fields = item.get("fields") if isinstance(item.get("fields"), dict) else {}
+        raw_fields_value = item.get("fields")
+        raw_fields: dict[str, Any] = (
+            raw_fields_value if isinstance(raw_fields_value, dict) else {}
+        )
         fields = {
             key: ProductionFeishuService._extract_feishu_value(value)
             for key, value in raw_fields.items()

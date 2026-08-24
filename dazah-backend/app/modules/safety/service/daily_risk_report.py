@@ -46,9 +46,7 @@ class DailyRiskReportService:
         """获取报备详情"""
         return await self.repo.get_daily_risk_report_by_id(report_id)
 
-    async def create_report(
-        self, data: DailyRiskReportCreate
-    ) -> DailyRiskReport:
+    async def create_report(self, data: DailyRiskReportCreate) -> DailyRiskReport:
         """创建报备"""
         return await self.repo.create_daily_risk_report(data.model_dump())
 
@@ -65,9 +63,7 @@ class DailyRiskReportService:
 
     # ── 工作流 ──
 
-    async def submit_report(
-        self, report_id: uuid.UUID
-    ) -> DailyRiskReport | None:
+    async def submit_report(self, report_id: uuid.UUID) -> DailyRiskReport | None:
         """提交报备（草稿→已提交）"""
         report = await self.repo.get_daily_risk_report_by_id(report_id)
         if not report or report.status != "draft":
@@ -76,9 +72,7 @@ class DailyRiskReportService:
             report_id, {"status": "submitted"}
         )
 
-    async def approve_report(
-        self, report_id: uuid.UUID
-    ) -> DailyRiskReport | None:
+    async def approve_report(self, report_id: uuid.UUID) -> DailyRiskReport | None:
         """审批报备（已提交→已审批）"""
         report = await self.repo.get_daily_risk_report_by_id(report_id)
         if not report or report.status != "submitted":
@@ -102,5 +96,3 @@ class DailyRiskReportService:
 
 
 # ==================== EHS变更管理 (MOC) Service ====================
-
-

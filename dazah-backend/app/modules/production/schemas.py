@@ -2,7 +2,7 @@
 
 import uuid
 from datetime import date, datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -20,7 +20,7 @@ def _clean_text(value: str | None) -> str | None:
     return cleaned or None
 
 
-class BatchStatus(str, Enum):
+class BatchStatus(StrEnum):
     """批次状态枚举"""
 
     DRAFT = "draft"  # 草稿
@@ -30,7 +30,7 @@ class BatchStatus(str, Enum):
     CANCELLED = "cancelled"  # 已取消
 
 
-class PlanStatus(str, Enum):
+class PlanStatus(StrEnum):
     """计划状态枚举"""
 
     DRAFT = "draft"  # 草稿
@@ -39,7 +39,7 @@ class PlanStatus(str, Enum):
     COMPLETED = "completed"  # 已完成
 
 
-class ProcessSpecStatus(str, Enum):
+class ProcessSpecStatus(StrEnum):
     """工艺规程状态枚举"""
 
     DRAFT = "draft"  # 草稿
@@ -48,7 +48,7 @@ class ProcessSpecStatus(str, Enum):
     ARCHIVED = "archived"  # 已归档
 
 
-class TaskStatus(str, Enum):
+class TaskStatus(StrEnum):
     """任务状态枚举"""
 
     PENDING = "pending"  # 待执行
@@ -57,7 +57,7 @@ class TaskStatus(str, Enum):
     COMPLETED = "completed"  # 已完成
 
 
-class OperationType(str, Enum):
+class OperationType(StrEnum):
     """操作类型枚举"""
 
     MATERIAL_ADD = "material_add"  # 投料
@@ -227,9 +227,7 @@ class ProductionExecutionPlanBase(BaseModel):
     """车间日生产执行计划台账。"""
 
     workshop: str | None = Field(None, max_length=64, description="车间")
-    product_name: str = Field(
-        ..., min_length=1, max_length=128, description="产品名称"
-    )
+    product_name: str = Field(..., min_length=1, max_length=128, description="产品名称")
     plan_date: date | None = Field(None, description="计划日期")
     unit: str | None = Field(None, max_length=32, description="单位")
     planned_yield: float | None = Field(None, ge=0, description="计划产量")
@@ -615,7 +613,9 @@ class MaterialBalanceUpdate(BaseModel):
     output_qty: float | None = Field(None, ge=0, description="产出总量")
     loss_qty: float | None = Field(None, description="损耗总量")
     balance_rate: float | None = Field(None, ge=0, le=100, description="平衡率(%)")
-    min_balance_rate: float | None = Field(None, ge=0, le=100, description="最低平衡率(%)")
+    min_balance_rate: float | None = Field(
+        None, ge=0, le=100, description="最低平衡率(%)"
+    )
     notes: str | None = Field(None, description="备注")
 
 
@@ -647,13 +647,21 @@ class MaterialBalanceCalculate(BaseModel):
 class ProductionFeishuConfigBase(BaseModel):
     """生产飞书配置基础模式"""
 
-    config_name: str = Field(default="生产飞书配置", max_length=128, description="配置名称")
+    config_name: str = Field(
+        default="生产飞书配置", max_length=128, description="配置名称"
+    )
     app_id: str = Field(..., max_length=128, description="飞书应用 App ID")
-    bitable_app_token: str = Field(default="", max_length=512, description="兼容旧同步的多维表格 App Token")
-    table_id: str | None = Field(None, max_length=512, description="默认多维表格数据表 Table ID")
+    bitable_app_token: str = Field(
+        default="", max_length=512, description="兼容旧同步的多维表格 App Token"
+    )
+    table_id: str | None = Field(
+        None, max_length=512, description="默认多维表格数据表 Table ID"
+    )
     is_active: bool = Field(True, description="是否启用")
     remark: str | None = Field(None, description="备注")
-    timezone: str = Field(default="Asia/Shanghai", max_length=64, description="同步时区")
+    timezone: str = Field(
+        default="Asia/Shanghai", max_length=64, description="同步时区"
+    )
     daily_sync_time: str = Field(
         default="02:00",
         pattern=r"^(?:[01]\d|2[0-3]):[0-5]\d$",
@@ -680,7 +688,9 @@ class ProductionFeishuConfigUpsert(ProductionFeishuConfigBase):
     """保存生产飞书配置"""
 
     id: uuid.UUID | None = Field(default=None, description="配置ID，留空则新增")
-    app_secret: str | None = Field(default=None, max_length=500, description="飞书应用 App Secret")
+    app_secret: str | None = Field(
+        default=None, max_length=500, description="飞书应用 App Secret"
+    )
 
     @field_validator("app_secret", mode="before")
     @classmethod
@@ -715,10 +725,16 @@ class ProductionFeishuSyncBindingBase(BaseModel):
 
     config_id: uuid.UUID = Field(..., description="生产飞书配置 ID")
     binding_name: str = Field(..., min_length=1, max_length=128, description="绑定名称")
-    sync_target: str = Field(..., min_length=1, max_length=64, description="同步业务目标")
+    sync_target: str = Field(
+        ..., min_length=1, max_length=64, description="同步业务目标"
+    )
     product_name: str | None = Field(None, max_length=128, description="适用产品")
-    workshop_code: str | None = Field(None, max_length=64, description="适用车间或生产线编码")
-    table_id: str = Field(..., max_length=512, description="飞书多维表格数据表 Table ID")
+    workshop_code: str | None = Field(
+        None, max_length=64, description="适用车间或生产线编码"
+    )
+    table_id: str = Field(
+        ..., max_length=512, description="飞书多维表格数据表 Table ID"
+    )
     field_mapping: dict[str, str] = Field(
         default_factory=dict, description="平台字段到飞书字段的映射"
     )
@@ -726,7 +742,12 @@ class ProductionFeishuSyncBindingBase(BaseModel):
     remark: str | None = Field(None, description="备注")
 
     @field_validator(
-        "binding_name", "sync_target", "product_name", "workshop_code", "remark", mode="before"
+        "binding_name",
+        "sync_target",
+        "product_name",
+        "workshop_code",
+        "remark",
+        mode="before",
     )
     @classmethod
     def normalize_binding_text(cls, value: str | None) -> str | None:
@@ -756,7 +777,12 @@ class ProductionFeishuSyncBindingUpdate(BaseModel):
     remark: str | None = None
 
     @field_validator(
-        "binding_name", "sync_target", "product_name", "workshop_code", "remark", mode="before"
+        "binding_name",
+        "sync_target",
+        "product_name",
+        "workshop_code",
+        "remark",
+        mode="before",
     )
     @classmethod
     def normalize_optional_binding_text(cls, value: str | None) -> str | None:

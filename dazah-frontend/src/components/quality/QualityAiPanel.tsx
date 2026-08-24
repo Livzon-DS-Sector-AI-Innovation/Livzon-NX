@@ -2,14 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Alert, App, Button, Card, Checkbox, Collapse, Empty, Space, Tag, Typography } from 'antd'
-import {
-  analyzeCapaAi,
-  analyzeChangeAi,
-  analyzeDeviationAi,
-  applyQualityAiLog,
-  suggestDeviationCapaAi,
-} from '@/actions/quality'
-import { fetchQualityAiLogs } from '@/lib/api/quality'
+import { analyzeCapaAi } from '@/actions/quality-capa'
+import { analyzeChangeAi } from '@/actions/quality-change'
+import { analyzeDeviationAi, suggestDeviationCapaAi } from '@/actions/quality-deviation'
+import { applyQualityAiLog } from '@/actions/quality'
+import { fetchQualityAiLogs } from '@/lib/api/client/quality'
 import type { QualityAiAnalysisLog } from '@/types/quality'
 
 const { Paragraph, Text } = Typography

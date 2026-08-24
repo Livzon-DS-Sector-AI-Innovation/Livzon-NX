@@ -6,7 +6,7 @@ import asyncio
 import json
 import logging
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from hashlib import sha256
@@ -63,9 +63,7 @@ MATERIAL_SUBCATEGORY_FIELD = "物料小类"
 MATERIAL_COST_CATEGORY_FIELD = "物料成本大类"
 # 可选字段：表里没有时不阻断同步，识别不到则留空。
 # (配置字段名, 飞书候选名, 显示名称)
-OPTIONAL_MATERIAL_FIELD_SPECS: tuple[
-    tuple[str, tuple[str, ...], str], ...
-] = (
+OPTIONAL_MATERIAL_FIELD_SPECS: tuple[tuple[str, tuple[str, ...], str], ...] = (
     ("material_unit_field", (MATERIAL_UNIT_FIELD,), "主要单位"),
     ("material_template_field", (MATERIAL_TEMPLATE_FIELD,), "物料模板"),
     ("material_category_field", (MATERIAL_CATEGORY_FIELD,), "物料大类"),
@@ -502,7 +500,7 @@ async def _iter_material_record_pages(
     config: MaterialSourceConfig,
     *,
     before_page_attempt: Callable[[int], Awaitable[None]] | None = None,
-):
+) -> AsyncIterator[tuple[BitableRecordPage, int | None]]:
     """Yield one Feishu page at a time; never retain the complete source table."""
     page_token: str | None = None
     field_names = list(
@@ -641,8 +639,7 @@ async def sync_material_source(
         mapping = _resolve_field_mapping(fields, _payload_from_config(config))
         if (
             mapping.material_code_field != config.material_code_field
-            or mapping.material_description_field
-            != config.material_description_field
+            or mapping.material_description_field != config.material_description_field
             or mapping.rule_model_field != config.rule_model_field
         ):
             raise MaterialSourceFieldsError(

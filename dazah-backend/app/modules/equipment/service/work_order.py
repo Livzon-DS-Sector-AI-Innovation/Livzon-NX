@@ -48,14 +48,10 @@ def _validate_transition(current: str, target: str) -> None:
     """校验状态转换是否合法"""
     allowed = _VALID_TRANSITIONS.get(current, [])
     if target not in allowed:
-        raise AppException(
-            message=f"状态不允许从 '{current}' 转换到 '{target}'"
-        )
+        raise AppException(message=f"状态不允许从 '{current}' 转换到 '{target}'")
 
 
-async def _get_work_order(
-    db: AsyncSession, work_order_id: uuid.UUID
-) -> WorkOrder:
+async def _get_work_order(db: AsyncSession, work_order_id: uuid.UUID) -> WorkOrder:
     """获取工单，不存在则抛异常"""
     wo = await repo.get_work_order_by_id(db, work_order_id)
     if not wo:
@@ -87,9 +83,7 @@ async def create_work_order(
 
     # 校验设备状态
     if equipment.status not in ("在用", "备用"):
-        raise AppException(
-            message=f"设备当前状态为 '{equipment.status}'，不能创建工单"
-        )
+        raise AppException(message=f"设备当前状态为 '{equipment.status}'，不能创建工单")
 
     original_status = equipment.status
 
@@ -108,7 +102,10 @@ async def create_work_order(
             if data.order_type != "异常处理":
                 await _update_equipment_status(db, data.equipment_id, "维修中")
             # eager re-fetch，避免返回对象触发懒加载 MissingGreenlet
-            return await repo.get_work_order_by_id(db, work_order.id)
+            saved_work_order = await repo.get_work_order_by_id(db, work_order.id)
+            if saved_work_order is None:
+                raise AppException(message="工单创建后读取失败")
+            return saved_work_order
         except IntegrityError:
             if attempt < _MAX_RETRIES - 1:
                 await db.rollback()
@@ -194,28 +191,30 @@ async def complete_work_order(
 
     # 计划维护工单完成时，联动更新维护计划日期
     if wo.order_type == "计划维护" and wo.maintenance_plan_id:
-        await _update_maintenance_plan_on_completion(
-            db, wo.maintenance_plan_id
-        )
+        await _update_maintenance_plan_on_completion(db, wo.maintenance_plan_id)
 
     # 待验收时，飞书通知责任人确认验收
     if target == "待验收":
         responsible = wo.responsible_person
         equipment = wo.equipment
         feishu_uid = (
-            getattr(responsible, "feishu_user_id", None)
-            if responsible else None
+            getattr(responsible, "feishu_user_id", None) if responsible else None
         )
         if feishu_uid:
-            asyncio.ensure_future(_notify_verification(
-                feishu_user_id=feishu_uid,
-                work_order_no=wo.work_order_no,
-                equipment_name=equipment.name if equipment else "",
-                assignee_name=wo.assignee.name if wo.assignee else "",
-                priority=wo.priority,
-            ))
+            asyncio.ensure_future(
+                _notify_verification(
+                    feishu_user_id=feishu_uid,
+                    work_order_no=wo.work_order_no,
+                    equipment_name=equipment.name if equipment else "",
+                    assignee_name=wo.assignee.name if wo.assignee else "",
+                    priority=wo.priority,
+                )
+            )
 
-    return await repo.get_work_order_by_id(db, wo.id)
+    saved_work_order = await repo.get_work_order_by_id(db, wo.id)
+    if saved_work_order is None:
+        raise AppException(message="工单更新后读取失败")
+    return saved_work_order
 
 
 async def _update_maintenance_plan_on_completion(
@@ -264,10 +263,12 @@ async def _notify_verification(
         ]
         if assignee_name:
             lines.append(f"**维修人员：**{assignee_name}")
-        lines.extend([
-            "",
-            "维修已完成，请及时确认验收。",
-        ])
+        lines.extend(
+            [
+                "",
+                "维修已完成，请及时确认验收。",
+            ]
+        )
         content = "\n".join(lines)
 
         ok = await send_user_card(
@@ -277,15 +278,21 @@ async def _notify_verification(
         )
         if ok:
             logger.info(
-                "验收通知已发送: %s -> %s", work_order_no, feishu_user_id,
+                "验收通知已发送: %s -> %s",
+                work_order_no,
+                feishu_user_id,
             )
         else:
             logger.warning(
-                "验收通知发送失败: %s -> %s", work_order_no, feishu_user_id,
+                "验收通知发送失败: %s -> %s",
+                work_order_no,
+                feishu_user_id,
             )
     except Exception:
         logger.exception(
-            "验收通知异常: %s -> %s", work_order_no, feishu_user_id,
+            "验收通知异常: %s -> %s",
+            work_order_no,
+            feishu_user_id,
         )
 
 
@@ -419,9 +426,7 @@ async def consume_materials(
         stock = await get_stock_by_spare_part_id(db, item["spare_part_id"])
 
         if not stock or stock.current_qty < item["quantity"]:
-            raise AppException(
-                message=f"备件 '{spare_part.name}' 库存不足"
-            )
+            raise AppException(message=f"备件 '{spare_part.name}' 库存不足")
 
         # 扣减库存
         await outbound_stock(db, item["spare_part_id"], item["quantity"])

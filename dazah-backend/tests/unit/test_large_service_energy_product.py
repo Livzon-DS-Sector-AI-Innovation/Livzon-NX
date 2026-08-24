@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
+from typing import Any, cast
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
@@ -11,25 +12,27 @@ from app.core.exceptions import DuplicateException, NotFoundException
 from app.modules.energy import service as energy_service
 from app.modules.product import service as product_service
 
+SimpleNamespace: Any = _SimpleNamespace
+
 
 class Dump:
-    def __init__(self, **values):
+    def __init__(self: Any, **values: Any) -> None:
         self.values = values
         for key, value in values.items():
             setattr(self, key, value)
 
-    def model_dump(self, **_kwargs):
+    def model_dump(self: Any, **_kwargs: Any) -> Any:
         return dict(self.values)
 
 
-def _product_service():
+def _product_service() -> Any:
     service = product_service.ProductService.__new__(product_service.ProductService)
     service.repo = AsyncMock()
     service.bitable = AsyncMock()
     return service
 
 
-def test_product_feishu_value_parsing_covers_supported_shapes():
+def test_product_feishu_value_parsing_covers_supported_shapes() -> Any:
     assert product_service._extract_text([{"text": "A"}, "B", {"text": ""}]) == "A, B"
     assert product_service._extract_text([]) is None
     assert product_service._extract_text({"text": "A"}) == "A"
@@ -57,23 +60,27 @@ def test_product_feishu_value_parsing_covers_supported_shapes():
     )
     assert parsed["name"] == "原料药"
     assert parsed["feishu_synced_at"].isoformat() == "2026-01-01"
-    assert product_service._parse_feishu_record(
-        {"record_id": "rec-2", "updated_time": "bad"}
-    )["feishu_synced_at"] is not None
-    assert product_service._parse_feishu_record(
-        {"record_id": "rec-3"}
-    )["feishu_synced_at"] is not None
+    assert (
+        product_service._parse_feishu_record(
+            {"record_id": "rec-2", "updated_time": "bad"}
+        )["feishu_synced_at"]
+        is not None
+    )
+    assert (
+        product_service._parse_feishu_record({"record_id": "rec-3"})["feishu_synced_at"]
+        is not None
+    )
 
 
 @pytest.mark.asyncio
-async def test_product_crud_boundaries_and_non_blocking_feishu(monkeypatch):
+async def test_product_crud_boundaries_and_non_blocking_feishu(monkeypatch: Any) -> Any:
     service = _product_service()
     product_id = uuid4()
     service.repo.get_by_id.return_value = None
     with pytest.raises(NotFoundException):
         await service.get_product(product_id)
 
-    created = SimpleNamespace(
+    created: Any = SimpleNamespace(
         id=product_id,
         name="P",
         major_category=None,
@@ -87,17 +94,19 @@ async def test_product_crud_boundaries_and_non_blocking_feishu(monkeypatch):
     )
     service.repo.create.return_value = created
     monkeypatch.setattr(service, "_sync_to_feishu", AsyncMock(return_value="rec-1"))
-    result = await service.create_product(Dump(name="P"))
+    result = await service.create_product(cast(Any, Dump)(name="P"))
     assert result.feishu_record_id == "rec-1"
     service.repo.update.assert_awaited()
 
     service._sync_to_feishu.side_effect = RuntimeError("offline")
     service.repo.create.return_value = created
-    assert await service.create_product(Dump(name="P")) is created
+    assert await service.create_product(cast(Any, Dump)(name="P")) is created
 
     service.repo.get_by_id.return_value = created
     service.repo.update.return_value = created
-    assert await service.update_product(product_id, Dump(name="P2")) is created
+    assert (
+        await service.update_product(product_id, cast(Any, Dump)(name="P2")) is created
+    )
     assert created.name == "P2"
 
     created.feishu_record_id = "rec-delete"
@@ -117,7 +126,7 @@ async def test_product_crud_boundaries_and_non_blocking_feishu(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_product_sync_created_updated_invalid_and_failed(monkeypatch):
+async def test_product_sync_created_updated_invalid_and_failed(monkeypatch: Any) -> Any:
     service = _product_service()
     now = datetime.utcnow()
     service.bitable.query.return_value = [
@@ -134,7 +143,7 @@ async def test_product_sync_created_updated_invalid_and_failed(monkeypatch):
     stats = await service.sync_from_feishu()
     assert stats == {"created": 1, "updated": 1, "failed": 2, "total": 4}
 
-    product = SimpleNamespace(
+    product: Any = SimpleNamespace(
         name="A",
         major_category="M",
         formulation_code="F",
@@ -164,70 +173,76 @@ async def test_product_sync_created_updated_invalid_and_failed(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_energy_device_config_boundaries_and_delegation(monkeypatch):
-    db = object()
+async def test_energy_device_config_boundaries_and_delegation(monkeypatch: Any) -> Any:
+    db: Any = object()
     config_id = uuid4()
-    existing = SimpleNamespace(
+    existing: Any = SimpleNamespace(
         id=config_id,
         platform_code="p1",
         platform_device_code="d1",
     )
     monkeypatch.setattr(
-        energy_service.repo,
+        energy_service.repo,  # type: ignore[attr-defined]
         "exists_device_config",
         AsyncMock(return_value=True),
     )
     with pytest.raises(DuplicateException):
         await energy_service.create_device_config(
-            db, Dump(platform_code="p1", platform_device_code="d1")
+            db, cast(Any, Dump)(platform_code="p1", platform_device_code="d1")
         )
 
-    energy_service.repo.exists_device_config.return_value = False
+    energy_service.repo.exists_device_config.return_value = False  # type: ignore[attr-defined]
     monkeypatch.setattr(
-        energy_service.repo, "create_device_config", AsyncMock(return_value=existing)
+        energy_service.repo,  # type: ignore[attr-defined]
+        "create_device_config",
+        AsyncMock(return_value=existing),
     )
     assert (
         await energy_service.create_device_config(
-            db, Dump(platform_code="p1", platform_device_code="d1")
+            db, cast(Any, Dump)(platform_code="p1", platform_device_code="d1")
         )
         is existing
     )
 
     monkeypatch.setattr(
-        energy_service.repo, "get_device_config_by_id", AsyncMock(return_value=None)
+        energy_service.repo,  # type: ignore[attr-defined]
+        "get_device_config_by_id",
+        AsyncMock(return_value=None),
     )
     with pytest.raises(NotFoundException):
         await energy_service.get_device_config(db, config_id)
     with pytest.raises(NotFoundException):
         await energy_service.update_device_config(
-            db, config_id, Dump(platform_code="p2")
+            db, config_id, cast(Any, Dump)(platform_code="p2")
         )
     with pytest.raises(NotFoundException):
         await energy_service.delete_device_config(db, config_id)
 
-    energy_service.repo.get_device_config_by_id.return_value = existing
-    energy_service.repo.exists_device_config.return_value = True
+    energy_service.repo.get_device_config_by_id.return_value = existing  # type: ignore[attr-defined]
+    energy_service.repo.exists_device_config.return_value = True  # type: ignore[attr-defined]
     with pytest.raises(DuplicateException):
         await energy_service.update_device_config(
-            db, config_id, Dump(platform_code="p2")
+            db, config_id, cast(Any, Dump)(platform_code="p2")
         )
 
-    energy_service.repo.exists_device_config.return_value = False
+    energy_service.repo.exists_device_config.return_value = False  # type: ignore[attr-defined]
     monkeypatch.setattr(
-        energy_service.repo, "update_device_config", AsyncMock(return_value=existing)
+        energy_service.repo,  # type: ignore[attr-defined]
+        "update_device_config",
+        AsyncMock(return_value=existing),
     )
     assert (
         await energy_service.update_device_config(
-            db, config_id, Dump(platform_device_code="d2")
+            db, config_id, cast(Any, Dump)(platform_device_code="d2")
         )
         is existing
     )
-    monkeypatch.setattr(energy_service.repo, "delete_device_config", AsyncMock())
+    monkeypatch.setattr(energy_service.repo, "delete_device_config", AsyncMock())  # type: ignore[attr-defined]
     await energy_service.delete_device_config(db, config_id)
-    energy_service.repo.delete_device_config.assert_awaited_once_with(db, config_id)
+    energy_service.repo.delete_device_config.assert_awaited_once_with(db, config_id)  # type: ignore[attr-defined]
 
     monkeypatch.setattr(
-        energy_service.repo,
+        energy_service.repo,  # type: ignore[attr-defined]
         "list_device_configs",
         AsyncMock(return_value=([existing], 1)),
     )
@@ -244,15 +259,15 @@ async def test_energy_device_config_boundaries_and_delegation(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_energy_collection_all_platform_outcomes(monkeypatch):
-    db = object()
-    device_a = SimpleNamespace(
+async def test_energy_collection_all_platform_outcomes(monkeypatch: Any) -> Any:
+    db: Any = object()
+    device_a: Any = SimpleNamespace(
         id=uuid4(), platform_device_code="a", api_endpoint="http://example.test"
     )
-    device_b = SimpleNamespace(
+    device_b: Any = SimpleNamespace(
         id=uuid4(), platform_device_code="b", api_endpoint="http://example.test"
     )
-    adapter_partial = SimpleNamespace(
+    adapter_partial: Any = SimpleNamespace(
         fetch_energy_data=AsyncMock(
             return_value=[
                 SimpleNamespace(
@@ -272,7 +287,7 @@ async def test_energy_collection_all_platform_outcomes(monkeypatch):
             ]
         )
     )
-    adapter_failed = SimpleNamespace(
+    adapter_failed: Any = SimpleNamespace(
         fetch_energy_data=AsyncMock(side_effect=RuntimeError("timeout"))
     )
     monkeypatch.setattr(
@@ -281,36 +296,40 @@ async def test_energy_collection_all_platform_outcomes(monkeypatch):
         {"empty": object(), "partial": adapter_partial, "failed": adapter_failed},
     )
 
-    async def devices(_db, platform):
+    async def devices(_db: Any, platform: Any) -> Any:
         if platform == "empty":
             return []
         return [device_a, device_b]
 
     monkeypatch.setattr(
-        energy_service.repo,
+        energy_service.repo,  # type: ignore[attr-defined]
         "get_enabled_devices_by_platform",
         AsyncMock(side_effect=devices),
     )
-    monkeypatch.setattr(energy_service.repo, "upsert_energy_data", AsyncMock())
-    monkeypatch.setattr(energy_service.repo, "create_collect_log", AsyncMock())
-    result = await energy_service.trigger_collection(db, Dump(platform_code=None))
+    monkeypatch.setattr(energy_service.repo, "upsert_energy_data", AsyncMock())  # type: ignore[attr-defined]
+    monkeypatch.setattr(energy_service.repo, "create_collect_log", AsyncMock())  # type: ignore[attr-defined]
+    result = await energy_service.trigger_collection(
+        db, cast(Any, Dump)(platform_code=None)
+    )
     assert result["empty"]["status"] == "success"
     assert result["partial"]["status"] == "partial"
     assert result["failed"]["status"] == "failed"
     assert result["failed"]["error"] == "timeout"
 
-    result = await energy_service.trigger_collection(db, Dump(platform_code="missing"))
+    result = await energy_service.trigger_collection(
+        db, cast(Any, Dump)(platform_code="missing")
+    )
     assert result["missing"]["status"] == "failed"
     assert "未找到平台适配器" in result["missing"]["error"]
 
 
 @pytest.mark.asyncio
-async def test_energy_read_models_and_overview(monkeypatch):
-    db = object()
+async def test_energy_read_models_and_overview(monkeypatch: Any) -> Any:
+    db: Any = object()
     log_id = uuid4()
     start = datetime(2026, 1, 1, 8)
     end = start + timedelta(hours=2)
-    log = SimpleNamespace(
+    log: Any = SimpleNamespace(
         id=log_id,
         platform_code="p",
         collect_time=end,
@@ -337,20 +356,20 @@ async def test_energy_read_models_and_overview(monkeypatch):
         ),
     ]
     monkeypatch.setattr(
-        energy_service.repo,
+        energy_service.repo,  # type: ignore[attr-defined]
         "get_collect_log_detail",
         AsyncMock(return_value=(None, [])),
     )
     with pytest.raises(NotFoundException):
         await energy_service.get_collect_log_detail(db, log_id)
-    energy_service.repo.get_collect_log_detail.return_value = (log, rows)
+    energy_service.repo.get_collect_log_detail.return_value = (log, rows)  # type: ignore[attr-defined]
     detail = await energy_service.get_collect_log_detail(db, log_id)
     assert detail["time_range_start"] == start
     assert detail["time_range_end"] == end
     assert detail["devices"][0]["value"] == 1.5
 
     monkeypatch.setattr(
-        energy_service.repo,
+        energy_service.repo,  # type: ignore[attr-defined]
         "get_overview_summary",
         AsyncMock(
             return_value=[
@@ -360,10 +379,12 @@ async def test_energy_read_models_and_overview(monkeypatch):
         ),
     )
     monkeypatch.setattr(
-        energy_service.repo, "get_overview_trend", AsyncMock(return_value=[{"v": 1}])
+        energy_service.repo,  # type: ignore[attr-defined]
+        "get_overview_trend",
+        AsyncMock(return_value=[{"v": 1}]),
     )
     monkeypatch.setattr(
-        energy_service.repo,
+        energy_service.repo,  # type: ignore[attr-defined]
         "get_energy_statistics",
         AsyncMock(return_value=[{"workshop": "W"}]),
     )
@@ -378,10 +399,10 @@ async def test_energy_read_models_and_overview(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_energy_alert_boundaries_and_simple_queries(monkeypatch):
-    db = object()
+async def test_energy_alert_boundaries_and_simple_queries(monkeypatch: Any) -> Any:
+    db: Any = object()
     item_id = uuid4()
-    obj = SimpleNamespace(id=item_id)
+    obj: Any = SimpleNamespace(id=item_id)
 
     for name, expected in (
         ("list_energy_data", ([obj], 1)),
@@ -390,7 +411,9 @@ async def test_energy_alert_boundaries_and_simple_queries(monkeypatch):
         ("list_alert_records", ([obj], 1)),
     ):
         monkeypatch.setattr(
-            energy_service.repo, name, AsyncMock(return_value=expected)
+        energy_service.repo,  # type: ignore[attr-defined]
+        name,
+            AsyncMock(return_value=expected),
         )
 
     assert (await energy_service.list_energy_data(db, page=1, page_size=2))[1] == 1
@@ -399,7 +422,9 @@ async def test_energy_alert_boundaries_and_simple_queries(monkeypatch):
     assert (await energy_service.list_alert_records(db, page=1, page_size=2))[1] == 1
 
     monkeypatch.setattr(
-        energy_service.repo, "get_energy_statistics", AsyncMock(return_value=[{"v": 1}])
+        energy_service.repo,  # type: ignore[attr-defined]
+        "get_energy_statistics",
+        AsyncMock(return_value=[{"v": 1}]),
     )
     assert await energy_service.get_energy_statistics(
         db,
@@ -408,43 +433,58 @@ async def test_energy_alert_boundaries_and_simple_queries(monkeypatch):
     ) == [{"v": 1}]
 
     monkeypatch.setattr(
-        energy_service.repo, "create_alert_rule", AsyncMock(return_value=obj)
+        energy_service.repo,  # type: ignore[attr-defined]
+        "create_alert_rule",
+        AsyncMock(return_value=obj),
     )
-    assert await energy_service.create_alert_rule(db, Dump(name="rule")) is obj
+    assert (
+        await energy_service.create_alert_rule(db, cast(Any, Dump)(name="rule")) is obj
+    )
 
     monkeypatch.setattr(
-        energy_service.repo, "get_alert_rule_by_id", AsyncMock(return_value=None)
+        energy_service.repo,  # type: ignore[attr-defined]
+        "get_alert_rule_by_id",
+        AsyncMock(return_value=None),
     )
     with pytest.raises(NotFoundException):
         await energy_service.get_alert_rule(db, item_id)
     with pytest.raises(NotFoundException):
-        await energy_service.update_alert_rule(db, item_id, Dump(name="new"))
+        await energy_service.update_alert_rule(db, item_id, cast(Any, Dump)(name="new"))
     with pytest.raises(NotFoundException):
         await energy_service.delete_alert_rule(db, item_id)
 
-    energy_service.repo.get_alert_rule_by_id.return_value = obj
+    energy_service.repo.get_alert_rule_by_id.return_value = obj  # type: ignore[attr-defined]
     monkeypatch.setattr(
-        energy_service.repo, "update_alert_rule", AsyncMock(return_value=obj)
+        energy_service.repo,  # type: ignore[attr-defined]
+        "update_alert_rule",
+        AsyncMock(return_value=obj),
     )
-    monkeypatch.setattr(energy_service.repo, "delete_alert_rule", AsyncMock())
+    monkeypatch.setattr(energy_service.repo, "delete_alert_rule", AsyncMock())  # type: ignore[attr-defined]
     assert await energy_service.get_alert_rule(db, item_id) is obj
-    assert await energy_service.update_alert_rule(db, item_id, Dump(name="new")) is obj
+    assert (
+        await energy_service.update_alert_rule(db, item_id, cast(Any, Dump)(name="new"))
+        is obj
+    )
     await energy_service.delete_alert_rule(db, item_id)
 
     monkeypatch.setattr(
-        energy_service.repo, "get_alert_record_by_id", AsyncMock(return_value=None)
+        energy_service.repo,  # type: ignore[attr-defined]
+        "get_alert_record_by_id",
+        AsyncMock(return_value=None),
     )
     with pytest.raises(NotFoundException):
         await energy_service.process_alert_record(
-            db, item_id, Dump(status="processed", process_note="ok")
+            db, item_id, cast(Any, Dump)(status="processed", process_note="ok")
         )
-    energy_service.repo.get_alert_record_by_id.return_value = obj
+    energy_service.repo.get_alert_record_by_id.return_value = obj  # type: ignore[attr-defined]
     monkeypatch.setattr(
-        energy_service.repo, "update_alert_record", AsyncMock(return_value=obj)
+        energy_service.repo,  # type: ignore[attr-defined]
+        "update_alert_record",
+        AsyncMock(return_value=obj),
     )
     assert (
         await energy_service.process_alert_record(
-            db, item_id, Dump(status="processed", process_note="ok")
+            db, item_id, cast(Any, Dump)(status="processed", process_note="ok")
         )
         is obj
     )

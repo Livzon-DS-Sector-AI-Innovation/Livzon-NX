@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import io
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from docx import Document
 
@@ -17,7 +17,7 @@ def test_generate_change_ledger_export_docx_uses_template_layout() -> None:
                 "change_object": "洁净区空调机组",
                 "change_content": "新增压差趋势监测\n补充偏差预警联动",
                 "change_level": "中度变更",
-                "application_date": datetime(2026, 7, 4, 10, 30, tzinfo=timezone.utc),
+                "application_date": datetime(2026, 7, 4, 10, 30, tzinfo=UTC),
                 "planned_approval_date": "2026-07-06",
                 "execution_date": "2026/07/08",
                 "closure_date": "2026.07.10",

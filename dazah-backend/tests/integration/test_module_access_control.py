@@ -1,5 +1,6 @@
 import uuid
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
+from typing import Any
 
 import pytest
 from httpx import AsyncClient
@@ -17,6 +18,8 @@ from app.platform.identity.permissions import (
 )
 from app.shared.module_registry import MODULES_BY_CODE
 
+SimpleNamespace: Any = _SimpleNamespace
+
 
 @pytest.mark.anyio
 async def test_business_module_routes_are_open_to_authenticated_users_in_all_mode(
@@ -24,7 +27,8 @@ async def test_business_module_routes_are_open_to_authenticated_users_in_all_mod
     db_session: AsyncSession,
 ) -> None:
     """Development all-mode exposes module routes without changing admin APIs."""
-    async def override_db():
+
+    async def override_db() -> Any:
         yield db_session
 
     original_db_override = app.dependency_overrides.get(get_db)
@@ -111,7 +115,7 @@ async def test_current_user_exposes_all_module_codes_in_all_mode(
     )
     await db_session.flush()
 
-    async def override_db():
+    async def override_db() -> Any:
         yield db_session
 
     async def override_current_user() -> User:
@@ -162,7 +166,7 @@ async def test_admin_has_implicit_all_module_and_livzon_access(
     db_session.add(admin)
     await db_session.flush()
 
-    async def override_db():
+    async def override_db() -> Any:
         yield db_session
 
     async def override_current_user() -> User:

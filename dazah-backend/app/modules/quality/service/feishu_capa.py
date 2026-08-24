@@ -1,73 +1,109 @@
-"""Feishu native CAPA service — direct bitable CRUD for CAPA ledger and plan track."""
+"""Feishu native CAPA service - direct bitable CRUD for CAPA ledger and plan track."""
 
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from collections.abc import Callable
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import AppException, NotFoundException
 from app.modules.quality.service.quality_feishu_sync import (
+    QualityFeishuEntityRuntimeConfig,
+    QualityFeishuRuntimeConfig,
+    _require_table_id,
     _resolve_contact_bitable_user_value,
     feishu_sync,
 )
-from app.platform.integrations.feishu.utils import build_bitable_client
+from app.platform.integrations.feishu.bitable import BitableClient
 
 logger = logging.getLogger(__name__)
+
+# ──────────────────────────────────────────────
+#  Field-name constants (centralized Chinese field names)
+# ──────────────────────────────────────────────
+
+
+class CapaLedgerFields:
+    """CAPA 台账飞书表中文字段名常量。"""
+
+    START_DATE = "启动日期"
+    CLOSE_DATE = "关闭日期"
+    QA_CONFIRM_DATE = "QA质量员确认日期"
+    QA_USER = "QA质量员"
+    RELATED_CAPA_PLAN = "关联CAPA计划"
+    DEPARTMENT = "事件部门"
+    PRODUCT = "涉及产品"
+    STATUS = "CAPA状态"
+
+
+class CapaPlanTrackFields:
+    """CAPA 计划跟踪飞书表中文字段名常量。"""
+
+    COMPLETE_TIME = "完成时间"
+    OWNER = "责任人"
+    DEPT_OWNER = "部门负责人"
+    RELATED_CAPA_CODE = "关联CAPA编号"
+    OWNER_CONFIRMED = "责任人确认"
+    DEPT_OWNER_CONFIRMED = "部门负责人确认"
+
 
 # ──────────────────────────────────────────────
 #  Field‑type descriptors (used for coercion)
 # ──────────────────────────────────────────────
 _CAPA_LEDGER_DATETIME_FIELDS = {
-    "启动日期",
-    "关闭日期",
-    "QA质量员确认日期",
+    CapaLedgerFields.START_DATE,
+    CapaLedgerFields.CLOSE_DATE,
+    CapaLedgerFields.QA_CONFIRM_DATE,
 }
 _CAPA_LEDGER_USER_FIELDS = {
-    "QA质量员",
+    CapaLedgerFields.QA_USER,
 }
 _CAPA_LEDGER_READONLY_FIELDS = {
-    "关联CAPA计划",
+    CapaLedgerFields.RELATED_CAPA_PLAN,
 }
 
 _CAPA_PLAN_DATETIME_FIELDS = {
-    "完成时间",
+    CapaPlanTrackFields.COMPLETE_TIME,
 }
 _CAPA_PLAN_USER_FIELDS = {
-    "责任人",
+    CapaPlanTrackFields.OWNER,
 }
 _CAPA_PLAN_READONLY_FIELDS = {
-    "部门负责人",
-    "关联CAPA编号",
+    CapaPlanTrackFields.DEPT_OWNER,
+    CapaPlanTrackFields.RELATED_CAPA_CODE,
 }
 _CAPA_PLAN_CHECKBOX_FIELDS = {
-    "责任人确认",
-    "部门负责人确认",
+    CapaPlanTrackFields.OWNER_CONFIRMED,
+    CapaPlanTrackFields.DEPT_OWNER_CONFIRMED,
 }
 
 # ──────────────────────────────────────────────
-#  Parse helpers  (Feishu raw → Python dict)
+#  Parse helpers  (Feishu raw -> Python dict)
 # ──────────────────────────────────────────────
 
 
 def _parse_date_field(value: Any) -> str | None:
-    """Millisecond timestamp (int) → YYYY‑MM‑DD string."""
+    """Millisecond timestamp (int) -> YYYY‑MM‑DD string."""
     if value in (None, "", []):
         return None
     if isinstance(value, (int, float)):
-        return datetime.fromtimestamp(float(value) / 1000, tz=timezone.utc).strftime("%Y-%m-%d")
+        return datetime.fromtimestamp(float(value) / 1000, tz=UTC).strftime("%Y-%m-%d")
     if isinstance(value, str):
         stripped = value.strip()
         if not stripped:
             return None
         if stripped.isdigit():
-            return datetime.fromtimestamp(int(stripped) / 1000, tz=timezone.utc).strftime("%Y-%m-%d")
+            return datetime.fromtimestamp(int(stripped) / 1000, tz=UTC).strftime(
+                "%Y-%m-%d"
+            )
     return str(value)
 
 
 def _parse_user_field(value: Any) -> str | None:
-    """Feishu User list → display name."""
+    """Feishu User list -> display name."""
     if not value:
         return None
     if isinstance(value, list):
@@ -88,23 +124,12 @@ def _parse_user_field(value: Any) -> str | None:
 
 
 def _parse_checkbox_field(value: Any) -> bool:
-    """Checkbox field → bool."""
+    """Checkbox field -> bool."""
     if isinstance(value, bool):
         return value
     if isinstance(value, str):
         return value.strip().lower() in {"true", "1", "是", "已确认"}
     return bool(value)
-
-
-def _parse_single_select(value: Any) -> str:
-    """SingleSelect field → string."""
-    if value in (None, "", []):
-        return ""
-    if isinstance(value, str):
-        return value
-    if isinstance(value, dict):
-        return str(value.get("text") or value.get("name") or "")
-    return str(value)
 
 
 def _parse_text_field(value: Any) -> str | None:
@@ -167,8 +192,19 @@ def _parse_capa_plan_track_fields(fields: dict[str, Any]) -> dict[str, Any]:
 
 def _records_to_items(
     records: list[dict[str, Any]],
-    parser: Any,
+    parser: Callable[[dict[str, Any]], dict[str, Any]],
 ) -> list[dict[str, Any]]:
+    """将飞书原始记录列表转换为前端可用的 item 列表。
+
+    Args:
+        records: 飞书 bitable 返回的原始记录列表，每条包含 ``fields``、
+            ``record_id``、``created_time``、``last_modified_time`` 等字段。
+        parser: 字段解析回调，用于将单条记录的 ``fields`` 转换为干净的字段字典。
+
+    Returns:
+        转换后的 item 列表，每个 item 在 parser 输出的基础上追加 ``record_id``、
+        ``created_time``、``last_modified_time`` 三个元数据字段。
+    """
     items: list[dict[str, Any]] = []
     for record in records:
         fields = record.get("fields") or {}
@@ -189,19 +225,24 @@ async def _resolve_entity(
     db: AsyncSession,
     entity_code: str,
     direction: str,
-) -> tuple[feishu_sync.QualityFeishuRuntimeConfig, feishu_sync.QualityFeishuEntityRuntimeConfig]:
+) -> tuple[QualityFeishuRuntimeConfig, QualityFeishuEntityRuntimeConfig]:
     runtime = await feishu_sync._resolve_runtime(db)
     entity = runtime.get_entity_config(entity_code, direction=direction)
-    if not runtime.is_enabled() or not entity or not entity.app_token or not entity.table_id:
-        raise ValueError(f"{entity_code} 飞书 Base 未启用")
+    if (
+        not runtime.is_enabled()
+        or not entity
+        or not entity.app_token
+        or not entity.table_id
+    ):
+        raise AppException(status_code=400, message=f"{entity_code} 飞书 Base 未启用")
     return runtime, entity
 
 
 def _make_client(
-    runtime: feishu_sync.QualityFeishuRuntimeConfig,
-    entity: feishu_sync.QualityFeishuEntityRuntimeConfig,
-) -> Any:
-    return build_bitable_client(
+    runtime: QualityFeishuRuntimeConfig,
+    entity: QualityFeishuEntityRuntimeConfig,
+) -> BitableClient:
+    return BitableClient(
         app_token=entity.app_token,
         app_id=runtime.app_id,
         app_secret=runtime.app_secret,
@@ -226,7 +267,7 @@ async def _coerce_write_fields(
 ) -> dict[str, Any]:
     """Prepare a fields dict for Feishu write (create / update)."""
     fields: dict[str, Any] = {}
-    department = str(data.get("事件部门") or "").strip() or None
+    department = str(data.get(CapaLedgerFields.DEPARTMENT) or "").strip() or None
     for key, value in data.items():
         if key in readonly_fields:
             continue
@@ -235,9 +276,7 @@ async def _coerce_write_fields(
                 continue
             if isinstance(value, str):
                 fields[key] = int(
-                    datetime.strptime(value, "%Y-%m-%d")
-                    .replace(tzinfo=timezone.utc)
-                    .timestamp()
+                    datetime.strptime(value, "%Y-%m-%d").replace(tzinfo=UTC).timestamp()
                     * 1000
                 )
             elif isinstance(value, (int, float)):
@@ -266,10 +305,10 @@ async def _coerce_write_fields(
             if _looks_like_bitable_user_id(normalized_value):
                 fields[key] = [{"id": normalized_value}]
                 continue
-            raise ValueError(
-                f"{key}“{normalized_value}”未在部门联系人中维护，无法写入飞书人员字段"
+            raise AppException(
+                status_code=400,
+                message=f"{key}“{normalized_value}”未在部门联系人中维护，无法写入飞书人员字段",
             )
-            continue
         if key in checkbox_fields:
             fields[key] = bool(value)
             continue
@@ -317,22 +356,52 @@ async def list_capa_ledger(
     page: int = 1,
     page_size: int = 50,
 ) -> dict[str, Any]:
+    """获取飞书CAPA台账记录列表，支持关键词、部门、产品、状态过滤与分页。
+
+    Args:
+        db: 异步数据库会话，用于解析飞书运行时配置。
+        keyword: 关键词，在所有字段值中做大小写不敏感包含匹配；``None`` 表示不过滤。
+        department: 事件部门精确匹配；``None`` 表示不过滤。
+        product: 涉及产品包含匹配；``None`` 表示不过滤。
+        status: CAPA状态精确匹配；``None`` 表示不过滤。
+        page: 页码，从 1 开始。
+        page_size: 每页条数。
+
+    Returns:
+        分页结果字典，包含 ``items``、``total``、``page``、``page_size`` 四个键。
+    """
     runtime, entity = await _resolve_entity(db, "capa_ledger", direction="pull")
     client = _make_client(runtime, entity)
-    records = await client.search_records(entity.table_id, automatic_fields=True, page_size=500)
+    records = await client.search_records(
+        _require_table_id(entity), automatic_fields=True, page_size=500
+    )
     items = _records_to_items(records, _parse_capa_ledger_fields)
 
     if keyword:
         items = [item for item in items if _contains_keyword(item, keyword)]
     if department:
-        items = [item for item in items if (item.get("事件部门") or "") == department]
+        items = [
+            item
+            for item in items
+            if (item.get(CapaLedgerFields.DEPARTMENT) or "") == department
+        ]
     if product:
-        items = [item for item in items if product in (item.get("涉及产品") or "")]
+        items = [
+            item
+            for item in items
+            if product in (item.get(CapaLedgerFields.PRODUCT) or "")
+        ]
     if status:
-        items = [item for item in items if (item.get("CAPA状态") or "") == status]
+        items = [
+            item
+            for item in items
+            if (item.get(CapaLedgerFields.STATUS) or "") == status
+        ]
 
     items.sort(
-        key=lambda item: item.get("last_modified_time") or item.get("created_time") or "",
+        key=lambda item: (
+            item.get("last_modified_time") or item.get("created_time") or ""
+        ),
         reverse=True,
     )
     start = (page - 1) * page_size
@@ -344,23 +413,47 @@ async def get_capa_ledger_record(
     db: AsyncSession,
     record_id: str,
 ) -> dict[str, Any]:
+    """根据记录 ID 获取单条飞书CAPA台账详情。
+
+    Args:
+        db: 异步数据库会话，用于解析飞书运行时配置。
+        record_id: 飞书 bitable 记录 ID。
+
+    Returns:
+        解析后的台账字段字典，包含 ``record_id``、``created_time``、
+        ``last_modified_time`` 等元数据。
+
+    Raises:
+        NotFoundException: 记录不存在时抛出。
+    """
     runtime, entity = await _resolve_entity(db, "capa_ledger", direction="pull")
     client = _make_client(runtime, entity)
-    records = await client.search_records(entity.table_id, automatic_fields=True, page_size=500)
-    for record in records:
-        if str(record.get("record_id") or "") == record_id:
-            item = _parse_capa_ledger_fields(record.get("fields") or {})
-            item["record_id"] = record_id
-            item["created_time"] = record.get("created_time")
-            item["last_modified_time"] = record.get("last_modified_time")
-            return item
-    raise ValueError("飞书CAPA台账记录不存在")
+    record = await client.get_record(_require_table_id(entity), record_id)
+    if not record:
+        raise NotFoundException("飞书CAPA台账记录", record_id)
+    item = _parse_capa_ledger_fields(record.get("fields") or {})
+    item["record_id"] = record_id
+    item["created_time"] = record.get("created_time")
+    item["last_modified_time"] = record.get("last_modified_time")
+    return item
 
 
 async def create_capa_ledger_record(
     db: AsyncSession,
     data: dict[str, Any],
 ) -> dict[str, Any]:
+    """在飞书CAPA台账表中创建一条新记录。
+
+    Args:
+        db: 异步数据库会话，用于解析飞书运行时配置及人员字段。
+        data: 待写入的字段字典，键为中文字段名。
+
+    Returns:
+        创建成功后重新读取并解析的台账记录字典。
+
+    Raises:
+        AppException: 人员字段值未在部门联系人中维护时抛出 400 错误。
+    """
     runtime, entity = await _resolve_entity(db, "capa_ledger", direction="push")
     client = _make_client(runtime, entity)
     fields = await _coerce_write_fields(
@@ -371,8 +464,9 @@ async def create_capa_ledger_record(
         checkbox_fields=set(),
         readonly_fields=_CAPA_LEDGER_READONLY_FIELDS,
     )
-    record = await client.create_record(entity.table_id, fields)
+    record = await client.create_record(_require_table_id(entity), fields)
     record_id = str(record.get("record_id") or "")
+    logger.info("CAPA ledger record created", extra={"record_id": record_id})
     return await get_capa_ledger_record(db, record_id)
 
 
@@ -381,6 +475,19 @@ async def update_capa_ledger_record(
     record_id: str,
     data: dict[str, Any],
 ) -> dict[str, Any]:
+    """根据记录 ID 更新飞书CAPA台账字段。
+
+    Args:
+        db: 异步数据库会话，用于解析飞书运行时配置及人员字段。
+        record_id: 飞书 bitable 记录 ID。
+        data: 待更新的字段字典，键为中文字段名。
+
+    Returns:
+        更新成功后重新读取并解析的台账记录字典。
+
+    Raises:
+        AppException: 人员字段值未在部门联系人中维护时抛出 400 错误。
+    """
     runtime, entity = await _resolve_entity(db, "capa_ledger", direction="push")
     client = _make_client(runtime, entity)
     fields = await _coerce_write_fields(
@@ -391,7 +498,8 @@ async def update_capa_ledger_record(
         checkbox_fields=set(),
         readonly_fields=_CAPA_LEDGER_READONLY_FIELDS,
     )
-    await client.update_record(entity.table_id, record_id, fields)
+    await client.update_record(_require_table_id(entity), record_id, fields)
+    logger.info("CAPA ledger record updated", extra={"record_id": record_id})
     return await get_capa_ledger_record(db, record_id)
 
 
@@ -399,9 +507,16 @@ async def delete_capa_ledger_record(
     db: AsyncSession,
     record_id: str,
 ) -> None:
+    """根据记录 ID 删除飞书CAPA台账记录。
+
+    Args:
+        db: 异步数据库会话，用于解析飞书运行时配置。
+        record_id: 飞书 bitable 记录 ID。
+    """
     runtime, entity = await _resolve_entity(db, "capa_ledger", direction="push")
     client = _make_client(runtime, entity)
-    await client.delete_record(entity.table_id, record_id)
+    await client.delete_record(_require_table_id(entity), record_id)
+    logger.info("CAPA ledger record deleted", extra={"record_id": record_id})
 
 
 # ══════════════════════════════════════════════
@@ -415,16 +530,31 @@ async def list_capa_plan_tracks(
     page: int = 1,
     page_size: int = 50,
 ) -> dict[str, Any]:
+    """获取飞书CAPA计划跟踪记录列表，支持关键词过滤与分页。
+
+    Args:
+        db: 异步数据库会话，用于解析飞书运行时配置。
+        keyword: 关键词，在所有字段值中做大小写不敏感包含匹配；``None`` 表示不过滤。
+        page: 页码，从 1 开始。
+        page_size: 每页条数。
+
+    Returns:
+        分页结果字典，包含 ``items``、``total``、``page``、``page_size`` 四个键。
+    """
     runtime, entity = await _resolve_entity(db, "capa_plan_track", direction="pull")
     client = _make_client(runtime, entity)
-    records = await client.search_records(entity.table_id, automatic_fields=True, page_size=500)
+    records = await client.search_records(
+        _require_table_id(entity), automatic_fields=True, page_size=500
+    )
     items = _records_to_items(records, _parse_capa_plan_track_fields)
 
     if keyword:
         items = [item for item in items if _contains_keyword(item, keyword)]
 
     items.sort(
-        key=lambda item: item.get("last_modified_time") or item.get("created_time") or "",
+        key=lambda item: (
+            item.get("last_modified_time") or item.get("created_time") or ""
+        ),
         reverse=True,
     )
     start = (page - 1) * page_size
@@ -436,23 +566,47 @@ async def get_capa_plan_track_record(
     db: AsyncSession,
     record_id: str,
 ) -> dict[str, Any]:
+    """根据记录 ID 获取单条飞书CAPA计划跟踪详情。
+
+    Args:
+        db: 异步数据库会话，用于解析飞书运行时配置。
+        record_id: 飞书 bitable 记录 ID。
+
+    Returns:
+        解析后的计划跟踪字段字典，包含 ``record_id``、``created_time``、
+        ``last_modified_time`` 等元数据。
+
+    Raises:
+        NotFoundException: 记录不存在时抛出。
+    """
     runtime, entity = await _resolve_entity(db, "capa_plan_track", direction="pull")
     client = _make_client(runtime, entity)
-    records = await client.search_records(entity.table_id, automatic_fields=True, page_size=500)
-    for record in records:
-        if str(record.get("record_id") or "") == record_id:
-            item = _parse_capa_plan_track_fields(record.get("fields") or {})
-            item["record_id"] = record_id
-            item["created_time"] = record.get("created_time")
-            item["last_modified_time"] = record.get("last_modified_time")
-            return item
-    raise ValueError("飞书CAPA计划跟踪记录不存在")
+    record = await client.get_record(_require_table_id(entity), record_id)
+    if not record:
+        raise NotFoundException("飞书CAPA计划跟踪记录", record_id)
+    item = _parse_capa_plan_track_fields(record.get("fields") or {})
+    item["record_id"] = record_id
+    item["created_time"] = record.get("created_time")
+    item["last_modified_time"] = record.get("last_modified_time")
+    return item
 
 
 async def create_capa_plan_track_record(
     db: AsyncSession,
     data: dict[str, Any],
 ) -> dict[str, Any]:
+    """在飞书CAPA计划跟踪表中创建一条新记录。
+
+    Args:
+        db: 异步数据库会话，用于解析飞书运行时配置及人员字段。
+        data: 待写入的字段字典，键为中文字段名。
+
+    Returns:
+        创建成功后重新读取并解析的计划跟踪记录字典。
+
+    Raises:
+        AppException: 人员字段值未在部门联系人中维护时抛出 400 错误。
+    """
     runtime, entity = await _resolve_entity(db, "capa_plan_track", direction="push")
     client = _make_client(runtime, entity)
     fields = await _coerce_write_fields(
@@ -463,8 +617,9 @@ async def create_capa_plan_track_record(
         checkbox_fields=_CAPA_PLAN_CHECKBOX_FIELDS,
         readonly_fields=_CAPA_PLAN_READONLY_FIELDS,
     )
-    record = await client.create_record(entity.table_id, fields)
+    record = await client.create_record(_require_table_id(entity), fields)
     record_id = str(record.get("record_id") or "")
+    logger.info("CAPA plan track record created", extra={"record_id": record_id})
     return await get_capa_plan_track_record(db, record_id)
 
 
@@ -473,6 +628,19 @@ async def update_capa_plan_track_record(
     record_id: str,
     data: dict[str, Any],
 ) -> dict[str, Any]:
+    """根据记录 ID 更新飞书CAPA计划跟踪字段。
+
+    Args:
+        db: 异步数据库会话，用于解析飞书运行时配置及人员字段。
+        record_id: 飞书 bitable 记录 ID。
+        data: 待更新的字段字典，键为中文字段名。
+
+    Returns:
+        更新成功后重新读取并解析的计划跟踪记录字典。
+
+    Raises:
+        AppException: 人员字段值未在部门联系人中维护时抛出 400 错误。
+    """
     runtime, entity = await _resolve_entity(db, "capa_plan_track", direction="push")
     client = _make_client(runtime, entity)
     fields = await _coerce_write_fields(
@@ -483,7 +651,8 @@ async def update_capa_plan_track_record(
         checkbox_fields=_CAPA_PLAN_CHECKBOX_FIELDS,
         readonly_fields=_CAPA_PLAN_READONLY_FIELDS,
     )
-    await client.update_record(entity.table_id, record_id, fields)
+    await client.update_record(_require_table_id(entity), record_id, fields)
+    logger.info("CAPA plan track record updated", extra={"record_id": record_id})
     return await get_capa_plan_track_record(db, record_id)
 
 
@@ -491,6 +660,13 @@ async def delete_capa_plan_track_record(
     db: AsyncSession,
     record_id: str,
 ) -> None:
+    """根据记录 ID 删除飞书CAPA计划跟踪记录。
+
+    Args:
+        db: 异步数据库会话，用于解析飞书运行时配置。
+        record_id: 飞书 bitable 记录 ID。
+    """
     runtime, entity = await _resolve_entity(db, "capa_plan_track", direction="push")
     client = _make_client(runtime, entity)
-    await client.delete_record(entity.table_id, record_id)
+    await client.delete_record(_require_table_id(entity), record_id)
+    logger.info("CAPA plan track record deleted", extra={"record_id": record_id})

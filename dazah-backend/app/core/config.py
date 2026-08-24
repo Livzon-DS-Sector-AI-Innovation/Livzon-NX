@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     APP_NAME: str = "dazah-backend"
     APP_ENV: str = "development"
     DEBUG: bool = False
+    DEV_BYPASS_AUTH: bool = False
 
     @field_validator("DEBUG", mode="before")
     @classmethod
@@ -66,6 +67,8 @@ class Settings(BaseSettings):
         "contact:contact.base:readonly contact:user.base:readonly offline_access"
     )
     FRONTEND_URL: str = ""
+    BACKEND_PUBLIC_URL: str = ""
+    FEISHU_WS_ENABLED: bool = True
 
     # Feishu 设备部
     FEISHU_EQUIPMENT_DEPT_ID: str = ""
@@ -137,6 +140,16 @@ class Settings(BaseSettings):
     FEISHU_BITABLE_ONBOARDING_TABLE_ID: str = ""
     FEISHU_BITABLE_DEPARTURE_TABLE_ID: str = ""
     FEISHU_BITABLE_APPROVAL_TABLE_ID: str = ""
+    FEISHU_BITABLE_CONTRACT_MANAGEMENT_TABLE_ID: str = ""
+    FEISHU_BITABLE_POSITION_TRANSFER_TABLE_ID: str = ""
+
+    # HR Feishu member synchronization. These are optional and intentionally
+    # empty by default; deployments opt in through their environment.
+    HR_FEISHU_MEMBER_ROOT_DEPT_ID: str = ""
+    HR_FEISHU_MEMBER_EXTRA_ROOT_DEPT_IDS: str = ""
+    HR_FEISHU_MEMBER_EMPLOYEE_NO_PREFIX: str = "112"
+    HR_FEISHU_MEMBER_SYNC_INTERVAL_HOURS: int = 12
+    HR_OFFBOARDING_REMINDER_OPEN_ID: str = ""
 
     # Feishu Bitable — 产品模块
     FEISHU_BITABLE_PRODUCT_APP_TOKEN: str = ""
@@ -144,7 +157,9 @@ class Settings(BaseSettings):
 
     # Feishu Bitable — 质量模块环境兜底。质量模块仍以模块内配置表为主；
     # 这些字段仅用于兼容既有部署和初始化预填。
-    QUALITY_FEISHU_APP_TOKEN: str = "NLQlbJFsjaY37Vs65gyc6VdtnXf"
+    QUALITY_FEISHU_APP_TOKEN: str = ""
+    QUALITY_SOLID_BASE_TOKEN: str = ""
+    QUALITY_LIQUID_BASE_TOKEN: str = ""
     QUALITY_FEISHU_DEVIATION_REPORT_TABLE_ID: str = ""
     QUALITY_FEISHU_DEVIATION_INVESTIGATION_PUSH_TABLE_ID: str = ""
     QUALITY_FEISHU_DEVIATION_TABLE_ID: str = ""
@@ -181,6 +196,20 @@ class Settings(BaseSettings):
 
     # Storage
     STORAGE_ROOT: str = "./storage"
+
+    # Registration local workbooks/templates. Business attachments remain in
+    # the deployment storage and are never copied from the migration source.
+    REGISTRATION_AUTHORIZATION_SOURCE_DIR: str = "./data/registration/授权书"
+    REGISTRATION_WORKBOOK_DIR: str = "./data/registration"
+    REGISTRATION_PROJECT_LEDGER_WORKBOOK_NAME: str = "1. 注册台账.xlsx"
+    REGISTRATION_DECLARATION_PROGRESS_WORKBOOK_NAME: str = (
+        "宁夏-注册项目信息统计表-2026.06.25.xlsx"
+    )
+    REGISTRATION_CERTIFICATE_WORKBOOK_NAME: str = "2. 药政证书台账.xlsx"
+
+    # Feishu event verification is optional for local deployments.
+    FEISHU_EVENT_ENCRYPT_KEY: str = ""
+    FEISHU_EVENT_VERIFICATION_TOKEN: str = ""
 
     # LLM (AI 解析配置)
     LLM_API_KEY: str | None = None

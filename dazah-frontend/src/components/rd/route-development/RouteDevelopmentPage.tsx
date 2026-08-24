@@ -43,7 +43,7 @@ export function RouteDevelopmentPage({ initialRoutes, initialTotal }: RouteDevel
   }, [page, pageSize])
 
   useEffect(() => {
-    loadRoutes()
+    queueMicrotask(loadRoutes)
   }, [loadRoutes])
 
   // 加载已保存的工作流状态

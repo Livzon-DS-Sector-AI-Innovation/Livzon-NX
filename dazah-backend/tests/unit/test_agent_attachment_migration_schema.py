@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
+from typing import Any
 
 MIGRATION_PATH = (
     Path(__file__).parents[2]
@@ -11,7 +12,7 @@ MIGRATION_PATH = (
 )
 
 
-def _load_migration():
+def _load_migration() -> Any:
     spec = importlib.util.spec_from_file_location(
         "agent_attachment_migration",
         MIGRATION_PATH,
@@ -31,7 +32,7 @@ def test_agent_attachment_migration_extends_current_head() -> None:
 
 
 def test_agent_attachment_migration_creates_expected_table_and_indexes(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     migration = _load_migration()
     created_tables: dict[str, tuple[tuple[object, ...], dict[str, object]]] = {}
@@ -59,7 +60,7 @@ def test_agent_attachment_migration_creates_expected_table_and_indexes(
     migration.upgrade()
 
     table_items, table_kwargs = created_tables["agent_attachments"]
-    column_names = {item.name for item in table_items if hasattr(item, "type")}
+    column_names = {item.name for item in table_items if hasattr(item, "type")}  # type: ignore[attr-defined]
 
     assert table_kwargs["schema"] == "core"
     assert {

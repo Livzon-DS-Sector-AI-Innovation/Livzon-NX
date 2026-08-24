@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
 
@@ -23,8 +24,10 @@ from app.platform.identity.schemas import (
     ExternalIdentityBindingStatusUpdate,
 )
 
+SimpleNamespace: Any = _SimpleNamespace
 
-def _binding():
+
+def _binding() -> Any:
     now = datetime.now(UTC)
     return SimpleNamespace(
         id=uuid4(),
@@ -46,31 +49,33 @@ def _binding():
 
 @pytest.mark.asyncio
 async def test_external_identity_binding_admin_endpoints(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     binding = _binding()
-    current_user = SimpleNamespace(id=uuid4())
-    db = SimpleNamespace(rollback=AsyncMock(), add=lambda _item: None)
-    user = SimpleNamespace(name="张三", department="质量部", status="active")
+    current_user: Any = SimpleNamespace(id=uuid4())
+    db: Any = SimpleNamespace(rollback=AsyncMock(), add=lambda _item: None)
+    user: Any = SimpleNamespace(name="张三", department="质量部", status="active")
 
     class BindingRepository:
-        async def list_page(self, _db, **_kwargs):
+        async def list_page(self: Any, _db: Any, **_kwargs: Any) -> Any:
             return [(binding, user)], 1
 
-        async def create(self, _db, **kwargs):
+        async def create(self: Any, _db: Any, **kwargs: Any) -> Any:
             assert kwargs["actor_id"] == current_user.id
             return binding
 
-        async def get(self, _db, binding_id):
+        async def get(self: Any, _db: Any, binding_id: Any) -> Any:
             return binding if binding_id == binding.id else None
 
-        async def set_status(self, _db, item, *, status_value, **kwargs):
+        async def set_status(
+            self: Any, _db: Any, item: Any, *, status_value: Any, **kwargs: Any
+        ) -> Any:
             assert kwargs["actor_id"] == current_user.id
             item.status = status_value
             return item
 
     class UserRepository:
-        async def get_by_id(self, _db, user_id):
+        async def get_by_id(self: Any, _db: Any, user_id: Any) -> Any:
             return SimpleNamespace(id=user_id)
 
     monkeypatch.setattr(
@@ -90,16 +95,16 @@ async def test_external_identity_binding_admin_endpoints(
         db=db,
         current_user=current_user,
     )
-    assert json.loads(listed.body)["data"]["items"][0]["id"] == str(binding.id)
+    assert json.loads(listed.body)["data"]["items"][0]["id"] == str(binding.id)  # type: ignore[arg-type]
     created = await create_external_identity_binding(payload, db, current_user)
-    assert json.loads(created.body)["data"]["external_open_id"] == "open"
+    assert json.loads(created.body)["data"]["external_open_id"] == "open"  # type: ignore[arg-type]
     suspended = await update_external_identity_binding_status(
         binding.id,
         ExternalIdentityBindingStatusUpdate(status="suspended"),
         db,
         current_user,
     )
-    assert json.loads(suspended.body)["data"]["status"] == "suspended"
+    assert json.loads(suspended.body)["data"]["status"] == "suspended"  # type: ignore[arg-type]
 
     with pytest.raises(HTTPException, match="不存在"):
         await update_external_identity_binding_status(
@@ -112,10 +117,10 @@ async def test_external_identity_binding_admin_endpoints(
 
 @pytest.mark.asyncio
 async def test_external_identity_binding_create_maps_expected_errors(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
-    current_user = SimpleNamespace(id=uuid4())
-    db = SimpleNamespace(rollback=AsyncMock())
+    current_user: Any = SimpleNamespace(id=uuid4())
+    db: Any = SimpleNamespace(rollback=AsyncMock())
     payload = ExternalIdentityBindingCreate(
         tenant_id="tenant",
         app_fingerprint="app",
@@ -124,7 +129,7 @@ async def test_external_identity_binding_create_maps_expected_errors(
     )
 
     class MissingUserRepository:
-        async def get_by_id(self, _db, _user_id):
+        async def get_by_id(self: Any, _db: Any, _user_id: Any) -> Any:
             return None
 
     monkeypatch.setattr(identity_api, "UserRepository", MissingUserRepository)
@@ -132,11 +137,11 @@ async def test_external_identity_binding_create_maps_expected_errors(
         await create_external_identity_binding(payload, db, current_user)
 
     class UserRepository:
-        async def get_by_id(self, _db, user_id):
+        async def get_by_id(self: Any, _db: Any, user_id: Any) -> Any:
             return SimpleNamespace(id=user_id)
 
     class DuplicateBindingRepository:
-        async def create(self, _db, **_kwargs):
+        async def create(self: Any, _db: Any, **_kwargs: Any) -> Any:
             raise IntegrityError("INSERT", {}, Exception("duplicate"))
 
     monkeypatch.setattr(identity_api, "UserRepository", UserRepository)
@@ -152,58 +157,58 @@ async def test_external_identity_binding_create_maps_expected_errors(
 
 @pytest.mark.asyncio
 async def test_gateway_status_maps_configuration_and_upstream_results(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
-    current_user = SimpleNamespace(id=uuid4())
-    missing = SimpleNamespace(HERMES_INTERNAL_URL="", HERMES_INTERNAL_TOKEN="")
+    current_user: Any = SimpleNamespace(id=uuid4())
+    missing: Any = SimpleNamespace(HERMES_INTERNAL_URL="", HERMES_INTERNAL_TOKEN="")
     with pytest.raises(HTTPException, match="未配置"):
         await get_livzon_feishu_gateway_status(missing, current_user)
 
     class Response:
-        def raise_for_status(self):
+        def raise_for_status(self: Any) -> Any:
             return None
 
-        def json(self):
+        def json(self: Any) -> Any:
             return {"connected": True}
 
     class Client:
-        def __init__(self, *, timeout):
+        def __init__(self: Any, *, timeout: Any) -> None:
             assert timeout == 15
 
-        async def __aenter__(self):
+        async def __aenter__(self: Any) -> Any:
             return self
 
-        async def __aexit__(self, *_args):
+        async def __aexit__(self: Any, *_args: Any) -> Any:
             return None
 
-        async def get(self, url, *, headers):
+        async def get(self: Any, url: Any, *, headers: Any) -> Any:
             assert url == "http://hermes/internal/feishu/status"
             assert headers["Authorization"] == "Bearer token"
             return Response()
 
-    monkeypatch.setattr(identity_api.httpx, "AsyncClient", Client)
-    configured = SimpleNamespace(
+    monkeypatch.setattr(identity_api.httpx, "AsyncClient", Client)  # type: ignore[attr-defined]
+    configured: Any = SimpleNamespace(
         HERMES_INTERNAL_URL="http://hermes/",
         HERMES_INTERNAL_TOKEN="token",
     )
     response = await get_livzon_feishu_gateway_status(configured, current_user)
-    assert json.loads(response.body)["data"] == {"connected": True}
+    assert json.loads(response.body)["data"] == {"connected": True}  # type: ignore[arg-type]
 
     class FailingClient(Client):
-        async def get(self, url, *, headers):
+        async def get(self: Any, url: Any, *, headers: Any) -> Any:
             raise httpx.ConnectError("unavailable")
 
-    monkeypatch.setattr(identity_api.httpx, "AsyncClient", FailingClient)
+    monkeypatch.setattr(identity_api.httpx, "AsyncClient", FailingClient)  # type: ignore[attr-defined]
     with pytest.raises(HTTPException, match="状态查询失败"):
         await get_livzon_feishu_gateway_status(configured, current_user)
 
 
 @pytest.mark.asyncio
-async def test_gateway_restart_is_audited(monkeypatch) -> None:
+async def test_gateway_restart_is_audited(monkeypatch: Any) -> None:
     from app.platform.identity import service
     from app.platform.identity.schemas import FeishuGatewayRestartResult
 
-    async def restart():
+    async def restart() -> Any:
         return FeishuGatewayRestartResult(
             status="connected",
             message="已恢复",
@@ -214,12 +219,12 @@ async def test_gateway_restart_is_audited(monkeypatch) -> None:
         )
 
     monkeypatch.setattr(service, "restart_livzon_feishu_gateway", restart)
-    db = SimpleNamespace(add=Mock())
-    current_user = SimpleNamespace(id=uuid4())
+    db: Any = SimpleNamespace(add=Mock())
+    current_user: Any = SimpleNamespace(id=uuid4())
 
     response = await identity_api.restart_livzon_feishu_gateway(db, current_user)
 
-    assert json.loads(response.body)["data"]["status"] == "connected"
+    assert json.loads(response.body)["data"]["status"] == "connected"  # type: ignore[arg-type]
     audit = db.add.call_args.args[0]
     assert audit.action == "restart_livzon_feishu_gateway"
     assert audit.user_id == current_user.id

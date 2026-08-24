@@ -87,9 +87,7 @@ async def update_device_config(
     update_data = data.model_dump(exclude_unset=True)
     if "platform_code" in update_data or "platform_device_code" in update_data:
         pc = update_data.get("platform_code", existing.platform_code)
-        pdc = update_data.get(
-            "platform_device_code", existing.platform_device_code
-        )
+        pdc = update_data.get("platform_device_code", existing.platform_device_code)
         if await repo.exists_device_config(db, pc, pdc, exclude_id=config_id):
             raise DuplicateException("设备配置", f"{pc}:{pdc}")
 
@@ -132,9 +130,7 @@ async def trigger_collection(
             }
             continue
 
-        devices = await repo.get_enabled_devices_by_platform(
-            db, platform_code
-        )
+        devices = await repo.get_enabled_devices_by_platform(db, platform_code)
         if not devices:
             results[platform_code] = {
                 "status": "success",
@@ -167,11 +163,7 @@ async def trigger_collection(
                 )
                 success_count += 1
 
-            status = (
-                "success"
-                if success_count == len(device_codes)
-                else "partial"
-            )
+            status = "success" if success_count == len(device_codes) else "partial"
             await repo.create_collect_log(
                 db,
                 {
@@ -268,9 +260,7 @@ async def list_collect_logs(
     )
 
 
-async def get_collect_log_detail(
-    db: AsyncSession, log_id: UUID
-) -> dict[str, Any]:
+async def get_collect_log_detail(db: AsyncSession, log_id: UUID) -> dict[str, Any]:
     """获取采集日志详情，包含设备数据和时间范围。"""
     log, rows = await repo.get_collect_log_detail(db, log_id)
     if log is None:
@@ -281,14 +271,16 @@ async def get_collect_log_detail(
     time_range_end: datetime | None = None
 
     for energy_data, device_config in rows:
-        devices.append({
-            "device_name": device_config.device_name,
-            "platform_device_code": device_config.platform_device_code,
-            "energy_type": device_config.energy_type,
-            "value": float(energy_data.value),
-            "unit": energy_data.unit,
-            "data_timestamp": energy_data.timestamp,
-        })
+        devices.append(
+            {
+                "device_name": device_config.device_name,
+                "platform_device_code": device_config.platform_device_code,
+                "energy_type": device_config.energy_type,
+                "value": float(energy_data.value),
+                "unit": energy_data.unit,
+                "data_timestamp": energy_data.timestamp,
+            }
+        )
         if time_range_start is None or energy_data.timestamp < time_range_start:
             time_range_start = energy_data.timestamp
         if time_range_end is None or energy_data.timestamp > time_range_end:

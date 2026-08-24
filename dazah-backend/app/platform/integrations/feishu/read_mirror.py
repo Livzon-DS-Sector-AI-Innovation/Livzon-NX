@@ -3,19 +3,23 @@
 from __future__ import annotations
 
 import hashlib
+import inspect
 import json
 import re
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any, cast
+from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.redis import redis_client
-from app.modules.warehouse.feishu_client import WarehouseFeishuClient, parse_feishu_root_token
 from app.core.exceptions import AppException
+from app.core.redis import redis_client
+from app.modules.warehouse.feishu_client import (
+    WarehouseFeishuClient,
+    parse_feishu_root_token,
+)
 
 
 @dataclass(frozen=True)
@@ -73,11 +77,13 @@ class ModuleFeishuReadMirrorService:
         except ValueError as exc:
             raise AppException(message=str(exc)) from exc
         existing = await self.session.scalar(
-            select(self.models.root).where(
+            select(self.models.root)
+            .where(
                 self.models.root.config_id == config_id,
                 self.models.root.source_type == normalized_type,
                 self.models.root.root_token == token,
-            ).order_by(self.models.root.updated_at.desc())
+            )
+            .order_by(self.models.root.updated_at.desc())
         )
         if existing is not None:
             if not existing.is_deleted:
@@ -132,7 +138,8 @@ class ModuleFeishuReadMirrorService:
                 app_token = str(base.get("app_token") or "")
                 if not app_token:
                     continue
-                path = base.get("path") if isinstance(base.get("path"), list) else []
+                raw_path = base.get("path")
+                path: list[Any] = raw_path if isinstance(raw_path, list) else []
                 for table in await self._client(app_token).list_tables(page_size=100):
                     table_id = str(table.get("table_id") or table.get("id") or "")
                     if not table_id:
@@ -175,13 +182,15 @@ class ModuleFeishuReadMirrorService:
         try:
             return await self._sync_resource_locked(resource_id)
         finally:
-            await redis_client.eval(
+            cleanup = redis_client.eval(
                 "if redis.call('get',KEYS[1]) == ARGV[1] then "
                 "return redis.call('del',KEYS[1]) else return 0 end",
                 1,
                 lock_key,
                 lock_value,
             )
+            if inspect.isawaitable(cleanup):
+                await cleanup
 
     async def _sync_resource_locked(self, resource_id: uuid.UUID) -> dict[str, Any]:
         resource = await self._resource(resource_id)
@@ -245,7 +254,9 @@ class ModuleFeishuReadMirrorService:
                         normalized_fields=raw,
                         search_text=search_text,
                         source_created_time=self._timestamp(item.get("created_time")),
-                        source_modified_time=self._timestamp(item.get("last_modified_time")),
+                        source_modified_time=self._timestamp(
+                            item.get("last_modified_time")
+                        ),
                     )
                 )
             schema_payload = [
@@ -363,7 +374,9 @@ class ModuleFeishuReadMirrorService:
                 conditions.append(self.models.record.search_text.ilike(f"%{keyword}%"))
             total = int(
                 await self.session.scalar(
-                    select(func.count()).select_from(self.models.record).where(*conditions)
+                    select(func.count())
+                    .select_from(self.models.record)
+                    .where(*conditions)
                 )
                 or 0
             )
@@ -383,8 +396,12 @@ class ModuleFeishuReadMirrorService:
                     "record_id": item.record_id,
                     "fields": item.raw_fields,
                     "normalized_fields": item.normalized_fields,
-                    "created_time": item.source_created_time.isoformat() if item.source_created_time else None,
-                    "last_modified_time": item.source_modified_time.isoformat() if item.source_modified_time else None,
+                    "created_time": item.source_created_time.isoformat()
+                    if item.source_created_time
+                    else None,
+                    "last_modified_time": item.source_modified_time.isoformat()
+                    if item.source_modified_time
+                    else None,
                 }
                 for item in records
             ],
@@ -426,12 +443,14 @@ class ModuleFeishuReadMirrorService:
         if not self._contains_attachment_token(value, file_token):
             raise AppException(message="附件不属于该记录", status_code=404)
         result = await self._client(resource.app_token).download_media(file_token)
-        return cast(tuple[bytes, str, str | None], result)
+        return result
 
     async def _binding_payload(self, binding: Any, resource: Any) -> dict[str, Any]:
         field_count = int(
             await self.session.scalar(
-                select(func.count()).select_from(self.models.field).where(
+                select(func.count())
+                .select_from(self.models.field)
+                .where(
                     self.models.field.resource_id == resource.id,
                     self.models.field.is_deleted.is_(False),
                 )
@@ -442,9 +461,12 @@ class ModuleFeishuReadMirrorService:
         if resource.active_mirror_version:
             record_count = int(
                 await self.session.scalar(
-                    select(func.count()).select_from(self.models.record).where(
+                    select(func.count())
+                    .select_from(self.models.record)
+                    .where(
                         self.models.record.resource_id == resource.id,
-                        self.models.record.mirror_version == resource.active_mirror_version,
+                        self.models.record.mirror_version
+                        == resource.active_mirror_version,
                         self.models.record.is_deleted.is_(False),
                     )
                 )
@@ -471,21 +493,29 @@ class ModuleFeishuReadMirrorService:
                 "is_enabled": True,
                 "field_count": field_count,
                 "record_count": record_count,
-                "last_synced_at": resource.last_complete_sync_at.isoformat() if resource.last_complete_sync_at else None,
+                "last_synced_at": resource.last_complete_sync_at.isoformat()
+                if resource.last_complete_sync_at
+                else None,
                 "sync_status": resource.sync_status,
                 "sync_error": resource.sync_error,
                 "source_root_id": str(resource.source_root_id),
                 "source_path": resource.source_path,
                 "schema_hash": resource.schema_hash,
-                "active_mirror_version": str(resource.active_mirror_version) if resource.active_mirror_version else None,
+                "active_mirror_version": str(resource.active_mirror_version)
+                if resource.active_mirror_version
+                else None,
             },
         }
 
-    async def _replace_fields(self, resource_id: uuid.UUID, raw_fields: list[dict[str, Any]]) -> list[Any]:
+    async def _replace_fields(
+        self, resource_id: uuid.UUID, raw_fields: list[dict[str, Any]]
+    ) -> list[Any]:
         existing_result = await self.session.execute(
             select(self.models.field)
             .where(self.models.field.resource_id == resource_id)
-            .order_by(self.models.field.is_deleted.asc(), self.models.field.updated_at.desc())
+            .order_by(
+                self.models.field.is_deleted.asc(), self.models.field.updated_at.desc()
+            )
         )
         existing: dict[str, Any] = {}
         for item in existing_result.scalars().all():
@@ -501,11 +531,15 @@ class ModuleFeishuReadMirrorService:
             values: dict[str, Any] = {
                 "field_name": str(raw.get("field_name") or raw.get("name") or field_id),
                 "field_type": str(raw.get("type") or "0"),
-                "property": raw.get("property") if isinstance(raw.get("property"), dict) else {},
+                "property": raw.get("property")
+                if isinstance(raw.get("property"), dict)
+                else {},
                 "sort_order": index,
             }
             if item is None:
-                item = self.models.field(resource_id=resource_id, field_id=field_id, **values)
+                item = self.models.field(
+                    resource_id=resource_id, field_id=field_id, **values
+                )
                 self.session.add(item)
             else:
                 for key, value in values.items():
@@ -518,7 +552,15 @@ class ModuleFeishuReadMirrorService:
         await self.session.flush()
         return output
 
-    async def _upsert_resource(self, *, root: Any, app_token: str, table_id: str, title: str, source_path: list[Any]) -> Any:
+    async def _upsert_resource(
+        self,
+        *,
+        root: Any,
+        app_token: str,
+        table_id: str,
+        title: str,
+        source_path: list[Any],
+    ) -> Any:
         resource = await self.session.scalar(
             select(self.models.resource).where(
                 self.models.resource.app_token == app_token,
@@ -575,10 +617,15 @@ class ModuleFeishuReadMirrorService:
         )
         return list(result.scalars().all())
 
-    async def _bound_resource(self, page_key: str, binding_id: uuid.UUID) -> tuple[Any, Any]:
+    async def _bound_resource(
+        self, page_key: str, binding_id: uuid.UUID
+    ) -> tuple[Any, Any]:
         result = await self.session.execute(
             select(self.models.binding, self.models.resource)
-            .join(self.models.resource, self.models.resource.id == self.models.binding.resource_id)
+            .join(
+                self.models.resource,
+                self.models.resource.id == self.models.binding.resource_id,
+            )
             .where(
                 self.models.binding.id == binding_id,
                 self.models.binding.page_key == page_key,
@@ -604,11 +651,19 @@ class ModuleFeishuReadMirrorService:
     @classmethod
     def _contains_attachment_token(cls, value: Any, file_token: str) -> bool:
         if isinstance(value, dict):
-            if value.get("file_token") == file_token or value.get("attachment_token") == file_token:
+            if (
+                value.get("file_token") == file_token
+                or value.get("attachment_token") == file_token
+            ):
                 return True
-            return any(cls._contains_attachment_token(item, file_token) for item in value.values())
+            return any(
+                cls._contains_attachment_token(item, file_token)
+                for item in value.values()
+            )
         if isinstance(value, list):
-            return any(cls._contains_attachment_token(item, file_token) for item in value)
+            return any(
+                cls._contains_attachment_token(item, file_token) for item in value
+            )
         return False
 
     @staticmethod

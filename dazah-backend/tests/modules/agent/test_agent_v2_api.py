@@ -1,6 +1,7 @@
 import json
 import uuid
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
+from typing import Any, cast
 
 import pytest
 from fastapi import HTTPException, status
@@ -14,43 +15,45 @@ from app.modules.agent.schemas import (
     AgentToolSearchRequest,
 )
 
+SimpleNamespace: Any = _SimpleNamespace
+
 
 class Dumpable:
-    def __init__(self, **payload) -> None:
+    def __init__(self: Any, **payload: Any) -> None:
         self.payload = payload
 
-    def model_dump(self, **kwargs):
+    def model_dump(self: Any, **kwargs: Any) -> Any:
         return self.payload
 
 
 class FakeDb:
-    def __init__(self, user=None) -> None:
+    def __init__(self: Any, user: Any = None) -> None:
         self.user = user
-        self.added = []
+        self.added = []  # type: ignore[var-annotated]
 
-    async def get(self, model, item_id):
+    async def get(self: Any, model: Any, item_id: Any) -> Any:
         return self.user
 
-    def add(self, value) -> None:
+    def add(self: Any, value: Any) -> None:
         self.added.append(value)
 
 
 class FakeAgentService:
-    def __init__(self) -> None:
+    def __init__(self: Any) -> None:
         self.executed_request = None
         self.cancelled = False
         self.confirmed = False
         self.expired = False
 
-    async def execute_tool(self, db, *, request):
+    async def execute_tool(self: Any, db: Any, *, request: Any) -> Any:
         self.executed_request = request
         return Dumpable(ok=True, operation=request.operation)
 
-    async def cancel_confirmation(self, db, **kwargs):
+    async def cancel_confirmation(self: Any, db: Any, **kwargs: Any) -> Any:
         self.cancelled = True
         return SimpleNamespace(id=kwargs["confirmation_id"])
 
-    async def execute_confirmation(self, db, **kwargs):
+    async def execute_confirmation(self: Any, db: Any, **kwargs: Any) -> Any:
         self.confirmed = True
         if self.expired:
             return SimpleNamespace(id=kwargs["confirmation_id"]), None
@@ -59,18 +62,18 @@ class FakeAgentService:
             Dumpable(ok=True, operation="agent.test"),
         )
 
-    def _confirmation_out(self, confirmation):
+    def _confirmation_out(self: Any, confirmation: Any) -> Any:
         return Dumpable(id=str(confirmation.id), status="completed")
 
 
 class FakeCatalogService:
-    def __init__(self) -> None:
+    def __init__(self: Any) -> None:
         self.enabled = None
 
-    async def list_all(self, db):
+    async def list_all(self: Any, db: Any) -> Any:
         return [Dumpable(operation="agent.test")]
 
-    async def list_page(self, db, **kwargs):
+    async def list_page(self: Any, db: Any, **kwargs: Any) -> Any:
         return [
             AgentToolCatalogEntry(
                 operation="agent.test",
@@ -88,13 +91,13 @@ class FakeCatalogService:
             )
         ], 1
 
-    async def search(self, db, request):
+    async def search(self: Any, db: Any, request: Any) -> Any:
         return [Dumpable(operation="agent.test")]
 
-    async def describe(self, db, **kwargs):
+    async def describe(self: Any, db: Any, **kwargs: Any) -> Any:
         return Dumpable(operation=kwargs["operation"])
 
-    async def set_enabled(self, db, **kwargs):
+    async def set_enabled(self: Any, db: Any, **kwargs: Any) -> Any:
         self.enabled = kwargs
         return Dumpable(operation=kwargs["operation"], status="active")
 
@@ -107,8 +110,8 @@ def _subject(user_id: uuid.UUID) -> dict[str, object]:
     }
 
 
-def _response_payload(response) -> dict:
-    return json.loads(response.body)
+def _response_payload(response: Any) -> dict[str, Any]:
+    return json.loads(response.body)  # type: ignore[no-any-return]
 
 
 @pytest.mark.anyio
@@ -116,16 +119,16 @@ async def test_control_plane_tool_routes_delegate_and_enforce_admin(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     user_id = uuid.uuid4()
-    admin = SimpleNamespace(
+    admin: Any = SimpleNamespace(
         id=user_id,
         tenant_key="tenant-a",
         role="admin",
     )
-    regular = SimpleNamespace(id=uuid.uuid4(), role="user")
-    settings = SimpleNamespace(AGENT_TOOL_TOKEN="token")
-    db = FakeDb()
-    agent_service = FakeAgentService()
-    catalog_service = FakeCatalogService()
+    regular: Any = SimpleNamespace(id=uuid.uuid4(), role="user")
+    settings: Any = SimpleNamespace(AGENT_TOOL_TOKEN="token")
+    db: Any = cast(Any, FakeDb)()
+    agent_service: Any = FakeAgentService()
+    catalog_service: Any = FakeCatalogService()
     monkeypatch.setattr(api, "AgentService", lambda settings: agent_service)
     monkeypatch.setattr(api, "ToolCatalogService", lambda: catalog_service)
     monkeypatch.setattr(api, "require_service_token", lambda *args: None)
@@ -161,8 +164,7 @@ async def test_control_plane_tool_routes_delegate_and_enforce_admin(
     )
     assert _response_payload(listed_page)["data"]["total"] == 1
     assert (
-        _response_payload(listed_page)["data"]["items"][0]["operation"]
-        == "agent.test"
+        _response_payload(listed_page)["data"]["items"][0]["operation"] == "agent.test"
     )
 
     with pytest.raises(HTTPException) as exc:
@@ -252,7 +254,7 @@ async def test_gateway_confirmation_resolution_rejects_untrusted_subject(
             await api.resolve_confirmation_from_gateway(
                 uuid.uuid4(),
                 payload,
-                FakeDb(user),
+                cast(Any, FakeDb)(user),
                 "Bearer token",
                 SimpleNamespace(AGENT_TOOL_TOKEN="token"),
             )
@@ -266,12 +268,12 @@ async def test_gateway_confirmation_resolution_delegates_choice(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     user_id = uuid.uuid4()
-    user = SimpleNamespace(
+    user: Any = SimpleNamespace(
         id=user_id,
         is_deleted=False,
         status="active",
     )
-    service = FakeAgentService()
+    service: Any = FakeAgentService()
     monkeypatch.setattr(api, "require_service_token", lambda *args: None)
     monkeypatch.setattr(api, "AgentService", lambda settings: service)
 
@@ -280,7 +282,7 @@ async def test_gateway_confirmation_resolution_delegates_choice(
         AgentConfirmationResolveRequest.model_validate(
             {"subject": _subject(user_id), "choice": choice}
         ),
-        FakeDb(user),
+        cast(Any, FakeDb)(user),
         "Bearer token",
         SimpleNamespace(AGENT_TOOL_TOKEN="token"),
     )
@@ -300,8 +302,8 @@ async def test_gateway_expired_confirmation_returns_conflict_response(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     user_id = uuid.uuid4()
-    user = SimpleNamespace(id=user_id, is_deleted=False, status="active")
-    service = FakeAgentService()
+    user: Any = SimpleNamespace(id=user_id, is_deleted=False, status="active")
+    service: Any = FakeAgentService()
     service.expired = True
     monkeypatch.setattr(api, "require_service_token", lambda *args: None)
     monkeypatch.setattr(api, "AgentService", lambda settings: service)
@@ -311,7 +313,7 @@ async def test_gateway_expired_confirmation_returns_conflict_response(
         AgentConfirmationResolveRequest.model_validate(
             {"subject": _subject(user_id), "choice": "allow"}
         ),
-        FakeDb(user),
+        cast(Any, FakeDb)(user),
         "Bearer token",
         SimpleNamespace(AGENT_TOOL_TOKEN="token"),
     )

@@ -1,5 +1,6 @@
 import uuid
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
+from typing import Any, cast
 
 import pytest
 from fastapi import HTTPException
@@ -7,6 +8,8 @@ from pydantic import BaseModel
 
 from app.modules.agent.schemas import AgentToolExecuteRequest, AgentTrustedSubject
 from app.modules.agent.tools import ToolExecutor, ToolRegistry, agent_tool
+
+SimpleNamespace: Any = _SimpleNamespace
 
 
 class EchoInput(BaseModel):
@@ -22,29 +25,31 @@ def _subject(user_id: uuid.UUID | None = None) -> AgentTrustedSubject:
 
 
 class FakeDb:
-    def __init__(self, user=None) -> None:
+    def __init__(self: Any, user: Any = None) -> None:
         self.user = user
-        self.added = []
+        self.added = []  # type: ignore[var-annotated]
 
-    async def get(self, model, item_id):
+    async def get(self: Any, model: Any, item_id: Any) -> Any:
         if self.user and self.user.id == item_id:
             return self.user
         return None
 
-    def add(self, item) -> None:
+    def add(self: Any, item: Any) -> None:
         self.added.append(item)
 
 
 class FakeRepo:
-    def __init__(self) -> None:
-        self.tool_calls = []
-        self.confirmations = []
+    def __init__(self: Any) -> None:
+        self.tool_calls = []  # type: ignore[var-annotated]
+        self.confirmations = []  # type: ignore[var-annotated]
 
-    async def get_session(self, db, session_id):
+    async def get_session(self: Any, db: Any, session_id: Any) -> Any:
         return None
 
-    async def create_tool_call(self, db, *, session_id, operation, request_payload):
-        call = SimpleNamespace(
+    async def create_tool_call(
+        self: Any, db: Any, *, session_id: Any, operation: Any, request_payload: Any
+    ) -> Any:
+        call: Any = SimpleNamespace(
             session_id=session_id,
             operation=operation,
             request_payload=request_payload,
@@ -56,32 +61,32 @@ class FakeRepo:
         return call
 
     async def finish_tool_call(
-        self,
-        db,
-        call,
+        self: Any,
+        db: Any,
+        call: Any,
         *,
-        status,
-        response_payload=None,
-        error_message=None,
-    ):
+        status: Any,
+        response_payload: Any = None,
+        error_message: Any = None,
+    ) -> Any:
         call.status = status
         call.response_payload = response_payload
         call.error_message = error_message
         return call
 
     async def create_confirmation(
-        self,
-        db,
+        self: Any,
+        db: Any,
         *,
-        session_id,
-        user_id,
-        operation,
-        summary,
-        risk_level,
-        request_payload,
-        expires_at,
-    ):
-        confirmation = SimpleNamespace(
+        session_id: Any,
+        user_id: Any,
+        operation: Any,
+        summary: Any,
+        risk_level: Any,
+        request_payload: Any,
+        expires_at: Any,
+    ) -> Any:
+        confirmation: Any = SimpleNamespace(
             id=uuid.uuid4(),
             session_id=session_id,
             user_id=user_id,
@@ -106,7 +111,7 @@ def build_registry() -> ToolRegistry:
         input_model=EchoInput,
         registry=registry,
     )
-    async def echo(context, data):
+    async def echo(context: Any, data: Any) -> Any:
         return {"value": data.value, "user_id": str(context.user_id)}
 
     @agent_tool(
@@ -116,7 +121,7 @@ def build_registry() -> ToolRegistry:
         required_roles=("admin",),
         registry=registry,
     )
-    async def admin_echo(context, data):
+    async def admin_echo(context: Any, data: Any) -> Any:
         return {"value": data.value}
 
     @agent_tool(
@@ -126,7 +131,7 @@ def build_registry() -> ToolRegistry:
         write=True,
         registry=registry,
     )
-    async def write_echo(context, data):
+    async def write_echo(context: Any, data: Any) -> Any:
         return {"value": data.value, "confirmation_id": str(context.confirmation_id)}
 
     @agent_tool(
@@ -138,7 +143,7 @@ def build_registry() -> ToolRegistry:
         human_decision_required=True,
         registry=registry,
     )
-    async def human_decision(context, data):
+    async def human_decision(context: Any, data: Any) -> Any:
         return {"value": data.value}
 
     return registry
@@ -148,13 +153,13 @@ def test_agent_tool_rejects_duplicate_registration() -> None:
     registry = ToolRegistry()
 
     @agent_tool(name="test.dup", summary="Dup", registry=registry)
-    async def first(context, data):
+    async def first(context: Any, data: Any) -> Any:
         return None
 
     with pytest.raises(ValueError):
 
         @agent_tool(name="test.dup", summary="Dup again", registry=registry)
-        async def second(context, data):
+        async def second(context: Any, data: Any) -> Any:
             return None
 
 
@@ -162,7 +167,7 @@ def test_agent_tool_infers_non_empty_output_schema_from_return_annotation() -> N
     registry = ToolRegistry()
 
     @agent_tool(name="test.inferred_output", summary="Output", registry=registry)
-    async def inferred_output(context, data) -> list[dict[str, str]]:
+    async def inferred_output(context: Any, data: Any) -> list[dict[str, str]]:
         return []
 
     schema = registry.require("test.inferred_output").output_schema
@@ -177,11 +182,11 @@ def test_agent_tool_infers_non_empty_output_schema_from_return_annotation() -> N
 
 @pytest.mark.anyio
 async def test_unregistered_tool_returns_400() -> None:
-    executor = ToolExecutor(registry=ToolRegistry(), repo=FakeRepo())
+    executor = ToolExecutor(registry=ToolRegistry(), repo=cast(Any, FakeRepo)())
 
     with pytest.raises(HTTPException) as exc_info:
         await executor.execute(
-            FakeDb(),
+            cast(Any, FakeDb)(),
             request=AgentToolExecuteRequest(
                 operation="missing.tool",
                 subject=_subject(),
@@ -193,14 +198,14 @@ async def test_unregistered_tool_returns_400() -> None:
 
 @pytest.mark.anyio
 async def test_input_validation_failure_returns_invalid_request_response() -> None:
-    repo = FakeRepo()
+    repo: Any = cast(Any, FakeRepo)()
     executor = ToolExecutor(registry=build_registry(), repo=repo)
-    user = SimpleNamespace(
+    user: Any = SimpleNamespace(
         id=uuid.uuid4(), role="user", status="active", is_deleted=False
     )
 
     response = await executor.execute(
-        FakeDb(user=user),
+        cast(Any, FakeDb)(user=user),
         request=AgentToolExecuteRequest(
             operation="test.echo",
             subject=_subject(user.id),
@@ -214,14 +219,14 @@ async def test_input_validation_failure_returns_invalid_request_response() -> No
 
 @pytest.mark.anyio
 async def test_permission_denied_returns_403() -> None:
-    user = SimpleNamespace(
+    user: Any = SimpleNamespace(
         id=uuid.uuid4(), role="user", status="active", is_deleted=False
     )
-    executor = ToolExecutor(registry=build_registry(), repo=FakeRepo())
+    executor = ToolExecutor(registry=build_registry(), repo=cast(Any, FakeRepo)())
 
     with pytest.raises(HTTPException) as exc_info:
         await executor.execute(
-            FakeDb(user=user),
+            cast(Any, FakeDb)(user=user),
             request=AgentToolExecuteRequest(
                 operation="test.admin_echo",
                 params={"value": "x"},
@@ -234,11 +239,11 @@ async def test_permission_denied_returns_403() -> None:
 
 @pytest.mark.anyio
 async def test_read_tool_executes_and_writes_audit() -> None:
-    user = SimpleNamespace(
+    user: Any = SimpleNamespace(
         id=uuid.uuid4(), role="user", status="active", is_deleted=False
     )
-    db = FakeDb(user=user)
-    repo = FakeRepo()
+    db: Any = cast(Any, FakeDb)(user=user)
+    repo: Any = cast(Any, FakeRepo)()
     executor = ToolExecutor(registry=build_registry(), repo=repo)
 
     response = await executor.execute(
@@ -258,11 +263,11 @@ async def test_read_tool_executes_and_writes_audit() -> None:
 
 @pytest.mark.anyio
 async def test_write_tool_requires_confirmation_then_executes() -> None:
-    user = SimpleNamespace(
+    user: Any = SimpleNamespace(
         id=uuid.uuid4(), role="user", status="active", is_deleted=False
     )
-    db = FakeDb(user=user)
-    repo = FakeRepo()
+    db: Any = cast(Any, FakeDb)(user=user)
+    repo: Any = cast(Any, FakeRepo)()
     executor = ToolExecutor(registry=build_registry(), repo=repo)
     request = AgentToolExecuteRequest(
         operation="test.write_echo",
@@ -286,13 +291,13 @@ async def test_write_tool_requires_confirmation_then_executes() -> None:
 
 @pytest.mark.anyio
 async def test_human_decision_tool_returns_policy_refusal() -> None:
-    executor = ToolExecutor(registry=build_registry(), repo=FakeRepo())
-    user = SimpleNamespace(
+    executor = ToolExecutor(registry=build_registry(), repo=cast(Any, FakeRepo)())
+    user: Any = SimpleNamespace(
         id=uuid.uuid4(), role="user", status="active", is_deleted=False
     )
 
     response = await executor.execute(
-        FakeDb(user=user),
+        cast(Any, FakeDb)(user=user),
         request=AgentToolExecuteRequest(
             operation="test.human_decision",
             params={"value": "approve"},

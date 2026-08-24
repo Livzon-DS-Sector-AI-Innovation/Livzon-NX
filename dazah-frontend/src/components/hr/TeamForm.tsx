@@ -46,8 +46,8 @@ export default function TeamForm({ open, team, departmentId, onClose, onSuccess 
       form.resetFields()
       onSuccess()
       onClose()
-    } catch (err: any) {
-      message.error(err.message || '操作失败')
+    } catch (err) {
+      message.error((err instanceof Error ? err.message : '') || '操作失败')
     }
   }
 

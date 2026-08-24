@@ -1,5 +1,6 @@
 import importlib.util
 from pathlib import Path
+from typing import Any
 
 MIGRATION_PATH = (
     Path(__file__).parents[2]
@@ -9,7 +10,7 @@ MIGRATION_PATH = (
 )
 
 
-def _load_migration():
+def _load_migration() -> Any:
     spec = importlib.util.spec_from_file_location(
         "procurement_material_catalog_migration",
         MIGRATION_PATH,
@@ -22,7 +23,7 @@ def _load_migration():
 
 
 def test_material_catalog_migration_creates_mirror_and_sync_metadata(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     migration = _load_migration()
     added_columns: list[tuple[str, str, bool]] = []
@@ -68,7 +69,9 @@ def test_material_catalog_migration_creates_mirror_and_sync_metadata(
     }
 
 
-def test_material_catalog_migration_downgrade_removes_all_objects(monkeypatch) -> None:
+def test_material_catalog_migration_downgrade_removes_all_objects(
+    monkeypatch: Any,
+) -> None:
     migration = _load_migration()
     dropped_indexes: list[str] = []
     dropped_tables: list[str] = []

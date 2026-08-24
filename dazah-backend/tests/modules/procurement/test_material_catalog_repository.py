@@ -1,6 +1,7 @@
 """MaterialCatalogRepository 批量写入路径的数据库集成测试。"""
 
 from datetime import UTC, datetime
+from typing import Any
 
 import pytest
 from sqlalchemy import func, select
@@ -25,7 +26,7 @@ async def _create_config(db: AsyncSession) -> MaterialSourceConfig:
     return config
 
 
-def _row(config: MaterialSourceConfig, record_id: str, code: str) -> dict:
+def _row(config: MaterialSourceConfig, record_id: str, code: str) -> dict[str, Any]:
     return {
         "source_config_id": config.id,
         "feishu_record_id": record_id,
@@ -71,7 +72,7 @@ async def test_list_option_records_filters_orders_and_limits_without_count(
     )
     await db_session.flush()
     await db_session.execute(
-        MaterialCatalogRecord.__table__.update()
+        MaterialCatalogRecord.__table__.update()  # type: ignore[attr-defined]
         .where(MaterialCatalogRecord.feishu_record_id == "rec-deleted")
         .values(is_deleted=True)
     )
@@ -87,6 +88,8 @@ async def test_list_option_records_filters_orders_and_limits_without_count(
         "rec-prefix-1",
         "rec-prefix-2",
     ]
+
+
 @pytest.mark.anyio
 async def test_bulk_upsert_inserts_updates_and_reactivates_records(
     db_session: AsyncSession,

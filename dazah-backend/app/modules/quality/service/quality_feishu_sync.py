@@ -9,27 +9,31 @@ from datetime import UTC, date, datetime
 from typing import Any
 from urllib.parse import urlparse
 
-from sqlalchemy import select
+from sqlalchemy import false, select
 from sqlalchemy.exc import IntegrityError, OperationalError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.core.exceptions import AppException, NotFoundException
 from app.core.llm.encryption import decrypt_api_key
 from app.modules.quality import repository
 from app.modules.quality.models import (
     CAPA,
     CapaPlanTrack,
-    DepartmentContact,
     Deviation,
     DeviationInvestigationPushRecord,
     QualityFeishuAppSettings,
     QualityFeishuEntitySetting,
 )
+from app.modules.quality.service.quality_feishu_material_groups import (
+    MATERIAL_ENTITY_CODES,
+)
 from app.platform.identity.models import User
-from app.platform.integrations.feishu.bitable import _to_ms_timestamp
-from app.platform.integrations.feishu.utils import (
-    build_bitable_client,
-    resolve_bitable_reference,
+from app.platform.integrations.feishu.bitable import (
+    BitableClient,
+)
+from app.platform.integrations.feishu.bitable import (
+    _to_ms_timestamp as _to_ms_timestamp,
 )
 
 logger = logging.getLogger(__name__)
@@ -38,18 +42,34 @@ SyncModel = Deviation | CAPA | DeviationInvestigationPushRecord | CapaPlanTrack
 SKIP_REMOTE_FIELD = object()
 
 QUALITY_PULL_ENTITY_LABELS: dict[str, str] = {
-    "deviation_ledger": "偏差台账",
     "deviation_report_record": "报告记录",
     "deviation_investigation_push_record": "调查推送",
     "capa_ledger": "CAPA台账",
     "capa_plan_track": "CAPA计划跟踪",
+    "oos_oot_report_record": "OOSOOT报告记录",
+    "oos_oot_investigation_push": "OOSOOT调查推送记录",
+    "oos_ledger": "OOS台账",
+    "oot_ledger": "OOT台账",
+    "oos_oot_product_department": "产品涉及部门",
+    "complaint_ledger": "投诉台账",
+    "return_application": "退货申请表",
+    "return_ledger": "退回台账",
+    "product_quality_mfn": "霉酚酸",
+    "product_quality_dljs": "多拉菌素",
+    "product_quality_lftt": "洛伐他汀",
+    "product_quality_mftt": "美伐他汀",
+    "product_quality_yslkms": "盐酸林可霉素",
+    "product_quality_bbas": "L-苯丙氨酸",
+    "product_quality_sas": "L-色氨酸",
+    "supplier_qualification": "供应商资质",
 }
 
 QUALITY_FEISHU_ENTITY_ENV_FALLBACKS: dict[str, str] = {
-    "deviation_ledger": "QUALITY_FEISHU_DEVIATION_TABLE_ID",
     "capa_ledger": "QUALITY_FEISHU_CAPA_TABLE_ID",
     "deviation_report_record": "QUALITY_FEISHU_DEVIATION_REPORT_TABLE_ID",
-    "deviation_investigation_push_record": "QUALITY_FEISHU_DEVIATION_INVESTIGATION_PUSH_TABLE_ID",
+    (
+        "deviation_investigation_push_record"
+    ): "QUALITY_FEISHU_DEVIATION_INVESTIGATION_PUSH_TABLE_ID",
     "capa_plan_track": "QUALITY_FEISHU_CAPA_PLAN_TABLE_ID",
     "department_contact": "QUALITY_DEPARTMENT_CONTACT_FEISHU_TABLE_ID",
     "change_ledger": "QUALITY_CHANGE_LEDGER_FEISHU_TABLE_ID",
@@ -59,18 +79,92 @@ QUALITY_FEISHU_ENTITY_ENV_FALLBACKS: dict[str, str] = {
     "validation_process": "QUALITY_VALIDATION_FEISHU_TABLE_ID",
     "validation_cleaning": "QUALITY_VALIDATION_FEISHU_TABLE_ID",
     "validation_other": "QUALITY_VALIDATION_FEISHU_TABLE_ID",
-    "inspection_general": "QUALITY_INSPECTION_GENERAL_FEISHU_TABLE_ID",
-    "inspection_lab_item": "QUALITY_INSPECTION_LAB_ITEM_FEISHU_TABLE_ID",
-    "inspection_lab_instrument": "QUALITY_INSPECTION_LAB_INSTRUMENT_FEISHU_TABLE_ID",
-    "inspection_finished_product": (
-        "QUALITY_INSPECTION_FINISHED_PRODUCT_FEISHU_TABLE_ID"
-    ),
-    "inspection_solid_material": (
-        "QUALITY_INSPECTION_SOLID_MATERIAL_FEISHU_TABLE_ID"
-    ),
-    "inspection_liquid_material": (
-        "QUALITY_INSPECTION_LIQUID_MATERIAL_FEISHU_TABLE_ID"
-    ),
+    "oos_oot_report_record": "QUALITY_OOS_OOT_REPORT_RECORD_TABLE_ID",
+    "oos_oot_investigation_push": "QUALITY_OOS_OOT_INVESTIGATION_PUSH_TABLE_ID",
+    "oos_ledger": "QUALITY_OOS_LEDGER_TABLE_ID",
+    "oot_ledger": "QUALITY_OOT_LEDGER_TABLE_ID",
+    "oos_oot_product_department": "QUALITY_OOS_OOT_PRODUCT_DEPARTMENT_TABLE_ID",
+    "complaint_ledger": "QUALITY_COMPLAINT_LEDGER_TABLE_ID",
+    "return_application": "QUALITY_RETURN_APPLICATION_TABLE_ID",
+    "return_ledger": "QUALITY_RETURN_LEDGER_TABLE_ID",
+    "product_quality_mfn": "QUALITY_PRODUCT_QUALITY_MFN_TABLE_ID",
+    "product_quality_dljs": "QUALITY_PRODUCT_QUALITY_DLJS_TABLE_ID",
+    "product_quality_lftt": "QUALITY_PRODUCT_QUALITY_LFTT_TABLE_ID",
+    "product_quality_mftt": "QUALITY_PRODUCT_QUALITY_MFTT_TABLE_ID",
+    "product_quality_yslkms": "QUALITY_PRODUCT_QUALITY_YSLKMS_TABLE_ID",
+    "product_quality_bbas": "QUALITY_PRODUCT_QUALITY_BBAS_TABLE_ID",
+    "product_quality_sas": "QUALITY_PRODUCT_QUALITY_SAS_TABLE_ID",
+    "supplier_qualification": "",  # PREFILLS 中已硬编码，无需环境变量回退
+    # ── 质量检验子模块 (DB-only, no env fallbacks) ──
+    # 物品管理
+    "qc_items_inventory": "",
+    "qc_items_inbound": "",
+    "qc_items_outbound": "",
+    # 仪器管理
+    "qc_instr_equipment": "",
+    "qc_instr_maintenance": "",
+    "qc_instr_calibration": "",
+    "qc_instr_repair": "",
+    "qc_instr_change": "",
+    "qc_instr_contracts": "",
+    "qc_instr_plans": "",
+    "qc_instr_assets": "",
+    # 成品检验 - 仅保留 DEFAULT_ENTITIES 中存在的客户特定子表
+    "qc_finished_bbas_hanguang_k1": "",
+    "qc_finished_bbas_weiduo_k2": "",
+    "qc_finished_bbas_changmao_k3": "",
+    "qc_finished_bbas_jinghai_k4": "",
+    "qc_finished_bbas_xiehe_k5": "",
+    "qc_finished_bbas_jiuling_k7": "",
+    "qc_finished_bbas_jirong_k8": "",
+    "qc_finished_bbas_yuanda_k9": "",
+    "qc_finished_bbas_hongshan_k10": "",
+    "qc_finished_bbas_bafeng_k11": "",
+    "qc_finished_bbas_haitian_k12": "",
+    "qc_finished_bbas_feed_q": "",
+    "qc_finished_mvt_bt_k1": "",
+    "qc_finished_mvt_tw_k2": "",
+    "qc_finished_mvt_zh_k3": "",
+    "qc_finished_mvt_tapi_k5": "",
+    "qc_finished_lft_lp_k3": "",
+    "qc_finished_lft_tapi_k4": "",
+    "qc_finished_lft_gn_k6": "",
+    "qc_finished_lft_jingxin_k7": "",
+    "qc_finished_lft_jb_k9": "",
+    "qc_finished_lft_jinbao_k10": "",
+    "qc_finished_lft_lp_crude_k11": "",
+    "qc_finished_dls_norbrook_k2": "",
+    "qc_finished_dls_zenex_k10": "",
+    "qc_finished_dls_microsules_k6": "",
+    "qc_finished_dls_elanco_kr_k11": "",
+    "qc_finished_dls_adwia_k12": "",
+    "qc_finished_dls_qilu_k13": "",
+    "qc_finished_dls_eurofarwa_k14": "",
+    "qc_finished_dls_msd_k15": "",
+    "qc_finished_dls_haoze_k16": "",
+    "qc_finished_dls_vetni_k17": "",
+    "qc_finished_dls_eva_k18": "",
+    "qc_finished_dls_cronus_k19": "",
+    "qc_finished_mpa_tapi_k1": "",
+    "qc_finished_mpa_emcure_k2": "",
+    "qc_finished_mpa_rakshit_k3": "",
+    "qc_finished_mpa_apotex_k4": "",
+    "qc_finished_mpa_sloara_k6": "",
+    "qc_finished_mpa_concord_k7": "",
+    "qc_finished_mpa_concord_high_spec_k11": "",
+    "qc_finished_mpa_taiwan_china_k12": "",
+    "qc_finished_mpa_biocon_k13": "",
+    "qc_finished_mpa_dasami_k14": "",
+    "qc_finished_mpa_fis_k15": "",
+    "qc_finished_mpa_intas_k16": "",
+    "qc_finished_lkms_internal": "",
+    "qc_finished_lkms_usp": "",
+    "qc_finished_lkms_k1": "",
+    "qc_finished_lkms_k2": "",
+    "qc_finished_lkms_k3": "",
+    "qc_finished_boiler_water": "",
+    # 固体/液体物料
+    **{entity_code: "" for entity_code in MATERIAL_ENTITY_CODES},
 }
 
 
@@ -82,6 +176,14 @@ class QualityFeishuEntityRuntimeConfig:
     enable_push_to_feishu: bool
     enable_pull_from_feishu: bool
     field_mappings: dict[str, str]
+
+
+def _require_table_id(
+    entity: QualityFeishuEntityRuntimeConfig | None,
+) -> str:
+    if entity is None or not entity.table_id:
+        raise RuntimeError("飞书实体未配置 table_id")
+    return entity.table_id
 
 
 @dataclass(slots=True)
@@ -113,12 +215,34 @@ class QualityFeishuRuntimeConfig:
             return None
         return QualityFeishuEntityRuntimeConfig(
             app_token=resolved_app_token,
-            table_id=entity.table_id,
+            table_id=_require_table_id(entity),
             is_enabled=entity.is_enabled,
             enable_push_to_feishu=entity.enable_push_to_feishu,
             enable_pull_from_feishu=entity.enable_pull_from_feishu,
             field_mappings=entity.field_mappings,
         )
+
+
+def _extract_feishu_link(value: Any) -> str | None:
+    """Normalize Feishu URL/link field shapes without persisting raw objects."""
+    if value in (None, "", []):
+        return None
+    if isinstance(value, str):
+        return value.strip() or None
+    if isinstance(value, list):
+        for item in value:
+            link = _extract_feishu_link(item)
+            if link:
+                return link
+        return None
+    if isinstance(value, dict):
+        for key in ("link", "url", "href", "value", "text", "name"):
+            link = _extract_feishu_link(value.get(key))
+            if link:
+                return link
+        return None
+    normalized = str(value).strip()
+    return normalized or None
 
 
 def _parse_feishu_datetime(value: Any) -> datetime | None:
@@ -154,11 +278,54 @@ def _normalize_text(value: Any) -> str | None:
     if isinstance(value, dict):
         for key in ("text", "name", "display_name", "en_name", "link", "value"):
             if key in value:
-                normalized = _normalize_text(value[key])
-                if normalized:
-                    return normalized
+                normalized_value = _normalize_text(value[key])
+                if normalized_value:
+                    return normalized_value
         return None
     return str(value).strip() or None
+
+
+def _parse_person_field(value: Any) -> list[dict[str, str]] | None:
+    "解析飞书人员字段（[{id,name,en_name,ava"
+    "tar_url,...}]）为 [{name, avatar"
+    "_url, id}]。"
+    if not isinstance(value, list):
+        return None
+    persons = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        person = {
+            "name": str(
+                item.get("name") or item.get("en_name") or item.get("text") or ""
+            ),
+            "avatar_url": str(item.get("avatar_url") or item.get("url") or ""),
+            "id": str(item.get("id") or ""),
+        }
+        if person["name"] or person["avatar_url"] or person["id"]:
+            persons.append(person)
+    return persons or None
+
+
+def _parse_attachment_field(value: Any) -> list[dict[str, Any]] | None:
+    "解析飞书附件字段（[{name,url,type,size,"
+    "tmp_url,...}]）为 [{name, url, t"
+    "ype, size}]。"
+    if not isinstance(value, list):
+        return None
+    attachments = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        attachment = {
+            "name": str(item.get("name") or ""),
+            "url": str(item.get("url") or item.get("tmp_url") or ""),
+            "type": str(item.get("type") or ""),
+            "size": item.get("size") or 0,
+        }
+        if attachment["url"]:
+            attachments.append(attachment)
+    return attachments or None
 
 
 def _normalize_bool_from_yes_no(value: Any) -> bool | None:
@@ -180,7 +347,16 @@ def _normalize_review_result(value: Any) -> str | None:
         return None
     if normalized in {"是", "已确认", "approved", "true", "True", "TRUE", "1", "通过"}:
         return "approved"
-    if normalized in {"否", "已拒绝", "rejected", "false", "False", "FALSE", "0", "不通过"}:
+    if normalized in {
+        "否",
+        "已拒绝",
+        "rejected",
+        "false",
+        "False",
+        "FALSE",
+        "0",
+        "不通过",
+    }:
         return "rejected"
     if normalized in {"已退回", "resubmitted"}:
         return "resubmitted"
@@ -243,13 +419,38 @@ def _fallback_runtime_entity(table_id: str | None) -> QualityFeishuEntityRuntime
     )
 
 
+# Fallback field name mapping for product quality entities (when field_mappings is
+# empty)
+# Maps system field name → Chinese feishu field label
+_PRODUCT_QUALITY_FIELD_FALLBACK: dict[str, str] = {
+    "customer_name": "客户名称",
+    "quality_standard": "质量标准",
+    "shipping_trend_url": "历史发货趋势",
+    "special_requirements": "特殊要求",
+    "packaging_requirements": "包装要求",
+    "label_requirements": "标签要求",
+    "pallet_requirements": "发货打托要求",
+    "target_market": "目标市场",
+    "registration_status": "注册情况",
+    "other_notes": "其他注意事项",
+    "serial_number": "序号",
+}
+
+
 def _resolve_remote_field_name(
     entity: QualityFeishuEntityRuntimeConfig | None,
     system_field: str,
 ) -> str:
     if entity is None:
         return system_field
-    return entity.field_mappings.get(system_field) or system_field
+    # Try entity field_mappings first
+    mapped = entity.field_mappings.get(system_field)
+    if mapped:
+        return mapped
+    # Fallback: use built-in mapping for product quality fields
+    if system_field in _PRODUCT_QUALITY_FIELD_FALLBACK:
+        return _PRODUCT_QUALITY_FIELD_FALLBACK[system_field]
+    return system_field
 
 
 def _map_push_fields(
@@ -366,9 +567,9 @@ def _has_remote_changes_since_last_sync(
 
 
 def _should_mark_conflict(model: SyncModel, source_updated_at: datetime | None) -> bool:
-    return _has_local_changes_since_last_sync(model) and _has_remote_changes_since_last_sync(
-        model, source_updated_at
-    )
+    return _has_local_changes_since_last_sync(
+        model
+    ) and _has_remote_changes_since_last_sync(model, source_updated_at)
 
 
 def _build_conflict_message(source_updated_at: datetime | None) -> str:
@@ -381,6 +582,9 @@ def _build_conflict_message(source_updated_at: datetime | None) -> str:
 
 
 class QualityFeishuSync:
+    async def _get_department_contacts(self, db: AsyncSession) -> list[dict[str, Any]]:
+        return await _get_department_contacts_from_feishu(db)
+
     async def _resolve_runtime(self, db: AsyncSession) -> QualityFeishuRuntimeConfig:
         app_model = None
         rows: list[QualityFeishuEntitySetting] = []
@@ -389,23 +593,19 @@ class QualityFeishuSync:
                 (
                     await db.execute(
                         select(QualityFeishuAppSettings)
-                        .where(QualityFeishuAppSettings.is_deleted == False)
-                        .order_by(
-                            QualityFeishuAppSettings.updated_at.desc(),
-                            QualityFeishuAppSettings.created_at.desc(),
-                            QualityFeishuAppSettings.id.desc(),
-                        )
+                        .where(QualityFeishuAppSettings.is_deleted.is_(False))
+                        .order_by(QualityFeishuAppSettings.updated_at.desc())
                         .limit(1)
                     )
                 )
                 .scalars()
                 .first()
             )
-            rows = (
+            rows = list(
                 (
                     await db.execute(
                         select(QualityFeishuEntitySetting).where(
-                            QualityFeishuEntitySetting.is_deleted == False
+                            QualityFeishuEntitySetting.is_deleted.is_(False)
                         )
                     )
                 )
@@ -419,24 +619,19 @@ class QualityFeishuSync:
 
         app_id = settings.FEISHU_APP_ID
         app_secret = settings.FEISHU_APP_SECRET
-        legacy_app_token = resolve_bitable_reference(
-            app_token=getattr(settings, "QUALITY_FEISHU_APP_TOKEN", None)
-        ).app_token
+        legacy_app_token = settings.QUALITY_FEISHU_APP_TOKEN
         is_app_enabled = bool(app_id and app_secret)
-        decrypted_model_secret = (
-            decrypt_api_key(app_model.app_secret)
-            if app_model and app_model.app_secret
-            else ""
-        )
         if (
             app_model
             and app_model.is_enabled
             and app_model.app_id
             and app_model.app_secret
-            and not _looks_like_test_app_settings(app_model.app_id, decrypted_model_secret)
+            and not _looks_like_test_app_settings(
+                app_model.app_id, app_model.app_secret
+            )
         ):
             app_id = app_model.app_id
-            app_secret = decrypted_model_secret
+            app_secret = decrypt_api_key(app_model.app_secret)
             legacy_app_token = app_model.app_token or legacy_app_token
             is_app_enabled = app_model.is_enabled
 
@@ -445,11 +640,8 @@ class QualityFeishuSync:
         for entity_code, env_name in QUALITY_FEISHU_ENTITY_ENV_FALLBACKS.items():
             model = entity_models.get(entity_code)
             if model is not None:
-                reference = resolve_bitable_reference(
-                    app_token=model.app_token,
-                    table_id=model.base_table_id,
-                    fallback_app_token=legacy_app_token,
-                )
+                table_id = (model.base_table_id or "").strip() or None
+                app_token = (model.app_token or "").strip() or legacy_app_token
                 field_mappings = {
                     str(item.get("system_field")): str(item.get("feishu_field"))
                     for item in (model.field_mappings or [])
@@ -458,30 +650,46 @@ class QualityFeishuSync:
                     and item.get("feishu_field")
                 }
                 entity_configs[entity_code] = QualityFeishuEntityRuntimeConfig(
-                    app_token=reference.app_token,
-                    table_id=reference.table_id,
-                    is_enabled=model.is_enabled
-                    and bool(reference.table_id)
-                    and bool(reference.app_token),
+                    app_token=app_token,
+                    table_id=table_id,
+                    is_enabled=model.is_enabled and bool(table_id) and bool(app_token),
                     enable_push_to_feishu=model.enable_push_to_feishu,
                     enable_pull_from_feishu=model.enable_pull_from_feishu,
                     field_mappings=field_mappings,
                 )
                 continue
 
-            fallback_reference = resolve_bitable_reference(
-                app_token=legacy_app_token,
-                table_id=getattr(settings, env_name, None),
-            )
+            fallback_table_id = getattr(settings, env_name, None)
             entity_configs[entity_code] = QualityFeishuEntityRuntimeConfig(
-                app_token=fallback_reference.app_token,
-                table_id=fallback_reference.table_id,
-                is_enabled=bool(
-                    fallback_reference.table_id and fallback_reference.app_token
-                ),
-                enable_push_to_feishu=bool(fallback_reference.table_id),
-                enable_pull_from_feishu=bool(fallback_reference.table_id),
+                app_token=legacy_app_token,
+                table_id=fallback_table_id,
+                is_enabled=bool(fallback_table_id and legacy_app_token),
+                enable_push_to_feishu=bool(fallback_table_id),
+                enable_pull_from_feishu=bool(fallback_table_id),
                 field_mappings={},
+            )
+
+        # 加载数据库中存在但不在 QUALITY_FEISHU_ENTITY_ENV_FALLBACKS 中的实体
+        # （如成品检验 qc_finished_internal、固体/液体物料 qc_solid_ys001 等）
+        for entity_code, model in entity_models.items():
+            if entity_code in entity_configs:
+                continue
+            table_id = (model.base_table_id or "").strip() or None
+            app_token = (model.app_token or "").strip() or legacy_app_token
+            field_mappings = {
+                str(item.get("system_field")): str(item.get("feishu_field"))
+                for item in (model.field_mappings or [])
+                if isinstance(item, dict)
+                and item.get("system_field")
+                and item.get("feishu_field")
+            }
+            entity_configs[entity_code] = QualityFeishuEntityRuntimeConfig(
+                app_token=app_token,
+                table_id=table_id,
+                is_enabled=model.is_enabled and bool(table_id) and bool(app_token),
+                enable_push_to_feishu=model.enable_push_to_feishu,
+                enable_pull_from_feishu=model.enable_pull_from_feishu,
+                field_mappings=field_mappings,
             )
 
         return QualityFeishuRuntimeConfig(
@@ -504,10 +712,10 @@ class QualityFeishuSync:
     ) -> tuple[str, str]:
         runtime = await self._resolve_runtime(db)
         entity = runtime.get_entity_config(entity_code, direction="push")
-        resolved_table_id = entity.table_id if entity else table_id
         if not runtime.is_enabled() or not entity or not entity.app_token:
             raise RuntimeError("质量模块飞书 Base 同步未启用")
-        client = build_bitable_client(
+        resolved_table_id = _require_table_id(entity)
+        client = BitableClient(
             app_token=entity.app_token,
             app_id=runtime.app_id,
             app_secret=runtime.app_secret,
@@ -527,13 +735,17 @@ class QualityFeishuSync:
             field_name: coerced_value
             for field_name, value in _map_push_fields(entity, fields).items()
             if field_name in remote_field_names
-            for coerced_value in [_coerce_remote_field_value(remote_field_map[field_name], value)]
+            for coerced_value in [
+                _coerce_remote_field_value(remote_field_map[field_name], value)
+            ]
             if coerced_value is not SKIP_REMOTE_FIELD
         }
 
         if record_id:
-            record = await client.update_record(resolved_table_id, record_id, mapped_fields)
-            return record.get("record_id") or record_id, resolved_table_id
+            record = await client.update_record(
+                resolved_table_id, record_id, mapped_fields
+            )
+            return str(record.get("record_id") or record_id), resolved_table_id
 
         search_filter = _build_search_filter(
             entity,
@@ -548,7 +760,10 @@ class QualityFeishuSync:
                 )
             except Exception as exc:  # noqa: BLE001
                 logger.warning(
-                    "Feishu search failed for %s with filter %s, fallback to create: %s",
+                    (
+                        "Feishu search failed for %s with filter "
+                        "%s, fallback to create: %s"
+                    ),
                     entity_code,
                     search_filter,
                     exc,
@@ -562,10 +777,12 @@ class QualityFeishuSync:
                         existing_id,
                         mapped_fields,
                     )
-                    return record.get("record_id") or existing_id, resolved_table_id
+                    return str(
+                        record.get("record_id") or existing_id
+                    ), resolved_table_id
 
         record = await client.create_record(resolved_table_id, mapped_fields)
-        return record.get("record_id", ""), resolved_table_id
+        return str(record.get("record_id", "")), resolved_table_id
 
     async def search_records(
         self,
@@ -574,13 +791,14 @@ class QualityFeishuSync:
         table_id: str | None = None,
         *,
         filter_str: str | None = None,
+        field_names: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         runtime = await self._resolve_runtime(db)
         entity = runtime.get_entity_config(entity_code, direction="pull")
-        resolved_table_id = entity.table_id if entity else table_id
         if not runtime.is_enabled() or not entity or not entity.app_token:
             return []
-        client = build_bitable_client(
+        resolved_table_id = _require_table_id(entity)
+        client = BitableClient(
             app_token=entity.app_token,
             app_id=runtime.app_id,
             app_secret=runtime.app_secret,
@@ -590,6 +808,7 @@ class QualityFeishuSync:
             filter_str=filter_str,
             page_size=500,
             automatic_fields=True,
+            field_names=field_names,
         )
 
 
@@ -653,7 +872,9 @@ async def _run_best_effort_sync(
     sync_coro: Any,
 ) -> None:
     runtime = await feishu_sync._resolve_runtime(db)
-    if not runtime.is_enabled() or not runtime.get_entity_config(entity_code, direction="push"):
+    if not runtime.is_enabled() or not runtime.get_entity_config(
+        entity_code, direction="push"
+    ):
         return
     try:
         await sync_coro
@@ -702,39 +923,17 @@ async def _resolve_deviation_reporter_contact(
 async def _get_department_contacts_from_feishu(
     db: AsyncSession,
 ) -> list[dict[str, Any]]:
-    from app.modules.quality.service import quality_management as quality_management_service
+    from app.modules.quality.service.department_contacts import (
+        get_department_contact_list_from_feishu,
+    )
 
-    result = await quality_management_service.get_department_contact_list_from_feishu(
+    result = await get_department_contact_list_from_feishu(
         db,
         page=1,
         page_size=1000,
     )
-    return result.get("items", [])
-
-
-async def _resolve_department_head_name(
-    db: AsyncSession, department: str | None, reporter_name: str | None = None
-) -> str:
-    normalized_department = (department or "").strip()
-    if not normalized_department:
-        return ""
-    normalized_reporter_name = (reporter_name or "").strip()
-    contacts = await _get_department_contacts_from_feishu(db)
-    for contact in contacts:
-        contact_department = str(contact.get("department") or "").strip()
-        contact_name = str(contact.get("name") or "").strip()
-        if (
-            normalized_reporter_name
-            and contact_department == normalized_department
-            and contact_name == normalized_reporter_name
-        ):
-            return str(contact.get("department_head_name") or "").strip()
-    for contact in contacts:
-        if str(contact.get("department") or "").strip() == normalized_department:
-            department_head_name = str(contact.get("department_head_name") or "").strip()
-            if department_head_name:
-                return department_head_name
-    return ""
+    items = result.get("items", [])
+    return items if isinstance(items, list) else []
 
 
 async def _resolve_contact_bitable_user_value(
@@ -755,67 +954,16 @@ async def _resolve_contact_bitable_user_value(
             contact_department = str(contact.get("department") or "").strip()
             if contact_name != normalized_name:
                 continue
-            if require_department and normalized_department and contact_department != normalized_department:
+            if (
+                require_department
+                and normalized_department
+                and contact_department != normalized_department
+            ):
                 continue
             bitable_user_id = str(contact.get("bitable_user_id") or "").strip()
             if bitable_user_id:
                 return [{"id": bitable_user_id}]
     return None
-
-
-async def sync_deviation_to_feishu(db: AsyncSession, deviation_id: uuid.UUID) -> dict[str, Any]:
-    deviation = await repository.get_deviation_by_id(db, deviation_id)
-    if not deviation:
-        raise ValueError("偏差不存在")
-    runtime = await feishu_sync._resolve_runtime(db)
-    entity = runtime.get_entity_config("deviation_ledger", direction="push")
-    current_record_id = (
-        deviation.feishu_base_record_id
-        if entity
-        and deviation.feishu_base_table_id
-        and deviation.feishu_base_table_id == entity.table_id
-        else None
-    )
-
-    related_capas = await repository.get_related_capas_for_deviation(
-        db, deviation.id, deviation.deviation_code
-    )
-    fields = {
-        "偏差编号": deviation.deviation_code,
-        "产品名称/批号": _join_non_empty([deviation.affected_items, deviation.batch_number]),
-        "偏差简要描述": deviation.description or deviation.title,
-        "偏差是否曾发生": "是" if deviation.has_occurred_before else "否",
-        "根本原因": deviation.root_cause_analysis or "",
-        "偏差等级": deviation.level or "",
-        "调查完成时间": _to_ms_timestamp(deviation.investigation_completed_at),
-        "纠正预防措施": deviation.corrective_actions or "",
-        "产品/物料处理结果": deviation.material_disposition or "",
-        "是否关闭": "是" if deviation.status == "closed" else "否",
-        "关闭时间": _to_ms_timestamp(
-            deviation.status_updated_at if deviation.status == "closed" else None
-        ),
-        "关联capa": "、".join(capa.capa_code for capa in related_capas),
-    }
-    try:
-        record_id, table_id = await feishu_sync._upsert_record(
-            db,
-            "deviation_ledger",
-            None,
-            current_record_id,
-            fields,
-            search_conditions=[("偏差编号", deviation.deviation_code)],
-        )
-        await _mark_sync_success(
-            db,
-            deviation,
-            table_id=table_id,
-            record_id=record_id,
-            direction="system_to_base",
-        )
-        return {"record_id": record_id, "table_id": table_id}
-    except Exception as exc:
-        await _mark_sync_failed(db, deviation, exc)
-        raise
 
 
 async def sync_deviation_report_record_to_feishu(
@@ -825,7 +973,7 @@ async def sync_deviation_report_record_to_feishu(
 ) -> dict[str, Any]:
     deviation = await repository.get_deviation_by_id(db, deviation_id)
     if not deviation:
-        raise ValueError("偏差不存在")
+        raise NotFoundException(resource="偏差")
     runtime = await feishu_sync._resolve_runtime(db)
     entity = runtime.get_entity_config("deviation_report_record", direction="push")
     current_record_id = target_record_id or (
@@ -836,7 +984,6 @@ async def sync_deviation_report_record_to_feishu(
         else None
     )
 
-    reporter_name = await _resolve_deviation_reporter_name(db, deviation)
     reporter_contact = await _resolve_deviation_reporter_contact(db, deviation)
     report_time = deviation.discovery_date or deviation.created_at
     fields = {
@@ -870,13 +1017,6 @@ async def auto_sync_deviation_after_write(
 ) -> None:
     await _run_best_effort_sync(
         db,
-        entity_code="deviation_ledger",
-        entity_label="deviation",
-        entity_id=deviation_id,
-        sync_coro=sync_deviation_to_feishu(db, deviation_id),
-    )
-    await _run_best_effort_sync(
-        db,
         entity_code="deviation_report_record",
         entity_label="deviation_report_record",
         entity_id=deviation_id,
@@ -887,13 +1027,14 @@ async def auto_sync_deviation_after_write(
 async def sync_capa_to_feishu(db: AsyncSession, capa_id: uuid.UUID) -> dict[str, Any]:
     capa = await repository.get_capa_by_id(db, capa_id)
     if not capa:
-        raise ValueError("CAPA不存在")
-    runtime = await feishu_sync._resolve_runtime(db)
-    entity = runtime.get_entity_config("capa_ledger", direction="push")
-
+        raise NotFoundException(resource="CAPA")
     tracks = await repository.get_capa_plan_tracks_by_capa_ids(db, [capa.id])
     started_on = capa.created_at.date() if capa.created_at else None
-    closure_on = capa.closure_date.date() if isinstance(capa.closure_date, datetime) else capa.closure_date
+    closure_on = (
+        capa.closure_date.date()
+        if isinstance(capa.closure_date, datetime)
+        else capa.closure_date
+    )
     qa_confirm_on = (
         capa.qa_confirm_date.date()
         if isinstance(capa.qa_confirm_date, datetime)
@@ -948,20 +1089,18 @@ async def sync_deviation_investigation_push_record_to_feishu(
     db: AsyncSession,
     record_id: uuid.UUID,
 ) -> dict[str, Any]:
-    record = await repository.get_deviation_investigation_push_record_by_id(db, record_id)
+    record = await repository.get_deviation_investigation_push_record_by_id(
+        db, record_id
+    )
     if not record:
-        raise ValueError("偏差调查推送记录不存在")
-    runtime = await feishu_sync._resolve_runtime(db)
-    entity = runtime.get_entity_config("deviation_investigation_push_record", direction="push")
+        raise NotFoundException(resource="偏差调查推送记录")
     deviation = await repository.get_deviation_by_id(db, record.deviation_id)
     department = deviation.department if deviation else None
 
     fields = {
         "偏差编号": record.deviation_code,
         "第N次推送": record.push_round,
-        "偏差调查报告": _to_feishu_url_field_value(
-            record.investigation_report_url
-        ),
+        "偏差调查报告": _to_feishu_url_field_value(record.investigation_report_url),
         "提交日期": _to_ms_timestamp(record.submitted_at),
         "提交人": await _resolve_contact_bitable_user_value(
             db,
@@ -1020,10 +1159,7 @@ async def sync_capa_plan_track_to_feishu(
 ) -> dict[str, Any]:
     track = await repository.get_capa_plan_track_by_id(db, track_id)
     if not track:
-        raise ValueError("CAPA计划跟踪不存在")
-    runtime = await feishu_sync._resolve_runtime(db)
-    entity = runtime.get_entity_config("capa_plan_track", direction="push")
-
+        raise NotFoundException(resource="CAPA计划跟踪")
     fields = {
         "CAPA编号": track.capa_code,
         "计划内容": track.plan_content,
@@ -1043,7 +1179,10 @@ async def sync_capa_plan_track_to_feishu(
             None,
             track.feishu_base_record_id,
             fields,
-            search_conditions=[("CAPA编号", track.capa_code), ("计划内容", track.plan_content)],
+            search_conditions=[
+                ("CAPA编号", track.capa_code),
+                ("计划内容", track.plan_content),
+            ],
         )
         await _mark_sync_success(
             db,
@@ -1070,40 +1209,79 @@ async def auto_sync_capa_plan_track_after_write(
     )
 
 
-def _extract_feishu_link(value: Any) -> str | None:
-    if value in (None, "", []):
-        return None
-    if isinstance(value, str):
-        text = value.strip()
-        return text or None
-    if isinstance(value, list):
-        for item in value:
-            extracted = _extract_feishu_link(item)
-            if extracted:
-                return extracted
-        return None
-    if isinstance(value, dict):
-        for key in ("link", "url", "href", "value", "text", "name"):
-            if key in value:
-                extracted = _extract_feishu_link(value[key])
-                if extracted:
-                    return extracted
-        return None
-    return str(value).strip() or None
+async def sync_deviation_to_feishu(
+    db: AsyncSession,
+    deviation_id: uuid.UUID,
+) -> dict[str, Any]:
+    """Push one local deviation to the configured deviation ledger.
+
+    This compatibility entry point retains the old record-id rule: a remote
+    record may only be updated when its saved table id still matches the
+    current runtime table, otherwise the upsert starts a new remote record.
+    """
+    deviation = await repository.get_deviation_by_id(db, deviation_id)
+    if not deviation:
+        raise ValueError("偏差不存在")
+    runtime = await feishu_sync._resolve_runtime(db)
+    entity = runtime.get_entity_config("deviation_ledger", direction="push")
+    current_record_id = (
+        deviation.feishu_base_record_id
+        if entity and deviation.feishu_base_table_id == entity.table_id
+        else None
+    )
+    related_capas = await repository.get_related_capas_for_deviation(
+        db, deviation.id, deviation.deviation_code
+    )
+    fields = {
+        "偏差编号": deviation.deviation_code,
+        "产品名称/批号": _join_non_empty(
+            [deviation.affected_items, deviation.batch_number]
+        ),
+        "偏差简要描述": deviation.description or deviation.title,
+        "偏差是否曾发生": "是" if deviation.has_occurred_before else "否",
+        "根本原因": deviation.root_cause_analysis or "",
+        "偏差等级": deviation.level or "",
+        "调查完成时间": _to_ms_timestamp(deviation.investigation_completed_at),
+        "纠正预防措施": deviation.corrective_actions or "",
+        "产品/物料处理结果": deviation.material_disposition or "",
+        "是否关闭": "是" if deviation.status == "closed" else "否",
+        "关闭时间": _to_ms_timestamp(
+            deviation.status_updated_at if deviation.status == "closed" else None
+        ),
+        "关联capa": "、".join(related_capa.capa_code for related_capa in related_capas),
+    }
+    record_id, table_id = await feishu_sync._upsert_record(
+        db,
+        "deviation_ledger",
+        None,
+        current_record_id,
+        fields,
+        search_conditions=[("偏差编号", deviation.deviation_code)],
+    )
+    await _mark_sync_success(
+        db,
+        deviation,
+        table_id=table_id,
+        record_id=record_id,
+        direction="system_to_base",
+    )
+    return {"record_id": record_id, "table_id": table_id}
 
 
 async def _sync_deviation_investigation_push_records_from_feishu(
     db: AsyncSession,
-    entity: QualityFeishuEntityRuntimeConfig,
+    entity: QualityFeishuEntityRuntimeConfig | None,
     records: list[dict[str, Any]],
 ) -> tuple[int, int, int]:
+    """Refresh existing local push-record snapshots without creating locals."""
+    if entity is None:
+        return 0, 0, 0
     synced = 0
     failed = 0
     conflicts = 0
-
-    for remote_record in records:
-        fields = remote_record.get("fields") or {}
-        source_updated_at = _get_record_modified_at(remote_record)
+    for remote in records:
+        fields = remote.get("fields") or {}
+        record_id = str(remote.get("record_id") or "")
         deviation_code = _normalize_text(
             _get_mapped_field_value(entity, fields, "偏差编号")
         )
@@ -1114,53 +1292,42 @@ async def _sync_deviation_investigation_push_records_from_feishu(
         if not deviation_code:
             failed += 1
             continue
-
-        local_record = None
-        record_id = remote_record.get("record_id")
-        if record_id:
-            result = await db.execute(
-                select(DeviationInvestigationPushRecord).where(
-                    DeviationInvestigationPushRecord.is_deleted == False,
-                    DeviationInvestigationPushRecord.feishu_base_record_id == record_id,
-                )
-            )
-            local_record = result.scalar_one_or_none()
-
         deviation = await repository.get_deviation_by_code(db, deviation_code)
-        if not local_record and deviation:
-            local_record = (
-                await repository.get_deviation_investigation_push_record_by_deviation_and_round(
-                    db,
-                    deviation.id,
-                    push_round,
+        if deviation is None:
+            # Feishu remains the source for this record, but without a local
+            # deviation there is no safe FK target for a local snapshot.
+            synced += 1
+            continue
+        local_record = None
+        if record_id:
+            push_result = await db.execute(
+                select(DeviationInvestigationPushRecord).where(
+                    DeviationInvestigationPushRecord.feishu_base_record_id == record_id,
+                    DeviationInvestigationPushRecord.is_deleted.is_(False),
                 )
             )
-
-        if not local_record:
-            if not deviation:
-                synced += 1
-                continue
-            local_record = await repository.create_deviation_investigation_push_record(
-                db,
-                {
-                    "deviation_id": deviation.id,
-                    "deviation_code": deviation_code,
-                    "push_round": push_round,
-                },
+            local_record = push_result.scalar_one_or_none()
+        if local_record is None:
+            get_push_record = getattr(
+                repository,
+                "get_deviation_investigation_push_record_by_deviation_and_round",
             )
-
+            local_record = await get_push_record(db, deviation.id, push_round)
+        if local_record is None:
+            synced += 1
+            continue
+        source_updated_at = _get_record_modified_at(remote)
         if _should_mark_conflict(local_record, source_updated_at):
             await _mark_sync_conflict(
                 db,
                 local_record,
-                table_id=entity.table_id,
+                table_id=_require_table_id(entity),
                 record_id=record_id,
                 source_updated_at=source_updated_at,
                 direction="base_to_system",
             )
             conflicts += 1
             continue
-
         await repository.update_deviation_investigation_push_record(
             db,
             local_record,
@@ -1185,7 +1352,9 @@ async def _sync_deviation_investigation_push_records_from_feishu(
                 "department_head_reviewed_at": _parse_feishu_datetime(
                     _get_mapped_field_value(entity, fields, "部门负责人审核时间")
                 ),
-                "qa_name": _normalize_text(_get_mapped_field_value(entity, fields, "QA")),
+                "qa_name": _normalize_text(
+                    _get_mapped_field_value(entity, fields, "QA")
+                ),
                 "qa_result": _normalize_review_result(
                     _get_mapped_field_value(entity, fields, "QA审核结果")
                 ),
@@ -1206,13 +1375,12 @@ async def _sync_deviation_investigation_push_records_from_feishu(
         await _mark_sync_success(
             db,
             local_record,
-            table_id=entity.table_id,
-            record_id=record_id or "",
+            table_id=_require_table_id(entity),
+            record_id=record_id,
             direction="base_to_system",
             source_updated_at=source_updated_at,
         )
         synced += 1
-
     return synced, failed, conflicts
 
 
@@ -1222,7 +1390,7 @@ async def pull_quality_records_from_feishu(
 ) -> dict[str, int | str | None]:
     runtime = await feishu_sync._resolve_runtime(db)
     if not runtime.is_enabled():
-        raise ValueError("质量模块飞书 Base 同步未启用")
+        raise AppException(message="质量模块飞书 Base 同步未启用")
 
     if entity_code and entity_code not in QUALITY_PULL_ENTITY_LABELS:
         raise ValueError("不支持的飞书回拉实体")
@@ -1233,111 +1401,129 @@ async def pull_quality_records_from_feishu(
     deviation_entity = runtime.get_entity_config("deviation_ledger", direction="pull")
     capa_entity = runtime.get_entity_config("capa_ledger", direction="pull")
     plan_entity = runtime.get_entity_config("capa_plan_track", direction="pull")
-    report_entity = runtime.get_entity_config("deviation_investigation_push_record", direction="pull")
-    report_record_entity = runtime.get_entity_config("deviation_report_record", direction="pull")
+    report_entity = runtime.get_entity_config(
+        "deviation_investigation_push_record", direction="pull"
+    )
+    report_record_entity = runtime.get_entity_config(
+        "deviation_report_record", direction="pull"
+    )
 
     if entity_code == "deviation_ledger" and not deviation_entity:
-        raise ValueError("偏差台账飞书 Base 回拉未启用")
+        raise AppException(message="偏差台账飞书 Base 回拉未启用")
     if entity_code == "capa_ledger" and not capa_entity:
-        raise ValueError("CAPA台账飞书 Base 回拉未启用")
+        raise AppException(message="CAPA台账飞书 Base 回拉未启用")
     if entity_code == "capa_plan_track" and not plan_entity:
-        raise ValueError("CAPA计划跟踪飞书 Base 回拉未启用")
+        raise AppException(message="CAPA计划跟踪飞书 Base 回拉未启用")
     if entity_code == "deviation_investigation_push_record" and not report_entity:
-        raise ValueError("调查推送飞书 Base 回拉未启用")
+        raise AppException(message="调查推送飞书 Base 回拉未启用")
     if entity_code == "deviation_report_record" and not report_record_entity:
-        raise ValueError("报告记录飞书 Base 回拉未启用")
+        raise AppException(message="报告记录飞书 Base 回拉未启用")
 
     deviation_records = (
-        await feishu_sync.search_records(
-            db,
-            "deviation_ledger",
-            None,
-        )
+        await feishu_sync.search_records(db, "deviation_ledger", None)
         if deviation_entity and entity_code in (None, "deviation_ledger")
         else []
     )
     for record in deviation_records:
-        fields = record.get("fields", {})
+        if deviation_entity is None:
+            continue
+        fields = record.get("fields") or {}
         source_updated_at = _get_record_modified_at(record)
         deviation = None
-        code = None
         if record.get("record_id"):
             result = await db.execute(
                 select(Deviation).where(
                     Deviation.feishu_base_record_id == record["record_id"],
-                    Deviation.is_deleted == False,
+                    Deviation.is_deleted.is_(False),
                 )
             )
             deviation = result.scalar_one_or_none()
-        if not deviation:
-            code = _normalize_text(_get_mapped_field_value(deviation_entity, fields, "偏差编号"))
-            if code:
-                deviation = await repository.get_deviation_by_code(db, code)
-        if not deviation:
-            code = code or _normalize_text(_get_mapped_field_value(deviation_entity, fields, "偏差编号"))
+        code = _normalize_text(
+            _get_mapped_field_value(deviation_entity, fields, "偏差编号")
+        )
+        if deviation is None and code:
+            deviation = await repository.get_deviation_by_code(db, code)
+        if deviation is None:
             if not code:
                 failed += 1
                 continue
-            description = _normalize_text(_get_mapped_field_value(deviation_entity, fields, "偏差简要描述"))
-            product_and_batch = _normalize_text(_get_mapped_field_value(deviation_entity, fields, "产品名称/批号"))
-            discovery_at = _parse_feishu_datetime(_get_mapped_field_value(deviation_entity, fields, "调查完成时间"))
             try:
                 deviation = await repository.create_deviation(
                     db,
                     {
                         "deviation_code": code,
-                        "title": description or code,
+                        "title": _normalize_text(
+                            _get_mapped_field_value(
+                                deviation_entity, fields, "偏差简要描述"
+                            )
+                        )
+                        or code,
+                        "description": _normalize_text(
+                            _get_mapped_field_value(
+                                deviation_entity, fields, "偏差简要描述"
+                            )
+                        ),
                         "status": "closed"
-                        if _normalize_bool_from_yes_no(_get_mapped_field_value(deviation_entity, fields, "是否关闭"))
+                        if _normalize_bool_from_yes_no(
+                            _get_mapped_field_value(
+                                deviation_entity, fields, "是否关闭"
+                            )
+                        )
                         else "draft",
-                        "description": description,
-                        "level": _normalize_text(_get_mapped_field_value(deviation_entity, fields, "偏差等级")),
-                        "affected_items": product_and_batch,
-                        "root_cause_analysis": _normalize_text(_get_mapped_field_value(deviation_entity, fields, "根本原因")),
-                        "corrective_actions": _normalize_text(_get_mapped_field_value(deviation_entity, fields, "纠正预防措施")),
-                        "material_disposition": _normalize_text(_get_mapped_field_value(deviation_entity, fields, "产品/物料处理结果")),
-                        "has_occurred_before": _normalize_bool_from_yes_no(_get_mapped_field_value(deviation_entity, fields, "偏差是否曾发生")),
-                        "investigation_completed_at": discovery_at,
-                        "status_updated_at": discovery_at,
                     },
                 )
             except IntegrityError:
-                # Another sync path may already have inserted the same deviation code.
                 await db.rollback()
                 deviation = await repository.get_deviation_by_code(db, code)
-                if not deviation:
+                if deviation is None:
                     raise
+        if deviation is None:
+            failed += 1
+            continue
         if _should_mark_conflict(deviation, source_updated_at):
             await _mark_sync_conflict(
                 db,
                 deviation,
-                table_id=deviation_entity.table_id,
+                table_id=_require_table_id(deviation_entity),
                 record_id=record.get("record_id"),
                 source_updated_at=source_updated_at,
                 direction="base_to_system",
             )
             conflicts += 1
             continue
-
-        product_and_batch = _normalize_text(_get_mapped_field_value(deviation_entity, fields, "产品名称/批号"))
-        has_before = _normalize_bool_from_yes_no(_get_mapped_field_value(deviation_entity, fields, "偏差是否曾发生"))
-        closed = _normalize_bool_from_yes_no(_get_mapped_field_value(deviation_entity, fields, "是否关闭"))
-        deviation.affected_items = product_and_batch or deviation.affected_items
-        deviation.description = _normalize_text(_get_mapped_field_value(deviation_entity, fields, "偏差简要描述")) or deviation.description
-        deviation.root_cause_analysis = _normalize_text(_get_mapped_field_value(deviation_entity, fields, "根本原因")) or deviation.root_cause_analysis
-        deviation.level = _normalize_text(_get_mapped_field_value(deviation_entity, fields, "偏差等级")) or deviation.level
-        deviation.corrective_actions = _normalize_text(_get_mapped_field_value(deviation_entity, fields, "纠正预防措施")) or deviation.corrective_actions
-        deviation.material_disposition = _normalize_text(_get_mapped_field_value(deviation_entity, fields, "产品/物料处理结果")) or deviation.material_disposition
-        deviation.investigation_completed_at = _parse_feishu_datetime(_get_mapped_field_value(deviation_entity, fields, "调查完成时间")) or deviation.investigation_completed_at
-        if has_before is not None:
-            deviation.has_occurred_before = has_before
+        deviation.description = (
+            _normalize_text(
+                _get_mapped_field_value(deviation_entity, fields, "偏差简要描述")
+            )
+            or deviation.description
+        )
+        deviation.affected_items = (
+            _normalize_text(
+                _get_mapped_field_value(deviation_entity, fields, "产品名称/批号")
+            )
+            or deviation.affected_items
+        )
+        deviation.root_cause_analysis = (
+            _normalize_text(
+                _get_mapped_field_value(deviation_entity, fields, "根本原因")
+            )
+            or deviation.root_cause_analysis
+        )
+        closed = _normalize_bool_from_yes_no(
+            _get_mapped_field_value(deviation_entity, fields, "是否关闭")
+        )
         if closed:
             deviation.status = "closed"
-            deviation.status_updated_at = _parse_feishu_datetime(_get_mapped_field_value(deviation_entity, fields, "关闭时间")) or datetime.now(UTC)
+            deviation.status_updated_at = (
+                _parse_feishu_datetime(
+                    _get_mapped_field_value(deviation_entity, fields, "关闭时间")
+                )
+                or deviation.status_updated_at
+            )
         await _mark_sync_success(
             db,
             deviation,
-            table_id=deviation_entity.table_id,
+            table_id=_require_table_id(deviation_entity),
             record_id=record.get("record_id", ""),
             direction="base_to_system",
             source_updated_at=source_updated_at,
@@ -1354,49 +1540,75 @@ async def pull_quality_records_from_feishu(
         else []
     )
     for record in capa_records:
+        if capa_entity is None:
+            continue
         fields = record.get("fields", {})
         source_updated_at = _get_record_modified_at(record)
-        capa = None
+        capa: CAPA | None = None
         if record.get("record_id"):
-            result = await db.execute(
+            capa_result = await db.execute(
                 select(CAPA).where(
                     CAPA.feishu_base_record_id == record["record_id"],
-                    CAPA.is_deleted == False,
+                    CAPA.is_deleted.is_(False),
                 )
             )
-            capa = result.scalar_one_or_none()
+            capa = capa_result.scalar_one_or_none()
         if not capa:
-            code = _normalize_text(_get_mapped_field_value(capa_entity, fields, "CAPA编号"))
+            code = _normalize_text(
+                _get_mapped_field_value(capa_entity, fields, "CAPA编号")
+            )
             if code:
                 capa = await repository.get_capa_by_code(db, code)
         if not capa:
-            code = _normalize_text(_get_mapped_field_value(capa_entity, fields, "CAPA编号"))
+            code = _normalize_text(
+                _get_mapped_field_value(capa_entity, fields, "CAPA编号")
+            )
             if not code:
                 failed += 1
                 continue
-            capa_content = _normalize_text(_get_mapped_field_value(capa_entity, fields, "CAPA简述"))
-            closure_at = _parse_feishu_datetime(_get_mapped_field_value(capa_entity, fields, "关闭日期"))
+            capa_content = _normalize_text(
+                _get_mapped_field_value(capa_entity, fields, "CAPA简述")
+            )
+            closure_at = _parse_feishu_datetime(
+                _get_mapped_field_value(capa_entity, fields, "关闭日期")
+            )
             capa = await repository.create_capa(
                 db,
                 {
                     "capa_code": code,
                     "title": capa_content or code,
-                    "status": _normalize_text(_get_mapped_field_value(capa_entity, fields, "CAPA状态")) or "draft",
-                    "department": _normalize_text(_get_mapped_field_value(capa_entity, fields, "事件部门")),
-                    "affected_product": _normalize_text(_get_mapped_field_value(capa_entity, fields, "涉及产品")),
+                    "status": _normalize_text(
+                        _get_mapped_field_value(capa_entity, fields, "CAPA状态")
+                    )
+                    or "draft",
+                    "department": _normalize_text(
+                        _get_mapped_field_value(capa_entity, fields, "事件部门")
+                    ),
+                    "affected_product": _normalize_text(
+                        _get_mapped_field_value(capa_entity, fields, "涉及产品")
+                    ),
                     "capa_content": capa_content,
-                    "evaluation_result": _normalize_text(_get_mapped_field_value(capa_entity, fields, "CAPA效果评估")),
-                    "qa_confirmer": _normalize_text(_get_mapped_field_value(capa_entity, fields, "QA质量员")),
-                    "qa_confirm_date": _parse_feishu_datetime(_get_mapped_field_value(capa_entity, fields, "QA质量员确认日期")),
+                    "evaluation_result": _normalize_text(
+                        _get_mapped_field_value(capa_entity, fields, "CAPA效果评估")
+                    ),
+                    "qa_confirmer": _normalize_text(
+                        _get_mapped_field_value(capa_entity, fields, "QA质量员")
+                    ),
+                    "qa_confirm_date": _parse_feishu_datetime(
+                        _get_mapped_field_value(capa_entity, fields, "QA质量员确认日期")
+                    ),
                     "closure_date": closure_at,
                     "status_updated_at": closure_at,
                 },
             )
+        if capa is None:
+            failed += 1
+            continue
         if _should_mark_conflict(capa, source_updated_at):
             await _mark_sync_conflict(
                 db,
                 capa,
-                table_id=capa_entity.table_id,
+                table_id=_require_table_id(capa_entity),
                 record_id=record.get("record_id"),
                 source_updated_at=source_updated_at,
                 direction="base_to_system",
@@ -1404,18 +1616,48 @@ async def pull_quality_records_from_feishu(
             conflicts += 1
             continue
 
-        capa.department = _normalize_text(_get_mapped_field_value(capa_entity, fields, "事件部门")) or capa.department
-        capa.affected_product = _normalize_text(_get_mapped_field_value(capa_entity, fields, "涉及产品")) or capa.affected_product
-        capa.capa_content = _normalize_text(_get_mapped_field_value(capa_entity, fields, "CAPA简述")) or capa.capa_content
-        capa.evaluation_result = _normalize_text(_get_mapped_field_value(capa_entity, fields, "CAPA效果评估")) or capa.evaluation_result
-        capa.qa_confirmer = _normalize_text(_get_mapped_field_value(capa_entity, fields, "QA质量员")) or capa.qa_confirmer
-        capa.qa_confirm_date = _parse_feishu_datetime(_get_mapped_field_value(capa_entity, fields, "QA质量员确认日期")) or capa.qa_confirm_date
-        capa.closure_date = _parse_feishu_datetime(_get_mapped_field_value(capa_entity, fields, "关闭日期")) or capa.closure_date
-        capa.status = _normalize_text(_get_mapped_field_value(capa_entity, fields, "CAPA状态")) or capa.status
+        capa.department = (
+            _normalize_text(_get_mapped_field_value(capa_entity, fields, "事件部门"))
+            or capa.department
+        )
+        capa.affected_product = (
+            _normalize_text(_get_mapped_field_value(capa_entity, fields, "涉及产品"))
+            or capa.affected_product
+        )
+        capa.capa_content = (
+            _normalize_text(_get_mapped_field_value(capa_entity, fields, "CAPA简述"))
+            or capa.capa_content
+        )
+        capa.evaluation_result = (
+            _normalize_text(
+                _get_mapped_field_value(capa_entity, fields, "CAPA效果评估")
+            )
+            or capa.evaluation_result
+        )
+        capa.qa_confirmer = (
+            _normalize_text(_get_mapped_field_value(capa_entity, fields, "QA质量员"))
+            or capa.qa_confirmer
+        )
+        capa.qa_confirm_date = (
+            _parse_feishu_datetime(
+                _get_mapped_field_value(capa_entity, fields, "QA质量员确认日期")
+            )
+            or capa.qa_confirm_date
+        )
+        capa.closure_date = (
+            _parse_feishu_datetime(
+                _get_mapped_field_value(capa_entity, fields, "关闭日期")
+            )
+            or capa.closure_date
+        )
+        capa.status = (
+            _normalize_text(_get_mapped_field_value(capa_entity, fields, "CAPA状态"))
+            or capa.status
+        )
         await _mark_sync_success(
             db,
             capa,
-            table_id=capa_entity.table_id,
+            table_id=_require_table_id(capa_entity),
             record_id=record.get("record_id", ""),
             direction="base_to_system",
             source_updated_at=source_updated_at,
@@ -1432,21 +1674,27 @@ async def pull_quality_records_from_feishu(
         else []
     )
     for record in plan_records:
+        if plan_entity is None:
+            continue
         fields = record.get("fields", {})
         source_updated_at = _get_record_modified_at(record)
-        capa_code = _normalize_text(_get_mapped_field_value(plan_entity, fields, "CAPA编号"))
-        plan_content = _normalize_text(_get_mapped_field_value(plan_entity, fields, "计划内容"))
+        capa_code = _normalize_text(
+            _get_mapped_field_value(plan_entity, fields, "CAPA编号")
+        )
+        plan_content = _normalize_text(
+            _get_mapped_field_value(plan_entity, fields, "计划内容")
+        )
         if not capa_code or not plan_content:
             failed += 1
             continue
 
-        result = await db.execute(
+        plan_result = await db.execute(
             select(CapaPlanTrack).where(
-                CapaPlanTrack.is_deleted == False,
+                CapaPlanTrack.is_deleted.is_(False),
                 (
                     (CapaPlanTrack.feishu_base_record_id == record.get("record_id"))
                     if record.get("record_id")
-                    else False
+                    else false()
                 )
                 | (
                     (CapaPlanTrack.capa_code == capa_code)
@@ -1454,7 +1702,7 @@ async def pull_quality_records_from_feishu(
                 ),
             )
         )
-        track = result.scalar_one_or_none()
+        track: CapaPlanTrack | None = plan_result.scalar_one_or_none()
         if not track:
             capa = await repository.get_capa_by_code(db, capa_code)
             if not capa:
@@ -1466,7 +1714,9 @@ async def pull_quality_records_from_feishu(
                         "status": "draft",
                     },
                 )
-            due_date = _parse_feishu_datetime(_get_mapped_field_value(plan_entity, fields, "完成时间"))
+            due_date = _parse_feishu_datetime(
+                _get_mapped_field_value(plan_entity, fields, "完成时间")
+            )
             track = await repository.create_capa_plan_track(
                 db,
                 {
@@ -1474,19 +1724,34 @@ async def pull_quality_records_from_feishu(
                     "capa_code": capa.capa_code,
                     "plan_content": plan_content,
                     "due_date": due_date.date() if due_date else None,
-                    "owner_name": _normalize_text(_get_mapped_field_value(plan_entity, fields, "责任人")),
-                    "owner_confirmed": _normalize_bool_from_yes_no(_get_mapped_field_value(plan_entity, fields, "责任人确认")) or False,
-                    "department_head": _normalize_text(_get_mapped_field_value(plan_entity, fields, "部门负责人")),
-                    "department_head_confirmed": _normalize_bool_from_yes_no(_get_mapped_field_value(plan_entity, fields, "部门负责人确认")) or False,
-                    "progress": _normalize_text(_get_mapped_field_value(plan_entity, fields, "进度")),
-                    "reminder_status": _normalize_text(_get_mapped_field_value(plan_entity, fields, "提醒状态")) or "pending",
+                    "owner_name": _normalize_text(
+                        _get_mapped_field_value(plan_entity, fields, "责任人")
+                    ),
+                    "owner_confirmed": _normalize_bool_from_yes_no(
+                        _get_mapped_field_value(plan_entity, fields, "责任人确认")
+                    )
+                    or False,
+                    "department_head": _normalize_text(
+                        _get_mapped_field_value(plan_entity, fields, "部门负责人")
+                    ),
+                    "department_head_confirmed": _normalize_bool_from_yes_no(
+                        _get_mapped_field_value(plan_entity, fields, "部门负责人确认")
+                    )
+                    or False,
+                    "progress": _normalize_text(
+                        _get_mapped_field_value(plan_entity, fields, "进度")
+                    ),
+                    "reminder_status": _normalize_text(
+                        _get_mapped_field_value(plan_entity, fields, "提醒状态")
+                    )
+                    or "pending",
                 },
             )
         if _should_mark_conflict(track, source_updated_at):
             await _mark_sync_conflict(
                 db,
                 track,
-                table_id=plan_entity.table_id,
+                table_id=_require_table_id(plan_entity),
                 record_id=record.get("record_id"),
                 source_updated_at=source_updated_at,
                 direction="base_to_system",
@@ -1494,22 +1759,40 @@ async def pull_quality_records_from_feishu(
             conflicts += 1
             continue
 
-        track.owner_name = _normalize_text(_get_mapped_field_value(plan_entity, fields, "责任人")) or track.owner_name
-        owner_confirmed = _normalize_bool_from_yes_no(_get_mapped_field_value(plan_entity, fields, "责任人确认"))
+        track.owner_name = (
+            _normalize_text(_get_mapped_field_value(plan_entity, fields, "责任人"))
+            or track.owner_name
+        )
+        owner_confirmed = _normalize_bool_from_yes_no(
+            _get_mapped_field_value(plan_entity, fields, "责任人确认")
+        )
         if owner_confirmed is not None:
             track.owner_confirmed = owner_confirmed
-        track.department_head = _normalize_text(_get_mapped_field_value(plan_entity, fields, "部门负责人")) or track.department_head
-        dept_head_confirmed = _normalize_bool_from_yes_no(_get_mapped_field_value(plan_entity, fields, "部门负责人确认"))
+        track.department_head = (
+            _normalize_text(_get_mapped_field_value(plan_entity, fields, "部门负责人"))
+            or track.department_head
+        )
+        dept_head_confirmed = _normalize_bool_from_yes_no(
+            _get_mapped_field_value(plan_entity, fields, "部门负责人确认")
+        )
         if dept_head_confirmed is not None:
             track.department_head_confirmed = dept_head_confirmed
-        track.progress = _normalize_text(_get_mapped_field_value(plan_entity, fields, "进度")) or track.progress
-        track.reminder_status = _normalize_text(_get_mapped_field_value(plan_entity, fields, "提醒状态")) or track.reminder_status
-        due_date = _parse_feishu_datetime(_get_mapped_field_value(plan_entity, fields, "完成时间"))
+        track.progress = (
+            _normalize_text(_get_mapped_field_value(plan_entity, fields, "进度"))
+            or track.progress
+        )
+        track.reminder_status = (
+            _normalize_text(_get_mapped_field_value(plan_entity, fields, "提醒状态"))
+            or track.reminder_status
+        )
+        due_date = _parse_feishu_datetime(
+            _get_mapped_field_value(plan_entity, fields, "完成时间")
+        )
         track.due_date = due_date.date() if due_date else track.due_date
         await _mark_sync_success(
             db,
             track,
-            table_id=plan_entity.table_id,
+            table_id=_require_table_id(plan_entity),
             record_id=record.get("record_id", ""),
             direction="base_to_system",
             source_updated_at=source_updated_at,
@@ -1522,7 +1805,8 @@ async def pull_quality_records_from_feishu(
             "deviation_investigation_push_record",
             None,
         )
-        if report_entity and entity_code in (None, "deviation_investigation_push_record")
+        if report_entity
+        and entity_code in (None, "deviation_investigation_push_record")
         else []
     )
     if entity_code in (None, "deviation_investigation_push_record"):
@@ -1531,9 +1815,7 @@ async def pull_quality_records_from_feishu(
             push_failed,
             push_conflicts,
         ) = await _sync_deviation_investigation_push_records_from_feishu(
-            db,
-            report_entity,
-            deviation_report_records,
+            db, report_entity, deviation_report_records
         )
         synced += push_synced
         failed += push_failed
@@ -1553,7 +1835,9 @@ async def pull_quality_records_from_feishu(
 
     return {
         "entity_code": entity_code,
-        "entity_label": QUALITY_PULL_ENTITY_LABELS.get(entity_code) if entity_code else None,
+        "entity_label": QUALITY_PULL_ENTITY_LABELS.get(entity_code)
+        if entity_code
+        else None,
         "synced": synced,
         "failed": failed,
         "conflicts": conflicts,
@@ -1595,16 +1879,20 @@ async def get_quality_sync_conflicts(
     results: list[dict[str, Any]] = []
 
     deviations = (
-        await db.execute(
-            select(Deviation)
-            .where(
-                Deviation.is_deleted == False,
-                Deviation.feishu_sync_status == "conflict",
+        (
+            await db.execute(
+                select(Deviation)
+                .where(
+                    Deviation.is_deleted.is_(False),
+                    Deviation.feishu_sync_status == "conflict",
+                )
+                .order_by(Deviation.updated_at.desc())
+                .limit(limit)
             )
-            .order_by(Deviation.updated_at.desc())
-            .limit(limit)
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     results.extend(
         _build_conflict_item(
             entity_type="deviation",
@@ -1619,13 +1907,19 @@ async def get_quality_sync_conflicts(
     )
 
     capas = (
-        await db.execute(
-            select(CAPA)
-            .where(CAPA.is_deleted == False, CAPA.feishu_sync_status == "conflict")
-            .order_by(CAPA.updated_at.desc())
-            .limit(limit)
+        (
+            await db.execute(
+                select(CAPA)
+                .where(
+                    CAPA.is_deleted.is_(False), CAPA.feishu_sync_status == "conflict"
+                )
+                .order_by(CAPA.updated_at.desc())
+                .limit(limit)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     results.extend(
         _build_conflict_item(
             entity_type="capa",
@@ -1640,16 +1934,20 @@ async def get_quality_sync_conflicts(
     )
 
     push_records = (
-        await db.execute(
-            select(DeviationInvestigationPushRecord)
-            .where(
-                DeviationInvestigationPushRecord.is_deleted == False,
-                DeviationInvestigationPushRecord.feishu_sync_status == "conflict",
+        (
+            await db.execute(
+                select(DeviationInvestigationPushRecord)
+                .where(
+                    DeviationInvestigationPushRecord.is_deleted.is_(False),
+                    DeviationInvestigationPushRecord.feishu_sync_status == "conflict",
+                )
+                .order_by(DeviationInvestigationPushRecord.updated_at.desc())
+                .limit(limit)
             )
-            .order_by(DeviationInvestigationPushRecord.updated_at.desc())
-            .limit(limit)
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     results.extend(
         _build_conflict_item(
             entity_type="deviation_investigation_push_record",
@@ -1664,16 +1962,20 @@ async def get_quality_sync_conflicts(
     )
 
     plan_tracks = (
-        await db.execute(
-            select(CapaPlanTrack)
-            .where(
-                CapaPlanTrack.is_deleted == False,
-                CapaPlanTrack.feishu_sync_status == "conflict",
+        (
+            await db.execute(
+                select(CapaPlanTrack)
+                .where(
+                    CapaPlanTrack.is_deleted.is_(False),
+                    CapaPlanTrack.feishu_sync_status == "conflict",
+                )
+                .order_by(CapaPlanTrack.updated_at.desc())
+                .limit(limit)
             )
-            .order_by(CapaPlanTrack.updated_at.desc())
-            .limit(limit)
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     results.extend(
         _build_conflict_item(
             entity_type="capa_plan_track",

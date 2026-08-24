@@ -33,14 +33,18 @@ def _extract_text(value: Any) -> str:
     - {"type": 2, "value": [123]} → "123"
     """
     if isinstance(value, list) and len(value) > 0 and isinstance(value[0], dict):
-        return value[0].get("text", "")
+        return str(value[0].get("text", ""))
     if isinstance(value, dict):
         if "text" in value:
-            return value.get("text", "")
-        if "value" in value and isinstance(value["value"], list) and len(value["value"]) > 0:
+            return str(value.get("text", ""))
+        if (
+            "value" in value
+            and isinstance(value["value"], list)
+            and len(value["value"]) > 0
+        ):
             inner = value["value"][0]
             if isinstance(inner, dict) and "text" in inner:
-                return inner.get("text", "")
+                return str(inner.get("text", ""))
             return str(inner)
     if isinstance(value, str):
         return value
@@ -54,9 +58,9 @@ def _extract_number(value: Any) -> int | float | None:
     if isinstance(value, dict) and "value" in value:
         v = value["value"]
         if isinstance(v, list) and len(v) > 0:
-            return v[0]
+            return v[0] if isinstance(v[0], (int, float)) else None
     if isinstance(value, list) and len(value) > 0:
-        return value[0]
+        return value[0] if isinstance(value[0], (int, float)) else None
     return None
 
 
@@ -73,12 +77,17 @@ def _extract_email(value: Any) -> str:
     """Extract email from Feishu URL format."""
     if isinstance(value, dict):
         if "text" in value:
-            return value["text"]
+            return str(value["text"])
         if "link" in value:
             link = value["link"]
             if isinstance(link, str) and link.startswith("mailto:"):
                 return link[7:]
     return _extract_text(value)
+
+
+def _extract_int(value: Any) -> int | None:
+    number = _extract_number(value)
+    return int(number) if number is not None else None
 
 
 def _ms_to_date(value: Any) -> date | None:
@@ -93,8 +102,8 @@ class OnboardingBitableDataSource:
 
     def __init__(self) -> None:
         self.client = BitableClient()
-        self.client.app_token = _settings.FEISHU_BITABLE_APP_TOKEN or "KHLsboPBGaah6Vs3EpgcpvzsnuH"
-        self.table_id = _settings.FEISHU_BITABLE_ONBOARDING_TABLE_ID or "tblb7CpwKUW25ONC"
+        self.client.app_token = _settings.FEISHU_BITABLE_APP_TOKEN
+        self.table_id = _settings.FEISHU_BITABLE_ONBOARDING_TABLE_ID
 
     def _is_enabled(self) -> bool:
         return bool(self.client.app_token and self.table_id)
@@ -117,7 +126,7 @@ class OnboardingBitableDataSource:
 
     async def _create(self, fields: dict[str, Any]) -> str:
         record = await self.client.create_record(self.table_id, fields)
-        return record.get("record_id", "")
+        return str(record.get("record_id", ""))
 
     async def _update(self, record_id: str, fields: dict[str, Any]) -> None:
         await self.client.update_record(self.table_id, record_id, fields)
@@ -138,7 +147,9 @@ class OnboardingBitableDataSource:
         items = await self._search(filter_str=filter_str, page_size=page_size)
         return [OnboardingRecord.from_api(item) for item in items]
 
-    async def find_by_employee_number(self, employee_number: str) -> "OnboardingRecord | None":
+    async def find_by_employee_number(
+        self, employee_number: str
+    ) -> "OnboardingRecord | None":
         items = await self._search(
             filter_str=f'CurrentValue.[工号] = "{employee_number}"'
         )
@@ -171,11 +182,19 @@ class OnboardingBitableDataSource:
             if value is None:
                 continue
             if key in {
-                "入职时间", "进厂时间", "入丽珠时间", "参加工作时间", "毕业时间",
-                "第一次合同起点时间", "第一次合同终止时间",
-                "第二次合同起点时间", "第二次合同终止时间",
-                "第三次合同起点时间", "第三次合同终止时间",
-                "第四次合同起点时间", "第四次合同终止时间",
+                "入职时间",
+                "进厂时间",
+                "入丽珠时间",
+                "参加工作时间",
+                "毕业时间",
+                "第一次合同起点时间",
+                "第一次合同终止时间",
+                "第二次合同起点时间",
+                "第二次合同终止时间",
+                "第三次合同起点时间",
+                "第三次合同终止时间",
+                "第四次合同起点时间",
+                "第四次合同终止时间",
             }:
                 prepared[key] = _to_ms_timestamp(value)
             else:
@@ -192,20 +211,20 @@ class OnboardingRecord:
         fields = raw.get("fields", {})
 
         # Identifiers
-        self.seq_number: int | None = _extract_number(fields.get("编号"))
+        self.seq_number: int | None = _extract_int(fields.get("编号"))
         self.employee_number: str = _extract_text(fields.get("工号"))
         self.name: str = _extract_text(fields.get("姓名"))
         self.domain_account: str = _extract_text(fields.get("域账号"))
 
         # Organization
-        self.department: str = fields.get("部门", "")
+        self.department: str = _extract_text(fields.get("部门"))
         self.team: str = _extract_text(fields.get("班组"))
         self.position: str = _extract_text(fields.get("岗位"))
-        self.job_category: str = fields.get("职类", "")
-        self.status_category: str = fields.get("统计类别", "")
+        self.job_category: str = _extract_text(fields.get("职类"))
+        self.status_category: str = _extract_text(fields.get("统计类别"))
 
         # Employment status
-        self.is_employed: str = fields.get("是否在职", "")
+        self.is_employed: str = _extract_text(fields.get("是否在职"))
 
         # Dates (raw ms timestamps)
         self._hire_date = fields.get("入职时间")
@@ -213,11 +232,11 @@ class OnboardingRecord:
         self._livo_entry_date = fields.get("入丽珠时间")
         self._work_start_date = fields.get("参加工作时间")
         self._graduation_date = fields.get("毕业时间")
-        self.birth_month: int | None = _extract_number(fields.get("月"))
-        self.birth_day: int | None = _extract_number(fields.get("日"))
+        self.birth_month: int | None = _extract_int(fields.get("月"))
+        self.birth_day: int | None = _extract_int(fields.get("日"))
 
         # Contract
-        self.contract_type: str = fields.get("合同期限", "")
+        self.contract_type: str = _extract_text(fields.get("合同期限"))
         self._contract_start_date = fields.get("第一次合同起点时间")
         self._contract_end_date = fields.get("第一次合同终止时间")
         self._contract_start_2 = fields.get("第二次合同起点时间")
@@ -236,7 +255,9 @@ class OnboardingRecord:
 
         # Education (prefer (1) fields, fallback to base fields)
         school_1 = _extract_text(fields.get("毕业学校 (1)"))
-        self.school: str = school_1 if school_1 else _extract_text(fields.get("毕业学校"))
+        self.school: str = (
+            school_1 if school_1 else _extract_text(fields.get("毕业学校"))
+        )
         edu_1 = fields.get("学历 (1)")
         self.education: str = edu_1 if edu_1 else (fields.get("学历") or "")
         major_1 = _extract_text(fields.get("专业 (1)"))
@@ -256,7 +277,9 @@ class OnboardingRecord:
         self.phone: str = _extract_text(fields.get("手机"))
         self.email: str = _extract_email(fields.get("邮箱地址"))
         self.emergency_contact_phone: str = _extract_text(fields.get("紧急联系人电话"))
-        self.emergency_contact_relation: str = _extract_text(fields.get("紧急联系人|关系"))
+        self.emergency_contact_relation: str = _extract_text(
+            fields.get("紧急联系人|关系")
+        )
 
         # Banking
         self.bank_account: str = _extract_text(fields.get("银行卡号"))
@@ -264,11 +287,15 @@ class OnboardingRecord:
 
         # Other
         self.training_id: str = _extract_text(fields.get("培训档案编号"))
-        self.transfer_history: str = _extract_text(fields.get("异动（含曾经工作部门、岗位)"))
+        self.transfer_history: str = _extract_text(
+            fields.get("异动（含曾经工作部门、岗位)")
+        )
         self.remarks: list[str] = _extract_multi_select(fields.get("备注"))
 
     @classmethod
-    def from_api(cls, raw: dict[str, Any]) -> "OnboardingRecord":
+    def from_api(
+        cls: type["OnboardingRecord"], raw: dict[str, Any]
+    ) -> "OnboardingRecord":
         return cls(raw)
 
     @property

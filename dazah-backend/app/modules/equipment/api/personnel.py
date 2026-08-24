@@ -23,6 +23,7 @@ router = APIRouter()
 
 # ═══════════════ 角色 API ═══════════════
 
+
 @router.post("/roles", summary="创建角色")
 async def create_role(
     data: RoleCreate,
@@ -41,7 +42,11 @@ async def list_roles(
     db: AsyncSession = Depends(get_db),
 ) -> JSONResponse:
     roles, total = await service.list_roles(
-        db, scope=scope, is_active=is_active, page=page, page_size=page_size,
+        db,
+        scope=scope,
+        is_active=is_active,
+        page=page,
+        page_size=page_size,
     )
     return success_response(
         data=[r.model_dump(mode="json") for r in roles],
@@ -79,6 +84,7 @@ async def delete_role(
 
 # ═══════════════ 人员 API ═══════════════
 
+
 @router.post("", summary="从身份系统添加人员")
 async def add_personnel(
     data: PersonnelAddRequest,
@@ -98,8 +104,12 @@ async def list_personnel(
     db: AsyncSession = Depends(get_db),
 ) -> JSONResponse:
     result = await service.list_personnel(
-        db, role_ids=role_id, is_active=is_active, keyword=keyword,
-        page=page, page_size=page_size,
+        db,
+        role_ids=role_id,
+        is_active=is_active,
+        keyword=keyword,
+        page=page,
+        page_size=page_size,
     )
     return success_response(
         data=[r.model_dump(mode="json") for r in result.items],
@@ -114,13 +124,16 @@ async def list_personnel(
 @router.get("/candidates", summary="按角色查询可分配人员")
 async def get_candidates(
     role_codes: list[str] = Query(
-        ..., description="角色编码列表，如 maintenance_tech",
+        ...,
+        description="角色编码列表，如 maintenance_tech",
     ),
     category_id: uuid.UUID | None = Query(None, description="设备分类ID（可选）"),
     db: AsyncSession = Depends(get_db),
 ) -> JSONResponse:
     candidates = await service.get_candidates(
-        db, role_codes, category_id=category_id,
+        db,
+        role_codes,
+        category_id=category_id,
     )
     return success_response(data=[c.model_dump(mode="json") for c in candidates])
 

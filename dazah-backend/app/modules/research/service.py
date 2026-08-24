@@ -1,12 +1,14 @@
 """Research business workflows."""
 
 import uuid
+from typing import Any
 
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import DuplicateException, NotFoundException
 from app.modules.research import repository as repo
-from app.modules.research.models import ResearchProject
+from app.modules.research.models import ICHAnalysisRecord, ResearchProject
 from app.modules.research.schemas import (
     ResearchProjectCreate,
     ResearchProjectUpdate,
@@ -20,10 +22,10 @@ async def create_project(
     project_no = data.project_no
     if not project_no:
         project_no = f"PRJ-{str(uuid.uuid4())[:8].upper()}"
-    
+
     if await repo.exists_by_project_no(db, project_no):
         raise DuplicateException("项目编号", project_no)
-    
+
     project_data = data.model_dump()
     project_data["project_no"] = project_no
     return await repo.create_project(db, project_data)
@@ -46,8 +48,13 @@ async def get_projects(
     page_size: int = 20,
 ) -> tuple[list[ResearchProject], int]:
     return await repo.get_projects(
-        db, stage=stage, status=status, keyword=keyword, project_type=project_type,
-        page=page, page_size=page_size
+        db,
+        stage=stage,
+        status=status,
+        keyword=keyword,
+        project_type=project_type,
+        page=page,
+        page_size=page_size,
     )
 
 
@@ -59,7 +66,9 @@ async def update_project(
     project = await get_project(db, project_id)
     update_data = data.model_dump(exclude_unset=True)
     if "project_no" in update_data and update_data["project_no"] != project.project_no:
-        if await repo.exists_by_project_no(db, update_data["project_no"], exclude_id=project_id):
+        if await repo.exists_by_project_no(
+            db, update_data["project_no"], exclude_id=project_id
+        ):
             raise DuplicateException("项目编号", update_data["project_no"])
     return await repo.update_project(db, project, update_data)
 
@@ -69,17 +78,12 @@ async def delete_project(db: AsyncSession, project_id: uuid.UUID) -> None:
     await repo.delete_project(db, project)
 
 
-# ICH Analysis functions
-from app.modules.research.models import ICHAnalysisRecord
-from sqlalchemy import select, func
-
-
 async def analyze_ich_q3c(
     db: AsyncSession,
     file_content: bytes,
     filename: str,
     route: str | None = None,
-) -> dict:
+) -> dict[str, Any]:
     """Analyze ICH Q3C solvent residuals from uploaded file."""
     # TODO: Implement actual Q3C analysis logic
     # For now, create a placeholder record
@@ -93,7 +97,7 @@ async def analyze_ich_q3c(
     db.add(record)
     await db.commit()
     await db.refresh(record)
-    
+
     return {
         "id": str(record.id),
         "filename": record.filename,
@@ -111,7 +115,7 @@ async def analyze_ich_combined(
     filename: str,
     route: str | None = None,
     use_llm: bool = False,
-) -> dict:
+) -> dict[str, Any]:
     """Analyze ICH Q3C/Q3D combined analysis from uploaded file."""
     # TODO: Implement actual combined analysis logic
     # For now, create a placeholder record
@@ -125,7 +129,7 @@ async def analyze_ich_combined(
     db.add(record)
     await db.commit()
     await db.refresh(record)
-    
+
     return {
         "id": str(record.id),
         "filename": record.filename,
@@ -147,7 +151,7 @@ async def get_ich_records(
     count_query = select(func.count()).select_from(ICHAnalysisRecord)
     total_result = await db.execute(count_query)
     total = total_result.scalar() or 0
-    
+
     # Get paginated records
     query = (
         select(ICHAnalysisRecord)
@@ -157,7 +161,7 @@ async def get_ich_records(
     )
     result = await db.execute(query)
     records = list(result.scalars().all())
-    
+
     return records, total
 
 
@@ -169,10 +173,10 @@ async def get_ich_record(
     query = select(ICHAnalysisRecord).where(ICHAnalysisRecord.id == record_id)
     result = await db.execute(query)
     record = result.scalar_one_or_none()
-    
+
     if not record:
         raise NotFoundException("ICH Q3C/Q3D 杂质识别记录", str(record_id))
-    
+
     return record
 
 
@@ -184,6 +188,3 @@ async def delete_ich_record(
     record = await get_ich_record(db, record_id)
     await db.delete(record)
     await db.commit()
-
-
-

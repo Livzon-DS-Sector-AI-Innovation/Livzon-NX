@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import JSON, DateTime, String, Text
 from sqlalchemy.dialects.postgresql import UUID
@@ -19,8 +20,8 @@ class QualityAiAnalysisLog(BaseModel):
     entity_type: Mapped[str] = mapped_column(String(32), nullable=False)
     entity_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     analysis_type: Mapped[str] = mapped_column(String(64), nullable=False)
-    input_snapshot: Mapped[dict] = mapped_column(JSON, nullable=False)
-    output_payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    input_snapshot: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    output_payload: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     model_name: Mapped[str] = mapped_column(String(128), nullable=False)
     status: Mapped[str] = mapped_column(
         String(32), nullable=False, default="completed", server_default="completed"

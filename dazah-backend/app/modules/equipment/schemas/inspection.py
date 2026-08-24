@@ -19,6 +19,8 @@ class InspectionRouteCreate(BaseModel):
 
     name: str = Field(..., max_length=200, description="路线名称")
     description: str | None = Field(default=None, description="路线描述")
+
+
 class InspectionRouteUpdate(BaseModel):
     """更新巡检路线请求"""
 
@@ -97,9 +99,7 @@ class RouteLocationEquipmentResponse(BaseModel):
     sort_order: int
     equipment_name: str | None = None
     equipment_no: str | None = None
-    templates: list[RouteEquipmentTemplateResponse] = Field(
-        default_factory=list
-    )
+    templates: list[RouteEquipmentTemplateResponse] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}
 
@@ -111,9 +111,7 @@ class RouteLocationResponse(BaseModel):
     location_id: uuid.UUID
     location_name: str | None = None
     sort_order: int
-    equipments: list[RouteLocationEquipmentResponse] = Field(
-        default_factory=list
-    )
+    equipments: list[RouteLocationEquipmentResponse] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}
 
@@ -192,17 +190,16 @@ class InspectionTaskCreate(BaseModel):
         default=None, min_length=1, description="设备ID列表（多设备模式）"
     )
     template_ids: list[uuid.UUID] | None = Field(
-        default=None, min_length=1, description="[DEPRECATED] 模板ID列表，推荐用 equipment_templates"
+        default=None,
+        min_length=1,
+        description="[DEPRECATED] 模板ID列表，推荐用 equipment_templates",
     )
     equipment_templates: dict[str, list[uuid.UUID]] | None = Field(
-        default=None, description="设备-模板映射（设备巡检用）: {equipment_id: [template_id, ...]}"
+        default=None,
+        description="设备-模板映射（设备巡检用）: {equipment_id: [template_id, ...]}",
     )
-    plan_type: InspectionPlanType = Field(
-        default="设备巡检", description="巡检类型"
-    )
-    assigned_to: uuid.UUID | None = Field(
-        default=None, description="巡检人员ID"
-    )
+    plan_type: InspectionPlanType = Field(default="设备巡检", description="巡检类型")
+    assigned_to: uuid.UUID | None = Field(default=None, description="巡检人员ID")
     planned_time: datetime = Field(..., description="计划巡检时间")
 
 
@@ -297,9 +294,7 @@ class RouteCheckSubmit(BaseModel):
     overall_result: InspectionOverallResult = Field(
         ..., description="总体结果：正常/异常"
     )
-    route_summary: str | None = Field(
-        default=None, description="现场描述"
-    )
+    route_summary: str | None = Field(default=None, description="现场描述")
 
 
 # ═══════════ 巡检照片 ═══════════
@@ -321,9 +316,7 @@ class InspectionAIAnalyzeRequest(BaseModel):
     """AI 分析请求"""
 
     image_base64: str = Field(..., description="图片的 base64 编码")
-    image_mime_type: str = Field(
-        default="image/jpeg", description="图片 MIME 类型"
-    )
+    image_mime_type: str = Field(default="image/jpeg", description="图片 MIME 类型")
 
 
 class InspectionAIItemResult(BaseModel):

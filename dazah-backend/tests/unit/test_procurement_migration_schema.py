@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
+from typing import Any
 
 MIGRATION_PATH = (
     Path(__file__).parents[2]
@@ -23,7 +24,7 @@ URGENT_ITEM_CATEGORY_MIGRATION_PATH = (
 )
 
 
-def _load_migration():
+def _load_migration() -> Any:
     spec = importlib.util.spec_from_file_location(
         "procurement_request_fields_migration",
         MIGRATION_PATH,
@@ -35,7 +36,7 @@ def _load_migration():
     return module
 
 
-def _load_category_migration():
+def _load_category_migration() -> Any:
     spec = importlib.util.spec_from_file_location(
         "advertising_printing_category_migration",
         CATEGORY_MIGRATION_PATH,
@@ -47,7 +48,7 @@ def _load_category_migration():
     return module
 
 
-def _load_urgent_item_category_migration():
+def _load_urgent_item_category_migration() -> Any:
     spec = importlib.util.spec_from_file_location(
         "urgent_item_category_migration",
         URGENT_ITEM_CATEGORY_MIGRATION_PATH,
@@ -60,13 +61,13 @@ def _load_urgent_item_category_migration():
 
 
 def test_procurement_migration_adds_fields_and_archives_old_labor(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     migration = _load_migration()
     added_columns: list[tuple[str, str, object]] = []
     executed_sql: list[str] = []
 
-    def capture_add_column(table_name, column, *, schema):
+    def capture_add_column(table_name: Any, column: Any, *, schema: Any) -> Any:
         added_columns.append((table_name, column.name, column))
 
     monkeypatch.setattr(migration.op, "add_column", capture_add_column)
@@ -84,8 +85,8 @@ def test_procurement_migration_adds_fields_and_archives_old_labor(
         ("purchase_request_items", "material_description"),
         ("purchase_request_items", "rule_model"),
     }
-    assert all(column.nullable is False for _, _, column in added_columns)
-    assert all(column.server_default is not None for _, _, column in added_columns)
+    assert all(column.nullable is False for _, _, column in added_columns)  # type: ignore[attr-defined]
+    assert all(column.server_default is not None for _, _, column in added_columns)  # type: ignore[attr-defined]
     assert len(executed_sql) == 3
     assert all("labor-protection" in statement for statement in executed_sql)
     assert "purchase_request_items" in executed_sql[0]
@@ -94,7 +95,7 @@ def test_procurement_migration_adds_fields_and_archives_old_labor(
 
 
 def test_procurement_migration_downgrade_drops_only_added_columns(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     migration = _load_migration()
     dropped_columns: list[tuple[str, str]] = []
@@ -118,7 +119,7 @@ def test_procurement_migration_downgrade_drops_only_added_columns(
 
 
 def test_category_migration_merges_legacy_advertising_and_printing(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     migration = _load_category_migration()
     executed_sql: list[str] = []
@@ -137,7 +138,7 @@ def test_category_migration_merges_legacy_advertising_and_printing(
 
 
 def test_urgent_item_category_migration_adds_and_backfills_item_category(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     migration = _load_urgent_item_category_migration()
     added_columns: list[tuple[str, str, object]] = []
@@ -156,14 +157,15 @@ def test_urgent_item_category_migration_adds_and_backfills_item_category(
         "execute",
         lambda statement: executed_sql.append(str(statement)),
     )
+
     def capture_alter_column(
-        table_name,
-        column_name,
+        table_name: Any,
+        column_name: Any,
         *,
-        existing_type,
-        nullable,
-        schema,
-    ):
+        existing_type: Any,
+        nullable: Any,
+        schema: Any,
+    ) -> Any:
         altered_columns.append((table_name, column_name, nullable))
 
     monkeypatch.setattr(migration.op, "alter_column", capture_alter_column)
@@ -171,13 +173,15 @@ def test_urgent_item_category_migration_adds_and_backfills_item_category(
     migration.upgrade()
 
     assert added_columns[0][:2] == ("purchase_request_items", "item_category")
-    assert added_columns[0][2].server_default is not None
+    assert added_columns[0][2].server_default is not None  # type: ignore[attr-defined]
     assert "purchase_requests" in executed_sql[0]
     assert "requests.category" in executed_sql[0]
     assert altered_columns == [("purchase_request_items", "item_category", False)]
 
 
-def test_urgent_item_category_migration_downgrade_drops_column(monkeypatch) -> None:
+def test_urgent_item_category_migration_downgrade_drops_column(
+    monkeypatch: Any,
+) -> None:
     migration = _load_urgent_item_category_migration()
     dropped_columns: list[tuple[str, str]] = []
     monkeypatch.setattr(

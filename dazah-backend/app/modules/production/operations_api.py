@@ -43,7 +43,7 @@ def _actor(user: CurrentUser | None) -> uuid.UUID | None:
     return user.id if user else None
 
 
-def _page(data: list[Any], schema: type, page: int, page_size: int, total: int):
+def _page(data: list[Any], schema: Any, page: int, page_size: int, total: int) -> Any:
     return ApiResponse(
         data=[schema.model_validate(item) for item in data],
         meta={"page": page, "page_size": page_size, "total": total},
@@ -60,7 +60,7 @@ async def list_fermentations(
     status: str | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     rows, total = await OperationsService(db).list_fermentations(
         skip=(page - 1) * page_size, limit=page_size, batch_no=batch_no, status=status
     )
@@ -74,7 +74,7 @@ async def create_fermentation(
     payload: FermentationCreate,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     row = await OperationsService(db).create_fermentation(payload, _actor(current_user))
     await db.commit()
     return ApiResponse(data=FermentationResponse.model_validate(row))
@@ -89,7 +89,7 @@ async def update_fermentation(
     payload: FermentationUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     row = await OperationsService(db).update_fermentation(
         record_id, payload, _actor(current_user)
     )
@@ -104,7 +104,7 @@ async def delete_fermentation(
     record_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     deleted = await OperationsService(db).delete(FermentationRecord, record_id)
     if not deleted:
         return ApiResponse(code=404, message="发酵记录不存在")
@@ -122,7 +122,7 @@ async def list_seed_cultures(
     status: str | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     rows, total = await OperationsService(db).list_seed_cultures(
         skip=(page - 1) * page_size, limit=page_size, batch_no=batch_no, status=status
     )
@@ -136,7 +136,7 @@ async def create_seed_culture(
     payload: SeedCultureCreate,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     row = await OperationsService(db).create_seed_culture(payload, _actor(current_user))
     await db.commit()
     return ApiResponse(data=SeedCultureResponse.model_validate(row))
@@ -151,7 +151,7 @@ async def update_seed_culture(
     payload: SeedCultureUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     row = await OperationsService(db).update_seed_culture(
         record_id, payload, _actor(current_user)
     )
@@ -166,7 +166,7 @@ async def delete_seed_culture(
     record_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     deleted = await OperationsService(db).delete(SeedCultureRecord, record_id)
     if not deleted:
         return ApiResponse(code=404, message="种子培养记录不存在")
@@ -185,7 +185,7 @@ async def list_events(
     status: str | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     rows, total = await OperationsService(db).list_events(
         skip=(page - 1) * page_size, limit=page_size, workshop=workshop, status=status
     )
@@ -200,7 +200,7 @@ async def create_event(
     payload: NonConformingEventCreate,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     row = await OperationsService(db).create_event(payload, _actor(current_user))
     await db.commit()
     return ApiResponse(data=NonConformingEventResponse.model_validate(row))
@@ -215,7 +215,7 @@ async def update_event(
     payload: NonConformingEventUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     row = await OperationsService(db).update_event(
         record_id, payload, _actor(current_user)
     )
@@ -233,7 +233,7 @@ async def close_event(
     record_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     row = await OperationsService(db).close_event(record_id, _actor(current_user))
     if not row:
         return ApiResponse(code=404, message="事件不存在")
@@ -248,7 +248,7 @@ async def delete_event(
     record_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     deleted = await OperationsService(db).delete(NonConformingEvent, record_id)
     if not deleted:
         return ApiResponse(code=404, message="事件不存在")
@@ -264,7 +264,7 @@ async def list_shift_logs(
     shift: str | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     rows, total = await OperationsService(db).list_shift_logs(
         skip=(page - 1) * page_size, limit=page_size, workshop=workshop, shift=shift
     )
@@ -276,7 +276,7 @@ async def create_shift_log(
     payload: ShiftLogCreate,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     row = await OperationsService(db).create_shift_log(payload, _actor(current_user))
     await db.commit()
     return ApiResponse(data=ShiftLogResponse.model_validate(row))
@@ -290,7 +290,7 @@ async def update_shift_log(
     payload: ShiftLogUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     row = await OperationsService(db).update_shift_log(
         record_id, payload, _actor(current_user)
     )
@@ -305,7 +305,7 @@ async def delete_shift_log(
     record_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     deleted = await OperationsService(db).delete(ShiftLog, record_id)
     if not deleted:
         return ApiResponse(code=404, message="班次日志不存在")
@@ -324,7 +324,7 @@ async def list_handovers(
     status: str | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     rows, total = await OperationsService(db).list_handovers(
         skip=(page - 1) * page_size, limit=page_size, workshop=workshop, status=status
     )
@@ -338,7 +338,7 @@ async def create_handover(
     payload: ShiftHandoverCreate,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     row = await OperationsService(db).create_handover(payload, _actor(current_user))
     await db.commit()
     return ApiResponse(data=ShiftHandoverResponse.model_validate(row))
@@ -353,7 +353,7 @@ async def update_handover(
     payload: ShiftHandoverUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     row = await OperationsService(db).update_handover(
         record_id, payload, _actor(current_user)
     )
@@ -371,7 +371,7 @@ async def confirm_handover(
     record_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     row = await OperationsService(db).confirm_handover(record_id, _actor(current_user))
     if not row:
         return ApiResponse(code=404, message="交接记录不存在")
@@ -386,7 +386,7 @@ async def delete_handover(
     record_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     deleted = await OperationsService(db).delete(ShiftHandover, record_id)
     if not deleted:
         return ApiResponse(code=404, message="交接记录不存在")

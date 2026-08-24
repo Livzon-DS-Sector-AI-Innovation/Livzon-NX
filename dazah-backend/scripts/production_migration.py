@@ -7,6 +7,7 @@ import sys
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -31,7 +32,7 @@ def parse_args() -> argparse.Namespace:
 
 async def main() -> int:
     args = parse_args()
-    service_result: dict = {}
+    service_result: dict[Any, Any] = {}
     if args.mode == "validate":
         bundle, load_errors = ProductionMigrationService.load_directory(args.input_dir)
         validated, validation_errors = ProductionMigrationService.validate_bundle(

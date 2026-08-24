@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import datetime
+from typing import Any
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -34,12 +35,16 @@ async def get_accidents(
     keyword: str | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """获取事故列表"""
     service = SafetyService(db)
     skip = (page - 1) * page_size
     items, total = await service.get_accidents(
-        skip, page_size, status, accident_type, accident_level,
+        skip,
+        page_size,
+        status,
+        accident_type,
+        accident_level,
         department,
         datetime.fromisoformat(date_from) if date_from else None,
         datetime.fromisoformat(date_to) if date_to else None,
@@ -51,12 +56,14 @@ async def get_accidents(
     )
 
 
-@accidents_router.get("/accidents/{accident_id}", response_model=ApiResponse, summary="获取事故详情")
+@accidents_router.get(
+    "/accidents/{accident_id}", response_model=ApiResponse, summary="获取事故详情"
+)
 async def get_accident(
     accident_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """获取事故详情"""
     service = SafetyService(db)
     item = await service.get_accident(accident_id)
@@ -70,7 +77,7 @@ async def create_accident(
     data: AccidentCreate,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """创建事故"""
     service = SafetyService(db)
     item = await service.create_accident(data)
@@ -78,13 +85,15 @@ async def create_accident(
     return ApiResponse(data=AccidentResponse.model_validate(item))
 
 
-@accidents_router.put("/accidents/{accident_id}", response_model=ApiResponse, summary="更新事故")
+@accidents_router.put(
+    "/accidents/{accident_id}", response_model=ApiResponse, summary="更新事故"
+)
 async def update_accident(
     accident_id: uuid.UUID,
     data: AccidentUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """更新事故"""
     service = SafetyService(db)
     item = await service.update_accident(accident_id, data)
@@ -103,12 +112,14 @@ async def investigate_accident(
     accident_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """开始调查事故"""
+    if current_user is None:
+        return ApiResponse(code=401, message="请先登录")
     service = SafetyService(db)
-    user_id = current_user.id if current_user else None
-    user_name = current_user.name if current_user else None
-    item = await service.investigate_accident(accident_id, user_id, user_name)
+    item = await service.investigate_accident(
+        accident_id, current_user.id, current_user.name
+    )
     if not item:
         return ApiResponse(code=400, message="无法开始调查，当前状态不允许")
     await db.commit()
@@ -130,12 +141,17 @@ async def resolve_accident(
     investigation_method: str | None = Query(None, description="调查方法"),
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """完成调查事故"""
     service = SafetyService(db)
     item = await service.resolve_accident(
-        accident_id, direct_cause, root_cause, handling_measures, corrective_actions,
-        investigation_findings, investigation_method,
+        accident_id,
+        direct_cause,
+        root_cause,
+        handling_measures,
+        corrective_actions,
+        investigation_findings,
+        investigation_method,
     )
     if not item:
         return ApiResponse(code=400, message="无法完成调查，当前状态不允许")
@@ -150,11 +166,13 @@ async def resolve_accident(
 )
 async def start_capa(
     accident_id: uuid.UUID,
-    corrective_action_deadline: str = Query(..., description="CAPA截止日期 (YYYY-MM-DD)"),
+    corrective_action_deadline: str = Query(
+        ..., description="CAPA截止日期 (YYYY-MM-DD)"
+    ),
     corrective_action_responsible: str = Query(..., description="CAPA责任人"),
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """启动CAPA: investigated → capa_in_progress"""
     service = SafetyService(db)
     item = await service.start_capa(
@@ -177,12 +195,12 @@ async def verify_capa(
     accident_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """验证CAPA并关闭事故: capa_in_progress → closed"""
+    if current_user is None:
+        return ApiResponse(code=401, message="请先登录")
     service = SafetyService(db)
-    user_id = current_user.id if current_user else None
-    user_name = current_user.name if current_user else None
-    item = await service.verify_capa(accident_id, user_id, user_name)
+    item = await service.verify_capa(accident_id, current_user.id, current_user.name)
     if not item:
         return ApiResponse(code=400, message="无法验证CAPA，当前状态不允许")
     await db.commit()
@@ -198,7 +216,7 @@ async def close_accident(
     accident_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """直接关闭事故（无CAPA时）"""
     service = SafetyService(db)
     item = await service.close_accident(accident_id)
@@ -208,12 +226,14 @@ async def close_accident(
     return ApiResponse(data=AccidentResponse.model_validate(item))
 
 
-@accidents_router.delete("/accidents/{accident_id}", response_model=ApiResponse, summary="删除事故")
+@accidents_router.delete(
+    "/accidents/{accident_id}", response_model=ApiResponse, summary="删除事故"
+)
 async def delete_accident(
     accident_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """删除事故"""
     service = SafetyService(db)
     result = await service.delete_accident(accident_id)
@@ -221,5 +241,3 @@ async def delete_accident(
         return ApiResponse(code=404, message="事故不存在")
     await db.commit()
     return ApiResponse(message="删除成功")
-
-

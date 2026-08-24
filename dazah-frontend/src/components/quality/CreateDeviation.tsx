@@ -4,10 +4,12 @@ import type { Dayjs } from 'dayjs'
 import { useRouter } from 'next/navigation'
 import { App, Button, Card, DatePicker, Form, Input, Select, Space } from 'antd'
 import { ArrowLeftOutlined } from '@ant-design/icons'
-import { createFeishuDeviationLedgerRecord } from '@/actions/quality'
+import { createDeviation } from '@/actions/quality-deviation'
+import type { DeviationLevel } from '@/types/quality'
 
 interface CreateDeviationFormValues {
-  level?: string
+  department: string
+  level?: DeviationLevel
   description: string
   affected_items: string
   has_occurred_before?: boolean
@@ -20,10 +22,10 @@ interface CreateDeviationFormValues {
 }
 
 const levelOptions = [
-  { label: '重大', value: '重大' },
-  { label: '次要', value: '次要' },
-  { label: '微小', value: '微小' },
-] as Array<{ label: string; value: string }>
+  { label: '严重', value: 'major' },
+  { label: '中等', value: 'moderate' },
+  { label: '轻微', value: 'minor' },
+] as Array<{ label: string; value: DeviationLevel }>
 
 const booleanOptions = [
   { label: '是', value: true },
@@ -38,8 +40,9 @@ export function CreateDeviation() {
 
   const handleSubmit = async (values: CreateDeviationFormValues) => {
     try {
-      await createFeishuDeviationLedgerRecord({
+      await createDeviation({
         title: values.description.trim(),
+        department: values.department.trim(),
         description: values.description.trim(),
         affected_items: values.affected_items.trim(),
         level: values.level ?? null,
@@ -54,11 +57,12 @@ export function CreateDeviation() {
         close_time: values.is_closed && values.close_time
           ? values.close_time.toISOString()
           : null,
+        needs_cross_dept_review: true,
       })
-      message.success('飞书台账已创建')
+      message.success('台账已创建')
       router.push('/quality/deviations/ledger')
-    } catch (error: any) {
-      message.error(error?.message || '创建失败')
+    } catch (error) {
+      message.error((error instanceof Error ? error.message : '') || '创建失败')
     }
   }
 
@@ -87,6 +91,17 @@ export function CreateDeviation() {
             label="偏差编号"
           >
             <Input value="保存后自动生成" disabled />
+          </Form.Item>
+
+          <Form.Item
+            name="department"
+            label="部门"
+            rules={[{ required: true, message: '请输入部门' }]}
+          >
+            <Input
+              placeholder="请输入部门"
+              maxLength={255}
+            />
           </Form.Item>
 
           <Form.Item

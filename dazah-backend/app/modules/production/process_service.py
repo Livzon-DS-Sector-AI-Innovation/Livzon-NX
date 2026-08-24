@@ -152,9 +152,7 @@ class ProcessExecutionService:
             previous_label = PROCESS_STEPS[definition["sequence"] - 2]["label"]
             raise AppException(message=f"请先完成前序工序：{previous_label}")
 
-    async def _ensure_previous_completed(
-        self, record: ProcessExecutionRecord
-    ) -> None:
+    async def _ensure_previous_completed(self, record: ProcessExecutionRecord) -> None:
         if record.step_sequence == 1:
             return
         records = await self.repo.records_for_batch(

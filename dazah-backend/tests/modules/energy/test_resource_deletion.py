@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from decimal import Decimal
+from typing import Any
 from uuid import uuid4
 
 import pytest
@@ -21,7 +22,9 @@ from app.modules.energy.wiki_repository import EnergyWikiRepository
 
 
 @pytest.mark.asyncio
-async def test_resource_deletion_removes_snapshot_and_local_database_data(db_session):
+async def test_resource_deletion_removes_snapshot_and_local_database_data(
+    db_session: Any,
+) -> Any:
     repo = EnergyWikiRepository(db_session)
     config = await repo.save_config(
         EnergyFeishuConfig(
@@ -107,9 +110,7 @@ async def test_resource_deletion_removes_snapshot_and_local_database_data(db_ses
         value=Decimal("12.5"),
         dimensions={},
     )
-    row = (
-        await repo.list_all_snapshot_rows(snapshot.id)
-    )[0]
+    row = (await repo.list_all_snapshot_rows(snapshot.id))[0]
     db_session.add_all(
         [
             mapping,

@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
@@ -11,18 +12,20 @@ from docx import Document
 
 from app.modules.dossier_writer import service as dossier_service
 
+SimpleNamespace: Any = _SimpleNamespace
+
 
 class Dump:
-    def __init__(self, **values):
+    def __init__(self: Any, **values: Any) -> None:
         self.values = values
         for key, value in values.items():
             setattr(self, key, value)
 
-    def model_dump(self, **_kwargs):
+    def model_dump(self: Any, **_kwargs: Any) -> Any:
         return dict(self.values)
 
 
-def _service(tmp_path):
+def _service(tmp_path: Any) -> Any:
     service = dossier_service.DossierService.__new__(dossier_service.DossierService)
     service.db = AsyncMock()
     service.repo = AsyncMock()
@@ -30,7 +33,7 @@ def _service(tmp_path):
     return service
 
 
-def _dossier(tmp_path, **overrides):
+def _dossier(tmp_path: Any, **overrides: Any) -> Any:
     dossier_id = uuid4()
     values = {
         "id": dossier_id,
@@ -48,9 +51,9 @@ def _dossier(tmp_path, **overrides):
     return SimpleNamespace(**values)
 
 
-def _chapter(**overrides):
+def _chapter(**overrides: Any) -> Any:
     chapter_id = uuid4()
-    values = {
+    values = {  # type: ignore[var-annotated]
         "id": chapter_id,
         "product_dossier_id": uuid4(),
         "parent_id": None,
@@ -68,7 +71,7 @@ def _chapter(**overrides):
     return SimpleNamespace(**values)
 
 
-def test_dossier_sort_heading_and_filename_helpers(tmp_path):
+def test_dossier_sort_heading_and_filename_helpers(tmp_path: Any) -> Any:
     service = _service(tmp_path)
     assert dossier_service._chapter_sort_key("") == ()
     assert dossier_service._chapter_sort_key("3.2.S.1.X") == (3, 2, 100, 1, 999)
@@ -90,7 +93,7 @@ def test_dossier_sort_heading_and_filename_helpers(tmp_path):
     )
 
 
-def test_dossier_storage_and_docx_replacement(tmp_path):
+def test_dossier_storage_and_docx_replacement(tmp_path: Any) -> Any:
     service = _service(tmp_path)
     paths = service._create_storage_dirs("d1")
     assert all(Path(path).is_dir() for path in paths.values())
@@ -125,10 +128,10 @@ def test_dossier_storage_and_docx_replacement(tmp_path):
 
 @pytest.mark.asyncio
 async def test_dossier_create_update_delete_transaction_boundaries(
-    tmp_path, monkeypatch
-):
+    tmp_path: Any, monkeypatch: Any
+) -> Any:
     service = _service(tmp_path)
-    data = Dump(
+    data = cast(Any, Dump)(
         product_name="P",
         manufacturer="M",
         sterile_type="无菌",
@@ -155,7 +158,7 @@ async def test_dossier_create_update_delete_transaction_boundaries(
     )
     monkeypatch.setattr(service, "_create_m3_chapters", AsyncMock())
     monkeypatch.setattr(service, "init_chapter_ai_config", AsyncMock())
-    execute_result = MagicMock()
+    execute_result: Any = MagicMock()
     execute_result.scalar_one.return_value = created
     service.db.execute.return_value = execute_result
     assert await service.create_product_dossier(data) is created
@@ -177,13 +180,17 @@ async def test_dossier_create_update_delete_transaction_boundaries(
     service.db.commit.reset_mock()
     service.repo.update_product_dossier.return_value = created
     assert (
-        await service.update_product_dossier(created.id, Dump(status="active"))
+        await service.update_product_dossier(
+            created.id, cast(Any, Dump)(status="active")
+        )
         is created
     )
     service.db.commit.assert_awaited_once()
     service.db.commit.reset_mock()
     service.repo.get_product_dossier.return_value = created
-    assert await service.update_product_dossier(created.id, Dump()) is created
+    assert (
+        await service.update_product_dossier(created.id, cast(Any, Dump)()) is created
+    )
     service.db.commit.assert_not_awaited()
 
     service.repo.delete_product_dossier.return_value = False
@@ -196,7 +203,7 @@ async def test_dossier_create_update_delete_transaction_boundaries(
 
 
 @pytest.mark.asyncio
-async def test_dossier_template_save_existing_and_new(tmp_path):
+async def test_dossier_template_save_existing_and_new(tmp_path: Any) -> Any:
     service = _service(tmp_path)
     dossier = _dossier(tmp_path)
     service.repo.get_product_dossier.return_value = None
@@ -204,7 +211,7 @@ async def test_dossier_template_save_existing_and_new(tmp_path):
         await service.save_template_file(dossier.id, "a.docx", b"x")
 
     service.repo.get_product_dossier.return_value = dossier
-    existing = SimpleNamespace(file_path="", file_size=0)
+    existing: Any = SimpleNamespace(file_path="", file_size=0)
     service.repo.get_template_by_filename.return_value = existing
     assert await service.save_template_file(dossier.id, "a.docx", b"abc") is existing
     assert existing.file_size == 3
@@ -219,7 +226,9 @@ async def test_dossier_template_save_existing_and_new(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_dossier_parse_success_and_failure_transactions(tmp_path, monkeypatch):
+async def test_dossier_parse_success_and_failure_transactions(
+    tmp_path: Any, monkeypatch: Any
+) -> Any:
     service = _service(tmp_path)
     dossier = _dossier(tmp_path)
     service.repo.get_product_dossier.return_value = None
@@ -235,8 +244,8 @@ async def test_dossier_parse_success_and_failure_transactions(tmp_path, monkeypa
     assert failed["success"] is False
     assert "没有上传模板文件" in failed["error"]
 
-    matching = SimpleNamespace(original_filename="3.2.S.1_template.docx")
-    unmatched = SimpleNamespace(original_filename="unknown.docx")
+    matching: Any = SimpleNamespace(original_filename="3.2.S.1_template.docx")
+    unmatched: Any = SimpleNamespace(original_filename="unknown.docx")
     chapter = _chapter(chapter_code="3.2.S.1")
     service.repo.list_templates.return_value = [matching, unmatched]
     service.repo.get_chapter_tree.side_effect = [[], [chapter]]
@@ -255,7 +264,9 @@ async def test_dossier_parse_success_and_failure_transactions(tmp_path, monkeypa
 
 
 @pytest.mark.asyncio
-async def test_dossier_docx_parse_tree_and_detail(tmp_path, monkeypatch):
+async def test_dossier_docx_parse_tree_and_detail(
+    tmp_path: Any, monkeypatch: Any
+) -> Any:
     service = _service(tmp_path)
     dossier = _dossier(tmp_path)
     Path(dossier.working_path).mkdir(parents=True)
@@ -265,7 +276,9 @@ async def test_dossier_docx_parse_tree_and_detail(tmp_path, monkeypatch):
     doc.add_paragraph("")
     doc.add_heading("3.2.1.1 二级", level=2)
     doc.save(source)
-    template = SimpleNamespace(file_path=str(source), original_filename=source.name)
+    template: Any = SimpleNamespace(
+        file_path=str(source), original_filename=source.name
+    )
     monkeypatch.setattr(service, "_replace_basic_info", MagicMock())
     chapters = await service._parse_docx_template(dossier, template)
     assert [chapter.level for chapter in chapters] == [1, 2]
@@ -287,7 +300,7 @@ async def test_dossier_docx_parse_tree_and_detail(tmp_path, monkeypatch):
 
     service.repo.get_chapter.return_value = None
     assert await service.get_chapter_detail(root.id) is None
-    asset = SimpleNamespace(
+    asset: Any = SimpleNamespace(
         id=uuid4(),
         original_filename="a.pdf",
         file_type="pdf",
@@ -304,8 +317,8 @@ async def test_dossier_docx_parse_tree_and_detail(tmp_path, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_dossier_asset_upload_delete_and_category_boundaries(
-    tmp_path, monkeypatch
-):
+    tmp_path: Any, monkeypatch: Any
+) -> Any:
     service = _service(tmp_path)
     dossier = _dossier(tmp_path)
     chapter = _chapter(product_dossier_id=dossier.id)
@@ -336,12 +349,12 @@ async def test_dossier_asset_upload_delete_and_category_boundaries(
     assert not Path(asset.file_path).exists()
 
     category_service = _service(tmp_path)
-    result = MagicMock()
+    result: Any = MagicMock()
     result.scalars.return_value.all.return_value = []
     category_service.db.execute.return_value = result
     assert await category_service._suggest_category("3.2.S.1", "test.pdf") is None
-    by_name = SimpleNamespace(id=uuid4(), category_name="稳定性", description=None)
-    by_description = SimpleNamespace(
+    by_name: Any = SimpleNamespace(id=uuid4(), category_name="稳定性", description=None)
+    by_description: Any = SimpleNamespace(
         id=uuid4(), category_name="其他", description="长期 稳定 关键字"
     )
     result.scalars.return_value.all.return_value = [by_name, by_description]
@@ -356,7 +369,9 @@ async def test_dossier_asset_upload_delete_and_category_boundaries(
 
 
 @pytest.mark.asyncio
-async def test_dossier_export_preview_and_matching_paths(tmp_path, monkeypatch):
+async def test_dossier_export_preview_and_matching_paths(
+    tmp_path: Any, monkeypatch: Any
+) -> Any:
     service = _service(tmp_path)
     dossier = _dossier(tmp_path)
     chapter = _chapter(product_dossier_id=dossier.id, working_file="source.docx")
@@ -368,7 +383,7 @@ async def test_dossier_export_preview_and_matching_paths(tmp_path, monkeypatch):
     table = doc.add_table(rows=1, cols=2)
     table.cell(0, 0).text = "A"
     table.cell(0, 1).text = "B"
-    doc.save(source)
+    doc.save(source)  # type: ignore[arg-type]
 
     service.repo.get_product_dossier.return_value = None
     assert (await service.export_dossier(dossier.id))["success"] is False
@@ -406,9 +421,9 @@ async def test_dossier_export_preview_and_matching_paths(tmp_path, monkeypatch):
     assert missing["matched_count"] == 0
     service.repo.get_product_dossier.return_value = dossier
     service.repo.list_templates.return_value = []
-    assert "无模板文件" in (
-        await service.match_assets_to_chapters(dossier.id)
-    )["message"]
+    assert (
+        "无模板文件" in (await service.match_assets_to_chapters(dossier.id))["message"]
+    )
     service.repo.list_templates.return_value = [
         SimpleNamespace(original_filename="match.docx"),
         SimpleNamespace(original_filename="unknown.docx"),
@@ -426,25 +441,29 @@ async def test_dossier_export_preview_and_matching_paths(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_dossier_working_copy_and_m3_creation(tmp_path, monkeypatch):
+async def test_dossier_working_copy_and_m3_creation(
+    tmp_path: Any, monkeypatch: Any
+) -> Any:
     service = _service(tmp_path)
     dossier = _dossier(tmp_path)
     source = tmp_path / "source.docx"
     Document().save(source)
-    template = SimpleNamespace(file_path=str(source), original_filename="source.docx")
+    template: Any = SimpleNamespace(
+        file_path=str(source), original_filename="source.docx"
+    )
     chapter = _chapter()
     monkeypatch.setattr(service, "_replace_basic_info", MagicMock())
     await service._create_working_copy_for_chapter(dossier, template, chapter)
     service.repo.update_chapter.assert_awaited_once()
     assert (Path(dossier.working_path) / "3_2_S_1_source.docx").exists()
 
-    created_ids = {}
+    created_ids: dict[Any, Any] = {}
 
-    async def create_chapter(item):
+    async def create_chapter(item: Any) -> Any:
         item.id = uuid4()
         created_ids[item.chapter_code] = item.id
         return item
 
     service.repo.create_chapter.side_effect = create_chapter
     await service._create_m3_chapters(dossier.id)
-    assert len(created_ids) == len(dossier_service.M3_CHAPTERS)
+    assert len(created_ids) == len(dossier_service.M3_CHAPTERS)  # type: ignore[attr-defined]

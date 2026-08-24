@@ -2,10 +2,22 @@
 
 import uuid
 from datetime import date, datetime
-from sqlalchemy import String, Boolean, Date, DateTime, ForeignKey, UniqueConstraint, Text, Float, text
-import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from typing import Any
+
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    String,
+    Text,
+    UniqueConstraint,
+    text,
+)
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from app.shared.base_model import BaseModel
 
 
@@ -14,7 +26,9 @@ class RegulatoryDocument(BaseModel):
 
     __tablename__ = "regulatory_documents"
     __table_args__ = (
-        UniqueConstraint("source_id", "channel_id", "document_id", name="uq_reg_docs_src_ch_doc"),
+        UniqueConstraint(
+            "source_id", "channel_id", "document_id", name="uq_reg_docs_src_ch_doc"
+        ),
         {"schema": "regulatory_tracker"},
     )
 
@@ -40,9 +54,7 @@ class RegulatoryDocument(BaseModel):
         String(200), nullable=True, comment="分类，如 生物制品、化学药品"
     )
     original_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
-    is_new: Mapped[bool] = mapped_column(
-        Boolean, default=True, server_default="true"
-    )
+    is_new: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     is_read: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default="false"
     )
@@ -56,7 +68,7 @@ class RegulatoryDocument(BaseModel):
     ai_summary: Mapped[str | None] = mapped_column(
         Text, nullable=True, comment="AI 生成的文档摘要"
     )
-    ai_key_points: Mapped[dict | None] = mapped_column(
+    ai_key_points: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB, nullable=True, comment="AI 提取的关键要点"
     )
     ai_relevance_score: Mapped[float | None] = mapped_column(
@@ -68,7 +80,7 @@ class RegulatoryDocument(BaseModel):
     ai_analysis_status: Mapped[str | None] = mapped_column(
         String(50), nullable=True, comment="AI 分析状态: pending/completed/failed"
     )
-    raw_data: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    raw_data: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
 
     # Relationships
     source = relationship("DataSource", back_populates="documents")

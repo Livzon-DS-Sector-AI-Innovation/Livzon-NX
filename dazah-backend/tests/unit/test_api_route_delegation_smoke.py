@@ -7,7 +7,7 @@ import uuid
 from datetime import date, datetime
 from io import BytesIO
 from pathlib import Path
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
 from typing import Any, get_args, get_origin
 from unittest.mock import AsyncMock, MagicMock
 
@@ -15,6 +15,8 @@ import pytest
 from fastapi import APIRouter, UploadFile
 from fastapi.params import Param
 from pydantic import BaseModel
+
+SimpleNamespace: Any = _SimpleNamespace
 
 API_MODULES = (
     "app.modules.research.api",
@@ -59,8 +61,8 @@ class _Payload:
     user_id = id
     filename = "test.csv"
     route = "oral"
-    q3c_result: dict[str, Any] = {}
-    q3d_result: dict[str, Any] = {}
+    q3c_result: dict[Any, Any] = {}
+    q3d_result: dict[Any, Any] = {}
     llm_used = False
     notes = None
     created_at = datetime(2026, 1, 1)
@@ -68,17 +70,17 @@ class _Payload:
     status = "active"
     content = b"test"
 
-    def __getattr__(self, _name: str) -> Any:
+    def __getattr__(self: Any, _name: str) -> Any:
         return None
 
-    def __iter__(self):
+    def __iter__(self: Any) -> Any:
         return iter(([], 0))
 
 
 class _ServiceDouble:
-    repo = SimpleNamespace(session=AsyncMock())
+    repo: Any = SimpleNamespace(session=AsyncMock())
 
-    def __getattr__(self, name: str):
+    def __getattr__(self: Any, name: str) -> Any:
         async def call(*_args: Any, **_kwargs: Any) -> Any:
             if name.startswith(("list_", "get_all", "search_")):
                 return [], 0
@@ -92,19 +94,19 @@ class _ServiceDouble:
 
 
 class _SchemaStub:
-    def __init__(self, **values: Any):
+    def __init__(self: Any, **values: Any) -> None:
         self.__dict__.update(values)
 
     @classmethod
-    def model_validate(cls, _value: Any, **_kwargs: Any) -> dict[str, Any]:
+    def model_validate(cls: Any, _value: Any, **_kwargs: Any) -> dict[str, Any]:
         return {}
 
     @classmethod
-    def model_validate_json(cls, _value: Any, **_kwargs: Any) -> dict[str, Any]:
+    def model_validate_json(cls: Any, _value: Any, **_kwargs: Any) -> dict[str, Any]:
         return {}
 
     @classmethod
-    def __class_getitem__(cls, _item: Any):
+    def __class_getitem__(cls: Any, _item: Any) -> Any:
         return cls
 
 
@@ -148,7 +150,7 @@ def _annotation_value(annotation: Any, name: str) -> Any:
 
 def _endpoint_kwargs(endpoint: Any) -> dict[str, Any]:
     signature = inspect.signature(endpoint)
-    kwargs: dict[str, Any] = {}
+    kwargs: dict[Any, Any] = {}
     for name, parameter in signature.parameters.items():
         if name in {"db", "session"}:
             kwargs[name] = AsyncMock()

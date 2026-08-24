@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, Mock
 
 import pytest
@@ -16,16 +17,18 @@ from app.modules.quality.schemas.feishu_settings import (
 from app.modules.quality.service import quality_feishu_settings as service
 from app.modules.quality.service import quality_feishu_sync
 
+SimpleNamespace: Any = _SimpleNamespace
+
 
 class _Result:
-    def __init__(self, value=None, values=None) -> None:
+    def __init__(self: Any, value: Any = None, values: Any = None) -> None:
         self.value = value
         self.values = values or []
 
-    def scalar_one_or_none(self):
+    def scalar_one_or_none(self: Any) -> Any:
         return self.value
 
-    def scalars(self):
+    def scalars(self: Any) -> Any:
         return SimpleNamespace(all=lambda: self.values)
 
 
@@ -144,7 +147,7 @@ async def test_app_settings_create_update_and_connection_results(
         lambda value: value.removeprefix("enc:"),
     )
     monkeypatch.setattr(service, "mask_api_key", lambda value: f"mask:{value}")
-    get_model = AsyncMock(return_value=None)
+    get_model: Any = AsyncMock(return_value=None)
     monkeypatch.setattr(service, "_get_app_settings_model", get_model)
 
     data = UpdateQualityFeishuAppSettingsRequest(
@@ -175,9 +178,9 @@ async def test_app_settings_create_update_and_connection_results(
         "_ensure_quality_feishu_app_settings_seeded",
         AsyncMock(return_value=created),
     )
-    auth = AsyncMock(return_value="tenant-token")
+    auth: Any = AsyncMock(return_value="tenant-token")
     monkeypatch.setattr(
-        service.FeishuAuth,
+        service.FeishuAuth,  # type: ignore[attr-defined]
         "get_tenant_access_token",
         auth,
     )
@@ -203,7 +206,7 @@ async def test_entity_refresh_records_success_and_sanitized_failure(
         "_get_entity_settings_model",
         AsyncMock(return_value=model),
     )
-    pull = AsyncMock()
+    pull: Any = AsyncMock()
     monkeypatch.setattr(
         quality_feishu_sync,
         "pull_quality_records_from_feishu",
@@ -230,10 +233,7 @@ async def test_entity_refresh_records_success_and_sanitized_failure(
 
     model.is_enabled = False
     pull.reset_mock()
-    assert (
-        await service._refresh_entity_data_after_save(db, model.entity_code)
-        is model
-    )
+    assert await service._refresh_entity_data_after_save(db, model.entity_code) is model
     pull.assert_not_awaited()
 
 
@@ -244,7 +244,7 @@ async def test_list_tables_and_field_mapping_bundle(
     db = _db()
     app_model = _app_model()
     entity = _entity_model()
-    client = SimpleNamespace(
+    client: Any = SimpleNamespace(
         list_tables=AsyncMock(
             return_value=[
                 {"table_id": "tbl123456789", "name": "偏差台账"},
@@ -288,9 +288,7 @@ async def test_list_tables_and_field_mapping_bundle(
     assert bundle.entity_code == entity.entity_code
     assert bundle.feishu_fields[0].field_name == "偏差编号"
     mapping = next(
-        item
-        for item in bundle.field_mappings
-        if item.system_field == "偏差编号"
+        item for item in bundle.field_mappings if item.system_field == "偏差编号"
     )
     assert mapping.feishu_field == "偏差编号"
 
@@ -338,7 +336,7 @@ async def test_update_and_test_entity_setting_success_and_failure(
     assert item.base_table_name == "更新台账"
     assert item.enable_pull_from_feishu is False
 
-    client = SimpleNamespace(search_records=AsyncMock(return_value=[]))
+    client: Any = SimpleNamespace(search_records=AsyncMock(return_value=[]))
     monkeypatch.setattr(
         service,
         "_ensure_quality_feishu_app_settings_seeded",

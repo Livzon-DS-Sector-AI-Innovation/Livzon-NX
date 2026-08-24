@@ -4,14 +4,14 @@ import asyncio
 import logging
 from datetime import UTC, datetime
 
-import lark_oapi as lark
-from lark_oapi.api.drive.v1 import P2DriveFileBitableRecordChangedV1
+import lark_oapi as lark  # type: ignore[import-untyped]
+from lark_oapi.api.drive.v1 import (  # type: ignore[import-untyped]
+    P2DriveFileBitableRecordChangedV1,
+)
 from sqlalchemy import select
 
 from app.core.database import async_session_factory
-from app.core.secrets import decrypt_secret
 from app.modules.warehouse.feishu_client import WarehouseFeishuClient
-from app.modules.warehouse.repository import WarehouseRepository
 from app.modules.warehouse.schemas import WarehouseFeishuWsStatus
 from app.modules.warehouse.service import WarehouseService
 from app.platform.identity.models import FeishuConfig
@@ -103,24 +103,36 @@ async def start_ws_from_db() -> WarehouseFeishuWsStatus:
         set_main_loop(asyncio.get_running_loop())
 
     try:
-        async with async_session_factory() as session:
-            repo = WarehouseRepository(session)
-            config = await repo.get_active_feishu_config()
-            if not config:
-                await stop_ws()
-                _last_error = "未启用仓储飞书配置"
-                return await get_ws_status()
+        # The migrated warehouse uses page-level app tokens while the current
+        # platform keeps the shared Feishu credentials in Settings.  Preserve
+        # the WS lifecycle by deriving the subscription set from the page map.
+        from app.core.config import get_settings
+        from app.modules.warehouse.feishu_material_pages import (
+            FEISHU_WAREHOUSE_MATERIAL_PAGES,
+        )
 
-            assert config.id is not None
-            tokens = await repo.list_feishu_app_tokens(config.id)
-            return await restart_ws_with_config(
-                app_id=config.app_id,
-                app_secret=decrypt_secret(config.encrypted_app_secret),
-                app_tokens={
-                    f"source_{index + 1}": token
-                    for index, token in enumerate(tokens)
-                },
+        settings = get_settings()
+        app_tokens = {
+            f"source_{index + 1}": token
+            for index, token in enumerate(
+                dict.fromkeys(
+                    page.app_token for page in FEISHU_WAREHOUSE_MATERIAL_PAGES.values()
+                )
             )
+        }
+        if (
+            not settings.FEISHU_APP_ID
+            or not settings.FEISHU_APP_SECRET
+            or not app_tokens
+        ):
+            await stop_ws()
+            _last_error = "未配置共享飞书凭据或仓储数据入口"
+            return await get_ws_status()
+        return await restart_ws_with_config(
+            app_id=settings.FEISHU_APP_ID,
+            app_secret=settings.FEISHU_APP_SECRET,
+            app_tokens=app_tokens,
+        )
     except Exception as exc:
         await stop_ws()
         _last_error = f"读取仓储飞书配置失败：{exc}"

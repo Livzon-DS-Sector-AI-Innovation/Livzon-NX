@@ -6,7 +6,8 @@ import json
 import random
 import re
 import time
-from typing import Any
+from collections.abc import Awaitable
+from typing import Any, cast
 from urllib.parse import quote
 
 import httpx
@@ -18,9 +19,7 @@ TOKEN_TTL_SECONDS = 90 * 60
 
 
 def _token_cache_key(app_id: str, app_secret: str) -> str:
-    digest = hashlib.sha256(
-        f"{app_id}\0{app_secret}".encode("utf-8")
-    ).hexdigest()[:24]
+    digest = hashlib.sha256(f"{app_id}\0{app_secret}".encode()).hexdigest()[:24]
     return f"warehouse:feishu:tenant_token:{digest}"
 
 
@@ -39,17 +38,23 @@ class WarehouseFeishuClient:
         key = "warehouse:feishu:qps:" + hashlib.sha256(self.app_id.encode()).hexdigest()
         member = f"{time.time_ns()}-{random.random()}"
         while True:
-            wait_ms = await redis_client.eval(
-                "local t=redis.call('time'); local now=t[1]*1000+math.floor(t[2]/1000); "
-                "redis.call('zremrangebyscore',KEYS[1],0,now-1000); "
-                "if redis.call('zcard',KEYS[1]) < tonumber(ARGV[2]) then "
-                "redis.call('zadd',KEYS[1],now,ARGV[1]); redis.call('expire',KEYS[1],2); "
-                "return 0 end; local first=redis.call('zrange',KEYS[1],0,0,'WITHSCORES'); "
-                "return math.max(1,1000-(now-tonumber(first[2])))",
-                1,
-                key,
-                member,
-                5,
+            wait_ms = await cast(
+                Awaitable[Any],
+                redis_client.eval(
+                    "local t=redis.call('time'); "
+                    "local now=t[1]*1000+math.floor(t[2]/1000); "
+                    "redis.call('zremrangebyscore',KEYS[1],0,now-1000); "
+                    "if redis.call('zcard',KEYS[1]) < tonumber(ARGV[2]) then "
+                    "redis.call('zadd',KEYS[1],now,ARGV[1]); "
+                    "redis.call('expire',KEYS[1],2); "
+                    "return 0 end; "
+                    "local first=redis.call('zrange',KEYS[1],0,0,'WITHSCORES'); "
+                    "return math.max(1,1000-(now-tonumber(first[2])))",
+                    1,
+                    key,
+                    member,
+                    5,
+                ),
             )
             if int(wait_ms or 0) <= 0:
                 return
@@ -96,7 +101,9 @@ class WarehouseFeishuClient:
         lock = self._rate_locks.setdefault(self.app_id, asyncio.Lock())
         for attempt in range(6):
             async with lock:
-                wait_for = 0.2 - (time.monotonic() - self._last_request_at.get(self.app_id, 0))
+                wait_for = 0.2 - (
+                    time.monotonic() - self._last_request_at.get(self.app_id, 0)
+                )
                 if wait_for > 0:
                     await asyncio.sleep(wait_for)
                 await self._wait_for_shared_rate_slot()
@@ -132,10 +139,16 @@ class WarehouseFeishuClient:
                     )
                     if auth_failed and attempt == 0 and not force_token_refresh:
                         continue
-                    retryable = resp.status_code == 429 or resp.status_code >= 500 or code == 1254290
+                    retryable = (
+                        resp.status_code == 429
+                        or resp.status_code >= 500
+                        or code == 1254290
+                    )
                     if retryable and attempt < 5:
                         retry_after = resp.headers.get("Retry-After")
-                        delay = float(retry_after) if retry_after else min(2**attempt, 16)
+                        delay = (
+                            float(retry_after) if retry_after else min(2**attempt, 16)
+                        )
                         await asyncio.sleep(delay + random.uniform(0, 0.3))
                         continue
                     if code != 0:
@@ -274,7 +287,9 @@ class WarehouseFeishuClient:
             data = await self.request(
                 "GET", f"/wiki/v2/spaces/{space_id}/nodes", params=params
             )
-            items.extend(item for item in data.get("items", []) if isinstance(item, dict))
+            items.extend(
+                item for item in data.get("items", []) if isinstance(item, dict)
+            )
             if not data.get("has_more"):
                 break
             page_token = str(data.get("page_token") or "")
@@ -282,9 +297,7 @@ class WarehouseFeishuClient:
                 break
         return items
 
-    async def discover_wiki_bases(
-        self, root_token: str
-    ) -> list[dict[str, Any]]:
+    async def discover_wiki_bases(self, root_token: str) -> list[dict[str, Any]]:
         root = await self.get_wiki_node(root_token)
         space_id = str(root.get("space_id") or "")
         if not space_id:

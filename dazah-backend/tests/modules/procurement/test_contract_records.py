@@ -4,7 +4,8 @@ import uuid
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from io import BytesIO
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
+from typing import Any, cast
 
 import pytest
 
@@ -17,34 +18,36 @@ from app.modules.procurement.schemas import (
     ContractPartyInfo,
 )
 
+SimpleNamespace: Any = _SimpleNamespace
+
 
 class FakeDb:
-    async def flush(self) -> None:
+    async def flush(self: Any) -> None:
         return None
 
 
 class FakeContractRecordRepository:
     records: dict[uuid.UUID, ContractRecord] = {}
 
-    def __init__(self, session) -> None:
+    def __init__(self: Any, session: Any) -> None:
         self.session = session
 
     @classmethod
-    def reset(cls) -> None:
+    def reset(cls: Any) -> None:
         cls.records = {}
 
-    async def create(self, record: ContractRecord) -> ContractRecord:
+    async def create(self: Any, record: ContractRecord) -> ContractRecord:
         now = datetime.now(UTC)
         record.created_at = now
         record.updated_at = now
         self.records[record.id] = record
         return record
 
-    async def get(self, record_id: uuid.UUID) -> ContractRecord | None:
-        return self.records.get(record_id)
+    async def get(self: Any, record_id: uuid.UUID) -> ContractRecord | None:
+        return self.records.get(record_id)  # type: ignore[no-any-return]
 
     async def list_records(
-        self,
+        self: Any,
         *,
         keyword: str | None = None,
         page: int = 1,
@@ -64,7 +67,7 @@ class FakeContractRecordRepository:
 
 
 @pytest.fixture(autouse=True)
-def fake_contract_record_repository(monkeypatch):
+def fake_contract_record_repository(monkeypatch: Any) -> Any:
     FakeContractRecordRepository.reset()
     monkeypatch.setattr(
         procurement_service,
@@ -73,7 +76,7 @@ def fake_contract_record_repository(monkeypatch):
     )
 
 
-def test_contract_record_loads_identity_user_table_for_audit_foreign_keys():
+def test_contract_record_loads_identity_user_table_for_audit_foreign_keys() -> Any:
     assert "identity.users" in ContractRecord.metadata.tables
 
 
@@ -119,8 +122,8 @@ def _record(
 
 @pytest.mark.anyio
 async def test_generate_and_store_contract_persists_record_and_local_file(
-    tmp_path,
-    monkeypatch,
+    tmp_path: Any,
+    monkeypatch: Any,
 ) -> None:
     monkeypatch.setattr(procurement_service, "minio_enabled", lambda: False)
     monkeypatch.setattr(
@@ -138,8 +141,13 @@ async def test_generate_and_store_contract_persists_record_and_local_file(
         ),
     )
 
-    buffer, filename, content_type, record = await procurement_service.generate_and_store_contract(
-        FakeDb(),
+    (
+        buffer,
+        filename,
+        content_type,
+        record,
+    ) = await procurement_service.generate_and_store_contract(
+        cast(Any, FakeDb)(),
         _payload(),
     )
 
@@ -151,12 +159,14 @@ async def test_generate_and_store_contract_persists_record_and_local_file(
     assert record.seller_name == "测试供应商有限公司"
     assert record.payload["title"] == "测试耗材采购合同"
     assert record.file_size == len(b"contract-bytes")
-    assert (tmp_path / "procurement" / "contracts" / str(record.id) / filename).read_bytes() == b"contract-bytes"
+    assert (
+        tmp_path / "procurement" / "contracts" / str(record.id) / filename
+    ).read_bytes() == b"contract-bytes"
 
 
 @pytest.mark.anyio
 async def test_list_contract_records_searches_title_number_and_seller() -> None:
-    repository = FakeContractRecordRepository(FakeDb())
+    repository: Any = FakeContractRecordRepository(cast(Any, FakeDb)())
     await repository.create(
         _record(
             title="原材料采购合同",
@@ -173,11 +183,11 @@ async def test_list_contract_records_searches_title_number_and_seller() -> None:
     )
 
     title_records, title_total = await procurement_service.list_contract_records(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         keyword="原材料",
     )
     seller_records, seller_total = await procurement_service.list_contract_records(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         keyword="乙供应商",
     )
 
@@ -188,7 +198,9 @@ async def test_list_contract_records_searches_title_number_and_seller() -> None:
 
 
 @pytest.mark.anyio
-async def test_get_contract_record_file_reads_local_file(tmp_path, monkeypatch) -> None:
+async def test_get_contract_record_file_reads_local_file(
+    tmp_path: Any, monkeypatch: Any
+) -> None:
     monkeypatch.setattr(procurement_service, "minio_enabled", lambda: False)
     file_path = tmp_path / "contract.docx"
     file_path.write_bytes(b"saved-contract")
@@ -198,10 +210,10 @@ async def test_get_contract_record_file_reads_local_file(tmp_path, monkeypatch) 
         seller_name="查看供应商",
         file_path=str(file_path),
     )
-    await FakeContractRecordRepository(FakeDb()).create(record)
+    await FakeContractRecordRepository(cast(Any, FakeDb)()).create(record)
 
     data, content_type, filename = await procurement_service.get_contract_record_file(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         record.id,
     )
 

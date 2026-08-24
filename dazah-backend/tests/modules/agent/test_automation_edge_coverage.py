@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
+from typing import Any, cast
 from uuid import uuid4
 
 import pytest
@@ -43,6 +44,8 @@ from app.modules.agent.push_delivery_service import (
 from app.modules.agent.schemas import AgentAutomationTriggerCreate
 from app.modules.agent.tools import EmptyToolInput, ToolContext
 
+SimpleNamespace: Any = _SimpleNamespace
+
 
 def _context() -> dict[str, object]:
     return {
@@ -77,14 +80,19 @@ def test_automation_runtime_covers_predicates_and_transform_operations() -> None
         ("exists", None, True),
     ]
     for operator, value, expected in predicates:
-        assert evaluate_condition(
-            ConditionPredicate(
-                field="trigger.number" if operator != "contains" else "trigger.label",
-                op=operator,
-                value=value,
-            ),
-            context,
-        ) is expected
+        assert (
+            evaluate_condition(
+                ConditionPredicate(
+                    field="trigger.number"
+                    if operator != "contains"
+                    else "trigger.label",
+                    op=operator,
+                    value=value,
+                ),
+                context,
+            )
+            is expected
+        )
 
     assert evaluate_condition(
         ConditionPredicate(
@@ -127,7 +135,7 @@ def test_automation_runtime_covers_predicates_and_transform_operations() -> None
         context,
     )
 
-    rows = context["steps"]["rows"]
+    rows = context["steps"]["rows"]  # type: ignore[index]
     assert apply_transforms(
         [
             TransformOperation(
@@ -142,24 +150,30 @@ def test_automation_runtime_covers_predicates_and_transform_operations() -> None
         {"name": "B", "score": 3},
         {"name": "C", "score": 2},
     ]
-    assert apply_transforms(
-        [
-            TransformOperation(
-                op="rename",
-                source="steps.rows",
-                fields=["name:label"],
-            )
-        ],
-        context,
-    )[1]["label"] == "B"
-    assert apply_transforms(
-        [
-            TransformOperation(
-                op="rename", source="steps.missing", fields=["old:new"]
-            )
-        ],
-        context,
-    ) is None
+    assert (
+        apply_transforms(
+            [
+                TransformOperation(
+                    op="rename",
+                    source="steps.rows",
+                    fields=["name:label"],
+                )
+            ],
+            context,
+        )[1]["label"]
+        == "B"
+    )
+    assert (
+        apply_transforms(
+            [
+                TransformOperation(
+                    op="rename", source="steps.missing", fields=["old:new"]
+                )
+            ],
+            context,
+        )
+        is None
+    )
 
     filter_cases = [
         ("eq", 1, ["A"]),
@@ -177,7 +191,9 @@ def test_automation_runtime_covers_predicates_and_transform_operations() -> None
                 TransformOperation(
                     op="filter",
                     source="steps.rows",
-                    field="tags" if operator == "contains" else "name"
+                    field="tags"
+                    if operator == "contains"
+                    else "name"
                     if operator == "exists"
                     else "score",
                     operator=operator,
@@ -188,17 +204,23 @@ def test_automation_runtime_covers_predicates_and_transform_operations() -> None
         )
         assert [item["name"] for item in filtered] == names
 
-    assert apply_transforms(
-        [
-            TransformOperation(
-                op="sort", source="steps.rows", field="score", descending=True
-            )
-        ],
-        context,
-    )[0]["name"] == "B"
-    assert apply_transforms(
-        [TransformOperation(op="limit", source="steps.rows", limit=2)], context
-    ) == rows[:2]
+    assert (
+        apply_transforms(
+            [
+                TransformOperation(
+                    op="sort", source="steps.rows", field="score", descending=True
+                )
+            ],
+            context,
+        )[0]["name"]
+        == "B"
+    )
+    assert (
+        apply_transforms(
+            [TransformOperation(op="limit", source="steps.rows", limit=2)], context
+        )
+        == rows[:2]
+    )
     aggregate = apply_transforms(
         [
             TransformOperation(
@@ -210,11 +232,7 @@ def test_automation_runtime_covers_predicates_and_transform_operations() -> None
     assert aggregate["score"] == {"count": 3, "sum": 6, "min": 1, "max": 3}
     assert aggregate["missing"]["sum"] is None
     groups = apply_transforms(
-        [
-            TransformOperation(
-                op="group_by", source="steps.rows", group_by=["group"]
-            )
-        ],
+        [TransformOperation(op="group_by", source="steps.rows", group_by=["group"])],
         context,
     )
     assert [item["count"] for item in groups] == [2, 1]
@@ -231,29 +249,34 @@ def test_automation_runtime_covers_predicates_and_transform_operations() -> None
     assert templated == {"message": "urgent/3/"}
 
     with pytest.raises(ValueError, match="source:target"):
-        apply_transforms(
-            [TransformOperation(op="rename", fields=["invalid"])], context
-        )
+        apply_transforms([TransformOperation(op="rename", fields=["invalid"])], context)
 
     empty_group = ConditionGroup.model_construct(all=None, any=None, not_=None)
     assert not evaluate_condition(empty_group, context)
     unknown_predicate = ConditionPredicate.model_construct(
-        field="trigger.number", op="unknown", value=None
+        field="trigger.number",
+        op="unknown",  # type: ignore[arg-type]
+        value=None,
     )
     assert not evaluate_condition(unknown_predicate, context)
     assert automation_runtime_module._select(1, ["value"]) == 1
-    assert automation_runtime_module._filter(
-        1, TransformOperation.model_construct(op="filter")
-    ) == []
-    assert not automation_runtime_module._filter_matches(
-        {}, TransformOperation.model_construct(operator="unknown", field="value")
+    assert (
+        automation_runtime_module._filter(
+            1, TransformOperation.model_construct(op="filter")
+        )
+        == []
     )
-    assert automation_runtime_module._sort(
-        1, TransformOperation.model_construct(op="sort")
-    ) == 1
-    assert automation_runtime_module._group_by(
-        1, ["value"]
-    ) == []
+    assert not automation_runtime_module._filter_matches(
+        {},
+        TransformOperation.model_construct(operator="unknown", field="value"),  # type: ignore[arg-type, call-arg]
+    )
+    assert (
+        automation_runtime_module._sort(
+            1, TransformOperation.model_construct(op="sort")
+        )
+        == 1
+    )
+    assert automation_runtime_module._group_by(1, ["value"]) == []
 
 
 def test_automation_node_error_keeps_machine_readable_code() -> None:
@@ -395,9 +418,12 @@ def test_automation_schema_validates_edges_and_v11_graph_rules() -> None:
 
 def test_schedule_validation_and_fire_time_edges() -> None:
     now = datetime.now(UTC).replace(microsecond=0)
-    assert normalize_schedule_config(
-        trigger_type="manual", schedule={}, timezone="Asia/Shanghai"
-    ) == {}
+    assert (
+        normalize_schedule_config(
+            trigger_type="manual", schedule={}, timezone="Asia/Shanghai"
+        )
+        == {}
+    )
     with pytest.raises(HTTPException):
         normalize_schedule_config(
             trigger_type="manual", schedule={}, timezone="Invalid/Zone"
@@ -428,11 +454,17 @@ def test_schedule_validation_and_fire_time_edges() -> None:
                 timezone="UTC",
             )
 
-    assert next_fire_at(
-        schedule={"kind": "once", "run_at": (now - timedelta(seconds=1)).isoformat()},
-        timezone="UTC",
-        after=now,
-    ) is None
+    assert (
+        next_fire_at(
+            schedule={
+                "kind": "once",
+                "run_at": (now - timedelta(seconds=1)).isoformat(),
+            },
+            timezone="UTC",
+            after=now,
+        )
+        is None
+    )
     with pytest.raises(ValueError):
         next_fire_at(
             schedule={
@@ -478,9 +510,7 @@ def test_interaction_schema_rejects_unsafe_or_incomplete_inputs() -> None:
                 **base,
                 "resource_type": "sheet",
                 "sheet_range": "A1:B2",
-                "field_schema": [
-                    {"key": "name", "label": "Name", "type": "text"}
-                ],
+                "field_schema": [{"key": "name", "label": "Name", "type": "text"}],
                 "writable_fields": ["name"],
             }
         )
@@ -499,9 +529,7 @@ def test_interaction_schema_rejects_unsafe_or_incomplete_inputs() -> None:
             **{
                 **request_base,
                 "mode": "table_link",
-                "form_schema": [
-                    {"key": "name", "label": "Name", "type": "text"}
-                ],
+                "form_schema": [{"key": "name", "label": "Name", "type": "text"}],
             }
         )
     with pytest.raises(ValidationError):
@@ -509,9 +537,7 @@ def test_interaction_schema_rejects_unsafe_or_incomplete_inputs() -> None:
             **{
                 **request_base,
                 "mode": "card_form",
-                "form_schema": [
-                    {"key": "name", "label": "Name", "type": "text"}
-                ],
+                "form_schema": [{"key": "name", "label": "Name", "type": "text"}],
                 "expires_at": datetime.now(),
             }
         )
@@ -562,9 +588,12 @@ def test_push_card_helpers_render_interaction_and_action_variants() -> None:
     assert _card_form_field({"key": "state", "type": "boolean"})["tag"] == (
         "select_static"
     )
-    assert _card_form_field(
-        {"key": "tags", "type": "multi_select", "options": ["a"]}
-    )["tag"] == "multi_select_static"
+    assert (
+        _card_form_field({"key": "tags", "type": "multi_select", "options": ["a"]})[
+            "tag"
+        ]
+        == "multi_select_static"
+    )
 
 
 @pytest.mark.anyio
@@ -577,32 +606,38 @@ async def test_agent_tool_wrappers_delegate_to_services(
         user_id=uuid4(),
         user=SimpleNamespace(id=uuid4()),
         reason=None,
-        raw_request=None,
+        raw_request=None,  # type: ignore[arg-type]
     )
 
     class Dumpable:
-        def __init__(self, value: dict[str, object]) -> None:
+        def __init__(self: Any, value: dict[str, object]) -> None:
             self.value = value
 
-        def model_dump(self, *, mode: str) -> dict[str, object]:
+        def model_dump(self: Any, *, mode: str) -> dict[str, object]:
             assert mode == "json"
-            return self.value
+            return self.value  # type: ignore[no-any-return]
 
     class FakeInteractionService:
-        async def list_templates(self, _db, *, user):
+        async def list_templates(self: Any, _db: Any, *, user: Any) -> Any:
             assert user is context.user
             return [Dumpable({"id": "template"})]
 
-        async def validate_template(self, _db, *, user, template_id):
+        async def validate_template(
+            self: Any, _db: Any, *, user: Any, template_id: Any
+        ) -> Any:
             assert user is context.user
             assert template_id
             return Dumpable({"valid": True})
 
-        async def list_requests(self, _db, *, user, page, page_size):
+        async def list_requests(
+            self: Any, _db: Any, *, user: Any, page: Any, page_size: Any
+        ) -> Any:
             assert user is context.user
             return Dumpable({"page": page, "page_size": page_size})
 
-        async def get_request(self, _db, *, user, request_id):
+        async def get_request(
+            self: Any, _db: Any, *, user: Any, request_id: Any
+        ) -> Any:
             assert user is context.user
             assert request_id
             return Dumpable({"id": str(request_id)})
@@ -613,12 +648,9 @@ async def test_agent_tool_wrappers_delegate_to_services(
     assert await agent_tools.list_feishu_resource_templates(
         context, EmptyToolInput()
     ) == [{"id": "template"}]
-    assert (
-        await agent_tools.validate_feishu_resource_template(
-            context, agent_tools.FeishuResourceTemplateIdInput(template_id=uuid4())
-        )
-        == {"valid": True}
-    )
+    assert await agent_tools.validate_feishu_resource_template(
+        context, agent_tools.FeishuResourceTemplateIdInput(template_id=uuid4())
+    ) == {"valid": True}
     assert await agent_tools.list_interaction_requests(
         context, agent_tools.InteractionRequestListInput(page=2, page_size=3)
     ) == {"page": 2, "page_size": 3}
@@ -632,16 +664,16 @@ async def test_agent_tool_wrappers_delegate_to_services(
     class FakeAutomation:
         id = automation_id
 
-        def model_dump(self, *, mode: str) -> dict[str, object]:
+        def model_dump(self: Any, *, mode: str) -> dict[str, object]:
             assert mode == "json"
             return {"id": str(self.id)}
 
     class FakeAutomationService:
-        async def update_automation(self, _db, **kwargs):
+        async def update_automation(self: Any, _db: Any, **kwargs: Any) -> Any:
             assert kwargs["automation_id"] == automation_id
             return FakeAutomation()
 
-        async def confirm_automation(self, _db, **kwargs):
+        async def confirm_automation(self: Any, _db: Any, **kwargs: Any) -> Any:
             assert kwargs["automation_id"] == automation_id
             return FakeAutomation()
 
@@ -677,7 +709,7 @@ async def test_agent_tool_wrappers_delegate_to_services(
 async def test_automation_preview_checks_schedules_and_templates(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    user = SimpleNamespace(id=uuid4(), role="user")
+    user: Any = SimpleNamespace(id=uuid4(), role="user")
     template_id = uuid4()
     definition = AutomationDefinitionV1.model_validate(
         {
@@ -694,7 +726,7 @@ async def test_automation_preview_checks_schedules_and_templates(
             ],
         }
     )
-    report = SimpleNamespace(
+    report: Any = SimpleNamespace(
         definition=definition,
         valid=True,
         required_operations=[],
@@ -703,7 +735,7 @@ async def test_automation_preview_checks_schedules_and_templates(
     )
 
     class PreviewDb:
-        async def get(self, _model, requested_id):
+        async def get(self: Any, _model: Any, requested_id: Any) -> Any:
             assert requested_id == template_id
             return SimpleNamespace(
                 is_deleted=False,
@@ -713,14 +745,14 @@ async def test_automation_preview_checks_schedules_and_templates(
 
     service = AgentAutomationService()
 
-    async def compile_for_user(_db, *, user, definition):
+    async def compile_for_user(_db: Any, *, user: Any, definition: Any) -> Any:
         assert user is not None
         assert definition is not None
         return report, {"scope": "snapshot"}, {"agent.list": "1.0"}
 
     monkeypatch.setattr(service, "_compile_for_user", compile_for_user)
     result = await service.preview(
-        PreviewDb(),
+        PreviewDb(),  # type: ignore[arg-type]
         user=user,
         definition=definition,
         triggers=[
@@ -744,71 +776,83 @@ async def test_automation_preview_checks_schedules_and_templates(
 async def test_interaction_api_wrappers_delegate_and_commit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    user = SimpleNamespace(id=uuid4())
+    user: Any = SimpleNamespace(id=uuid4())
     request_id = uuid4()
     template_id = uuid4()
 
     class FakeDb:
-        def __init__(self) -> None:
+        def __init__(self: Any) -> None:
             self.commits = 0
 
-        async def commit(self) -> None:
+        async def commit(self: Any) -> None:  # type: ignore[return]
             self.commits += 1
 
     class Dumpable:
-        def __init__(self, value: dict[str, object]) -> None:
+        def __init__(self: Any, value: dict[str, object]) -> None:
             self.value = value
 
-        def model_dump(self, *, mode: str) -> dict[str, object]:
+        def model_dump(self: Any, *, mode: str) -> dict[str, object]:
             assert mode == "json"
             return self.value
 
     class FakeInteractionService:
-        async def create_template(self, _db, *, user, request):
+        async def create_template(
+            self: Any, _db: Any, *, user: Any, request: Any
+        ) -> Any:
             assert user is user_ref
             assert request is template_payload
-            return Dumpable({"id": "template"})
+            return Dumpable({"id": "template"})  # type: ignore[return-value]
 
-        async def list_templates(self, _db, *, user):
+        async def list_templates(self: Any, _db: Any, *, user: Any) -> Any:
             assert user is user_ref
-            return [Dumpable({"id": "template"})]
+            return [Dumpable({"id": "template"})]  # type: ignore[return-value]
 
-        async def validate_template(self, _db, *, user, template_id):
+        async def validate_template(
+            self: Any, _db: Any, *, user: Any, template_id: Any
+        ) -> Any:
             assert user is user_ref
             assert template_id == template_ref
-            return Dumpable({"valid": True})
+            return Dumpable({"valid": True})  # type: ignore[return-value]
 
-        async def create_request(self, _db, *, user, request):
+        async def create_request(
+            self: Any, _db: Any, *, user: Any, request: Any
+        ) -> Any:
             assert user is user_ref
             assert request is request_payload
-            return Dumpable({"id": "request"})
+            return Dumpable({"id": "request"})  # type: ignore[return-value]
 
-        async def list_requests(self, _db, *, user, page, page_size):
+        async def list_requests(
+            self: Any, _db: Any, *, user: Any, page: Any, page_size: Any
+        ) -> Any:
             assert user is user_ref
             assert (page, page_size) == (2, 100)
-            return Dumpable({"page": page, "page_size": page_size})
+            return Dumpable({"page": page, "page_size": page_size})  # type: ignore[return-value]
 
-        async def get_request(self, _db, *, user, request_id):
+        async def get_request(
+            self: Any, _db: Any, *, user: Any, request_id: Any
+        ) -> Any:
             assert user is user_ref
             assert request_id == request_ref
-            return Dumpable({"id": str(request_id)})
+            return Dumpable({"id": str(request_id)})  # type: ignore[return-value]
 
-        async def submit(self, _db, *, user, request_id, request):
+        async def submit(
+            self: Any, _db: Any, *, user: Any, request_id: Any, request: Any
+        ) -> Any:
             assert user is user_ref
             assert request_id == request_ref
             assert request is submission_payload
-            return Dumpable({"status": "submitted"})
+            return Dumpable({"status": "submitted"})  # type: ignore[return-value]
 
     user_ref = user
     template_ref = template_id
     request_ref = request_id
-    template_payload = object()
-    request_payload = object()
-    submission_payload = object()
+    template_payload: Any = object()
+    request_payload: Any = object()
+    submission_payload: Any = object()
     monkeypatch.setattr(
         agent_api, "AgentInteractionService", lambda: FakeInteractionService()
     )
-    db = FakeDb()
+    db: Any = cast(Any, FakeDb)()
 
     await agent_api.create_feishu_resource_template(
         template_payload, db=db, current_user=user
@@ -836,36 +880,38 @@ async def test_internal_interaction_api_validates_subject_and_commits(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     request_id = uuid4()
-    user = SimpleNamespace(id=uuid4())
-    db = SimpleNamespace(commits=0)
+    user: Any = SimpleNamespace(id=uuid4())
+    db: Any = SimpleNamespace(commits=0)
 
     async def commit() -> None:
         db.commits += 1
 
     db.commit = commit
-    payload = SimpleNamespace(subject=object(), submission=object())
-    settings = SimpleNamespace(HERMES_INTERNAL_TOKEN="internal-token")
+    payload: Any = SimpleNamespace(subject=object(), submission=object())
+    settings: Any = SimpleNamespace(HERMES_INTERNAL_TOKEN="internal-token")
 
     def check_token(expected: str, authorization: str | None) -> None:
         assert expected == "internal-token"
         assert authorization == "Bearer internal-token"
 
-    async def resolve_user(_db, *, subject):
+    async def resolve_user(_db: Any, *, subject: Any) -> Any:
         assert subject is payload.subject
         return user
 
     class FakeService:
-        async def submit(self, _db, *, user, request_id, request):
+        async def submit(
+            self: Any, _db: Any, *, user: Any, request_id: Any, request: Any
+        ) -> Any:
             assert user is not None
             assert request_id == request_ref
             assert request is payload.submission
-            return Dumpable({"status": "submitted"})
+            return Dumpable({"status": "submitted"})  # type: ignore[return-value]
 
     class Dumpable:
-        def __init__(self, value: dict[str, object]) -> None:
+        def __init__(self: Any, value: dict[str, object]) -> None:
             self.value = value
 
-        def model_dump(self, *, mode: str) -> dict[str, object]:
+        def model_dump(self: Any, *, mode: str) -> dict[str, object]:
             assert mode == "json"
             return self.value
 

@@ -1,4 +1,5 @@
 from datetime import UTC, date, datetime, timedelta
+from typing import Any
 
 import pytest
 
@@ -33,7 +34,7 @@ def test_event_restore_cannot_precede_start() -> None:
 
 
 @pytest.mark.anyio
-async def test_fermentation_crud_uses_soft_delete(db_session) -> None:
+async def test_fermentation_crud_uses_soft_delete(db_session: Any) -> None:
     service = OperationsService(db_session)
     record = await service.create_fermentation(
         FermentationCreate(

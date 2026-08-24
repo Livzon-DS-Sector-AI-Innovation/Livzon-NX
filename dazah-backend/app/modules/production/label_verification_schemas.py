@@ -107,6 +107,4 @@ class LabelVerificationStatistics(BaseModel):
     today_count: int = Field(..., description="今日复核次数")
     this_week_count: int = Field(..., description="本周复核次数")
     this_month_count: int = Field(..., description="本月复核次数")
-    by_batch: dict[str, int] = Field(
-        default_factory=dict, description="按批号统计"
-    )
+    by_batch: dict[str, int] = Field(default_factory=dict, description="按批号统计")

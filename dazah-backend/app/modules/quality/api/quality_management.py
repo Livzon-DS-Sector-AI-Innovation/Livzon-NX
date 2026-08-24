@@ -2,35 +2,35 @@
 
 import uuid
 from io import BytesIO
-from typing import Literal
+from typing import Any, Literal
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import HTMLResponse, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.database import get_db
+from app.core.upload_security import read_upload_secure
+from app.modules.quality import service
 from app.modules.quality.schemas import (
+    ApplyDeviationAiSessionRequest,
     BatchUpdateStatusRequest,
     CapaApprovalRequest,
     CapaDeptHeadConfirmRequest,
     CapaEvaluationRequest,
-    CapaStatistics,
-    ChangeStatistics,
     CompleteAiAnalysisRequest,
     CompletePartRequest,
     ConfirmProductionStatusRequest,
     CreateAttachmentReviewRequest,
-    CreateCapaRequest,
     CreateCapaPlanTrackRequest,
+    CreateCapaRequest,
     CreateChangeActionPlanRequest,
     CreateChangeRequest,
     CreateDepartmentContactRequest,
-    CreateDeviationRequest,
     CreateDeviationInvestigationPushRecordRequest,
-    ApplyDeviationAiSessionRequest,
+    CreateDeviationRequest,
     DeviationAiSessionOut,
-    DeviationStatistics,
     ExecutionTrack,
     LinkDeviationRequest,
     QualityAiApplyRequest,
@@ -41,18 +41,16 @@ from app.modules.quality.schemas import (
     QualityFeishuTableOption,
     SubmitInvestigationRequest,
     SubmitReviewRequest,
-    UpdateQualityFeishuAppSettingsRequest,
-    UpdateQualityFeishuEntitySettingRequest,
-    UpdateCapaRequest,
     UpdateCapaPlanTrackRequest,
+    UpdateCapaRequest,
     UpdateChangeActionPlanRequest,
     UpdateChangeRequest,
     UpdateDepartmentContactRequest,
     UpdateDeviationAiSessionRequest,
-    UpdateDeviationInvestigationPushRecordRequest,
     UpdateDeviationRequest,
+    UpdateQualityFeishuAppSettingsRequest,
+    UpdateQualityFeishuEntitySettingRequest,
 )
-from app.modules.quality import service
 from app.modules.quality.service import (
     change_ledger_export,
     deviation_ledger_export,
@@ -64,7 +62,9 @@ from app.platform.identity.deps import CurrentUser
 router = APIRouter()
 
 
-def _build_docx_download_headers(filename_utf8: str, fallback_ascii: str) -> dict[str, str]:
+def _build_docx_download_headers(
+    filename_utf8: str, fallback_ascii: str
+) -> dict[str, str]:
     encoded = quote(filename_utf8)
     return {
         "Content-Disposition": (
@@ -91,10 +91,12 @@ async def _resolve_change_export_items(
     closure_date_from: str | None,
     closure_date_to: str | None,
     content_keyword: str | None,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     if scope == "single":
         if change_id is None:
-            raise HTTPException(status_code=400, detail="scope=single 时必须提供 change_id")
+            raise HTTPException(
+                status_code=400, detail="scope=single 时必须提供 change_id"
+            )
         detail = await service.get_change_detail(db, change_id)
         return [detail.model_dump(mode="json")]
 
@@ -103,7 +105,7 @@ async def _resolve_change_export_items(
             raise HTTPException(
                 status_code=400, detail="scope=selected 时必须提供 change_ids"
             )
-        items: list[dict] = []
+        items: list[dict[str, Any]] = []
         for selected_change_id in change_ids:
             detail = await service.get_change_detail(db, selected_change_id)
             items.append(detail.model_dump(mode="json"))
@@ -112,6 +114,7 @@ async def _resolve_change_export_items(
     result = await service.get_change_list(
         db,
         change_code,
+        None,
         applicant_department,
         change_object,
         change_level,
@@ -127,11 +130,12 @@ async def _resolve_change_export_items(
         1,
         10000,
     )
-    return result["items"]
+    raw_items = result["items"]
+    return [dict(item) for item in raw_items if isinstance(item, dict)]
 
 
 def _build_change_export_filename(
-    scope: Literal["single", "selected", "filtered"], items: list[dict]
+    scope: Literal["single", "selected", "filtered"], items: list[dict[str, Any]]
 ) -> tuple[str, str]:
     if scope == "single" and items:
         change_code = (items[0].get("change_code") or "change-ledger").strip()
@@ -140,6 +144,7 @@ def _build_change_export_filename(
 
 
 # ============ Deviations ============
+
 
 @router.get("/deviations", summary="获取偏差列表")
 async def list_deviations(
@@ -158,7 +163,7 @@ async def list_deviations(
     page: int = 1,
     page_size: int = 20,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     result = await service.get_deviation_list(
         db,
         status,
@@ -176,7 +181,14 @@ async def list_deviations(
         page,
         page_size,
     )
-    return {"data": result["items"], "meta": {"total": result["total"], "page": result["page"], "page_size": result["page_size"]}}
+    return {
+        "data": result["items"],
+        "meta": {
+            "total": result["total"],
+            "page": result["page"],
+            "page_size": result["page_size"],
+        },
+    }
 
 
 @router.get("/deviations/report-records", summary="获取偏差报告记录列表")
@@ -184,7 +196,7 @@ async def list_deviation_report_records(
     page: int = 1,
     page_size: int = 20,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     result = await service.get_deviation_report_record_list(
         db,
         page=page,
@@ -205,7 +217,7 @@ async def list_deviation_report_records_static(
     page: int = 1,
     page_size: int = 20,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     result = await quality_feishu_pages.list_report_records(
         db,
         page=page,
@@ -228,7 +240,7 @@ async def list_deviation_report_records_static(
 async def ensure_deviation_from_report_record(
     record_id: str,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     try:
         result = await service.ensure_deviation_from_report_record(db, record_id)
         return {"data": result}
@@ -237,8 +249,12 @@ async def ensure_deviation_from_report_record(
 
 
 @router.patch("/deviations/batch", summary="批量更新偏差状态")
-async def batch_update_deviation_status(data: BatchUpdateStatusRequest, db: AsyncSession = Depends(get_db)) -> dict:
-    result = await service.batch_update_status(db, data.deviation_ids, data.target_status, "system")
+async def batch_update_deviation_status(
+    data: BatchUpdateStatusRequest, db: AsyncSession = Depends(get_db)
+) -> Any:
+    result = await service.batch_update_status(
+        db, data.deviation_ids, data.target_status, "system"
+    )
     return {"data": result}
 
 
@@ -248,25 +264,38 @@ async def list_department_confirmations(
     page: int = 1,
     page_size: int = 20,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     result = await service.get_department_confirmations(db, week_key, page, page_size)
-    return {"data": result["items"], "meta": {"total": result["total"], "page": result["page"], "page_size": result["page_size"]}}
+    return {
+        "data": result["items"],
+        "meta": {
+            "total": result["total"],
+            "page": result["page"],
+            "page_size": result["page_size"],
+        },
+    }
 
 
 @router.post("/deviations/department-confirmations", summary="确认部门生产状态")
-async def confirm_department_status(data: ConfirmProductionStatusRequest, db: AsyncSession = Depends(get_db)) -> dict:
+async def confirm_department_status(
+    data: ConfirmProductionStatusRequest, db: AsyncSession = Depends(get_db)
+) -> Any:
     result = await service.confirm_production_status(db, data, "system")
     return {"data": result}
 
 
 @router.get("/deviations/stopped-departments", summary="获取停产部门列表")
-async def get_stopped_departments(week_key: str, db: AsyncSession = Depends(get_db)) -> dict:
+async def get_stopped_departments(
+    week_key: str, db: AsyncSession = Depends(get_db)
+) -> Any:
     departments = await service.get_stopped_departments(db, week_key)
     return {"data": departments}
 
 
 @router.get("/deviations/{deviation_id}", summary="获取偏差详情")
-async def get_deviation(deviation_id: uuid.UUID, db: AsyncSession = Depends(get_db)) -> dict:
+async def get_deviation(
+    deviation_id: uuid.UUID, db: AsyncSession = Depends(get_db)
+) -> Any:
     try:
         detail = await service.get_deviation_detail(db, deviation_id)
         return {"data": detail.model_dump()}
@@ -278,7 +307,7 @@ async def get_deviation(deviation_id: uuid.UUID, db: AsyncSession = Depends(get_
 async def get_related_capas(
     deviation_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     try:
         result = await service.get_related_capas_for_deviation(db, deviation_id)
         return {"data": result}
@@ -291,7 +320,7 @@ async def create_deviation(
     data: CreateDeviationRequest,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = None,
-) -> dict:
+) -> Any:
     try:
         result = await service.create_deviation(
             db,
@@ -305,7 +334,11 @@ async def create_deviation(
 
 
 @router.put("/deviations/{deviation_id}", summary="更新偏差")
-async def update_deviation(deviation_id: uuid.UUID, data: UpdateDeviationRequest, db: AsyncSession = Depends(get_db)) -> dict:
+async def update_deviation(
+    deviation_id: uuid.UUID,
+    data: UpdateDeviationRequest,
+    db: AsyncSession = Depends(get_db),
+) -> Any:
     try:
         result = await service.update_deviation(db, deviation_id, data, "system")
         return {"data": result}
@@ -314,7 +347,9 @@ async def update_deviation(deviation_id: uuid.UUID, data: UpdateDeviationRequest
 
 
 @router.delete("/deviations/{deviation_id}", summary="删除偏差")
-async def delete_deviation(deviation_id: uuid.UUID, db: AsyncSession = Depends(get_db)) -> dict:
+async def delete_deviation(
+    deviation_id: uuid.UUID, db: AsyncSession = Depends(get_db)
+) -> Any:
     try:
         result = await service.delete_deviation(db, deviation_id)
         return {"data": result}
@@ -323,7 +358,9 @@ async def delete_deviation(deviation_id: uuid.UUID, db: AsyncSession = Depends(g
 
 
 @router.post("/deviations/batch-delete", summary="批量删除偏差")
-async def batch_delete_deviations(data: dict, db: AsyncSession = Depends(get_db)) -> dict:
+async def batch_delete_deviations(
+    data: dict[str, Any], db: AsyncSession = Depends(get_db)
+) -> Any:
     ids = data.get("ids", [])
     if not ids:
         raise HTTPException(status_code=400, detail="请选择要删除的记录")
@@ -338,7 +375,9 @@ async def batch_delete_deviations(data: dict, db: AsyncSession = Depends(get_db)
 
 
 @router.post("/deviations/{deviation_id}/submit", summary="提交偏差启动审核流程")
-async def submit_deviation_for_review(deviation_id: uuid.UUID, db: AsyncSession = Depends(get_db)) -> dict:
+async def submit_deviation_for_review(
+    deviation_id: uuid.UUID, db: AsyncSession = Depends(get_db)
+) -> Any:
     try:
         result = await service.submit_for_review(db, deviation_id, "system")
         return {"data": result}
@@ -351,16 +390,22 @@ async def complete_ai_analysis(
     deviation_id: uuid.UUID,
     data: CompleteAiAnalysisRequest,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     try:
-        result = await service.complete_ai_analysis(db, deviation_id, data.ai_analysis, "system")
+        result = await service.complete_ai_analysis(
+            db, deviation_id, data.ai_analysis, "system"
+        )
         return {"data": result}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post("/deviations/{deviation_id}/submit-investigation", summary="提交调查报告")
-async def submit_investigation(deviation_id: uuid.UUID, data: SubmitInvestigationRequest, db: AsyncSession = Depends(get_db)) -> dict:
+async def submit_investigation(
+    deviation_id: uuid.UUID,
+    data: SubmitInvestigationRequest,
+    db: AsyncSession = Depends(get_db),
+) -> Any:
     try:
         result = await service.submit_investigation(db, deviation_id, data, "system")
         return {"data": result}
@@ -369,7 +414,11 @@ async def submit_investigation(deviation_id: uuid.UUID, data: SubmitInvestigatio
 
 
 @router.post("/deviations/{deviation_id}/submit-review", summary="提交审核意见")
-async def submit_review(deviation_id: uuid.UUID, data: SubmitReviewRequest, db: AsyncSession = Depends(get_db)) -> dict:
+async def submit_review(
+    deviation_id: uuid.UUID,
+    data: SubmitReviewRequest,
+    db: AsyncSession = Depends(get_db),
+) -> Any:
     try:
         result = await service.submit_review(db, deviation_id, data, "system")
         return {"data": result}
@@ -378,7 +427,9 @@ async def submit_review(deviation_id: uuid.UUID, data: SubmitReviewRequest, db: 
 
 
 @router.post("/deviations/{deviation_id}/submit-final-code", summary="提交最终编号")
-async def submit_final_code(deviation_id: uuid.UUID, final_code: str, db: AsyncSession = Depends(get_db)) -> dict:
+async def submit_final_code(
+    deviation_id: uuid.UUID, final_code: str, db: AsyncSession = Depends(get_db)
+) -> Any:
     try:
         result = await service.submit_final_code(db, deviation_id, final_code, "system")
         return {"data": result}
@@ -387,7 +438,9 @@ async def submit_final_code(deviation_id: uuid.UUID, final_code: str, db: AsyncS
 
 
 @router.post("/deviations/{deviation_id}/resubmit", summary="重新提交偏差")
-async def resubmit_deviation(deviation_id: uuid.UUID, db: AsyncSession = Depends(get_db)) -> dict:
+async def resubmit_deviation(
+    deviation_id: uuid.UUID, db: AsyncSession = Depends(get_db)
+) -> Any:
     try:
         result = await service.resubmit_deviation(db, deviation_id, "system")
         return {"data": result}
@@ -396,6 +449,7 @@ async def resubmit_deviation(deviation_id: uuid.UUID, db: AsyncSession = Depends
 
 
 # ============ CAPAs ============
+
 
 @router.get("/changes", summary="获取变更列表")
 async def list_changes(
@@ -415,10 +469,11 @@ async def list_changes(
     page: int = 1,
     page_size: int = 20,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     result = await service.get_change_list(
         db,
         change_code,
+        None,
         applicant_department,
         change_object,
         change_level,
@@ -434,7 +489,14 @@ async def list_changes(
         page,
         page_size,
     )
-    return {"data": result["items"], "meta": {"total": result["total"], "page": result["page"], "page_size": result["page_size"]}}
+    return {
+        "data": result["items"],
+        "meta": {
+            "total": result["total"],
+            "page": result["page"],
+            "page_size": result["page_size"],
+        },
+    }
 
 
 @router.get("/change-action-plans", summary="获取变更计划列表", response_model=None)
@@ -453,7 +515,7 @@ async def list_change_action_plans(
     page: int = 1,
     page_size: int = 20,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     result = await service.get_change_action_plan_list(
         db,
         change_id=change_id,
@@ -484,7 +546,7 @@ async def list_change_action_plans(
 async def create_change_action_plan(
     data: CreateChangeActionPlanRequest,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     result = await service.create_change_action_plan_record(db, data, "system")
     return {"data": result}
 
@@ -493,7 +555,7 @@ async def create_change_action_plan(
 async def search_change_action_plan_persons(
     keyword: str = Query(..., min_length=1, description="姓名/手机号/邮箱关键词"),
     limit: int = Query(20, ge=1, le=50, description="返回条数"),
-) -> dict:
+) -> Any:
     try:
         result = await service.search_change_action_plan_person_options(keyword, limit)
         return {"data": [item.model_dump() for item in result]}
@@ -504,7 +566,7 @@ async def search_change_action_plan_persons(
 @router.post("/change-action-plans/sync-from-feishu", summary="从飞书同步变更计划")
 async def sync_change_action_plans_from_feishu(
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     try:
         result = await service.sync_change_action_plans_from_feishu(db, "system")
         return {"data": result.model_dump()}
@@ -515,7 +577,7 @@ async def sync_change_action_plans_from_feishu(
 @router.post("/change-action-plans/reminders/run", summary="立即执行变更计划提醒")
 async def run_change_action_plan_reminders(
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     result = await service.run_change_action_plan_reminders_now(db)
     return {"data": result.model_dump()}
 
@@ -525,9 +587,11 @@ async def update_change_action_plan(
     plan_id: uuid.UUID,
     data: UpdateChangeActionPlanRequest,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     try:
-        result = await service.update_change_action_plan_record(db, plan_id, data, "system")
+        result = await service.update_change_action_plan_record(
+            db, plan_id, data, "system"
+        )
         return {"data": result}
     except ValueError as e:
         detail = str(e)
@@ -536,11 +600,13 @@ async def update_change_action_plan(
         raise HTTPException(status_code=400, detail=detail)
 
 
-@router.post("/change-action-plans/{plan_id}/reminders/send", summary="手动发送单条变更计划提醒")
+@router.post(
+    "/change-action-plans/{plan_id}/reminders/send", summary="手动发送单条变更计划提醒"
+)
 async def send_change_action_plan_reminder(
     plan_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     try:
         result = await service.send_change_action_plan_reminder_for_plan(db, plan_id)
         return {"data": result}
@@ -550,12 +616,14 @@ async def send_change_action_plan_reminder(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/change-action-plans/{plan_id}/reminders/confirm", summary="确认变更计划提醒")
+@router.post(
+    "/change-action-plans/{plan_id}/reminders/confirm", summary="确认变更计划提醒"
+)
 async def confirm_change_action_plan_reminder(
     plan_id: uuid.UUID,
     confirmed_by: str = Query("系统确认", description="确认人"),
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     try:
         result = await service.confirm_change_action_plan_reminder(
             db,
@@ -576,12 +644,14 @@ async def confirm_change_action_plan_reminder_page(
     plan_id: uuid.UUID,
     confirmed_by: str = Query("飞书确认", description="确认人"),
     db: AsyncSession = Depends(get_db),
-) -> HTMLResponse:
+) -> Any:
     try:
-        html_content = await service.render_change_action_plan_reminder_confirmation_page(
-            db,
-            plan_id,
-            confirmed_by=confirmed_by,
+        html_content = (
+            await service.render_change_action_plan_reminder_confirmation_page(
+                db,
+                plan_id,
+                confirmed_by=confirmed_by,
+            )
         )
         return HTMLResponse(content=html_content)
     except ValueError as e:
@@ -592,7 +662,7 @@ async def confirm_change_action_plan_reminder_page(
 async def delete_change_action_plan(
     plan_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     try:
         result = await service.delete_change_action_plan_record(db, plan_id)
         return {"data": result}
@@ -614,7 +684,7 @@ async def list_deviation_investigation_push_records(
     page: int = 1,
     page_size: int = 20,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     result = await quality_feishu_pages.list_investigation_push_records(
         db,
         deviation_id=deviation_id,
@@ -631,7 +701,11 @@ async def list_deviation_investigation_push_records(
     )
     return {
         "data": result["items"],
-        "meta": {"total": result["total"], "page": result["page"], "page_size": result["page_size"]},
+        "meta": {
+            "total": result["total"],
+            "page": result["page"],
+            "page_size": result["page_size"],
+        },
     }
 
 
@@ -639,7 +713,7 @@ async def list_deviation_investigation_push_records(
 async def create_deviation_investigation_push_record(
     data: CreateDeviationInvestigationPushRecordRequest,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     try:
         result = await quality_feishu_pages.create_investigation_push_record(
             db,
@@ -653,12 +727,14 @@ async def create_deviation_investigation_push_record(
         raise HTTPException(status_code=400, detail=detail)
 
 
-@router.put("/deviation-investigation-push-records/{record_id}", summary="更新偏差调查推送记录")
+@router.put(
+    "/deviation-investigation-push-records/{record_id}", summary="更新偏差调查推送记录"
+)
 async def update_deviation_investigation_push_record(
     record_id: str,
-    data: dict,
+    data: dict[str, Any],
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     try:
         result = await quality_feishu_pages.update_investigation_push_record(
             db,
@@ -672,11 +748,13 @@ async def update_deviation_investigation_push_record(
         raise HTTPException(status_code=status_code, detail=detail)
 
 
-@router.delete("/deviation-investigation-push-records/{record_id}", summary="删除偏差调查推送记录")
+@router.delete(
+    "/deviation-investigation-push-records/{record_id}", summary="删除偏差调查推送记录"
+)
 async def delete_deviation_investigation_push_record(
     record_id: str,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     try:
         await quality_feishu_pages.delete_investigation_push_record(db, record_id)
         return {"data": {"success": True}}
@@ -698,7 +776,7 @@ async def list_deviation_ledger_records(
     page: int = 1,
     page_size: int = 20,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     result = await quality_feishu_pages.list_deviation_ledger_records(
         db,
         keyword=keyword,
@@ -736,7 +814,7 @@ async def export_deviation_ledger_records(
     root_cause_keyword: str | None = None,
     corrective_actions_keyword: str | None = None,
     db: AsyncSession = Depends(get_db),
-):
+) -> Any:
     result = await quality_feishu_pages.list_deviation_ledger_records(
         db,
         record_ids=record_ids,
@@ -772,7 +850,7 @@ async def export_deviation_ledger_records(
 async def export_deviation_ledger_record(
     record_id: str,
     db: AsyncSession = Depends(get_db),
-):
+) -> Any:
     try:
         item = await quality_feishu_pages.get_deviation_ledger_record(db, record_id)
     except ValueError as e:
@@ -794,7 +872,7 @@ async def export_deviation_ledger_record(
 async def get_deviation_ledger_record(
     record_id: str,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     try:
         result = await quality_feishu_pages.get_deviation_ledger_record(db, record_id)
         return {"data": result}
@@ -804,9 +882,9 @@ async def get_deviation_ledger_record(
 
 @router.post("/deviation-ledger-records", summary="创建偏差台账飞书记录")
 async def create_deviation_ledger_record(
-    data: dict,
+    data: dict[str, Any],
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     try:
         result = await quality_feishu_pages.create_deviation_ledger_record(db, data)
         return {"data": result}
@@ -817,9 +895,9 @@ async def create_deviation_ledger_record(
 @router.put("/deviation-ledger-records/{record_id}", summary="更新偏差台账飞书记录")
 async def update_deviation_ledger_record(
     record_id: str,
-    data: dict,
+    data: dict[str, Any],
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     try:
         result = await quality_feishu_pages.update_deviation_ledger_record(
             db,
@@ -837,7 +915,7 @@ async def update_deviation_ledger_record(
 async def delete_deviation_ledger_record(
     record_id: str,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     try:
         await quality_feishu_pages.delete_deviation_ledger_record(db, record_id)
         return {"data": {"success": True}}
@@ -857,7 +935,7 @@ async def list_capa_plan_tracks(
     page: int = 1,
     page_size: int = 20,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     result = await service.get_capa_plan_track_list(
         db,
         capa_id=capa_id,
@@ -872,7 +950,11 @@ async def list_capa_plan_tracks(
     )
     return {
         "data": result["items"],
-        "meta": {"total": result["total"], "page": result["page"], "page_size": result["page_size"]},
+        "meta": {
+            "total": result["total"],
+            "page": result["page"],
+            "page_size": result["page_size"],
+        },
     }
 
 
@@ -880,7 +962,7 @@ async def list_capa_plan_tracks(
 async def create_capa_plan_track(
     data: CreateCapaPlanTrackRequest,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     try:
         result = await service.create_capa_plan_track(db, data, "system")
         return {"data": result}
@@ -896,7 +978,7 @@ async def update_capa_plan_track(
     track_id: uuid.UUID,
     data: UpdateCapaPlanTrackRequest,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     try:
         result = await service.update_capa_plan_track(db, track_id, data, "system")
         return {"data": result}
@@ -911,7 +993,7 @@ async def update_capa_plan_track(
 async def sync_deviation_record_to_feishu(
     deviation_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     try:
         result = await service.sync_deviation_to_feishu(db, deviation_id)
         return {"data": result}
@@ -923,7 +1005,7 @@ async def sync_deviation_record_to_feishu(
 async def sync_capa_record_to_feishu(
     capa_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     try:
         result = await service.sync_capa_to_feishu(db, capa_id)
         return {"data": result}
@@ -931,11 +1013,13 @@ async def sync_capa_record_to_feishu(
         raise HTTPException(status_code=404, detail=str(e))
 
 
-@router.post("/feishu-sync/capa-plan-tracks/{track_id}", summary="同步CAPA计划跟踪到飞书Base")
+@router.post(
+    "/feishu-sync/capa-plan-tracks/{track_id}", summary="同步CAPA计划跟踪到飞书Base"
+)
 async def sync_capa_plan_track_record_to_feishu(
     track_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     try:
         result = await service.sync_capa_plan_track_to_feishu(db, track_id)
         return {"data": result}
@@ -947,9 +1031,11 @@ async def sync_capa_plan_track_record_to_feishu(
 async def pull_quality_records_from_feishu(
     entity_code: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     try:
-        result = await service.pull_quality_records_from_feishu(db, entity_code=entity_code)
+        result = await service.pull_quality_records_from_feishu(
+            db, entity_code=entity_code
+        )
         return {"data": result}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -959,7 +1045,7 @@ async def pull_quality_records_from_feishu(
 async def list_quality_sync_conflicts(
     limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     result = await service.get_quality_sync_conflicts(db, limit=limit)
     return {
         "data": result,
@@ -1017,7 +1103,7 @@ async def test_quality_feishu_app_settings(
 )
 async def list_quality_feishu_entity_settings(
     db: AsyncSession = Depends(get_db),
-) -> list[QualityFeishuEntitySettingItem]:
+) -> Any:
     return await service.list_quality_feishu_entity_settings(db)
 
 
@@ -1031,7 +1117,7 @@ async def list_quality_feishu_entity_tables(
     app_token: str | None = Query(None),
     table_id: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
-) -> list[QualityFeishuTableOption]:
+) -> Any:
     try:
         kwargs = {"app_token": app_token}
         if table_id is not None:
@@ -1046,7 +1132,10 @@ async def list_quality_feishu_entity_tables(
         status_code = 404 if "不存在" in detail else 400
         raise HTTPException(status_code=status_code, detail=detail)
     except Exception:
-        raise HTTPException(status_code=400, detail="读取飞书表列表失败，请检查飞书应用信息、App Token 和 Base Table ID")
+        raise HTTPException(
+            status_code=400,
+            detail="读取飞书表列表失败，请检查飞书应用信息、App Token 和 Base Table ID",
+        )
 
 
 @router.get(
@@ -1108,11 +1197,13 @@ async def test_quality_feishu_entity_setting(
         raise HTTPException(status_code=status_code, detail=detail)
 
 
-@router.post("/change-action-plans/{plan_id}/sync-to-feishu", summary="同步变更计划到飞书")
+@router.post(
+    "/change-action-plans/{plan_id}/sync-to-feishu", summary="同步变更计划到飞书"
+)
 async def sync_change_action_plan_to_feishu(
     plan_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     try:
         result = await service.sync_change_action_plan_to_feishu(db, plan_id)
         return {"data": result}
@@ -1123,7 +1214,7 @@ async def sync_change_action_plan_to_feishu(
 @router.post("/changes/sync-from-feishu", summary="从飞书同步变更数据")
 async def sync_changes_from_feishu(
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     result = await quality_feishu_pages.sync_changes_from_feishu(db)
     return {"data": result}
 
@@ -1131,13 +1222,15 @@ async def sync_changes_from_feishu(
 @router.get("/changes/next-code", summary="获取下一个变更控制号")
 async def get_next_change_code(
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     code = await service.generate_next_change_code(db)
     return {"data": {"code": code}}
 
 
 @router.post("/changes", summary="创建变更")
-async def create_change(data: CreateChangeRequest, db: AsyncSession = Depends(get_db)) -> dict:
+async def create_change(
+    data: CreateChangeRequest, db: AsyncSession = Depends(get_db)
+) -> Any:
     try:
         result = await service.create_change(db, data, "system")
         return {"data": result}
@@ -1146,7 +1239,9 @@ async def create_change(data: CreateChangeRequest, db: AsyncSession = Depends(ge
 
 
 @router.post("/changes/batch-delete", summary="批量删除变更")
-async def batch_delete_changes(data: dict, db: AsyncSession = Depends(get_db)) -> dict:
+async def batch_delete_changes(
+    data: dict[str, Any], db: AsyncSession = Depends(get_db)
+) -> Any:
     ids = data.get("ids", [])
     if not ids:
         raise HTTPException(status_code=400, detail="请选择要删除的记录")
@@ -1164,10 +1259,15 @@ async def batch_delete_changes(data: dict, db: AsyncSession = Depends(get_db)) -
 async def preview_change_import(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     if not file.filename or not file.filename.endswith((".docx", ".doc")):
         raise HTTPException(status_code=400, detail="请上传 Word 文件 (.docx)")
-    content = await file.read()
+    _, content = await read_upload_secure(
+        file,
+        max_bytes=get_settings().MAX_UPLOAD_SIZE_MB * 1024 * 1024,
+        allowed_extensions={".docx", ".doc"},
+        what="质量导入文件",
+    )
     result = await ie_service.preview_change_import(db, content)
     return {"data": result}
 
@@ -1178,10 +1278,15 @@ async def confirm_change_import(
     skip_duplicates: bool = Query(True, description="是否跳过重复记录"),
     update_existing: bool = Query(False, description="是否更新已存在记录"),
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     if not file.filename or not file.filename.endswith((".docx", ".doc")):
         raise HTTPException(status_code=400, detail="请上传 Word 文件 (.docx)")
-    content = await file.read()
+    _, content = await read_upload_secure(
+        file,
+        max_bytes=get_settings().MAX_UPLOAD_SIZE_MB * 1024 * 1024,
+        allowed_extensions={".docx", ".doc"},
+        what="质量导入文件",
+    )
     result = await ie_service.confirm_change_import(
         db, content, skip_duplicates, update_existing
     )
@@ -1213,7 +1318,7 @@ async def export_changes(
     closure_date_to: str | None = None,
     content_keyword: str | None = None,
     db: AsyncSession = Depends(get_db),
-):
+) -> Any:
     try:
         items = await _resolve_change_export_items(
             db,
@@ -1253,13 +1358,13 @@ async def export_changes(
 async def list_change_action_plans_by_change(
     change_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     result = await service.get_change_action_plans_for_change(db, change_id)
     return {"data": result}
 
 
 @router.get("/changes/{change_id}", summary="获取变更详情")
-async def get_change(change_id: uuid.UUID, db: AsyncSession = Depends(get_db)) -> dict:
+async def get_change(change_id: uuid.UUID, db: AsyncSession = Depends(get_db)) -> Any:
     try:
         detail = await service.get_change_detail(db, change_id)
         return {"data": detail.model_dump()}
@@ -1268,7 +1373,9 @@ async def get_change(change_id: uuid.UUID, db: AsyncSession = Depends(get_db)) -
 
 
 @router.put("/changes/{change_id}", summary="更新变更")
-async def update_change(change_id: uuid.UUID, data: UpdateChangeRequest, db: AsyncSession = Depends(get_db)) -> dict:
+async def update_change(
+    change_id: uuid.UUID, data: UpdateChangeRequest, db: AsyncSession = Depends(get_db)
+) -> Any:
     try:
         result = await service.update_change(db, change_id, data, "system")
         return {"data": result}
@@ -1277,7 +1384,9 @@ async def update_change(change_id: uuid.UUID, data: UpdateChangeRequest, db: Asy
 
 
 @router.delete("/changes/{change_id}", summary="删除变更")
-async def delete_change(change_id: uuid.UUID, db: AsyncSession = Depends(get_db)) -> dict:
+async def delete_change(
+    change_id: uuid.UUID, db: AsyncSession = Depends(get_db)
+) -> Any:
     try:
         result = await service.delete_change(db, change_id)
         return {"data": result}
@@ -1288,7 +1397,7 @@ async def delete_change(change_id: uuid.UUID, db: AsyncSession = Depends(get_db)
 @router.post("/ai/deviations/{deviation_id}/analyze", summary="AI分析偏差")
 async def analyze_deviation_ai(
     deviation_id: uuid.UUID, db: AsyncSession = Depends(get_db)
-) -> dict:
+) -> Any:
     try:
         result = await service.analyze_deviation_record(db, deviation_id, "system")
         return {"data": result.model_dump()}
@@ -1302,10 +1411,10 @@ async def analyze_deviation_ai(
 async def get_deviation_ai_session(
     deviation_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     try:
-        result: DeviationAiSessionOut = await service.get_or_create_deviation_ai_session(
-            db, deviation_id
+        result: DeviationAiSessionOut = (
+            await service.get_or_create_deviation_ai_session(db, deviation_id)
         )
         return {"data": result.model_dump(mode="json")}
     except ValueError as e:
@@ -1317,7 +1426,7 @@ async def update_deviation_ai_session(
     deviation_id: uuid.UUID,
     data: UpdateDeviationAiSessionRequest,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     try:
         result = await service.update_deviation_ai_session(
             db,
@@ -1338,7 +1447,7 @@ async def upload_deviation_ai_session_attachment(
     deviation_id: uuid.UUID,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     try:
         result = await service.upload_deviation_ai_session_attachment(
             db,
@@ -1359,7 +1468,7 @@ async def delete_deviation_ai_session_attachment(
     deviation_id: uuid.UUID,
     attachment_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     try:
         result = await service.delete_deviation_ai_session_attachment(
             db,
@@ -1379,7 +1488,7 @@ async def delete_deviation_ai_session_attachment(
 async def regenerate_deviation_ai_session(
     deviation_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     try:
         result = await service.regenerate_deviation_ai_session(
             db,
@@ -1393,12 +1502,14 @@ async def regenerate_deviation_ai_session(
         raise HTTPException(status_code=502, detail=str(e))
 
 
-@router.post("/ai/deviations/{deviation_id}/session/apply", summary="应用偏差当前AI结果")
+@router.post(
+    "/ai/deviations/{deviation_id}/session/apply", summary="应用偏差当前AI结果"
+)
 async def apply_deviation_ai_session(
     deviation_id: uuid.UUID,
     data: ApplyDeviationAiSessionRequest,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     try:
         result = await service.apply_deviation_ai_session(
             db,
@@ -1415,7 +1526,7 @@ async def apply_deviation_ai_session(
 @router.post("/ai/deviations/{deviation_id}/suggest-capa", summary="AI生成偏差CAPA建议")
 async def suggest_deviation_capa_ai(
     deviation_id: uuid.UUID, db: AsyncSession = Depends(get_db)
-) -> dict:
+) -> Any:
     try:
         result = await service.suggest_capa_for_deviation(db, deviation_id, "system")
         return {"data": result.model_dump()}
@@ -1426,7 +1537,9 @@ async def suggest_deviation_capa_ai(
 
 
 @router.post("/ai/capas/{capa_id}/analyze", summary="AI分析CAPA")
-async def analyze_capa_ai(capa_id: uuid.UUID, db: AsyncSession = Depends(get_db)) -> dict:
+async def analyze_capa_ai(
+    capa_id: uuid.UUID, db: AsyncSession = Depends(get_db)
+) -> Any:
     try:
         result = await service.analyze_capa_record(db, capa_id, "system")
         return {"data": result.model_dump()}
@@ -1439,7 +1552,7 @@ async def analyze_capa_ai(capa_id: uuid.UUID, db: AsyncSession = Depends(get_db)
 @router.post("/ai/changes/{change_id}/analyze", summary="AI分析变更")
 async def analyze_change_ai(
     change_id: uuid.UUID, db: AsyncSession = Depends(get_db)
-) -> dict:
+) -> Any:
     try:
         result = await service.analyze_change_record(db, change_id, "system")
         return {"data": result.model_dump()}
@@ -1456,7 +1569,7 @@ async def list_ai_logs(
     page: int = 1,
     page_size: int = 20,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     result = await service.list_ai_logs(
         db,
         entity_type=entity_type,
@@ -1475,7 +1588,7 @@ async def list_ai_logs(
 
 
 @router.get("/ai/logs/{log_id}", summary="获取AI分析日志详情")
-async def get_ai_log(log_id: uuid.UUID, db: AsyncSession = Depends(get_db)) -> dict:
+async def get_ai_log(log_id: uuid.UUID, db: AsyncSession = Depends(get_db)) -> Any:
     try:
         result = await service.get_ai_log_detail(db, log_id)
         return {"data": result.model_dump()}
@@ -1488,12 +1601,13 @@ async def apply_ai_log(
     log_id: uuid.UUID,
     data: QualityAiApplyRequest,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     try:
         result = await service.apply_ai_log(db, log_id, data.field_keys, "system")
         return {"data": result.model_dump()}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
 
 @router.get("/capas", summary="获取CAPA列表")
 async def list_capas(
@@ -1512,7 +1626,7 @@ async def list_capas(
     page: int = 1,
     page_size: int = 20,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     result = await service.get_capa_list(
         db,
         status,
@@ -1530,17 +1644,26 @@ async def list_capas(
         page,
         page_size,
     )
-    return {"data": result["items"], "meta": {"total": result["total"], "page": result["page"], "page_size": result["page_size"]}}
+    return {
+        "data": result["items"],
+        "meta": {
+            "total": result["total"],
+            "page": result["page"],
+            "page_size": result["page_size"],
+        },
+    }
 
 
 @router.get("/capas/departments", summary="获取所有部门列表")
-async def get_capa_departments(db: AsyncSession = Depends(get_db)) -> dict:
+async def get_capa_departments(db: AsyncSession = Depends(get_db)) -> Any:
     departments = await service.get_capa_departments(db)
     return {"data": departments}
 
 
 @router.get("/capas/auto-fill/{deviation_id}", summary="从偏差自动填充CAPA表单")
-async def auto_fill_capa_from_deviation(deviation_id: uuid.UUID, db: AsyncSession = Depends(get_db)) -> dict:
+async def auto_fill_capa_from_deviation(
+    deviation_id: uuid.UUID, db: AsyncSession = Depends(get_db)
+) -> Any:
     try:
         result = await service.auto_fill_from_deviation(db, deviation_id)
         return {"data": result}
@@ -1549,7 +1672,7 @@ async def auto_fill_capa_from_deviation(deviation_id: uuid.UUID, db: AsyncSessio
 
 
 @router.get("/capas/{capa_id}", summary="获取CAPA详情")
-async def get_capa(capa_id: uuid.UUID, db: AsyncSession = Depends(get_db)) -> dict:
+async def get_capa(capa_id: uuid.UUID, db: AsyncSession = Depends(get_db)) -> Any:
     try:
         detail = await service.get_capa_detail(db, capa_id)
         return {"data": detail.model_dump()}
@@ -1558,13 +1681,17 @@ async def get_capa(capa_id: uuid.UUID, db: AsyncSession = Depends(get_db)) -> di
 
 
 @router.post("/capas", summary="创建CAPA")
-async def create_capa(data: CreateCapaRequest, db: AsyncSession = Depends(get_db)) -> dict:
+async def create_capa(
+    data: CreateCapaRequest, db: AsyncSession = Depends(get_db)
+) -> Any:
     result = await service.create_capa(db, data, "system")
     return {"data": result}
 
 
 @router.put("/capas/{capa_id}", summary="更新CAPA")
-async def update_capa(capa_id: uuid.UUID, data: UpdateCapaRequest, db: AsyncSession = Depends(get_db)) -> dict:
+async def update_capa(
+    capa_id: uuid.UUID, data: UpdateCapaRequest, db: AsyncSession = Depends(get_db)
+) -> Any:
     try:
         result = await service.update_capa(db, capa_id, data, "system")
         return {"data": result}
@@ -1573,7 +1700,7 @@ async def update_capa(capa_id: uuid.UUID, data: UpdateCapaRequest, db: AsyncSess
 
 
 @router.delete("/capas/{capa_id}", summary="删除CAPA")
-async def delete_capa(capa_id: uuid.UUID, db: AsyncSession = Depends(get_db)) -> dict:
+async def delete_capa(capa_id: uuid.UUID, db: AsyncSession = Depends(get_db)) -> Any:
     try:
         result = await service.delete_capa(db, capa_id)
         return {"data": result}
@@ -1582,7 +1709,9 @@ async def delete_capa(capa_id: uuid.UUID, db: AsyncSession = Depends(get_db)) ->
 
 
 @router.post("/capas/batch-delete", summary="批量删除CAPA")
-async def batch_delete_capas(data: dict, db: AsyncSession = Depends(get_db)) -> dict:
+async def batch_delete_capas(
+    data: dict[str, Any], db: AsyncSession = Depends(get_db)
+) -> Any:
     ids = data.get("ids", [])
     if not ids:
         raise HTTPException(status_code=400, detail="请选择要删除的记录")
@@ -1601,9 +1730,11 @@ async def link_capa_to_deviation(
     capa_id: uuid.UUID,
     data: LinkDeviationRequest,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     try:
-        result = await service.link_deviation(db, capa_id, data.deviation_id, "system")
+        result = await service.link_deviation(
+            db, capa_id, uuid.UUID(str(data.deviation_id)), "system"
+        )
         return {"data": result}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -1614,7 +1745,7 @@ async def complete_capa_part(
     capa_id: uuid.UUID,
     data: CompletePartRequest,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     try:
         result = await service.complete_part(db, capa_id, data.part, "system")
         return {"data": result}
@@ -1623,7 +1754,9 @@ async def complete_capa_part(
 
 
 @router.post("/capas/{capa_id}/submit", summary="提交CAPA审核")
-async def submit_capa_for_review(capa_id: uuid.UUID, db: AsyncSession = Depends(get_db)) -> dict:
+async def submit_capa_for_review(
+    capa_id: uuid.UUID, db: AsyncSession = Depends(get_db)
+) -> Any:
     try:
         result = await service.submit_capa(db, capa_id, "system")
         return {"data": result}
@@ -1636,7 +1769,7 @@ async def confirm_capa_by_dept_head(
     capa_id: uuid.UUID,
     data: CapaDeptHeadConfirmRequest,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     try:
         result = await service.confirm_dept_head(db, capa_id, data, "system")
         return {"data": result}
@@ -1649,7 +1782,7 @@ async def approve_capa(
     capa_id: uuid.UUID,
     data: CapaApprovalRequest,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     try:
         result = await service.approve_capa(db, capa_id, data, "system")
         return {"data": result}
@@ -1658,7 +1791,7 @@ async def approve_capa(
 
 
 @router.post("/capas/{capa_id}/resubmit", summary="重新提交CAPA")
-async def resubmit_capa(capa_id: uuid.UUID, db: AsyncSession = Depends(get_db)) -> dict:
+async def resubmit_capa(capa_id: uuid.UUID, db: AsyncSession = Depends(get_db)) -> Any:
     try:
         result = await service.resubmit_capa(db, capa_id, "system")
         return {"data": result}
@@ -1671,9 +1804,11 @@ async def add_capa_execution_track(
     capa_id: uuid.UUID,
     data: ExecutionTrack,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     try:
-        result = await service.add_execution_track(db, capa_id, data.model_dump(), "system")
+        result = await service.add_execution_track(
+            db, capa_id, data.model_dump(), "system"
+        )
         return {"data": result}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -1684,7 +1819,7 @@ async def delete_capa_execution_track(
     capa_id: uuid.UUID,
     index: int,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     try:
         result = await service.delete_execution_track(db, capa_id, index, "system")
         return {"data": result}
@@ -1693,7 +1828,9 @@ async def delete_capa_execution_track(
 
 
 @router.post("/capas/{capa_id}/confirm-execution", summary="确认CAPA执行完成")
-async def confirm_capa_execution(capa_id: uuid.UUID, db: AsyncSession = Depends(get_db)) -> dict:
+async def confirm_capa_execution(
+    capa_id: uuid.UUID, db: AsyncSession = Depends(get_db)
+) -> Any:
     try:
         result = await service.confirm_execution(db, capa_id, "system")
         return {"data": result}
@@ -1706,7 +1843,7 @@ async def submit_capa_evaluation(
     capa_id: uuid.UUID,
     data: CapaEvaluationRequest,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     try:
         result = await service.submit_evaluation(db, capa_id, data, "system")
         return {"data": result}
@@ -1716,12 +1853,13 @@ async def submit_capa_evaluation(
 
 # ============ Department Contacts ============
 
+
 @router.get("/department-contacts", summary="获取部门联系人列表")
 async def list_department_contacts(
     page: int = 1,
     page_size: int = 20,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     result = await service.get_department_contact_list(db, page, page_size)
     return {"data": result}
 
@@ -1731,7 +1869,7 @@ async def list_department_contacts_from_feishu(
     page: int = 1,
     page_size: int = 20,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     result = await service.get_department_contact_list_from_feishu(db, page, page_size)
     return {"data": result}
 
@@ -1740,7 +1878,7 @@ async def list_department_contacts_from_feishu(
 async def upsert_department_contact(
     data: CreateDepartmentContactRequest,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     result = await service.upsert_department_contact(db, data, None, "system")
     return {"data": result}
 
@@ -1750,7 +1888,7 @@ async def update_department_contact(
     contact_id: uuid.UUID,
     data: UpdateDepartmentContactRequest,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     try:
         result = await service.update_department_contact(db, contact_id, data)
         return {"data": result}
@@ -1762,7 +1900,9 @@ async def update_department_contact(
 
 
 @router.delete("/department-contacts/{contact_id}", summary="删除部门联系人")
-async def delete_department_contact(contact_id: uuid.UUID, db: AsyncSession = Depends(get_db)) -> dict:
+async def delete_department_contact(
+    contact_id: uuid.UUID, db: AsyncSession = Depends(get_db)
+) -> Any:
     try:
         result = await service.delete_department_contact(db, contact_id)
         return {"data": result}
@@ -1772,25 +1912,27 @@ async def delete_department_contact(contact_id: uuid.UUID, db: AsyncSession = De
 
 # ============ Statistics ============
 
+
 @router.get("/statistics/deviations", summary="获取偏差统计")
-async def get_deviation_statistics(db: AsyncSession = Depends(get_db)) -> dict:
+async def get_deviation_statistics(db: AsyncSession = Depends(get_db)) -> Any:
     stats = await service.get_deviation_statistics(db)
     return {"data": stats.model_dump()}
 
 
 @router.get("/statistics/capas", summary="获取CAPA统计")
-async def get_capa_statistics(db: AsyncSession = Depends(get_db)) -> dict:
+async def get_capa_statistics(db: AsyncSession = Depends(get_db)) -> Any:
     stats = await service.get_capa_statistics(db)
     return {"data": stats.model_dump()}
 
 
 @router.get("/statistics/changes", summary="获取变更统计")
-async def get_change_statistics(db: AsyncSession = Depends(get_db)) -> dict:
+async def get_change_statistics(db: AsyncSession = Depends(get_db)) -> Any:
     stats = await service.get_change_statistics(db)
     return {"data": stats.model_dump()}
 
 
 # ============ Attachment Reviews ============
+
 
 @router.get("/attachment-reviews", summary="获取附件审阅列表")
 async def list_attachment_reviews(
@@ -1798,8 +1940,10 @@ async def list_attachment_reviews(
     capa_id: uuid.UUID | None = None,
     attachment_url: str | None = None,
     db: AsyncSession = Depends(get_db),
-) -> dict:
-    items = await service.list_attachment_reviews(db, deviation_id, capa_id, attachment_url)
+) -> Any:
+    items = await service.list_attachment_reviews(
+        db, deviation_id, capa_id, attachment_url
+    )
     return {"data": items}
 
 
@@ -1807,13 +1951,15 @@ async def list_attachment_reviews(
 async def create_attachment_review(
     data: CreateAttachmentReviewRequest,
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     result = await service.create_attachment_review(db, data, "system")
     return {"data": result}
 
 
 @router.delete("/attachment-reviews/{review_id}", summary="删除附件审阅")
-async def delete_attachment_review(review_id: uuid.UUID, db: AsyncSession = Depends(get_db)) -> dict:
+async def delete_attachment_review(
+    review_id: uuid.UUID, db: AsyncSession = Depends(get_db)
+) -> Any:
     try:
         await service.delete_attachment_review(db, review_id)
         return {"data": {"success": True}}
@@ -1823,14 +1969,20 @@ async def delete_attachment_review(review_id: uuid.UUID, db: AsyncSession = Depe
 
 # ============ CAPA Import/Export ============
 
+
 @router.post("/capas/import/preview", summary="CAPA导入预览")
 async def preview_capa_import(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     if not file.filename or not file.filename.endswith((".docx", ".doc")):
         raise HTTPException(status_code=400, detail="请上传 Word 文件 (.docx)")
-    content = await file.read()
+    _, content = await read_upload_secure(
+        file,
+        max_bytes=get_settings().MAX_UPLOAD_SIZE_MB * 1024 * 1024,
+        allowed_extensions={".docx", ".doc"},
+        what="质量导入文件",
+    )
     result = await ie_service.preview_capa_import(db, content)
     return {"data": result}
 
@@ -1841,11 +1993,18 @@ async def confirm_capa_import(
     skip_duplicates: bool = Query(True, description="是否跳过重复记录"),
     update_existing: bool = Query(False, description="是否更新已存在记录"),
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     if not file.filename or not file.filename.endswith((".docx", ".doc")):
         raise HTTPException(status_code=400, detail="请上传 Word 文件 (.docx)")
-    content = await file.read()
-    result = await ie_service.confirm_capa_import(db, content, skip_duplicates, update_existing)
+    _, content = await read_upload_secure(
+        file,
+        max_bytes=get_settings().MAX_UPLOAD_SIZE_MB * 1024 * 1024,
+        allowed_extensions={".docx", ".doc"},
+        what="质量导入文件",
+    )
+    result = await ie_service.confirm_capa_import(
+        db, content, skip_duplicates, update_existing
+    )
     return {"data": result}
 
 
@@ -1864,7 +2023,7 @@ async def export_capas(
     department: str | None = None,
     qa_confirmer: str | None = None,
     db: AsyncSession = Depends(get_db),
-):
+) -> Any:
     data = await ie_service.export_capas(
         db,
         None,
@@ -1893,14 +2052,20 @@ async def export_capas(
 
 # ============ Deviation Import/Export ============
 
+
 @router.post("/deviations/import/preview", summary="偏差导入预览")
 async def preview_deviation_import(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     if not file.filename or not file.filename.endswith((".docx", ".doc")):
         raise HTTPException(status_code=400, detail="请上传 Word 文件 (.docx)")
-    content = await file.read()
+    _, content = await read_upload_secure(
+        file,
+        max_bytes=get_settings().MAX_UPLOAD_SIZE_MB * 1024 * 1024,
+        allowed_extensions={".docx", ".doc"},
+        what="质量导入文件",
+    )
     result = await ie_service.preview_deviation_import(db, content)
     return {"data": result}
 
@@ -1911,11 +2076,18 @@ async def confirm_deviation_import(
     skip_duplicates: bool = Query(True, description="是否跳过重复记录"),
     update_existing: bool = Query(False, description="是否更新已存在记录"),
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> Any:
     if not file.filename or not file.filename.endswith((".docx", ".doc")):
         raise HTTPException(status_code=400, detail="请上传 Word 文件 (.docx)")
-    content = await file.read()
-    result = await ie_service.confirm_deviation_import(db, content, skip_duplicates, update_existing)
+    _, content = await read_upload_secure(
+        file,
+        max_bytes=get_settings().MAX_UPLOAD_SIZE_MB * 1024 * 1024,
+        allowed_extensions={".docx", ".doc"},
+        what="质量导入文件",
+    )
+    result = await ie_service.confirm_deviation_import(
+        db, content, skip_duplicates, update_existing
+    )
     return {"data": result}
 
 
@@ -1926,8 +2098,10 @@ async def export_deviations(
     department: str | None = None,
     keyword: str | None = None,
     db: AsyncSession = Depends(get_db),
-):
-    data = await ie_service.export_deviations(db, None, status, level, department, keyword)
+) -> Any:
+    data = await ie_service.export_deviations(
+        db, None, status, level, department, keyword
+    )
     return StreamingResponse(
         BytesIO(data),
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",

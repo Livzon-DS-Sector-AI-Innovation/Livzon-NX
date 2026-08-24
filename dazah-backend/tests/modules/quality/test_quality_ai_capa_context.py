@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import uuid
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
+from typing import Any
 
 import pytest
 from httpx import AsyncClient
@@ -11,17 +12,19 @@ from app.modules.quality.models.ai_analysis_log import QualityAiAnalysisLog
 from app.modules.quality.models.capa import CAPA
 from app.modules.quality.models.deviations import Deviation
 
+SimpleNamespace: Any = _SimpleNamespace
+
 
 @pytest.fixture(autouse=True)
-async def _clean_tables(db_session: AsyncSession):
-    await db_session.execute(QualityAiAnalysisLog.__table__.delete())
-    await db_session.execute(CAPA.__table__.delete())
-    await db_session.execute(Deviation.__table__.delete())
+async def _clean_tables(db_session: AsyncSession) -> Any:
+    await db_session.execute(QualityAiAnalysisLog.__table__.delete())  # type: ignore[attr-defined]
+    await db_session.execute(CAPA.__table__.delete())  # type: ignore[attr-defined]
+    await db_session.execute(Deviation.__table__.delete())  # type: ignore[attr-defined]
     await db_session.commit()
     yield
-    await db_session.execute(QualityAiAnalysisLog.__table__.delete())
-    await db_session.execute(CAPA.__table__.delete())
-    await db_session.execute(Deviation.__table__.delete())
+    await db_session.execute(QualityAiAnalysisLog.__table__.delete())  # type: ignore[attr-defined]
+    await db_session.execute(CAPA.__table__.delete())  # type: ignore[attr-defined]
+    await db_session.execute(Deviation.__table__.delete())  # type: ignore[attr-defined]
     await db_session.commit()
 
 
@@ -51,15 +54,15 @@ async def test_capa_ai_includes_deviation_context_when_linked(
     db_session.add(capa)
     await db_session.commit()
 
-    captured_input: dict = {}
+    captured_input: dict[Any, Any] = {}
 
     async def _fake_llm_chat_json(
-        self,  # noqa: ANN001
-        messages: list[dict],
-        expected_keys=None,  # noqa: ANN001
-        temperature=None,  # noqa: ANN001
-        config_type="text",  # noqa: ANN001
-    ) -> dict:
+        self: Any,  # noqa: ANN001
+        messages: list[dict[Any, Any]],
+        expected_keys: Any = None,  # noqa: ANN001
+        temperature: Any = None,  # noqa: ANN001
+        config_type: Any = "text",  # noqa: ANN001
+    ) -> dict[str, Any]:
         captured_input["prompt"] = messages[0]["content"] if messages else ""
         return {
             "summary": "CAPA 已对准偏差根因",
@@ -105,15 +108,15 @@ async def test_capa_ai_continues_without_deviation_context_when_not_linked(
     db_session.add(capa)
     await db_session.commit()
 
-    captured_input: dict = {}
+    captured_input: dict[Any, Any] = {}
 
     async def _fake_llm_chat_json(
-        self,  # noqa: ANN001
-        messages: list[dict],
-        expected_keys=None,  # noqa: ANN001
-        temperature=None,  # noqa: ANN001
-        config_type="text",  # noqa: ANN001
-    ) -> dict:
+        self: Any,  # noqa: ANN001
+        messages: list[dict[Any, Any]],
+        expected_keys: Any = None,  # noqa: ANN001
+        temperature: Any = None,  # noqa: ANN001
+        config_type: Any = "text",  # noqa: ANN001
+    ) -> dict[str, Any]:
         captured_input["prompt"] = messages[0]["content"] if messages else ""
         return {
             "summary": "仅基于CAPA自身分析",
@@ -145,5 +148,5 @@ async def test_capa_ai_continues_without_deviation_context_when_not_linked(
     assert "偏差描述" not in prompt
 
 
-async def _async_config_stub():
+async def _async_config_stub() -> Any:
     return SimpleNamespace(model_name="test-model")

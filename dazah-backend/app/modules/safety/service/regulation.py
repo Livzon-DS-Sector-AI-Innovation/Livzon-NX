@@ -7,9 +7,9 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.llm import LLMOutputError, llm_client
 from app.modules.safety.repository import SafetyRepository
 from app.platform.audit.service import record_audit_log
-from app.core.llm import llm_client, LLMOutputError
 
 logger = logging.getLogger(__name__)
 
@@ -59,15 +59,15 @@ class RegulationService:
         position: str | None = None,
         keyword: str | None = None,
         status: str | None = None,
-    ) -> tuple[list, int]:
+    ) -> tuple[list[Any], int]:
         """获取操规列表"""
         return await self.repo.get_regulations(skip, limit, position, keyword, status)
 
-    async def get_regulation(self, regulation_id: uuid.UUID):
+    async def get_regulation(self, regulation_id: uuid.UUID) -> Any:
         """获取操规详情"""
         return await self.repo.get_regulation_by_id(regulation_id)
 
-    async def create_regulation(self, data) -> Any:
+    async def create_regulation(self, data: Any) -> Any:
         """创建安全操作规程"""
 
         create_data = data.model_dump() if not isinstance(data, dict) else data
@@ -75,7 +75,9 @@ class RegulationService:
         await self._audit("create", "regulation", resource_id=item.id)
         return item
 
-    async def update_regulation(self, regulation_id: uuid.UUID, data) -> Any | None:
+    async def update_regulation(
+        self, regulation_id: uuid.UUID, data: Any
+    ) -> Any | None:
         """更新安全操作规程"""
         update_data = {k: v for k, v in data.model_dump().items() if v is not None}
         item = await self.repo.update_regulation(regulation_id, update_data)
@@ -100,17 +102,17 @@ class RegulationService:
         revision_type: str | None = None,
         review_opinion: str | None = None,
         revision_scope: str | None = None,
-    ) -> tuple[list, int]:
+    ) -> tuple[list[Any], int]:
         """获取修订记录列表"""
         return await self.repo.get_revisions(
             skip, limit, regulation_id, revision_type, review_opinion, revision_scope
         )
 
-    async def get_revision(self, revision_id: uuid.UUID):
+    async def get_revision(self, revision_id: uuid.UUID) -> Any:
         """获取修订记录详情"""
         return await self.repo.get_revision_by_id(revision_id)
 
-    async def create_revision(self, data) -> Any:
+    async def create_revision(self, data: Any) -> Any:
         """创建修订记录
 
         自动从安全操作规程表获取当前文档链接填入旧文档链接。
@@ -124,7 +126,9 @@ class RegulationService:
             "regulation_id": data.regulation_id,
             "regulation_name": reg.regulation_name,
             "old_document_path": reg.document_path,
-            "revision_type": data.revision_type.value if hasattr(data.revision_type, 'value') else data.revision_type,
+            "revision_type": data.revision_type.value
+            if hasattr(data.revision_type, "value")
+            else data.revision_type,
             "revision_opinion": data.revision_opinion,
             "reviser": data.reviser,
             "reviser_name": data.reviser_name,
@@ -135,7 +139,7 @@ class RegulationService:
         await self._audit("create", "regulation_revision", resource_id=item.id)
         return item
 
-    async def update_revision(self, revision_id: uuid.UUID, data) -> Any | None:
+    async def update_revision(self, revision_id: uuid.UUID, data: Any) -> Any | None:
         """更新修订记录"""
         update_data = {k: v for k, v in data.model_dump().items() if v is not None}
         item = await self.repo.update_revision(revision_id, update_data)
@@ -196,7 +200,7 @@ class RegulationService:
     async def ai_revision_generate(
         self,
         revision_id: uuid.UUID,
-    ) -> dict | None:
+    ) -> dict[str, Any] | None:
         """AI 根据修订意见生成修订版本（不持久化，返回给用户确认）
 
         返回 {"generated_content": str} 供前端展示对比。
@@ -256,7 +260,10 @@ class RegulationService:
         with open(file_path, "w", encoding="utf-8") as f:
             f.write(generated_content)
 
-        doc_name = document_name or f"{revision.regulation_name}_修订版_{int(datetime.now().timestamp())}.md"
+        doc_name = (
+            document_name
+            or f"{revision.regulation_name}_修订版_{int(datetime.now().timestamp())}.md"
+        )
 
         # 更新修订记录
         await self.repo.update_revision(
@@ -293,7 +300,9 @@ class RegulationService:
 
         if not revision.revision_opinion:
             # 无修订意见，默认仅安全要求
-            await self.repo.update_revision(revision_id, {"revision_scope": "safety_requirement"})
+            await self.repo.update_revision(
+                revision_id, {"revision_scope": "safety_requirement"}
+            )
             await self.session.flush()
             return await self.repo.get_revision_by_id(revision_id)
 
@@ -324,7 +333,9 @@ class RegulationService:
         Returns:
             逗号分隔的范围字符串，如 "process,safety_requirement"
         """
-        prompt = f"""你是一个专业的安全生产管理专家。请分析以下操规修订意见，判断修订范围属于"工艺"还是"安全要求"。
+        prompt = f"""你是一个专业的安全生产管理专家。请分析以下操规修订意见，\
+判断修订范围属于\
+"工艺"还是"安全要求"。
 
 操规名称：{regulation_name}
 修订类型：{"人工修订" if revision_type == "manual" else "AI修订"}
@@ -336,18 +347,25 @@ class RegulationService:
 - 安全要求（safety_requirement）：涉及安全措施、防护要求、警示标识、联锁装置、应急措施等
 
 请返回 JSON 格式：
-{{"scope": "process" 或 "safety_requirement" 或 "process,safety_requirement"（两者都有时逗号分隔）, "reasoning": "识别依据说明"}}"""
+{{"scope": "process" 或 "safety_requirement" 或 "process,safety_requirement"（两者\
+都有时逗号分隔）, "reasoning": "识别依据说明"}}"""
 
         try:
-            
             result = await llm_client.chat_json(
                 messages=[
-                    {"role": "system", "content": "你是一个专业的安全生产管理专家，擅长识别操规修订的影响范围。"},
+                    {
+                        "role": "system",
+                        "content": (
+                            "你是一个专业的安全生产管理专家，"
+                            "擅长识别操规修订的影响范围。"
+                        ),
+                    },
                     {"role": "user", "content": prompt},
                 ],
                 expected_keys=["scope", "reasoning"],
             )
-            return result.get("scope", "safety_requirement")
+            scope = result.get("scope", "safety_requirement")
+            return scope if isinstance(scope, str) else "safety_requirement"
         except LLMOutputError:
             logger.warning("AI 识别修订范围失败，默认标记为安全要求")
             return "safety_requirement"
@@ -362,12 +380,13 @@ class RegulationService:
         revision_opinion: str,
     ) -> str:
         """AI 根据修订意见生成新版本的操规文档"""
+        empty_content_message = "（无当前内容，请根据操规名称和修订意见生成完整文档）"
         prompt = f"""请根据以下修订意见，对安全操作规程进行修订，生成完整的修订后文档。
 
 操规名称：{regulation_name}
 
 当前操规内容：
-{current_content if current_content else "（无当前内容，请根据操规名称和修订意见生成完整文档）"}
+        {current_content if current_content else empty_content_message}
 
 修订意见：
 {revision_opinion}
@@ -381,9 +400,14 @@ class RegulationService:
 请直接输出修订后的完整文档内容。"""
 
         try:
-            
             messages = [
-                {"role": "system", "content": "你是一个专业的安全操作规程编写专家，服务于原料药生产企业。"},
+                {
+                    "role": "system",
+                    "content": (
+                        "你是一个专业的安全操作规程编写专家，"
+                        "服务于原料药生产企业。"
+                    ),
+                },
                 {"role": "user", "content": prompt},
             ]
             # 自由文本生成，使用 chat 方法
@@ -395,14 +419,14 @@ class RegulationService:
             return result if result else ""
         except Exception as e:
             logger.error(f"AI 生成修订版本失败: {e}")
-            raise AIOutputError(f"AI 生成修订版本失败: {e}")
+            raise LLMOutputError(f"AI 生成修订版本失败: {e}")
 
     async def _ai_diff_analysis(
         self,
         old_content: str,
         new_content: str,
         regulation_name: str,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """AI 识别新旧文档差异（人工修订时使用）"""
         prompt = f"""请对比以下安全操作规程的新旧版本，识别具体差异。
 
@@ -415,10 +439,11 @@ class RegulationService:
 {new_content}
 
 请输出 JSON 格式：
-{{"has_changes": true/false, "changes": [{{"section": "章节/条款号", "old_text": "旧内容摘要", "new_text": "新内容摘要", "change_type": "新增/修改/删除"}}], "summary": "差异摘要说明"}}"""
+{{"has_changes": true/false, "changes": [{{"section": "章节/条款号",\
+ "old_text": "旧内容摘要", "new_text": "新内容摘要",\
+ "change_type": "新增/修改/删除"}}], "summary": "差异摘要说明"}}"""
 
         try:
-            
             result = await llm_client.chat_json(
                 messages=[
                     {"role": "system", "content": "你是一个专业的文档对比分析专家。"},
@@ -429,7 +454,7 @@ class RegulationService:
             return result
         except Exception as e:
             logger.error(f"AI 差异分析失败: {e}")
-            raise AIOutputError(f"AI 差异分析失败: {e}")
+            raise LLMOutputError(f"AI 差异分析失败: {e}")
 
     @staticmethod
     def _read_document(path: str, max_chars: int = 50000) -> str:
@@ -459,5 +484,3 @@ class RegulationService:
 
 
 # ==================== AI 配置 Service ====================
-
-

@@ -95,11 +95,7 @@ export default function ProductionDashboard() {
   const [recentBatches, setRecentBatches] = useState<BatchRecord[]>([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    loadDashboardData()
-  }, [])
-
-  const loadDashboardData = async () => {
+  async function loadDashboardData() {
     try {
       const response = await getBatches({ page_size: 100 })
       if (response.code === 200) {
@@ -118,6 +114,12 @@ export default function ProductionDashboard() {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      void loadDashboardData()
+    })
+  }, [])
 
   const getStatusTag = (status: string) => {
     const statusMap: Record<string, { color: string; label: string }> = {

@@ -1,13 +1,17 @@
 """Deviation automation service - overdue reminders and weekly confirmations."""
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import select, func, and_, or_
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.quality.models import Deviation, DepartmentContact, DepartmentWeeklyConfirmation
+from app.modules.quality.models import (
+    DepartmentContact,
+    DepartmentWeeklyConfirmation,
+    Deviation,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -46,65 +50,69 @@ APPROVAL_STEP_LABELS = {
 PENDING_STATUSES = list(STATUS_TO_STEP.keys())
 
 
-async def check_overdue_deviations(db: AsyncSession) -> list[dict]:
+async def check_overdue_deviations(db: AsyncSession) -> list[dict[str, Any]]:
     """Find deviations that have exceeded their step deadline."""
     query = select(Deviation).where(
         and_(
-            Deviation.is_deleted == False,
+            Deviation.is_deleted.is_(False),
             Deviation.status.in_(PENDING_STATUSES),
             Deviation.status_updated_at.isnot(None),
         )
     )
-    
+
     result = await db.execute(query)
     deviations = result.scalars().all()
-    
+
     overdue_items = []
-    now = datetime.now(timezone.utc)
-    
+    now = datetime.now(UTC)
+
     for dev in deviations:
         step = STATUS_TO_STEP.get(dev.status)
         if not step:
             continue
-        
+
         limit_days = STEP_OVERDUE_DAYS.get(step, 7)
         if dev.status_updated_at:
             days_elapsed = (now - dev.status_updated_at).days
             if days_elapsed > limit_days:
-                overdue_items.append({
-                    "id": str(dev.id),
-                    "code": dev.deviation_code,
-                    "title": dev.title,
-                    "status": dev.status,
-                    "department": dev.department,
-                    "handler": dev.handler,
-                    "status_updated_at": dev.status_updated_at.isoformat(),
-                    "overdue_days": days_elapsed - limit_days,
-                    "step": step,
-                    "step_label": APPROVAL_STEP_LABELS.get(step, step),
-                })
-    
+                overdue_items.append(
+                    {
+                        "id": str(dev.id),
+                        "code": dev.deviation_code,
+                        "title": dev.title,
+                        "status": dev.status,
+                        "department": dev.department,
+                        "handler": dev.handler,
+                        "status_updated_at": dev.status_updated_at.isoformat(),
+                        "overdue_days": days_elapsed - limit_days,
+                        "step": step,
+                        "step_label": APPROVAL_STEP_LABELS.get(step, step),
+                    }
+                )
+
     return overdue_items
 
 
-async def check_unsubmitted_weekly_confirmations(db: AsyncSession) -> list[dict]:
+async def check_unsubmitted_weekly_confirmations(
+    db: AsyncSession,
+) -> list[dict[str, Any]]:
     """Find departments with production but no deviation submission this week."""
     # Get current week key (e.g., "2026-W23")
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     iso_cal = now.isocalendar()
     current_week_key = f"{iso_cal[0]}-W{iso_cal[1]:02d}"
-    
+
     # Get all production workshops
+    # The current compatibility model stores department-head identifiers but
+    # no longer has the removed legacy production-workshop/GMP columns. Keep
+    # reminders usable with the current schema.
     workshop_query = select(DepartmentContact).where(
-        and_(
-            DepartmentContact.is_deleted == False,
-            DepartmentContact.is_production_workshop == True,
-        )
+        DepartmentContact.is_deleted.is_(False)
     )
     result = await db.execute(workshop_query)
     workshops = result.scalars().all()
-    
-    unsubmitted = []
+
+    unsubmitted: list[dict[str, Any]] = []
     for workshop in workshops:
         # Check if there's a confirmation for this week
         confirm_query = select(DepartmentWeeklyConfirmation).where(
@@ -115,26 +123,37 @@ async def check_unsubmitted_weekly_confirmations(db: AsyncSession) -> list[dict]
         )
         confirm_result = await db.execute(confirm_query)
         confirm = confirm_result.scalar_one_or_none()
-        
+
         if not confirm:
             # No confirmation yet - check if they have production
-            unsubmitted.append({
-                "department": workshop.department,
-                "dept_head_id": str(workshop.dept_head_id) if workshop.dept_head_id else None,
-                "gmp_staff_ids": workshop.gmp_staff_ids or [],
-            })
-        elif confirm.production_status == "production" and confirm.deviation_status == "unsubmitted":
+            unsubmitted.append(
+                {
+                    "department": workshop.department,
+                    "dept_head_id": str(workshop.department_head_open_id)
+                    if workshop.department_head_open_id
+                    else None,
+                    "gmp_staff_ids": [],
+                }
+            )
+        elif (
+            confirm.production_status == "production"
+            and confirm.deviation_status == "unsubmitted"
+        ):
             # Confirmed production but no deviation submitted
-            unsubmitted.append({
-                "department": workshop.department,
-                "dept_head_id": str(workshop.dept_head_id) if workshop.dept_head_id else None,
-                "gmp_staff_ids": workshop.gmp_staff_ids or [],
-            })
-    
+            unsubmitted.append(
+                {
+                    "department": workshop.department,
+                    "dept_head_id": str(workshop.department_head_open_id)
+                    if workshop.department_head_open_id
+                    else None,
+                    "gmp_staff_ids": [],
+                }
+            )
+
     return unsubmitted
 
 
-def format_overdue_notification(item: dict) -> str:
+def format_overdue_notification(item: dict[str, Any]) -> str:
     """Format an overdue deviation notification message."""
     return (
         f"⚠️ 偏差超期提醒\n\n"
@@ -148,7 +167,7 @@ def format_overdue_notification(item: dict) -> str:
     )
 
 
-def format_weekly_unsubmitted_notification(dept: dict) -> str:
+def format_weekly_unsubmitted_notification(dept: dict[str, Any]) -> str:
     """Format a weekly unsubmitted deviation notification message."""
     return (
         f"📋 周偏差确认提醒\n\n"

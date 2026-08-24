@@ -1,24 +1,41 @@
 """培训效果评估表 Excel 文档生成器."""
 
+import logging
 from datetime import date
 from io import BytesIO
+from typing import Any
 
-from openpyxl import Workbook
-from openpyxl.styles import Alignment, Border, Side, Font
+from openpyxl import Workbook  # type: ignore[import-untyped]
+from openpyxl.styles import (  # type: ignore[import-untyped]
+    Alignment,
+    Border,
+    Font,
+    Side,
+)
 from pydantic import BaseModel, Field
+
+from app.modules.hr.date_format import HR_EXPORT_DATE_FORMAT
+
+logger = logging.getLogger(__name__)
 
 
 class TrainingEvaluationInput(BaseModel):
     subject: str = Field(..., max_length=128, description="培训主题")
     training_date: date | None = Field(None, description="培训日期")
-    training_time_start: str | None = Field(None, max_length=32, description="培训开始时间")
-    training_time_end: str | None = Field(None, max_length=32, description="培训结束时间")
+    training_time_start: str | None = Field(
+        None, max_length=32, description="培训开始时间"
+    )
+    training_time_end: str | None = Field(
+        None, max_length=32, description="培训结束时间"
+    )
     duration_hours: float | None = Field(None, description="学时")
     training_method: str | None = Field(None, max_length=32, description="培训方式")
     is_exam: bool = Field(False, description="是否考试")
     trainer_type: str | None = Field(None, max_length=64, description="培训人员类型")
     trainer: str | None = Field(None, max_length=64, description="授课人")
-    department_personnel: str | None = Field(None, max_length=256, description="部门/班组/人员")
+    department_personnel: str | None = Field(
+        None, max_length=256, description="部门/班组/人员"
+    )
     expected_count: int | None = Field(None, description="应出席人数")
     actual_count: int | None = Field(None, description="实际出席人数")
     absent_count: int | None = Field(None, description="缺席人数")
@@ -28,26 +45,30 @@ class TrainingEvaluationInput(BaseModel):
     pass_count: int | None = Field(None, description="合格人数")
     fail_count: int | None = Field(None, description="不合格人数")
     absent_exam_count: int | None = Field(None, description="缺考人数")
-    absent_exam_handling: str | None = Field(None, max_length=512, description="缺考人员处理方式和原因")
+    absent_exam_handling: str | None = Field(
+        None, max_length=512, description="缺考人员处理方式和原因"
+    )
     excellent_count: int | None = Field(None, description="优秀人数")
     qualified_count: int | None = Field(None, description="合格人数")
     unqualified_count: int | None = Field(None, description="不合格人数")
-    evaluation_conclusion: str | None = Field(None, max_length=1024, description="培训效果评估及结论")
+    evaluation_conclusion: str | None = Field(
+        None, max_length=1024, description="培训效果评估及结论"
+    )
     organizer: str | None = Field(None, max_length=64, description="培训组织人")
     organizer_date: date | None = Field(None, description="组织日期")
     remarks: str | None = Field(None, max_length=512, description="备注")
 
 
-def _cell_border():
+def _cell_border() -> Any:
     thin = Side(style="thin")
     return Border(left=thin, right=thin, top=thin, bottom=thin)
 
 
-def _center_align():
+def _center_align() -> Any:
     return Alignment(horizontal="center", vertical="center", wrap_text=True)
 
 
-def _left_align():
+def _left_align() -> Any:
     return Alignment(horizontal="left", vertical="center", wrap_text=True)
 
 
@@ -92,7 +113,7 @@ def generate_training_evaluation(data: TrainingEvaluationInput) -> BytesIO:
     # 培训时间 + 学时
     time_str = ""
     if data.training_date:
-        time_str = data.training_date.strftime("%Y年%m月%d日")
+        time_str = data.training_date.strftime(HR_EXPORT_DATE_FORMAT)
     if data.training_time_start and data.training_time_end:
         time_str += f" {data.training_time_start}~{data.training_time_end}"
     ws.merge_cells("A5:C5")
@@ -112,7 +133,9 @@ def generate_training_evaluation(data: TrainingEvaluationInput) -> BytesIO:
         "远程教育": "□面授  □函授  ☑远程教育  □自学  □其他方式",
         "自学": "□面授  □函授  □远程教育  ☑自学  □其他方式",
     }
-    method_str = method_map.get(data.training_method, "□面授  □函授  □远程教育  □自学  □其他方式")
+    method_str = method_map.get(
+        data.training_method or "", "□面授  □函授  □远程教育  □自学  □其他方式"
+    )
     ws.merge_cells("A6:C6")
     ws["A6"] = f"培训方式：{method_str}"
     ws["A6"].alignment = _left_align()
@@ -153,11 +176,23 @@ def generate_training_evaluation(data: TrainingEvaluationInput) -> BytesIO:
     ws.merge_cells("A10:E10")
     makeup_str = ""
     if data.makeup_training is True:
-        makeup_str = "是否进行补课培训，☑是 □否，未参加培训人员必须补上培训内容，（包括培训时间、地点、方式等）。"
+        makeup_str = (
+            "是否进行补课培训，☑是 □否，未参加培训人员必须补上培训内容"
+            "，（包括培训时间、地"
+            "点、方式等）。"
+        )
     elif data.makeup_training is False:
-        makeup_str = "是否进行补课培训，□是 ☑否，未参加培训人员必须补上培训内容，（包括培训时间、地点、方式等）。"
+        makeup_str = (
+            "是否进行补课培训，□是 ☑否，未参加培训人员必须补上培训内容"
+            "，（包括培训时间、地"
+            "点、方式等）。"
+        )
     else:
-        makeup_str = "是否进行补课培训，□是 □否，未参加培训人员必须补上培训内容，（包括培训时间、地点、方式等）。"
+        makeup_str = (
+            "是否进行补课培训，□是 □否，未参加培训人员必须补上培训内容"
+            "，（包括培训时间、地"
+            "点、方式等）。"
+        )
     ws["A10"] = f"缺席人员处理方式：\n{makeup_str}"
     ws["A10"].alignment = Alignment(horizontal="left", vertical="top", wrap_text=True)
     ws["A10"].border = _cell_border()
@@ -227,7 +262,7 @@ def generate_training_evaluation(data: TrainingEvaluationInput) -> BytesIO:
     if data.organizer:
         org_date += data.organizer
     if data.organizer_date:
-        org_date += f" / {data.organizer_date.strftime('%Y年%m月%d日')}"
+        org_date += f" / {data.organizer_date.strftime(HR_EXPORT_DATE_FORMAT)}"
     ws["A18"] = f"培训组织人/日期：{org_date}"
     ws["A18"].alignment = _left_align()
     ws["A18"].border = _cell_border()

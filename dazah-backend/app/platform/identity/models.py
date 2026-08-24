@@ -265,6 +265,146 @@ class Department(BaseModel):
     )
 
 
+class Role(BaseModel):
+    """RBAC 角色。"""
+
+    __tablename__ = "roles"
+    __table_args__ = (
+        UniqueConstraint("code", name="uq_identity_roles_code"),
+        {"schema": "identity"},
+    )
+
+    name: Mapped[str] = mapped_column(String(100), comment="角色名称")
+    code: Mapped[str] = mapped_column(String(64), comment="角色编码")
+    description: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, comment="角色描述"
+    )
+    is_system: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false", comment="系统内置角色（禁删）"
+    )
+
+
+class Permission(BaseModel):
+    """RBAC 权限点。"""
+
+    __tablename__ = "permissions"
+    __table_args__ = (
+        UniqueConstraint("code", name="uq_identity_permissions_code"),
+        {"schema": "identity"},
+    )
+
+    code: Mapped[str] = mapped_column(String(128), comment="权限编码")
+    module: Mapped[str] = mapped_column(String(64), comment="模块名")
+    action: Mapped[str] = mapped_column(String(32), comment="操作")
+    name: Mapped[str] = mapped_column(String(100), comment="权限名称")
+    description: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, comment="权限描述"
+    )
+
+
+class RolePermission(BaseModel):
+    """角色-权限绑定。"""
+
+    __tablename__ = "role_permissions"
+    __table_args__ = (
+        UniqueConstraint(
+            "role_id", "permission_id", name="uq_identity_role_permissions"
+        ),
+        {"schema": "identity"},
+    )
+
+    role_id = mapped_column(UUID(as_uuid=True), index=True, nullable=False)
+    permission_id = mapped_column(UUID(as_uuid=True), index=True, nullable=False)
+
+
+class UserRole(BaseModel):
+    """用户-角色绑定，来源为手动或部门映射。"""
+
+    __tablename__ = "user_roles"
+    __table_args__ = (
+        UniqueConstraint("user_id", "role_id", "source", name="uq_identity_user_roles"),
+        {"schema": "identity"},
+    )
+
+    user_id = mapped_column(UUID(as_uuid=True), index=True, nullable=False)
+    role_id = mapped_column(UUID(as_uuid=True), index=True, nullable=False)
+    source: Mapped[str] = mapped_column(
+        String(16), default="manual", server_default="manual", comment="来源"
+    )
+
+
+class Menu(BaseModel):
+    """系统菜单、目录和按钮。"""
+
+    __tablename__ = "menus"
+    __table_args__ = (
+        UniqueConstraint("key", name="uq_identity_menus_key"),
+        {"schema": "identity"},
+    )
+
+    key: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    parent_id = mapped_column(UUID(as_uuid=True), index=True, nullable=True)
+    name: Mapped[str] = mapped_column(String(100), comment="菜单名称")
+    type: Mapped[str] = mapped_column(String(16), comment="directory/menu/button")
+    permission_code: Mapped[str | None] = mapped_column(
+        String(128), index=True, nullable=True
+    )
+    route_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    component_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    icon: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    status: Mapped[str] = mapped_column(
+        String(16), default="active", server_default="active"
+    )
+
+
+class RoleMenu(BaseModel):
+    """角色-菜单绑定。"""
+
+    __tablename__ = "role_menus"
+    __table_args__ = (
+        UniqueConstraint("role_id", "menu_id", name="uq_identity_role_menus"),
+        {"schema": "identity"},
+    )
+
+    role_id = mapped_column(UUID(as_uuid=True), index=True, nullable=False)
+    menu_id = mapped_column(UUID(as_uuid=True), index=True, nullable=False)
+
+
+class DataScopeRule(BaseModel):
+    """角色或用户的部门数据范围配置。"""
+
+    __tablename__ = "data_scope_rules"
+    __table_args__ = (
+        UniqueConstraint("role_id", "user_id", name="uq_identity_data_scope_rules"),
+        {"schema": "identity"},
+    )
+
+    role_id = mapped_column(UUID(as_uuid=True), nullable=True)
+    user_id = mapped_column(UUID(as_uuid=True), nullable=True)
+    scope_type: Mapped[str] = mapped_column(String(16), comment="all/departments")
+    department_names: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class DepartmentRoleRule(BaseModel):
+    """按飞书部门 ID 或部门名称映射角色。"""
+
+    __tablename__ = "department_role_rules"
+    __table_args__ = (
+        UniqueConstraint(
+            "feishu_department_id",
+            "department_name",
+            "role_id",
+            name="uq_identity_department_role_rules",
+        ),
+        {"schema": "identity"},
+    )
+
+    feishu_department_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    department_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    role_id = mapped_column(UUID(as_uuid=True), nullable=False)
+
+
 class FeishuConfig(BaseModel):
     """Livzon 助手专用飞书通讯录配置。"""
 

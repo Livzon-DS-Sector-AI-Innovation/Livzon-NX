@@ -15,7 +15,16 @@ const currentUser = {
   employee_no: 'CI-001',
   department: '质量保证',
   position: '测试账号',
-  module_codes: ['procurement'],
+  module_codes: [
+    'procurement',
+    'quality',
+    'registration',
+    'hr',
+    'warehouse',
+    'identity',
+    'platform',
+    'energy',
+  ],
 }
 
 const pendingPurchaseRequest = {
@@ -43,6 +52,33 @@ const feishuConfig = {
   is_active: true,
   updated_at: '2026-07-31T09:00:00Z',
   updated_by: '00000000-0000-0000-0000-000000000001',
+}
+
+let llmConfigs = [
+  {
+    id: '30000000-0000-0000-0000-000000000001',
+    config_name: '现有测试配置',
+    config_type: 'text',
+    capabilities: ['text', 'document'],
+    api_base_url: 'https://existing.example/v1',
+    api_key_masked: '******',
+    model_name: 'existing-model',
+    temperature: 0,
+    timeout_seconds: 120,
+    is_active: false,
+    notes: '用于端到端测试',
+    created_at: '2026-08-19T00:00:00Z',
+    updated_at: '2026-08-19T00:00:00Z',
+  },
+]
+
+function llmDetection(detail = '模型连通正常；已检测到文本和文档能力，模型不接受图片输入') {
+  return {
+    status: 'ok',
+    config_type: 'text',
+    capabilities: ['text', 'document'],
+    detail,
+  }
 }
 
 function readJsonBody(request) {
@@ -157,8 +193,108 @@ const server = createServer(async (request, response) => {
 
     const user = authorization.includes('restricted')
       ? { ...currentUser, module_codes: [] }
-      : currentUser
+      : authorization.includes('procurement-only')
+        ? { ...currentUser, module_codes: ['procurement'] }
+        : currentUser
     response.end(JSON.stringify({ code: 200, message: 'success', data: user }))
+    return
+  }
+
+  if (request.url === '/api/v1/llm/configs' && request.method === 'GET') {
+    response.end(JSON.stringify(llmConfigs))
+    return
+  }
+
+  if (request.url === '/api/v1/llm/configs/probe' && request.method === 'POST') {
+    const body = await readJsonBody(request)
+    if (String(body.api_base_url || '').includes('fail.example')) {
+      response.statusCode = 400
+      response.end(JSON.stringify({ detail: '模拟连通性失败' }))
+      return
+    }
+    response.end(JSON.stringify({
+      ...llmDetection(
+        body.probe_type === 'url'
+          ? 'API URL 与密钥连通正常'
+          : undefined,
+      ),
+      probe_type: body.probe_type,
+    }))
+    return
+  }
+
+  if (request.url === '/api/v1/llm/configs/test' && request.method === 'POST') {
+    if (!llmConfigs.some((config) => config.is_active)) {
+      response.statusCode = 404
+      response.end(JSON.stringify({ detail: '没有已激活的 LLM 配置' }))
+      return
+    }
+    response.end(JSON.stringify(llmDetection('当前激活模型连接正常')))
+    return
+  }
+
+  if (request.url === '/api/v1/llm/configs' && request.method === 'POST') {
+    const body = await readJsonBody(request)
+    if (body.is_active) {
+      llmConfigs = llmConfigs.map((config) => ({ ...config, is_active: false }))
+    }
+    const now = new Date().toISOString()
+    const config = {
+      ...body,
+      id: '30000000-0000-0000-0000-000000000002',
+      config_type: 'text',
+      capabilities: ['text', 'document'],
+      api_key_masked: '******',
+      created_at: now,
+      updated_at: now,
+    }
+    delete config.api_key
+    llmConfigs.unshift(config)
+    response.statusCode = 201
+    response.end(JSON.stringify(config))
+    return
+  }
+
+  const llmConfigMatch = request.url?.match(
+    /^\/api\/v1\/llm\/configs\/([^/]+)(\/test)?$/,
+  )
+  if (llmConfigMatch && request.method === 'POST' && llmConfigMatch[2]) {
+    const config = llmConfigs.find((item) => item.id === llmConfigMatch[1])
+    if (!config) {
+      response.statusCode = 404
+      response.end(JSON.stringify({ detail: 'Config not found' }))
+      return
+    }
+    response.end(JSON.stringify(llmDetection('已重新检测模型能力')))
+    return
+  }
+
+  if (llmConfigMatch && request.method === 'PUT' && !llmConfigMatch[2]) {
+    const body = await readJsonBody(request)
+    if (body.is_active) {
+      llmConfigs = llmConfigs.map((config) => ({ ...config, is_active: false }))
+    }
+    const index = llmConfigs.findIndex((item) => item.id === llmConfigMatch[1])
+    if (index < 0) {
+      response.statusCode = 404
+      response.end(JSON.stringify({ detail: 'Config not found' }))
+      return
+    }
+    const updated = {
+      ...llmConfigs[index],
+      ...body,
+      updated_at: new Date().toISOString(),
+    }
+    delete updated.api_key
+    llmConfigs[index] = updated
+    response.end(JSON.stringify(updated))
+    return
+  }
+
+  if (llmConfigMatch && request.method === 'DELETE' && !llmConfigMatch[2]) {
+    llmConfigs = llmConfigs.filter((item) => item.id !== llmConfigMatch[1])
+    response.statusCode = 204
+    response.end()
     return
   }
 

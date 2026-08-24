@@ -1,14 +1,16 @@
 """Quality business workflows live here."""
 
 import logging
-from datetime import date, datetime
+from datetime import date
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundException
 from app.modules.production.label_verification_models import LabelVerification
-from app.modules.production.label_verification_repository import LabelVerificationRepository
+from app.modules.production.label_verification_repository import (
+    LabelVerificationRepository,
+)
 from app.modules.production.label_verification_schemas import (
     LabelVerificationCreate,
     LabelVerificationResponse,
@@ -43,9 +45,7 @@ class LabelVerificationService:
         # 检查视频是否已处理（去重）
         existing = await self.repo.get_by_video_file_key(data.video_file_key)
         if existing:
-            logger.info(
-                f"视频 {data.video_file_key} 已处理，返回已有记录"
-            )
+            logger.info(f"视频 {data.video_file_key} 已处理，返回已有记录")
             return self._to_response(existing)
 
         verification = LabelVerification(

@@ -1,19 +1,21 @@
-import { fetchAuthorizationLettersServer, fetchProductsServer } from '@/actions/registration'
-import AuthorizationLetterClient from '@/components/registration/AuthorizationLetterClient'
+import { AuthorizationLetterClient } from '@/components/registration'
+import {
+  fetchAuthorizationFdaServer,
+  fetchAuthorizationLedgerServer,
+} from '@/lib/api/server/registration'
 
 export const dynamic = 'force-dynamic'
 
 export default async function AuthorizationLetterPage() {
-  const [lettersRes, productsRes] = await Promise.all([
-    fetchAuthorizationLettersServer({ page: 1, page_size: 20 }),
-    fetchProductsServer(),
+  const [groupedLedgerResult, fdaResult] = await Promise.all([
+    fetchAuthorizationLedgerServer(),
+    fetchAuthorizationFdaServer().catch(() => []),
   ])
 
   return (
     <AuthorizationLetterClient
-      initialLetters={lettersRes?.data || []}
-      initialTotal={lettersRes?.meta?.total || 0}
-      products={productsRes || []}
+      initialRecords={groupedLedgerResult.records}
+      initialFdaRecords={fdaResult}
     />
   )
 }
