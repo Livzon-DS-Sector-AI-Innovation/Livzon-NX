@@ -38,4 +38,4 @@ backups/
 .env.*
 !.env.example
 
-storage/
+/storage/
