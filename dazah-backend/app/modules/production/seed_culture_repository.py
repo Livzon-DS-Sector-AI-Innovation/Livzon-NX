@@ -1,5 +1,5 @@
 """摇瓶种子制备记录 repository."""
-
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -9,7 +9,7 @@ from app.modules.production.seed_culture_models import SeedCulture
 
 
 class SeedCultureRepository:
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
     async def list(
@@ -18,7 +18,7 @@ class SeedCultureRepository:
         page_size: int = 20,
         batch_no: str | None = None,
         product_name: str | None = None,
-    ):
+    ) -> Any:
         query = select(SeedCulture).where(SeedCulture.is_deleted.is_(False))
 
         if batch_no:
@@ -45,7 +45,7 @@ class SeedCultureRepository:
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
 
-    async def create(self, data: dict) -> SeedCulture:
+    async def create(self, data: dict[str, Any]) -> SeedCulture:
         record = SeedCulture(**data)
         self.session.add(record)
         await self.session.flush()
@@ -53,7 +53,7 @@ class SeedCultureRepository:
         await self.session.refresh(record)
         return record
 
-    async def update(self, record_id: UUID, data: dict) -> SeedCulture | None:
+    async def update(self, record_id: UUID, data: dict[str, Any]) -> SeedCulture | None:
         record = await self.get_by_id(record_id)
         if not record:
             return None

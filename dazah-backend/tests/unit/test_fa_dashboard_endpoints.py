@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from types import SimpleNamespace
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -14,11 +15,11 @@ from app.modules.production import fa_dashboard_api as fd
 
 
 @pytest.mark.anyio
-async def test_get_fa_dashboard_summary_full():
+async def test_get_fa_dashboard_summary_full() -> Any:
     """汇总端点全流程：各工段计数、产量、平均收率、达标率、流程监控、趋势。"""
     s = AsyncMock()
 
-    def branch(sql, params=None):
+    def branch(sql: Any, params: Any=None) -> Any:
         ssql = str(sql)
         r = MagicMock()
         if "SELECT COUNT(1) FROM production.fa_fermentation_batches" in ssql:
@@ -58,11 +59,11 @@ async def test_get_fa_dashboard_summary_full():
 
 
 @pytest.mark.anyio
-async def test_get_fa_dashboard_dec_boundary_and_empty():
+async def test_get_fa_dashboard_dec_boundary_and_empty() -> Any:
     """12 月边界 end_date 跨年；无数据 → 达标率/产量为 0。"""
     s = AsyncMock()
 
-    def branch(sql, params=None):
+    def branch(sql: Any, params: Any=None) -> Any:
         ssql = str(sql)
         r = MagicMock()
         if "SELECT COUNT(1) FROM production.fa_fermentation_batches" in ssql:
@@ -91,7 +92,7 @@ async def test_get_fa_dashboard_dec_boundary_and_empty():
 
 
 @pytest.mark.anyio
-async def test_get_fa_dashboard_exception_paths():
+async def test_get_fa_dashboard_exception_paths() -> Any:
     """所有子查询抛异常 → 汇总端点仍返回全部 0 的响应，不扩散。"""
     s = AsyncMock()
     s.execute.side_effect = Exception("boom")
@@ -108,11 +109,11 @@ async def test_get_fa_dashboard_exception_paths():
 
 
 @pytest.mark.anyio
-async def test_fa_yield_chain_full():
+async def test_fa_yield_chain_full() -> Any:
     """收率全链路：一个批次完全走通酸化/离心/脱色，生成阶段汇总与整体累计。"""
     s = AsyncMock()
 
-    def branch(sql, params=None):
+    def branch(sql: Any, params: Any=None) -> Any:
         ssql = str(sql)
         r = MagicMock()
         if "FROM production.fa_fermentation_batches fb" in ssql:
@@ -157,11 +158,11 @@ async def test_fa_yield_chain_full():
 
 
 @pytest.mark.anyio
-async def test_fa_yield_chain_empty():
+async def test_fa_yield_chain_empty() -> Any:
     """无发酵批次 → 立即空响应。"""
     s = AsyncMock()
     s.execute.side_effect = lambda sql, params: MagicMock(fetchall=lambda: [])
-    resp = await fd.fa_yield_chain(month=None, session=s)
+    resp = await fd.fa_yield_chain(month=cast(str, None), session=s)
     data = json.loads(resp.body)["data"]
     assert data["batches"] == []
     assert data["stages"] == []
@@ -172,11 +173,11 @@ async def test_fa_yield_chain_empty():
 
 
 @pytest.mark.anyio
-async def test_fa_golden_batches_quality_score():
+async def test_fa_golden_batches_quality_score() -> Any:
     """quality 评分：批量条目含 x2 离心数据、酸化/脱色字段，参考区间生成。"""
     s = AsyncMock()
 
-    def branch(sql, params):
+    def branch(sql: Any, params: Any) -> Any:
         ssql = str(sql)
         r = MagicMock()
         if "FROM production.fa_fermentation_batches fb" in ssql:
@@ -218,11 +219,11 @@ async def test_fa_golden_batches_quality_score():
 
 
 @pytest.mark.anyio
-async def test_fa_batch_params_full():
+async def test_fa_batch_params_full() -> Any:
     """批次对比诊断：命中发酵批次、构建参数、生成偏离建议，并保存 ai_analysis。"""
     s = AsyncMock()
 
-    def acidexec(sql, params=None):
+    def acidexec(sql: Any, params: Any=None) -> Any:
         rm = MagicMock()
         ssql = str(sql)
         if "fa_fermentation_batches" in ssql and "WHERE" in ssql:
@@ -270,11 +271,11 @@ async def test_fa_batch_params_full():
 
 
 @pytest.mark.anyio
-async def test_fa_batch_params_not_found_and_quality():
+async def test_fa_batch_params_not_found_and_quality() -> Any:
     """批次不存在 → error_response；quality 评分走 quality 分支。"""
     s = AsyncMock()
 
-    def ac_query(sql, params=None):
+    def ac_query(sql: Any, params: Any=None) -> Any:
         ssql = str(sql)
         rm = MagicMock()
         if "fe_fermentation_batches" in ssql and "发酵罐号" in ssql:
@@ -291,7 +292,7 @@ async def test_fa_batch_params_not_found_and_quality():
     # 找到批次但 score=quality 走 quality 分支（用简单场景）
     s2 = AsyncMock()
 
-    def ac_query2(sql, params=None):
+    def ac_query2(sql: Any, params: Any=None) -> Any:
         ssql = str(sql)
         rm = MagicMock()
         if "fa_fermentation_batches" in ssql and "发酵罐号" in ssql:

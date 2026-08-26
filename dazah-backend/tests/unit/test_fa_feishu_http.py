@@ -1,7 +1,7 @@
 """FA 苯丙氨酸 飞书同步/调度 helper 覆盖（mock httpx/session，无真实网络）。"""
-
 import importlib
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
@@ -9,7 +9,7 @@ import pytest
 
 
 @pytest.mark.anyio
-async def test_fa_feishu_sync_token_and_read_sheet():
+async def test_fa_feishu_sync_token_and_read_sheet() -> Any:
     mod = importlib.import_module("app.modules.production.fa_feishu_sync")
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -25,7 +25,7 @@ async def test_fa_feishu_sync_token_and_read_sheet():
     transport = httpx.MockTransport(handler)
     real_client = httpx.AsyncClient
 
-    def fake_async_client(*, base_url=None, timeout=30, **kw):
+    def fake_async_client(*, base_url: Any=None, timeout: Any=30, **kw: Any) -> Any:
         return real_client(transport=transport, timeout=timeout, base_url=base_url)
 
     mod._token_cache.clear()
@@ -38,7 +38,7 @@ async def test_fa_feishu_sync_token_and_read_sheet():
         assert rows[1] == ["a", "b", "c"]
 
 
-def _result(first=None, scalar=None):
+def _result(first: Any=None, scalar: Any=None) -> Any:
     r = MagicMock()
     r.scalars.return_value = r
     r.first.return_value = first
@@ -47,7 +47,7 @@ def _result(first=None, scalar=None):
 
 
 @pytest.mark.anyio
-async def test_fa_scheduler_get_config_and_run_sync():
+async def test_fa_scheduler_get_config_and_run_sync() -> Any:
     sched = importlib.import_module("app.modules.production.fa_feishu_scheduler")
     cfg_obj = SimpleNamespace(
         product_name="L-苯丙氨酸",
@@ -83,7 +83,7 @@ async def test_fa_scheduler_get_config_and_run_sync():
 
 
 @pytest.mark.anyio
-async def test_fa_scheduler_run_sync_simple():
+async def test_fa_scheduler_run_sync_simple() -> Any:
     # 走 run_fa_sync 的 decolor1 简单表解析，覆盖 _sync_simple 的 DELETE+INSERT 分支。
     sched = importlib.import_module("app.modules.production.fa_feishu_scheduler")
     cfg = {"spreadsheet_token": "st", "app_id": "app", "app_secret": "sec"}
@@ -106,7 +106,7 @@ async def test_fa_scheduler_run_sync_simple():
 
 
 @pytest.mark.anyio
-async def test_fa_scheduler_months_and_card():
+async def test_fa_scheduler_months_and_card() -> Any:
     """覆盖 _sync_simple 的月份分隔行跳过、日期解析与 DELETE+INSERT。"""
     sched = importlib.import_module("app.modules.production.fa_feishu_scheduler")
     cfg = {"spreadsheet_token": "s", "app_id": "a", "app_secret": "x"}

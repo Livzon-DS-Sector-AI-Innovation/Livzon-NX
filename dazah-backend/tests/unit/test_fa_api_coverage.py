@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from datetime import date
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -12,11 +13,11 @@ import pytest
 from app.modules.production import fa_api as api
 
 
-def _parse(resp):
+def _parse(resp: Any) -> Any:
     return json.loads(resp.body)["data"]
 
 
-def _batch(**over):
+def _batch(**over: Any) -> Any:
     data = dict(
         发酵罐号="FA-EX1",
         放罐日期=None,
@@ -37,7 +38,7 @@ def _batch(**over):
     return SimpleNamespace(**data)
 
 
-def _sub(**over):
+def _sub(**over: Any) -> Any:
     data = dict(
         id="sub-1",
         发酵批号="FA-EX1-1",
@@ -51,7 +52,7 @@ def _sub(**over):
     return SimpleNamespace(**data)
 
 
-def _acid(**over):
+def _acid(**over: Any) -> Any:
     data = dict(
         id=1,
         日期=date(2026, 5, 10),
@@ -90,7 +91,7 @@ def _acid(**over):
     return SimpleNamespace(**data)
 
 
-def _decolor(**over):
+def _decolor(**over: Any) -> Any:
     return SimpleNamespace(
         id=2,
         日期=date(2026, 5, 10),
@@ -114,7 +115,7 @@ def _decolor(**over):
     )
 
 
-def _mvr(**over):
+def _mvr(**over: Any) -> Any:
     return SimpleNamespace(
         id=3,
         日期=date(2026, 5, 10),
@@ -131,7 +132,7 @@ def _mvr(**over):
     )
 
 
-def _mother(**over):
+def _mother(**over: Any) -> Any:
     return SimpleNamespace(
         id=4,
         日期=date(2026, 5, 10),
@@ -146,7 +147,7 @@ def _mother(**over):
     )
 
 
-def _plate(**over):
+def _plate(**over: Any) -> Any:
     return SimpleNamespace(
         id=5,
         日期=date(2026, 5, 10),
@@ -168,25 +169,25 @@ def _plate(**over):
     )
 
 
-def _count(scalar_val):
+def _count(scalar_val: Any) -> Any:
     r = MagicMock()
     r.scalar.return_value = scalar_val
     return r
 
 
-def _scalars(items):
+def _scalars(items: Any) -> Any:
     r = MagicMock()
     r.scalars.return_value.all.return_value = items
     return r
 
 
-def _mappings(rows):
+def _mappings(rows: Any) -> Any:
     r = MagicMock()
     r.mappings.return_value.all.return_value = rows
     return r
 
 
-def _single(item):
+def _single(item: Any) -> Any:
     r = MagicMock()
     r.scalar_one_or_none.return_value = item
     return r
@@ -196,10 +197,10 @@ def _single(item):
 
 
 @pytest.mark.anyio
-async def test_list_batches_success_with_subs():
+async def test_list_batches_success_with_subs() -> Any:
     s = AsyncMock()
 
-    def exec(stmt, **kw):
+    def exec(stmt: Any, **kw: Any) -> Any:
         sql = str(stmt)
         if "count(*)" in sql and "fa_fermentation_batches" in sql:
             return _count(2)
@@ -226,10 +227,10 @@ async def test_list_batches_success_with_subs():
 
 
 @pytest.mark.anyio
-async def test_list_batches_tank_filter_and_empty():
+async def test_list_batches_tank_filter_and_empty() -> Any:
     s = AsyncMock()
 
-    def exec(stmt, **kw):
+    def exec(stmt: Any, **kw: Any) -> Any:
         sql = str(stmt)
         if "count(*)" in sql and "fa_fermentation_batches" in sql:
             return _count(0)
@@ -248,7 +249,7 @@ async def test_list_batches_tank_filter_and_empty():
 
 
 @pytest.mark.anyio
-async def test_list_flat_success_flatten():
+async def test_list_flat_success_flatten() -> Any:
     s = AsyncMock()
     s.execute.side_effect = [
         _count(2),
@@ -265,7 +266,7 @@ async def test_list_flat_success_flatten():
 
 
 @pytest.mark.anyio
-async def test_list_flat_month_and_tank_filter_empty():
+async def test_list_flat_month_and_tank_filter_empty() -> Any:
     s = AsyncMock()
     s.execute.side_effect = [
         _count(0),
@@ -281,7 +282,7 @@ async def test_list_flat_month_and_tank_filter_empty():
 
 
 @pytest.mark.anyio
-async def test_get_batch_found():
+async def test_get_batch_found() -> Any:
     s = AsyncMock()
     s.execute.return_value = _single(_batch())
     resp = await api.get_batch(tank_no="FA-EX1", session=s)
@@ -291,7 +292,7 @@ async def test_get_batch_found():
 
 
 @pytest.mark.anyio
-async def test_get_batch_not_found():
+async def test_get_batch_not_found() -> Any:
     s = AsyncMock()
     s.execute.return_value = _single(None)
     resp = await api.get_batch(tank_no="NOPE", session=s)
@@ -303,7 +304,7 @@ async def test_get_batch_not_found():
 
 
 @pytest.mark.anyio
-async def test_update_sub_batch_not_found():
+async def test_update_sub_batch_not_found() -> Any:
     s = AsyncMock()
     s.execute.return_value = _single(None)
     resp = await api.update_sub_batch(sub_id="x", data={}, session=s)
@@ -312,7 +313,7 @@ async def test_update_sub_batch_not_found():
 
 
 @pytest.mark.anyio
-async def test_update_sub_batch_success():
+async def test_update_sub_batch_success() -> Any:
     s = AsyncMock()
     s.execute.return_value = _single(_sub())
     s.commit = AsyncMock()
@@ -326,7 +327,7 @@ async def test_update_sub_batch_success():
 
 
 @pytest.mark.anyio
-async def test_list_acidification_date_and_none():
+async def test_list_acidification_date_and_none() -> Any:
     s = AsyncMock()
     s.execute.side_effect = [_count(2), _scalars([_acid(), _acid(id=6, 日期=None)])]
     resp = await api.list_acidification(page=1, page_size=5, batch_no="FA", month=5, session=s)  # noqa: E501
@@ -338,7 +339,7 @@ async def test_list_acidification_date_and_none():
 
 
 @pytest.mark.anyio
-async def test_list_acidification_default_filters_empty():
+async def test_list_acidification_default_filters_empty() -> Any:
     s = AsyncMock()
     s.execute.side_effect = [_count(0), _scalars([])]
     resp = await api.list_acidification(page=1, page_size=5, batch_no=None, month=None, session=s)  # noqa: E501
@@ -351,7 +352,7 @@ async def test_list_acidification_default_filters_empty():
 
 
 @pytest.mark.anyio
-async def test_list_decolor1_fields():
+async def test_list_decolor1_fields() -> Any:
     s = AsyncMock()
     s.execute.side_effect = [_count(1), _scalars([_decolor()])]
     resp = await api.list_decolor1(page=1, page_size=5, month=5, session=s)
@@ -362,7 +363,7 @@ async def test_list_decolor1_fields():
 
 
 @pytest.mark.anyio
-async def test_list_decolor1_no_month_empty():
+async def test_list_decolor1_no_month_empty() -> Any:
     s = AsyncMock()
     s.execute.side_effect = [_count(0), _scalars([])]
     resp = await api.list_decolor1(page=1, page_size=5, month=None, session=s)
@@ -373,7 +374,7 @@ async def test_list_decolor1_no_month_empty():
 
 
 @pytest.mark.anyio
-async def test_list_mvr_fields():
+async def test_list_mvr_fields() -> Any:
     s = AsyncMock()
     s.execute.side_effect = [_count(1), _scalars([_mvr()])]
     resp = await api.list_mvr(page=1, page_size=5, month=5, session=s)
@@ -386,7 +387,7 @@ async def test_list_mvr_fields():
 
 
 @pytest.mark.anyio
-async def test_list_mother_liquor_fields():
+async def test_list_mother_liquor_fields() -> Any:
     s = AsyncMock()
     s.execute.side_effect = [_count(1), _scalars([_mother()])]
     resp = await api.list_mother_liquor(page=1, page_size=5, month=5, session=s)
@@ -399,7 +400,7 @@ async def test_list_mother_liquor_fields():
 
 
 @pytest.mark.anyio
-async def test_list_plate_recovery_fields():
+async def test_list_plate_recovery_fields() -> Any:
     s = AsyncMock()
     s.execute.side_effect = [_count(1), _scalars([_plate()])]
     resp = await api.list_plate_recovery(page=1, page_size=5, month=5, session=s)
@@ -412,7 +413,7 @@ async def test_list_plate_recovery_fields():
 
 
 @pytest.mark.anyio
-async def test_list_decolor_centrifuge():
+async def test_list_decolor_centrifuge() -> Any:
     rows = [
         {
             "id": 1,
@@ -439,7 +440,7 @@ async def test_list_decolor_centrifuge():
 
 
 @pytest.mark.anyio
-async def test_list_decolor_centrifuge_no_month_empty():
+async def test_list_decolor_centrifuge_no_month_empty() -> Any:
     s = AsyncMock()
     s.execute.side_effect = [_count(0), _mappings([])]
     resp = await api.list_decolor_centrifuge(page=1, page_size=5, month=None, session=s)
@@ -450,7 +451,7 @@ async def test_list_decolor_centrifuge_no_month_empty():
 
 
 @pytest.mark.anyio
-async def test_list_intermediate():
+async def test_list_intermediate() -> Any:
     rows = [{"id": 1, "日期": date(2026, 5, 10), "当日母液总体积/方": "5", "合计570": "10"}]  # noqa: E501
     s = AsyncMock()
     s.execute.side_effect = [_count(1), _mappings(rows)]
@@ -464,14 +465,14 @@ async def test_list_intermediate():
 
 
 @pytest.mark.anyio
-async def test_monthly_averages_unknown_table():
+async def test_monthly_averages_unknown_table() -> Any:
     resp = await api.monthly_averages(table="nope", session=AsyncMock())
     assert json.loads(resp.body)["message"] == "未知表: nope"
     assert resp.status_code == 400
 
 
 @pytest.mark.anyio
-async def test_monthly_averages_success():
+async def test_monthly_averages_success() -> Any:
     col_rows = [("批收率",), ("created_at",), ("updated_at",), ("is_deleted",), ("电导_uscm",)]  # noqa: E501
     agg_row = {"月份": "5月", "批收率": 88.5}
     s = AsyncMock()
@@ -486,7 +487,7 @@ async def test_monthly_averages_success():
 
 
 @pytest.mark.anyio
-async def test_monthly_averages_no_columns():
+async def test_monthly_averages_no_columns() -> Any:
     s = AsyncMock()
     s.execute.side_effect = [MagicMock(fetchall=lambda: [])]
     resp = await api.monthly_averages(table="decolor1_records", session=s)
@@ -499,7 +500,7 @@ async def test_monthly_averages_no_columns():
 
 
 @pytest.mark.anyio
-async def test_trigger_fa_sync_default_and_partial_error():
+async def test_trigger_fa_sync_default_and_partial_error() -> Any:
     s = AsyncMock()
     with patch(
         "app.modules.production.fa_feishu_scheduler.run_fa_sync",

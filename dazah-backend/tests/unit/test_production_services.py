@@ -13,9 +13,11 @@ from __future__ import annotations
 import uuid
 from datetime import date
 from types import SimpleNamespace
+from typing import Any, cast
 from unittest.mock import AsyncMock
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.production import (
     fermentation_service,
@@ -30,13 +32,13 @@ from app.modules.production import (
 def _fermentation_service() -> tuple[
     fermentation_service.FermentationService, SimpleNamespace
 ]:
-    service = fermentation_service.FermentationService(object())
+    service = fermentation_service.FermentationService(cast(AsyncSession, object()))
     repo = SimpleNamespace(
         create=AsyncMock(return_value=SimpleNamespace(id=uuid.uuid4())),
         update=AsyncMock(return_value=SimpleNamespace(id=uuid.uuid4())),
         delete=AsyncMock(return_value=True),
     )
-    service.repo = repo
+    setattr(service, "repo", repo)
     return service, repo
 
 
@@ -67,13 +69,13 @@ async def test_fermentation_update_raises_on_missing() -> None:
 
 
 def _seed_service() -> tuple[seed_culture_service.SeedCultureService, SimpleNamespace]:
-    service = seed_culture_service.SeedCultureService(object())
+    service = seed_culture_service.SeedCultureService(cast(AsyncSession, object()))
     repo = SimpleNamespace(
         create=AsyncMock(return_value=SimpleNamespace(id=uuid.uuid4())),
         update=AsyncMock(return_value=SimpleNamespace(id=uuid.uuid4())),
         delete=AsyncMock(return_value=True),
     )
-    service.repo = repo
+    setattr(service, "repo", repo)
     return service, repo
 
 
@@ -98,13 +100,13 @@ async def test_seed_culture_update_delete_raise_on_missing() -> None:
 
 
 def _shift_log_service() -> tuple[shift_log_service.ShiftLogService, SimpleNamespace]:
-    service = shift_log_service.ShiftLogService(object())
+    service = shift_log_service.ShiftLogService(cast(AsyncSession, object()))
     repo = SimpleNamespace(
         create=AsyncMock(return_value=SimpleNamespace(id=uuid.uuid4())),
         update=AsyncMock(return_value=SimpleNamespace(id=uuid.uuid4())),
         delete=AsyncMock(return_value=True),
     )
-    service.repo = repo
+    setattr(service, "repo", repo)
     return service, repo
 
 
@@ -130,12 +132,14 @@ async def test_shift_log_update_delete_raise_on_missing() -> None:
 def _shift_handover_service() -> tuple[
     shift_handover_service.ShiftHandoverService, SimpleNamespace
 ]:
-    service = shift_handover_service.ShiftHandoverService(object())
+    service = shift_handover_service.ShiftHandoverService(
+        cast(AsyncSession, object())
+    )
     repo = SimpleNamespace(
         confirm=AsyncMock(return_value=SimpleNamespace(id=uuid.uuid4())),
         get_distinct_positions=AsyncMock(return_value=["洁净区", "生产区"]),
     )
-    service.repo = repo
+    setattr(service, "repo", repo)
     return service, repo
 
 
@@ -156,18 +160,18 @@ async def test_shift_handover_confirm_raises_on_missing() -> None:
 
 
 def _nce_service() -> tuple[nce_service.NCEService, SimpleNamespace]:
-    service = nce_service.NCEService(object())
+    service = nce_service.NCEService(cast(AsyncSession, object()))
     session = SimpleNamespace(
         execute=AsyncMock(),
         flush=AsyncMock(),
     )
-    service.session = session
+    setattr(service, "session", session)
     repo = SimpleNamespace(
         create=AsyncMock(return_value=SimpleNamespace(id=uuid.uuid4())),
         update=AsyncMock(return_value=SimpleNamespace(id=uuid.uuid4())),
         delete=AsyncMock(return_value=True),
     )
-    service.repo = repo
+    setattr(service, "repo", repo)
     return service, repo
 
 
@@ -179,7 +183,7 @@ async def test_nce_delete_raises_on_missing() -> None:
         await service.delete_record(uuid.uuid4())
 
 
-def _test_extract_text():
+def _test_extract_text() -> Any:
     assert production_plan_service._extract_text(None) is None
     assert production_plan_service._extract_text("   ") is None
     assert production_plan_service._extract_text("  FA-01 ") == "FA-01"
@@ -188,14 +192,14 @@ def _test_extract_text():
     assert production_plan_service._extract_text(["产品C"]) == "产品C"
 
 
-def _test_extract_number():
+def _test_extract_number() -> Any:
     assert production_plan_service._extract_number({"type": 2, "value": [98]}) == 98.0
     assert production_plan_service._extract_number("98.5") == 98.5
     assert production_plan_service._extract_number("随附") is None
     assert production_plan_service._extract_number(None) is None
 
 
-def _test_extract_date():
+def _test_extract_date() -> Any:
     assert production_plan_service._extract_date("2026-07-01") == date(2026, 7, 1)
     assert production_plan_service._extract_date(None) is None
     assert production_plan_service._extract_date("not-a-date") is None  # noqa: E501
@@ -221,4 +225,4 @@ def test_parse_json_helpers() -> None:
     assert _parse_json("not json") == {}
     import pytest as _pytest
     with _pytest.raises(AttributeError):
-        _parse_json(None)
+        _parse_json(cast(str, None))

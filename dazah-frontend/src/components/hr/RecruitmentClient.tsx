@@ -9,7 +9,7 @@ import {
   ThunderboltOutlined,
   ImportOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { fetchCandidates } from '@/lib/api/client/hr'
+import { fetchCandidates, type JobPostingVM } from '@/lib/api/client/hr'
 import {
   createJobPosting,
   deleteCandidateAction,
@@ -23,7 +23,12 @@ import { Candidate } from '@/types/hr'
 import { usePermission } from '@/hooks/usePermission'
 
 interface RecruitmentClientProps {
-  initialJobs: any[]
+  initialJobs: JobPostingVM[]
+}
+
+interface CandidateQueryData {
+  data?: Candidate[]
+  meta?: { total?: number; page?: number; page_size?: number }
 }
 
 export default function RecruitmentClient({ initialJobs }: RecruitmentClientProps) {
@@ -71,9 +76,9 @@ export default function RecruitmentClient({ initialJobs }: RecruitmentClientProp
       // 取消正在进行的查询
       await queryClient.cancelQueries({ queryKey: ['candidates'] })
       // 保存之前的状态
-      const previousData = queryClient.getQueryData(['candidates', searchKeyword, fitFilter, statusFilter, selectedJobId, page, pageSize])
+      const previousData = queryClient.getQueryData<CandidateQueryData>(['candidates', searchKeyword, fitFilter, statusFilter, selectedJobId, page, pageSize])
       // 乐观更新
-      queryClient.setQueryData(['candidates', searchKeyword, fitFilter, statusFilter, selectedJobId, page, pageSize], (old: any) => {
+      queryClient.setQueryData<CandidateQueryData>(['candidates', searchKeyword, fitFilter, statusFilter, selectedJobId, page, pageSize], (old) => {
         if (!old?.data) return old
         return {
           ...old,
@@ -130,7 +135,7 @@ export default function RecruitmentClient({ initialJobs }: RecruitmentClientProp
         onSuccess: () => {
           message.success('面试状态已更新')
         },
-        onError: (err: any) => {
+        onError: (err: unknown) => {
           message.error((err instanceof Error ? err.message : '') || '更新失败')
         },
       }
@@ -156,7 +161,7 @@ export default function RecruitmentClient({ initialJobs }: RecruitmentClientProp
     }
     setAnalyzing(true)
     try {
-      const ids = (candidatesData?.data as Candidate[]).map((c: any) => c.id)
+      const ids = candidatesData.data.map((c) => c.id)
       const res = await batchAnalyzeCandidatesAction(ids)
       message.success(res.message || '批量分析完成')
       refetch()
@@ -236,7 +241,7 @@ export default function RecruitmentClient({ initialJobs }: RecruitmentClientProp
             <span className="text-xs text-gray-400">{initialJobs.length} 个职位</span>
           </div>
           <div className="p-2 flex flex-col gap-1 max-h-[70vh] overflow-auto">
-            {initialJobs.map((job: any) => {
+            {initialJobs.map((job) => {
               const cnt = job.candidate_count ?? 0
               const sel = selectedJobId === job.id
               return (

@@ -27,7 +27,7 @@ async def test_ai_parser_maps_missing_configuration_without_leaking_details(
     # Patch the class method so monkeypatch teardown does not leave a bound
     # method on the shared singleton and shadow later module-level patches.
     monkeypatch.setattr(
-        type(api.llm_client),
+        type(getattr(api, "llm_client")),
         "chat_json",
         fail_with_configuration_error,
     )

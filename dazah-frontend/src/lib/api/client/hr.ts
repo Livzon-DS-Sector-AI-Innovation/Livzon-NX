@@ -21,7 +21,35 @@ import type {
   PositionTrainingMappingResponse,
   ContractApprovalResultQuery,
   ContractApprovalResultVM,
+  Candidate,
+  Department,
 } from '@/types/hr'
+
+export interface JobPostingVM {
+  id: string
+  title: string
+  description?: string | null
+  requirement?: string | null
+  salary_range?: string | null
+  location?: string | null
+  req_skills?: string[] | null
+  candidate_count?: number
+}
+
+export interface OnboardingListItem {
+  id: string
+  name: string
+  onboard_date?: string
+  department?: string
+  level?: string
+  status?: string
+  health_status?: string
+  resignation_cert?: string
+  id_card?: string
+  education_cert?: string
+  created_at?: string
+  updated_at?: string
+}
 
 // ─── 员工 ───
 
@@ -35,7 +63,7 @@ export async function fetchMaxSeqNumber(): Promise<{ code: number; data: { max_s
 
 export async function fetchDepartments(
   params?: { keyword?: string; page?: number; page_size?: number }
-): Promise<{ code: number; message: string; data: any[]; meta?: { total: number } }> {
+): Promise<{ code: number; message: string; data: Department[]; meta?: { total: number } }> {
   const searchParams = new URLSearchParams()
   if (params?.keyword) searchParams.set('keyword', params.keyword)
   searchParams.set('page', String(params?.page || 1))
@@ -47,7 +75,7 @@ export async function fetchDepartments(
 
 export async function fetchJobPostings(
   params?: { keyword?: string; page?: number; page_size?: number }
-): Promise<{ code: number; message: string; data: any[]; meta?: { total: number; page: number; page_size: number } }> {
+): Promise<{ code: number; message: string; data: JobPostingVM[]; meta?: { total: number; page: number; page_size: number } }> {
   const searchParams = new URLSearchParams()
   if (params?.keyword) searchParams.set('keyword', params.keyword)
   searchParams.set('page', String(params?.page || 1))
@@ -57,7 +85,7 @@ export async function fetchJobPostings(
   return res.json()
 }
 
-export async function fetchJobPostingById(id: string): Promise<{ code: number; message: string; data: any }> {
+export async function fetchJobPostingById(id: string): Promise<{ code: number; message: string; data: JobPostingVM }> {
   const res = await fetch(`/api/v1/hr/jobs/${id}`, { cache: 'no-store' })
   if (!res.ok) throw new Error('获取职位详情失败')
   return res.json()
@@ -67,7 +95,7 @@ export async function fetchJobPostingById(id: string): Promise<{ code: number; m
 
 export async function fetchCandidates(
   params?: { keyword?: string; fit_level?: string; interview_status?: string; job_id?: string; page?: number; page_size?: number }
-): Promise<{ code: number; message: string; data: any[]; meta?: { total: number; page: number; page_size: number } }> {
+): Promise<{ code: number; message: string; data: Candidate[]; meta?: { total: number; page: number; page_size: number } }> {
   const searchParams = new URLSearchParams()
   if (params?.keyword) searchParams.set('keyword', params.keyword)
   if (params?.fit_level) searchParams.set('fit_level', params.fit_level)
@@ -80,7 +108,7 @@ export async function fetchCandidates(
   return res.json()
 }
 
-export async function fetchCandidateById(id: string): Promise<{ code: number; message: string; data: any }> {
+export async function fetchCandidateById(id: string): Promise<{ code: number; message: string; data: Candidate }> {
   const res = await fetch(`/api/v1/hr/candidates/${id}`, { cache: 'no-store' })
   if (!res.ok) throw new Error('获取候选人详情失败')
   return res.json()
@@ -90,7 +118,7 @@ export async function fetchCandidateById(id: string): Promise<{ code: number; me
 
 export async function fetchOnboardingList(
   params?: { keyword?: string; page?: number; page_size?: number }
-): Promise<{ code: number; message: string; data: any[]; meta?: { total: number; page: number; page_size: number } }> {
+): Promise<{ code: number; message: string; data: OnboardingListItem[]; meta?: { total: number; page: number; page_size: number } }> {
   const searchParams = new URLSearchParams()
   if (params?.keyword) searchParams.set('keyword', params.keyword)
   searchParams.set('page', String(params?.page || 1))
@@ -100,7 +128,7 @@ export async function fetchOnboardingList(
   return res.json()
 }
 
-export async function fetchOnboardingById(id: string): Promise<{ code: number; message: string; data: any }> {
+export async function fetchOnboardingById(id: string): Promise<{ code: number; message: string; data: OnboardingListItem }> {
   const res = await fetch(`/api/v1/hr/onboarding/${id}`, { cache: 'no-store' })
   if (!res.ok) throw new Error('获取入职详情失败')
   return res.json()
@@ -377,7 +405,7 @@ export interface TrainingDocumentVM {
   session_id: string
   doc_type: string
   title?: string | null
-  payload: Record<string, any>
+  payload: Record<string, unknown>
   updated_at?: string | null
 }
 
@@ -556,7 +584,7 @@ export interface ContractVM {
   updated_at: string
 }
 
-export async function fetchContracts(params?: Record<string, any>): Promise<{ data: ContractVM[]; total: number }> {
+export async function fetchContracts(params?: Record<string, unknown>): Promise<{ data: ContractVM[]; total: number }> {
   const sp = new URLSearchParams()
   if (params) Object.entries(params).forEach(([k, v]) => { if (v != null) sp.set(k, String(v)) })
   const res = await fetch(`/api/v1/hr/contracts?${sp}`, { cache: 'no-store' })

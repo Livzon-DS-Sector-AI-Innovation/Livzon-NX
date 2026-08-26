@@ -141,8 +141,11 @@ describe('ProductDataView', () => {
   it('filters by status and search text and exports a CSV', async () => {
     vi.stubGlobal('fetch', vi.fn(() => jsonResponse({ code: 200, message: 'success', data: [] })))
     const exportSpy = vi.fn()
-    vi.stubGlobal('URL', { ...URL, createObjectURL: vi.fn(() => 'blob:x'), revokeObjectURL: vi.fn(), }) as any
-    global.URL.createObjectURL = exportSpy
+    const NativeURL = globalThis.URL
+    class TestURL extends NativeURL {}
+    Object.defineProperty(TestURL, 'createObjectURL', { configurable: true, value: exportSpy })
+    Object.defineProperty(TestURL, 'revokeObjectURL', { configurable: true, value: vi.fn() })
+    vi.stubGlobal('URL', TestURL)
     act(() => {
       root.render(<App><ProductDataView productName="霉酚酸" /></App>)
     })

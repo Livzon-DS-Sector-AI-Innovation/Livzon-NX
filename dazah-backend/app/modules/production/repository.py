@@ -24,7 +24,7 @@ from app.modules.production.production_feishu_models import ProductionFeishuConf
 class ProductionRepository:
     """Production module repository"""
 
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
     async def get_active_feishu_config(self) -> ProductionFeishuConfig | None:
@@ -516,4 +516,4 @@ class ProductionRepository:
             .values(is_deleted=True)
         )
         result = await self.session.execute(query)
-        return result.rowcount > 0
+        return bool(getattr(result, "rowcount", 0) > 0)

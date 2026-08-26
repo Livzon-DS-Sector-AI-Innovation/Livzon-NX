@@ -167,7 +167,14 @@ export default function CandidateDetailClient({ candidate }: CandidateDetailClie
     setSendingNotice(true)
     try {
       const result = await sendCandidateNoticeAction(candidate.id, sceneCode)
-      const data = result.data || {}
+      const data = (result.data || {}) as {
+        email_sent?: boolean
+        email_recipient?: string
+        email_error?: string
+        feishu_sent?: boolean
+        feishu_recipients?: string[]
+        feishu_errors?: string[]
+      }
       const parts: string[] = []
       if (data.email_sent) parts.push(`邮件已发送至 ${data.email_recipient}`)
       else if (data.email_error) parts.push(`邮件发送失败: ${data.email_error}`)

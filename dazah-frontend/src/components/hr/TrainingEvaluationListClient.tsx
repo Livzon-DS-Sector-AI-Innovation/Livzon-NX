@@ -46,7 +46,7 @@ export default function TrainingEvaluationListClient({ sessionData, onSessionCha
   const [form] = Form.useForm()
   const [exporting, setExporting] = useState(false)
   // 用 onValuesChange 维护表单值快照，渲染 □/☑ 勾选状态（兼容性最好）
-  const [fv, setFv] = useState<any>({})
+  const [fv, setFv] = useState<Record<string, unknown>>({})
   const syncFv = () => setFv(form.getFieldsValue(true))
 
   const setSingle = (field: string, value: string) => {
@@ -147,7 +147,7 @@ export default function TrainingEvaluationListClient({ sessionData, onSessionCha
     const v = form.getFieldsValue(true)
     const out: Record<string, unknown> = {}
     for (const [k, val] of Object.entries(v)) {
-      out[k] = val && typeof (val as any).format === 'function' ? (val as any).format('YYYY-MM-DD') : val
+      out[k] = dayjs.isDayjs(val) ? val.format('YYYY-MM-DD') : val
     }
     return out
   }

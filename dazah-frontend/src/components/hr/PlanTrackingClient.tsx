@@ -231,7 +231,7 @@ export default function PlanTrackingClient() {
         if (!hasContent) return
         const res = await createPlanTrackingRecord(data)
         setRows((prev) =>
-          prev.map((r, i) => (i === index && !r.record ? { ...r, record: res.data } : r)),
+          prev.map((r, i) => (i === index && !r.record ? { ...r, record: res.data as PlanTrackingRecord } : r)),
         )
       }
     } catch {
@@ -304,7 +304,7 @@ export default function PlanTrackingClient() {
         const res = await createPlanTrackingRecord(data)
         setRows((prev) =>
           prev.map((r, i) =>
-            i === editingIndex ? { fields, record: res.data } : r,
+            i === editingIndex ? { fields, record: res.data as PlanTrackingRecord } : r,
           ),
         )
         setEditingIndex(null)

@@ -70,7 +70,7 @@ interface RegulationTrackerPageProps {
   notificationRecipients: RegulatoryTrackerNotificationRecipientOption[]
 }
 
-function formatDate(value?: string | null, withTime?: boolean) {
+export function formatDate(value?: string | null, withTime?: boolean) {
   if (!value) {
     return '-'
   }
@@ -83,7 +83,7 @@ function formatDate(value?: string | null, withTime?: boolean) {
   return parsed.format(withTime ? 'YYYY-MM-DD HH:mm' : 'YYYY-MM-DD')
 }
 
-function renderMultilineText(value?: string | null, clampLines?: number) {
+export function renderMultilineText(value?: string | null, clampLines?: number) {
   if (!value) {
     return '-'
   }
@@ -106,14 +106,14 @@ function renderMultilineText(value?: string | null, clampLines?: number) {
   )
 }
 
-function hasCompletedAnalysis(record?: Pick<RegulatoryTrackerDetail, 'ai_analysis_status' | 'ai_summary'> | null) {
+export function hasCompletedAnalysis(record?: Pick<RegulatoryTrackerDetail, 'ai_analysis_status' | 'ai_summary'> | null) {
   return (
     record?.ai_analysis_status === 'completed' ||
     Boolean(typeof record?.ai_summary === 'string' && record.ai_summary.trim())
   )
 }
 
-function buildQueryParams(input: TrackerFilters): RegulatoryTrackerListParams {
+export function buildQueryParams(input: TrackerFilters): RegulatoryTrackerListParams {
   const params: RegulatoryTrackerListParams = {}
   const normalizedKeyword = input.keyword.trim()
 

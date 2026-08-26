@@ -9,6 +9,7 @@ from __future__ import annotations
 import importlib
 from datetime import date, datetime
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, patch
 
 
@@ -22,7 +23,7 @@ def _config() -> SimpleNamespace:
     )
 
 
-async def test_seed_culture_parsing_variants():
+async def test_seed_culture_parsing_variants() -> Any:
     mod = importlib.import_module("app.modules.production.seed_culture_sync")
     items = [
         # 人员字段 {"name": "张三"} + 数字时间戳日期 + 数值文本
@@ -64,7 +65,7 @@ async def test_seed_culture_parsing_variants():
     session.execute.assert_awaited()
 
 
-def test_seed_culture_pure_helpers():
+def test_seed_culture_pure_helpers() -> Any:
     mod = importlib.import_module("app.modules.production.seed_culture_sync")
     assert mod._parse_date(None) is None
     assert mod._parse_date("2026-03-05") == date(2026, 3, 5)

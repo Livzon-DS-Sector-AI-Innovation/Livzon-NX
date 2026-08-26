@@ -2,6 +2,7 @@
 
 import logging
 from datetime import date, datetime
+from typing import Any
 
 from fastapi import Depends, Query
 from sqlalchemy import text
@@ -30,7 +31,7 @@ async def get_fa_dashboard(
         pattern=r"^\d{4}-\d{2}$",
     ),
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     if month is None:
         now = datetime.now()
         month = f"{now.year}-{now.month:02d}"
@@ -48,11 +49,14 @@ async def get_fa_dashboard(
     else:
         end_date = date(year, mon + 1, 1)
 
-    result: dict = {"_month": month}
+    result: dict[str, Any] = {"_month": month}
 
     # ── 辅助：按月计数 ──
     async def _count_month(
-        table: str, date_col: str, extra_where: str = "", params: dict | None = None
+        table: str,
+        date_col: str,
+        extra_where: str = "",
+        params: dict[str, Any] | None = None,
     ) -> int:
         where = f""""{date_col}" >= :start AND "{date_col}" < :end"""
         if extra_where:
@@ -68,7 +72,9 @@ async def get_fa_dashboard(
             await session.rollback()
             return 0
 
-    async def _count_ferm(extra_where: str = "", params: dict | None = None) -> int:
+    async def _count_ferm(
+        extra_where: str = "", params: dict[str, Any] | None = None
+    ) -> int:
         where = """"放罐日期" >= :start AND "放罐日期" < :end"""
         if extra_where:
             where += f" AND {extra_where}"
@@ -174,7 +180,9 @@ async def get_fa_dashboard(
     result["flow"] = flow
 
     # ── 7. 近12个月产量趋势 ──
-    monthly_trend = [{"month": m, "output_kg": 0} for m in range(1, 13)]
+    monthly_trend: list[dict[str, int | float]] = [
+        {"month": m, "output_kg": 0} for m in range(1, 13)
+    ]
     try:
         r = await session.execute(
             text("""SELECT EXTRACT(MONTH FROM "放罐日期")::int AS m,
@@ -225,7 +233,7 @@ async def get_fa_dashboard(
     return success_response(result)
 
 
-def _to_yield(val) -> float:
+def _to_yield(val: Any) -> float:
     """安全转收率百分比值（兼容字符串带%、小数0-2等格式）"""
     if val is None:
         return 0.0
@@ -240,7 +248,7 @@ def _to_yield(val) -> float:
         return 0.0
 
 
-def _to_float(val) -> float:
+def _to_float(val: Any) -> float:
     """安全转浮点数，兼容字符串带%等格式"""
     if val is None:
         return 0.0
@@ -265,10 +273,10 @@ FA_STAGE_LABELS = {
 async def fa_yield_chain(
     month: str = Query(None, description="月份，格式 YYYY-MM"),
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     """返回 FA 收率全链路数据：各阶段收率 + 批次明细 + 汇总"""
     month_filter = ""
-    params: dict = {}
+    params: dict[str, Any] = {}
     if month:
         month_filter = """
             AND fb."放罐日期"::text >= :month_start
@@ -298,7 +306,7 @@ async def fa_yield_chain(
 
     # ── 2. 逐个批次查下游 ──
     batches = []
-    stage_yields_all = {
+    stage_yields_all: dict[str, list[float]] = {
         "fermentation": [],
         "acidification": [],
         "decolor1": [],
@@ -362,7 +370,7 @@ async def fa_yield_chain(
                 {"core": core},
             )
         ).fetchall()
-        total_yr = 0
+        total_yr = 0.0
         yr_count = 0
         for cr in cent_rows:
             yr = round(_to_yield(cr[2]), 1)
@@ -405,7 +413,7 @@ async def fa_yield_chain(
         batches.append(item)
 
     # ── 3. 汇总统计 ──
-    def _avg(lst):
+    def _avg(lst: Any) -> Any:
         return round(sum(lst) / len(lst), 1) if lst else 0
 
     stage_summary = []
@@ -468,7 +476,7 @@ async def fa_golden_batches(
     limit: int = Query(5, ge=1, le=20),
     score: str = Query("stability", description="评分模式: stability/quality/filtered"),
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     """按评分标准找出最近3个月最优批次，提取关键工艺参数范围
     - stability: 离心离散度越低越优（操作稳定性）
     - quality: 累计收率 × 碳后含量（产量+质量双维度）
@@ -584,7 +592,7 @@ async def fa_golden_batches(
     top = golden[:limit]
 
     # 计算黄金参数范围
-    def _param_range(key, top_list):
+    def _param_range(key: Any, top_list: Any) -> Any:
         vals = [b[key] for b in top_list if b.get(key) is not None]
         if not vals:
             return None
@@ -759,7 +767,7 @@ _SUGGESTION_RULES = {
 _DEVIATION_THRESHOLD = 10  # 偏离超过该百分比才生成建议
 
 
-def _get_suggestion(key: str, direction: str) -> dict | None:
+def _get_suggestion(key: str, direction: str) -> dict[str, Any] | None:
     """根据参数key和偏离方向返回四段式建议"""
     rules = _SUGGESTION_RULES.get(key, {})
     rule = rules.get(direction)
@@ -778,7 +786,7 @@ async def fa_batch_params(
     batch_no: str = Query(...),
     score: str = Query("stability"),
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     """查询指定批次的10个关键参数，与黄金均值对比，给出逐阶段纠正建议"""
     from datetime import date, timedelta
 
@@ -838,7 +846,7 @@ async def fa_batch_params(
     ).fetchall()
 
     # ── 2. 构建参数 ──
-    def _get(key, default=None):
+    def _get(key: Any, default: Any = None) -> Any:
         return params.get(key, {}).get("value", default)
 
     params = {
@@ -1012,7 +1020,7 @@ async def fa_batch_params(
             }
 
     # ── 4. 计算偏离 + 生成建议 ──
-    stages: dict[str, list[dict]] = {
+    stages: dict[str, list[dict[str, Any]]] = {
         "发酵放罐": [],
         "酸化过滤": [],
         "一次脱色": [],

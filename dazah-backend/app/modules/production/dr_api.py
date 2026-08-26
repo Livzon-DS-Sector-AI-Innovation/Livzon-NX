@@ -2,6 +2,7 @@
 
 import logging
 from datetime import date, datetime
+from typing import Any
 from uuid import UUID
 
 from fastapi import Depends, Query
@@ -30,7 +31,7 @@ router = create_module_router(MODULES_BY_CODE["production"])
 
 
 # ── 辅助 ──
-def _clean_dict(obj) -> dict:
+def _clean_dict(obj: Any) -> dict[str, Any]:
     return {k: v for k, v in obj.__dict__.items() if not k.startswith("_")}
 
 
@@ -45,7 +46,7 @@ async def get_dr_extraction_full(
     year: int | None = Query(None, ge=2020, le=2099, description="筛选年份"),
     month: int | None = Query(None, ge=1, le=12, description="筛选月份"),
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     """
     返回 批次→发酵罐→萃取→滤液 四级嵌套结构，供前端 DRTable 组件直接渲染。
     支持按年份/月份筛选（基于 tank_date 接罐日期字段）。
@@ -106,12 +107,12 @@ async def get_dr_extraction_full(
 
     # ── 组装嵌套结构 ──
     # 滤液按 extraction_id 分组
-    filtr_map: dict[str, list] = {}
+    filtr_map: dict[str, list[Any]] = {}
     for f in filtr_rows:
         filtr_map.setdefault(f.extraction_id, []).append(_clean_dict(f))
 
     # 萃取按 tank_id 分组
-    extr_map: dict[str, list] = {}
+    extr_map: dict[str, list[Any]] = {}
     for e in extr_rows:
         eid = str(e.id)
         d = _clean_dict(e)
@@ -119,7 +120,7 @@ async def get_dr_extraction_full(
         extr_map.setdefault(e.fermentation_tank_id, []).append(d)
 
     # 罐按 batch_id 分组
-    tank_map: dict[str, list] = {}
+    tank_map: dict[str, list[Any]] = {}
     for t in tank_rows:
         tid = str(t.id)
         d = _clean_dict(t)
@@ -167,7 +168,7 @@ async def get_dr_extraction_full(
 async def get_dr_extraction_years(
     workshop: str = Query("201-3"),
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     """返回发酵批次 tank_date 中出现过的年份（升序），供前端动态生成年份下拉框。"""
     q = (
         select(func.substr(DrFermentationBatch.tank_date, 1, 4).label("yr"))
@@ -195,7 +196,7 @@ async def list_dr_batches(
     batch_no: str | None = Query(None),
     workshop: str = Query("201-3"),
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     query = select(DrFermentationBatch).where(
         DrFermentationBatch.is_deleted.is_(False),
         DrFermentationBatch.workshop == workshop,
@@ -215,7 +216,9 @@ async def list_dr_batches(
 
 
 @router.post("/dr/fermentation-batches", summary="创建 DR 发酵批次")
-async def create_dr_batch(data: dict, session: AsyncSession = Depends(get_db)):
+async def create_dr_batch(
+    data: dict[str, Any], session: AsyncSession = Depends(get_db)
+) -> Any:
     record = DrFermentationBatch(**data)
     session.add(record)
     await session.commit()
@@ -226,8 +229,8 @@ async def create_dr_batch(data: dict, session: AsyncSession = Depends(get_db)):
 
 @router.put("/dr/fermentation-batches/{record_id}", summary="更新 DR 发酵批次")
 async def update_dr_batch(
-    record_id: UUID, data: dict, session: AsyncSession = Depends(get_db)
-):
+    record_id: UUID, data: dict[str, Any], session: AsyncSession = Depends(get_db)
+) -> Any:
     record = await session.get(DrFermentationBatch, record_id)
     if not record or record.is_deleted:
         return success_response(None, message="记录不存在", status_code=404)
@@ -238,7 +241,9 @@ async def update_dr_batch(
 
 
 @router.delete("/dr/fermentation-batches/{record_id}", summary="删除 DR 发酵批次")
-async def delete_dr_batch(record_id: UUID, session: AsyncSession = Depends(get_db)):
+async def delete_dr_batch(
+    record_id: UUID, session: AsyncSession = Depends(get_db)
+) -> Any:
     record = await session.get(DrFermentationBatch, record_id)
     if not record:
         return success_response(None, message="记录不存在", status_code=404)
@@ -253,7 +258,7 @@ async def delete_dr_batch(record_id: UUID, session: AsyncSession = Depends(get_d
 
 
 @router.get("/dr/fermentation-batches/{batch_id}/tanks", summary="某批次下的发酵罐列表")
-async def list_dr_tanks(batch_id: str, session: AsyncSession = Depends(get_db)):
+async def list_dr_tanks(batch_id: str, session: AsyncSession = Depends(get_db)) -> Any:
     query = (
         select(DrFermentationTank)
         .where(
@@ -267,7 +272,9 @@ async def list_dr_tanks(batch_id: str, session: AsyncSession = Depends(get_db)):
 
 
 @router.post("/dr/fermentation-tanks", summary="添加发酵罐")
-async def create_dr_tank(data: dict, session: AsyncSession = Depends(get_db)):
+async def create_dr_tank(
+    data: dict[str, Any], session: AsyncSession = Depends(get_db)
+) -> Any:
     record = DrFermentationTank(**data)
     session.add(record)
     await session.commit()
@@ -276,8 +283,8 @@ async def create_dr_tank(data: dict, session: AsyncSession = Depends(get_db)):
 
 @router.put("/dr/fermentation-tanks/{record_id}", summary="更新发酵罐")
 async def update_dr_tank(
-    record_id: UUID, data: dict, session: AsyncSession = Depends(get_db)
-):
+    record_id: UUID, data: dict[str, Any], session: AsyncSession = Depends(get_db)
+) -> Any:
     record = await session.get(DrFermentationTank, record_id)
     if not record or record.is_deleted:
         return success_response(None, message="记录不存在", status_code=404)
@@ -288,7 +295,9 @@ async def update_dr_tank(
 
 
 @router.delete("/dr/fermentation-tanks/{record_id}", summary="删除发酵罐")
-async def delete_dr_tank(record_id: UUID, session: AsyncSession = Depends(get_db)):
+async def delete_dr_tank(
+    record_id: UUID, session: AsyncSession = Depends(get_db)
+) -> Any:
     record = await session.get(DrFermentationTank, record_id)
     if not record:
         return success_response(None, message="记录不存在", status_code=404)
@@ -303,7 +312,9 @@ async def delete_dr_tank(record_id: UUID, session: AsyncSession = Depends(get_db
 
 
 @router.get("/dr/tanks/{tank_id}/extractions", summary="某罐下的萃取批次列表")
-async def list_dr_extractions(tank_id: str, session: AsyncSession = Depends(get_db)):
+async def list_dr_extractions(
+    tank_id: str, session: AsyncSession = Depends(get_db)
+) -> Any:
     query = (
         select(DrExtraction)
         .where(
@@ -317,7 +328,9 @@ async def list_dr_extractions(tank_id: str, session: AsyncSession = Depends(get_
 
 
 @router.post("/dr/extractions", summary="添加萃取批次")
-async def create_dr_extraction(data: dict, session: AsyncSession = Depends(get_db)):
+async def create_dr_extraction(
+    data: dict[str, Any], session: AsyncSession = Depends(get_db)
+) -> Any:
     record = DrExtraction(**data)
     session.add(record)
     await session.commit()
@@ -326,8 +339,8 @@ async def create_dr_extraction(data: dict, session: AsyncSession = Depends(get_d
 
 @router.put("/dr/extractions/{record_id}", summary="更新萃取批次")
 async def update_dr_extraction(
-    record_id: UUID, data: dict, session: AsyncSession = Depends(get_db)
-):
+    record_id: UUID, data: dict[str, Any], session: AsyncSession = Depends(get_db)
+) -> Any:
     record = await session.get(DrExtraction, record_id)
     if not record or record.is_deleted:
         return success_response(None, message="记录不存在", status_code=404)
@@ -340,7 +353,7 @@ async def update_dr_extraction(
 @router.delete("/dr/extractions/{record_id}", summary="删除萃取批次")
 async def delete_dr_extraction(
     record_id: UUID, session: AsyncSession = Depends(get_db)
-):
+) -> Any:
     record = await session.get(DrExtraction, record_id)
     if not record:
         return success_response(None, message="记录不存在", status_code=404)
@@ -359,7 +372,7 @@ async def delete_dr_extraction(
 )
 async def list_dr_filtrates(
     extraction_id: str, session: AsyncSession = Depends(get_db)
-):
+) -> Any:
     query = (
         select(DrFiltrate)
         .where(
@@ -373,7 +386,9 @@ async def list_dr_filtrates(
 
 
 @router.post("/dr/filtrates", summary="添加滤液记录")
-async def create_dr_filtrate(data: dict, session: AsyncSession = Depends(get_db)):
+async def create_dr_filtrate(
+    data: dict[str, Any], session: AsyncSession = Depends(get_db)
+) -> Any:
     record = DrFiltrate(**data)
     session.add(record)
     await session.commit()
@@ -382,8 +397,8 @@ async def create_dr_filtrate(data: dict, session: AsyncSession = Depends(get_db)
 
 @router.put("/dr/filtrates/{record_id}", summary="更新滤液记录")
 async def update_dr_filtrate(
-    record_id: UUID, data: dict, session: AsyncSession = Depends(get_db)
-):
+    record_id: UUID, data: dict[str, Any], session: AsyncSession = Depends(get_db)
+) -> Any:
     record = await session.get(DrFiltrate, record_id)
     if not record or record.is_deleted:
         return success_response(None, message="记录不存在", status_code=404)
@@ -394,7 +409,9 @@ async def update_dr_filtrate(
 
 
 @router.delete("/dr/filtrates/{record_id}", summary="删除滤液记录")
-async def delete_dr_filtrate(record_id: UUID, session: AsyncSession = Depends(get_db)):
+async def delete_dr_filtrate(
+    record_id: UUID, session: AsyncSession = Depends(get_db)
+) -> Any:
     record = await session.get(DrFiltrate, record_id)
     if not record:
         return success_response(None, message="记录不存在", status_code=404)
@@ -413,7 +430,7 @@ async def get_dr_dashboard(
     month: str = Query(default=None, pattern=r"^\d{4}-\d{2}$"),
     workshop: str = Query("201-3"),
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     if month is None:
         now = datetime.now()
         month = f"{now.year}-{now.month:02d}"
@@ -515,18 +532,22 @@ DR_ORDER_BY = {
 async def get_dr_record_years(
     table: str = Query("dr_chromatography_crystal", description="表名"),
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     """返回台账表 production_date 中出现过的年份（升序），供前端动态生成年份下拉框。"""
     model = DR_TABLES.get(table)
     if not model:
         return success_response(None, message=f"未知表: {table}", status_code=400)
-    if not hasattr(model, "production_date"):
+    production_date = getattr(model, "production_date", None)
+    if production_date is None:
         return success_response([])
 
     # 提取 production_date 前 4 位作为年份（格式 YYYY.MM.DD），过滤掉 '-' 等非日期值
     q = (
-        select(func.substr(model.production_date, 1, 4).label("yr"))
-        .where(model.is_deleted.is_(False), model.production_date.isnot(None))
+        select(func.substr(production_date, 1, 4).label("yr"))
+        .where(
+            getattr(model, "is_deleted").is_(False),
+            production_date.isnot(None),
+        )
         .distinct()
     )
     rows = (await session.execute(q)).scalars().all()
@@ -542,7 +563,7 @@ async def get_dr_records(
     year: int | None = Query(None, ge=2020, le=2099, description="按生产日期筛选年份"),
     month: int | None = Query(None, ge=1, le=12, description="按生产日期筛选月份"),
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     model = DR_TABLES.get(table)
     if not model:
         return success_response(None, message=f"未知表: {table}", status_code=400)

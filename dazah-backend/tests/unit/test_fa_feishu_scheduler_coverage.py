@@ -8,13 +8,14 @@ _sync_acidification 数据主路径、run_fa_sync 分派与错误分支，以及
 from __future__ import annotations
 
 import importlib
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
 
 
-def _cfg() -> dict:
+def _cfg() -> dict[str, Any]:
     return {"spreadsheet_token": "spt", "app_id": "app", "app_secret": "sec"}
 
 
@@ -25,7 +26,7 @@ def _session() -> AsyncMock:
     return session
 
 
-def _config_patch(mod):
+def _config_patch(mod: Any) -> Any:
     """统一 patch run_fa_sync 的数据库配置读取。"""
     return patch.object(
         mod, "_get_fa_spreadsheet_config", AsyncMock(return_value=_cfg())
@@ -36,7 +37,7 @@ def _config_patch(mod):
 
 
 @pytest.mark.anyio
-async def test_fa_scheduler_get_token_fetch_cache_and_error():
+async def test_fa_scheduler_get_token_fetch_cache_and_error() -> Any:
     mod = importlib.import_module("app.modules.production.fa_feishu_scheduler")
     mod._token_cache.clear()
     real_client = httpx.AsyncClient
@@ -45,10 +46,10 @@ async def test_fa_scheduler_get_token_fetch_cache_and_error():
     )
     err_transport = httpx.MockTransport(lambda req: httpx.Response(500, text="boom"))
 
-    def fake_ok(*, base_url=None, timeout=30, **kw):
+    def fake_ok(*, base_url: Any=None, timeout: Any=30, **kw: Any) -> Any:
         return real_client(transport=ok_transport, timeout=timeout, base_url=base_url)
 
-    def fake_err(*, base_url=None, timeout=30, **kw):
+    def fake_err(*, base_url: Any=None, timeout: Any=30, **kw: Any) -> Any:
         return real_client(transport=err_transport, timeout=timeout, base_url=base_url)
 
     with patch.object(mod.httpx, "AsyncClient", fake_ok):
@@ -66,11 +67,11 @@ async def test_fa_scheduler_get_token_fetch_cache_and_error():
 
 
 @pytest.mark.anyio
-async def test_fa_scheduler_read_sheet_ok():
+async def test_fa_scheduler_read_sheet_ok() -> Any:
     mod = importlib.import_module("app.modules.production.fa_feishu_scheduler")
     mod._token_cache.clear()
 
-    def handler(req):
+    def handler(req: Any) -> Any:
         if req.url.path.endswith("/tenant_access_token/internal"):
             return httpx.Response(200, json={"tenant_access_token": "tok-r"})
         return httpx.Response(
@@ -84,7 +85,7 @@ async def test_fa_scheduler_read_sheet_ok():
 
     real_client = httpx.AsyncClient
 
-    def fake_client(*, base_url=None, timeout=30, **kw):
+    def fake_client(*, base_url: Any=None, timeout: Any=30, **kw: Any) -> Any:
         return real_client(
             transport=httpx.MockTransport(handler), timeout=timeout, base_url=base_url
         )
@@ -95,7 +96,7 @@ async def test_fa_scheduler_read_sheet_ok():
 
 
 @pytest.mark.anyio
-async def test_fa_scheduler_sync_fermentation_wrapper():
+async def test_fa_scheduler_sync_fermentation_wrapper() -> Any:
     mod = importlib.import_module("app.modules.production.fa_feishu_scheduler")
     session = _session()
     with patch(
@@ -111,7 +112,7 @@ async def test_fa_scheduler_sync_fermentation_wrapper():
 
 
 @pytest.mark.anyio
-async def test_fa_run_sync_simple_excel_and_year_month_day():
+async def test_fa_run_sync_simple_excel_and_year_month_day() -> Any:
     """mvr(excel) 与 mother_liquor(year_month_day) 的解析分支。"""
     mod = importlib.import_module("app.modules.production.fa_feishu_scheduler")
 
@@ -142,7 +143,7 @@ async def test_fa_run_sync_simple_excel_and_year_month_day():
 
 
 @pytest.mark.anyio
-async def test_fa_run_sync_dot_buffer_and_pending():
+async def test_fa_run_sync_dot_buffer_and_pending() -> Any:
     """decolor_centrifuge 的 dot 格式：日期前缓冲 FA- 行、日期后 flush、杂项跳过。"""
     mod = importlib.import_module("app.modules.production.fa_feishu_scheduler")
     rows = [
@@ -159,7 +160,7 @@ async def test_fa_run_sync_dot_buffer_and_pending():
 
 
 @pytest.mark.anyio
-async def test_fa_run_sync_fermentation_acidification_and_error():
+async def test_fa_run_sync_fermentation_acidification_and_error() -> Any:
     """run_fa_sync 分派：fermentation / acidification 成功 + 异常记录 error。"""
     mod = importlib.import_module("app.modules.production.fa_feishu_scheduler")
     cfg = _cfg()
@@ -218,7 +219,7 @@ async def test_fa_run_sync_fermentation_acidification_and_error():
 
 
 @pytest.mark.anyio
-async def test_fa_run_sync_dot_pending_flush():
+async def test_fa_run_sync_dot_pending_flush() -> Any:
     """dot 格式：只有 FA- 无日期行 → 全部缓冲，循环结束后以 NULL 日期 flush。"""
     mod = importlib.import_module("app.modules.production.fa_feishu_scheduler")
     rows = [
@@ -234,7 +235,7 @@ async def test_fa_run_sync_dot_pending_flush():
 
 
 @pytest.mark.anyio
-async def test_fa_run_sync_acidification_empty():
+async def test_fa_run_sync_acidification_empty() -> Any:
     """acidification 空数据 → {"rows": 0}。"""
     mod = importlib.import_module("app.modules.production.fa_feishu_scheduler")
     session = _session()
@@ -248,15 +249,15 @@ async def test_fa_run_sync_acidification_empty():
 
 
 @pytest.mark.anyio
-async def test_fa_scheduled_job_success_with_and_without_errors():
+async def test_fa_scheduled_job_success_with_and_without_errors() -> Any:
     mod = importlib.import_module("app.modules.production.fa_feishu_scheduler")
     session = AsyncMock()
 
     class _Ctx:
-        async def __aenter__(self):
+        async def __aenter__(self) -> Any:
             return session
 
-        async def __aexit__(self, *args):
+        async def __aexit__(self, *args: Any) -> Any:
             return False
 
     with patch("app.core.database.async_session_factory", new=lambda: _Ctx()):
@@ -282,43 +283,45 @@ async def test_fa_scheduled_job_success_with_and_without_errors():
 
 
 @pytest.mark.anyio
-async def test_fa_scheduler_start_stop_and_failure():
+async def test_fa_scheduler_start_stop_and_failure() -> Any:
     mod = importlib.import_module("app.modules.production.fa_feishu_scheduler")
-    from apscheduler.schedulers import asyncio as aps_asyncio
+    from apscheduler.schedulers import (  # type: ignore[import-untyped]
+        asyncio as aps_asyncio,
+    )
 
-    mod._fa_scheduler = None
+    setattr(mod, "_fa_scheduler", None)
     fake_scheduler = MagicMock()
     with patch.object(aps_asyncio, "AsyncIOScheduler", return_value=fake_scheduler):
         mod.start_fa_sync_scheduler()
-        assert mod._fa_scheduler is fake_scheduler
+        assert getattr(mod, "_fa_scheduler") is fake_scheduler
         fake_scheduler.add_job.assert_called_once()
         fake_scheduler.start.assert_called_once()
 
     # 已存在 → 直接返回（不创建）
-    mod._fa_scheduler = MagicMock()
+    setattr(mod, "_fa_scheduler", MagicMock())
     with patch.object(
         aps_asyncio, "AsyncIOScheduler", new=MagicMock(side_effect=AssertionError("no"))
     ):
         mod.start_fa_sync_scheduler()
 
     # stop 正常
-    mod._fa_scheduler = MagicMock()
+    setattr(mod, "_fa_scheduler", MagicMock())
     mod.stop_fa_sync_scheduler()
-    assert mod._fa_scheduler is None
+    assert getattr(mod, "_fa_scheduler") is None
     mod.stop_fa_sync_scheduler()
-    assert mod._fa_scheduler is None
+    assert getattr(mod, "_fa_scheduler") is None
 
     # shutdown 抛异常也要置 None
     broken = MagicMock()
     broken.shutdown.side_effect = RuntimeError("shutdown-fail")
-    mod._fa_scheduler = broken
+    setattr(mod, "_fa_scheduler", broken)
     mod.stop_fa_sync_scheduler()
-    assert mod._fa_scheduler is None
+    assert getattr(mod, "_fa_scheduler") is None
 
     # start 失败分支 → 不抛
-    mod._fa_scheduler = None
+    setattr(mod, "_fa_scheduler", None)
     with patch.object(
         aps_asyncio, "AsyncIOScheduler", new=MagicMock(side_effect=RuntimeError("boom"))
     ):
         mod.start_fa_sync_scheduler()
-    assert mod._fa_scheduler is None
+    assert getattr(mod, "_fa_scheduler") is None

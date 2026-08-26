@@ -13,7 +13,9 @@ def normalize_yield_rate(value: float | None) -> float | None:
     """
     if value is not None and 0 < value <= 10:
         logger.info(
-            "yield_rate_auto_normalized", original=value, normalized=value * 100
+            "yield_rate_auto_normalized original=%s normalized=%s",
+            value,
+            value * 100,
         )
         return value * 100
     return value

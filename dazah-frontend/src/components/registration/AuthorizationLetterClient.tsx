@@ -129,7 +129,7 @@ interface LedgerDocumentSection {
 type LedgerMainModalMode = 'create' | 'edit'
 type LedgerUpdateModalMode = 'create' | 'edit'
 
-function buildLedgerGroupKey(record: AuthorizationLedgerRecord): string {
+export function buildLedgerGroupKey(record: AuthorizationLedgerRecord): string {
   return [
     record.product_name,
     record.market_name || '',
@@ -143,27 +143,27 @@ function buildLedgerGroupKey(record: AuthorizationLedgerRecord): string {
   ].join('||')
 }
 
-function normalizeNullableText(value: string | null | undefined): string | null {
+export function normalizeNullableText(value: string | null | undefined): string | null {
   const normalized = String(value || '').trim()
   return normalized || null
 }
 
-function normalizeRequiredText(value: string | null | undefined): string {
+export function normalizeRequiredText(value: string | null | undefined): string {
   return String(value || '').trim()
 }
 
-function displayText(value: string | null | undefined): string {
+export function displayText(value: string | null | undefined): string {
   return normalizeRequiredText(value) || '-'
 }
 
-function buildSelectOptions(values: Array<string | null | undefined>) {
+export function buildSelectOptions(values: Array<string | null | undefined>) {
   return Array.from(new Set(values.filter(Boolean))).map((value) => ({
     label: value as string,
     value: value as string,
   }))
 }
 
-function getLedgerDateSortValue(value: string | null | undefined): number {
+export function getLedgerDateSortValue(value: string | null | undefined): number {
   const normalized = String(value || '').trim()
   if (!normalized) {
     return Number.MAX_SAFE_INTEGER
@@ -178,7 +178,7 @@ function getLedgerDateSortValue(value: string | null | undefined): number {
   return Number(`${year}${month.padStart(2, '0')}${day.padStart(2, '0')}`)
 }
 
-function sortLedgerUpdates(updates: AuthorizationLedgerUpdateRecord[]): AuthorizationLedgerUpdateRecord[] {
+export function sortLedgerUpdates(updates: AuthorizationLedgerUpdateRecord[]): AuthorizationLedgerUpdateRecord[] {
   return [...updates].sort((a, b) => {
     const sortOrderCompare = a.sort_order - b.sort_order
     if (sortOrderCompare !== 0) {
@@ -189,14 +189,14 @@ function sortLedgerUpdates(updates: AuthorizationLedgerUpdateRecord[]): Authoriz
   })
 }
 
-function normalizeLedgerRecord(record: AuthorizationLedgerRecord): AuthorizationLedgerRecord {
+export function normalizeLedgerRecord(record: AuthorizationLedgerRecord): AuthorizationLedgerRecord {
   return {
     ...record,
     updates: sortLedgerUpdates(record.updates || []),
   }
 }
 
-function sortLedgerRecords(records: AuthorizationLedgerRecord[]): AuthorizationLedgerRecord[] {
+export function sortLedgerRecords(records: AuthorizationLedgerRecord[]): AuthorizationLedgerRecord[] {
   return [...records].map(normalizeLedgerRecord).sort((a, b) => {
     const productCompare = String(a.product_name || '').localeCompare(String(b.product_name || ''), 'zh-CN')
     if (productCompare !== 0) {
@@ -224,7 +224,7 @@ function sortLedgerRecords(records: AuthorizationLedgerRecord[]): AuthorizationL
   })
 }
 
-function replaceLedgerMainRecord(
+export function replaceLedgerMainRecord(
   records: AuthorizationLedgerRecord[],
   nextRecord: AuthorizationLedgerRecord
 ): AuthorizationLedgerRecord[] {
@@ -233,7 +233,7 @@ function replaceLedgerMainRecord(
   )
 }
 
-function upsertLedgerUpdateRecord(
+export function upsertLedgerUpdateRecord(
   records: AuthorizationLedgerRecord[],
   mainId: string,
   nextUpdate: AuthorizationLedgerUpdateRecord
@@ -256,7 +256,7 @@ function upsertLedgerUpdateRecord(
   )
 }
 
-function removeLedgerUpdateRecord(
+export function removeLedgerUpdateRecord(
   records: AuthorizationLedgerRecord[],
   mainId: string,
   updateId: string
@@ -275,7 +275,7 @@ function removeLedgerUpdateRecord(
   )
 }
 
-function buildLedgerMainCreatePayload(values: AuthorizationLedgerEntryInput): AuthorizationLedgerMainCreateInput {
+export function buildLedgerMainCreatePayload(values: AuthorizationLedgerEntryInput): AuthorizationLedgerMainCreateInput {
   return {
     product_name: normalizeRequiredText(values.product_name),
     market_name: normalizeNullableText(values.market_name),
@@ -295,7 +295,7 @@ function buildLedgerMainCreatePayload(values: AuthorizationLedgerEntryInput): Au
   }
 }
 
-function buildLedgerMainUpdatePayload(values: AuthorizationLedgerEntryInput): AuthorizationLedgerMainUpdateInput {
+export function buildLedgerMainUpdatePayload(values: AuthorizationLedgerEntryInput): AuthorizationLedgerMainUpdateInput {
   return {
     product_name: normalizeRequiredText(values.product_name),
     market_name: normalizeNullableText(values.market_name),
@@ -310,7 +310,7 @@ function buildLedgerMainUpdatePayload(values: AuthorizationLedgerEntryInput): Au
   }
 }
 
-function buildLedgerUpdateCreatePayload(values: LedgerUpdateFormValues): AuthorizationLedgerUpdateCreateInput {
+export function buildLedgerUpdateCreatePayload(values: LedgerUpdateFormValues): AuthorizationLedgerUpdateCreateInput {
   return {
     authorization_date: normalizeNullableText(values.authorization_date),
     handler: normalizeNullableText(values.handler),
@@ -318,7 +318,7 @@ function buildLedgerUpdateCreatePayload(values: LedgerUpdateFormValues): Authori
   }
 }
 
-function buildLedgerUpdatePatchPayload(values: LedgerUpdateFormValues): AuthorizationLedgerUpdateUpdateInput {
+export function buildLedgerUpdatePatchPayload(values: LedgerUpdateFormValues): AuthorizationLedgerUpdateUpdateInput {
   return {
     authorization_date: normalizeNullableText(values.authorization_date),
     handler: normalizeNullableText(values.handler),
@@ -326,7 +326,7 @@ function buildLedgerUpdatePatchPayload(values: LedgerUpdateFormValues): Authoriz
   }
 }
 
-function buildCompanyCountryDisplay(record: AuthorizationLedgerRecord): string {
+export function buildCompanyCountryDisplay(record: AuthorizationLedgerRecord): string {
   return [record.company_name, record.country].filter(Boolean).join('\n') || '-'
 }
 

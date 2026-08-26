@@ -1,5 +1,6 @@
 """MC 霉酚酸 — 提取工段 API（粗品→萃取→湿粉）"""
 
+from typing import Any
 from uuid import UUID
 
 from fastapi import Depends, Query
@@ -35,7 +36,7 @@ async def full_list_extraction_records(
     workshop: str = Query("201-2"),
     month: int | None = Query(None, ge=1, le=12),
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     """返回提取记录+投入明细的嵌套结构，用于台账页面"""
     from sqlalchemy import extract
 
@@ -65,7 +66,7 @@ async def full_list_extraction_records(
         all_inputs = inputs_rows.scalars().all()
 
         # 按 batch_no 分组
-        inputs_map: dict[str, list] = {}
+        inputs_map: dict[str, list[Any]] = {}
         for inp in all_inputs:
             inputs_map.setdefault(inp.extraction_batch, []).append(
                 ExtractionInputResponse.model_validate(inp).model_dump()
@@ -86,7 +87,7 @@ async def list_extraction_records(
     batch_no: str | None = Query(None),
     workshop: str = Query("201-2"),
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     query = select(ExtractionRecord).where(
         ExtractionRecord.is_deleted.is_(False),
         ExtractionRecord.workshop == workshop,
@@ -105,7 +106,7 @@ async def list_extraction_records(
 async def create_extraction_record(
     data: ExtractionRecordCreate,
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     record = ExtractionRecord(**data.model_dump())
     session.add(record)
     await session.flush()
@@ -121,7 +122,7 @@ async def update_extraction_record(
     record_id: UUID,
     data: ExtractionRecordUpdate,
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     record = await session.get(ExtractionRecord, record_id)
     if not record or record.is_deleted:
         return success_response(None, message="记录不存在", status_code=404)
@@ -137,7 +138,7 @@ async def update_extraction_record(
 async def delete_extraction_record(
     record_id: UUID,
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     record = await session.get(ExtractionRecord, record_id)
     if not record:
         return success_response(None, message="记录不存在", status_code=404)
@@ -162,7 +163,7 @@ async def delete_extraction_record(
 async def list_extraction_inputs(
     batch_no: str,
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     query = (
         select(ExtractionInput)
         .where(
@@ -180,7 +181,7 @@ async def list_extraction_inputs(
 async def create_extraction_input(
     data: ExtractionInputCreate,
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     record = ExtractionInput(**data.model_dump())
     session.add(record)
     await session.flush()
@@ -198,7 +199,7 @@ async def update_extraction_input(
     record_id: UUID,
     data: ExtractionInputUpdate,
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     record = await session.get(ExtractionInput, record_id)
     if not record or record.is_deleted:
         return success_response(None, message="记录不存在", status_code=404)
@@ -216,7 +217,7 @@ async def update_extraction_input(
 async def delete_extraction_input(
     record_id: UUID,
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     record = await session.get(ExtractionInput, record_id)
     if not record:
         return success_response(None, message="记录不存在", status_code=404)
@@ -227,7 +228,9 @@ async def delete_extraction_input(
     return success_response(None, message="删除成功")
 
 
-async def _recalc_extraction_totals(extraction_batch: str, session: AsyncSession):
+async def _recalc_extraction_totals(
+    extraction_batch: str, session: AsyncSession
+) -> Any:
     """重新计算主表的投入汇总"""
     inputs_result = await session.execute(
         select(ExtractionInput).where(

@@ -52,7 +52,9 @@ import type {
   EmployeeStats,
   OnboardingRecord,
   PositionTransferRecord,
+  AnnualTrainingPlan,
 } from '@/types/hr'
+import type { ContractVM } from '@/lib/api/client/hr'
 
 export async function fetchPositionTransfersServer(params?: {
   keyword?: string
@@ -74,7 +76,7 @@ export async function fetchPositionTransfersServer(params?: {
 
 export async function fetchJobPostingsServer(
   params?: { keyword?: string; page?: number; page_size?: number }
-): Promise<{ code: number; message: string; data: any[]; meta?: any }> {
+): Promise<{ code: number; message: string; data: Record<string, unknown>[]; meta?: Record<string, unknown> }> {
   const searchParams = new URLSearchParams()
   if (params?.keyword) searchParams.set('keyword', params.keyword)
   searchParams.set('page', String(params?.page || 1))
@@ -86,7 +88,7 @@ export async function fetchJobPostingsServer(
 
 export async function fetchCandidatesServer(
   params?: { keyword?: string; fit_level?: string; interview_status?: string; page?: number; page_size?: number }
-): Promise<{ code: number; message: string; data: any[]; meta?: any }> {
+): Promise<{ code: number; message: string; data: Record<string, unknown>[]; meta?: Record<string, unknown> }> {
   const searchParams = new URLSearchParams()
   if (params?.keyword) searchParams.set('keyword', params.keyword)
   if (params?.fit_level) searchParams.set('fit_level', params.fit_level)
@@ -100,7 +102,7 @@ export async function fetchCandidatesServer(
 
 export async function fetchOnboardingServer(
   params?: { keyword?: string; page?: number; page_size?: number }
-): Promise<{ code: number; message: string; data: any[]; meta?: any }> {
+): Promise<{ code: number; message: string; data: Record<string, unknown>[]; meta?: Record<string, unknown> }> {
   const searchParams = new URLSearchParams()
   if (params?.keyword) searchParams.set('keyword', params.keyword)
   searchParams.set('page', String(params?.page || 1))
@@ -217,7 +219,7 @@ export async function fetchEmployeeStatsServer(): Promise<ApiEnvelope<EmployeeSt
 
 export async function fetchContractsServer(
   params?: { keyword?: string; contract_sequence?: string; page?: number; page_size?: number }
-): Promise<{ code: number; message: string; data: { data: any[]; total: number; page: number; page_size: number }; meta?: any }> {
+): Promise<{ code: number; message: string; data: { data: ContractVM[]; total: number; page: number; page_size: number }; meta?: Record<string, unknown> }> {
   const searchParams = new URLSearchParams()
   if (params?.keyword) searchParams.set('keyword', params.keyword)
   if (params?.contract_sequence) searchParams.set('contract_sequence', params.contract_sequence)
@@ -232,7 +234,7 @@ export async function fetchContractsServer(
 
 export async function fetchAnnualTrainingPlanByIdServer(
   id: string
-): Promise<ApiEnvelope<any>> {
+): Promise<ApiEnvelope<AnnualTrainingPlan>> {
   return serverApiFetch(`/api/v1/hr/annual-training-plans/${id}`)
 }
 

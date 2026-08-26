@@ -1,5 +1,6 @@
 """MC 霉酚酸 — 粗提工段 API（发酵液→提炼→分罐→钠化/酸化→粗品）"""
 
+from typing import Any
 from uuid import UUID
 
 from fastapi import Depends, Query
@@ -41,7 +42,7 @@ async def full_list(
     workshop: str = Query("201-2"),
     month: int | None = Query(None, ge=1, le=12),
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     # 1. 发酵液
     fl_q = (
         select(FermentationLiquid)
@@ -74,14 +75,14 @@ async def full_list(
         .order_by(SubTankRecord.parent_batch, SubTankRecord.tank_no)
     )
     st_rows = (await session.execute(st_q)).scalars().all()
-    st_by_parent: dict[str, list] = {}
+    st_by_parent: dict[str, list[Any]] = {}
     st_ids = []
     for st in st_rows:
         st_by_parent.setdefault(st.parent_batch, []).append(st)
         st_ids.append(st.batch_no)
 
     # 4. 钠化
-    sodium_map: dict[str, list] = {}
+    sodium_map: dict[str, list[Any]] = {}
     if st_ids:
         na_q = (
             select(SubTankSodiumStep)
@@ -97,7 +98,7 @@ async def full_list(
             )
 
     # 5. 酸化
-    acid_map: dict[str, list] = {}
+    acid_map: dict[str, list[Any]] = {}
     if st_ids:
         ac_q = (
             select(SubTankAcidStep)
@@ -146,7 +147,7 @@ async def full_list(
 @router.get("/mc/crude-extract/fermentation-liquids", summary="发酵液列表")
 async def list_fl(
     page_size: int = Query(200, ge=1), session: AsyncSession = Depends(get_db)
-):
+) -> Any:
     q = (
         select(FermentationLiquid)
         .where(FermentationLiquid.is_deleted.is_(False))
@@ -162,7 +163,7 @@ async def list_fl(
 @router.post("/mc/crude-extract/fermentation-liquids", summary="创建发酵液")
 async def create_fl(
     data: FermentationLiquidCreate, session: AsyncSession = Depends(get_db)
-):
+) -> Any:
     record = FermentationLiquid(**data.model_dump())
     session.add(record)
     await session.flush()
@@ -179,7 +180,9 @@ async def create_fl(
 @router.post(
     "/mc/crude-extract/refining-batches", summary="创建提炼批次（自动创建分罐-1/-2）"
 )
-async def create_rb(data: RefiningBatchCreate, session: AsyncSession = Depends(get_db)):
+async def create_rb(
+    data: RefiningBatchCreate, session: AsyncSession = Depends(get_db)
+) -> Any:
     record = RefiningBatch(**data.model_dump())
     session.add(record)
     # 自动创建两个分罐
@@ -198,7 +201,7 @@ async def create_rb(data: RefiningBatchCreate, session: AsyncSession = Depends(g
 
 
 @router.delete("/mc/crude-extract/refining-batches/{record_id}", summary="删除提炼批次")
-async def delete_rb(record_id: UUID, session: AsyncSession = Depends(get_db)):
+async def delete_rb(record_id: UUID, session: AsyncSession = Depends(get_db)) -> Any:
     rb = await session.get(RefiningBatch, record_id)
     if not rb:
         return success_response(None, message="记录不存在", status_code=404)
@@ -224,7 +227,8 @@ async def delete_rb(record_id: UUID, session: AsyncSession = Depends(get_db)):
                 (
                     await session.execute(
                         select(m).where(
-                            m.sub_tank_id.in_(st_ids), m.is_deleted.is_(False)
+                            getattr(m, "sub_tank_id").in_(st_ids),
+                            m.is_deleted.is_(False),
                         )
                     )
                 )
@@ -244,7 +248,7 @@ async def delete_rb(record_id: UUID, session: AsyncSession = Depends(get_db)):
 @router.put("/mc/crude-extract/sub-tank-records/{record_id}", summary="更新分罐记录")
 async def update_st(
     record_id: UUID, data: SubTankRecordUpdate, session: AsyncSession = Depends(get_db)
-):
+) -> Any:
     record = await session.get(SubTankRecord, record_id)
     if not record or record.is_deleted:
         return success_response(None, message="记录不存在", status_code=404)
@@ -260,7 +264,7 @@ async def update_st(
 @router.post("/mc/crude-extract/sodium-steps", summary="添加钠化步骤")
 async def create_sodium(
     data: SodiumStepCreate, session: AsyncSession = Depends(get_db)
-):
+) -> Any:
     record = SubTankSodiumStep(**data.model_dump())
     session.add(record)
     await session.flush()
@@ -272,8 +276,8 @@ async def create_sodium(
 
 @router.put("/mc/crude-extract/sodium-steps/{record_id}", summary="更新钠化步骤")
 async def update_sodium(
-    record_id: UUID, data: dict, session: AsyncSession = Depends(get_db)
-):
+    record_id: UUID, data: dict[str, Any], session: AsyncSession = Depends(get_db)
+) -> Any:
     record = await session.get(SubTankSodiumStep, record_id)
     if not record or record.is_deleted:
         return success_response(None, message="记录不存在", status_code=404)
@@ -287,7 +291,9 @@ async def update_sodium(
 
 
 @router.post("/mc/crude-extract/acid-steps", summary="添加酸化步骤")
-async def create_acid(data: AcidStepCreate, session: AsyncSession = Depends(get_db)):
+async def create_acid(
+    data: AcidStepCreate, session: AsyncSession = Depends(get_db)
+) -> Any:
     record = SubTankAcidStep(**data.model_dump())
     session.add(record)
     await session.flush()
@@ -299,8 +305,8 @@ async def create_acid(data: AcidStepCreate, session: AsyncSession = Depends(get_
 
 @router.put("/mc/crude-extract/acid-steps/{record_id}", summary="更新酸化步骤")
 async def update_acid(
-    record_id: UUID, data: dict, session: AsyncSession = Depends(get_db)
-):
+    record_id: UUID, data: dict[str, Any], session: AsyncSession = Depends(get_db)
+) -> Any:
     record = await session.get(SubTankAcidStep, record_id)
     if not record or record.is_deleted:
         return success_response(None, message="记录不存在", status_code=404)

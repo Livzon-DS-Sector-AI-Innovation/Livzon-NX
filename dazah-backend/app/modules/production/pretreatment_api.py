@@ -1,5 +1,6 @@
 """预处理工艺记录 API"""
 
+from typing import Any
 from uuid import UUID
 
 from fastapi import Depends, Query
@@ -27,7 +28,7 @@ async def list_pretreatments(
     received_batch: str | None = None,
     workshop: str = Query("203"),
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     query = select(Pretreatment).where(
         Pretreatment.is_deleted.is_(False), Pretreatment.workshop == workshop
     )
@@ -52,7 +53,7 @@ async def list_pretreatments(
 @router.post("/pretreatments", summary="创建预处理记录")
 async def create_pretreatment(
     data: PretreatmentCreate, session: AsyncSession = Depends(get_db)
-):
+) -> Any:
     r = Pretreatment(**data.model_dump())
     session.add(r)
     await session.flush()
@@ -64,7 +65,7 @@ async def create_pretreatment(
 @router.put("/pretreatments/{record_id}", summary="更新预处理记录")
 async def update_pretreatment(
     record_id: UUID, data: PretreatmentUpdate, session: AsyncSession = Depends(get_db)
-):
+) -> Any:
     r = await session.get(Pretreatment, record_id)
     if not r or r.is_deleted:
         return success_response(None, message="记录不存在", status_code=404)
@@ -75,7 +76,9 @@ async def update_pretreatment(
 
 
 @router.delete("/pretreatments/{record_id}", summary="删除预处理记录")
-async def delete_pretreatment(record_id: UUID, session: AsyncSession = Depends(get_db)):
+async def delete_pretreatment(
+    record_id: UUID, session: AsyncSession = Depends(get_db)
+) -> Any:
     r = await session.get(Pretreatment, record_id)
     if not r:
         return success_response(None, message="记录不存在", status_code=404)

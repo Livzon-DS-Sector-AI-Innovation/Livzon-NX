@@ -8,7 +8,18 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/lib/server-api', () => ({ getServerApiBaseUrl: mocks.getServerApiBaseUrl }))
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }))
 
-import { createValidationAuditTask, deleteValidationAuditTask } from './validation-audit'
+import {
+  createValidationAuditTask,
+  deleteValidationAuditTask,
+  fetchFilesServer,
+  fetchIssuesServer,
+  fetchReportServer,
+  fetchTaskByIdServer,
+  fetchTasksServer,
+  parseValidationAuditFiles,
+  runValidationAudit,
+  uploadValidationAuditFiles,
+} from './validation-audit'
 
 describe('validation audit server actions', () => {
   afterEach(() => {
@@ -50,5 +61,20 @@ describe('validation audit server actions', () => {
       expect.objectContaining({ method: 'DELETE' }),
     )
     expect(mocks.revalidatePath).toHaveBeenCalledWith('/registration/validation-audit')
+  })
+
+  it('returns safe failure results for audit reads, writes, and malformed responses', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ message: '验证任务不可用' }), { status: 503 }))
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(fetchTasksServer({ product_name: '产品A', source_company: '机构A', status: 'pending', page: 2, page_size: 5 })).resolves.toBeNull()
+    await expect(fetchTaskByIdServer('task-1')).resolves.toBeNull()
+    await expect(fetchFilesServer('task-1')).resolves.toBeNull()
+    await expect(fetchIssuesServer('task-1', 'critical')).resolves.toBeNull()
+    await expect(fetchReportServer('task-1')).resolves.toBeNull()
+    await expect(createValidationAuditTask({ product_name: '产品A' } as never)).resolves.toMatchObject({ success: false })
+    await expect(deleteValidationAuditTask('task-1')).resolves.toMatchObject({ success: false })
+    await expect(uploadValidationAuditFiles('task-1', new FormData())).resolves.toMatchObject({ success: false })
+    await expect(parseValidationAuditFiles('task-1')).resolves.toMatchObject({ success: false })
+    await expect(runValidationAudit('task-1')).resolves.toMatchObject({ success: false })
   })
 })

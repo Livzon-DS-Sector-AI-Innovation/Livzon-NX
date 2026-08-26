@@ -34,9 +34,9 @@ export default function OffboardingForm({ open, record, onClose, onSuccess }: Of
         .catch(() => setEmployees([]))
 
       if (record) {
-        const values: any = { ...record }
+        const values: Record<string, unknown> = { ...record }
         DATE_FIELDS.forEach((f) => {
-          const val = (record as any)[f]
+          const val = (record as unknown as Record<string, unknown>)[f]
           if (val && typeof val === 'string') {
             values[f] = dayjs(val)
           }
@@ -52,7 +52,7 @@ export default function OffboardingForm({ open, record, onClose, onSuccess }: Of
   const handleSubmit = async () => {
     try {
       const values = await form.validateFields()
-      const payload: any = { ...values }
+      const payload: Record<string, unknown> = { ...values }
       DATE_FIELDS.forEach((f) => {
         if (values[f]) {
           payload[f] = values[f].format('YYYY-MM-DD')
@@ -88,7 +88,7 @@ export default function OffboardingForm({ open, record, onClose, onSuccess }: Of
   const handleEmployeeChange = (employeeId: string) => {
     const emp = employees.find((e) => e.id === employeeId)
     if (!emp) return
-    const mapped: Record<string, any> = {
+    const mapped: Record<string, unknown> = {
       employee_number: emp.employee_number,
       name: emp.name,
       domain_account: emp.domain_account,
@@ -152,8 +152,8 @@ export default function OffboardingForm({ open, record, onClose, onSuccess }: Of
       contract_start_2: 'contract_start_2',
     }
     for (const [empField, formField] of Object.entries(dateFieldMap)) {
-      const val = (emp as any)[empField]
-      if (val) {
+      const val = (emp as unknown as Record<string, unknown>)[empField]
+      if (typeof val === 'string' || typeof val === 'number' || val instanceof Date) {
         mapped[formField] = dayjs(val)
       }
     }

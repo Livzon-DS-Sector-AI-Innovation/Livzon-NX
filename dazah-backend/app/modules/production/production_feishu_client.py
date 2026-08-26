@@ -17,7 +17,7 @@ def _cache_key(app_id: str) -> str:
 
 
 class ProductionFeishuClient:
-    def __init__(self, app_id: str, app_secret: str, app_token: str):
+    def __init__(self, app_id: str, app_secret: str, app_token: str) -> None:
         self.app_id = app_id
         self.app_secret = app_secret
         self.app_token = app_token
@@ -43,7 +43,7 @@ class ProductionFeishuClient:
         await redis_client.set(cache_key, token, ex=TOKEN_TTL)
         return str(token)
 
-    async def _request(self, method: str, path: str, **kwargs) -> dict[str, Any]:
+    async def _request(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
         token = await self._get_token()
         async with httpx.AsyncClient(base_url=OPEN_API_BASE_URL, timeout=30) as client:
             resp = await client.request(
@@ -63,8 +63,8 @@ class ProductionFeishuClient:
 
     async def list_records(
         self, table_id: str, page_size: int = 100, page_token: str | None = None
-    ) -> dict:
-        payload: dict = {"page_size": page_size}
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {"page_size": page_size}
         if page_token:
             payload["page_token"] = page_token
         data = await self._request(
@@ -79,7 +79,7 @@ class ProductionFeishuClient:
             "total": data.get("total"),
         }
 
-    async def list_fields(self, table_id: str) -> list[dict]:
+    async def list_fields(self, table_id: str) -> list[dict[str, Any]]:
         data = await self._request(
             "GET",
             f"/bitable/v1/apps/{self.app_token}/tables/{table_id}/fields",

@@ -1,6 +1,6 @@
 """批次全貌查询 API — 跨模块按批号聚合所有记录"""
-
 import logging
+from typing import Any
 
 from fastapi import Depends
 from sqlalchemy import text
@@ -19,9 +19,9 @@ router = create_module_router(MODULES_BY_CODE["production"])
 async def get_batch_profile(
     batch_no: str,
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     """根据批号查询所有关联数据：菌种、发酵、非密事件"""
-    result: dict = {
+    result: dict[str, Any] = {
         "batch_no": batch_no,
         "seed_culture": None,
         "fermentation": None,

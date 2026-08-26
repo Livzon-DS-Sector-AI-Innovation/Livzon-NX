@@ -49,7 +49,7 @@ interface ProjectLedgerHistoryDisplayRecord extends ProjectLedgerHistoryRecord {
 type ProjectLedgerFormValues = Record<string, string | undefined>
 type ProjectLedgerFormMode = 'create-main' | 'edit-main' | 'create-sub-record'
 
-function renderCellValue(
+export function renderCellValue(
   value?: string | null,
   options?: {
     compact?: boolean
@@ -79,7 +79,7 @@ function renderCellValue(
   )
 }
 
-function getColumnWidth(label: string): number {
+export function getColumnWidth(label: string): number {
   if (label === '序号') return 64
   if (label === '产品') return 108
   if (label === '项目名称') return 132
@@ -109,7 +109,7 @@ function getColumnWidth(label: string): number {
   return 108
 }
 
-function getMainCellClampLines(label: string): number {
+export function getMainCellClampLines(label: string): number {
   if (label === '项目名称' || label === '产品') return 2
   if (
     label.includes('审评结果') ||
@@ -126,7 +126,7 @@ function getMainCellClampLines(label: string): number {
   return 1
 }
 
-function buildHistoryColumns(
+export function buildHistoryColumns(
   columns: ProjectLedgerColumn[],
   historyCount: number
 ): ColumnsType<ProjectLedgerHistoryDisplayRecord> {
@@ -160,7 +160,7 @@ function buildHistoryColumns(
   ]
 }
 
-function buildHistoryDisplayRecords(
+export function buildHistoryDisplayRecords(
   historyRecords: ProjectLedgerHistoryRecord[],
   columns: ProjectLedgerColumn[]
 ): ProjectLedgerHistoryDisplayRecord[] {
@@ -176,7 +176,7 @@ function buildHistoryDisplayRecords(
   })
 }
 
-function isMultilineField(label: string): boolean {
+export function isMultilineField(label: string): boolean {
   return (
     label.includes('类型') ||
     label.includes('说明') ||
@@ -225,13 +225,13 @@ const HIDDEN_COLUMNS_BY_SHEET: Record<string, string[]> = {
   ],
 }
 
-function isColumnHidden(sheetKey: string, columnLabel: string): boolean {
+export function isColumnHidden(sheetKey: string, columnLabel: string): boolean {
   const hiddenLabels = HIDDEN_COLUMNS_BY_SHEET[sheetKey]
   if (!hiddenLabels) return false
   return hiddenLabels.some((label) => columnLabel === label || columnLabel.includes(label) || label.includes(columnLabel))
 }
 
-function toEntryInput(
+export function toEntryInput(
   sheetKey: string,
   columns: ProjectLedgerColumn[],
   values: ProjectLedgerFormValues

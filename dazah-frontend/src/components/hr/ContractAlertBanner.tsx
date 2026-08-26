@@ -26,6 +26,22 @@ interface Props {
   onViewExpiring?: (startDate: string, endDate: string) => void
 }
 
+interface ContractPushResult {
+  state?: string
+  status?: string
+  progress?: string
+  message?: string
+  result?: unknown
+  pushed?: number
+  failed?: number
+  skipped_pushed?: number
+  skipped_approved?: number
+}
+
+function asContractPushResult(value: unknown): ContractPushResult | null {
+  return typeof value === 'object' && value !== null ? value as ContractPushResult : null
+}
+
 function getNextQuarter() {
   const now = new Date()
   const quarterStart = Math.floor(now.getMonth() / 3) * 3 + 1
@@ -50,17 +66,21 @@ export default function ContractAlertBanner({ onViewExpiring }: Props) {
       try {
         const res = await fetch(`/api/v1/hr/employees/contract-expiring?start_date=${quarter.start}&end_date=${quarter.end}&page_size=100`, { cache: 'no-store' })
         if (!res.ok) return
-        const json = await res.json()
-        setItems((json.data || []).map((e: any) => ({
-          employee_id: e.employee_id,
-          name: e.name,
-          department: e.department,
-          sub_department: e.sub_department || '',
-          contract_end_date: e.contract_end_date,
-          employee_number: e.employee_number,
-          position: e.position,
-          contract_sequence: e.contract_sequence,
-        })))
+        const json = await res.json() as { data?: unknown }
+        const rows = Array.isArray(json.data) ? json.data : []
+        setItems(rows.map((raw): ContractExpiringItem => {
+          const e = asContractPushResult(raw) as ContractPushResult & Partial<ContractExpiringItem>
+          return {
+            employee_id: e.employee_id || '',
+            name: e.name || '',
+            department: e.department || '',
+            sub_department: e.sub_department || '',
+            contract_end_date: e.contract_end_date || '',
+            employee_number: e.employee_number,
+            position: e.position,
+            contract_sequence: e.contract_sequence,
+          }
+        }))
       } catch { /* ignore */ }
     })()
   }, [quarter.start, quarter.end])
@@ -70,7 +90,7 @@ export default function ContractAlertBanner({ onViewExpiring }: Props) {
     (async () => {
       try {
         const statusRes = await getContractPushStatusAction()
-        if (statusRes.data?.state === 'completed') {
+        if (asContractPushResult(statusRes.data)?.state === 'completed') {
           setPushed(true)
         }
       } catch { /* ignore */ }
@@ -89,15 +109,20 @@ export default function ContractAlertBanner({ onViewExpiring }: Props) {
     interval: 2000,
     onSuccess: (_msg, result) => {
       setPushed(true)
-      if (result) {
-        const parts: string[] = [`发送审批卡片 ${result.pushed} 个部门`]
-        if (result.failed > 0) parts.push(`失败 ${result.failed} 个部门`)
-        if (result.skipped_pushed > 0) parts.push(`已发送跳过 ${result.skipped_pushed} 人`)
-        if (result.skipped_approved > 0) parts.push(`已审批跳过 ${result.skipped_approved} 人`)
+      const pushResult = asContractPushResult(result)
+      if (pushResult) {
+        const pushed = pushResult.pushed || 0
+        const failed = pushResult.failed || 0
+        const skippedPushed = pushResult.skipped_pushed || 0
+        const skippedApproved = pushResult.skipped_approved || 0
+        const parts: string[] = [`发送审批卡片 ${pushed} 个部门`]
+        if (failed > 0) parts.push(`失败 ${failed} 个部门`)
+        if (skippedPushed > 0) parts.push(`已发送跳过 ${skippedPushed} 人`)
+        if (skippedApproved > 0) parts.push(`已审批跳过 ${skippedApproved} 人`)
         const summary = parts.join('，')
         setPushSummary(summary)
         setNotifyMsg(`发起审批完成：${summary}`)
-        if (result.pushed > 0) {
+        if (pushed > 0) {
           message.success(`审批卡片已发送：${summary}`)
         } else {
           message.info(`无新增到期人员需要发起审批（${summary}）`)
@@ -166,7 +191,7 @@ export default function ContractAlertBanner({ onViewExpiring }: Props) {
 
   const mergedColumns = exportColumns.map((col) => ({
     ...col,
-    onCell: (_record: any, rowIndex?: number) => {
+    onCell: (_record: unknown, rowIndex?: number) => {
       if (col.key === 'leader_approval' && rowIndex !== undefined) {
         const span = getRowSpan(rowIndex)
         if (span > 1) return { rowSpan: span }
@@ -205,18 +230,18 @@ export default function ContractAlertBanner({ onViewExpiring }: Props) {
         const data = reader.result
         const wb = XLSX.read(data, { type: 'binary' })
         const ws = wb.Sheets[wb.SheetNames[0]]
-        const jsonData = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as any[][]
+        const jsonData = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '' })
 
         let headerRowIdx = -1
         for (let i = 0; i < jsonData.length; i++) {
           const row = jsonData[i] || []
-          if (row.some((c: any) => String(c || '').includes('姓名')) && row.some((c: any) => String(c || '').includes('部门'))) {
+          if (row.some((c) => String(c || '').includes('姓名')) && row.some((c) => String(c || '').includes('部门'))) {
             headerRowIdx = i; break
           }
         }
         if (headerRowIdx === -1) { message.error('模板格式不正确'); return }
 
-        const headers = (jsonData[headerRowIdx] || []).map((h: any) => String(h || '').trim())
+        const headers = (jsonData[headerRowIdx] || []).map((h) => String(h || '').trim())
         const templateConfig = {
           sheet_name: wb.SheetNames[0],
           header_row: headerRowIdx + 1,

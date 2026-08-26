@@ -1,5 +1,6 @@
 """MC 霉酚酸 — MC 二次精制工段 API（湿粉→二次结晶→干粉 MC-F2）"""
 
+from typing import Any
 from uuid import UUID
 
 from fastapi import Depends, Query
@@ -35,7 +36,7 @@ async def full_list_mc_refinement_records(
     workshop: str = Query("201-2"),
     month: int | None = Query(None, ge=1, le=12),
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     """返回MC精制记录+投入明细的嵌套结构，用于台账页面"""
     from sqlalchemy import extract
 
@@ -65,7 +66,7 @@ async def full_list_mc_refinement_records(
         inputs_rows = await session.execute(inputs_q)
         all_inputs = inputs_rows.scalars().all()
 
-        inputs_map: dict[str, list] = {}
+        inputs_map: dict[str, list[Any]] = {}
         for inp in all_inputs:
             inputs_map.setdefault(inp.refinement_batch, []).append(
                 McRefinementInputResponse.model_validate(inp).model_dump()
@@ -86,7 +87,7 @@ async def list_mc_refinement_records(
     batch_no: str | None = Query(None),
     workshop: str = Query("201-2"),
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     query = select(McRefinementRecord).where(
         McRefinementRecord.is_deleted.is_(False),
         McRefinementRecord.workshop == workshop,
@@ -105,7 +106,7 @@ async def list_mc_refinement_records(
 async def create_mc_refinement_record(
     data: McRefinementRecordCreate,
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     record = McRefinementRecord(**data.model_dump())
     session.add(record)
     await session.flush()
@@ -121,7 +122,7 @@ async def update_mc_refinement_record(
     record_id: UUID,
     data: McRefinementRecordUpdate,
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     record = await session.get(McRefinementRecord, record_id)
     if not record or record.is_deleted:
         return success_response(None, message="记录不存在", status_code=404)
@@ -137,7 +138,7 @@ async def update_mc_refinement_record(
 async def delete_mc_refinement_record(
     record_id: UUID,
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     record = await session.get(McRefinementRecord, record_id)
     if not record:
         return success_response(None, message="记录不存在", status_code=404)
@@ -161,7 +162,7 @@ async def delete_mc_refinement_record(
 async def list_mc_refinement_inputs(
     batch_no: str,
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     query = select(McRefinementInput).where(
         McRefinementInput.is_deleted.is_(False),
         McRefinementInput.refinement_batch == batch_no,
@@ -175,7 +176,7 @@ async def list_mc_refinement_inputs(
 async def create_mc_refinement_input(
     data: McRefinementInputCreate,
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     record = McRefinementInput(**data.model_dump())
     session.add(record)
     await session.flush()
@@ -192,7 +193,7 @@ async def update_mc_refinement_input(
     record_id: UUID,
     data: McRefinementInputUpdate,
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     record = await session.get(McRefinementInput, record_id)
     if not record or record.is_deleted:
         return success_response(None, message="记录不存在", status_code=404)
@@ -210,7 +211,7 @@ async def update_mc_refinement_input(
 async def delete_mc_refinement_input(
     record_id: UUID,
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     record = await session.get(McRefinementInput, record_id)
     if not record:
         return success_response(None, message="记录不存在", status_code=404)
@@ -221,7 +222,9 @@ async def delete_mc_refinement_input(
     return success_response(None, message="删除成功")
 
 
-async def _recalc_refinement_totals(refinement_batch: str, session: AsyncSession):
+async def _recalc_refinement_totals(
+    refinement_batch: str, session: AsyncSession
+) -> Any:
     """重新计算主表的投入汇总和收率"""
     inputs_result = await session.execute(
         select(McRefinementInput).where(

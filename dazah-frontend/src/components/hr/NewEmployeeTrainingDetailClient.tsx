@@ -120,7 +120,7 @@ export default function NewEmployeeTrainingDetailClient({ planId }: { planId: st
         item_ids: selectedItemIds,
         additional_trainees,
       })
-      const data = res.data
+      const data = res.data as { session_id: string }
       // 新 tab 打开培训资料页面，通过 session 恢复预填内容
       window.open(`/hr/training/sign-in?session=${data.session_id}&doc=sign_in`, '_blank')
       message.success(res.message || '已创建培训会话，请在培训资料页面完善信息')

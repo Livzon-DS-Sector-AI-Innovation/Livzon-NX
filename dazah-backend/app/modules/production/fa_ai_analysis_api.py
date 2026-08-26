@@ -1,13 +1,15 @@
 """FA 苯丙氨酸 - AI 批次分析 API"""
-
 import json
 import logging
 import re
 import uuid as _uuid
+from collections.abc import AsyncIterator
+from typing import Any
 
 from fastapi import Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from openai import AsyncOpenAI
+from openai.types.chat import ChatCompletionUserMessageParam
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,25 +31,27 @@ FA_STAGE_LABELS = {
 }
 
 
-def _parse_json(raw: str) -> dict:
+def _parse_json(raw: str) -> dict[str, Any]:
     """从 LLM 回复中提取 JSON"""
     # 去掉 markdown 代码块
     m = re.search(r"```(?:json)?\s*([\s\S]*?)```", raw)
     js = (m.group(1) if m else raw).strip()
     try:
-        return json.loads(js)
+        parsed = json.loads(js)
+        return parsed if isinstance(parsed, dict) else {}
     except json.JSONDecodeError:
         # 尝试提取 { ... }
         m2 = re.search(r"\{[\s\S]*\}", js)
         if m2:
             try:
-                return json.loads(m2.group(0))
+                parsed = json.loads(m2.group(0))
+                return parsed if isinstance(parsed, dict) else {}
             except json.JSONDecodeError:
                 pass
         return {}
 
 
-async def _get_trace_data(session, batch_no, stage):
+async def _get_trace_data(session: Any, batch_no: Any, stage: Any) -> Any:
     """收集批次全量数据"""
     data_sections = []
 
@@ -218,7 +222,7 @@ async def fa_ai_analysis(
     batch_no: str = Query(...),
     stage: str = Query("fermentation"),
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     if stage not in FA_STAGE_LABELS:
         raise HTTPException(400, f"无效工段: {stage}")
 
@@ -370,16 +374,16 @@ async def fa_ai_analysis_stream(
     batch_no: str = Query(...),
     stage: str = Query("fermentation"),
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     if stage not in FA_STAGE_LABELS:
         raise HTTPException(
             400, f"无效工段: {stage}，可选: {list(FA_STAGE_LABELS.keys())}"
         )
 
-    async def generate():
+    async def generate() -> AsyncIterator[Any]:
         sid = str(_uuid.uuid4())
         cfg = await get_config("text")
-        def evt(t, d):
+        def evt(t: Any, d: Any) -> Any:
             return (
                     f"data: {json.dumps({'type': t, **d}, ensure_ascii=False)}\n\n"
                 )
@@ -601,9 +605,11 @@ async def fa_ai_analysis_stream(
                 api_key=cfg.api_key or "",
             )
 
-            async def _call_llm_stream(temp, extra=""):
+            async def _call_llm_stream(temp: Any, extra: Any="") -> AsyncIterator[Any]:
                 nonlocal llm_text
-                msgs = [{"role": "user", "content": prompt + extra}]
+                msgs: list[ChatCompletionUserMessageParam] = [
+                    {"role": "user", "content": prompt + extra}
+                ]
                 s = await client.chat.completions.create(
                     model=cfg.model_name or "deepseek-v4-pro",
                     messages=msgs,
@@ -621,8 +627,8 @@ async def fa_ai_analysis_stream(
                             llm_text += token
                             yield evt("token", {"content": token})
 
-            async for e in _call_llm_stream(0.3):
-                yield e
+            async for event in _call_llm_stream(0.3):
+                yield event
 
             parsed = _parse_json(llm_text)
             summary = parsed.get("summary", "")
@@ -633,11 +639,11 @@ async def fa_ai_analysis_stream(
             # 重试：结果太短
             if len(causes) < 2 or len(suggestions) < 2:
                 yield evt("step", {"step": "llm_retry", "msg": "分析过短，重新生成..."})
-                async for e in _call_llm_stream(
+                async for event in _call_llm_stream(
                     0.7,
                     "\n\n【重要提醒】上一轮分析太简略。请详细评价。causes和suggestions各至少3条。",
                 ):
-                    yield e
+                    yield event
                 retry = _parse_json(llm_text)
                 if retry.get("summary"):
                     summary = retry["summary"]

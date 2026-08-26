@@ -260,8 +260,8 @@ class LabelVerificationVideoService:
     async def analyze_and_compare(
         self,
         video_path: str,
-        form_data: dict,
-        ai_service,
+        form_data: dict[str, Any],
+        ai_service: Any,
         initial_fps: float = 1.0,
         max_retry_fps: float = 0.3,
     ) -> dict[str, Any]:

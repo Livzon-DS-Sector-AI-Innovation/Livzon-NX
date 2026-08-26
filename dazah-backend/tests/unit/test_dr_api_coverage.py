@@ -12,7 +12,9 @@ from __future__ import annotations
 import json
 from datetime import date
 from types import SimpleNamespace
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import UUID
 
 import pytest
 from fastapi import HTTPException
@@ -21,10 +23,14 @@ from app.modules.production import dr_api as dra
 from app.modules.production import dr_lineage_api as drl
 from app.modules.production import dr_schedule_api as drs
 
+
+def _uuid(value: str) -> UUID:
+    return cast(UUID, value)
+
 # ── mock 结果构造 ──────────────────────────────────
 
 
-def _scalars(rows) -> MagicMock:
+def _scalars(rows: Any) -> MagicMock:
     """Result: scalars().all() 返回 rows。"""
     r = MagicMock()
     scalar = MagicMock()
@@ -33,25 +39,25 @@ def _scalars(rows) -> MagicMock:
     return r
 
 
-def _fetchone(v) -> MagicMock:
+def _fetchone(v: Any) -> MagicMock:
     r = MagicMock()
     r.fetchone.return_value = v
     return r
 
 
-def _fetchall(v) -> MagicMock:
+def _fetchall(v: Any) -> MagicMock:
     r = MagicMock()
     r.fetchall.return_value = v
     return r
 
 
-def _scalar(v) -> MagicMock:
+def _scalar(v: Any) -> MagicMock:
     r = MagicMock()
     r.scalar.return_value = v
     return r
 
 
-def _scalar_one(v) -> MagicMock:
+def _scalar_one(v: Any) -> MagicMock:
     r = MagicMock()
     r.scalar_one.return_value = v
     return r
@@ -74,7 +80,7 @@ class _FakeFile:
 class _FakeSheet:
     """二维列表模拟 openpyxl Worksheet 读写。"""
 
-    def __init__(self, rows: list[list]) -> None:
+    def __init__(self, rows: list[list[Any]]) -> None:
         self.rows = rows
         self.title = "2026.08.20排产"
 
@@ -86,7 +92,7 @@ class _FakeSheet:
     def max_column(self) -> int:
         return max(len(r) for r in self.rows)
 
-    def cell(self, r: int, c: int):
+    def cell(self, r: int, c: int) -> Any:
         row = self.rows[r - 1]
         val = row[c - 1] if c - 1 < len(row) else None
         return SimpleNamespace(value=val)
@@ -97,7 +103,7 @@ class _FakeUpload:
         self.filename = filename
         self._content = content
 
-    async def read(self):
+    async def read(self) -> Any:
         return self._content
 
 
@@ -107,7 +113,7 @@ class _FakeUpload:
 
 
 @pytest.mark.anyio
-async def test_get_dr_extraction_full_empty_batches():
+async def test_get_dr_extraction_full_empty_batches() -> Any:
     """批次为空 → 立即返回 []。"""
     s = _session()
     s.execute.return_value = _scalars([])
@@ -116,13 +122,24 @@ async def test_get_dr_extraction_full_empty_batches():
 
 
 @pytest.mark.anyio
-async def test_get_dr_extraction_full_no_children():
+async def test_get_dr_extraction_full_no_children() -> Any:
     """有批次但无罐/萃取/滤液 → 空嵌套、rowspan=0。"""
     batch = SimpleNamespace(
-        id="b1", batch_no="DR-26026", workshop="201-3", tank_date="2026.08.20",
-        impurity_6=None, impurity_1=0.1, impurity_2=0.2, impurity_7=0.3,
-        impurity_3=0.4, impurity_4=None, impurity_5=0.5, rrt_068=None,
-        unknown_max_single=0.6, total_impurities=1.4, purity=99.1,
+        id="b1",
+        batch_no="DR-26026",
+        workshop="201-3",
+        tank_date="2026.08.20",
+        impurity_6=None,
+        impurity_1=0.1,
+        impurity_2=0.2,
+        impurity_7=0.3,
+        impurity_3=0.4,
+        impurity_4=None,
+        impurity_5=0.5,
+        rrt_068=None,
+        unknown_max_single=0.6,
+        total_impurities=1.4,
+        purity=99.1,
     )
     s = _session()
     s.execute.side_effect = [
@@ -140,19 +157,35 @@ async def test_get_dr_extraction_full_no_children():
 
 
 @pytest.mark.anyio
-async def test_get_dr_extraction_full_nested():
+async def test_get_dr_extraction_full_nested() -> Any:
     """批次→罐→萃取→滤液 全量嵌套 + 杂质 + rowspan。"""
     rec = SimpleNamespace(
-        id="b1", batch_no="DR-26026", workshop="201-3", tank_date="2026.08.20",
-        impurity_6=None, impurity_1=0.1, impurity_2=0.2, impurity_7=0.3,
-        impurity_3=0.4, impurity_4=None, impurity_5=0.5, rrt_068=None,
-        unknown_max_single=0.6, total_impurities=1.4, purity=99.5, remarks="ok",
+        id="b1",
+        batch_no="DR-26026",
+        workshop="201-3",
+        tank_date="2026.08.20",
+        impurity_6=None,
+        impurity_1=0.1,
+        impurity_2=0.2,
+        impurity_7=0.3,
+        impurity_3=0.4,
+        impurity_4=None,
+        impurity_5=0.5,
+        rrt_068=None,
+        unknown_max_single=0.6,
+        total_impurities=1.4,
+        purity=99.5,
+        remarks="ok",
     )
     tank = SimpleNamespace(
-        id="t1", fermentation_batch_id="b1", tank_no="B401",
+        id="t1",
+        fermentation_batch_id="b1",
+        tank_no="B401",
     )
     extr = SimpleNamespace(
-        id="e1", fermentation_tank_id="t1", extraction_batch_no="DR-26026-1",
+        id="e1",
+        fermentation_tank_id="t1",
+        extraction_batch_no="DR-26026-1",
         total_qty=100.0,
     )
     filtr = SimpleNamespace(extraction_id="e1", tank_no="F1", volume=10.0)
@@ -176,7 +209,7 @@ async def test_get_dr_extraction_full_nested():
 
 
 @pytest.mark.anyio
-async def test_get_dr_extraction_years():
+async def test_get_dr_extraction_years() -> Any:
     """年份：过滤非数字年份并按升序返回。"""
     s = _session()
     s.execute.return_value = _scalars(["2021", "2020", "abc", "2026"])
@@ -185,7 +218,7 @@ async def test_get_dr_extraction_years():
 
 
 @pytest.mark.anyio
-async def test_list_dr_batches():
+async def test_list_dr_batches() -> Any:
     """批次分页列表 + batch_no 模糊过滤。"""
     s = _session()
     s.execute.side_effect = [
@@ -206,7 +239,7 @@ async def test_list_dr_batches():
 
 
 @pytest.mark.anyio
-async def test_create_update_delete_dr_batch():
+async def test_create_update_delete_dr_batch() -> Any:
     """创建 / 更新 / 删除发酵批次（含不存在路径）。"""
     s = _session()
     resp = await dra.create_dr_batch(
@@ -219,32 +252,32 @@ async def test_create_update_delete_dr_batch():
     s2 = _session()
     s2.get.return_value = SimpleNamespace(id="rid", is_deleted=False)
     resp2 = await dra.update_dr_batch(
-        record_id="rid", data={"batch_no": "DR-26027-new"}, session=s2
+        record_id=_uuid("rid"), data={"batch_no": "DR-26027-new"}, session=s2
     )
     assert json.loads(resp2.body)["message"] == "更新成功"
 
     s3 = _session()
     s3.get.return_value = None
     resp3 = await dra.update_dr_batch(
-        record_id="nope", data={"batch_no": "x"}, session=s3
+        record_id=_uuid("nope"), data={"batch_no": "x"}, session=s3
     )
     assert json.loads(resp3.body)["code"] == 404
     assert json.loads(resp3.body)["message"] == "记录不存在"
 
     s4 = _session()
     s4.get.return_value = None
-    resp4 = await dra.delete_dr_batch(record_id="gone", session=s4)
+    resp4 = await dra.delete_dr_batch(record_id=_uuid("gone"), session=s4)
     assert json.loads(resp4.body)["code"] == 404
 
     s5 = _session()
     s5.get.return_value = SimpleNamespace(id="rid", is_deleted=False)
-    resp5 = await dra.delete_dr_batch(record_id="rid", session=s5)
+    resp5 = await dra.delete_dr_batch(record_id=_uuid("rid"), session=s5)
     assert json.loads(resp5.body)["message"] == "删除成功"
     assert s5.commit.assert_awaited is not None
 
 
 @pytest.mark.anyio
-async def test_dr_tank_crud():
+async def test_dr_tank_crud() -> Any:
     """发酵罐 list/create/update/delete。"""
     s = _session()
     s.execute.return_value = _scalars(
@@ -261,29 +294,27 @@ async def test_dr_tank_crud():
 
     s3 = _session()
     s3.get.return_value = SimpleNamespace(id="t1", is_deleted=False)
-    resp3 = await dra.update_dr_tank(
-        "t1", {"tank_no": "B401"}, session=s3
-    )
+    resp3 = await dra.update_dr_tank(_uuid("t1"), {"tank_no": "B401"}, session=s3)
     assert json.loads(resp3.body)["message"] == "更新成功"
 
     s4 = _session()
     s4.get.return_value = None
-    resp4 = await dra.update_dr_tank("miss", {"tank_no": "x"}, session=s4)
+    resp4 = await dra.update_dr_tank(_uuid("miss"), {"tank_no": "x"}, session=s4)
     assert json.loads(resp4.body)["code"] == 404
 
     s5 = _session()
     s5.get.return_value = None
-    resp5 = await dra.delete_dr_tank("gone", session=s5)
+    resp5 = await dra.delete_dr_tank(_uuid("gone"), session=s5)
     assert json.loads(resp5.body)["code"] == 404
 
     s6 = _session()
     s6.get.return_value = SimpleNamespace(id="t1", is_deleted=False)
-    resp6 = await dra.delete_dr_tank("t1", session=s6)
+    resp6 = await dra.delete_dr_tank(_uuid("t1"), session=s6)
     assert json.loads(resp6.body)["message"] == "删除成功"
 
 
 @pytest.mark.anyio
-async def test_dr_extraction_crud():
+async def test_dr_extraction_crud() -> Any:
     """萃取列表/create/update/delete。"""
     s = _session()
     s.execute.return_value = _scalars(
@@ -300,27 +331,27 @@ async def test_dr_extraction_crud():
 
     s3 = _session()
     s3.get.return_value = SimpleNamespace(id="e1", is_deleted=False)
-    resp3 = await dra.update_dr_extraction("e1", {"total_qty": 1.0}, session=s3)
+    resp3 = await dra.update_dr_extraction(_uuid("e1"), {"total_qty": 1.0}, session=s3)
     assert json.loads(resp3.body)["message"] == "更新成功"
 
     s4 = _session()
     s4.get.return_value = None
-    resp4 = await dra.update_dr_extraction("miss", {"x": 1}, session=s4)
+    resp4 = await dra.update_dr_extraction(_uuid("miss"), {"x": 1}, session=s4)
     assert json.loads(resp4.body)["code"] == 404
 
     s5 = _session()
     s5.get.return_value = None
-    resp5 = await dra.delete_dr_extraction("gone", session=s5)
+    resp5 = await dra.delete_dr_extraction(_uuid("gone"), session=s5)
     assert json.loads(resp5.body)["code"] == 404
 
     s6 = _session()
     s6.get.return_value = SimpleNamespace(id="e1", is_deleted=False)
-    resp6 = await dra.delete_dr_extraction("e1", session=s6)
+    resp6 = await dra.delete_dr_extraction(_uuid("e1"), session=s6)
     assert json.loads(resp6.body)["message"] == "删除成功"
 
 
 @pytest.mark.anyio
-async def test_dr_filtrate_crud():
+async def test_dr_filtrate_crud() -> Any:
     """滤液列表/create/update/delete。"""
     s = _session()
     s.execute.return_value = _scalars(
@@ -337,29 +368,27 @@ async def test_dr_filtrate_crud():
 
     s3 = _session()
     s3.get.return_value = SimpleNamespace(id="f1", is_deleted=False)
-    resp3 = await dra.update_dr_filtrate("f1", {"volume": 6.0}, session=s3)
+    resp3 = await dra.update_dr_filtrate(_uuid("f1"), {"volume": 6.0}, session=s3)
     assert json.loads(resp3.body)["message"] == "更新成功"
 
     s4 = _session()
     s4.get.return_value = None
-    resp4 = await dra.update_dr_filtrate(
-        "miss", {"volume": 1.0}, session=s4
-    )
+    resp4 = await dra.update_dr_filtrate(_uuid("miss"), {"volume": 1.0}, session=s4)
     assert json.loads(resp4.body)["code"] == 404
 
     s5 = _session()
     s5.get.return_value = None
-    resp5 = await dra.delete_dr_filtrate("gone", session=s5)
+    resp5 = await dra.delete_dr_filtrate(_uuid("gone"), session=s5)
     assert json.loads(resp5.body)["code"] == 404
 
     s6 = _session()
     s6.get.return_value = SimpleNamespace(id="f1", is_deleted=False)
-    resp6 = await dra.delete_dr_filtrate("f1", session=s6)
+    resp6 = await dra.delete_dr_filtrate(_uuid("f1"), session=s6)
     assert json.loads(resp6.body)["message"] == "删除成功"
 
 
 @pytest.mark.anyio
-async def test_get_dr_dashboard_default_month():
+async def test_get_dr_dashboard_default_month() -> Any:
     """仪表盘：默认当月 + 跨 12 月的结束日期分支。"""
     s = _session()
     count = MagicMock()
@@ -368,7 +397,11 @@ async def test_get_dr_dashboard_default_month():
     month_ok.scalar_one.return_value = 4
     s.execute.side_effect = [count] + [month_ok] * 12
     data = json.loads(
-        (await dra.get_dr_dashboard(month=None, workshop="201-3", session=s)).body
+        (
+            await dra.get_dr_dashboard(
+                month=cast(str, None), workshop="201-3", session=s
+            )
+        ).body
     )["data"]
     assert data["monthly_batches"] == 3
     assert len(data["monthly_trend"]) == 12
@@ -380,20 +413,16 @@ async def test_get_dr_dashboard_default_month():
     month2 = MagicMock()
     month2.scalar_one.return_value = 4
     s2.execute.side_effect = [count2] + [month2] * 12
-    resp2 = await dra.get_dr_dashboard(
-        month="2026-12", workshop="201-3", session=s2
-    )
+    resp2 = await dra.get_dr_dashboard(month="2026-12", workshop="201-3", session=s2)
     data2 = json.loads(resp2.body)["data"]
     assert data2["_month"] == "2026-12"
 
 
 @pytest.mark.anyio
-async def test_get_dr_record_years():
+async def test_get_dr_record_years() -> Any:
     """台账年份：未知表 400、无 production_date 表、有效年份。"""
     s = _session()
-    resp = await dra.get_dr_record_years(
-        table="dr_unknown", session=s
-    )
+    resp = await dra.get_dr_record_years(table="dr_unknown", session=s)
     body = json.loads(resp.body)
     assert body["code"] == 400
     assert "未知表" in body["message"]
@@ -407,13 +436,15 @@ async def test_get_dr_record_years():
     s3 = _session()
     s3.execute.return_value = _scalars(["2026", "2021", "xx"])
     data = json.loads(
-        (await dra.get_dr_record_years(table="dr_chromatography_crystal", session=s3)).body  # noqa: E501
+        (
+            await dra.get_dr_record_years(table="dr_chromatography_crystal", session=s3)
+        ).body  # noqa: E501
     )["data"]
     assert data == [2021, 2026]
 
 
 @pytest.mark.anyio
-async def test_get_dr_records():
+async def test_get_dr_records() -> Any:
     """通用台账查询：未知表 / 年月筛选 / 排序 / 分页。"""
     s = _session()
     resp = await dra.get_dr_records(table="dr_bad", session=s)
@@ -461,7 +492,7 @@ async def test_get_dr_records():
 # ═════════════════════════════════════════════════════════
 
 
-def test_pick_latest_sheet():
+def test_pick_latest_sheet() -> Any:
     """pick_latest_sheet：取日期最大版本；无日期取第一个。"""
     wb = MagicMock()
     ws1 = SimpleNamespace()
@@ -472,7 +503,7 @@ def test_pick_latest_sheet():
     assert drs._pick_latest_sheet(wb) is ws2
 
     wb2 = MagicMock()
-    wb2.worksheets = [SimpleNamespace(title="无日期") , SimpleNamespace(title="A")]
+    wb2.worksheets = [SimpleNamespace(title="无日期"), SimpleNamespace(title="A")]
     out = drs._pick_latest_sheet(wb2)
     assert out.title == "无日期"
 
@@ -481,9 +512,9 @@ def test_pick_latest_sheet():
     assert drs._pick_latest_sheet(wb3) is None
 
 
-def test_parse_dump_plans():
+def test_parse_dump_plans() -> Any:
     """解析「放罐」行：泵批号 + 下一行罐号 + 纯数字罐号补 B 前缀。"""
-    rows = [
+    rows: list[list[Any]] = [
         ["2026年8月多拉计划", "", "", "", ""],
         ["放罐", "DR-26030", "中试-1", None, "DR-315"],
         ["", "304", "B205", "", "304"],
@@ -496,11 +527,11 @@ def test_parse_dump_plans():
 
 
 @pytest.mark.anyio
-async def test_sync_receiving_tasks():
+async def test_sync_receiving_tasks() -> Any:
     """同步接任务：新批建 / pending 更新 / 非法日期跳过 / 终态不动。"""
     s = _session()
 
-    async def _exec(sql, params=None):
+    async def _exec(sql: Any, params: Any = None) -> Any:
         r = MagicMock()
         s_str = str(sql)
         if "SELECT id, status FROM production.receiving_task" in s_str:
@@ -530,7 +561,7 @@ async def test_sync_receiving_tasks():
 
 
 @pytest.mark.anyio
-async def test_receiving_task_map():
+async def test_receiving_task_map() -> Any:
     """批号 → 任务状态映射。"""
     s = _session()
     s.execute.return_value = _fetchall(
@@ -546,7 +577,7 @@ async def test_receiving_task_map():
 
 
 @pytest.mark.anyio
-async def test_dump_plans_no_files():
+async def test_dump_plans_no_files() -> Any:
     """无排产文件 → version=None。"""
     fake = MagicMock()
     fake.glob.return_value = []
@@ -558,17 +589,25 @@ async def test_dump_plans_no_files():
 
 
 @pytest.mark.anyio
-async def test_dump_plans_no_plans():
+async def test_dump_plans_no_plans() -> Any:
     """有文件但解析无放罐行 → version 返回，items 空。"""
     fake = MagicMock()
     fake.glob.return_value = [_FakeFile("plan.xlsx")]
     s = AsyncMock()
-    with patch.object(drs, "_SCHEDULE_DIR", fake), patch(
-        "openpyxl.load_workbook",
-        return_value=SimpleNamespace(title="wb"),
-    ), patch.object(drs, "_pick_latest_sheet", return_value=SimpleNamespace(title="2026.08.20")), patch.object(  # noqa: E501
-        drs, "_parse_dump_plans", return_value=[]
-    ), patch.object(drs, "_sync_receiving_tasks", new=AsyncMock()):
+    with (
+        patch.object(drs, "_SCHEDULE_DIR", fake),
+        patch(
+            "openpyxl.load_workbook",
+            return_value=SimpleNamespace(title="wb"),
+        ),
+        patch.object(
+            drs, "_pick_latest_sheet", return_value=SimpleNamespace(title="2026.08.20")
+        ),
+        patch.object(  # noqa: E501
+            drs, "_parse_dump_plans", return_value=[]
+        ),
+        patch.object(drs, "_sync_receiving_tasks", new=AsyncMock()),
+    ):
         resp = await drs.dr_dump_plans(session=s)
     data = json.loads(resp.body)["data"]
     assert data["version"]["file"] == "plan.xlsx"
@@ -576,14 +615,17 @@ async def test_dump_plans_no_plans():
 
 
 @pytest.mark.anyio
-async def test_dump_plans_full():
+async def test_dump_plans_full() -> Any:
     """全量放行：DB 批号命中 + 任务状态 + 日期筛选 + summary。"""
     s = _session()
 
-    async def _exec(sql, params=None):
+    async def _exec(sql: Any, params: Any = None) -> Any:
         r = MagicMock()
         sql_str = str(sql)
-        if "SELECT DISTINCT batch_no FROM production.dr_fermentation_batches" in sql_str:  # noqa: E501
+        if (
+            "SELECT DISTINCT batch_no FROM production.dr_fermentation_batches"
+            in sql_str
+        ):  # noqa: E501
             r.fetchall.return_value = [("DR-1",)]
         elif "SELECT batch_no, status, " in sql_str:
             r.fetchall.return_value = [
@@ -600,12 +642,14 @@ async def test_dump_plans_full():
         (2031, 1, 1, "ZS-1", "B1"),
         (2032, 1, 1, "DR-FUTURE", "B2"),
     ]
-    with patch.object(drs, "_SCHEDULE_DIR", fake), patch(
-        "openpyxl.load_workbook", return_value=MagicMock()
-    ), patch.object(
-        drs, "_pick_latest_sheet", return_value=SimpleNamespace(title="2026.08.20")
-    ), patch.object(drs, "_parse_dump_plans", return_value=plans), patch.object(
-        drs, "_sync_receiving_tasks", new=AsyncMock()
+    with (
+        patch.object(drs, "_SCHEDULE_DIR", fake),
+        patch("openpyxl.load_workbook", return_value=MagicMock()),
+        patch.object(
+            drs, "_pick_latest_sheet", return_value=SimpleNamespace(title="2026.08.20")
+        ),
+        patch.object(drs, "_parse_dump_plans", return_value=plans),
+        patch.object(drs, "_sync_receiving_tasks", new=AsyncMock()),
     ):
         resp = await drs.dr_dump_plans(
             session=s, from_date="2021-01-01", to_date="2035-12-31"
@@ -622,7 +666,7 @@ async def test_dump_plans_full():
 
 
 @pytest.mark.anyio
-async def test_dump_plans_no_filter():
+async def test_dump_plans_no_filter() -> Any:
     """不传 from/to → 列出全部（无日期过滤）。"""
     fake = MagicMock()
     fake.glob.return_value = [_FakeFile("plan.xlsx")]
@@ -631,16 +675,20 @@ async def test_dump_plans_no_filter():
         _fetchall([("DR-1",)]),
         _fetchall([("DR-1", "pending", None, None, None, None, None)]),
     ]
-    with patch.object(drs, "_SCHEDULE_DIR", fake), patch(
-        "openpyxl.load_workbook", return_value=MagicMock()
-    ), patch.object(
-        drs, "_pick_latest_sheet", return_value=SimpleNamespace(title="x")
-    ), patch.object(drs, "_parse_dump_plans", return_value=[(2026, 1, 1, "DR-1", "B1")]), patch.object(  # noqa: E501
-        drs, "_sync_receiving_tasks", new=AsyncMock()
+    with (
+        patch.object(drs, "_SCHEDULE_DIR", fake),
+        patch("openpyxl.load_workbook", return_value=MagicMock()),
+        patch.object(
+            drs, "_pick_latest_sheet", return_value=SimpleNamespace(title="x")
+        ),
+        patch.object(
+            drs, "_parse_dump_plans", return_value=[(2026, 1, 1, "DR-1", "B1")]
+        ),
+        patch.object(  # noqa: E501
+            drs, "_sync_receiving_tasks", new=AsyncMock()
+        ),
     ):
-        resp = await drs.dr_dump_plans(
-            session=s, from_date="", to_date=""
-        )
+        resp = await drs.dr_dump_plans(session=s, from_date="", to_date="")
     data = json.loads(resp.body)["data"]
     items = data["items"]
     assert len(items) == 1
@@ -649,18 +697,34 @@ async def test_dump_plans_no_filter():
 
 
 @pytest.mark.anyio
-async def test_receiving_tasks_list():
+async def test_receiving_tasks_list() -> Any:
     """接任务列表：月/状态过滤 + ISO 日期。"""
     s = _session()
     s.execute.return_value = _fetchall(
         [
             (
-                "DR-1", "B1", date(2026, 8, 2), "pending", None,
-                None, None, None, None, None,
+                "DR-1",
+                "B1",
+                date(2026, 8, 2),
+                "pending",
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
             ),
             (
-                "DR-2", "B2", date(2026, 8, 3), "confirmed",
-                "2026-08-03 10:00:00", "李四", "A2", "晚点", "王五", "approved",
+                "DR-2",
+                "B2",
+                date(2026, 8, 3),
+                "confirmed",
+                "2026-08-03 10:00:00",
+                "李四",
+                "A2",
+                "晚点",
+                "王五",
+                "approved",
             ),
         ]
     )
@@ -671,7 +735,7 @@ async def test_receiving_tasks_list():
     assert data["items"][1]["approver"] == "王五"
 
 
-def test_operator_name():
+def test_operator_name() -> Any:
     """确认/审批人名称解析。"""
     assert drs._operator_name(SimpleNamespace(name="张三"), None) == "张三"
     assert drs._operator_name(None, "手动") == "手动"
@@ -679,43 +743,37 @@ def test_operator_name():
 
 
 @pytest.mark.anyio
-async def test_confirm_receiving_not_found():
+async def test_confirm_receiving_not_found() -> Any:
     """确认：任务不存在 → 404。"""
     s = AsyncMock()
     s.execute.return_value = _fetchone(None)
     with pytest.raises(HTTPException) as ei:
-        await drs.confirm_receiving(
-            batch_no="DR-1", body=drs.ConfirmBody(), session=s
-        )
+        await drs.confirm_receiving(batch_no="DR-1", body=drs.ConfirmBody(), session=s)
     assert ei.value.status_code == 404
 
 
 @pytest.mark.anyio
-async def test_confirm_receiving_dup_and_delayed():
+async def test_confirm_receiving_dup_and_delayed() -> Any:
     """确认：已确认 / 已延期 → 400。"""
     s = _session()
     s.execute.return_value = _fetchone(("id1", "confirmed", "B1"))
     with pytest.raises(HTTPException) as e1:
-        await drs.confirm_receiving(
-            batch_no="DR-1", body=drs.ConfirmBody(), session=s
-        )
+        await drs.confirm_receiving(batch_no="DR-1", body=drs.ConfirmBody(), session=s)
     assert e1.value.status_code == 400
 
     s2 = _session()
     s2.execute.return_value = _fetchone(("id1", "delayed", "B1"))
     with pytest.raises(HTTPException) as e2:
-        await drs.confirm_receiving(
-            batch_no="DR-1", body=drs.ConfirmBody(), session=s2
-        )
+        await drs.confirm_receiving(batch_no="DR-1", body=drs.ConfirmBody(), session=s2)
     assert e2.value.status_code == 400
 
 
 @pytest.mark.anyio
-async def test_confirm_receiving_success():
+async def test_confirm_receiving_success() -> Any:
     """确认成功：限实罐/未登录人、commit。"""
     s = _session()
 
-    async def _exec(sql, params=None):
+    async def _exec(sql: Any, params: Any = None) -> Any:
         r = MagicMock()
         if "SELECT id, status, tank_no FROM production.receiving_task" in str(sql):
             r.fetchone.return_value = (5, "pending", "B1")
@@ -737,12 +795,12 @@ async def test_confirm_receiving_success():
 
 
 @pytest.mark.anyio
-async def test_confirm_receiving_qualified_user():
+async def test_confirm_receiving_qualified_user() -> Any:
     """开启资质校验且无资质 → 转 pending_approval。"""
     s = _session()
     q_log = []
 
-    async def _exec(sql, params=None):
+    async def _exec(sql: Any, params: Any = None) -> Any:
         r = MagicMock()
         sql_str = str(sql)
         if "SELECT id, status, tank_no FROM production.receiving_task" in sql_str:
@@ -758,7 +816,7 @@ async def test_confirm_receiving_qualified_user():
             batch_no="DR-X",
             body=drs.ConfirmBody(),
             session=s,
-            current_user=SimpleNamespace(name="组长", employee_no="E9"),
+            current_user=cast(Any, SimpleNamespace(name="组长", employee_no="E9")),
         )
     data = json.loads(resp.body)["data"]
     assert data["task_status"] == "pending_approval"
@@ -766,7 +824,7 @@ async def test_confirm_receiving_qualified_user():
 
 
 @pytest.mark.anyio
-async def test_delay_receiving():
+async def test_delay_receiving() -> Any:
     """延期：空原因 / 不存在 / 状态不允许 / 成功。"""
     s = _session()
     with pytest.raises(HTTPException) as e1:
@@ -805,14 +863,12 @@ async def test_delay_receiving():
 
 
 @pytest.mark.anyio
-async def test_approve_receiving():
+async def test_approve_receiving() -> Any:
     """审批：不存在 / 非待审批 / 批准 / 驳回。"""
     s = _session()
     s.execute.return_value = _fetchone(None)
     with pytest.raises(HTTPException) as e1:
-        await drs.approve_receiving(
-            batch_no="DR-1", body=drs.ApproveBody(), session=s
-        )
+        await drs.approve_receiving(batch_no="DR-1", body=drs.ApproveBody(), session=s)
     assert e1.value.status_code == 404
 
     s2 = _session()
@@ -846,44 +902,51 @@ async def test_approve_receiving():
 
 
 @pytest.mark.anyio
-async def test_schedule_upload_validations():
+async def test_schedule_upload_validations() -> Any:
     """上传：缺文件名 / 非 xlsx / 空内容 / 超大 / 非有效文件。"""
     with patch.object(drs, "_SCHEDULE_DIR", MagicMock()):
         with pytest.raises(HTTPException) as e1:
-            await drs.dr_schedule_upload(_FakeUpload(None, b"x"))
+            await drs.dr_schedule_upload(cast(Any, _FakeUpload(None, b"x")))
         assert e1.value.status_code == 400
 
         with pytest.raises(HTTPException) as e2:
-            await drs.dr_schedule_upload(_FakeUpload("a.csv", b"x"))
+            await drs.dr_schedule_upload(cast(Any, _FakeUpload("a.csv", b"x")))
         assert e2.value.status_code == 400
 
         with pytest.raises(HTTPException) as e3:
-            await drs.dr_schedule_upload(_FakeUpload("a.xlsx", b""))
+            await drs.dr_schedule_upload(cast(Any, _FakeUpload("a.xlsx", b"")))
         assert e3.value.status_code == 400
 
         with pytest.raises(HTTPException) as e4:
             await drs.dr_schedule_upload(
-                _FakeUpload("a.xlsx", b"x" * (21 * 1024 * 1024))
+                cast(Any, _FakeUpload("a.xlsx", b"x" * (21 * 1024 * 1024)))
             )
         assert e4.value.status_code == 400
 
         with patch("openpyxl.load_workbook", side_effect=Exception("corrupt")):
             with pytest.raises(HTTPException) as e5:
-                await drs.dr_schedule_upload(_FakeUpload("a.xlsx", b"abc"))
+                await drs.dr_schedule_upload(cast(Any, _FakeUpload("a.xlsx", b"abc")))
             assert e5.value.status_code == 400
             assert "不是有效的 xlsx" in e5.value.detail
 
 
 @pytest.mark.anyio
-async def test_schedule_upload_success():
+async def test_schedule_upload_success() -> Any:
     """上传成功：写文件 + 解析放罐条数。"""
     fake_dir = MagicMock()
-    with patch.object(drs, "_SCHEDULE_DIR", fake_dir), patch(
-        "openpyxl.load_workbook", return_value=MagicMock()
-    ), patch.object(
-        drs, "_pick_latest_sheet", return_value=SimpleNamespace(title="2026.08.20")
-    ), patch.object(drs, "_parse_dump_plans", return_value=[(2026, 1, 1, "DR-1", "B1")]):  # noqa: E501
-        resp = await drs.dr_schedule_upload(_FakeUpload("plan.xlsx", b"data"))
+    with (
+        patch.object(drs, "_SCHEDULE_DIR", fake_dir),
+        patch("openpyxl.load_workbook", return_value=MagicMock()),
+        patch.object(
+            drs, "_pick_latest_sheet", return_value=SimpleNamespace(title="2026.08.20")
+        ),
+        patch.object(
+            drs, "_parse_dump_plans", return_value=[(2026, 1, 1, "DR-1", "B1")]
+        ),
+    ):  # noqa: E501
+        resp = await drs.dr_schedule_upload(
+            cast(Any, _FakeUpload("plan.xlsx", b"data"))
+        )
     body = json.loads(resp.body)
     assert body["data"]["file"] == "plan.xlsx"
     assert body["data"]["total"] == 1
@@ -896,7 +959,7 @@ async def test_schedule_upload_success():
 
 
 @pytest.mark.anyio
-async def test_feed_pure_from_upstream():
+async def test_feed_pure_from_upstream() -> Any:
     """DR-F1/F2/F3 顺链折纯补全 + 无记录回退。"""
     s = _session()
     s.execute.return_value = _fetchone(SimpleNamespace(feed_pure_kg=4.0))
@@ -914,29 +977,41 @@ async def test_feed_pure_from_upstream():
 
 
 @pytest.mark.anyio
-async def test_loss_breakdown_from():
+async def test_loss_breakdown_from() -> Any:
     """精制段损耗去向：一/二/三次 + 四次无字段。"""
     s = _session()
     s.execute.return_value = _fetchone((2.0,))
-    assert await drl._loss_breakdown_from(s, "first_refinement", "DR-F1-1") == (2.0, 0.0)  # noqa: E501
+    assert await drl._loss_breakdown_from(s, "first_refinement", "DR-F1-1") == (
+        2.0,
+        0.0,
+    )  # noqa: E501
 
     s.execute.return_value = _fetchone(None)
     assert await drl._loss_breakdown_from(s, "first_refinement", "x") == (0.0, 0.0)
 
     s.execute.return_value = _fetchone(SimpleNamespace(ml=3.0, rp=1.0))
-    assert await drl._loss_breakdown_from(s, "second_refinement", "DR-F2-1") == (3.0, 1.0)  # noqa: E501
+    assert await drl._loss_breakdown_from(s, "second_refinement", "DR-F2-1") == (
+        3.0,
+        1.0,
+    )  # noqa: E501
 
     s.execute.return_value = _fetchone(SimpleNamespace(ml=None, rp=None))
     assert await drl._loss_breakdown_from(s, "second_refinement", "y") == (0.0, 0.0)
 
     s.execute.return_value = _fetchone((4.0,))
-    assert await drl._loss_breakdown_from(s, "third_refinement", "DR-F3-1") == (4.0, 0.0)  # noqa: E501
+    assert await drl._loss_breakdown_from(s, "third_refinement", "DR-F3-1") == (
+        4.0,
+        0.0,
+    )  # noqa: E501
 
-    assert await drl._loss_breakdown_from(s, "fourth_refinement", "DR-GB-1") == (0.0, 0.0)  # noqa: E501
+    assert await drl._loss_breakdown_from(s, "fourth_refinement", "DR-GB-1") == (
+        0.0,
+        0.0,
+    )  # noqa: E501
 
 
 @pytest.mark.anyio
-async def test_node_info_all_stages():
+async def test_node_info_all_stages() -> Any:
     """_node_info：各精制段有/无记录、收率/折纯文案。"""
     s = _session()
 
@@ -951,7 +1026,11 @@ async def test_node_info_all_stages():
     assert yr is None and q == 10.0
 
     s.execute.return_value = _fetchall(
-        [SimpleNamespace(product_qty_kg=5.0, chromatography_yield=0.9, crystallization_yield=None)]  # noqa: E501
+        [
+            SimpleNamespace(
+                product_qty_kg=5.0, chromatography_yield=0.9, crystallization_yield=None
+            )
+        ]  # noqa: E501
     )
     d, yr, q = await drl._node_info(s, "chromatography", "DR-C1")
     assert "层析 90.0%" in d
@@ -967,27 +1046,33 @@ async def test_node_info_all_stages():
     s.execute.return_value = _fetchone(None)
     assert await drl._node_info(s, "second_refinement", "F2") == ("", None, None)
 
-    s.execute.return_value = _fetchone(SimpleNamespace(product_pure_kg=6.0, batch_yield=0.95))  # noqa: E501
+    s.execute.return_value = _fetchone(
+        SimpleNamespace(product_pure_kg=6.0, batch_yield=0.95)
+    )  # noqa: E501
     d, yr, q = await drl._node_info(s, "second_refinement", "F2")
     assert "收率 95.0%" in d and "折纯 6.00kg" in d
 
     s.execute.return_value = _fetchone(None)
     assert await drl._node_info(s, "third_refinement", "F3") == ("", None, None)
 
-    s.execute.return_value = _fetchone(SimpleNamespace(product_pure_kg=7.0, yield_rate=0.98))  # noqa: E501
+    s.execute.return_value = _fetchone(
+        SimpleNamespace(product_pure_kg=7.0, yield_rate=0.98)
+    )  # noqa: E501
     d, yr, q = await drl._node_info(s, "third_refinement", "F3")
     assert yr == 98.0
 
     s.execute.return_value = _fetchone(None)
     assert await drl._node_info(s, "fourth_refinement", "GB") == ("", None, None)
 
-    s.execute.return_value = _fetchone(SimpleNamespace(dry_weight_kg=9.0, yield_rate=0.99))  # noqa: E501
+    s.execute.return_value = _fetchone(
+        SimpleNamespace(dry_weight_kg=9.0, yield_rate=0.99)
+    )  # noqa: E501
     d, yr, q = await drl._node_info(s, "fourth_refinement", "GB")
     assert "干粉 9.00kg" in d and yr == 99.0
 
 
 @pytest.mark.anyio
-async def test_broken_reason():
+async def test_broken_reason() -> Any:
     """断链原因：回收粉 / 未知工段 / 有记录 / 各段无记录。"""
     s = _session()
     assert (
@@ -1009,7 +1094,7 @@ async def test_broken_reason():
 
 
 @pytest.mark.anyio
-async def test_upstream_branches():
+async def test_upstream_branches() -> Any:
     """_upstream：萃取无发酵批 / 有发酵批 / 层析 / 一次 / 二三四投料。"""
     s = _session()
     s.execute.side_effect = [_fetchone(None), _fetchone(None)]
@@ -1031,9 +1116,7 @@ async def test_upstream_branches():
     assert up == [("fermentation", "DR-26026", None)]
 
     s4 = _session()
-    s4.execute.return_value = _fetchall(
-        [SimpleNamespace(extraction_batch_no="DR-E1")]
-    )
+    s4.execute.return_value = _fetchall([SimpleNamespace(extraction_batch_no="DR-E1")])
     up2 = await drl._upstream(s4, "chromatography", "DR-C1")
     assert up2[0][0] == "extraction"
 
@@ -1061,7 +1144,7 @@ async def test_upstream_branches():
 
 
 @pytest.mark.anyio
-async def test_downstream_branches():
+async def test_downstream_branches() -> Any:
     """_downstream：萃取 / 层析 / 精炼 / 四精 без upstream。"""
     s = _session()
     s.execute.return_value = _fetchall(
@@ -1089,11 +1172,11 @@ async def test_downstream_branches():
 
 
 @pytest.mark.anyio
-async def test_siblings_extraction_hint():
+async def test_siblings_extraction_hint() -> Any:
     """兄弟批：撞名优先主链发酵批。"""
     s = _session()
 
-    async def _exec(sql, params=None):
+    async def _exec(sql: Any, params: Any = None) -> Any:
         sql_str = str(sql)
         r = MagicMock()
         if "SELECT DISTINCT t.fermentation_batch_id" in sql_str:
@@ -1103,7 +1186,10 @@ async def test_siblings_extraction_hint():
             ]
         elif "SELECT id::text AS id FROM production.dr_fermentation_batches" in sql_str:
             r.fetchone.return_value = SimpleNamespace(id="f1")
-        elif "SELECT DISTINCT e.extraction_batch_no" in sql_str and "FROM production.dr_extractions e" in sql_str:  # noqa: E501
+        elif (
+            "SELECT DISTINCT e.extraction_batch_no" in sql_str
+            and "FROM production.dr_extractions e" in sql_str
+        ):  # noqa: E501
             r.fetchall.return_value = [
                 SimpleNamespace(extraction_batch_no="DR-E1"),
                 SimpleNamespace(extraction_batch_no="DR-E2"),
@@ -1122,7 +1208,7 @@ async def test_siblings_extraction_hint():
 
 
 @pytest.mark.anyio
-async def test_siblings_empty_and_single():
+async def test_siblings_empty_and_single() -> Any:
     """兄弟组：无发酵罐 / 单成员 → (None, [])。"""
     s = _session()
     s.execute.side_effect = [
@@ -1132,7 +1218,7 @@ async def test_siblings_empty_and_single():
 
 
 @pytest.mark.anyio
-async def test_siblings_chrom_and_f1():
+async def test_siblings_chrom_and_f1() -> Any:
     """层析/一次精炼兄弟组。"""
     s = _session()
     s.execute.side_effect = [
@@ -1175,12 +1261,12 @@ async def test_siblings_chrom_and_f1():
 
 
 @pytest.mark.anyio
-async def test_siblings_none_for_other_stage():
+async def test_siblings_none_for_other_stage() -> Any:
     assert await drl._siblings(_session(), "fourth_refinement", "GB") == (None, [])
 
 
 @pytest.mark.anyio
-async def test_trace_not_found():
+async def test_trace_not_found() -> Any:
     """追溯：批号未解析 → 404。"""
     with patch.object(drl, "_resolve", new=AsyncMock(return_value=(None, None))):
         with pytest.raises(HTTPException) as e:
@@ -1189,35 +1275,44 @@ async def test_trace_not_found():
 
 
 @pytest.mark.anyio
-async def test_trace_sibling_loss_breakdown():
+async def test_trace_sibling_loss_breakdown() -> Any:
     """追溯完整策略：兄弟批展开 + 断链回收粉 + 损耗拆解。"""
     s = _session()
     misi = AsyncMock(return_value=("含收率 90.0%", 90.0, 9.0))
     broken_reason = AsyncMock(return_value=None)
 
-    async def _up(se, st, bn):
+    async def _up(se: Any, st: Any, bn: Any) -> Any:
         if st == "third_refinement" and bn == "DR-F3-1":
             return [("second_refinement", "DR-F2-1", 10.0), ("recovery", "回收粉", 0.0)]
         return []
 
-    async def _dn(se, st, bn):
+    async def _dn(se: Any, st: Any, bn: Any) -> Any:
         if st in ("third_refinement",):
             return [("fourth_refinement", "DR-GB-1", None)]
         return []
 
-    async def _sib(se, st, bn, hint_fbatch=""):
-        return ("DR-F2-1", [("third_refinement", "DR-F3-1"), ("third_refinement", "DR-F3-2")])  # noqa: E501
+    async def _sib(se: Any, st: Any, bn: Any, hint_fbatch: Any = "") -> Any:
+        return (
+            "DR-F2-1",
+            [("third_refinement", "DR-F3-1"), ("third_refinement", "DR-F3-2")],
+        )  # noqa: E501
 
-    async def _lb(se, st, bn):
+    async def _lb(se: Any, st: Any, bn: Any) -> Any:
         return (2.0, 1.0)
 
-    with patch.object(drl, "_resolve", new=AsyncMock(return_value=("third_refinement", "DR-F3-1"))), patch.object(  # noqa: E501
-        drl, "_node_info", misi
-    ), patch.object(drl, "_broken_reason", broken_reason), patch.object(
-        drl, "_upstream", _up
-    ), patch.object(drl, "_downstream", _dn), patch.object(
-        drl, "_siblings", _sib
-    ), patch.object(drl, "_loss_breakdown_from", _lb):
+    with (
+        patch.object(
+            drl, "_resolve", new=AsyncMock(return_value=("third_refinement", "DR-F3-1"))
+        ),
+        patch.object(  # noqa: E501
+            drl, "_node_info", misi
+        ),
+        patch.object(drl, "_broken_reason", broken_reason),
+        patch.object(drl, "_upstream", _up),
+        patch.object(drl, "_downstream", _dn),
+        patch.object(drl, "_siblings", _sib),
+        patch.object(drl, "_loss_breakdown_from", _lb),
+    ):
         resp = await drl.dr_lineage_trace(
             batch_no="DR-F3-1", stage="third_refinement", session=s
         )
@@ -1237,7 +1332,7 @@ async def test_trace_sibling_loss_breakdown():
 
 
 @pytest.mark.anyio
-async def test_trace_target_and_node_broken():
+async def test_trace_target_and_node_broken() -> Any:
     """追溯：目标断链 + 投料节点断链登记 broken_links。"""
     s = _session()
     misi = AsyncMock(return_value=("", None, None))
@@ -1251,26 +1346,34 @@ async def test_trace_target_and_node_broken():
         )
     )
 
-    async def _up(se, st, bn):
+    async def _up(se: Any, st: Any, bn: Any) -> Any:
         if st == "second_refinement" and bn == "DR-F2-T":
             return [("first_refinement", "DR-F1-9", 1.0)]
         return []
 
-    async def _dn(se, st, bn):
+    async def _dn(se: Any, st: Any, bn: Any) -> Any:
         if st == "second_refinement":
             return [("third_refinement", "DR-F3-1", None)]
         return []
 
     with (
-        patch.object(drl, "_resolve", new=AsyncMock(return_value=("second_refinement", "DR-F2-T"))),  # noqa: E501
+        patch.object(
+            drl,
+            "_resolve",
+            new=AsyncMock(return_value=("second_refinement", "DR-F2-T")),
+        ),  # noqa: E501
         patch.object(drl, "_node_info", misi),
         patch.object(drl, "_broken_reason", broken_reason),
         patch.object(drl, "_upstream", _up),
         patch.object(drl, "_downstream", _dn),
         patch.object(drl, "_siblings", new=AsyncMock(return_value=(None, []))),
-        patch.object(drl, "_loss_breakdown_from", new=AsyncMock(return_value=(0.0, 0.0))),  # noqa: E501
+        patch.object(
+            drl, "_loss_breakdown_from", new=AsyncMock(return_value=(0.0, 0.0))
+        ),  # noqa: E501
     ):
-        resp = await drl.dr_lineage_trace(batch_no="DR-F2-T", stage="second_refinement", session=s)  # noqa: E501
+        resp = await drl.dr_lineage_trace(
+            batch_no="DR-F2-T", stage="second_refinement", session=s
+        )  # noqa: E501
     data = json.loads(resp.body)["data"]
     broken = {b["batch_no"]: b["reason"] for b in data["broken_links"]}
     assert broken["DR-F2-T"] == "二次精制表无记录"
@@ -1288,21 +1391,23 @@ async def test_trace_target_and_node_broken():
 
 
 @pytest.mark.anyio
-async def test_wet_powder_roots():
+async def test_wet_powder_roots() -> Any:
     """层析湿粉起点：直接/向上/向下找层析。"""
     s = _session()
     assert await drl._wet_powder_roots(s, "chromatography", "DR-C") == {"DR-C"}
 
-    async def _up(se, st, bn):
+    async def _up(se: Any, st: Any, bn: Any) -> Any:
         if st == "first_refinement":
             return [("chromatography", "DR-C1", None)]
         return []
 
     with patch.object(drl, "_upstream", new=_up):
-        assert await drl._wet_powder_roots(s, "first_refinement", "DR-F1-1") == {"DR-C1"}  # noqa: E501
+        assert await drl._wet_powder_roots(s, "first_refinement", "DR-F1-1") == {
+            "DR-C1"
+        }  # noqa: E501
 
     # 目标在层析之前（发酵）→ 向下展开
-    async def _dn2(se, st, bn):
+    async def _dn2(se: Any, st: Any, bn: Any) -> Any:
         if bn == "DR-26026":
             return [("extraction", "DR-E1", None), ("chromatography", "DR-C2", None)]
         if bn == "DR-E1":
@@ -1316,13 +1421,16 @@ async def test_wet_powder_roots():
 
 
 @pytest.mark.anyio
-async def test_wet_powder_roots_seen_skip():
+async def test_wet_powder_roots_seen_skip() -> Any:
     """向上回溯遇已访问节点跳过。"""
     s = _session()
 
-    async def _up(se, st, bn):
+    async def _up(se: Any, st: Any, bn: Any) -> Any:
         if st == "first_refinement":
-            return [("first_refinement", "DR-F1-loop", None), ("chromatography", "DR-C", None)]  # noqa: E501
+            return [
+                ("first_refinement", "DR-F1-loop", None),
+                ("chromatography", "DR-C", None),
+            ]  # noqa: E501
         if st == "fermentation":
             return [("fermentation", "loop", None)]
         return []
@@ -1333,11 +1441,11 @@ async def test_wet_powder_roots_seen_skip():
 
 
 @pytest.mark.anyio
-async def test_chain_layers():
+async def test_chain_layers() -> Any:
     """从层析起点逐层展开 + 访问去重。"""
     s = _session()
 
-    async def _dn(se, st, bn):
+    async def _dn(se: Any, st: Any, bn: Any) -> Any:
         if st == "chromatography" and bn in {"DR-C1"}:
             return [("first_refinement", "DR-F1-1", None)]
         if st == "first_refinement" and bn == "DR-F1-1":
@@ -1358,7 +1466,7 @@ async def test_chain_layers():
 
 
 @pytest.mark.anyio
-async def test_layer_output():
+async def test_layer_output() -> Any:
     """产出量：空集合 / 无列工段 / 有效聚合。"""
     s = _session()
     assert await drl._layer_output(s, "second_refinement", set()) == 0.0
@@ -1368,12 +1476,12 @@ async def test_layer_output():
 
 
 @pytest.mark.anyio
-async def test_layer_input():
+async def test_layer_input() -> Any:
     """投入量：只累计精制段折纯。"""
     s = _session()
     assert await drl._layer_input(s, "second_refinement", set()) == 0.0
 
-    async def _up(se, st, bn):
+    async def _up(se: Any, st: Any, bn: Any) -> Any:
         return [
             ("first_refinement", "DR-F1-A", 3.0),
             ("second_refinement", "DR-F1-B", 2.0),
@@ -1388,17 +1496,20 @@ async def test_layer_input():
 
 
 @pytest.mark.anyio
-async def test_loss_funnel_endpoint():
+async def test_loss_funnel_endpoint() -> Any:
     """漏斗：未找到 / 无起点 / 全链 + 超产 / 干粉口径备注。"""
-    with patch.object(
-        drl, "_resolve", new=AsyncMock(return_value=(None, None))
-    ):
+    with patch.object(drl, "_resolve", new=AsyncMock(return_value=(None, None))):
         with pytest.raises(HTTPException) as e:
             await drl.dr_loss_funnel(batch_no="DR-X", stage="", session=_session())
         assert e.value.status_code == 404
 
-    with patch.object(drl, "_resolve", new=AsyncMock(return_value=("chromatography", "DR-C"))), patch.object(  # noqa: E501
-        drl, "_wet_powder_roots", new=AsyncMock(return_value=set())
+    with (
+        patch.object(
+            drl, "_resolve", new=AsyncMock(return_value=("chromatography", "DR-C"))
+        ),
+        patch.object(  # noqa: E501
+            drl, "_wet_powder_roots", new=AsyncMock(return_value=set())
+        ),
     ):
         resp = await drl.dr_loss_funnel(batch_no="DR-C", stage="", session=_session())
     data = json.loads(resp.body)["data"]
@@ -1421,18 +1532,32 @@ async def test_loss_funnel_endpoint():
         "fourth_refinement": {"DR-GB-1"},
     }
 
-    async def _out(se, st, batches):
+    async def _out(se: Any, st: Any, batches: Any) -> Any:
         return out_map[st]
 
-    async def _inp(se, st, batches):
-        return {"second_refinement": 100.0, "third_refinement": 50.0, "fourth_refinement": 120.0}.get(st, 0.0)  # noqa: E501
+    async def _inp(se: Any, st: Any, batches: Any) -> Any:
+        return {
+            "second_refinement": 100.0,
+            "third_refinement": 50.0,
+            "fourth_refinement": 120.0,
+        }.get(st, 0.0)  # noqa: E501
 
-    with patch.object(drl, "_resolve", new=AsyncMock(return_value=("fermentation", "DR-26026"))), patch.object(  # noqa: E501
-        drl, "_wet_powder_roots", new=AsyncMock(return_value={"DR-C1"})
-    ), patch.object(drl, "_chain_layers", new=AsyncMock(return_value=layer_map)), patch.object(  # noqa: E501
-        drl, "_layer_output", new=_out
-    ), patch.object(drl, "_layer_input", new=_inp):
-        resp2 = await drl.dr_loss_funnel(batch_no="DR-26026", stage="", session=_session())  # noqa: E501
+    with (
+        patch.object(
+            drl, "_resolve", new=AsyncMock(return_value=("fermentation", "DR-26026"))
+        ),
+        patch.object(  # noqa: E501
+            drl, "_wet_powder_roots", new=AsyncMock(return_value={"DR-C1"})
+        ),
+        patch.object(drl, "_chain_layers", new=AsyncMock(return_value=layer_map)),
+        patch.object(  # noqa: E501
+            drl, "_layer_output", new=_out
+        ),
+        patch.object(drl, "_layer_input", new=_inp),
+    ):
+        resp2 = await drl.dr_loss_funnel(
+            batch_no="DR-26026", stage="", session=_session()
+        )  # noqa: E501
     data2 = json.loads(resp2.body)["data"]
     assert len(data2["layers"]) == 5
     assert data2["layers"][4]["note"].startswith("干粉口径")

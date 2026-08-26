@@ -2,6 +2,7 @@
 
 import logging
 from datetime import date
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,7 +32,7 @@ FIELD_MAP = {
 }
 
 
-def _extract_text(field_value: list | dict | str | None) -> str | None:
+def _extract_text(field_value: list[Any] | dict[str, Any] | str | None) -> str | None:
     """Extract plain text from a Feishu field value."""
     if field_value is None:
         return None
@@ -50,7 +51,9 @@ def _extract_text(field_value: list | dict | str | None) -> str | None:
     return None
 
 
-def _extract_number(field_value: list | dict | str | None) -> float | None:
+def _extract_number(
+    field_value: list[Any] | dict[str, Any] | str | None,
+) -> float | None:
     """Extract a number from a Feishu field value."""
     text = _extract_text(field_value)
     if text is None:
@@ -68,7 +71,9 @@ STATUS_MAP = {
 }
 
 
-async def sync_config(config: ProductionFeishuConfig, session: AsyncSession) -> dict:
+async def sync_config(
+    config: ProductionFeishuConfig, session: AsyncSession
+) -> dict[str, Any]:
     """从飞书同步一个配置对应产品的发酵记录"""
     app_secret = decrypt_secret(config.encrypted_app_secret)
     client = ProductionFeishuClient(
@@ -89,7 +94,7 @@ async def sync_config(config: ProductionFeishuConfig, session: AsyncSession) -> 
             item.get("record_id", "")
 
             # 映射字段
-            mapped = {}
+            mapped: dict[str, Any] = {}
             for feishu_name, db_name in FIELD_MAP.items():
                 val = fields.get(feishu_name)
                 if db_name in ("entry_date", "discharge_date"):
@@ -154,7 +159,7 @@ async def sync_config(config: ProductionFeishuConfig, session: AsyncSession) -> 
     return {"created": created, "updated": updated, "product": config.product_name}
 
 
-async def sync_all_active(session: AsyncSession) -> list[dict]:
+async def sync_all_active(session: AsyncSession) -> list[dict[str, Any]]:
     """同步所有启用的飞书配置"""
     from sqlalchemy import select
 

@@ -10,7 +10,7 @@ import { downloadBytes } from '@/lib/download'
 
 /** 培训附件行（UI 类型：表格行编辑状态，非后端 API 类型） */
 interface TrainingAttachmentRow {
-  uid: string
+  uid?: string
   name: string
   code: string | null
 }
@@ -166,7 +166,7 @@ export default function TrainingAttachmentClient({
         )}
       </div>
       <Table<TrainingAttachmentRow>
-        rowKey={(r) => r.uid}
+        rowKey={(r) => r.uid ?? r.name}
         columns={columns}
         dataSource={rows}
         pagination={false}

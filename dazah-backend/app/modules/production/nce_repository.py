@@ -1,5 +1,6 @@
 """非密事件与运行偏差 repository."""
 
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -9,19 +10,21 @@ from app.modules.production.nce_models import NonConformingEvent
 
 
 class NCERepository:
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
     async def list(
         self,
-        page=1,
-        page_size=20,
-        workshop=None,
-        event_type=None,
-        date_from=None,
-        date_to=None,
-    ):
-        query = select(NonConformingEvent).where(NonConformingEvent.is_deleted.is_(False))  # noqa: E501
+        page: Any = 1,
+        page_size: Any = 20,
+        workshop: Any = None,
+        event_type: Any = None,
+        date_from: Any = None,
+        date_to: Any = None,
+    ) -> Any:
+        query = select(NonConformingEvent).where(
+            NonConformingEvent.is_deleted.is_(False)
+        )  # noqa: E501
         if workshop:
             query = query.where(NonConformingEvent.workshop == workshop)
         if event_type:
@@ -46,7 +49,7 @@ class NCERepository:
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
 
-    async def create(self, data: dict) -> NonConformingEvent:
+    async def create(self, data: dict[str, Any]) -> NonConformingEvent:
         record = NonConformingEvent(**data)
         self.session.add(record)
         await self.session.flush()
@@ -54,7 +57,9 @@ class NCERepository:
         await self.session.refresh(record)
         return record
 
-    async def update(self, record_id: UUID, data: dict) -> NonConformingEvent | None:
+    async def update(
+        self, record_id: UUID, data: dict[str, Any]
+    ) -> NonConformingEvent | None:
         record = await self.get_by_id(record_id)
         if not record:
             return None

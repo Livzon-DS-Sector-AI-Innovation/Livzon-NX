@@ -1,6 +1,6 @@
 """包装 API"""
-
 from datetime import datetime as dt
+from typing import Any
 from uuid import UUID
 
 from fastapi import Depends, Query
@@ -78,7 +78,7 @@ async def _list(
     s: str | None = Query(None, alias="batch_no"),
     workshop: str = Query("203"),
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     q = select(Pack).where(Pack.is_deleted.is_(False), Pack.workshop == workshop)
     if s:
         q = q.where(Pack.batch_no.ilike(f"%{s}%"))
@@ -94,7 +94,7 @@ async def _list(
 
 
 @router.post("/pack", summary="创建包装")
-async def _create(d: CD, session: AsyncSession = Depends(get_db)):
+async def _create(d: CD, session: AsyncSession = Depends(get_db)) -> Any:
     r = Pack(**d.model_dump())
     session.add(r)
     await session.flush()
@@ -104,7 +104,7 @@ async def _create(d: CD, session: AsyncSession = Depends(get_db)):
 
 
 @router.put("/pack/{rid}", summary="更新包装")
-async def _update(rid: UUID, d: CD, session: AsyncSession = Depends(get_db)):
+async def _update(rid: UUID, d: CD, session: AsyncSession = Depends(get_db)) -> Any:
     r = await session.get(Pack, rid)
     if not r or r.is_deleted:
         return success_response(None, message="记录不存在", status_code=404)
@@ -115,7 +115,7 @@ async def _update(rid: UUID, d: CD, session: AsyncSession = Depends(get_db)):
 
 
 @router.delete("/pack/{rid}", summary="删除包装")
-async def _delete(rid: UUID, session: AsyncSession = Depends(get_db)):
+async def _delete(rid: UUID, session: AsyncSession = Depends(get_db)) -> Any:
     r = await session.get(Pack, rid)
     if not r:
         return success_response(None, message="记录不存在", status_code=404)

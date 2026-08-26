@@ -1,5 +1,6 @@
 """Fermentation record API routes."""
 
+from typing import Any
 from uuid import UUID
 
 from fastapi import Depends, Query
@@ -40,7 +41,7 @@ async def list_fermentation_records(
     status: str | None = Query(None, description="状态"),
     fermenter: str | None = Query(None, description="发酵罐搜索"),
     svc: FermentationService = Depends(get_fermentation_service),
-):
+) -> Any:
     items, total = await svc.list_records(
         page=page,
         page_size=page_size,
@@ -56,7 +57,9 @@ async def list_fermentation_records(
 @router.get(
     "/fermentation/{record_id}/related-events", summary="查询批次相关的非密事件"
 )
-async def get_related_events(record_id: UUID, session: AsyncSession = Depends(get_db)):
+async def get_related_events(
+    record_id: UUID, session: AsyncSession = Depends(get_db)
+) -> Any:
     from sqlalchemy import text
 
     rows = await session.execute(
@@ -91,7 +94,7 @@ async def get_related_events(record_id: UUID, session: AsyncSession = Depends(ge
 async def get_fermentation_record(
     record_id: UUID,
     svc: FermentationService = Depends(get_fermentation_service),
-):
+) -> Any:
     record = await svc.get_record(record_id)
     if not record:
         return success_response(None, message="记录不存在", status_code=404)
@@ -102,7 +105,7 @@ async def get_fermentation_record(
 async def create_fermentation_record(
     data: FermentationCreate,
     svc: FermentationService = Depends(get_fermentation_service),
-):
+) -> Any:
     record = await svc.create_record(data.model_dump())
     return success_response(
         FermentationResponse.model_validate(record), message="创建成功"
@@ -114,7 +117,7 @@ async def update_fermentation_record(
     record_id: UUID,
     data: FermentationUpdate,
     svc: FermentationService = Depends(get_fermentation_service),
-):
+) -> Any:
     record = await svc.update_record(record_id, data.model_dump(exclude_unset=True))
     return success_response(
         FermentationResponse.model_validate(record), message="更新成功"
@@ -126,7 +129,7 @@ async def update_fermentation_status(
     record_id: UUID,
     data: FermentationStatusUpdate,
     svc: FermentationService = Depends(get_fermentation_service),
-):
+) -> Any:
     record = await svc.update_status(record_id, data.status)
     return success_response(
         FermentationResponse.model_validate(record), message="状态更新成功"
@@ -137,6 +140,6 @@ async def update_fermentation_status(
 async def delete_fermentation_record(
     record_id: UUID,
     svc: FermentationService = Depends(get_fermentation_service),
-):
+) -> Any:
     await svc.delete_record(record_id)
     return success_response(None, message="删除成功")

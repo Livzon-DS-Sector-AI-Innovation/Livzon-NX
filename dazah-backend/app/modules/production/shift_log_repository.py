@@ -1,5 +1,5 @@
 """生产日志与交接班 repository."""
-
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -9,7 +9,7 @@ from app.modules.production.shift_log_models import ShiftLog
 
 
 class ShiftLogRepository:
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
     async def list(
@@ -20,7 +20,7 @@ class ShiftLogRepository:
         shift: str | None = None,
         date_from: str | None = None,
         date_to: str | None = None,
-    ):
+    ) -> Any:
         query = select(ShiftLog).where(ShiftLog.is_deleted.is_(False))
 
         if workshop:
@@ -52,7 +52,7 @@ class ShiftLogRepository:
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
 
-    async def create(self, data: dict) -> ShiftLog:
+    async def create(self, data: dict[str, Any]) -> ShiftLog:
         record = ShiftLog(**data)
         self.session.add(record)
         await self.session.flush()
@@ -60,7 +60,7 @@ class ShiftLogRepository:
         await self.session.refresh(record)
         return record
 
-    async def update(self, record_id: UUID, data: dict) -> ShiftLog | None:
+    async def update(self, record_id: UUID, data: dict[str, Any]) -> ShiftLog | None:
         record = await self.get_by_id(record_id)
         if not record:
             return None

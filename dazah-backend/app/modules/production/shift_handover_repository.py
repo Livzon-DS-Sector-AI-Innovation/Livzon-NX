@@ -2,6 +2,7 @@
 
 import builtins
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -11,7 +12,7 @@ from app.modules.production.shift_handover_models import ShiftHandover
 
 
 class ShiftHandoverRepository:
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
     async def list(
@@ -22,7 +23,7 @@ class ShiftHandoverRepository:
         workshop: str | None = None,
         date_from: str | None = None,
         date_to: str | None = None,
-    ):
+    ) -> Any:
         query = select(ShiftHandover).where(ShiftHandover.is_deleted.is_(False))
 
         if position:
@@ -52,7 +53,7 @@ class ShiftHandoverRepository:
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
 
-    async def create(self, data: dict) -> ShiftHandover:
+    async def create(self, data: dict[str, Any]) -> ShiftHandover:
         record = ShiftHandover(**data)
         self.session.add(record)
         await self.session.flush()
@@ -60,7 +61,9 @@ class ShiftHandoverRepository:
         await self.session.refresh(record)
         return record
 
-    async def update(self, record_id: UUID, data: dict) -> ShiftHandover | None:
+    async def update(
+        self, record_id: UUID, data: dict[str, Any]
+    ) -> ShiftHandover | None:
         record = await self.get_by_id(record_id)
         if not record:
             return None

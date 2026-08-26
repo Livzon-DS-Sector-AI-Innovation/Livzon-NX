@@ -1,8 +1,10 @@
 from types import SimpleNamespace
+from typing import cast
 from uuid import uuid4
 
 import pytest
 from fastapi.routing import APIRoute
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.regulatory_tracker.api import routes
 
@@ -53,7 +55,8 @@ async def test_list_documents_serializes_pagination_and_document_fields(
         assert kwargs["page_size"] == 10
         return [document], 21
 
-    monkeypatch.setattr(routes.repo, "get_documents_with_filters", fake_get_documents)
+    repo = cast(object, getattr(routes, "repo"))
+    monkeypatch.setattr(repo, "get_documents_with_filters", fake_get_documents)
 
     result = await routes.list_documents(
         keyword=None,
@@ -64,7 +67,7 @@ async def test_list_documents_serializes_pagination_and_document_fields(
         is_new=None,
         page=2,
         page_size=10,
-        db=object(),
+        db=cast(AsyncSession, object()),
     )
 
     assert result["data"]["total"] == 21

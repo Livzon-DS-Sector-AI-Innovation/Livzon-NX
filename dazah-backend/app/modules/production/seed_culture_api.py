@@ -1,5 +1,5 @@
 """摇瓶种子制备记录 API routes."""
-
+from typing import Any
 from uuid import UUID
 
 from fastapi import Depends, Query
@@ -32,7 +32,7 @@ async def list_seed_cultures(
     batch_no: str | None = Query(None, description="摇瓶批号搜索"),
     product_name: str | None = Query(None, description="产品名称"),
     svc: SeedCultureService = Depends(get_seed_culture_service),
-):
+) -> Any:
     items, total = await svc.list_records(
         page=page, page_size=page_size, batch_no=batch_no, product_name=product_name
     )
@@ -44,7 +44,7 @@ async def list_seed_cultures(
 @router.get("/seed-cultures/{record_id}", summary="种子培养记录详情")
 async def get_seed_culture(
     record_id: UUID, svc: SeedCultureService = Depends(get_seed_culture_service)
-):
+) -> Any:
     record = await svc.get_record(record_id)
     if not record:
         return success_response(None, message="记录不存在", status_code=404)
@@ -54,7 +54,7 @@ async def get_seed_culture(
 @router.post("/seed-cultures", summary="创建种子培养记录")
 async def create_seed_culture(
     data: SeedCultureCreate, svc: SeedCultureService = Depends(get_seed_culture_service)
-):
+) -> Any:
     record = await svc.create_record(data.model_dump())
     return success_response(
         SeedCultureResponse.model_validate(record), message="创建成功"
@@ -66,7 +66,7 @@ async def update_seed_culture(
     record_id: UUID,
     data: SeedCultureUpdate,
     svc: SeedCultureService = Depends(get_seed_culture_service),
-):
+) -> Any:
     record = await svc.update_record(record_id, data.model_dump(exclude_unset=True))
     return success_response(
         SeedCultureResponse.model_validate(record), message="更新成功"
@@ -76,6 +76,6 @@ async def update_seed_culture(
 @router.delete("/seed-cultures/{record_id}", summary="删除种子培养记录")
 async def delete_seed_culture(
     record_id: UUID, svc: SeedCultureService = Depends(get_seed_culture_service)
-):
+) -> Any:
     await svc.delete_record(record_id)
     return success_response(None, message="删除成功")

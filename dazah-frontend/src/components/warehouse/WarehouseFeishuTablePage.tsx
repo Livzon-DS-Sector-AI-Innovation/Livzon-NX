@@ -328,7 +328,7 @@ const WAREHOUSE_INOUT_LINKS: Record<
 // 基础数据表页面：不展示统计仪表卡片
 const NO_STAT_CARD_PAGE_KEYS = new Set(['qualified-suppliers', 'material-name-code-map'])
 
-function resolveInoutLinks(
+export function resolveInoutLinks(
   pageKey: string
 ): { inbound?: string; outbound?: string; outboundLabel?: string } | null {
   return WAREHOUSE_INOUT_LINKS[pageKey] ?? null
@@ -364,11 +364,11 @@ const DATE_FILTER_TYPE_LABELS: Record<DateFilterType, string> = Object.fromEntri
   DATE_FILTER_TYPE_OPTIONS.map((option) => [option.value, option.label])
 ) as Record<DateFilterType, string>
 
-function isDateLikeColumn(columnKey: string) {
+export function isDateLikeColumn(columnKey: string) {
   return /(日期|有效期|复验期)$/.test(columnKey)
 }
 
-function formatDateForChina(date: Date) {
+export function formatDateForChina(date: Date) {
   const formatter = new Intl.DateTimeFormat('zh-CN', {
     timeZone: 'Asia/Shanghai',
     year: 'numeric',
@@ -378,7 +378,7 @@ function formatDateForChina(date: Date) {
   return formatter.format(date).replace(/\//g, '-')
 }
 
-function formatDateValue(value: WarehouseFeishuCellValue | string | undefined) {
+export function formatDateValue(value: WarehouseFeishuCellValue | string | undefined) {
   if (value === null || value === undefined || value === '') {
     return value
   }
@@ -404,7 +404,7 @@ function formatDateValue(value: WarehouseFeishuCellValue | string | undefined) {
   return value
 }
 
-function resolveWeekRange(baseDate: Dayjs) {
+export function resolveWeekRange(baseDate: Dayjs) {
   const weekday = baseDate.day()
   const offset = weekday === 0 ? 6 : weekday - 1
   const start = baseDate.subtract(offset, 'day')
@@ -412,7 +412,7 @@ function resolveWeekRange(baseDate: Dayjs) {
   return { start, end }
 }
 
-function resolveDateFilterRange(filterType: DateFilterType, selectedDate: Dayjs | null) {
+export function resolveDateFilterRange(filterType: DateFilterType, selectedDate: Dayjs | null) {
   const today = dayjs()
 
   if (filterType === 'eq' && selectedDate) {
@@ -462,7 +462,7 @@ function resolveDateFilterRange(filterType: DateFilterType, selectedDate: Dayjs 
   return { startDate: '', endDate: '' }
 }
 
-function buildDateFilterLabel(filterType: string, startDate: string, endDate: string) {
+export function buildDateFilterLabel(filterType: string, startDate: string, endDate: string) {
   if (!filterType) {
     return ''
   }
@@ -482,7 +482,7 @@ function buildDateFilterLabel(filterType: string, startDate: string, endDate: st
   return `日期：${DATE_FILTER_TYPE_LABELS[filterType as DateFilterType] ?? filterType}`
 }
 
-function buildVisiblePageData(
+export function buildVisiblePageData(
   pageKey: string,
   data: WarehouseFeishuMaterialPageData
 ): {
@@ -586,7 +586,7 @@ function buildVisiblePageData(
   return { columns, rows }
 }
 
-function parseAdvancedFilters(value: string | null): WarehouseAdvancedFilter[] {
+export function parseAdvancedFilters(value: string | null): WarehouseAdvancedFilter[] {
   if (!value) {
     return []
   }
@@ -598,7 +598,7 @@ function parseAdvancedFilters(value: string | null): WarehouseAdvancedFilter[] {
   }
 }
 
-function getUniqueOptions(
+export function getUniqueOptions(
   rows: WarehouseFeishuRow[],
   candidateKeys: string[]
 ): SelectOption[] {
@@ -618,7 +618,7 @@ function getUniqueOptions(
     .map((value) => ({ label: value, value }))
 }
 
-function buildAdvancedFilterLabel(filter: WarehouseAdvancedFilter) {
+export function buildAdvancedFilterLabel(filter: WarehouseAdvancedFilter) {
   const operatorLabel =
     ADVANCED_OPERATOR_OPTIONS.find((option) => option.value === filter.operator)?.label ??
     filter.operator
@@ -678,7 +678,7 @@ function renderCell(
   return String(value)
 }
 
-function formatDetailDisplayValue(field: WarehouseRecordFieldValue): string {
+export function formatDetailDisplayValue(field: WarehouseRecordFieldValue): string {
   const value = field.value
   if (value === null || value === undefined || value === '') {
     return '-'
@@ -703,7 +703,7 @@ function formatDetailDisplayValue(field: WarehouseRecordFieldValue): string {
   return String(value)
 }
 
-function formatSyncTime(time: string | undefined): string {
+export function formatSyncTime(time: string | undefined): string {
   if (!time) {
     return '-'
   }
@@ -854,7 +854,7 @@ function isGroupRow(record: WarehouseTableRow): record is WarehouseGroupRow {
   return (record as WarehouseGroupRow).__group_row === true
 }
 
-function buildGroupedRows(
+export function buildGroupedRows(
   rows: WarehouseFeishuRow[],
   groupKeys: string[]
 ): WarehouseTableRow[] {

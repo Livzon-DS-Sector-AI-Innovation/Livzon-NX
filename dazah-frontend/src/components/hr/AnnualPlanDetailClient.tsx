@@ -20,7 +20,7 @@ import AttachmentPreviewModal from './AttachmentPreviewModal'
 // ── 附件编号归一化（与后端 normalize_annex_no 同规则）──
 const CN_DIGIT: Record<string, number> = { '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9 }
 
-function cnToInt(s: string): number | null {
+export function cnToInt(s: string): number | null {
   if (!s) return null
   if (/^\d+$/.test(s)) return parseInt(s, 10)
   if (!s.includes('十')) return CN_DIGIT[s] ?? null
@@ -32,12 +32,12 @@ function cnToInt(s: string): number | null {
   return t * 10 + o
 }
 
-function toHalfDigits(s: string): string {
+export function toHalfDigits(s: string): string {
   return s.replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
 }
 
 /** 从培训内容中提取所有"附件X"引用（归一化、去重、保序）. */
-function extractAnnexRefs(text: string): string[] {
+export function extractAnnexRefs(text: string): string[] {
   const refs: string[] = []
   const re = /附件\s*([0-9０-９一二三四五六七八九十]+)/g
   let m: RegExpExecArray | null

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from types import SimpleNamespace
+from typing import Any, cast
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -12,7 +13,7 @@ import pytest
 from app.modules.production import production_feishu_api as api
 
 
-def _config_obj():
+def _config_obj() -> Any:
     return SimpleNamespace(
         id="cfg-1",
         name="测试配置",
@@ -33,26 +34,26 @@ def _config_obj():
 
 
 class _Scalars:
-    def __init__(self, items):
+    def __init__(self, items: Any) -> None:
         self._items = items
 
-    def all(self):
+    def all(self) -> Any:
         return self._items
 
-    def first(self):
+    def first(self) -> Any:
         return self._items[0] if self._items else None
 
 
 class _Result:
-    def __init__(self, items):
+    def __init__(self, items: Any) -> None:
         self._s = _Scalars(items)
 
-    def scalars(self):
+    def scalars(self) -> Any:
         return self._s
 
 
 @pytest.mark.anyio
-async def test__config_to_dict():
+async def test__config_to_dict() -> Any:
     """_config_to_dict: 序列化配置对象。"""
     c = _config_obj()
     d = api._config_to_dict(c)
@@ -65,7 +66,7 @@ async def test__config_to_dict():
 
 
 @pytest.mark.anyio
-async def test_list_feishu_configs():
+async def test_list_feishu_configs() -> Any:
     """list_feishu_configs: 返回配置列表。"""
     session = AsyncMock()
     session.execute.return_value = _Result([_config_obj()])
@@ -76,14 +77,14 @@ async def test_list_feishu_configs():
 
 
 @pytest.mark.anyio
-async def test_upsert_feishu_config_create():
+async def test_upsert_feishu_config_create() -> Any:
     """upsert_feishu_config: 创建新配置。"""
     session = AsyncMock()
     session.execute.return_value = _Result([])  # 无已有配置
     session.flush = AsyncMock()
     session.commit = AsyncMock()
 
-    def _refresh(config):
+    def _refresh(config: Any) -> Any:
         config.created_at = datetime(2026, 8, 1)
         config.updated_at = datetime(2026, 8, 2)
 
@@ -100,12 +101,14 @@ async def test_upsert_feishu_config_create():
         "app.modules.production.auto_sync_service.discover_and_save_mapping",
         new=AsyncMock(return_value=None),
     ):
-        resp = await api.upsert_feishu_config(body=body, session=session)
+        resp = await api.upsert_feishu_config(
+            body=cast(api.ProductionFeishuConfigUpsert, body), session=session
+        )
     assert json.loads(resp.body)["message"] == "配置已保存"
 
 
 @pytest.mark.anyio
-async def test_upsert_feishu_config_update():
+async def test_upsert_feishu_config_update() -> Any:
     """upsert_feishu_config: 更新已有配置。"""
     session = AsyncMock()
     session.execute.return_value = _Result([_config_obj()])  # 已有配置
@@ -124,5 +127,7 @@ async def test_upsert_feishu_config_update():
         "app.modules.production.auto_sync_service.discover_and_save_mapping",
         new=AsyncMock(return_value=None),
     ):
-        resp = await api.upsert_feishu_config(body=body, session=session)
+        resp = await api.upsert_feishu_config(
+            body=cast(api.ProductionFeishuConfigUpsert, body), session=session
+        )
     assert json.loads(resp.body)["message"] == "配置已保存"

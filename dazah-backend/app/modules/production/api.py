@@ -504,7 +504,7 @@ async def update_process_parameter(
     data: ProcessParameterUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """更新工艺参数"""
     service = ProductionService(db)
     param = await service.update_process_parameter(param_id, data)
@@ -666,7 +666,7 @@ async def delete_material_balance(
     batch_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """软删除物料平衡"""
     service = ProductionService(db)
     result = await service.delete_material_balance(batch_id)
@@ -948,7 +948,7 @@ async def get_sales_plan_details(
     page_size: int = Query(20, ge=1, le=200),
     product_name: str | None = None,
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     query = select(SalesPlanDetail).where(SalesPlanDetail.is_deleted.is_(False))
     count_q = select(func.count(SalesPlanDetail.id)).where(
         SalesPlanDetail.is_deleted.is_(False)
@@ -983,7 +983,7 @@ async def get_sales_plan_details(
 async def create_sales_plan_detail(
     data: SalesPlanDetailCreate,
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     detail = SalesPlanDetail(**data.model_dump(), source="manual")
     session.add(detail)
     await session.commit()
@@ -1000,7 +1000,7 @@ async def update_sales_plan_detail(
     detail_id: uuid.UUID,
     data: SalesPlanDetailUpdate,
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     detail = await session.get(SalesPlanDetail, detail_id)
     if not detail or detail.is_deleted:
         return ApiResponse(code=404, message="记录不存在")
@@ -1019,7 +1019,7 @@ async def update_sales_plan_detail(
 async def delete_sales_plan_detail(
     detail_id: uuid.UUID,
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     detail = await session.get(SalesPlanDetail, detail_id)
     if not detail or detail.is_deleted:
         return ApiResponse(code=404, message="记录不存在")

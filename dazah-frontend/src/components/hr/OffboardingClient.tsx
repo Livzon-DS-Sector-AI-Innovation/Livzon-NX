@@ -186,14 +186,14 @@ export default function OffboardingClient({
       key: 'employee_number',
       width: 110,
       fixed: 'left' as const,
-      render: (_: any, record: OffboardingRecord) => record.employee_number || record.employee?.employee_number || '-' },
+      render: (_: unknown, record: OffboardingRecord) => record.employee_number || record.employee?.employee_number || '-' },
     {
       title: '姓名',
       dataIndex: 'name',
       key: 'name',
       width: 90,
       fixed: 'left' as const,
-      render: (_: any, record: OffboardingRecord) => (
+      render: (_: unknown, record: OffboardingRecord) => (
         <a onClick={() => handleView(record)} className="text-blue-600 hover:text-blue-800 cursor-pointer">
           {record.name || record.employee?.name || '-'}
         </a>
@@ -203,49 +203,49 @@ export default function OffboardingClient({
       dataIndex: 'domain_account',
       key: 'domain_account',
       width: 120,
-      render: (_: any, record: OffboardingRecord) => record.domain_account || record.employee?.domain_account || '-' },
+      render: (_: unknown, record: OffboardingRecord) => record.domain_account || record.employee?.domain_account || '-' },
     {
       title: '性别',
       dataIndex: 'gender',
       key: 'gender',
       width: 70,
-      render: (_: any, record: OffboardingRecord) => record.gender || record.employee?.gender || '-' },
+      render: (_: unknown, record: OffboardingRecord) => record.gender || record.employee?.gender || '-' },
     {
       title: '一级部门',
       dataIndex: 'department',
       key: 'department',
       width: 120,
-      render: (_: any, record: OffboardingRecord) => record.department || record.employee?.department || '-' },
+      render: (_: unknown, record: OffboardingRecord) => record.department || record.employee?.department || '-' },
     {
       title: '二级部门',
       dataIndex: 'sub_department',
       key: 'sub_department',
       width: 120,
-      render: (_: any, record: OffboardingRecord) => record.sub_department || '-' },
+      render: (_: unknown, record: OffboardingRecord) => record.sub_department || '-' },
     {
       title: '职位/岗位',
       dataIndex: 'position',
       key: 'position',
       width: 120,
-      render: (_: any, record: OffboardingRecord) => record.position || record.employee?.position || '-' },
+      render: (_: unknown, record: OffboardingRecord) => record.position || record.employee?.position || '-' },
     {
       title: '职级',
       dataIndex: 'level',
       key: 'level',
       width: 80,
-      render: (_: any, record: OffboardingRecord) => record.level || record.employee?.level || '-' },
+      render: (_: unknown, record: OffboardingRecord) => record.level || record.employee?.level || '-' },
     {
       title: '联系电话',
       dataIndex: 'phone',
       key: 'phone',
       width: 130,
-      render: (_: any, record: OffboardingRecord) => record.phone || record.employee?.phone || '-' },
+      render: (_: unknown, record: OffboardingRecord) => record.phone || record.employee?.phone || '-' },
     {
       title: '邮箱',
       dataIndex: 'email',
       key: 'email',
       width: 180,
-      render: (_: any, record: OffboardingRecord) => record.email || record.employee?.email || '-' },
+      render: (_: unknown, record: OffboardingRecord) => record.email || record.employee?.email || '-' },
     {
       title: '最后工作日',
       dataIndex: 'offboarding_date',
@@ -340,7 +340,7 @@ export default function OffboardingClient({
       key: 'action',
       width: 140,
       fixed: 'right' as const,
-      render: (_: any, record: OffboardingRecord) => (
+      render: (_: unknown, record: OffboardingRecord) => (
         <Space size="small">
           <Tooltip title="查看详情">
             <Button

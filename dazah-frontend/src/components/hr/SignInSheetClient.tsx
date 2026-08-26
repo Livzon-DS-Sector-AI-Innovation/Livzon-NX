@@ -14,7 +14,7 @@ import {
   TimePicker,
 } from 'antd'
 import { DownloadOutlined } from '@ant-design/icons'
-import dayjs from 'dayjs'
+import dayjs, { type Dayjs } from 'dayjs'
 import { Employee } from '@/types/hr'
 import type { ExportedDoc, TrainingDocExporter, TrainingSessionData } from '@/types/hr'
 import { fetchEmployees } from '@/lib/api/hr'
@@ -37,6 +37,15 @@ interface Props {
   registerExporter?: (type: string, fn: TrainingDocExporter) => void
   /** 当前会话 ID，用于冲突检测时排除自身 */
   sessionId?: string
+}
+
+interface SignInFormValues {
+  training_date?: Dayjs
+  training_time?: [Dayjs, Dayjs]
+  topic?: string
+  training_method?: string
+  instructor?: string
+  actual_count?: number
 }
 
 export default function SignInSheetClient({ sessionData, onSessionChange, registerExporter, sessionId }: Props) {
@@ -63,6 +72,8 @@ export default function SignInSheetClient({ sessionData, onSessionChange, regist
           exclude_session_id: sessionId || undefined,
         })
         if (res.data.has_conflict) {
+          // The callback is declared below the effect to keep the conflict renderer near its UI.
+          // eslint-disable-next-line react-hooks/immutability
           showConflictModal(res.data)
         }
       } catch {
@@ -81,11 +92,11 @@ export default function SignInSheetClient({ sessionData, onSessionChange, regist
   }
 
   // 冲突弹窗
-  const showConflictModal = (data: {
+  function showConflictModal(data: {
     instructor_conflicts: { training_name: string; time_range: string; conflict_depts: string[]; conflict_count: number }[]
     trainee_conflicts: { training_name: string; time_range: string; names: string[]; conflict_count: number }[]
     suggested_times: { start: string; end: string }[]
-  }) => {
+  }) {
     const parts: React.ReactNode[] = []
 
     if (data.instructor_conflicts.length > 0) {
@@ -222,7 +233,7 @@ export default function SignInSheetClient({ sessionData, onSessionChange, regist
   const [sessionApplied, setSessionApplied] = useState(false)
   useEffect(() => {
     if (sessionApplied || !sessionData.training_date) return
-    const fields: Record<string, any> = {}
+    const fields: Record<string, unknown> = {}
     if (sessionData.training_date) fields.training_date = dayjs(sessionData.training_date)
     if (sessionData.training_time_start && sessionData.training_time_end) {
       fields.training_time = [dayjs(sessionData.training_time_start, 'HH:mm'), dayjs(sessionData.training_time_end, 'HH:mm')]
@@ -268,8 +279,8 @@ export default function SignInSheetClient({ sessionData, onSessionChange, regist
   // 实时同步共享 session（其他表修改的日期/时间/授课人/方式回流）
   // 仅当与当前表单值不同才写入；dayjs 只在此处创建、不进入依赖/状态，避免循环引用告警
   useEffect(() => {
-    const cur = form.getFieldsValue()
-    const fields: Record<string, any> = {}
+    const cur = form.getFieldsValue() as SignInFormValues
+    const fields: Record<string, unknown> = {}
     if (sessionData.training_date) {
       const v = dayjs(sessionData.training_date)
       if (!cur.training_date || cur.training_date.format('YYYY-MM-DD') !== v.format('YYYY-MM-DD')) {
@@ -291,7 +302,7 @@ export default function SignInSheetClient({ sessionData, onSessionChange, regist
   }, [sessionData.training_date, sessionData.training_time_start, sessionData.training_time_end, sessionData.instructor, sessionData.training_method])
 
   // 上报共享 session
-  const handleFormChange = useCallback((_c: any, all: any) => {
+  const handleFormChange = useCallback((_c: Record<string, unknown>, all: SignInFormValues) => {
     if (all.topic !== undefined) lastTopicRef.current = all.topic
     const data: TrainingSessionData = {}
     if (all.training_date) data.training_date = all.training_date.format('YYYY-MM-DD')

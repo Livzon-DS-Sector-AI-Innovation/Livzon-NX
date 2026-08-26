@@ -480,7 +480,8 @@ max-width: 600px; margin: 0 auto;">
         import base64
 
         try:
-            import fitz  # type: ignore[import-untyped]  # PyMuPDF
+            # PyMuPDF's compatibility import has no mypy metadata in CI.
+            import fitz  # type: ignore[import-not-found]  # PyMuPDF
         except ImportError:
             logger.warning("PDF vision analysis unavailable: PyMuPDF is not installed")
             return None

@@ -4,14 +4,15 @@
 仅异常批次调用 LLM 分析，结果写入 ai_analysis 表。
 独立于手动 AI 分析，互不影响。
 """
-
 import json
 import logging
 import re
 import uuid as _uuid
 from datetime import date, timedelta
+from typing import Any
 
 from openai import AsyncOpenAI
+from openai.types.chat import ChatCompletionUserMessageParam
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -42,7 +43,7 @@ ROLLING_MONTHS = 2
 # ── JSON 解析工具（同 ai_analysis_api.py） ──
 
 
-def _parse_json(text: str) -> dict:
+def _parse_json(text: str) -> dict[str, Any]:
     t = text.strip()
     if t.startswith("```json"):
         t = t[7:]
@@ -52,12 +53,15 @@ def _parse_json(text: str) -> dict:
         t = t[:-3]
     t = t.strip()
     try:
-        return json.loads(t)
+        parsed = json.loads(t)
+        return parsed if isinstance(parsed, dict) else {}
     except json.JSONDecodeError:
         pass
     for suffix in ['"}]', '"]}]', "}]", "]}]", "}", '"}}', '"}', '"]}']:
         try:
-            return json.loads(t + suffix)
+            parsed = json.loads(t + suffix)
+            if isinstance(parsed, dict):
+                return parsed
         except json.JSONDecodeError:
             continue
     result = {}
@@ -85,7 +89,7 @@ def _parse_json(text: str) -> dict:
 # ═══════════════════════════════════════════════════════
 
 
-async def scan_new_batches(session: AsyncSession) -> list[dict]:
+async def scan_new_batches(session: AsyncSession) -> list[dict[str, Any]]:
     """扫描三工段中有收率但尚未被自动分析过的批次，同时返回批次日期"""
     rows_raw = (
         await session.execute(
@@ -145,7 +149,7 @@ async def _compute_stage_iqr(
     session: AsyncSession,
     stage: str,
     near_date: date | None,
-) -> dict:
+) -> dict[str, Any]:
     """计算工段在 near_date 前 3 个月内的收率 IQR（移动窗口）"""
     table, yield_col = STAGE_TABLE[stage]
 
@@ -193,6 +197,16 @@ async def _compute_stage_iqr(
         )
     ).fetchone()
 
+    if rows is None:
+        return {
+            "n": 0,
+            "median": 0.0,
+            "q1": 0.0,
+            "q3": 0.0,
+            "iqr": 0.0,
+            "window_start": window_start.isoformat(),
+            "window_end": near_date.isoformat(),
+        }
     q1 = float(rows.q1 or 0)
     q3 = float(rows.q3 or 0)
     median = float(rows.median or 0)
@@ -210,7 +224,7 @@ async def _compute_stage_iqr(
 
 async def _compute_similar_range(
     session: AsyncSession, stage: str, yield_rate: float
-) -> dict:
+) -> dict[str, Any]:
     """同工段收率 ±2% 范围内的历史批次统计"""
     table, yield_col = STAGE_TABLE[stage]
     low = round(yield_rate - 2, 1)
@@ -231,6 +245,8 @@ async def _compute_similar_range(
             {"low": low, "high": high},
         )
     ).fetchone()
+    if row is None:
+        return {"count": 0, "avg": 0.0, "min": 0.0, "max": 0.0}
     return {
         "count": row.cnt or 0,
         "avg": float(row.avg_yr or 0),
@@ -241,7 +257,7 @@ async def _compute_similar_range(
 
 async def _compute_equipment_trend(
     session: AsyncSession, stage: str, batch_no: str
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """设备/工段近3月收率列表（最近 20 条）"""
     table, yield_col = STAGE_TABLE[stage]
     date_fields = {
@@ -289,7 +305,7 @@ async def _compute_equipment_trend(
 
 async def _compute_downstream_comparison(
     session: AsyncSession, stage: str, batch_no: str
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """通过 batch_lineage 找下游批次，对比其收率与工段历史均值"""
     ds_rows = (
         await session.execute(
@@ -328,8 +344,12 @@ async def _compute_downstream_comparison(
             """)
                 )
             ).fetchone()
-            mean_yr = float(mean_row.mean_yr or 0)
-            n = mean_row.n or 0
+            if mean_row is None:
+                mean_yr = 0.0
+                n = 0
+            else:
+                mean_yr = float(mean_row.mean_yr or 0)
+                n = mean_row.n or 0
         else:
             mean_yr = 0
             n = 0
@@ -372,7 +392,7 @@ def judge_anomaly_severity(yield_rate: float, median: float, iqr: float) -> str 
 
 async def _get_similar_cases(
     session: AsyncSession, stage: str, severity: str, limit: int = 3
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     rows = (
         await session.execute(
             text(
@@ -405,11 +425,11 @@ def _build_auto_detect_prompt(
     stage: str,
     yield_rate: float,
     severity: str,
-    stage_iqr: dict,
-    similar_range: dict,
-    equipment_trend: list[dict],
-    downstream_comparison: list[dict],
-    ref_cases: list[dict],
+    stage_iqr: dict[str, Any],
+    similar_range: dict[str, Any],
+    equipment_trend: list[dict[str, Any]],
+    downstream_comparison: list[dict[str, Any]],
+    ref_cases: list[dict[str, Any]],
 ) -> str:
     label = STAGE_LABELS_ZH.get(stage, stage)
     median = stage_iqr["median"]
@@ -503,11 +523,11 @@ async def _call_llm_and_save(
     stage: str,
     yield_rate: float,
     severity: str,
-    stage_iqr: dict,
-    similar_range: dict,
-    equipment_trend: list[dict],
-    downstream_comparison: list[dict],
-    ref_cases: list[dict],
+    stage_iqr: dict[str, Any],
+    similar_range: dict[str, Any],
+    equipment_trend: list[dict[str, Any]],
+    downstream_comparison: list[dict[str, Any]],
+    ref_cases: list[dict[str, Any]],
 ) -> AiAnalysis | None:
     """调 LLM 分析并写入 ai_analysis 表"""
     cfg = await get_config("text")
@@ -532,7 +552,9 @@ async def _call_llm_and_save(
             base_url=cfg.api_base_url or "https://newapi.livzon.cn/v1",
             api_key=cfg.api_key or "",
         )
-        msgs = [{"role": "user", "content": prompt}]
+        msgs: list[ChatCompletionUserMessageParam] = [
+            {"role": "user", "content": prompt}
+        ]
         resp = await client.chat.completions.create(
             model=cfg.model_name or "deepseek-v4-pro",
             messages=msgs,
@@ -549,7 +571,7 @@ async def _call_llm_and_save(
 
         if len(causes) < 3 or len(suggestions) < 3:
             logger.warning(f"[异常检测] LLM 分析过短 {batch_no}，重试...")
-            msgs2 = [
+            msgs2: list[ChatCompletionUserMessageParam] = [
                 {
                     "role": "user",
                     "content": prompt
@@ -630,7 +652,7 @@ async def _call_llm_and_save(
 # ═══════════════════════════════════════════════════════
 
 
-async def run_anomaly_detection(session: AsyncSession) -> dict:
+async def run_anomaly_detection(session: AsyncSession) -> dict[str, Any]:
     """执行一次完整的收率异常自动检测，返回汇总"""
     new_batches = await scan_new_batches(session)
     if not new_batches:
@@ -645,14 +667,14 @@ async def run_anomaly_detection(session: AsyncSession) -> dict:
         }
 
     # 按 (stage, year-month) 缓存 IQR
-    iqr_cache: dict[str, dict] = {}
+    iqr_cache: dict[str, dict[str, Any]] = {}
 
     def _cache_key(stage: str, batch_date: date | None) -> str:
         if batch_date is None:
             return f"{stage}:unknown"
         return f"{stage}:{batch_date.year}-{batch_date.month:02d}"
 
-    async def _get_iqr(stage: str, batch_date: date | None) -> dict:
+    async def _get_iqr(stage: str, batch_date: date | None) -> dict[str, Any]:
         key = _cache_key(stage, batch_date)
         if key not in iqr_cache:
             iqr_cache[key] = await _compute_stage_iqr(session, stage, batch_date)

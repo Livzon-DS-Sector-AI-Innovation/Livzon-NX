@@ -6,18 +6,17 @@
 spreadsheet_token / app_id / app_secret 由调用方从数据库 production_feishu_configs
         表读取后传入。
 """
-
 import asyncio
 import logging
 import os
 import re
 from pathlib import Path
+from typing import Any
 
 import httpx
 from dotenv import load_dotenv
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 # 加载 .env（仅用于独立运行时 DATABASE_URL）
 env_path = Path(__file__).resolve().parents[1] / ".env"
@@ -50,7 +49,7 @@ async def _get_token(app_id: str, app_secret: str) -> str:
 
 async def _read_sheet(
     spreadsheet_token: str, app_id: str, app_secret: str
-) -> list[list]:
+) -> list[list[Any]]:
     """读取整个工作表，返回二维数组（每行是一个 list）"""
     token = await _get_token(app_id, app_secret)
 
@@ -74,7 +73,7 @@ async def _read_sheet(
     return [[str(c) if c is not None else "" for c in row] for row in values]
 
 
-def _get(row: list, idx: int) -> str:
+def _get(row: list[Any], idx: int) -> str:
     """安全取列值"""
     if idx < len(row):
         return str(row[idx]).strip()
@@ -121,7 +120,7 @@ def _safe_pct(val: str) -> str:
 
 async def sync_fermentation(
     session: AsyncSession, spreadsheet_token: str, app_id: str, app_secret: str
-):
+) -> Any:
     """主同步函数"""
     logger.info("FA 发酵液放罐同步开始...")
 
@@ -130,8 +129,8 @@ async def sync_fermentation(
     logger.info(f"飞书读取完成，共 {len(rows)} 行")
 
     # 2. 解析数据
-    batches: list[dict] = []  # 主批
-    sub_batches: list[dict] = []  # 子批
+    batches: list[dict[str, Any]] = []  # 主批
+    sub_batches: list[dict[str, Any]] = []  # 子批
 
     current_date: str | None = None  # 继承合并单元格的日期（Row A）
     current_tank: str | None = None  # 继承合并单元格的罐号（Row B）
@@ -230,7 +229,8 @@ async def sync_fermentation(
                 updated_at = now()
         """)
         result = await session.execute(sql)
-        if result.rowcount and result.rowcount > 0:
+        rowcount = int(getattr(result, "rowcount", 0) or 0)
+        if rowcount > 0:
             updated_b += 1
         else:
             created_b += 1
@@ -251,7 +251,8 @@ async def sync_fermentation(
                 updated_at = now()
         """)
         result = await session.execute(sql)
-        if result.rowcount and result.rowcount > 0:
+        rowcount = int(getattr(result, "rowcount", 0) or 0)
+        if rowcount > 0:
             updated_s += 1
         else:
             created_s += 1
@@ -271,7 +272,7 @@ async def sync_fermentation(
     }
 
 
-async def main():
+async def main() -> Any:
     """独立运行入口（从命令行直接执行）"""
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
@@ -281,7 +282,7 @@ async def main():
         "DATABASE_URL", "postgresql+asyncpg://postgres:postgres@db:5432/dazah"
     )
     engine = create_async_engine(db_url)
-    async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    async_session = async_sessionmaker(engine, expire_on_commit=False)
 
     async with async_session() as session:
         from app.modules.production.fa_feishu_scheduler import (

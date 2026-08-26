@@ -4,12 +4,13 @@ from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace as _SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 
 from app.modules.energy import scheduler as energy_scheduler
 from app.modules.equipment import scheduler as equipment_scheduler
+from app.modules.production.repository import ProductionRepository
 from app.modules.warehouse import scheduler as warehouse_scheduler
 from app.platform.identity import scheduler as identity_scheduler
 from app.platform.integrations.feishu import read_scheduler
@@ -144,11 +145,42 @@ async def test_read_mirror_execute_skips_missing_credentials(monkeypatch: Any) -
         uuid4(),
     )
 
+    config = SimpleNamespace(
+        app_id="production-app",
+        encrypted_app_secret="encrypted-secret",
+    )
+    production_repo.get_active_feishu_config.return_value = config
+    mirror = SimpleNamespace(sync_resource=AsyncMock())
+    monkeypatch.setattr(
+        read_scheduler,
+        "ModuleFeishuReadMirrorService",
+        lambda *_args, **_kwargs: mirror,
+    )
+    monkeypatch.setattr(read_scheduler, "decrypt_secret", lambda _value: "secret")
+    resource_id = uuid4()
+    await read_scheduler.ProductionFeishuReadDailySyncGenerator().execute_one(
+        production_session,
+        resource_id,
+    )
+    mirror.sync_resource.assert_awaited_once_with(UUID(str(resource_id)))
+
     quality_session: Any = SimpleNamespace(scalar=AsyncMock(return_value=None))
     await read_scheduler.QualityFeishuReadDailySyncGenerator().execute_one(
         quality_session,
         uuid4(),
     )
+
+
+@pytest.mark.asyncio
+async def test_production_repository_reads_active_feishu_config() -> None:
+    config = SimpleNamespace(id=uuid4())
+    result = SimpleNamespace(scalar_one_or_none=lambda: config)
+    session: Any = SimpleNamespace(execute=AsyncMock(return_value=result))
+
+    found = await ProductionRepository(session).get_active_feishu_config()
+
+    assert found is config
+    session.execute.assert_awaited_once()
 
 
 @pytest.mark.asyncio

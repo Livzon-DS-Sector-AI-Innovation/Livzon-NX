@@ -198,9 +198,12 @@ export default function DepartmentClient({
     maxPolls: 90,
     interval: 2000,
     onSuccess: (msg, result) => {
-      if (result?.created !== undefined) {
+      const syncResult = typeof result === 'object' && result !== null
+        ? result as { created?: number; updated?: number; skipped?: number; failed?: number }
+        : undefined
+      if (syncResult?.created !== undefined) {
         message.success(
-          `同步完成：新增 ${result.created} 条，更新 ${result.updated} 条，跳过 ${result.skipped} 条，失败 ${result.failed} 条`,
+          `同步完成：新增 ${syncResult.created} 条，更新 ${syncResult.updated || 0} 条，跳过 ${syncResult.skipped || 0} 条，失败 ${syncResult.failed || 0} 条`,
         )
       } else {
         message.success(msg || '同步完成')

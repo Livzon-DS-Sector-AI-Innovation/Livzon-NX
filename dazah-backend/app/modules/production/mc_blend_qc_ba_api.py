@@ -1,5 +1,6 @@
 """MC 霉酚酸 — 混粉/QC检验/丁酯盘点 统一 API"""
 
+from typing import Any
 from uuid import UUID
 
 from fastapi import Depends, Query
@@ -22,7 +23,7 @@ router = create_module_router(MODULES_BY_CODE["production"])
 
 
 # ── 辅助：清理 SQLAlchemy __dict__ 中的内部状态 ──
-def _clean_dict(obj) -> dict:
+def _clean_dict(obj: Any) -> dict[str, Any]:
     return {k: v for k, v in obj.__dict__.items() if not k.startswith("_")}
 
 
@@ -38,7 +39,7 @@ async def full_list_blending(
         None, description="筛选月份 (1-12)，按批号 MC-YYMMxx 的 MM 位匹配"
     ),
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     """返回混粉记录+投入明细的嵌套结构"""
     from sqlalchemy import func as sa_func
 
@@ -72,7 +73,7 @@ async def full_list_blending(
         inputs_rows = await session.execute(inputs_q)
         all_inputs = inputs_rows.scalars().all()
 
-        inputs_map: dict[str, list] = {}
+        inputs_map: dict[str, list[Any]] = {}
         for inp in all_inputs:
             d = {k: v for k, v in inp.__dict__.items() if not k.startswith("_")}
             inputs_map.setdefault(inp.blend_batch, []).append(d)
@@ -92,7 +93,7 @@ async def list_blending(
     batch_no: str | None = Query(None),
     workshop: str = Query("201-2"),
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     query = select(BlendingRecord).where(
         BlendingRecord.is_deleted.is_(False), BlendingRecord.workshop == workshop
     )
@@ -111,7 +112,9 @@ async def list_blending(
 
 
 @router.post("/mc/blending-records", summary="创建混粉记录")
-async def create_blending(data: dict, session: AsyncSession = Depends(get_db)):
+async def create_blending(
+    data: dict[str, Any], session: AsyncSession = Depends(get_db)
+) -> Any:
     record = BlendingRecord(**data)
     session.add(record)
     await session.commit()
@@ -122,8 +125,8 @@ async def create_blending(data: dict, session: AsyncSession = Depends(get_db)):
 
 @router.put("/mc/blending-records/{record_id}", summary="更新混粉记录")
 async def update_blending(
-    record_id: UUID, data: dict, session: AsyncSession = Depends(get_db)
-):
+    record_id: UUID, data: dict[str, Any], session: AsyncSession = Depends(get_db)
+) -> Any:
     record = await session.get(BlendingRecord, record_id)
     if not record or record.is_deleted:
         return success_response(None, message="记录不存在", status_code=404)
@@ -134,7 +137,9 @@ async def update_blending(
 
 
 @router.delete("/mc/blending-records/{record_id}", summary="删除混粉记录")
-async def delete_blending(record_id: UUID, session: AsyncSession = Depends(get_db)):
+async def delete_blending(
+    record_id: UUID, session: AsyncSession = Depends(get_db)
+) -> Any:
     record = await session.get(BlendingRecord, record_id)
     if not record:
         return success_response(None, message="记录不存在", status_code=404)
@@ -147,7 +152,9 @@ async def delete_blending(record_id: UUID, session: AsyncSession = Depends(get_d
 
 
 @router.get("/mc/blending-records/{batch_no}/inputs", summary="混粉投入明细")
-async def list_blending_inputs(batch_no: str, session: AsyncSession = Depends(get_db)):
+async def list_blending_inputs(
+    batch_no: str, session: AsyncSession = Depends(get_db)
+) -> Any:
     query = select(BlendingInput).where(
         BlendingInput.is_deleted.is_(False), BlendingInput.blend_batch == batch_no
     )
@@ -156,7 +163,9 @@ async def list_blending_inputs(batch_no: str, session: AsyncSession = Depends(ge
 
 
 @router.post("/mc/blending-inputs", summary="添加混粉投入")
-async def create_blending_input(data: dict, session: AsyncSession = Depends(get_db)):
+async def create_blending_input(
+    data: dict[str, Any], session: AsyncSession = Depends(get_db)
+) -> Any:
     record = BlendingInput(**data)
     session.add(record)
     await session.commit()
@@ -166,7 +175,7 @@ async def create_blending_input(data: dict, session: AsyncSession = Depends(get_
 @router.delete("/mc/blending-inputs/{record_id}", summary="删除混粉投入")
 async def delete_blending_input(
     record_id: UUID, session: AsyncSession = Depends(get_db)
-):
+) -> Any:
     record = await session.get(BlendingInput, record_id)
     if not record:
         return success_response(None, message="记录不存在", status_code=404)
@@ -181,7 +190,7 @@ async def delete_blending_input(
 @router.post("/mc/blending-records/{batch_no}/calculate", summary="加权杂质计算")
 async def calculate_blending_impurities(
     batch_no: str, session: AsyncSession = Depends(get_db)
-):
+) -> Any:
     """根据投入明细计算加权平均杂质（5个RRT点位 + 总杂 + 含量）"""
     inputs_result = await session.execute(
         select(BlendingInput).where(
@@ -211,28 +220,28 @@ async def calculate_blending_impurities(
         result[field] = round(weighted_sum / total_weight, 4) if total_weight > 0 else 0
 
     # 更新主表计算结果
-    main = await session.execute(
+    main_result = await session.execute(
         select(BlendingRecord).where(
             BlendingRecord.batch_no == batch_no, BlendingRecord.is_deleted.is_(False)
         )
     )
-    main = main.scalar_one_or_none()
-    if main:
+    main_record = main_result.scalar_one_or_none()
+    if main_record:
         for field, value in result.items():
-            setattr(main, field, value)
-        main.total_weight = total_weight
-        if main.pack_spec:
+            setattr(main_record, field, value)
+        main_record.total_weight = total_weight
+        if main_record.pack_spec:
             try:
-                spec_kg = float(main.pack_spec.replace("kg", ""))
-                main.barrel_count = (
-                    int(main.total_weight / spec_kg)
-                    + (1 if main.total_weight % spec_kg > 0 else 0)
-                    if main.total_weight
+                spec_kg = float(main_record.pack_spec.replace("kg", ""))
+                main_record.barrel_count = (
+                    int(main_record.total_weight / spec_kg)
+                    + (1 if main_record.total_weight % spec_kg > 0 else 0)
+                    if main_record.total_weight
                     else None
                 )
             except Exception:
                 pass
-        main.status = 2  # 计算完成
+        main_record.status = 2  # 计算完成
         await session.commit()
 
     # 检查杂质超限警告
@@ -264,7 +273,7 @@ async def calculate_blending_impurities(
 async def full_list_qc(
     month: int | None = Query(None, ge=1, le=12),
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     """返回QC检验+投入明细的嵌套结构"""
     from sqlalchemy import extract
 
@@ -291,7 +300,7 @@ async def full_list_qc(
         inputs_rows = await session.execute(inputs_q)
         all_inputs = inputs_rows.scalars().all()
 
-        inputs_map: dict[str, list] = {}
+        inputs_map: dict[str, list[Any]] = {}
         for inp in all_inputs:
             d = {k: v for k, v in inp.__dict__.items() if not k.startswith("_")}
             inputs_map.setdefault(inp.qc_batch, []).append(d)
@@ -306,7 +315,7 @@ async def full_list_qc(
 
 # QC投入明细
 @router.get("/mc/qc-inputs/{qc_batch}", summary="QC投入明细列表")
-async def list_qc_inputs(qc_batch: str, session: AsyncSession = Depends(get_db)):
+async def list_qc_inputs(qc_batch: str, session: AsyncSession = Depends(get_db)) -> Any:
     query = select(QcInspectionInput).where(
         QcInspectionInput.is_deleted.is_(False), QcInspectionInput.qc_batch == qc_batch
     )
@@ -320,7 +329,9 @@ async def list_qc_inputs(qc_batch: str, session: AsyncSession = Depends(get_db))
 
 
 @router.post("/mc/qc-inputs", summary="添加QC投入明细")
-async def create_qc_input(data: dict, session: AsyncSession = Depends(get_db)):
+async def create_qc_input(
+    data: dict[str, Any], session: AsyncSession = Depends(get_db)
+) -> Any:
     record = QcInspectionInput(**data)
     session.add(record)
     await session.commit()
@@ -329,8 +340,8 @@ async def create_qc_input(data: dict, session: AsyncSession = Depends(get_db)):
 
 @router.put("/mc/qc-inputs/{record_id}", summary="更新QC投入明细")
 async def update_qc_input(
-    record_id: UUID, data: dict, session: AsyncSession = Depends(get_db)
-):
+    record_id: UUID, data: dict[str, Any], session: AsyncSession = Depends(get_db)
+) -> Any:
     record = await session.get(QcInspectionInput, record_id)
     if not record:
         return success_response(None, message="记录不存在", status_code=404)
@@ -341,7 +352,9 @@ async def update_qc_input(
 
 
 @router.delete("/mc/qc-inputs/{record_id}", summary="删除QC投入明细")
-async def delete_qc_input(record_id: UUID, session: AsyncSession = Depends(get_db)):
+async def delete_qc_input(
+    record_id: UUID, session: AsyncSession = Depends(get_db)
+) -> Any:
     record = await session.get(QcInspectionInput, record_id)
     if not record:
         return success_response(None, message="记录不存在", status_code=404)
@@ -355,7 +368,7 @@ async def list_qc(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     query = (
         select(QcInspection)
         .where(QcInspection.is_deleted.is_(False))
@@ -370,7 +383,9 @@ async def list_qc(
 
 
 @router.post("/mc/qc-inspections", summary="创建QC检验单")
-async def create_qc(data: dict, session: AsyncSession = Depends(get_db)):
+async def create_qc(
+    data: dict[str, Any], session: AsyncSession = Depends(get_db)
+) -> Any:
     # 转换字符串日期
     for field in ("input_date", "blend_date"):
         if field in data and data[field] and isinstance(data[field], str):
@@ -385,8 +400,8 @@ async def create_qc(data: dict, session: AsyncSession = Depends(get_db)):
 
 @router.put("/mc/qc-inspections/{record_id}", summary="更新QC检验单")
 async def update_qc(
-    record_id: UUID, data: dict, session: AsyncSession = Depends(get_db)
-):
+    record_id: UUID, data: dict[str, Any], session: AsyncSession = Depends(get_db)
+) -> Any:
     record = await session.get(QcInspection, record_id)
     if not record or record.is_deleted:
         return success_response(None, message="记录不存在", status_code=404)
@@ -403,7 +418,7 @@ async def update_qc(
 
 # QC检验明细
 @router.get("/mc/qc-inspections/{qc_id}/items", summary="QC检验明细")
-async def list_qc_items(qc_id: str, session: AsyncSession = Depends(get_db)):
+async def list_qc_items(qc_id: str, session: AsyncSession = Depends(get_db)) -> Any:
     query = select(QcInspectionItem).where(
         QcInspectionItem.is_deleted.is_(False), QcInspectionItem.inspection_id == qc_id
     )
@@ -412,7 +427,9 @@ async def list_qc_items(qc_id: str, session: AsyncSession = Depends(get_db)):
 
 
 @router.post("/mc/qc-inspection-items", summary="添加QC检验项目")
-async def create_qc_item(data: dict, session: AsyncSession = Depends(get_db)):
+async def create_qc_item(
+    data: dict[str, Any], session: AsyncSession = Depends(get_db)
+) -> Any:
     item = QcInspectionItem(**data)
     # 自动计算偏差
     if item.theory_value is not None and item.actual_value is not None:
@@ -430,7 +447,7 @@ async def create_qc_item(data: dict, session: AsyncSession = Depends(get_db)):
 
 
 @router.get("/mc/ba-records", summary="丁酯台账交叉表数据")
-async def get_ba_records(session: AsyncSession = Depends(get_db)):
+async def get_ba_records(session: AsyncSession = Depends(get_db)) -> Any:
     """返回丁酯交叉表数据：日期列、设备行、消耗/入库值矩阵"""
     records = (
         (

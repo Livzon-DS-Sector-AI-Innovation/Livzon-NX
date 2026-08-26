@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('next/headers', () => ({ cookies: mocks.cookies }))
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }))
 
-import { analyzeRegulatoryDocuments, markDocumentRead } from './regulatory-tracker'
+import { analyzeRegulatoryDocument, analyzeRegulatoryDocuments, manualSyncRegulatoryTracker, markDocumentRead } from './regulatory-tracker'
 
 describe('regulatory tracker server actions', () => {
   afterEach(() => {
@@ -49,5 +49,28 @@ describe('regulatory tracker server actions', () => {
       expect.objectContaining({ method: 'POST' }),
     )
     expect(mocks.revalidatePath).toHaveBeenCalledWith('/registration/regulation')
+  })
+
+  it('maps tracker transport failures and uses default sync windows', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => new Response('上游法规服务不可用', { status: 503, statusText: 'Unavailable' }))
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(markDocumentRead('doc-1')).rejects.toThrow('上游法规服务不可用')
+    await expect(analyzeRegulatoryDocument('doc-1')).rejects.toThrow('上游法规服务不可用')
+    await expect(analyzeRegulatoryDocuments()).rejects.toThrow('上游法规服务不可用')
+    await expect(manualSyncRegulatoryTracker()).rejects.toThrow('上游法规服务不可用')
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('recentDays=7'))).toBe(true)
+  })
+
+  it('handles empty, single-document and manual-sync success responses', async () => {
+    const fetchMock = vi.fn().mockImplementation(async (url: string) => {
+      if (url.includes('doc-empty')) return new Response(null, { status: 204 })
+      if (url.includes('/analyze')) return new Response(JSON.stringify({ data: { analyzed: true } }), { status: 200 })
+      return new Response(JSON.stringify({ data: { synced: 2, failed: 0 } }), { status: 200 })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(markDocumentRead('doc-empty')).resolves.toBeNull()
+    await expect(analyzeRegulatoryDocument('doc-2')).resolves.toEqual({ analyzed: true })
+    await expect(manualSyncRegulatoryTracker(14)).resolves.toEqual({ synced: 2, failed: 0 })
   })
 })

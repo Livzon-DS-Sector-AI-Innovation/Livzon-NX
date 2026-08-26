@@ -376,7 +376,7 @@ export async function deleteAnnualTrainingPlan(id: string) {
   return res.json()
 }
 
-export async function batchUpdatePlanItems(planId: string, data: { items: any[] }) {
+export async function batchUpdatePlanItems(planId: string, data: { items: unknown[] }) {
   const res = await authedFetch(`${API_BASE}/api/v1/hr/annual-training-plans/${planId}/items/batch`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -393,7 +393,7 @@ export async function importAnnualTrainingPlan(
   year: number,
   planLevel?: string,
   department?: string
-): Promise<{ code: number; message: string; data: any }> {
+): Promise<{ code: number; message: string; data: unknown }> {
   const formData = new FormData()
   formData.append('file', file)
 
@@ -433,7 +433,7 @@ export async function syncCandidateToFeishuAction(candidateId: string) {
   throw new Error('syncCandidateToFeishuAction: 功能尚未实现')
 }
 
-export async function updateCandidateAction(candidateId: string, data: any) {
+export async function updateCandidateAction(candidateId: string, data: unknown) {
   const res = await authedFetch(`${API_BASE}/api/v1/hr/candidates/${candidateId}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -572,7 +572,7 @@ export async function fetchAnnualTrainingPlanById(id: string): Promise<AnnualTra
   return res.json()
 }
 
-export async function fetchPlanItems(id: string): Promise<{ code: number; message: string; data: any[]; meta?: { total: number } }> {
+export async function fetchPlanItems(id: string): Promise<{ code: number; message: string; data: unknown[]; meta?: { total: number } }> {
   const res = await authedFetch(`${API_BASE}/api/v1/hr/annual-training-plans/${id}/items`, {
     cache: 'no-store',
   })
@@ -609,7 +609,7 @@ export async function syncDepartmentsFromFeishuAction(forceRefresh = true): Prom
   return res.json()
 }
 
-export async function getDepartmentSyncStatus(): Promise<{ code: number; message: string; data: { state: string; progress: string; result: any } }> {
+export async function getDepartmentSyncStatus(): Promise<{ code: number; message: string; data: { state: string; progress: string; result: unknown } }> {
   const res = await authedFetch(`${API_BASE}/api/v1/hr/departments/sync-status`, {
     cache: 'no-store',
   })
@@ -645,25 +645,25 @@ async function hrActionFetch<T>(url: string, options?: RequestInit): Promise<T |
   return result.data
 }
 
-export async function updateHrFeishuAppSettings(data: { app_id: string; app_secret: string; is_enabled: boolean }): Promise<any> {
+export async function updateHrFeishuAppSettings(data: { app_id: string; app_secret: string; is_enabled: boolean }): Promise<unknown> {
   return hrActionFetch(`${API_BASE}/api/v1/hr/feishu-settings/app`, { method: 'PUT', body: JSON.stringify(data) })
 }
 
-export async function testHrFeishuAppSettings(): Promise<any> {
+export async function testHrFeishuAppSettings(): Promise<unknown> {
   return hrActionFetch(`${API_BASE}/api/v1/hr/feishu-settings/app/test`, { method: 'POST' })
 }
 
-export async function updateHrFeishuEntitySetting(entityCode: string, data: any): Promise<any> {
+export async function updateHrFeishuEntitySetting(entityCode: string, data: unknown): Promise<unknown> {
   return hrActionFetch(`${API_BASE}/api/v1/hr/feishu-settings/entities/${entityCode}`, { method: 'PUT', body: JSON.stringify(data) })
 }
 
-export async function testHrFeishuEntitySetting(entityCode: string): Promise<any> {
+export async function testHrFeishuEntitySetting(entityCode: string): Promise<unknown> {
   return hrActionFetch(`${API_BASE}/api/v1/hr/feishu-settings/entities/${entityCode}/test`, { method: 'POST' })
 }
 
 // ─── 邮箱配置 ───
 
-export async function updateEmailConfig(data: Record<string, any>) {
+export async function updateEmailConfig(data: Record<string, unknown>) {
   const res = await authedFetch(`${API_BASE}/api/v1/hr/email/config`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -681,7 +681,7 @@ export async function testEmailConfig() {
 
 // ─── 提醒/审批配置 ───
 
-export async function updateReminderConfig(configId: string, data: any) {
+export async function updateReminderConfig(configId: string, data: unknown) {
   const res = await authedFetch(`${API_BASE}/api/v1/hr/hr-settings/reminders/${configId}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -692,7 +692,7 @@ export async function updateReminderConfig(configId: string, data: any) {
   return (await res.json()).data
 }
 
-export async function updateApprovalConfig(configId: string, data: any) {
+export async function updateApprovalConfig(configId: string, data: unknown) {
   const res = await authedFetch(`${API_BASE}/api/v1/hr/hr-settings/approvals/${configId}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -703,7 +703,7 @@ export async function updateApprovalConfig(configId: string, data: any) {
   return (await res.json()).data
 }
 
-export async function saveDeptRecipients(configId: string, data: Array<any>) {
+export async function saveDeptRecipients(configId: string, data: Array<unknown>) {
   const res = await authedFetch(`${API_BASE}/api/v1/hr/hr-settings/reminders/${configId}/dept-recipients`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -723,7 +723,7 @@ export async function deleteDeptRecipient(deptRecipientId: string) {
 
 // ─── 飞书联系人同步 ───
 
-export async function syncFeishuMembersAction(): Promise<{ code: number; message: string; data: any }> {
+export async function syncFeishuMembersAction(): Promise<{ code: number; message: string; data: unknown }> {
   const res = await authedFetch(`${API_BASE}/api/v1/hr/hr-settings/hr-members/sync`, {
     method: 'POST',
     cache: 'no-store',
@@ -732,7 +732,7 @@ export async function syncFeishuMembersAction(): Promise<{ code: number; message
   return res.json()
 }
 
-export async function getFeishuMembersSyncStatus(): Promise<{ code: number; message: string; data: { state: string; progress: string; result: any } }> {
+export async function getFeishuMembersSyncStatus(): Promise<{ code: number; message: string; data: { state: string; progress: string; result: unknown } }> {
   const res = await authedFetch(`${API_BASE}/api/v1/hr/hr-settings/hr-members/sync-status`, {
     cache: 'no-store',
   })
@@ -760,7 +760,7 @@ export async function fetchOrgTreeAction() {
 
 // ─── 招聘管理 Actions ───
 
-export async function createJobPosting(data: any) {
+export async function createJobPosting(data: unknown) {
   const res = await authedFetch(`${API_BASE}/api/v1/hr/jobs`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -793,7 +793,7 @@ export async function createOnboardingFromInterviewAction(candidateId: string) {
   return res.json()
 }
 
-export async function updateOnboardingAction(id: string, data: any) {
+export async function updateOnboardingAction(id: string, data: unknown) {
   const res = await authedFetch(`${API_BASE}/api/v1/hr/onboarding/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -803,7 +803,7 @@ export async function updateOnboardingAction(id: string, data: any) {
   return res.json()
 }
 
-export async function createEmployeePublicAction(data: Record<string, any>) {
+export async function createEmployeePublicAction(data: Record<string, unknown>) {
   const res = await authedFetch(`${API_BASE}/api/v1/hr/employees/public-create`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -888,7 +888,7 @@ export async function rejectPositionTransferNode(id: string, opinion: string) {
   return res.json()
 }
 
-export async function createPositionTransfer(data: any) {
+export async function createPositionTransfer(data: unknown) {
   const res = await authedFetch(`${API_BASE}/api/v1/hr/position-transfers`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -899,7 +899,7 @@ export async function createPositionTransfer(data: any) {
   return res.json()
 }
 
-export async function updatePositionTransfer(id: string, data: any) {
+export async function updatePositionTransfer(id: string, data: unknown) {
   const res = await authedFetch(`${API_BASE}/api/v1/hr/position-transfers/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -1001,7 +1001,7 @@ export async function generateOffboardingCertificateAction(
   }
 }
 
-export async function uploadOffboardingTemplateAction(formData: FormData): Promise<{ code: number; message: string; data: any }> {
+export async function uploadOffboardingTemplateAction(formData: FormData): Promise<{ code: number; message: string; data: unknown }> {
   const res = await authedFetch(`${API_BASE}/api/v1/hr/hr-settings/offboarding-template`, {
     method: 'POST',
     body: formData,
@@ -1303,7 +1303,7 @@ export async function syncContractsFromFeishu(): Promise<{ code: number; message
 export async function pushContractExpiringAction(
   startDate: string,
   endDate: string
-): Promise<{ code: number; message: string; data: any }> {
+): Promise<{ code: number; message: string; data: unknown }> {
   const res = await authedFetch(`${API_BASE}/api/v1/hr/employees/contract-expiring/push-notify`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1314,7 +1314,7 @@ export async function pushContractExpiringAction(
   return res.json()
 }
 
-export async function getContractPushStatusAction(): Promise<{ code: number; data: any }> {
+export async function getContractPushStatusAction(): Promise<{ code: number; data: unknown }> {
   const res = await authedFetch(`${API_BASE}/api/v1/hr/employees/contract-expiring/push-status`, {
     cache: 'no-store',
   })
@@ -1322,7 +1322,7 @@ export async function getContractPushStatusAction(): Promise<{ code: number; dat
   return res.json()
 }
 
-export async function saveContractTemplateAction(payload: Record<string, any>): Promise<{ code: number; message: string }> {
+export async function saveContractTemplateAction(payload: Record<string, unknown>): Promise<{ code: number; message: string }> {
   const res = await authedFetch(`${API_BASE}/api/v1/hr/employees/contract-expiring/template`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1345,8 +1345,8 @@ export async function deleteContractAction(id: string): Promise<{ code: number; 
 
 export async function updateContractAction(
   id: string,
-  data: Record<string, any>
-): Promise<{ code: number; message: string; data: any }> {
+  data: Record<string, unknown>
+): Promise<{ code: number; message: string; data: unknown }> {
   const res = await authedFetch(`${API_BASE}/api/v1/hr/contracts/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -1362,7 +1362,7 @@ export async function renewContractAction(
   id: string,
   startDate: string,
   endDate: string
-): Promise<{ code: number; message: string; data: any }> {
+): Promise<{ code: number; message: string; data: unknown }> {
   const res = await authedFetch(`${API_BASE}/api/v1/hr/contracts/${id}/renew`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1383,7 +1383,7 @@ export async function renewContractAction(
 
 export async function createTrainer(
   data: TrainerCreateInput
-): Promise<{ code: number; message: string; data: any }> {
+): Promise<{ code: number; message: string; data: unknown }> {
   const res = await authedFetch(`${API_BASE}/api/v1/hr/trainers`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1398,7 +1398,7 @@ export async function createTrainer(
 export async function updateTrainer(
   id: string,
   data: TrainerUpdateInput
-): Promise<{ code: number; message: string; data: any }> {
+): Promise<{ code: number; message: string; data: unknown }> {
   const res = await authedFetch(`${API_BASE}/api/v1/hr/trainers/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -1424,7 +1424,7 @@ export async function deleteTrainer(
 
 export async function importTrainers(
   formData: FormData
-): Promise<{ code: number; message: string; data: any }> {
+): Promise<{ code: number; message: string; data: unknown }> {
   const res = await authedFetch(`${API_BASE}/api/v1/hr/trainers/import`, {
     method: 'POST',
     body: formData,
@@ -1442,7 +1442,7 @@ export async function importTrainers(
 
 export async function createTrainingEvaluation(
   data: TrainingEvaluationCreateInput
-): Promise<{ code: number; message: string; data: any }> {
+): Promise<{ code: number; message: string; data: unknown }> {
   const res = await authedFetch(`${API_BASE}/api/v1/hr/training-evaluations`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1457,7 +1457,7 @@ export async function createTrainingEvaluation(
 export async function updateTrainingEvaluation(
   id: string,
   data: TrainingEvaluationUpdateInput
-): Promise<{ code: number; message: string; data: any }> {
+): Promise<{ code: number; message: string; data: unknown }> {
   const res = await authedFetch(`${API_BASE}/api/v1/hr/training-evaluations/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -1485,7 +1485,7 @@ export async function deleteTrainingEvaluation(
 
 export async function saveTrainingPersonnelConfig(
   data: components['schemas']['TrainingPersonnelConfigCreate']
-): Promise<{ code: number; message: string; data: any }> {
+): Promise<{ code: number; message: string; data: unknown }> {
   const res = await authedFetch(`${API_BASE}/api/v1/hr/training-personnel-configs`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1512,7 +1512,7 @@ export async function deleteTrainingPersonnelConfig(
 
 export async function createPositionTrainingList(
   data: PositionTrainingListCreateInput
-): Promise<{ code: number; message: string; data: any }> {
+): Promise<{ code: number; message: string; data: unknown }> {
   const res = await authedFetch(`${API_BASE}/api/v1/hr/position-training-lists`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1527,7 +1527,7 @@ export async function createPositionTrainingList(
 export async function updatePositionTrainingList(
   id: string,
   data: PositionTrainingListUpdateInput
-): Promise<{ code: number; message: string; data: any }> {
+): Promise<{ code: number; message: string; data: unknown }> {
   const res = await authedFetch(`${API_BASE}/api/v1/hr/position-training-lists/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -1563,7 +1563,7 @@ export async function batchUpdatePositionTrainingListItems(
     assessment_method?: string
     remarks?: string
   }>
-): Promise<{ code: number; message: string; data: any }> {
+): Promise<{ code: number; message: string; data: unknown }> {
   const res = await authedFetch(`${API_BASE}/api/v1/hr/position-training-lists/${listId}/items/batch`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -1577,7 +1577,7 @@ export async function batchUpdatePositionTrainingListItems(
 
 export async function importPositionTrainingLists(
   file: File,
-): Promise<{ code: number; message: string; data: any }> {
+): Promise<{ code: number; message: string; data: unknown }> {
   const formData = new FormData()
   formData.append('file', file)
   const res = await authedFetch(`${API_BASE}/api/v1/hr/position-training-lists/import`, {
@@ -1595,7 +1595,7 @@ export async function importPositionTrainingLists(
 
 export async function clearPositionTrainingListsByDept(
   department: string
-): Promise<{ code: number; message: string; data: any }> {
+): Promise<{ code: number; message: string; data: unknown }> {
   const res = await authedFetch(
     `${API_BASE}/api/v1/hr/position-training-lists/by-dept/clear?department=${encodeURIComponent(department)}`,
     { method: 'DELETE', cache: 'no-store' },
@@ -1612,7 +1612,7 @@ export async function clearPositionTrainingListsByDept(
 
 export async function createPlanTrackingRecord(
   data: PlanTrackingRecordCreateInput
-): Promise<{ code: number; message: string; data: any }> {
+): Promise<{ code: number; message: string; data: unknown }> {
   const res = await authedFetch(`${API_BASE}/api/v1/hr/plan-tracking`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1627,7 +1627,7 @@ export async function createPlanTrackingRecord(
 export async function updatePlanTrackingRecord(
   id: string,
   data: PlanTrackingRecordUpdateInput
-): Promise<{ code: number; message: string; data: any }> {
+): Promise<{ code: number; message: string; data: unknown }> {
   const res = await authedFetch(`${API_BASE}/api/v1/hr/plan-tracking/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -1655,7 +1655,7 @@ export async function deletePlanTrackingRecord(
 
 export async function updateEsgTrainingRecord(
   id: string,
-  data: Record<string, any>
+  data: Record<string, unknown>
 ): Promise<void> {
   const res = await authedFetch(`${API_BASE}/api/v1/hr/esg-training-records/${id}`, {
     method: 'PUT',
@@ -1703,7 +1703,7 @@ export async function syncEsgFromLedger(department: string): Promise<{
 export async function importTrainingLedgerByDept(
   file: File,
   department: string
-): Promise<{ code: number; message: string; data: any }> {
+): Promise<{ code: number; message: string; data: unknown }> {
   const formData = new FormData()
   formData.append('file', file)
   const res = await authedFetch(
@@ -1720,7 +1720,7 @@ export async function importTrainingLedgerByDept(
 export async function importEsgRecordsByDept(
   file: File,
   department: string
-): Promise<{ code: number; message: string; data: any }> {
+): Promise<{ code: number; message: string; data: unknown }> {
   const formData = new FormData()
   formData.append('file', file)
   const res = await authedFetch(
@@ -1761,7 +1761,7 @@ export async function confirmTrainingImport(
   file: File,
   department: string,
   sheets: components['schemas']['ImportSheetConfirm'][]
-): Promise<{ code: number; message: string; data: any }> {
+): Promise<{ code: number; message: string; data: unknown }> {
   const formData = new FormData()
   formData.append('file', file)
   formData.append('department', department)
@@ -1822,7 +1822,7 @@ export async function confirmExamScores(
 export async function uploadPlanAttachments(
   planId: string,
   files: File[]
-): Promise<{ code: number; message: string; data: any }> {
+): Promise<{ code: number; message: string; data: unknown }> {
   const formData = new FormData()
   for (const f of files) {
     formData.append('files', f)
@@ -1978,7 +1978,7 @@ export async function markPlanAttachmentsLedgerImported(
 
 export async function generateNewEmployeeTrainingPlan(
   data: NewEmployeeTrainingPlanGenerateInput
-): Promise<{ code: number; message: string; data: any }> {
+): Promise<{ code: number; message: string; data: unknown }> {
   const res = await authedFetch(`${API_BASE}/api/v1/hr/new-employee-training/plans/generate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1995,7 +1995,7 @@ export async function generateNewEmployeeTrainingPlan(
 
 export async function createManualNewEmployeeTrainingPlan(
   data: NewEmployeeTrainingManualAddInput
-): Promise<{ code: number; message: string; data: any }> {
+): Promise<{ code: number; message: string; data: unknown }> {
   const res = await authedFetch(`${API_BASE}/api/v1/hr/new-employee-training/plans/manual-add`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -2013,7 +2013,7 @@ export async function createManualNewEmployeeTrainingPlan(
 export async function updateNewEmployeeTrainingPlan(
   planId: string,
   data: NewEmployeeTrainingUpdateInput
-): Promise<{ code: number; message: string; data: any }> {
+): Promise<{ code: number; message: string; data: unknown }> {
   const res = await authedFetch(`${API_BASE}/api/v1/hr/new-employee-training/plans/${planId}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -2031,7 +2031,7 @@ export async function updateNewEmployeeTrainingPlan(
 export async function addNewEmployeeTrainingItem(
   planId: string,
   data: NewEmployeeTrainingItemAddInput
-): Promise<{ code: number; message: string; data: any }> {
+): Promise<{ code: number; message: string; data: unknown }> {
   const res = await authedFetch(`${API_BASE}/api/v1/hr/new-employee-training/plans/${planId}/items`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -2049,7 +2049,7 @@ export async function addNewEmployeeTrainingItem(
 export async function startNewEmployeeTraining(
   planId: string,
   data: NewEmployeeTrainingStartInput
-): Promise<{ code: number; message: string; data: any }> {
+): Promise<{ code: number; message: string; data: unknown }> {
   const res = await authedFetch(
     `${API_BASE}/api/v1/hr/new-employee-training/plans/${planId}/start-training`,
     {
@@ -2086,7 +2086,7 @@ export async function deleteNewEmployeeTrainingPlan(
 export async function addNewEmployeeTrainingTrainees(
   planId: string,
   data: { item_ids: string[]; additional_trainees: { name: string; department: string }[] }
-): Promise<{ code: number; message: string; data: any }> {
+): Promise<{ code: number; message: string; data: unknown }> {
   const res = await authedFetch(
     `${API_BASE}/api/v1/hr/new-employee-training/plans/${planId}/start-training`,
     {
@@ -2107,7 +2107,7 @@ export async function addNewEmployeeTrainingTrainees(
 
 export async function createPositionTrainingMappingAction(
   data: PositionTrainingMappingCreateInput
-): Promise<{ code: number; message: string; data: any }> {
+): Promise<{ code: number; message: string; data: unknown }> {
   const res = await authedFetch(`${API_BASE}/api/v1/hr/position-training-mappings`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -2126,7 +2126,7 @@ export async function createPositionTrainingMappingAction(
 
 export async function sendOfferEmailAction(
   data: { candidate_id: string; to_email: string; subject: string; body: string }
-): Promise<{ code: number; message: string; data?: any }> {
+): Promise<{ code: number; message: string; data?: unknown }> {
   const res = await authedFetch(`${API_BASE}/api/v1/hr/email/send-offer`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -2143,7 +2143,7 @@ export async function sendOfferEmailAction(
 export async function sendCandidateNoticeAction(
   candidateId: string,
   sceneCode: string
-): Promise<{ code: number; message: string; data?: any }> {
+): Promise<{ code: number; message: string; data?: unknown }> {
   const res = await authedFetch(`${API_BASE}/api/v1/hr/candidates/${candidateId}/send-notice`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -2171,7 +2171,7 @@ export async function browseFolderAction(): Promise<{ code: number; message: str
 
 export async function uploadOfferTemplateAction(
   formData: FormData
-): Promise<{ code: number; message: string; data?: any }> {
+): Promise<{ code: number; message: string; data?: unknown }> {
   const res = await authedFetch(`${API_BASE}/api/v1/hr/email/upload-offer-template`, {
     method: 'POST',
     body: formData,
@@ -2189,7 +2189,7 @@ export async function uploadOfferTemplateAction(
 export async function updateContractSignStatusAction(
   recordId: string,
   signedStatus: '已签署' | '拒签'
-): Promise<{ code: number; message: string; data?: any }> {
+): Promise<{ code: number; message: string; data?: unknown }> {
   const res = await authedFetch(`${API_BASE}/api/v1/hr/contracts/${recordId}/sign-status`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },

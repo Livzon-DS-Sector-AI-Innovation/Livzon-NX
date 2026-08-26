@@ -1,6 +1,7 @@
 """MC 霉酚酸 - 批次血链表 API"""
 
 import logging
+from typing import Any
 
 from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -15,7 +16,8 @@ from app.shared.module_registry import MODULES_BY_CODE
 logger = logging.getLogger(__name__)
 router = create_module_router(MODULES_BY_CODE["production"])
 
-def fmt_val(v):
+
+def fmt_val(v: Any) -> Any:
     return float(v) if v is not None else 0.0
 
 
@@ -100,7 +102,7 @@ def _normalize_batch(bn: str) -> str:
     return _FIS_RE.sub("", bn).strip()
 
 
-async def _resolve_batch(stage, batch_no, session):
+async def _resolve_batch(stage: Any, batch_no: Any, session: Any) -> Any:
     norm = _normalize_batch(batch_no)
     if stage in ("na_batch", "crude_product"):
         row = (
@@ -180,7 +182,7 @@ _DOWNSTREAM_SQL = """
 """
 
 
-def _fmt_detail(item):
+def _fmt_detail(item: Any) -> Any:
     p = []
     yr = item.get("y") or item.get("yield_rate")
     if yr and float(yr) > 0:
@@ -197,14 +199,14 @@ async def lineage_trace(
     stage: str = Query(...),
     include_siblings: bool = Query(False),
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     if stage not in STAGE_LABELS:
         raise HTTPException(400, f"Invalid: {stage}")
     real_stage, real_batch_no = await _resolve_batch(stage, batch_no, session)
     if real_stage is None:
         raise HTTPException(404, f"Not found: {batch_no}")
 
-    async def rd(stg, bn):
+    async def rd(stg: Any, bn: Any) -> Any:
         p = []
         yr = qty = None
         if stg in ("sub_tank", "extraction", "refinement"):
@@ -407,7 +409,9 @@ async def lineage_trace(
         fb = qc_fm[real_batch_no]
         td = (td + ", " if td else "") + f"前台:{fb}"
 
-    def mk_node(stg, bn, detail, y, q, sib=False, ct=""):
+    def mk_node(
+        stg: Any, bn: Any, detail: Any, y: Any, q: Any, sib: Any = False, ct: Any = ""
+    ) -> Any:
         d = detail
         if stg == "qc" and bn in qc_fm and "前台" not in (d or ""):
             d = (d + ", " if d else "") + f"前台:{qc_fm[bn]}"
@@ -424,7 +428,7 @@ async def lineage_trace(
         )
 
     # --- aggregate ---
-    stage_nodes = {s: [] for s in STAGE_LABELS}
+    stage_nodes: dict[str, list[LineageNode]] = {s: [] for s in STAGE_LABELS}
     for layer in reversed(upstream_layers):
         for it in layer:
             stage_nodes[it["stage"]].append(
@@ -487,7 +491,7 @@ async def lineage_trace(
 
 
 @router.get("/mc/lineage/yield-distribution", summary="收率分布")
-async def lineage_yield_distribution(session: AsyncSession = Depends(get_db)):
+async def lineage_yield_distribution(session: AsyncSession = Depends(get_db)) -> Any:
     rows = await session.execute(
         text("""
         SELECT stage, COUNT(*) AS n,
@@ -538,7 +542,7 @@ async def lineage_yield_distribution(session: AsyncSession = Depends(get_db)):
 
 
 @router.get("/mc/lineage/material-reuse", summary="物料复用")
-async def lineage_material_reuse(session: AsyncSession = Depends(get_db)):
+async def lineage_material_reuse(session: AsyncSession = Depends(get_db)) -> Any:
     rows = await session.execute(
         text("""
         SELECT upstream_type, upstream_batch, COUNT(*) AS usage_count,
@@ -561,7 +565,7 @@ async def lineage_material_reuse(session: AsyncSession = Depends(get_db)):
 
 
 @router.get("/mc/lineage/coverage", summary="覆盖完整性")
-async def lineage_coverage(session: AsyncSession = Depends(get_db)):
+async def lineage_coverage(session: AsyncSession = Depends(get_db)) -> Any:
     seg_rows = await session.execute(
         text("""
         SELECT upstream_type || ' -> ' || downstream_type AS seg, COUNT(*) AS n

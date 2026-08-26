@@ -5,7 +5,7 @@ import tempfile
 from datetime import date
 from pathlib import Path
 
-import fitz  # type: ignore[import-untyped]  # PyMuPDF exposes runtime module without stubs
+import fitz  # type: ignore[import-not-found]  # PyMuPDF exposes runtime module without stubs
 
 logger = logging.getLogger(__name__)
 

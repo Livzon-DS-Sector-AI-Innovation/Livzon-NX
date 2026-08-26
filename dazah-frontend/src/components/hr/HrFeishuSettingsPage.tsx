@@ -301,7 +301,7 @@ export function HrFeishuSettingsPage() {
   const handleTestApp = useCallback(async () => {
     try {
       setAppTesting(true)
-      const result = await testHrFeishuAppSettings()
+      const result = await testHrFeishuAppSettings() as { success?: boolean; message?: string }
       if (result?.success) {
         setResultNotice({ type: 'success', title: '飞书应用连接测试成功', description: formatHrFeishuTestSummary(result) })
         message.success(formatHrFeishuTestSummary(result))
@@ -329,7 +329,7 @@ export function HrFeishuSettingsPage() {
           ...draft,
           base_table_name: draft.base_table_name?.trim() || '',
           base_table_id: draft.base_table_id?.trim() || '',
-        })
+        }) as { entity_name?: string } | null
         if (!result) return
         setResultNotice({ type: 'success', title: `${result.entity_name} 配置已保存` })
         message.success(`${result.entity_name} 配置已保存`)
@@ -349,7 +349,7 @@ export function HrFeishuSettingsPage() {
     async (entityCode: string, entityName: string) => {
       try {
         setRowTesting((current) => ({ ...current, [entityCode]: true }))
-        const result = await testHrFeishuEntitySetting(entityCode)
+        const result = await testHrFeishuEntitySetting(entityCode) as { success?: boolean; message?: string }
         if (result?.success) {
           setResultNotice({ type: 'success', title: `${entityName} 连接测试成功`, description: formatHrFeishuTestSummary(result) })
           message.success(formatHrFeishuTestSummary(result))
@@ -449,7 +449,7 @@ export function HrFeishuSettingsPage() {
     [entityDrafts, message]
   )
 
-  const handleEmailSave = async (values: any) => {
+  const handleEmailSave = async (values: Record<string, unknown>) => {
     setEmailSaving(true)
     try {
       // 确保 fetch_interval_hours 是数字类型

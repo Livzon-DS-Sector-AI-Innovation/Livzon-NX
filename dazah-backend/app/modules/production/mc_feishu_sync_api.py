@@ -2,9 +2,9 @@
 
 提供从飞书电子表格同步 MC 台账数据的 HTTP 接口。
 """
-
 import logging
 from datetime import UTC, datetime
+from typing import Any
 
 from fastapi import Depends
 from pydantic import BaseModel, Field
@@ -34,7 +34,7 @@ class SyncTriggerRequest(BaseModel):
 async def trigger_mc_sync(
     body: SyncTriggerRequest,
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     """触发从飞书电子表格 "2026年生产台账-mc" 同步数据到本地数据库。
 
     支持的模块:
@@ -92,7 +92,7 @@ async def trigger_mc_sync(
 
 
 @router.get("/mc/sync/status", summary="查看MC飞书同步状态")
-async def get_mc_sync_status():
+async def get_mc_sync_status() -> Any:
     """返回各模块的上次同步时间"""
     return success_response(
         {

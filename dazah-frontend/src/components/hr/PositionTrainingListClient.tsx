@@ -215,8 +215,15 @@ export default function PositionTrainingListClient() {
         await createPositionTrainingList({
           department: department || '',
           position: '—',
-          items: [newItem],
-        } as any)
+          items: [{
+            level: newItem.level,
+            sort_order: newItem.sort_order,
+            textbook_name: newItem.textbook_name,
+            textbook_code: newItem.textbook_code,
+            assessment_method: newItem.assessment_method,
+            remarks: newItem.remarks,
+          }],
+        })
         message.success('已创建清单并添加明细')
         // 新部门首次入库后刷新部门列表
         loadDepartments()
@@ -235,7 +242,7 @@ export default function PositionTrainingListClient() {
     setImportLoading(true)
     try {
       const result = await importPositionTrainingLists(file)
-      const data = result.data || {}
+      const data = (result.data || {}) as { department?: string; imported?: number; skipped?: number }
       const importedDept = data.department
       const detail = `导入${data.imported || 0}条，跳过${data.skipped || 0}条重复`
       message.success(`${result.message || '导入成功'}（${detail}）`)

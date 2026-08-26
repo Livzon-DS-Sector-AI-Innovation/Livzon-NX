@@ -4,17 +4,33 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 
 interface SyncPollingOptions {
   /** Action that kicks off the sync (POST). Returns a response that may contain data.state for immediate completion. */
-  syncAction: () => Promise<any>
+  syncAction: () => Promise<unknown>
   /** Action that checks sync status. Called every `interval` ms until completion, failure, or timeout. */
-  pollAction: () => Promise<any>
+  pollAction: () => Promise<unknown>
   /** Maximum number of poll attempts (default 90). Set to 0 for unlimited. */
   maxPolls?: number
   /** Polling interval in milliseconds (default 2000). */
   interval?: number
   /** Called on successful completion with the status message and optional result data. */
-  onSuccess?: (message: string, result?: any) => void
+  onSuccess?: (message: string, result?: unknown) => void
   /** Called on failure or timeout with an error message. */
   onError?: (message: string) => void
+}
+
+interface SyncStatusData {
+  status?: string
+  state?: string
+  progress?: string
+  message?: string
+  result?: unknown
+}
+
+function toSyncResponse(value: unknown): { data?: SyncStatusData } {
+  if (typeof value !== 'object' || value === null) return {}
+  const data = (value as { data?: unknown }).data
+  return typeof data === 'object' && data !== null
+    ? { data: data as SyncStatusData }
+    : {}
 }
 
 /**
@@ -63,7 +79,7 @@ export function useSyncPolling(options: SyncPollingOptions) {
         return
       }
       try {
-        const statusRes = await pollAction()
+        const statusRes = toSyncResponse(await pollAction())
         const status = statusRes.data?.status || statusRes.data?.state
 
         if (status === 'completed' || status === 'success') {
@@ -87,7 +103,8 @@ export function useSyncPolling(options: SyncPollingOptions) {
     }
 
     syncAction()
-      .then((res) => {
+      .then((value) => {
+        const res = toSyncResponse(value)
         if (cancelledRef.current) return
         const status = res.data?.status || res.data?.state
         // Check for immediate completion/failure (e.g. syncAction returns final status directly)
@@ -104,9 +121,9 @@ export function useSyncPolling(options: SyncPollingOptions) {
         // Status is 'running' or undefined — start polling
         timerRef.current = setTimeout(poll, interval)
       })
-      .catch((err: any) => {
+      .catch((err: unknown) => {
         if (cancelledRef.current) return
-        handleError(err.message || '同步失败')
+        handleError(err instanceof Error ? err.message : '同步失败')
       })
   }, [clearTimer])
 

@@ -1,9 +1,10 @@
 """非密事件与运行偏差 ORM model."""
 
 from datetime import datetime
+from uuid import UUID
 
 from sqlalchemy import DateTime, ForeignKey, Index, String, Text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID as SQLUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.shared.base_model import BaseModel
@@ -56,13 +57,13 @@ class NCEBatchLink(BaseModel):
     )
 
     nce_id: Mapped[UUID] = mapped_column(
-        UUID(as_uuid=True),
+        SQLUUID(as_uuid=True),
         ForeignKey("production.non_conforming_events.id"),
         nullable=False,
         comment="非密事件ID",
     )
     batch_id: Mapped[UUID] = mapped_column(
-        UUID(as_uuid=True),
+        SQLUUID(as_uuid=True),
         ForeignKey("production.fermentation_records.id"),
         nullable=False,
         comment="发酵批次ID",

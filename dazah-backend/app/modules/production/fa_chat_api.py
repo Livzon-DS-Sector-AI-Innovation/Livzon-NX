@@ -3,13 +3,15 @@
 POST /fa/chat/send — 发送消息，SSE 流式返回（自动注入批次数据）
 GET  /fa/chat/history — 获取会话历史消息
 """
-
 import json
 import logging
+from collections.abc import AsyncIterator
+from typing import Any, Literal, cast
 
 from fastapi import Depends, Query, Request
 from fastapi.responses import StreamingResponse
 from openai import AsyncOpenAI
+from openai.types.chat import ChatCompletionMessageParam
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,12 +39,12 @@ FA_CHAT_SYSTEM_PROMPT = """你是丽珠制药 203 车间的 FA（L-苯丙氨酸�
 
 
 def _build_chat_prompt(
-    history: list[dict],
+    history: list[dict[str, Any]],
     user_msg: str,
     batch_no: str,
     stage: str,
     trace_context: str,
-) -> list[dict]:
+) -> list[ChatCompletionMessageParam]:
     """构建 LLM 消息列表，注入批次数据"""
     stage_label = FA_STAGE_LABELS.get(stage, stage)
     system = FA_CHAT_SYSTEM_PROMPT
@@ -50,12 +52,18 @@ def _build_chat_prompt(
     if batch_no and trace_context:
         system += f"\n\n当前关注批次: {batch_no}（{stage_label}）\n{trace_context}"
 
-    messages: list[dict] = [{"role": "system", "content": system}]
+    messages: list[ChatCompletionMessageParam] = [
+        {"role": "system", "content": system}
+    ]
 
     recent = [h for h in history if h.get("role") in ("user", "assistant")][-20:]
     for h in recent:
         content = h.get("llm_response") or h.get("summary", "")
-        messages.append({"role": h["role"], "content": content[:2000]})
+        role = cast(Literal["user", "assistant"], h["role"])
+        if role == "user":
+            messages.append({"role": "user", "content": str(content)[:2000]})
+        else:
+            messages.append({"role": "assistant", "content": str(content)[:2000]})
 
     messages.append({"role": "user", "content": user_msg})
     return messages
@@ -290,7 +298,9 @@ async def _gather_fa_context(batch_no: str, stage: str, session: AsyncSession) -
 
 
 @router.post("/fa/chat/send", summary="发送对话消息（SSE流式）")
-async def fa_chat_send(request: Request, session: AsyncSession = Depends(get_db)):
+async def fa_chat_send(
+    request: Request, session: AsyncSession = Depends(get_db)
+) -> Any:
     """发送消息，返回 SSE 流"""
     body = await request.json()
     sid = body.get("session_id", "").strip()
@@ -344,7 +354,7 @@ async def fa_chat_send(request: Request, session: AsyncSession = Depends(get_db)
     )
 
     # 5. SSE 流
-    async def generate():
+    async def generate() -> AsyncIterator[Any]:
         full_text = ""
         try:
             cfg = await get_config("text")
@@ -410,7 +420,7 @@ async def fa_chat_send(request: Request, session: AsyncSession = Depends(get_db)
 async def fa_chat_history(
     session_id: str = Query(...),
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     """获取指定会话的全部消息"""
     result = await session.execute(
         select(AiAnalysis)
@@ -419,9 +429,9 @@ async def fa_chat_history(
     )
     rows = result.scalars().all()
 
-    messages = []
+    messages: list[dict[str, Any]] = []
     for r in rows:
-        content = r.llm_response
+        content: Any = r.llm_response
         if r.role == "system":
             content = {
                 "summary": r.summary,

@@ -1,4 +1,5 @@
 """Production Feishu sync models."""
+from typing import Any
 
 from sqlalchemy import Boolean, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
@@ -36,7 +37,7 @@ class ProductionFeishuConfig(BaseModel):
         server_default="production_plan",
         comment="同步目标: production_plan / fermentation_record / batch / production_record / material_balance",  # noqa: E501
     )
-    field_mapping: Mapped[dict | None] = mapped_column(
+    field_mapping: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB,
         nullable=True,
         comment="自动发现的字段映射 {feishu_field_id: {name, type, db_column}}",

@@ -1,6 +1,6 @@
 """二次重结晶脱色 API"""
-
 from datetime import datetime as dt
+from typing import Any
 from uuid import UUID
 
 from fastapi import Depends, Query
@@ -70,7 +70,7 @@ async def _list(
     s: str | None = Query(None, alias="batch_no"),
     workshop: str = Query("203"),
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     q = select(Recrystallize).where(
         Recrystallize.is_deleted.is_(False), Recrystallize.workshop == workshop
     )
@@ -88,7 +88,7 @@ async def _list(
 
 
 @router.post("/recrystallize", summary="创建二次重结晶脱色")
-async def _create(d: CD, session: AsyncSession = Depends(get_db)):
+async def _create(d: CD, session: AsyncSession = Depends(get_db)) -> Any:
     r = Recrystallize(**d.model_dump())
     session.add(r)
     await session.flush()
@@ -98,7 +98,7 @@ async def _create(d: CD, session: AsyncSession = Depends(get_db)):
 
 
 @router.put("/recrystallize/{rid}", summary="更新二次重结晶脱色")
-async def _update(rid: UUID, d: CD, session: AsyncSession = Depends(get_db)):
+async def _update(rid: UUID, d: CD, session: AsyncSession = Depends(get_db)) -> Any:
     r = await session.get(Recrystallize, rid)
     if not r or r.is_deleted:
         return success_response(None, message="记录不存在", status_code=404)
@@ -109,7 +109,7 @@ async def _update(rid: UUID, d: CD, session: AsyncSession = Depends(get_db)):
 
 
 @router.delete("/recrystallize/{rid}", summary="删除二次重结晶脱色")
-async def _delete(rid: UUID, session: AsyncSession = Depends(get_db)):
+async def _delete(rid: UUID, session: AsyncSession = Depends(get_db)) -> Any:
     r = await session.get(Recrystallize, rid)
     if not r:
         return success_response(None, message="记录不存在", status_code=404)

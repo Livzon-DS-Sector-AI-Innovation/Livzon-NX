@@ -12,7 +12,7 @@ import OralExamSheetClient from './OralExamSheetClient'
 import PracticalExamSheetClient from './PracticalExamSheetClient'
 import AiWrittenExamClient from './AiWrittenExamClient'
 import TrainingAttachmentClient from './TrainingAttachmentClient'
-import type { TrainingSessionData, TrainingDocExporter, AnnualTrainingPlan, AnnualTrainingPlanItem, TrainingPersonnelItem, PlanAttachmentSection } from '@/types/hr'
+import type { TrainingSessionData, TrainingDocExporter, AnnualTrainingPlan, AnnualTrainingPlanItem, TrainingPersonnelItem, PlanAttachmentSection, AiWrittenExamPayload } from '@/types/hr'
 import {
   fetchAnnualTrainingPlans,
   fetchPlanItems,
@@ -32,8 +32,14 @@ import {
 } from '@/actions/hr'
 import { downloadZip } from '@/lib/download'
 import { with201SubDepts, unify201Dept, DEPT_201_MC, DEPT_201_DR, ensureDeptMappings, useDeptMappings } from './trainingDept'
+import type { OralExamPayload } from './OralExamSheetClient'
+import type { PracticalExamPayload } from './PracticalExamSheetClient'
 
 const CURRENT_YEAR = new Date().getFullYear()
+
+type TrainingAttachmentPayload = {
+  items: { name: string; code: string | null }[]
+}
 
 // ── 培训类别自动识别（严格按桌面《培训类别.xlsx》八分类映射，未列出的不识别） ──
 // 判定优先级：
@@ -56,7 +62,7 @@ const TRAINING_TYPE_RULES: { type: string; keywords: string[] }[] = [
 // 文件编号模式：SOP/SMP/STP/KP/QP/QS 等文件代码 + 编号段（如 SOP-PM-106/03、KP-SC-MV-001/07）
 const FILE_CODE_RE = /(?:SOP|SMP|STP|KP|QP|QS)[-–—－]?[A-Z0-9]{1,4}(?:[-–—－][A-Z0-9]{1,4})+(?:\/\d{1,3})?/i
 
-function matchTrainingType(topic: string, content: string): string | undefined {
+export function matchTrainingType(topic: string, content: string): string | undefined {
   const fullText = `${topic || ''} ${content || ''}`
   // ① 文件编号优先：含文件编号即管理类
   if (FILE_CODE_RE.test(fullText)) return '管理类'
@@ -79,7 +85,7 @@ const DRUG_CATEGORY_RULES: { category: string; keywords: string[] }[] = [
   { category: '人药', keywords: ['ICH', 'GMP', '药品'] },
 ]
 
-function matchDrugCategory(topic: string, content: string): string | undefined {
+export function matchDrugCategory(topic: string, content: string): string | undefined {
   const text = `${topic || ''} ${content || ''}`.toUpperCase()
   for (const { category, keywords } of DRUG_CATEGORY_RULES) {
     if (keywords.some((k) => text.includes(k.toUpperCase()))) return category
@@ -88,7 +94,7 @@ function matchDrugCategory(topic: string, content: string): string | undefined {
 }
 
 // ── 签到表培训题目格式化：选中 ≤2 份显示全部；>2 份只显示前 2 份，剩余写"等N份文件详见附件"（附件完整清单见培训附件页）──
-function formatTopicForSignin(entries: { name: string; code?: string | null; resolvedCode?: string | null }[]): string {
+export function formatTopicForSignin(entries: { name: string; code?: string | null; resolvedCode?: string | null }[]): string {
   const fmt = (e: { name: string; code?: string | null; resolvedCode?: string | null }) =>
     e.resolvedCode || e.code ? `《${e.name}》（${e.resolvedCode || e.code}）` : `《${e.name}》`
   if (entries.length <= 2) return entries.map(fmt).join('、')
@@ -101,7 +107,7 @@ const YEAR_OPTIONS = [CURRENT_YEAR - 1, CURRENT_YEAR, CURRENT_YEAR + 1].map((y) 
 const ANNEX_RE = /附件\s*([0-9０-９一二三四五六七八九十]+)/g
 const CN_DIGIT: Record<string, number> = { 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 }
 
-function cnToInt(s: string): number | null {
+export function cnToInt(s: string): number | null {
   const half = s.replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0))
   if (/^\d+$/.test(half)) return parseInt(half, 10)
   if (!half.includes('十')) return CN_DIGIT[half] ?? null
@@ -112,7 +118,7 @@ function cnToInt(s: string): number | null {
 }
 
 /** 从项目文本提取所有"附件X"引用，归一化为"附件{n}"（去重保序） */
-function extractAnnexRefs(text: string): string[] {
+export function extractAnnexRefs(text: string): string[] {
   const refs: string[] = []
   for (const m of text.matchAll(ANNEX_RE)) {
     const n = cnToInt(m[1])
@@ -199,12 +205,12 @@ export default function TrainingSignInTabsClient() {
       },
     })
   }
-  const [oralPayload, setOralPayload] = useState<any>(null)
-  const [practicalPayload, setPracticalPayload] = useState<any>(null)
-  const [aiWrittenPayload, setAiWrittenPayload] = useState<any>(null)
-  const [attachmentPayload, setAttachmentPayload] = useState<any>(null)
-  const [evalDraft, setEvalDraft] = useState<any>(null)
-  const [notifyDraft, setNotifyDraft] = useState<any>(null)
+  const [oralPayload, setOralPayload] = useState<OralExamPayload | null>(null)
+  const [practicalPayload, setPracticalPayload] = useState<PracticalExamPayload | null>(null)
+  const [aiWrittenPayload, setAiWrittenPayload] = useState<AiWrittenExamPayload | null>(null)
+  const [attachmentPayload, setAttachmentPayload] = useState<TrainingAttachmentPayload | null>(null)
+  const [evalDraft, setEvalDraft] = useState<Record<string, unknown> | null>(null)
+  const [notifyDraft, setNotifyDraft] = useState<Record<string, unknown> | null>(null)
 
   const buildSessionUpsert = (s: TrainingSessionData) => ({
     training_level: s.training_level,
@@ -339,17 +345,18 @@ export default function TrainingSignInTabsClient() {
         // 恢复全部五类草稿（列表接口已带 payload）
         const docs = await fetchSessionDocuments(sid)
         for (const d of docs) {
-          if (d.doc_type === 'oral_exam') setOralPayload(d.payload)
-          else if (d.doc_type === 'practical_exam') setPracticalPayload(d.payload)
-          else if (d.doc_type === 'ai_written_exam') setAiWrittenPayload(d.payload)
-          else if (d.doc_type === 'attachment') setAttachmentPayload(d.payload)
+          if (d.doc_type === 'oral_exam') setOralPayload(d.payload as unknown as OralExamPayload)
+          else if (d.doc_type === 'practical_exam') setPracticalPayload(d.payload as unknown as PracticalExamPayload)
+          else if (d.doc_type === 'ai_written_exam') setAiWrittenPayload(d.payload as unknown as AiWrittenExamPayload)
+          else if (d.doc_type === 'attachment') setAttachmentPayload(d.payload as unknown as TrainingAttachmentPayload)
           else if (d.doc_type === 'evaluation') {
-            setEvalDraft(d.payload)
+            const evaluationDraft = d.payload
+            setEvalDraft(evaluationDraft)
             // 考核方式从评估表草稿恢复（AI 笔试/口试 Tab 联动依赖 session.assessment_method）
-            if (d.payload?.assessment_method) {
+            if (typeof evaluationDraft.assessment_method === 'string') {
               setSession((prev) => ({
                 ...prev,
-                assessment_method: d.payload.assessment_method,
+                assessment_method: evaluationDraft.assessment_method as string,
               }))
             }
           } else if (d.doc_type === 'notification') setNotifyDraft(d.payload)
@@ -846,7 +853,7 @@ export default function TrainingSignInTabsClient() {
 
 
 
-  const notifyInitialValues: Record<string, any> = {}
+  const notifyInitialValues: Record<string, unknown> = {}
   if (session.department) notifyInitialValues.department = session.department
   if (session.training_date) notifyInitialValues.training_date = session.training_date
   if (session.topic) {

@@ -13,7 +13,7 @@ import {
   TimePicker,
 } from 'antd'
 import { DownloadOutlined } from '@ant-design/icons'
-import dayjs from 'dayjs'
+import dayjs, { type Dayjs } from 'dayjs'
 import { generateTrainingNotification } from '@/actions/hr'
 import { fetchTrainingDepartments } from '@/lib/api/client/hr'
 import { downloadBytes } from '@/lib/download'
@@ -36,6 +36,20 @@ interface NotificationProps {
   draft?: Record<string, unknown> | null
   onSessionChange?: (data: TrainingSessionData) => void
   notifyInitialValues?: Record<string, unknown>
+}
+
+interface NotificationFormValues {
+  training_date?: Dayjs
+  subject?: string
+  content?: string
+  training_method?: string
+  trainer?: string
+  location?: string
+  department?: string
+  trainee_departments?: string[]
+  employee_names?: string[]
+  issuer_department?: string
+  issue_date?: Dayjs
 }
 
 export default function TrainingNotificationClient({
@@ -121,11 +135,11 @@ export default function TrainingNotificationClient({
       const v = form.getFieldsValue(true)
       const out: Record<string, unknown> = {}
       for (const [k, val] of Object.entries(v)) {
-        if (Array.isArray(val) && val[0] && typeof (val[0] as any).format === 'function') {
-          out.training_time_start = (val[0] as any).format('HH:mm')
-          out.training_time_end = (val[1] as any).format('HH:mm')
+        if (Array.isArray(val) && dayjs.isDayjs(val[0])) {
+          out.training_time_start = val[0].format('HH:mm')
+          out.training_time_end = dayjs.isDayjs(val[1]) ? val[1].format('HH:mm') : undefined
         } else {
-          out[k] = val && typeof (val as any).format === 'function' ? (val as any).format('YYYY-MM-DD') : val
+          out[k] = dayjs.isDayjs(val) ? val.format('YYYY-MM-DD') : val
         }
       }
       return out
@@ -201,7 +215,7 @@ export default function TrainingNotificationClient({
   }
 
   // 上报共享 session（导出/发送按钮在顶部控制条，依赖这些数据）
-  const handleNotifyFormChange = useCallback((_changed: any, allValues: any) => {
+  const handleNotifyFormChange = useCallback((_changed: Record<string, unknown>, allValues: NotificationFormValues) => {
     const data: TrainingSessionData = {}
     if (allValues.training_date) data.training_date = allValues.training_date.format('YYYY-MM-DD')
     if (allValues.subject) data.topic = allValues.subject
@@ -211,8 +225,8 @@ export default function TrainingNotificationClient({
     if (allValues.trainer) data.instructor = allValues.trainer
     if (allValues.location) data.location = allValues.location
     if (allValues.department) data.department = allValues.department
-    if (allValues.trainee_departments?.length > 0) data.trainee_departments = allValues.trainee_departments
-    if (allValues.employee_names?.length > 0) data.employee_names = allValues.employee_names
+    if ((allValues.trainee_departments?.length ?? 0) > 0) data.trainee_departments = allValues.trainee_departments
+    if ((allValues.employee_names?.length ?? 0) > 0) data.employee_names = allValues.employee_names
     if (allValues.issuer_department) data.issuer_department = allValues.issuer_department
     if (allValues.issue_date) data.issue_date = allValues.issue_date.format('YYYY-MM-DD')
     onSessionChange(data)

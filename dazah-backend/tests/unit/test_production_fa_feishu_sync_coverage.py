@@ -8,13 +8,14 @@ from __future__ import annotations
 import ast
 import importlib
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 
 @pytest.mark.anyio
-async def test_fa_fermentation_skip_rows_and_created():
+async def test_fa_fermentation_skip_rows_and_created() -> Any:
     mod = importlib.import_module("app.modules.production.fa_feishu_sync")
     rows = [
         ["3月", "", "", "", "", "", "", "", "", "", "", "", "", ""],  # 月份分隔行
@@ -36,7 +37,7 @@ async def test_fa_fermentation_skip_rows_and_created():
     session.commit.assert_awaited_once()
 
 
-def _exec_main_block(mod):
+def _exec_main_block(mod: Any) -> Any:
     """Exec 模块底部 `if __name__ == '__main__':` 块，覆盖 __main__ 行."""
     path = mod.__file__
     with open(path, encoding="utf-8") as fh:
@@ -58,7 +59,7 @@ def _exec_main_block(mod):
             ns = dict(mod.__dict__)
             ns["__name__"] = "__main__"
 
-            def _noop_main():
+            def _noop_main() -> Any:
                 return None
 
             ns["main"] = _noop_main
@@ -68,15 +69,15 @@ def _exec_main_block(mod):
 
 
 @pytest.mark.anyio
-async def test_fa_feishu_sync_main_entry_and_main_block():
+async def test_fa_feishu_sync_main_entry_and_main_block() -> Any:
     mod = importlib.import_module("app.modules.production.fa_feishu_sync")
     session = AsyncMock()
 
     class _Ctx:
-        async def __aenter__(self):
+        async def __aenter__(self) -> Any:
             return session
 
-        async def __aexit__(self, *args):
+        async def __aexit__(self, *args: Any) -> Any:
             return False
 
     engine = MagicMock()
@@ -95,7 +96,7 @@ async def test_fa_feishu_sync_main_entry_and_main_block():
 
     with (
         patch.object(mod, "create_async_engine", return_value=engine),
-        patch.object(mod, "sessionmaker", return_value=lambda: _Ctx()),
+        patch.object(mod, "async_sessionmaker", return_value=lambda: _Ctx()),
         patch.object(mod.os, "getenv", return_value="postgresql+asyncpg://"),
     ):
         with (

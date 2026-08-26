@@ -1,5 +1,5 @@
 """陶瓷膜过滤 5表 API — 匹配飞书字段结构"""
-
+from typing import Any
 from uuid import UUID
 
 from fastapi import Depends, Query
@@ -172,7 +172,7 @@ class R4(R):
     remarks: str | None = None
 
 
-def mk(tbl, m, c, resp_cls, sf):
+def mk(tbl: Any, m: Any, c: Any, resp_cls: Any, sf: Any) -> Any:
     @router.get(f"/{tbl}", summary=f"{tbl}列表")
     async def _list(
         page: int = Query(1, ge=1),
@@ -180,7 +180,7 @@ def mk(tbl, m, c, resp_cls, sf):
         s: str | None = Query(None, alias=sf),
         workshop: str = Query("203"),
         session: AsyncSession = Depends(get_db),
-    ):
+    ) -> Any:
         q = select(m).where(m.is_deleted.is_(False), m.workshop == workshop)
         if s:
             q = q.where(getattr(m, sf).ilike(f"%{s}%"))
@@ -195,7 +195,7 @@ def mk(tbl, m, c, resp_cls, sf):
         )
 
     @router.post(f"/{tbl}", summary=f"创建{tbl}")
-    async def _create(d: c, session: AsyncSession = Depends(get_db)):
+    async def _create(d: c, session: AsyncSession = Depends(get_db)) -> Any:
         obj = m(**d.model_dump())
         session.add(obj)
         await session.flush()
@@ -204,7 +204,7 @@ def mk(tbl, m, c, resp_cls, sf):
         return success_response(resp_cls.model_validate(obj), message="创建成功")
 
     @router.put(f"/{tbl}/{{rid}}", summary=f"更新{tbl}")
-    async def _update(rid: UUID, d: c, session: AsyncSession = Depends(get_db)):
+    async def _update(rid: UUID, d: c, session: AsyncSession = Depends(get_db)) -> Any:
         obj = await session.get(m, rid)
         if not obj or obj.is_deleted:
             return success_response(None, message="记录不存在", status_code=404)
@@ -214,7 +214,7 @@ def mk(tbl, m, c, resp_cls, sf):
         return success_response(resp_cls.model_validate(obj), message="更新成功")
 
     @router.delete(f"/{tbl}/{{rid}}", summary=f"删除{tbl}")
-    async def _delete(rid: UUID, session: AsyncSession = Depends(get_db)):
+    async def _delete(rid: UUID, session: AsyncSession = Depends(get_db)) -> Any:
         r = await session.get(m, rid)
         if not r:
             return success_response(None, message="记录不存在", status_code=404)

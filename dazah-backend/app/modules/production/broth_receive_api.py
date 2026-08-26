@@ -1,5 +1,5 @@
 """发酵液接收记录 API"""
-
+from typing import Any
 from uuid import UUID
 
 from fastapi import Depends, Query
@@ -27,7 +27,7 @@ async def list_broth_receives(
     received_batch: str | None = Query(None),
     workshop: str = Query("203"),
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     query = select(BrothReceive).where(
         BrothReceive.is_deleted.is_(False), BrothReceive.workshop == workshop
     )
@@ -47,7 +47,7 @@ async def list_broth_receives(
 @router.post("/broth-receives", summary="创建发酵液接收记录")
 async def create_broth_receive(
     data: BrothReceiveCreate, session: AsyncSession = Depends(get_db)
-):
+) -> Any:
     record = BrothReceive(**data.model_dump())
     session.add(record)
     await session.flush()
@@ -61,7 +61,7 @@ async def create_broth_receive(
 @router.put("/broth-receives/{record_id}", summary="更新发酵液接收记录")
 async def update_broth_receive(
     record_id: UUID, data: BrothReceiveUpdate, session: AsyncSession = Depends(get_db)
-):
+) -> Any:
     record = await session.get(BrothReceive, record_id)
     if not record or record.is_deleted:
         return success_response(None, message="记录不存在", status_code=404)
@@ -76,7 +76,7 @@ async def update_broth_receive(
 @router.delete("/broth-receives/{record_id}", summary="删除发酵液接收记录")
 async def delete_broth_receive(
     record_id: UUID, session: AsyncSession = Depends(get_db)
-):
+) -> Any:
     record = await session.get(BrothReceive, record_id)
     if not record:
         return success_response(None, message="记录不存在", status_code=404)

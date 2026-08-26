@@ -1,7 +1,7 @@
 """飞书 → broth_receives 同步服务"""
-
 import logging
 from datetime import date, datetime
+from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -54,7 +54,7 @@ NUMBER_FIELDS = {
 DATE_FIELDS = {"receive_time", "sample_time"}
 
 
-def _extract_text(field_value) -> str | None:
+def _extract_text(field_value: Any) -> str | None:
     if field_value is None:
         return None
     if isinstance(field_value, str):
@@ -72,7 +72,7 @@ def _extract_text(field_value) -> str | None:
     return str(field_value).strip() or None
 
 
-def _extract_number(field_value) -> float | None:
+def _extract_number(field_value: Any) -> float | None:
     if isinstance(field_value, (int, float)):
         return float(field_value)
     text = _extract_text(field_value)
@@ -84,7 +84,7 @@ def _extract_number(field_value) -> float | None:
         return None
 
 
-def _parse_date(v):
+def _parse_date(v: Any) -> Any:
     if v is None:
         return None
     if isinstance(v, (int, float)) and 0 < v < 1e15:
@@ -99,7 +99,7 @@ def _parse_date(v):
 
 async def sync_broth_receive(
     config: ProductionFeishuConfig, session: AsyncSession
-) -> dict:
+) -> dict[str, Any]:
     app_secret = decrypt_secret(config.encrypted_app_secret)
     client = ProductionFeishuClient(config.app_id, app_secret, config.bitable_app_token)
 
@@ -109,11 +109,12 @@ async def sync_broth_receive(
     rows = []
     for item in items:
         fields = item.get("fields", {})
-        mapped: dict = {}
+        mapped: dict[str, Any] = {}
         for feishu_name, db_col in FIELD_MAPPING.items():
             raw = fields.get(feishu_name)
             if raw is None:
                 continue
+            val: Any
             if db_col in DATE_FIELDS:
                 val = _extract_text(raw)
                 if val is not None:
@@ -133,7 +134,7 @@ async def sync_broth_receive(
         return {"created": 0, "updated": 0}
 
     all_cols = sorted(set().union(*(r.keys() for r in rows)))
-    params: dict = {}
+    params: dict[str, Any] = {}
     values_clauses = []
     for i, row in enumerate(rows):
         vals = ", ".join(f":{c}_{i}" for c in all_cols)

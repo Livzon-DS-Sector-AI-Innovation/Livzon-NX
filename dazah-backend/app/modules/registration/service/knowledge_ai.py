@@ -52,11 +52,11 @@ def _extract_text_from_file(file_name: str, file_content: bytes) -> str:
 
     try:
         if ext == ".pdf":
-            import pymupdf
+            # PyMuPDF is a runtime dependency, but the package does not expose
+            # importable mypy metadata in the CI environment.
+            import pymupdf  # type: ignore[import-not-found]
 
-            pdf_doc: Any = pymupdf.open(  # type: ignore[no-untyped-call]
-                stream=file_content, filetype="pdf"
-            )
+            pdf_doc: Any = pymupdf.open(stream=file_content, filetype="pdf")
             text_parts: list[str] = []
             for page in pdf_doc:
                 text_parts.append(page.get_text())
