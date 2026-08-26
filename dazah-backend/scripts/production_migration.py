@@ -11,8 +11,12 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+# The path bootstrap must run before importing the application package when this
+# utility is executed directly from the scripts directory.
+# isort: off
 from app.core.database import async_session_factory
 from app.modules.production.migration_service import ProductionMigrationService
+# isort: on
 
 
 def parse_args() -> argparse.Namespace:

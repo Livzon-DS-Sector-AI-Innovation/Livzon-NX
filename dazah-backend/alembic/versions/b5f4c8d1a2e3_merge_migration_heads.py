@@ -7,7 +7,6 @@ Create Date: 2026-08-24 16:35:00.000000
 
 from collections.abc import Sequence
 
-
 # revision identifiers, used by Alembic.
 revision: str = "b5f4c8d1a2e3"
 down_revision: tuple[str, str] = ("4772bce4935d", "5e1f7a9b0c2d")
