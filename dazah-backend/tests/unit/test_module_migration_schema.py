@@ -19,9 +19,9 @@ def test_migration_is_the_additive_migration_head() -> None:
 
 
 def test_source_uploads_are_not_part_of_the_migration() -> None:
-    source_uploads = Path(
-        "C:/Users/Dan/Documents/dazah-Migration/dazah-backend/dazah-backend/uploads"
-    )
-    assert source_uploads.exists()
-    assert source_uploads.resolve() != (Path(__file__).parents[2] / "uploads").resolve()
-    assert "dazah-Migration" not in MIGRATION.read_text(encoding="utf-8")
+    migration_text = MIGRATION.read_text(encoding="utf-8")
+
+    # Source attachments are intentionally excluded from the repository and
+    # must not be required by a migration test running in CI.
+    assert "dazah-Migration" not in migration_text
+    assert "uploads" not in migration_text.lower()
