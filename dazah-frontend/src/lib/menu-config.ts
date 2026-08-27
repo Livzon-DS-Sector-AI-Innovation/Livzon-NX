@@ -305,12 +305,7 @@ export const moduleMenus: ModuleMenu[] = [
           },
         ],
       },
-      { key: "dossier-writer", label: "卷宗编写", path: "/registration/dossier-writer" },
-      { key: "validation-audit", label: "验证文件审核", path: "/registration/validation-audit" },
-      { key: "review", label: "申报进度查询", path: "/registration/review" },
       { key: "authorization-letter", label: "授权书管理", path: "/registration/authorization-letter" },
-      { key: "supplementary-reply", label: "发补回复", path: "/registration/supplementary-reply" },
-      { key: "reference-standard", label: "对照物质说明表", path: "/registration/reference-standard" },
       {
         key: "certificate-management",
         label: "证书管理",
@@ -341,6 +336,7 @@ export const moduleMenus: ModuleMenu[] = [
     icon: "check-circle",
     path: "/quality",
     children: [
+      { key: "feishu-settings", label: "飞书设置", path: "/quality/feishu-settings" },
       { key: "documents", label: "文件管理", path: "/quality/documents" },
       {
         key: "deviations",
@@ -457,7 +453,7 @@ export const moduleMenus: ModuleMenu[] = [
           { key: "product-departments", label: "产品涉及部门", path: "/quality/oos-oot/product-departments" },
         ],
       },
-      { key: "product-quality", label: "产品质量标准", path: "/quality/product-quality" },
+      { key: "product-quality", label: "产品质量回顾", path: "/quality/product-quality" },
       {
         key: "return-recalls",
         label: "退货召回",
@@ -476,6 +472,16 @@ export const moduleMenus: ModuleMenu[] = [
         ],
       },
       {
+        key: "change",
+        label: "变更控制",
+        path: "/quality/change",
+        children: [
+          { key: "change-ledger", label: "技术变更台账", path: "/quality/change/ledger" },
+          { key: "file-change-ledger", label: "文件变更台账", path: "/quality/file-change/ledger" },
+          { key: "change-action-plans", label: "变更计划", path: "/quality/change/action-plans" },
+        ],
+      },
+      {
         key: "validation",
         label: "验证与确认",
         path: "/quality/validation",
@@ -487,19 +493,6 @@ export const moduleMenus: ModuleMenu[] = [
           { key: "other-validations", label: "其他验证", path: "/quality/validation/other-validations" },
         ],
       },
-      {
-        key: "change",
-        label: "变更控制",
-        path: "/quality/change",
-        children: [
-          { key: "change-ledger", label: "技术变更台账", path: "/quality/change/ledger" },
-          { key: "file-change-ledger", label: "文件变更台账", path: "/quality/file-change/ledger" },
-          { key: "change-action-plans", label: "变更计划", path: "/quality/change/action-plans" },
-        ],
-      },
-      { key: "cpv", label: "持续工艺验证", path: "/quality/cpv" },
-      { key: "feishu-data", label: "飞书数据", path: "/quality/data" },
-      { key: "feishu-settings", label: "飞书设置", path: "/quality/feishu-settings", placement: "bottom" },
     ],
   },
   {
@@ -521,83 +514,15 @@ export const moduleMenus: ModuleMenu[] = [
     icon: "users",
     path: "/hr",
     children: [
-      {
-        key: "employee-management",
-        label: "员工管理",
-        path: "/hr/employee-management",
-        children: [
-          { key: "employee-dashboard", label: "员工总览", path: "/hr/employee-management" },
-          { key: "employee-fill", label: "员工信息填报", path: "/hr/employee-fill" },
-          { key: "feishu-contacts", label: "飞书联系人", path: "/hr/feishu-contacts" },
-        ],
-      },
+      { key: "departments", label: "部门管理", path: "/hr/departments" },
+      { key: "employee-management", label: "员工管理", path: "/hr/employee-management" },
       { key: "recruitment", label: "招聘管理", path: "/hr/recruitment" },
-      { key: "onboarding-management", label: "入职管理", path: "/hr/onboarding-management" },
+      { key: "onboarding", label: "入职台账", path: "/hr/onboarding" },
+      { key: "offboarding", label: "离职管理", path: "/hr/offboarding" },
       { key: "position-transfer", label: "岗位调动管理", path: "/hr/position-transfer" },
-      {
-        key: "contracts",
-        label: "合同管理",
-        path: "/hr/contracts",
-        children: [
-          { key: "contracts-ledger", label: "合同台账", path: "/hr/contracts" },
-          { key: "contract-approval-results", label: "合同到期审批结果", path: "/hr/contracts/approval-results" },
-        ],
-      },
-      {
-        key: "old-factory",
-        label: "老厂",
-        path: "/hr/departments",
-        children: [
-          { key: "departments", label: "部门管理", path: "/hr/departments" },
-          { key: "profile", label: "员工档案", path: "/hr/profile" },
-          { key: "roster", label: "员工花名册", path: "/hr/roster" },
-          { key: "onboarding", label: "入职台账", path: "/hr/onboarding" },
-          { key: "departure", label: "离职台账", path: "/hr/departure" },
-          { key: "offboarding", label: "离职管理", path: "/hr/offboarding" },
-          {
-            key: "training",
-            label: "培训管理",
-            path: "/hr/training",
-            children: [
-              { key: "onboarding-training", label: "新员工入职培训", path: "/hr/training/onboarding" },
-              { key: "training-notification", label: "培训通知", path: "/hr/training/notification" },
-              { key: "sign-in-sheet", label: "培训签到表", path: "/hr/training/sign-in" },
-              { key: "ai-exam", label: "AI 出题", path: "/hr/training/ai-exam" },
-              { key: "annual-plan", label: "年度培训计划", path: "/hr/training/annual-plan" },
-              { key: "training-ledger", label: "培训台账", path: "/hr/training/ledger" },
-              { key: "new-employee-training", label: "新员工培训", path: "/hr/training/new-employee" },
-              { key: "employee-training-list", label: "员工培训清单", path: "/hr/training/employee-training-list" },
-              { key: "trainer", label: "培训师管理", path: "/hr/training/trainer" },
-              { key: "position-training", label: "岗位培训清单", path: "/hr/training/position-training" },
-              { key: "plan-tracking", label: "培训计划跟踪", path: "/hr/training/plan-tracking" },
-            ],
-          },
-        ],
-      },
-      {
-        key: "new-factory",
-        label: "新厂",
-        path: "#",
-        children: [
-          { key: "new-departments", label: "部门管理", path: "/hr/new/departments" },
-          { key: "new-profile", label: "员工档案", path: "/hr/new/profile" },
-          { key: "new-onboarding", label: "入职台账", path: "/hr/new/onboarding" },
-          { key: "new-departure", label: "离职台账", path: "/hr/new/departure" },
-          { key: "new-offboarding", label: "离职管理", path: "/hr/new/offboarding" },
-        ],
-      },
-      {
-        key: "hr-settings",
-        label: "HR设置",
-        path: "/hr/settings/feishu",
-        children: [
-          { key: "hr-settings-feishu", label: "飞书设置", path: "/hr/settings/feishu" },
-          { key: "hr-settings-reminder", label: "提醒设置", path: "/hr/settings/reminder" },
-          { key: "hr-settings-approval", label: "审批流程设置", path: "/hr/settings/approval" },
-          { key: "hr-settings-dept-mapping", label: "培训部门映射", path: "/hr/settings/dept-mapping", permission: "hr:write" },
-          { key: "hr-settings-dept-scopes", label: "部门权限配置", path: "/hr/settings/dept-scopes", permission: "hr:write" },
-        ],
-      },
+      { key: "contracts", label: "合同管理", path: "/hr/contracts" },
+      { key: "training", label: "培训管理", path: "/hr/training" },
+      { key: "hr-settings", label: "HR设置", path: "/hr/settings/feishu" },
     ],
   },
   {
@@ -607,9 +532,6 @@ export const moduleMenus: ModuleMenu[] = [
     icon: "archive",
     path: "/warehouse",
     children: [
-      { key: "raw-material", label: "成品", path: "/warehouse/raw-material", feishuPageKey: "warehouse.raw_material" },
-      { key: "packaging", label: "原辅料及包材", path: "/warehouse/packaging", feishuPageKey: "warehouse.packaging" },
-      { key: "product", label: "五金", path: "/warehouse/product", feishuPageKey: "warehouse.product" },
       { key: "ai-analysis", label: "AI分析", path: "/warehouse/ai-analysis" },
       {
         key: "materials",
@@ -649,7 +571,6 @@ export const moduleMenus: ModuleMenu[] = [
         ],
       },
       { key: "warehouse-settings", label: "仓储设置", path: "/warehouse/settings", placement: "bottom" },
-      { key: "feishu-config", label: "飞书配置", path: "/warehouse/feishu-config", placement: "bottom" },
     ],
   },
   {

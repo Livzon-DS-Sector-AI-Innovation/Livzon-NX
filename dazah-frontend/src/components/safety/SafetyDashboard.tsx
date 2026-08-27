@@ -164,7 +164,7 @@ function KpiCard({
         <div className="flex items-baseline gap-1">
           <span
             className="text-3xl font-semibold tracking-tight"
-            style={{ color, fontFamily: "'Notion Sans', Inter, system-ui, sans-serif" }}
+            style={{ color, fontFamily: 'var(--font-ui)' }}
           >
             {value}
           </span>
@@ -313,7 +313,7 @@ export default function SafetyDashboard({ data }: { data: DashboardData }) {
     <div className="space-y-6 pb-8">
       {/* ── Header ── */}
       <div>
-        <Title level={4} className="!mb-1" style={{ fontFamily: "'Notion Sans', Inter, system-ui, sans-serif" }}>
+        <Title level={4} className="!mb-1" style={{ fontFamily: 'var(--font-ui)' }}>
           安全管理总览
         </Title>
         <Text style={{ color: T.slate, fontSize: 14 }}>

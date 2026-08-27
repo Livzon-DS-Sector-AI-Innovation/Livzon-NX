@@ -1,7 +1,7 @@
 import nextCoreWebVitals from "eslint-config-next/core-web-vitals";
 import nextTypescript from "eslint-config-next/typescript";
 
-export default [
+const eslintConfig = [
   { ignores: [".pytest_cache/**"] },
   ...nextCoreWebVitals,
   ...nextTypescript,
@@ -23,3 +23,5 @@ export default [
     },
   },
 ];
+
+export default eslintConfig;
