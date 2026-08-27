@@ -46,7 +46,7 @@ async def _resolve_watch_dir() -> Path:
                 await session.commit()
             logger.info(
                 "简历目录已迁移为服务器默认值",
-                extra={"module": "hr", "watch_dir": DEFAULT_RESUME_WATCH_DIR},
+                extra={"component": "hr", "watch_dir": DEFAULT_RESUME_WATCH_DIR},
             )
         except Exception:
             logger.exception("failed to migrate resume watch dir setting")

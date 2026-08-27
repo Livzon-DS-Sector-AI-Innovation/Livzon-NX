@@ -115,7 +115,7 @@ class BitableClient:
         if len(file_bytes) > max_size:
             logger.warning(
                 "附件超过飞书 20MB 上限，跳过上传",
-                extra={"module": "hr", "file": file_name, "size": len(file_bytes)},
+                extra={"component": "hr", "file": file_name, "size": len(file_bytes)},
             )
             return None
 
@@ -130,7 +130,7 @@ class BitableClient:
         if not file_token:
             logger.warning(
                 "飞书附件上传未返回 file_token",
-                extra={"module": "hr", "file": file_name},
+                extra={"component": "hr", "file": file_name},
             )
             return None
         return file_token

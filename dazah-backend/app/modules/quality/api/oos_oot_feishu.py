@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+from urllib.parse import quote
 
 from fastapi import APIRouter, Body, Depends, Query
 from fastapi.responses import StreamingResponse
@@ -171,7 +172,9 @@ async def api_export_oos_ledger(
             output,
             media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             headers={
-                "Content-Disposition": "attachment; filename=检验结果OOS调查列表.docx"
+                "Content-Disposition": (
+                    "attachment; filename*=UTF-8''" + quote("检验结果OOS调查列表.docx")
+                )
             },
         )
     except AppException:
@@ -193,7 +196,9 @@ async def api_export_oot_ledger(
             output,
             media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             headers={
-                "Content-Disposition": "attachment; filename=检验结果OOT调查列表.docx"
+                "Content-Disposition": (
+                    "attachment; filename*=UTF-8''" + quote("检验结果OOT调查列表.docx")
+                )
             },
         )
     except AppException:

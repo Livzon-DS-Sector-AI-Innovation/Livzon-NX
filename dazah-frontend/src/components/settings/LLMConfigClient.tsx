@@ -177,6 +177,10 @@ export default function LLMConfigClient({ embedded = false }: LLMConfigClientPro
         model_name: probeType === 'model' ? values.model_name : null,
         timeout_seconds: values.timeout_seconds,
       })
+      if (!res.ok) {
+        message.error(res.error)
+        return
+      }
       message.success(res.data.detail)
     } catch (error) {
       if (error && typeof error === 'object' && 'errorFields' in error) return

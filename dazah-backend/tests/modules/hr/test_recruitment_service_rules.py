@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from types import SimpleNamespace as _SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock
@@ -210,3 +211,81 @@ async def test_onboarding_list_supports_tuple_and_invalid_results() -> None:
     assert (await instance.list_onboarding())[1] == 1
     repo.list_onboarding.return_value = None
     assert await instance.list_onboarding() == ([], 0)
+
+
+@pytest.mark.anyio
+async def test_recruitment_analyze_and_create_handles_structured_and_empty_output(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo: Any = SimpleNamespace(create_candidate=AsyncMock(return_value={"id": "c1"}))
+    instance = _recruitment(repo)
+    chat = AsyncMock(
+        return_value={
+            "name": "张三",
+            "phone": "13800000000",
+            "email": "a@example.test",
+            "skills": "GMP, QA, Python, SQL, Excel, 额外技能",
+            "match_rate": 95,
+            "resume_score": 88,
+            "fit_level": "高",
+            "reason": "匹配",
+        }
+    )
+    monkeypatch.setattr(type(service.llm_client), "chat_json", chat)  # type: ignore[attr-defined]
+    result = await instance.analyze_and_create("简历内容", "官网", "hash-1")
+    fields = repo.create_candidate.await_args.args[0]
+    assert result["candidate"] == {"id": "c1"}
+    assert fields["skills"] == ["GMP", "QA", "Python", "SQL", "Excel"]
+    assert fields["fit_level"] == "高"
+
+    chat.return_value = None
+    fallback = await instance.analyze_and_create("无结构化结果", "邮箱", "hash-2")
+    assert fallback["ai_result"] is None
+    assert repo.create_candidate.await_args.args[0]["interview_status"] == "待安排"
+
+
+@pytest.mark.anyio
+async def test_recruitment_vision_analysis_converts_pdf_and_parses_fenced_json(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _Pixmap:
+        def tobytes(self, _format: str) -> bytes:
+            return b"png-bytes"
+
+    class _Page:
+        def get_pixmap(self, *, dpi: int) -> _Pixmap:
+            assert dpi == 150
+            return _Pixmap()
+
+    class _Document:
+        def __len__(self) -> int:
+            return 1
+
+        def __getitem__(self, _index: int) -> _Page:
+            return _Page()
+
+        def close(self) -> None:
+            pass
+
+    monkeypatch.setitem(
+        sys.modules,
+        "fitz",
+        SimpleNamespace(open=lambda **_kwargs: _Document()),
+    )
+    instance = _recruitment(SimpleNamespace())
+    chat = AsyncMock(return_value='```json\n{"name":"视觉候选人","match_rate":91}\n```')
+    monkeypatch.setattr(type(service.llm_client), "chat", chat)  # type: ignore[attr-defined]
+    result = await instance._try_vision_analysis(b"pdf" * 40, "resume.pdf", "岗位要求")
+    assert result == {"name": "视觉候选人", "match_rate": 91}
+    content = chat.await_args.args[0][0]["content"]
+    assert content[-1]["type"] == "text"
+
+
+@pytest.mark.anyio
+async def test_recruitment_batch_analysis_empty_auto_selection_returns_message() -> (
+    None
+):
+    repo: Any = SimpleNamespace(list_candidates=AsyncMock(return_value=([], 0)))
+    instance = _recruitment(repo)
+    result = await instance.batch_analyze(candidate_ids=[])
+    assert result["message"] == "没有需要分析的候选人"

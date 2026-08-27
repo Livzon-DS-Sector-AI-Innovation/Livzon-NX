@@ -12,6 +12,9 @@ export type LLMConfigUpdate = components['schemas']['LLMConfigUpdate']
 export type LLMCapabilityDetection = components['schemas']['LLMCapabilityDetectionResponse']
 export type LLMConfigProbeRequest = components['schemas']['LLMConfigProbeRequest']
 export type LLMConfigProbeResponse = components['schemas']['LLMConfigProbeResponse']
+export type LLMConfigProbeResult =
+  | { ok: true; data: LLMConfigProbeResponse }
+  | { ok: false; error: string }
 export type FeishuConfig = components['schemas']['FeishuConfigResponse']
 export type FeishuConfigUpsert = components['schemas']['FeishuConfigUpsert']
 export type AgentMemoryTenantPolicy =
@@ -239,11 +242,19 @@ export async function testLLMConfig(id: string) {
   })
 }
 
-export async function probeLLMConfig(data: LLMConfigProbeRequest) {
-  return fetchApi<LLMConfigProbeResponse>('/llm/configs/probe', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  })
+export async function probeLLMConfig(data: LLMConfigProbeRequest): Promise<LLMConfigProbeResult> {
+  try {
+    const response = await fetchApi<LLMConfigProbeResponse>('/llm/configs/probe', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+    return { ok: true, data: response.data }
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : '连通性测试失败',
+    }
+  }
 }
 
 function unwrapResponseData<T>(value: unknown): T {

@@ -647,97 +647,105 @@ async def test_sync_endpoint_serializes_real_orm_config_after_commit(
     """
     from sqlalchemy import delete, select
 
-    from app.core.database import async_session_factory
+    from app.core.database import async_session_factory, engine
     from app.modules.procurement.models import (
         MaterialCatalogRecord,
         MaterialSourceConfig,
     )
     from app.platform.identity.deps import get_current_user
 
-    async with async_session_factory() as session:
+    # The application engine uses a QueuePool in production, while pytest
+    # creates a fresh event loop for async tests.  Drop idle connections that
+    # may belong to a previous loop before opening the real ORM session, and
+    # again after the test so they cannot be reused by a later loop.
+    await engine.dispose(close=False)
+    try:
+        async with async_session_factory() as session:
 
-        async def _override_get_db() -> Any:
+            async def _override_get_db() -> Any:
+                try:
+                    yield session
+                finally:
+                    pass
+
+            app.dependency_overrides[get_db] = _override_get_db
+            app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(
+                role="admin",
+                status="active",
+                id=uuid4(),
+            )
             try:
-                yield session
+                await session.execute(
+                    delete(MaterialCatalogRecord).where(
+                        MaterialCatalogRecord.source_config_id.in_(
+                            select(MaterialSourceConfig.id).where(
+                                MaterialSourceConfig.config_key == "material-master"
+                            )
+                        )
+                    )
+                )
+                await session.execute(
+                    delete(MaterialSourceConfig).where(
+                        MaterialSourceConfig.config_key == "material-master"
+                    )
+                )
+                await session.commit()
+
+                session.add(
+                    MaterialSourceConfig(
+                        config_key="material-master",
+                        source_url="https://feishu.cn/base/appToken123456?table=tbl123456",
+                        app_token="appToken123456",
+                        table_id="tbl123456",
+                        material_code_field="物料编码",
+                        material_description_field="物料说明",
+                        rule_model_field="规格型号",
+                        last_test_status="success",
+                        sync_status="not_synced",
+                        sync_phase="idle",
+                        last_sync_record_count=0,
+                        sync_persisted_count=0,
+                    )
+                )
+                await session.commit()
+
+                monkeypatch.setattr(
+                    procurement_api,
+                    "acquire_lock",
+                    AsyncMock(return_value=True),
+                )
+                monkeypatch.setattr(procurement_api, "release_lock", AsyncMock())
+                monkeypatch.setattr(procurement_api, "record_audit_log", AsyncMock())
+                monkeypatch.setattr(
+                    procurement_api,
+                    "_run_material_source_sync",
+                    AsyncMock(),
+                )
+
+                response = await client.post(
+                    "/api/v1/procurement/material-source-config/sync",
+                    json={},
+                )
+                assert response.status_code == 200
+                assert response.json()["message"] == "采购物料数据同步已启动"
+                assert response.json()["data"]["config"]["sync_status"] == "syncing"
             finally:
-                pass
-
-        app.dependency_overrides[get_db] = _override_get_db
-        app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(
-            role="admin",
-            status="active",
-            id=uuid4(),
-        )
-        try:
-            await session.execute(
-                delete(MaterialCatalogRecord).where(
-                    MaterialCatalogRecord.source_config_id.in_(
-                        select(MaterialSourceConfig.id).where(
-                            MaterialSourceConfig.config_key == "material-master"
+                await session.execute(
+                    delete(MaterialCatalogRecord).where(
+                        MaterialCatalogRecord.source_config_id.in_(
+                            select(MaterialSourceConfig.id).where(
+                                MaterialSourceConfig.config_key == "material-master"
+                            )
                         )
                     )
                 )
-            )
-            await session.execute(
-                delete(MaterialSourceConfig).where(
-                    MaterialSourceConfig.config_key == "material-master"
-                )
-            )
-            await session.commit()
-
-            session.add(
-                MaterialSourceConfig(
-                    config_key="material-master",
-                    source_url="https://feishu.cn/base/appToken123456?table=tbl123456",
-                    app_token="appToken123456",
-                    table_id="tbl123456",
-                    material_code_field="物料编码",
-                    material_description_field="物料说明",
-                    rule_model_field="规格型号",
-                    last_test_status="success",
-                    sync_status="not_synced",
-                    sync_phase="idle",
-                    last_sync_record_count=0,
-                    sync_persisted_count=0,
-                )
-            )
-            await session.commit()
-
-            monkeypatch.setattr(
-                procurement_api,
-                "acquire_lock",
-                AsyncMock(return_value=True),
-            )
-            monkeypatch.setattr(procurement_api, "release_lock", AsyncMock())
-            monkeypatch.setattr(procurement_api, "record_audit_log", AsyncMock())
-            monkeypatch.setattr(
-                procurement_api,
-                "_run_material_source_sync",
-                AsyncMock(),
-            )
-
-            response = await client.post(
-                "/api/v1/procurement/material-source-config/sync",
-                json={},
-            )
-            assert response.status_code == 200
-            assert response.json()["message"] == "采购物料数据同步已启动"
-            assert response.json()["data"]["config"]["sync_status"] == "syncing"
-        finally:
-            await session.execute(
-                delete(MaterialCatalogRecord).where(
-                    MaterialCatalogRecord.source_config_id.in_(
-                        select(MaterialSourceConfig.id).where(
-                            MaterialSourceConfig.config_key == "material-master"
-                        )
+                await session.execute(
+                    delete(MaterialSourceConfig).where(
+                        MaterialSourceConfig.config_key == "material-master"
                     )
                 )
-            )
-            await session.execute(
-                delete(MaterialSourceConfig).where(
-                    MaterialSourceConfig.config_key == "material-master"
-                )
-            )
-            await session.commit()
-            app.dependency_overrides.pop(get_db, None)
-            app.dependency_overrides.pop(get_current_user, None)
+                await session.commit()
+                app.dependency_overrides.pop(get_db, None)
+                app.dependency_overrides.pop(get_current_user, None)
+    finally:
+        await engine.dispose(close=False)

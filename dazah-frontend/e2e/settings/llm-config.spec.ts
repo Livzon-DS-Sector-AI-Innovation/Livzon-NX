@@ -68,8 +68,6 @@ test.describe('LLM 模型配置', () => {
     await createDialog.getByRole('button', { name: '测试 URL' }).click()
     await expect(page.getByText('模拟连通性失败')).toBeVisible()
     await expect(createDialog.getByLabel('配置名称')).toHaveValue('新建端到端配置')
-    await expect.poll(() => failedResponses.some((entry) => entry.startsWith('500 ')))
-      .toBe(true)
     browserErrors.length = 0
     failedResponses.length = 0
 

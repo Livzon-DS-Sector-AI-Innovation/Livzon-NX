@@ -246,7 +246,7 @@ async def import_document_catalog(
         total_entries += len(entries)
         logger.info(
             "document catalog sheet imported",
-            extra={"module": "quality", "sheet": dept_name, "count": len(entries)},
+            extra={"component": "quality", "sheet": dept_name, "count": len(entries)},
         )
 
     return {

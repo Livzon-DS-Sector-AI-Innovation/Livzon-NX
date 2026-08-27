@@ -1281,7 +1281,7 @@ async def _build_validation_feishu_fields(
     if participants:
         # 支持数组（前端多选）或字符串
         if isinstance(participants, list):
-            names_str = ",".join(str(p) for p in participants if p)
+            names_str = "、".join(str(p) for p in participants if p)
         else:
             names_str = str(participants).strip()
         if names_str:
@@ -1294,7 +1294,7 @@ async def _build_validation_feishu_fields(
         owner_str = (
             str(owner).strip()
             if not isinstance(owner, list)
-            else ",".join(str(o) for o in owner if o)
+            else "、".join(str(o) for o in owner if o)
         )
         if owner_str:
             owner_ids = _resolve_bitable_user_ids_from_names(contacts, owner_str)

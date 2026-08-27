@@ -141,7 +141,7 @@ def seed_template_from_source(source_path: str, department_name: str = "") -> Pa
     shutil.copyfile(source, destination)
     logger.info(
         "document catalog template seeded",
-        extra={"module": "quality", "source": str(source), "dest": str(destination)},
+        extra={"component": "quality", "source": str(source), "dest": str(destination)},
     )
     return destination
 

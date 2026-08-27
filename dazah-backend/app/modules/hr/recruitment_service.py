@@ -981,7 +981,7 @@ max-width: 600px; margin: 0 auto;">
         logger.info(
             "candidate created from upload",
             extra={
-                "name": result.get("name") if result else "",
+                "candidate_name": result.get("name") if result else "",
                 "source": source_channel,
             },
         )

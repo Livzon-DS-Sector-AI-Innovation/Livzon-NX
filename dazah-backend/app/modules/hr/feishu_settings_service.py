@@ -362,7 +362,7 @@ async def ensure_hr_feishu_entity_settings(db: AsyncSession) -> None:
             existing.pop(code, None)
         logger.info(
             "已清理无用的 HR 飞书实体配置",
-            extra={"module": "hr", "entity_codes": obsolete_codes},
+            extra={"component": "hr", "entity_codes": obsolete_codes},
         )
 
     for (
@@ -395,7 +395,7 @@ async def ensure_hr_feishu_entity_settings(db: AsyncSession) -> None:
                 logger.info(
                     "修正历史错误 Table ID",
                     extra={
-                        "module": "hr",
+                        "component": "hr",
                         "entity_code": entity_code,
                         "old_table_id": row.base_table_id,
                         "new_table_id": corrected,

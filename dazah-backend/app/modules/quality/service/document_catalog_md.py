@@ -428,7 +428,7 @@ def _convert_doc_via_soffice(content: bytes, file_name: str) -> bytes:
         if result.returncode != 0 or not os.path.exists(dst_path):
             logger.warning(
                 "soffice convert non-zero",
-                extra={"module": "quality", "returncode": result.returncode},
+                extra={"component": "quality", "returncode": result.returncode},
             )
             return b""
         with open(dst_path, "rb") as f:

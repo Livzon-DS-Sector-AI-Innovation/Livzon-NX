@@ -59,13 +59,13 @@ describe('settings Agent and Feishu actions', () => {
       )
     vi.stubGlobal('fetch', fetchMock)
 
-    await probeLLMConfig({
+    await expect(probeLLMConfig({
       probe_type: 'model',
       api_base_url: 'https://llm.example/v1',
       api_key: 'test-key',
       model_name: 'test-model',
       timeout_seconds: 30,
-    })
+    })).resolves.toMatchObject({ ok: true, data: { detail: '模型连通正常' } })
 
     expect(fetchMock).toHaveBeenCalledWith(
       'http://backend.test/api/v1/llm/configs/probe',
@@ -86,7 +86,7 @@ describe('settings Agent and Feishu actions', () => {
       api_base_url: 'https://llm.example/v1',
       api_key: 'bad-key',
       timeout_seconds: 30,
-    })).rejects.toThrow('模型认证失败')
+    })).resolves.toEqual({ ok: false, error: '模型认证失败' })
   })
 
   it('unwraps the Hermes gateway status envelope', async () => {

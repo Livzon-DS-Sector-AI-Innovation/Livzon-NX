@@ -160,7 +160,7 @@ async def upload_attachment_to_entry(
                 # 转换失败（伪 docx/加密/损坏文件）：降级为原样存储，仍可下载/预览原文件
                 logger.warning(
                     "word attachment convert failed, stored as-is",
-                    extra={"module": "quality", "file": file_name},
+                    extra={"component": "quality", "file": file_name},
                 )
             else:
                 md_key = (
@@ -196,7 +196,7 @@ async def upload_attachment_to_entry(
         raise
     logger.info(
         "document entry attachment uploaded",
-        extra={"module": "quality", "entry_id": str(entry.id), "file": file_name},
+        extra={"component": "quality", "entry_id": str(entry.id), "file": file_name},
     )
     return attachment
 
@@ -382,7 +382,7 @@ async def llm_match_entry(db: AsyncSession, file_name: str) -> DocumentEntry | N
     ) as exc:
         logger.warning(
             "llm attachment match failed",
-            extra={"module": "quality", "file": file_name, "error": str(exc)},
+            extra={"component": "quality", "file": file_name, "error": str(exc)},
         )
         return None
     try:
@@ -461,7 +461,7 @@ async def delete_attachment_from_entry(
         raise AppException(message="附件删除失败，已回滚可恢复的变更", status_code=502)
     logger.info(
         "document entry attachment deleted",
-        extra={"module": "quality", "entry_id": str(entry.id), "key": storage_key},
+        extra={"component": "quality", "entry_id": str(entry.id), "key": storage_key},
     )
     return True
 
@@ -506,7 +506,11 @@ def read_entry_md_contents(entry: DocumentEntry) -> list[dict[str, Any]]:
         except UnicodeDecodeError:
             logger.warning(
                 "attachment md decode failed",
-                extra={"module": "quality", "entry_id": str(entry.id), "key": md_key},
+                extra={
+                    "component": "quality",
+                    "entry_id": str(entry.id),
+                    "key": md_key,
+                },
             )
             continue
         contents.append(
