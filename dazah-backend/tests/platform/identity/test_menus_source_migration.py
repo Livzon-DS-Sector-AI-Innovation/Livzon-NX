@@ -17,6 +17,7 @@ from app.platform.identity.rbac import (
     resolve_user_menu_ids,
     resolve_user_permissions,
     seed_menus,
+    seed_permissions,
 )
 from app.platform.identity.repository import MenuRepository, RbacRepository
 from app.platform.identity.schemas import (
@@ -192,6 +193,10 @@ def test_menu_update_cleared_fields() -> None:
 @pytest.mark.asyncio
 async def test_resolve_permissions_merges_role_buttons(db_session) -> None:
     """角色勾选按钮菜单 → 按钮码并入用户 permissions。"""
+    # Integration CI starts from a migrated, empty database and does not run
+    # the FastAPI lifespan. Seed the permission catalog explicitly so this
+    # test does not depend on another test or a developer database.
+    await seed_permissions(db_session)
     await seed_menus(db_session)
     rbac = RbacRepository()
     role = await rbac.get_role_by_code(db_session, "btn_role")
@@ -393,6 +398,9 @@ async def test_admin_menu_crud_api(client) -> None:
 @pytest.mark.asyncio
 async def test_role_menus_api_and_user_menus(client, db_session) -> None:
     """角色菜单绑定 API + 用户菜单端点。"""
+    # The API contract asserts the seeded super_admin role at the end of the
+    # flow; keep the fixture self-contained instead of relying on app startup.
+    await seed_permissions(db_session)
     await seed_menus(db_session)
     await db_session.commit()
 
