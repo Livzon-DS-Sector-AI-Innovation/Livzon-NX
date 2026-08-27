@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from urllib.parse import urlparse
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import AppException, NotFoundException
 from app.modules.quality import repository
 from app.modules.quality.schemas import (
     CapaPlanTrackDetail,
@@ -20,6 +22,8 @@ from app.modules.quality.schemas import (
     UpdateCapaPlanTrackRequest,
     UpdateDeviationInvestigationPushRecordRequest,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _build_page_result(
@@ -70,6 +74,10 @@ def _get_record_created_at(record: dict[str, Any]) -> datetime | None:
     value = record.get("created_time")
     if value in (None, ""):
         return None
+    try:
+        return datetime.fromisoformat(str(value))
+    except (ValueError, TypeError):
+        return None
 
 
 def _extract_feishu_link(value: Any) -> str | None:
@@ -109,23 +117,25 @@ async def _resolve_selected_submitter_contact(
 ) -> dict[str, str]:
     normalized_open_id = (submitter_open_id or "").strip()
     if not normalized_open_id:
-        raise ValueError("提交人不能为空")
+        raise AppException(message="提交人不能为空")
 
-    from app.modules.quality.service import quality_management as quality_management_service
-
-    result = await quality_management_service.get_department_contact_list_from_feishu(
-        db, page=1, page_size=1000
+    from app.modules.quality.service.department_contacts import (
+        get_department_contact_list_from_feishu,
     )
+
+    result = await get_department_contact_list_from_feishu(db, page=1, page_size=1000)
     for contact in result.get("items", []):
         if str(contact.get("open_id") or "").strip() == normalized_open_id:
             return {
                 "name": str(contact.get("name") or "").strip(),
                 "open_id": normalized_open_id,
                 "department": str(contact.get("department") or "").strip(),
-                "department_head_name": str(contact.get("department_head_name") or "").strip(),
+                "department_head_name": str(
+                    contact.get("department_head_name") or ""
+                ).strip(),
             }
 
-    raise ValueError("所选提交人不存在于部门联系人台账中")
+    raise AppException(message="所选提交人不存在于部门联系人台账中")
 
 
 async def _build_deviation_investigation_push_items_from_feishu(
@@ -146,7 +156,9 @@ async def _build_deviation_investigation_push_items_from_feishu(
     from app.modules.quality.service import quality_feishu_sync as feishu_sync_service
 
     runtime = await feishu_sync_service.feishu_sync._resolve_runtime(db)
-    entity = runtime.get_entity_config("deviation_investigation_push_record", direction="pull")
+    entity = runtime.get_entity_config(
+        "deviation_investigation_push_record", direction="pull"
+    )
     if not runtime.is_enabled() or not entity:
         return _build_page_result([], 0, page, page_size)
 
@@ -163,47 +175,31 @@ async def _build_deviation_investigation_push_items_from_feishu(
 
     deviation_codes = []
     for record in records:
-        code = normalize_text(field_value(entity, record.get("fields") or {}, "偏差编号"))
+        code = normalize_text(
+            field_value(entity, record.get("fields") or {}, "偏差编号")
+        )
         if code:
             deviation_codes.append(code)
-
-    linked_deviations = await repository.get_deviations_by_codes(db, list(dict.fromkeys(deviation_codes)))
-    deviation_map = {
-        deviation.deviation_code: deviation for deviation in linked_deviations if deviation.deviation_code
-    }
-    local_records = await repository.get_deviation_investigation_push_records_by_codes(
-        db,
-        list(dict.fromkeys(deviation_codes)),
-    )
-    local_record_id_map = {
-        record.feishu_base_record_id: record
-        for record in local_records
-        if record.feishu_base_record_id
-    }
-    local_record_key_map = {
-        (record.deviation_code, record.push_round): record for record in local_records
-    }
 
     items: list[dict[str, Any]] = []
     for record in records:
         fields = record.get("fields") or {}
-        current_deviation_code = normalize_text(field_value(entity, fields, "偏差编号")) or ""
-        current_push_round = normalize_text(field_value(entity, fields, "第N次推送")) or "第1次"
-        linked_deviation = deviation_map.get(current_deviation_code)
-        local_record = local_record_id_map.get(record.get("record_id")) or local_record_key_map.get(
-            (current_deviation_code, current_push_round)
+        current_deviation_code = (
+            normalize_text(field_value(entity, fields, "偏差编号")) or ""
+        )
+        current_push_round = (
+            normalize_text(field_value(entity, fields, "第N次推送")) or "第1次"
         )
         submitted_at_value = parse_datetime(field_value(entity, fields, "提交日期"))
+        linked_deviation = (
+            await repository.get_deviation_by_code(db, current_deviation_code)
+            if current_deviation_code
+            else None
+        )
         item = DeviationInvestigationPushRecordListItem(
             id=record.get("record_id", ""),
-            local_record_id=local_record.id if local_record else None,
-            deviation_id=(
-                linked_deviation.id
-                if linked_deviation
-                else local_record.deviation_id
-                if local_record
-                else None
-            ),
+            local_record_id=None,
+            deviation_id=linked_deviation.id if linked_deviation else None,
             deviation_code=current_deviation_code,
             push_round=current_push_round,
             investigation_report_url=_extract_feishu_link(
@@ -211,7 +207,13 @@ async def _build_deviation_investigation_push_items_from_feishu(
             ),
             submitted_at=submitted_at_value,
             submitter=normalize_text(field_value(entity, fields, "提交人")),
+            submitters=feishu_sync_service._parse_person_field(
+                field_value(entity, fields, "提交人")
+            ),
             department_head=normalize_text(field_value(entity, fields, "部门负责人")),
+            department_heads=feishu_sync_service._parse_person_field(
+                field_value(entity, fields, "部门负责人")
+            ),
             department_head_result=normalize_review_result(
                 field_value(entity, fields, "部门负责人审核结果")
             ),
@@ -219,9 +221,17 @@ async def _build_deviation_investigation_push_items_from_feishu(
                 field_value(entity, fields, "部门负责人审核时间")
             ),
             qa_name=normalize_text(field_value(entity, fields, "QA")),
-            qa_result=normalize_review_result(field_value(entity, fields, "QA审核结果")),
+            qas=feishu_sync_service._parse_person_field(
+                field_value(entity, fields, "QA")
+            ),
+            qa_result=normalize_review_result(
+                field_value(entity, fields, "QA审核结果")
+            ),
             qa_reviewed_at=parse_datetime(field_value(entity, fields, "QA审核时间")),
             qa_head_name=normalize_text(field_value(entity, fields, "QA负责人")),
+            qa_heads=feishu_sync_service._parse_person_field(
+                field_value(entity, fields, "QA负责人")
+            ),
             qa_head_result=normalize_review_result(
                 field_value(entity, fields, "QA负责人审核结果")
             ),
@@ -241,13 +251,18 @@ async def _build_deviation_investigation_push_items_from_feishu(
 
         if deviation_id and item.get("deviation_id") != deviation_id:
             continue
-        if deviation_code and not _contains_text(item.get("deviation_code"), deviation_code):
+        if deviation_code and not _contains_text(
+            item.get("deviation_code"), deviation_code
+        ):
             continue
         if push_round and item.get("push_round") != push_round:
             continue
         if submitter and not _contains_text(item.get("submitter"), submitter):
             continue
-        if department_head_result and item.get("department_head_result") != department_head_result:
+        if (
+            department_head_result
+            and item.get("department_head_result") != department_head_result
+        ):
             continue
         if qa_result and item.get("qa_result") != qa_result:
             continue
@@ -265,14 +280,99 @@ async def _build_deviation_investigation_push_items_from_feishu(
 
     items.sort(
         key=lambda item: (
-            item.get("submitted_at") or datetime.min.replace(tzinfo=timezone.utc),
-            item.get("feishu_source_updated_at") or datetime.min.replace(tzinfo=timezone.utc),
+            item.get("submitted_at") or datetime.min.replace(tzinfo=UTC),
+            item.get("feishu_source_updated_at") or datetime.min.replace(tzinfo=UTC),
         ),
         reverse=True,
     )
     start = (page - 1) * page_size
     end = start + page_size
     return _build_page_result(items[start:end], len(items), page, page_size)
+
+
+async def get_deviation_report_record_from_feishu(
+    db: AsyncSession,
+    record_id: str,
+) -> dict[str, Any]:
+    from app.modules.quality.service import quality_feishu_sync as feishu_sync_service
+
+    runtime = await feishu_sync_service.feishu_sync._resolve_runtime(db)
+    entity = runtime.get_entity_config("deviation_report_record", direction="pull")
+    if not runtime.is_enabled() or not entity:
+        raise AppException(message="飞书报告记录未启用")
+
+    records = await feishu_sync_service.feishu_sync.search_records(
+        db, "deviation_report_record", None
+    )
+    field_value = feishu_sync_service._get_mapped_field_value
+    normalize_text = feishu_sync_service._normalize_text
+    parse_datetime = feishu_sync_service._parse_feishu_datetime
+    get_record_modified_at = feishu_sync_service._get_record_modified_at
+
+    for record in records:
+        if str(record.get("record_id") or "") != record_id:
+            continue
+        fields = record.get("fields") or {}
+        modified_at = get_record_modified_at(record)
+        created_at = parse_datetime(record.get("created_time")) or modified_at
+        return {
+            "deviation_code": normalize_text(field_value(entity, fields, "偏差编号")),
+            "description": normalize_text(field_value(entity, fields, "偏差内容")),
+            "report_time": parse_datetime(field_value(entity, fields, "报告时间")),
+            "product_batch": normalize_text(
+                field_value(entity, fields, "涉及产品名称/批号")
+            ),
+            "department": normalize_text(field_value(entity, fields, "部门")),
+            "reporter_name": normalize_text(field_value(entity, fields, "报告人")),
+            "reporters": feishu_sync_service._parse_person_field(
+                field_value(entity, fields, "报告人")
+            ),
+            "department_head": normalize_text(
+                field_value(entity, fields, "部门负责人")
+            ),
+            "department_heads": feishu_sync_service._parse_person_field(
+                field_value(entity, fields, "部门负责人")
+            ),
+            "department_head_result": _normalize_checkbox_result(
+                field_value(entity, fields, "部门负责人确认")
+            ),
+            "department_head_reviewed_at": parse_datetime(
+                field_value(entity, fields, "部门负责人确认时间")
+            ),
+            "qa_name": normalize_text(field_value(entity, fields, "QA")),
+            "qas": feishu_sync_service._parse_person_field(
+                field_value(entity, fields, "QA")
+            ),
+            "qa_result": _normalize_checkbox_result(
+                field_value(entity, fields, "QA确认")
+            ),
+            "qa_reviewed_at": parse_datetime(field_value(entity, fields, "QA确认时间")),
+            "qa_head_name": normalize_text(field_value(entity, fields, "QA负责人")),
+            "qa_heads": feishu_sync_service._parse_person_field(
+                field_value(entity, fields, "QA负责人")
+            ),
+            "qa_head_result": _normalize_checkbox_result(
+                field_value(entity, fields, "QA负责人确认")
+            ),
+            "qa_head_reviewed_at": parse_datetime(
+                field_value(entity, fields, "QA负责人确认时间")
+            ),
+            "report_status": normalize_text(field_value(entity, fields, "报告状态")),
+            "attachments": feishu_sync_service._parse_attachment_field(
+                field_value(entity, fields, "附件")
+            ),
+            "record_id": record_id,
+            "feishu_base_table_id": entity.table_id,
+            "feishu_base_record_id": record_id,
+            "feishu_sync_status": "synced",
+            "feishu_last_sync_direction": "base_to_system",
+            "feishu_synced_at": modified_at,
+            "feishu_source_updated_at": modified_at,
+            "created_at": created_at,
+            "updated_at": modified_at,
+        }
+
+    raise NotFoundException(resource="偏差报告记录")
 
 
 async def _get_deviation_investigation_push_record_from_feishu(
@@ -282,9 +382,11 @@ async def _get_deviation_investigation_push_record_from_feishu(
     from app.modules.quality.service import quality_feishu_sync as feishu_sync_service
 
     runtime = await feishu_sync_service.feishu_sync._resolve_runtime(db)
-    entity = runtime.get_entity_config("deviation_investigation_push_record", direction="pull")
+    entity = runtime.get_entity_config(
+        "deviation_investigation_push_record", direction="pull"
+    )
     if not runtime.is_enabled() or not entity:
-        raise ValueError("调查推送飞书 Base 未启用")
+        raise AppException(message="调查推送飞书 Base 未启用")
 
     records = await feishu_sync_service.feishu_sync.search_records(
         db,
@@ -301,8 +403,12 @@ async def _get_deviation_investigation_push_record_from_feishu(
         if str(record.get("record_id") or "") != feishu_record_id:
             continue
         fields = record.get("fields") or {}
-        current_deviation_code = normalize_text(field_value(entity, fields, "偏差编号")) or ""
-        current_push_round = normalize_text(field_value(entity, fields, "第N次推送")) or "第1次"
+        current_deviation_code = (
+            normalize_text(field_value(entity, fields, "偏差编号")) or ""
+        )
+        current_push_round = (
+            normalize_text(field_value(entity, fields, "第N次推送")) or "第1次"
+        )
         submitted_at_value = parse_datetime(field_value(entity, fields, "提交日期"))
         parsed_item = DeviationInvestigationPushRecordListItem(
             id=record.get("record_id", ""),
@@ -313,7 +419,13 @@ async def _get_deviation_investigation_push_record_from_feishu(
             ),
             submitted_at=submitted_at_value,
             submitter=normalize_text(field_value(entity, fields, "提交人")),
+            submitters=feishu_sync_service._parse_person_field(
+                field_value(entity, fields, "提交人")
+            ),
             department_head=normalize_text(field_value(entity, fields, "部门负责人")),
+            department_heads=feishu_sync_service._parse_person_field(
+                field_value(entity, fields, "部门负责人")
+            ),
             department_head_result=normalize_review_result(
                 field_value(entity, fields, "部门负责人审核结果")
             ),
@@ -321,9 +433,17 @@ async def _get_deviation_investigation_push_record_from_feishu(
                 field_value(entity, fields, "部门负责人审核时间")
             ),
             qa_name=normalize_text(field_value(entity, fields, "QA")),
-            qa_result=normalize_review_result(field_value(entity, fields, "QA审核结果")),
+            qas=feishu_sync_service._parse_person_field(
+                field_value(entity, fields, "QA")
+            ),
+            qa_result=normalize_review_result(
+                field_value(entity, fields, "QA审核结果")
+            ),
             qa_reviewed_at=parse_datetime(field_value(entity, fields, "QA审核时间")),
             qa_head_name=normalize_text(field_value(entity, fields, "QA负责人")),
+            qa_heads=feishu_sync_service._parse_person_field(
+                field_value(entity, fields, "QA负责人")
+            ),
             qa_head_result=normalize_review_result(
                 field_value(entity, fields, "QA负责人审核结果")
             ),
@@ -341,7 +461,7 @@ async def _get_deviation_investigation_push_record_from_feishu(
             updated_at=get_record_modified_at(record),
         ).model_dump()
         return record, parsed_item, feishu_sync_service
-    raise ValueError("飞书调查推送记录不存在")
+    raise NotFoundException(resource="偏差调查推送记录")
 
 
 async def get_deviation_investigation_push_record_list(
@@ -378,18 +498,22 @@ async def get_deviation_investigation_push_record_list(
 async def get_deviation_investigation_push_record_detail(
     db: AsyncSession, record_id: uuid.UUID
 ) -> DeviationInvestigationPushRecordDetail:
-    record = await repository.get_deviation_investigation_push_record_by_id(db, record_id)
+    record = await repository.get_deviation_investigation_push_record_by_id(
+        db, record_id
+    )
     if not record:
-        raise ValueError(f"Deviation investigation push record {record_id} not found")
+        raise NotFoundException(resource="偏差调查推送记录", resource_id=str(record_id))
     return DeviationInvestigationPushRecordDetail.model_validate(record)
 
 
 async def _dump_deviation_investigation_push_record(
     db: AsyncSession, record_id: uuid.UUID
 ) -> dict[str, Any]:
-    record = await repository.get_deviation_investigation_push_record_by_id(db, record_id)
+    record = await repository.get_deviation_investigation_push_record_by_id(
+        db, record_id
+    )
     if not record:
-        raise ValueError(f"Deviation investigation push record {record_id} not found")
+        raise NotFoundException(resource="偏差调查推送记录", resource_id=str(record_id))
     return DeviationInvestigationPushRecordDetail.model_validate(record).model_dump(
         mode="json"
     )
@@ -400,26 +524,30 @@ async def create_deviation_investigation_push_record(
     data: CreateDeviationInvestigationPushRecordRequest,
     user_id: str,
 ) -> dict[str, str]:
+    if data.deviation_id is None:
+        raise AppException(message="偏差记录不能为空")
     deviation = await repository.get_deviation_by_id(db, data.deviation_id)
     if not deviation:
-        raise ValueError(f"Deviation {data.deviation_id} not found")
+        raise NotFoundException(resource="偏差", resource_id=str(data.deviation_id))
 
     submitter_contact = await _resolve_selected_submitter_contact(
         db, data.submitter_open_id
     )
     investigation_report_url = _to_feishu_url_field(data.investigation_report_url)
     if not data.push_round.strip():
-        raise ValueError("第N次推送不能为空")
+        raise AppException(message="第N次推送不能为空")
 
     payload = data.model_dump()
     payload.pop("submitter_open_id", None)
     payload["deviation_code"] = deviation.deviation_code
     payload["push_round"] = data.push_round.strip()
     payload["investigation_report_url"] = investigation_report_url
-    payload["submitted_at"] = data.submitted_at or datetime.now(timezone.utc)
+    payload["submitted_at"] = data.submitted_at or datetime.now(UTC)
     payload["submitter"] = submitter_contact["name"] or deviation.discoverer or ""
     payload["department_head"] = (
-        submitter_contact["department_head_name"] or payload.get("department_head") or ""
+        submitter_contact["department_head_name"]
+        or payload.get("department_head")
+        or ""
     )
     payload["created_by"] = None
     payload["updated_by"] = None
@@ -435,11 +563,22 @@ async def create_deviation_investigation_push_record(
 
 async def update_deviation_investigation_push_record(
     db: AsyncSession,
-    record_id: uuid.UUID,
+    record_id: str | uuid.UUID,
     data: UpdateDeviationInvestigationPushRecordRequest,
     user_id: str,
-) -> dict[str, str]:
-    record = await repository.get_deviation_investigation_push_record_by_id(db, record_id)
+) -> dict[str, Any]:
+    try:
+        local_id = (
+            record_id if isinstance(record_id, uuid.UUID) else uuid.UUID(str(record_id))
+        )
+    except (ValueError, TypeError) as exc:
+        raise ValueError(
+            f"Deviation investigation push record {record_id} not found"
+        ) from exc
+
+    record = await repository.get_deviation_investigation_push_record_by_id(
+        db, local_id
+    )
     if not record:
         raise ValueError(f"Deviation investigation push record {record_id} not found")
 
@@ -460,10 +599,13 @@ async def update_deviation_investigation_push_record_by_ref(
     data: UpdateDeviationInvestigationPushRecordRequest,
     user_id: str,
 ) -> dict[str, Any]:
-    try:
-        local_id = uuid.UUID(record_ref)
-    except ValueError:
-        local_id = None
+    if isinstance(record_ref, uuid.UUID):
+        local_id = record_ref
+    else:
+        try:
+            local_id = uuid.UUID(str(record_ref))
+        except (ValueError, TypeError):
+            local_id = None
 
     if local_id:
         local_record = await repository.get_deviation_investigation_push_record_by_id(
@@ -474,9 +616,11 @@ async def update_deviation_investigation_push_record_by_ref(
                 db, local_id, data, user_id
             )
 
-    _, remote_item, feishu_sync_service = (
-        await _get_deviation_investigation_push_record_from_feishu(db, record_ref)
-    )
+    (
+        _,
+        remote_item,
+        feishu_sync_service,
+    ) = await _get_deviation_investigation_push_record_from_feishu(db, record_ref)
     payload = data.model_dump(exclude_unset=True)
     merged = {**remote_item, **payload}
     deviation = await repository.get_deviation_by_code(db, merged["deviation_code"])
@@ -511,7 +655,9 @@ async def update_deviation_investigation_push_record_by_ref(
         "QA审核结果": feishu_sync_service._to_feishu_review_option(
             merged.get("qa_result")
         ),
-        "QA审核时间": feishu_sync_service._to_ms_timestamp(merged.get("qa_reviewed_at")),
+        "QA审核时间": feishu_sync_service._to_ms_timestamp(
+            merged.get("qa_reviewed_at")
+        ),
         "QA负责人": await feishu_sync_service._resolve_contact_bitable_user_value(
             db, merged.get("qa_head_name")
         ),
@@ -522,17 +668,20 @@ async def update_deviation_investigation_push_record_by_ref(
             merged.get("qa_head_reviewed_at")
         ),
     }
-    next_record_id, table_id = await feishu_sync_service.feishu_sync._upsert_record(
-        db,
-        "deviation_investigation_push_record",
-        None,
-        record_ref,
-        fields,
-        search_conditions=[
-            ("偏差编号", merged["deviation_code"]),
-            ("第N次推送", merged["push_round"]),
-        ],
-    )
+    try:
+        next_record_id, table_id = await feishu_sync_service.feishu_sync._upsert_record(
+            db,
+            "deviation_investigation_push_record",
+            None,
+            record_ref,
+            fields,
+            search_conditions=[
+                ("偏差编号", merged["deviation_code"]),
+                ("第N次推送", merged["push_round"]),
+            ],
+        )
+    except Exception:
+        raise
     merged["id"] = next_record_id
     merged["feishu_base_record_id"] = next_record_id
     merged["feishu_base_table_id"] = table_id
@@ -556,9 +705,14 @@ async def sync_deviation_investigation_push_record_to_feishu_by_ref(
             db, local_id
         )
         if local_record:
-            from app.modules.quality.service import quality_feishu_sync as feishu_sync_service
+            from app.modules.quality.service import (
+                quality_feishu_sync as feishu_sync_service,
+            )
 
-            return await feishu_sync_service.sync_deviation_investigation_push_record_to_feishu(
+            sync_push_record = (
+                feishu_sync_service.sync_deviation_investigation_push_record_to_feishu
+            )
+            return await sync_push_record(
                 db,
                 local_id,
             )
@@ -610,8 +764,27 @@ async def get_capa_plan_track_detail(
 ) -> CapaPlanTrackDetail:
     track = await repository.get_capa_plan_track_by_id(db, track_id)
     if not track:
-        raise ValueError(f"CAPA plan track {track_id} not found")
-    return CapaPlanTrackDetail.model_validate(track)
+        raise NotFoundException(resource="CAPA计划跟踪", resource_id=str(track_id))
+    return _cap_plan_track_to_detail(track)
+
+
+def _cap_plan_track_to_detail(track: Any) -> CapaPlanTrackDetail:
+    """Convert ORM object to detail schema, bypassing SQLAlchemy descriptor protocol."""
+    raw = {k: v for k, v in track.__dict__.items() if not k.startswith("_sa_")}
+    for col in track.__table__.columns:
+        if col.key not in raw:
+            raw[col.key] = None
+    # Fix None values for required datetime columns
+    now = datetime.now(UTC)
+    for key in ("created_at", "updated_at"):
+        if raw.get(key) is None:
+            raw[key] = now
+    return CapaPlanTrackDetail(**raw)
+
+
+def _cap_plan_track_to_dict(track: Any) -> dict[str, Any]:
+    """Convert ORM object to plain dict, bypassing all Pydantic validation."""
+    return _cap_plan_track_to_detail(track).model_dump(mode="json")
 
 
 async def create_capa_plan_track(
@@ -621,7 +794,7 @@ async def create_capa_plan_track(
 ) -> dict[str, str]:
     capa = await repository.get_capa_by_id(db, data.capa_id)
     if not capa:
-        raise ValueError(f"CAPA {data.capa_id} not found")
+        raise NotFoundException(resource="CAPA", resource_id=str(data.capa_id))
 
     payload = data.model_dump()
     payload["capa_code"] = capa.capa_code
@@ -629,10 +802,14 @@ async def create_capa_plan_track(
     payload["updated_by"] = None
     record = await repository.create_capa_plan_track(db, payload)
     await db.commit()
+    # Re-fetch to ensure all server-generated columns are loaded
+    result = await repository.get_capa_plan_track_by_id(db, record.id)
+    if not result:
+        raise AppException(message=f"Failed to re-fetch CAPA plan track {record.id}")
     from app.modules.quality.service import quality_feishu_sync as feishu_sync_service
 
     await feishu_sync_service.auto_sync_capa_plan_track_after_write(db, record.id)
-    return CapaPlanTrackDetail.model_validate(record).model_dump(mode="json")
+    return _cap_plan_track_to_dict(result)
 
 
 async def update_capa_plan_track(
@@ -643,12 +820,133 @@ async def update_capa_plan_track(
 ) -> dict[str, str]:
     track = await repository.get_capa_plan_track_by_id(db, track_id)
     if not track:
-        raise ValueError(f"CAPA plan track {track_id} not found")
+        raise NotFoundException(resource="CAPA计划跟踪", resource_id=str(track_id))
 
     payload = data.model_dump(exclude_unset=True)
     await repository.update_capa_plan_track(db, track, payload)
     await db.commit()
+    result = await repository.get_capa_plan_track_by_id(db, track.id)
+    if not result:
+        raise AppException(message=f"Failed to re-fetch CAPA plan track {track.id}")
     from app.modules.quality.service import quality_feishu_sync as feishu_sync_service
 
     await feishu_sync_service.auto_sync_capa_plan_track_after_write(db, track.id)
-    return CapaPlanTrackDetail.model_validate(track).model_dump(mode="json")
+    return _cap_plan_track_to_detail(result).model_dump(mode="json")
+
+
+async def delete_capa_plan_track(
+    db: AsyncSession,
+    track_id: uuid.UUID,
+) -> None:
+    await repository.delete_capa_plan_track(db, track_id)
+    await db.commit()
+
+
+def _normalize_checkbox_result(value: Any) -> str:
+    return "已确认" if value else "待确认"
+
+
+async def get_deviation_report_record_list_from_feishu(
+    db: AsyncSession,
+    *,
+    page: int = 1,
+    page_size: int = 20,
+) -> dict[str, Any]:
+    from app.modules.quality.service import quality_feishu_sync as feishu_sync_service
+
+    runtime = await feishu_sync_service.feishu_sync._resolve_runtime(db)
+    entity = runtime.get_entity_config("deviation_report_record", direction="pull")
+    if not runtime.is_enabled() or not entity:
+        return _build_page_result([], 0, page, page_size)
+
+    records = await feishu_sync_service.feishu_sync.search_records(
+        db,
+        "deviation_report_record",
+        None,
+    )
+    field_value = feishu_sync_service._get_mapped_field_value
+    normalize_text = feishu_sync_service._normalize_text
+    parse_datetime = feishu_sync_service._parse_feishu_datetime
+    get_record_modified_at = feishu_sync_service._get_record_modified_at
+
+    items: list[dict[str, Any]] = []
+    for record in records:
+        fields = record.get("fields") or {}
+        modified_at = get_record_modified_at(record)
+        created_at = parse_datetime(record.get("created_time")) or modified_at
+        record_id = str(record.get("record_id") or "")
+        items.append(
+            {
+                "deviation_code": normalize_text(
+                    field_value(entity, fields, "偏差编号")
+                ),
+                "description": normalize_text(field_value(entity, fields, "偏差内容")),
+                "report_time": parse_datetime(field_value(entity, fields, "报告时间")),
+                "product_batch": normalize_text(
+                    field_value(entity, fields, "涉及产品名称/批号")
+                ),
+                "department": normalize_text(field_value(entity, fields, "部门")),
+                "reporter_name": normalize_text(field_value(entity, fields, "报告人")),
+                "reporters": feishu_sync_service._parse_person_field(
+                    field_value(entity, fields, "报告人")
+                ),
+                "department_head": normalize_text(
+                    field_value(entity, fields, "部门负责人")
+                ),
+                "department_heads": feishu_sync_service._parse_person_field(
+                    field_value(entity, fields, "部门负责人")
+                ),
+                "department_head_result": _normalize_checkbox_result(
+                    field_value(entity, fields, "部门负责人确认")
+                ),
+                "department_head_reviewed_at": parse_datetime(
+                    field_value(entity, fields, "部门负责人确认时间")
+                ),
+                "qa_name": normalize_text(field_value(entity, fields, "QA")),
+                "qas": feishu_sync_service._parse_person_field(
+                    field_value(entity, fields, "QA")
+                ),
+                "qa_result": _normalize_checkbox_result(
+                    field_value(entity, fields, "QA确认")
+                ),
+                "qa_reviewed_at": parse_datetime(
+                    field_value(entity, fields, "QA确认时间")
+                ),
+                "qa_head_name": normalize_text(field_value(entity, fields, "QA负责人")),
+                "qa_heads": feishu_sync_service._parse_person_field(
+                    field_value(entity, fields, "QA负责人")
+                ),
+                "qa_head_result": _normalize_checkbox_result(
+                    field_value(entity, fields, "QA负责人确认")
+                ),
+                "qa_head_reviewed_at": parse_datetime(
+                    field_value(entity, fields, "QA负责人确认时间")
+                ),
+                "report_status": normalize_text(
+                    field_value(entity, fields, "报告状态")
+                ),
+                "attachments": feishu_sync_service._parse_attachment_field(
+                    field_value(entity, fields, "附件")
+                ),
+                "record_id": record_id,
+                "feishu_base_table_id": entity.table_id,
+                "feishu_base_record_id": record_id,
+                "feishu_sync_status": "synced",
+                "feishu_last_sync_direction": "base_to_system",
+                "feishu_synced_at": modified_at,
+                "feishu_source_updated_at": modified_at,
+                "created_at": created_at,
+                "updated_at": modified_at,
+            }
+        )
+
+    items.sort(
+        key=lambda item: (
+            item.get("report_time") or datetime.min.replace(tzinfo=UTC),
+            item.get("feishu_source_updated_at") or datetime.min.replace(tzinfo=UTC),
+        ),
+        reverse=True,
+    )
+    start = (page - 1) * page_size
+    end = start + page_size
+    return _build_page_result(items[start:end], len(items), page, page_size)

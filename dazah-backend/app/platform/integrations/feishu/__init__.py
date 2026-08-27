@@ -21,6 +21,8 @@ from app.platform.integrations.feishu.im import (
 from app.platform.integrations.feishu.notification import (
     build_card,
     send_user_card,
+    send_user_card_with_message_id,
+    update_card,
 )
 from app.platform.integrations.feishu.utils import (
     FEISHU_BITABLE_RECORD_CHANGED_EVENT,
@@ -56,6 +58,8 @@ __all__ = [
     "update_feishu_message",
     "build_card",
     "send_user_card",
+    "send_user_card_with_message_id",
+    "update_card",
     "BitableReference",
     "ConnectivityStep",
     "FEISHU_BITABLE_RECORD_CHANGED_EVENT",

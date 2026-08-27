@@ -1,10 +1,10 @@
 """CAPA Pydantic schemas."""
 
-
 import uuid
 from datetime import datetime
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class CapaItem(BaseModel):
@@ -23,9 +23,17 @@ class ExecutionTrack(BaseModel):
 
 
 class DeptHeadConfirmation(BaseModel):
+    """部门负责人确认（JSON 存储，字段与 service 实际写入一致）。"""
+
+    model_config = ConfigDict(populate_by_name=True)
+
     department: str
-    confirmed: bool
+    dept_head_user_id: str | None = Field(default=None, alias="deptHeadUserId")
+    result: str | None = None
     opinion: str | None = None
+    confirm_time: str | None = Field(default=None, alias="confirmTime")
+    # 兼容旧数据的遗留字段
+    confirmed: bool = False
     confirm_date: str | None = None
 
 
@@ -65,6 +73,7 @@ class CapaListItem(BaseModel):
     status_updated_at: datetime | None = None
     returned_step: str | None = None
 
+
 class CapaDetail(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -80,7 +89,7 @@ class CapaDetail(BaseModel):
     non_conformity_description: str | None = None
     root_cause_analysis: str | None = None
     capa_content: str | None = None
-    capa_items: list | None = None
+    capa_items: list[Any] | None = None
     executors: list[str] | None = None
     expected_completion_date: datetime | None = None
     qa_reviewer_id: uuid.UUID | None = None
@@ -90,8 +99,8 @@ class CapaDetail(BaseModel):
     q_head_approval_opinion: str | None = None
     q_head_approval_time: datetime | None = None
     execution_status: str | None = None
-    execution_tracks: list | None = None
-    dept_head_confirmations: list | None = None
+    execution_tracks: list[Any] | None = None
+    dept_head_confirmations: list[Any] | None = None
     evaluation_result: str | None = None
     evaluation_target: str | None = None
     evaluation_deadline: datetime | None = None
@@ -101,7 +110,7 @@ class CapaDetail(BaseModel):
     closure_remark: str | None = None
     final_code: str | None = None
     report_content: str | None = None
-    report_versions: list | None = None
+    report_versions: list[Any] | None = None
     returned_step: str | None = None
     status_updated_at: datetime | None = None
     reporter: str | None = None
@@ -116,6 +125,7 @@ class CapaDetail(BaseModel):
     feishu_source_updated_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
+
 
 class CreateCapaRequest(BaseModel):
     title: str | None = None
@@ -162,7 +172,7 @@ class UpdateCapaRequest(BaseModel):
     closure_remark: str | None = None
     final_code: str | None = None
     report_content: str | None = None
-    report_versions: list | None = None
+    report_versions: list[Any] | None = None
     returned_step: str | None = None
     reporter: str | None = None
     reason_category: str | None = None

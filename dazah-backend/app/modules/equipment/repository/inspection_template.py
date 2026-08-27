@@ -22,9 +22,7 @@ async def create_inspection_template(
 
     if items:
         for item_data in items:
-            item = InspectionTemplateItem(
-                template_id=template.id, **item_data
-            )
+            item = InspectionTemplateItem(template_id=template.id, **item_data)
             db.add(item)
         await db.flush()
 

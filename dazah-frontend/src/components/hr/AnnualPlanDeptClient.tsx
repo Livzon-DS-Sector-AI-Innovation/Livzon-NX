@@ -5,7 +5,7 @@ import { App, Button, Card, Row, Col, Popconfirm, Spin, } from 'antd'
 import { PlusOutlined, DeleteOutlined, EditOutlined, FileTextOutlined } from '@ant-design/icons'
 import Link from 'next/link'
 import { AnnualTrainingPlan } from '@/types/hr'
-import { fetchAnnualTrainingPlans } from '@/lib/api/hr'
+import { fetchAnnualTrainingPlans } from '@/lib/api/client/hr'
 import { deleteAnnualTrainingPlan } from '@/actions/hr'
 
 interface AnnualPlanDeptClientProps {
@@ -27,14 +27,14 @@ export default function AnnualPlanDeptClient({ department }: AnnualPlanDeptClien
       })
       setPlans(res.data || [])
     } catch (err) {
-      message.error('加载计划列表失败: ' + (err.message || '未知错误'))
+      message.error('加载计划列表失败: ' + ((err instanceof Error ? err.message : '') || '未知错误'))
     } finally {
       setLoading(false)
     }
   }
 
   useEffect(() => {
-    loadPlans()
+    queueMicrotask(loadPlans)
   }, [department])
 
   const handleDelete = async (id: string) => {
@@ -43,7 +43,7 @@ export default function AnnualPlanDeptClient({ department }: AnnualPlanDeptClien
       setPlans((prev) => prev.filter((p) => p.id !== id))
       message.success('删除成功')
     } catch (err) {
-      message.error(err.message || '删除失败')
+      message.error((err instanceof Error ? err.message : '') || '删除失败')
     }
   }
 

@@ -2,10 +2,10 @@
 
 统一入口 run_fa_sync()，API 和定时任务共用
 """
-
 import logging
 import re
 from pathlib import Path
+from typing import Any
 
 import httpx
 from dotenv import load_dotenv
@@ -35,7 +35,7 @@ FA_SYNC_MODULES = [
 ]
 
 
-async def _get_fa_spreadsheet_config(session: AsyncSession) -> dict:
+async def _get_fa_spreadsheet_config(session: AsyncSession) -> dict[str, Any]:
     """从数据库读取 FA 飞书电子表格配置，返回 {spreadsheet_token, app_id, app_secret}"""
     result = await session.execute(
         select(ProductionFeishuConfig)
@@ -81,7 +81,7 @@ async def _get_token(app_id: str, app_secret: str) -> str:
 
 async def _read_sheet(
     spreadsheet_token: str, sheet_id: str, app_id: str, app_secret: str
-) -> list[list]:
+) -> list[list[Any]]:
     t = await _get_token(app_id, app_secret)
     async with httpx.AsyncClient(base_url=BASE_URL, timeout=60) as c:
         r = await c.get(
@@ -97,7 +97,7 @@ async def _read_sheet(
     return [[str(c) if c is not None else "" for c in row] for row in vals]
 
 
-def _g(row, i):
+def _g(row: Any, i: Any) -> Any:
     return str(row[i]).strip() if i < len(row) else ""
 
 
@@ -154,7 +154,7 @@ def _p(v: str) -> str:
 # ========== 模块同步函数 ==========
 
 
-async def _sync_fermentation(session: AsyncSession, cfg: dict):
+async def _sync_fermentation(session: AsyncSession, cfg: dict[str, Any]) -> Any:
     from app.modules.production.fa_feishu_sync import sync_fermentation
 
     return await sync_fermentation(
@@ -164,20 +164,21 @@ async def _sync_fermentation(session: AsyncSession, cfg: dict):
 
 async def _sync_simple(
     session: AsyncSession,
-    cfg: dict,
+    cfg: dict[str, Any],
     sheet_id: str,
     table: str,
-    cols: list,
-    parse_row,
-    date_fmt="slash",
-):
+    cols: list[Any],
+    parse_row: Any,
+    date_fmt: Any="slash",
+) -> Any:
     """通用简单表同步：读飞书 → 解析 → DELETE + INSERT"""
     rows = await _read_sheet(
         cfg["spreadsheet_token"], sheet_id, cfg["app_id"], cfg["app_secret"]
     )
-    records, in_data = [], False
+    records: list[dict[str, Any]] = []
+    in_data = False
     cur_date = None
-    pending: list = []  # 缓冲无日期行，等后面出现日期再处理
+    pending: list[Any] = []  # 缓冲无日期行，等后面出现日期再处理
     for row in rows:
         c0 = _g(row, 0)
         if not in_data:
@@ -258,7 +259,7 @@ async def _sync_simple(
     return {"rows": len(records)}
 
 
-async def _sync_acidification(session: AsyncSession, cfg: dict):
+async def _sync_acidification(session: AsyncSession, cfg: dict[str, Any]) -> Any:
     cols = [
         ("日期", 0),
         ("批号", 1),
@@ -304,7 +305,8 @@ async def _sync_acidification(session: AsyncSession, cfg: dict):
     rows = await _read_sheet(
         cfg["spreadsheet_token"], "1ijZSR", cfg["app_id"], cfg["app_secret"]
     )
-    records, in_data = [], False
+    records: list[dict[str, Any]] = []
+    in_data = False
     cur_date, cur_batch = None, None
     for row in rows:
         c0, c1 = _g(row, 0), _g(row, 1)
@@ -355,7 +357,7 @@ async def _sync_acidification(session: AsyncSession, cfg: dict):
 # ========== 统一入口 ==========
 
 
-async def run_fa_sync(modules: list[str], session: AsyncSession) -> dict:
+async def run_fa_sync(modules: list[str], session: AsyncSession) -> dict[str, Any]:
     """统一入口，同 MC 的 run_mc_sync"""
     cfg = await _get_fa_spreadsheet_config(session)
     logger.info("[FA同步] 使用电子表格: %s", cfg["spreadsheet_token"])
@@ -491,8 +493,8 @@ async def run_fa_sync(modules: list[str], session: AsyncSession) -> dict:
         ),
     }
 
-    def simple_parser(cols, date_fmt):
-        def fn(row, cur_date=None):
+    def simple_parser(cols: Any, date_fmt: Any) -> Any:
+        def fn(row: Any, cur_date: Any=None) -> Any:
             c0 = _g(row, 0)
             if not c0 and not cur_date:
                 return {}, True
@@ -561,15 +563,15 @@ async def run_fa_sync(modules: list[str], session: AsyncSession) -> dict:
 _fa_scheduler = None
 
 
-async def _fa_scheduled_job():
+async def _fa_scheduled_job() -> Any:
     logger.info("[FA飞书同步] 定时任务触发")
     from app.core.database import async_session_factory
 
     async with async_session_factory() as session:
         results = await run_fa_sync(FA_SYNC_MODULES, session)
     errors = [m for m, r in results.items() if isinstance(r, dict) and "error" in r]
-    total_new = sum(
-        r.get("rows", r.get("batches", 0))
+    total_new: int = sum(
+        int(r.get("rows", r.get("batches", 0)) or 0)
         for r in results.values()
         if isinstance(r, dict) and "error" not in r
     )
@@ -578,10 +580,14 @@ async def _fa_scheduled_job():
     logger.info("[FA飞书同步] 完成, 新增/更新 %d 条", total_new)
 
 
-def start_fa_sync_scheduler():
+def start_fa_sync_scheduler() -> Any:
     global _fa_scheduler
-    from apscheduler.schedulers.asyncio import AsyncIOScheduler
-    from apscheduler.triggers.interval import IntervalTrigger
+    from apscheduler.schedulers.asyncio import (  # type: ignore[import-untyped]
+        AsyncIOScheduler,
+    )
+    from apscheduler.triggers.interval import (  # type: ignore[import-untyped]
+        IntervalTrigger,
+    )
 
     if _fa_scheduler is not None:
         return
@@ -600,7 +606,7 @@ def start_fa_sync_scheduler():
         logger.error(f"[FA飞书同步] 启动失败: {e}")
 
 
-def stop_fa_sync_scheduler():
+def stop_fa_sync_scheduler() -> Any:
     global _fa_scheduler
     if _fa_scheduler is not None:
         try:

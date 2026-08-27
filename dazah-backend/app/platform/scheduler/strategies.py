@@ -36,6 +36,7 @@ def is_due(
         case ScheduleStrategy.FIXED_TIME:
             return _is_fixed_time_due(schedule.time_of_day, last_run, now)
 
+
 # ── strategy helpers ──────────────────────────────────────────────
 
 

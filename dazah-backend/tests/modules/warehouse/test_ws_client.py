@@ -1,3 +1,4 @@
+from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
@@ -14,7 +15,7 @@ async def test_restart_skips_duplicate_consumer_for_hermes_owned_app(
 
     class FakeWarehouseFeishuClient:
         def __init__(
-            self,
+            self: Any,
             *,
             app_id: str,
             app_secret: str,
@@ -24,7 +25,7 @@ async def test_restart_skips_duplicate_consumer_for_hermes_owned_app(
             assert app_secret == "test-secret"
             subscribed_tokens.append(app_token)
 
-        async def subscribe_bitable(self) -> None:
+        async def subscribe_bitable(self: Any) -> None:
             return None
 
     monkeypatch.setattr(ws_client, "_main_loop", object())

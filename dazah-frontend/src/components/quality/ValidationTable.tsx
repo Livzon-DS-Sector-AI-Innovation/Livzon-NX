@@ -1,11 +1,10 @@
 'use client'
 
-import { useState, useCallback, type Key } from 'react'
+import { useState, useCallback } from 'react'
 import { Button, Input, Select, Space, Table, Tag, Tooltip, DatePicker, App } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, FilterOutlined } from '@ant-design/icons'
-import type { FeishuValidationItem } from '@/types/quality'
-import { deleteValidation } from '@/actions/quality'
+import type { ValidationListItem } from '@/types/quality'
 import dayjs, { Dayjs } from 'dayjs'
 
 interface ValidationTableFilters {
@@ -23,7 +22,7 @@ interface ValidationTableFilters {
 interface ValidationTableProps {
   mode: 'master' | 'child'
   validationType?: string
-  items: FeishuValidationItem[]
+  items: ValidationListItem[]
   total: number
   loading: boolean
   page: number
@@ -33,19 +32,21 @@ interface ValidationTableProps {
   onPageChange: (page: number, pageSize: number) => void
   onRefresh: () => void
   onCreate: () => void
-  onEdit: (record: FeishuValidationItem) => void
-  onDelete: (record: FeishuValidationItem) => void
-  onBatchDelete?: (ids: string[]) => void
+  onEdit: (record: ValidationListItem) => void
+  onDelete: (record: ValidationListItem) => void
+  onBatchDelete?: (recordIds: string[]) => void
 }
 
 const statusOptions = [
   { label: '完成', value: '完成' },
   { label: '未完成', value: '未完成' },
+  { label: '待完成', value: '待完成' },
 ]
 
 const statusLabelMap: Record<string, string> = {
   '完成': '完成',
   '未完成': '未完成',
+  '待完成': '待完成',
   completed: '完成',
   incomplete: '未完成',
   pending: '待完成',
@@ -71,13 +72,14 @@ function formatDate(value: string | null | undefined): string {
 
 function renderStatus(status: string | null) {
   if (!status) return '-'
+  const normalized = statusLabelMap[status] ?? status
   const color =
-    status === 'completed'
+    normalized === '完成'
       ? 'green'
-      : status === 'pending'
+      : normalized === '待完成'
         ? 'orange'
         : 'red'
-  return <Tag color={color}>{statusLabelMap[status] ?? status}</Tag>
+  return <Tag color={color}>{normalized}</Tag>
 }
 
 function renderProductCodes(codes: string[] | string | null | undefined) {
@@ -112,7 +114,7 @@ export function ValidationTable({
 }: ValidationTableProps) {
   const { message, modal } = App.useApp()
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
-  const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([])
+  const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([])
 
   // 部门选项
   const departmentOptions = [
@@ -153,12 +155,7 @@ export function ValidationTable({
       onOk: async () => {
         try {
           if (onBatchDelete) {
-            await onBatchDelete(selectedRowKeys.map(String))
-          } else {
-            // 逐条删除
-            for (const id of selectedRowKeys) {
-              await deleteValidation(String(id))
-            }
+            await onBatchDelete(selectedRowKeys)
           }
           message.success(`成功删除 ${selectedRowKeys.length} 条记录`)
           setSelectedRowKeys([])
@@ -186,58 +183,84 @@ export function ValidationTable({
     })
   }, [onFilterChange])
 
-  // 验证主计划页面列配置
-  const planColumns: ColumnsType<FeishuValidationItem> = [
+  // 验证计划页面列配置
+  const planColumns: ColumnsType<ValidationListItem> = [
     {
       title: '确认名称',
       dataIndex: 'title',
       width: 280,
       render: (value: string) => (
         <Tooltip title={value}>
-          <div style={{ whiteSpace: 'normal', wordBreak: 'break-all' }}>{value || '-'}</div>
+          <div style={{ whiteSpace: 'normal', wordBreak: 'break-all' }}>{value}</div>
         </Tooltip>
       ),
     },
     {
       title: '验证类别',
-      dataIndex: 'validation_type',
-      width: 120,
+      dataIndex: 'validation_type' as never,
+      width: 130,
       render: (value: string | null) => validationTypeLabelMap[value ?? ''] ?? value ?? '-',
     },
     {
-      title: '任务状态',
-      dataIndex: 'status',
-      width: 100,
-      render: (value: string | null) => renderStatus(value),
+      title: '产品代码',
+      dataIndex: 'product_codes',
+      width: 160,
+      render: renderProductCodes,
     },
     {
       title: '部门名称',
       dataIndex: 'department',
-      width: 140,
+      width: 130,
       render: (value: string | null) => value || '-',
     },
     {
       title: '设备编码',
       dataIndex: 'equipment_code',
-      width: 180,
+      width: 140,
       render: (value: string | null) => value || '-',
+    },
+    {
+      title: '验证到期时间',
+      dataIndex: 'planned_end_date' as never,
+      width: 130,
+      render: formatDate,
+    },
+    {
+      title: '任务状态',
+      dataIndex: 'status',
+      width: 110,
+      render: (value: string | null) => renderStatus(value),
+    },
+  ]
+
+  // 设备确认/工艺验证/清洁验证/其他验证 列配置
+  const detailColumns: ColumnsType<ValidationListItem> = [
+    {
+      title: '确认名称',
+      dataIndex: 'title',
+      width: 280,
+      render: (value: string) => (
+        <Tooltip title={value}>
+          <div style={{ whiteSpace: 'normal', wordBreak: 'break-all' }}>{value}</div>
+        </Tooltip>
+      ),
     },
     {
       title: '产品代码',
       dataIndex: 'product_codes',
-      width: 130,
+      width: 160,
       render: renderProductCodes,
     },
     {
-      title: '验证到期时间',
-      dataIndex: 'planned_end_date',
+      title: '部门名称',
+      dataIndex: 'department',
       width: 130,
       render: (value: string | null) => value || '-',
     },
     {
-      title: '负责人',
-      dataIndex: 'owner_name',
-      width: 100,
+      title: '群组',
+      dataIndex: 'group_chat',
+      width: 140,
       render: (value: string | null) => value || '-',
     },
     {
@@ -246,42 +269,10 @@ export function ValidationTable({
       width: 140,
       render: (value: string | null) => value || '-',
     },
-  ]
-
-  // 设备确认/工艺验证/清洁验证/其他验证 列配置
-  const detailColumns: ColumnsType<FeishuValidationItem> = [
     {
-      title: '确认名称',
-      dataIndex: 'title',
-      width: 280,
-      render: (value: string) => (
-        <Tooltip title={value}>
-          <div style={{ whiteSpace: 'normal', wordBreak: 'break-all' }}>{value || '-'}</div>
-        </Tooltip>
-      ),
-    },
-    {
-      title: '部门名称',
-      dataIndex: 'department',
-      width: 130,
-      render: (value: string | null) => value || '-',
-    },
-    {
-      title: '任务状态',
-      dataIndex: 'status',
-      width: 100,
-      render: (value: string | null) => renderStatus(value),
-    },
-    {
-      title: '产品代码',
-      dataIndex: 'product_codes',
-      width: 130,
-      render: renderProductCodes,
-    },
-    {
-      title: '验证到期时间',
-      dataIndex: 'planned_end_date',
-      width: 130,
+      title: '负责人',
+      dataIndex: 'owner_name',
+      width: 120,
       render: (value: string | null) => value || '-',
     },
     {
@@ -293,50 +284,44 @@ export function ValidationTable({
     {
       title: '方案编码',
       dataIndex: 'plan_code',
-      width: 160,
+      width: 140,
       render: (value: string | null) => value || '-',
     },
     {
       title: '起草时间',
       dataIndex: 'drafted_at',
-      width: 120,
+      width: 130,
       render: formatDate,
     },
     {
       title: '批准时间',
       dataIndex: 'approved_at',
-      width: 120,
+      width: 130,
       render: formatDate,
     },
     {
       title: '报告编号',
       dataIndex: 'report_no',
-      width: 160,
+      width: 140,
       render: (value: string | null) => value || '-',
     },
     {
-      title: '报告起草时间',
+      title: '起草时间 1',
       dataIndex: 'drafted_at_1',
       width: 130,
       render: formatDate,
     },
     {
-      title: '报告批准时间',
+      title: '批准时间 1',
       dataIndex: 'approved_at_1',
       width: 130,
       render: formatDate,
     },
     {
-      title: '负责人',
-      dataIndex: 'owner_name',
-      width: 100,
-      render: (value: string | null) => value || '-',
-    },
-    {
-      title: '人员',
-      dataIndex: 'participants',
+      title: '再验证周期（几年）',
+      dataIndex: 'revalidation_cycle_years',
       width: 140,
-      render: (value: string | null) => value || '-',
+      render: (value: number | null) => (value != null ? `${value}年` : '-'),
     },
   ]
 
@@ -351,12 +336,10 @@ export function ValidationTable({
       key: 'action',
       fixed: 'right' as const,
       width: 120,
-      render: (_: unknown, record: FeishuValidationItem) => (
+      render: (_: unknown, record: ValidationListItem) => (
         <Space size="small">
           <Button type="text" icon={<EditOutlined />} onClick={() => onEdit(record)} />
-          {mode === 'master' ? (
-            <Button type="text" danger icon={<DeleteOutlined />} onClick={() => onDelete(record)} />
-          ) : null}
+          <Button type="text" danger icon={<DeleteOutlined />} onClick={() => onDelete(record)} />
         </Space>
       ),
     },
@@ -365,7 +348,7 @@ export function ValidationTable({
   // 行选择配置
   const rowSelection = {
     selectedRowKeys,
-    onChange: (keys: Key[]) => setSelectedRowKeys(keys),
+    onChange: (keys: React.Key[]) => setSelectedRowKeys(keys as string[]),
   }
 
   return (
@@ -373,7 +356,7 @@ export function ValidationTable({
       {/* 基础筛选 */}
       <Space wrap style={{ marginBottom: 12 }}>
         <Input
-          placeholder="搜索确认名称/设备编码/方案编码"
+          placeholder="确认名称/设备编码/方案编码"
           style={{ width: 280 }}
           value={filters.keyword}
           onChange={(e) => onFilterChange({ keyword: e.target.value })}
@@ -414,6 +397,13 @@ export function ValidationTable({
       {/* 高级筛选 */}
       {showAdvancedFilters && (
         <Space wrap style={{ marginBottom: 12, padding: 12, background: '#fafafa', borderRadius: 6 }}>
+          <Input
+            placeholder="记录编号"
+            style={{ width: 200 }}
+            value={filters.record_code}
+            onChange={(e) => onFilterChange({ record_code: e.target.value })}
+            allowClear
+          />
           {mode === 'master' && (
             <>
               <DatePicker
@@ -464,10 +454,13 @@ export function ValidationTable({
 
       {/* 操作按钮 */}
       <Space style={{ marginBottom: 12 }}>
+        <Button type="primary" icon={<PlusOutlined />} onClick={onCreate}>
+          新增
+        </Button>
         <Button icon={<ReloadOutlined />} onClick={onRefresh}>
           刷新
         </Button>
-        {mode === 'master' && selectedRowKeys.length > 0 && (
+        {selectedRowKeys.length > 0 && (
           <Button danger icon={<DeleteOutlined />} onClick={handleBatchDelete}>
             批量删除 ({selectedRowKeys.length})
           </Button>
@@ -479,7 +472,7 @@ export function ValidationTable({
         loading={loading}
         dataSource={items}
         columns={columnsWithAction}
-        rowSelection={mode === 'master' ? rowSelection : undefined}
+        rowSelection={rowSelection}
         scroll={{ x: mode === 'master' ? 1500 : 2200 }}
         pagination={{
           current: page,

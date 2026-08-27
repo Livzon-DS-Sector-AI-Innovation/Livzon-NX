@@ -1,11 +1,11 @@
 """Pressure differential inspection database queries."""
 
-import uuid
 from collections import defaultdict
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
+from typing import Any
 from uuid import UUID
 
-from sqlalchemy import and_, delete, func, select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.production.pressure_models import (
@@ -40,7 +40,11 @@ class PressureRepository:
         count_stmt = select(func.count()).select_from(stmt.subquery())
         total = (await self.session.execute(count_stmt)).scalar() or 0
 
-        stmt = stmt.order_by(PointMapping.point_id).offset((page - 1) * page_size).limit(page_size)
+        stmt = (
+            stmt.order_by(PointMapping.point_id)
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
         result = await self.session.execute(stmt)
         return list(result.scalars().all()), total
 
@@ -70,13 +74,13 @@ class PressureRepository:
 
     async def get_points_by_area(self, area: str) -> list[PointMapping]:
         result = await self.session.execute(
-            select(PointMapping).where(
-                PointMapping.area == area, PointMapping.is_deleted.is_(False)
-            ).order_by(PointMapping.point_id)
+            select(PointMapping)
+            .where(PointMapping.area == area, PointMapping.is_deleted.is_(False))
+            .order_by(PointMapping.point_id)
         )
         return list(result.scalars().all())
 
-    async def create_point_mapping(self, data: dict) -> PointMapping:
+    async def create_point_mapping(self, data: dict[str, Any]) -> PointMapping:
         mapping = PointMapping(**data)
         self.session.add(mapping)
         await self.session.flush()
@@ -84,7 +88,7 @@ class PressureRepository:
         return mapping
 
     async def update_point_mapping(
-        self, mapping_id: UUID, data: dict
+        self, mapping_id: UUID, data: dict[str, Any]
     ) -> PointMapping | None:
         stmt = (
             update(PointMapping)
@@ -102,7 +106,7 @@ class PressureRepository:
             .values(is_deleted=True)
         )
         result = await self.session.execute(stmt)
-        return result.rowcount > 0
+        return bool(getattr(result, "rowcount", 0))
 
     # ─── PressureRecord ───
 
@@ -135,7 +139,11 @@ class PressureRepository:
         count_stmt = select(func.count()).select_from(stmt.subquery())
         total = (await self.session.execute(count_stmt)).scalar() or 0
 
-        stmt = stmt.order_by(PressureRecord.record_time.desc()).offset((page - 1) * page_size).limit(page_size)
+        stmt = (
+            stmt.order_by(PressureRecord.record_time.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
         result = await self.session.execute(stmt)
         return list(result.scalars().all()), total
 
@@ -147,14 +155,16 @@ class PressureRepository:
         )
         return result.scalar_one_or_none()
 
-    async def create_record(self, data: dict) -> PressureRecord:
+    async def create_record(self, data: dict[str, Any]) -> PressureRecord:
         record = PressureRecord(**data)
         self.session.add(record)
         await self.session.flush()
         await self.session.refresh(record)
         return record
 
-    async def create_records_batch(self, records: list[PressureRecord]) -> list[PressureRecord]:
+    async def create_records_batch(
+        self, records: list[PressureRecord]
+    ) -> list[PressureRecord]:
         for r in records:
             self.session.add(r)
         await self.session.flush()
@@ -162,7 +172,9 @@ class PressureRepository:
             await self.session.refresh(r)
         return records
 
-    async def update_record(self, record_id: UUID, data: dict) -> PressureRecord | None:
+    async def update_record(
+        self, record_id: UUID, data: dict[str, Any]
+    ) -> PressureRecord | None:
         stmt = (
             update(PressureRecord)
             .where(PressureRecord.id == record_id, PressureRecord.is_deleted.is_(False))
@@ -179,7 +191,7 @@ class PressureRepository:
             .values(is_deleted=True)
         )
         result = await self.session.execute(stmt)
-        return result.rowcount > 0
+        return bool(getattr(result, "rowcount", 0))
 
     async def batch_delete_records(self, ids: list[UUID]) -> int:
         if not ids:
@@ -190,7 +202,7 @@ class PressureRepository:
             .values(is_deleted=True)
         )
         result = await self.session.execute(stmt)
-        return result.rowcount
+        return int(getattr(result, "rowcount", 0))
 
     async def audit_record(
         self, record_id: UUID, status: str, reject_reason: str | None = None
@@ -205,7 +217,7 @@ class PressureRepository:
     ) -> int:
         if not ids:
             return 0
-        data: dict = {"status": status}
+        data: dict[str, Any] = {"status": status}
         if reject_reason:
             data["reject_reason"] = reject_reason
         stmt = (
@@ -214,7 +226,7 @@ class PressureRepository:
             .values(**data)
         )
         result = await self.session.execute(stmt)
-        return result.rowcount
+        return int(getattr(result, "rowcount", 0))
 
     # ─── Merged View ───
 
@@ -228,7 +240,7 @@ class PressureRepository:
         end_date: datetime | None = None,
         page: int = 1,
         page_size: int = 20,
-    ) -> tuple[list[dict], int]:
+    ) -> tuple[list[dict[str, Any]], int]:
         """查询合并后的压差记录（同一位点同一天合并为一行）"""
         stmt = select(PressureRecord).where(PressureRecord.is_deleted.is_(False))
         if area:
@@ -247,7 +259,7 @@ class PressureRepository:
         all_records = list(result.scalars().all())
 
         # 按 point_id + date 分组
-        group_map: dict[str, dict] = {}
+        group_map: dict[str, dict[str, Any]] = {}
         for rec in all_records:
             date_str = rec.record_time.strftime("%Y-%m-%d")
             group_key = f"{rec.point_id}|{date_str}"
@@ -283,21 +295,25 @@ class PressureRepository:
             else:
                 merged_status = "approved"
 
-            items.append({
-                "point_id": g["point_id"],
-                "area": g["area"],
-                "date": g["date"],
-                "time_slot_values": g["time_slot_values"],
-                "standard_pressure": g["standard_pressure"],
-                "record_ids": g["record_ids"],
-                "status": merged_status,
-                "input_type": g["input_type"],
-            })
+            items.append(
+                {
+                    "point_id": g["point_id"],
+                    "area": g["area"],
+                    "date": g["date"],
+                    "time_slot_values": g["time_slot_values"],
+                    "standard_pressure": g["standard_pressure"],
+                    "record_ids": g["record_ids"],
+                    "status": merged_status,
+                    "input_type": g["input_type"],
+                }
+            )
 
         return items, total
 
     async def delete_merged_row(self, point_id: str, record_date: str) -> int:
-        start = datetime.strptime(record_date, "%Y-%m-%d").replace(hour=0, minute=0, second=0)
+        start = datetime.strptime(record_date, "%Y-%m-%d").replace(
+            hour=0, minute=0, second=0
+        )
         end = start.replace(hour=23, minute=59, second=59)
         stmt = (
             update(PressureRecord)
@@ -310,18 +326,20 @@ class PressureRepository:
             .values(is_deleted=True)
         )
         result = await self.session.execute(stmt)
-        return result.rowcount
+        return int(getattr(result, "rowcount", 0))
 
-    async def batch_delete_merged_rows(self, rows: list[dict]) -> int:
+    async def batch_delete_merged_rows(self, rows: list[dict[str, Any]]) -> int:
         total_deleted = 0
         for row in rows:
             total_deleted += await self.delete_merged_row(row["point_id"], row["date"])
         return total_deleted
 
     async def update_merged_row(
-        self, point_id: str, record_date: str, time_slot_values: dict
+        self, point_id: str, record_date: str, time_slot_values: dict[str, Any]
     ) -> int:
-        start = datetime.strptime(record_date, "%Y-%m-%d").replace(hour=0, minute=0, second=0)
+        start = datetime.strptime(record_date, "%Y-%m-%d").replace(
+            hour=0, minute=0, second=0
+        )
         end = start.replace(hour=23, minute=59, second=59)
 
         stmt = select(PressureRecord).where(
@@ -354,7 +372,7 @@ class PressureRepository:
         start_date: datetime | None = None,
         end_date: datetime | None = None,
         point_id: str | None = None,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         stmt = select(PressureRecord).where(PressureRecord.is_deleted.is_(False))
         if area:
             stmt = stmt.where(PressureRecord.area == area)
@@ -370,10 +388,14 @@ class PressureRepository:
         records = list(result.scalars().all())
 
         # 按区域分组
-        area_groups: dict[str, dict] = {}
+        area_groups: dict[str, dict[str, Any]] = {}
         for rec in records:
             if rec.area not in area_groups:
-                area_groups[rec.area] = {"area": rec.area, "time_slots": set(), "rows": defaultdict(dict)}
+                area_groups[rec.area] = {
+                    "area": rec.area,
+                    "time_slots": set(),
+                    "rows": defaultdict(dict),
+                }
             group = area_groups[rec.area]
             slot = rec.time_slot or "默认"
             group["time_slots"].add(slot)
@@ -388,16 +410,18 @@ class PressureRepository:
 
         export_data = []
         for area_name, group in area_groups.items():
-            export_data.append({
-                "area": area_name,
-                "time_slots": sorted(group["time_slots"]),
-                "rows": list(group["rows"].values()),
-            })
+            export_data.append(
+                {
+                    "area": area_name,
+                    "time_slots": sorted(group["time_slots"]),
+                    "rows": list(group["rows"].values()),
+                }
+            )
         return export_data
 
     # ─── Dashboard ───
 
-    async def get_dashboard_stats(self) -> dict:
+    async def get_dashboard_stats(self) -> dict[str, Any]:
         today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
 
         today_result = await self.session.execute(
@@ -427,10 +451,12 @@ class PressureRepository:
         return {
             "today_count": today_count,
             "pending_count": pending_count,
-            "last_record_time": last_record_time.isoformat() if last_record_time else None,
+            "last_record_time": last_record_time.isoformat()
+            if last_record_time
+            else None,
         }
 
-    async def get_audit_stats(self) -> dict:
+    async def get_audit_stats(self) -> dict[str, Any]:
         today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
         base = PressureRecord.is_deleted.is_(False)
 
@@ -470,26 +496,30 @@ class PressureRepository:
         count_stmt = select(func.count()).select_from(stmt.subquery())
         total = (await self.session.execute(count_stmt)).scalar() or 0
 
-        stmt = stmt.order_by(OcrTask.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
+        stmt = (
+            stmt.order_by(OcrTask.created_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
         result = await self.session.execute(stmt)
         return list(result.scalars().all()), total
 
     async def get_ocr_task_by_id(self, task_id: UUID) -> OcrTask | None:
         result = await self.session.execute(
-            select(OcrTask).where(
-                OcrTask.id == task_id, OcrTask.is_deleted.is_(False)
-            )
+            select(OcrTask).where(OcrTask.id == task_id, OcrTask.is_deleted.is_(False))
         )
         return result.scalar_one_or_none()
 
-    async def create_ocr_task(self, data: dict) -> OcrTask:
+    async def create_ocr_task(self, data: dict[str, Any]) -> OcrTask:
         task = OcrTask(**data)
         self.session.add(task)
         await self.session.flush()
         await self.session.refresh(task)
         return task
 
-    async def update_ocr_task(self, task_id: UUID, data: dict) -> OcrTask | None:
+    async def update_ocr_task(
+        self, task_id: UUID, data: dict[str, Any]
+    ) -> OcrTask | None:
         stmt = (
             update(OcrTask)
             .where(OcrTask.id == task_id, OcrTask.is_deleted.is_(False))
@@ -527,7 +557,11 @@ class PressureRepository:
         count_stmt = select(func.count()).select_from(stmt.subquery())
         total = (await self.session.execute(count_stmt)).scalar() or 0
 
-        stmt = stmt.order_by(DataMaster.record_date.desc()).offset((page - 1) * page_size).limit(page_size)
+        stmt = (
+            stmt.order_by(DataMaster.record_date.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
         result = await self.session.execute(stmt)
         return list(result.scalars().all()), total
 
@@ -539,14 +573,16 @@ class PressureRepository:
         )
         return result.scalar_one_or_none()
 
-    async def create_data_master(self, data: dict) -> DataMaster:
+    async def create_data_master(self, data: dict[str, Any]) -> DataMaster:
         item = DataMaster(**data)
         self.session.add(item)
         await self.session.flush()
         await self.session.refresh(item)
         return item
 
-    async def create_data_master_batch(self, items: list[DataMaster]) -> list[DataMaster]:
+    async def create_data_master_batch(
+        self, items: list[DataMaster]
+    ) -> list[DataMaster]:
         for item in items:
             self.session.add(item)
         await self.session.flush()
@@ -554,7 +590,9 @@ class PressureRepository:
             await self.session.refresh(item)
         return items
 
-    async def update_data_master(self, item_id: UUID, data: dict) -> DataMaster | None:
+    async def update_data_master(
+        self, item_id: UUID, data: dict[str, Any]
+    ) -> DataMaster | None:
         stmt = (
             update(DataMaster)
             .where(DataMaster.id == item_id, DataMaster.is_deleted.is_(False))
@@ -571,7 +609,7 @@ class PressureRepository:
             .values(is_deleted=True)
         )
         result = await self.session.execute(stmt)
-        return result.rowcount > 0
+        return bool(getattr(result, "rowcount", 0))
 
     async def batch_delete_data_master(self, ids: list[UUID]) -> int:
         if not ids:
@@ -582,7 +620,7 @@ class PressureRepository:
             .values(is_deleted=True)
         )
         result = await self.session.execute(stmt)
-        return result.rowcount
+        return int(getattr(result, "rowcount", 0))
 
     # ─── Notification ───
 
@@ -600,7 +638,11 @@ class PressureRepository:
         count_stmt = select(func.count()).select_from(stmt.subquery())
         total = (await self.session.execute(count_stmt)).scalar() or 0
 
-        stmt = stmt.order_by(Notification.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
+        stmt = (
+            stmt.order_by(Notification.created_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
         result = await self.session.execute(stmt)
         return list(result.scalars().all()), total
 
@@ -614,7 +656,7 @@ class PressureRepository:
         result = await self.session.execute(stmt)
         return result.scalar() or 0
 
-    async def create_notification(self, data: dict) -> Notification:
+    async def create_notification(self, data: dict[str, Any]) -> Notification:
         item = Notification(**data)
         self.session.add(item)
         await self.session.flush()
@@ -624,11 +666,13 @@ class PressureRepository:
     async def mark_read(self, notification_id: UUID) -> bool:
         stmt = (
             update(Notification)
-            .where(notification_id == notification_id, Notification.is_deleted.is_(False))
+            .where(
+                Notification.id == notification_id, Notification.is_deleted.is_(False)
+            )
             .values(is_read=True)
         )
         result = await self.session.execute(stmt)
-        return result.rowcount > 0
+        return bool(getattr(result, "rowcount", 0))
 
     async def mark_all_read(self, user_id: str | None = None) -> int:
         stmt = (
@@ -639,4 +683,4 @@ class PressureRepository:
         if user_id:
             stmt = stmt.where(Notification.target_user_id == user_id)
         result = await self.session.execute(stmt)
-        return result.rowcount
+        return int(getattr(result, "rowcount", 0))

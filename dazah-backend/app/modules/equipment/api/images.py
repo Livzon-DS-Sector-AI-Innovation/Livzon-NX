@@ -2,10 +2,11 @@
 
 import os
 import uuid
+from io import BytesIO
+from typing import Any
 
 from fastapi import APIRouter, Depends, File, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
-from io import BytesIO
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -55,8 +56,9 @@ async def serve_work_order_image(
     work_order_id: uuid.UUID,
     image_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-):
-    from app.core.storage import get_object, is_enabled as minio_enabled
+) -> Any:
+    from app.core.storage import get_object
+    from app.core.storage import is_enabled as minio_enabled
 
     image = await repo.get_image_by_id(db, image_id)
     if not image or str(image.work_order_id) != str(work_order_id):

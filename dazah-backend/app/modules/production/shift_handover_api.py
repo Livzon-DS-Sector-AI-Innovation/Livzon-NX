@@ -1,5 +1,5 @@
 """班组交接确认 API routes."""
-
+from typing import Any
 from uuid import UUID
 
 from fastapi import Depends, Query
@@ -34,7 +34,7 @@ async def list_shift_handovers(
     date_from: str | None = Query(None, description="开始日期"),
     date_to: str | None = Query(None, description="结束日期"),
     svc: ShiftHandoverService = Depends(get_shift_handover_service),
-):
+) -> Any:
     items, total = await svc.list_records(
         page=page,
         page_size=page_size,
@@ -51,7 +51,7 @@ async def list_shift_handovers(
 async def search_users(
     q: str = Query("", description="搜索关键词"),
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     from sqlalchemy import select
 
     from app.core.secrets import decrypt_secret
@@ -110,7 +110,7 @@ async def search_users(
 @router.get("/shift-handovers/positions", summary="获取所有岗位列表")
 async def get_positions(
     svc: ShiftHandoverService = Depends(get_shift_handover_service),
-):
+) -> Any:
     positions = await svc.get_distinct_positions()
     return success_response(positions)
 
@@ -119,7 +119,7 @@ async def get_positions(
 async def get_shift_handover(
     record_id: UUID,
     svc: ShiftHandoverService = Depends(get_shift_handover_service),
-):
+) -> Any:
     record = await svc.get_record(record_id)
     if not record:
         return success_response(None, message="记录不存在", status_code=404)
@@ -130,7 +130,7 @@ async def get_shift_handover(
 async def create_shift_handover(
     data: ShiftHandoverCreate,
     svc: ShiftHandoverService = Depends(get_shift_handover_service),
-):
+) -> Any:
     record = await svc.create_record(data.model_dump())
     return success_response(
         ShiftHandoverResponse.model_validate(record), message="创建成功"
@@ -142,7 +142,7 @@ async def update_shift_handover(
     record_id: UUID,
     data: ShiftHandoverUpdate,
     svc: ShiftHandoverService = Depends(get_shift_handover_service),
-):
+) -> Any:
     record = await svc.update_record(record_id, data.model_dump(exclude_unset=True))
     return success_response(
         ShiftHandoverResponse.model_validate(record), message="更新成功"
@@ -153,7 +153,7 @@ async def update_shift_handover(
 async def confirm_shift_handover(
     record_id: UUID,
     svc: ShiftHandoverService = Depends(get_shift_handover_service),
-):
+) -> Any:
     record = await svc.confirm_record(record_id)
     return success_response(
         ShiftHandoverResponse.model_validate(record), message="确认成功"
@@ -164,6 +164,6 @@ async def confirm_shift_handover(
 async def delete_shift_handover(
     record_id: UUID,
     svc: ShiftHandoverService = Depends(get_shift_handover_service),
-):
+) -> Any:
     await svc.delete_record(record_id)
     return success_response(None, message="删除成功")

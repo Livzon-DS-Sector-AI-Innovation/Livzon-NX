@@ -199,7 +199,7 @@ export function BayesianOptimizationPage() {
       message.success(`优化完成，共 ${rows.length} 条结果`)
     } catch (error) {
       console.error('Optimization error:', error)
-      message.error(error.message || '优化失败')
+      message.error((error instanceof Error ? error.message : '') || '优化失败')
     } finally {
       setLoading(false)
     }
@@ -330,7 +330,7 @@ export function BayesianOptimizationPage() {
       }
     } catch (error) {
       console.error('Generate scope error:', error)
-      message.error(error.message || '生成反应范围失败')
+      message.error((error instanceof Error ? error.message : '') || '生成反应范围失败')
     } finally {
       setGeneratingScope(false)
     }

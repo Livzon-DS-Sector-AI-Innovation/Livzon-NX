@@ -5,7 +5,7 @@
 import { useState, useCallback, useEffect, type JSX } from 'react'
 import {
   Button, Space, Tag, App, Card, Descriptions, Upload, Select, Empty,
-  Typography, Spin,
+  Typography,
 } from 'antd'
 import {
   ArrowLeftOutlined, UploadOutlined, PlayCircleOutlined, FileTextOutlined,
@@ -90,7 +90,7 @@ export default function ValidationAuditDetailClient({
 
   // Fetch fresh data on mount to fix stale initial data from Server Component
   useEffect(() => {
-    refreshData()
+    queueMicrotask(refreshData)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const statusCfg = STATUS_LABELS[task.status as keyof typeof STATUS_LABELS]

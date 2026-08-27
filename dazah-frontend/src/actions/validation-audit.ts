@@ -2,7 +2,21 @@
 
 import { getServerApiBaseUrl } from '@/lib/server-api'
 import { revalidatePath } from 'next/cache'
-import type { ValidationAuditTaskCreate } from '@/types/validation-audit'
+import type {
+  ValidationAuditFile,
+  ValidationAuditIssue,
+  ValidationAuditReport,
+  ValidationAuditTask,
+  ValidationAuditTaskCreate,
+  ValidationAuditTaskListResponse,
+  ValidationAuditTaskResponse,
+} from '@/types/validation-audit'
+
+interface ValidationAuditDataResponse<T> {
+  code: number
+  message: string
+  data: T
+}
 
 const API_BASE_URL = getServerApiBaseUrl()
 const BASE = `${API_BASE_URL}/api/v1/registration/validation-audit`
@@ -45,7 +59,9 @@ export async function fetchTasksServer(params?: {
   searchParams.set('page_size', String(params?.page_size || 20))
 
   try {
-    return await actionFetch<any>(`${BASE}/tasks?${searchParams.toString()}`)
+    return await actionFetch<ValidationAuditTaskListResponse>(
+      `${BASE}/tasks?${searchParams.toString()}`,
+    )
   } catch {
     return null
   }
@@ -53,7 +69,7 @@ export async function fetchTasksServer(params?: {
 
 export async function fetchTaskByIdServer(id: string) {
   try {
-    return await actionFetch<any>(`${BASE}/tasks/${id}`)
+    return await actionFetch<ValidationAuditTaskResponse>(`${BASE}/tasks/${id}`)
   } catch {
     return null
   }
@@ -61,7 +77,9 @@ export async function fetchTaskByIdServer(id: string) {
 
 export async function fetchFilesServer(taskId: string) {
   try {
-    return await actionFetch<any>(`${BASE}/tasks/${taskId}/files`)
+    return await actionFetch<ValidationAuditDataResponse<ValidationAuditFile[]>>(
+      `${BASE}/tasks/${taskId}/files`,
+    )
   } catch {
     return null
   }
@@ -71,7 +89,9 @@ export async function fetchIssuesServer(taskId: string, issueType?: string) {
   const params = new URLSearchParams()
   if (issueType) params.set('issue_type', issueType)
   try {
-    return await actionFetch<any>(`${BASE}/tasks/${taskId}/issues?${params.toString()}`)
+    return await actionFetch<ValidationAuditDataResponse<ValidationAuditIssue[]>>(
+      `${BASE}/tasks/${taskId}/issues?${params.toString()}`,
+    )
   } catch {
     return null
   }
@@ -79,7 +99,9 @@ export async function fetchIssuesServer(taskId: string, issueType?: string) {
 
 export async function fetchReportServer(taskId: string) {
   try {
-    return await actionFetch<any>(`${BASE}/tasks/${taskId}/report`)
+    return await actionFetch<ValidationAuditDataResponse<ValidationAuditReport | null>>(
+      `${BASE}/tasks/${taskId}/report`,
+    )
   } catch {
     return null
   }
@@ -89,7 +111,7 @@ export async function fetchReportServer(taskId: string) {
 
 export async function createValidationAuditTask(
   data: ValidationAuditTaskCreate
-): Promise<{ success: boolean; message: string; data?: any }> {
+): Promise<{ success: boolean; message: string; data?: ValidationAuditTask }> {
   try {
     const response = await fetch(`${BASE}/tasks`, {
       method: 'POST',
@@ -134,7 +156,7 @@ export async function deleteValidationAuditTask(
 export async function uploadValidationAuditFiles(
   taskId: string,
   formData: FormData
-): Promise<{ success: boolean; message: string; data?: any }> {
+): Promise<{ success: boolean; message: string; data?: unknown }> {
   try {
     const response = await fetch(`${BASE}/tasks/${taskId}/files`, {
       method: 'POST',
@@ -156,7 +178,7 @@ export async function uploadValidationAuditFiles(
 
 export async function parseValidationAuditFiles(
   taskId: string
-): Promise<{ success: boolean; message: string; data?: any }> {
+): Promise<{ success: boolean; message: string; data?: unknown }> {
   try {
     const response = await fetch(`${BASE}/tasks/${taskId}/parse`, {
       method: 'POST',
@@ -177,7 +199,7 @@ export async function parseValidationAuditFiles(
 
 export async function runValidationAudit(
   taskId: string
-): Promise<{ success: boolean; message: string; data?: any }> {
+): Promise<{ success: boolean; message: string; data?: unknown }> {
   try {
     const response = await fetch(`${BASE}/tasks/${taskId}/audit`, {
       method: 'POST',

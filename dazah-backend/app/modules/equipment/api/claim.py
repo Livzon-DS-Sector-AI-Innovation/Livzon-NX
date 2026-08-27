@@ -2,6 +2,7 @@
 
 import asyncio
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
@@ -25,7 +26,7 @@ async def claim_work_order(
     work_order_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = None,
-    settings = Depends(get_settings),
+    settings: Any = Depends(get_settings),
 ) -> JSONResponse:
     if not current_user:
         raise AppException(message="需要登录", status_code=401)
@@ -44,9 +45,7 @@ async def claim_work_order(
 
     wo = await service.claim_work_order(db, work_order_id, current_user.id)
 
-    asyncio.ensure_future(
-        send_claim_notification(wo.work_order_no, current_user.name)
-    )
+    asyncio.ensure_future(send_claim_notification(wo.work_order_no, current_user.name))
 
     resp = WorkOrderResponse.model_validate(wo)
     if wo.reporter:

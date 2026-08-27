@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from datetime import date
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.modules.production import mc_yield_anomaly_detector as det
 
 
-def make_result(fetchall=None, fetchone=None):
+def make_result(fetchall: Any=None, fetchone: Any=None) -> Any:
     r = MagicMock()
     if fetchall is not None:
         r.fetchall.return_value = fetchall
@@ -18,7 +19,7 @@ def make_result(fetchall=None, fetchone=None):
     return r
 
 
-def make_session(execute_results=None):
+def make_session(execute_results: Any=None) -> Any:
     s = AsyncMock()
     if execute_results is None:
         s.execute.return_value = make_result(fetchall=[])
@@ -32,7 +33,7 @@ def make_session(execute_results=None):
 # ═══════════ _parse_json ═══════════
 
 
-def test_parse_json_variants():
+def test_parse_json_variants() -> Any:
     assert det._parse_json('{"a": 1}') == {"a": 1}
     assert det._parse_json('```json\n{"a": 1}\n```') == {"a": 1}
     assert det._parse_json('```\n{"a": 1}\n```') == {"a": 1}
@@ -42,7 +43,7 @@ def test_parse_json_variants():
     assert det._parse_json('{"causes": ["x", "y') == {"causes": ["x", "y"]}
 
 
-def test_parse_json_regex_fallback():
+def test_parse_json_regex_fallback() -> Any:
     t = '... "summary": "收率偏低" ... "severity": "high" ... "causes": ["a", "b", "c"] ...'  # noqa: E501
     parsed = det._parse_json(t)
     assert parsed["summary"] == "收率偏低"
@@ -54,7 +55,7 @@ def test_parse_json_regex_fallback():
 # ═══════════ judge_anomaly_severity ═══════════
 
 
-def test_judge_anomaly_severity():
+def test_judge_anomaly_severity() -> Any:
     assert det.judge_anomaly_severity(80, 90, 10) is None  # 正常
     assert det.judge_anomaly_severity(79, 90, 10) == "medium"  # < median - IQR
     assert det.judge_anomaly_severity(74, 90, 10) == "high"  # < median - 1.5*IQR
@@ -67,7 +68,7 @@ def test_judge_anomaly_severity():
 # ═══════════ _build_auto_detect_prompt ═══════════
 
 
-def _iqr_stats(**over):
+def _iqr_stats(**over: Any) -> Any:
     base = {
         "n": 12,
         "median": 90.0,
@@ -81,7 +82,7 @@ def _iqr_stats(**over):
     return base
 
 
-def test_build_auto_detect_prompt_full():
+def test_build_auto_detect_prompt_full() -> Any:
     prompt = det._build_auto_detect_prompt(
         "MC-1",
         "sub_tank",
@@ -118,7 +119,7 @@ def test_build_auto_detect_prompt_full():
     assert "只返回JSON" in prompt
 
 
-def test_build_auto_detect_prompt_empty_sections():
+def test_build_auto_detect_prompt_empty_sections() -> Any:
     prompt = det._build_auto_detect_prompt(
         "MC-1",
         "extraction",
@@ -139,14 +140,14 @@ def test_build_auto_detect_prompt_empty_sections():
 # ═══════════ SQL 查询函数 ═══════════
 
 
-def test_compute_stage_iqr_extraction():
+def test_compute_stage_iqr_extraction() -> Any:
     import asyncio
 
     s = make_session(
         [make_result(fetchone=SimpleNamespace(n=10, q1=85.0, median=90.0, q3=95.0))]
     )
 
-    async def _run():
+    async def _run() -> Any:
         return await det._compute_stage_iqr(s, "extraction", date(2026, 3, 15))
 
     result = asyncio.run(_run())
@@ -157,7 +158,7 @@ def test_compute_stage_iqr_extraction():
     assert "2025-12" in result["window_start"]
 
 
-def test_compute_stage_iqr_default_date_and_sub_tank():
+def test_compute_stage_iqr_default_date_and_sub_tank() -> Any:
     import asyncio
 
     s = make_session(
@@ -168,7 +169,7 @@ def test_compute_stage_iqr_default_date_and_sub_tank():
     assert result["window_end"] == date.today().isoformat()
 
 
-def test_compute_similar_range():
+def test_compute_similar_range() -> Any:
     import asyncio
 
     s = make_session(
@@ -182,7 +183,7 @@ def test_compute_similar_range():
     assert result == {"count": 5, "avg": 87.5, "min": 85.0, "max": 90.0}
 
 
-def test_compute_equipment_trend_without_tank():
+def test_compute_equipment_trend_without_tank() -> Any:
     import asyncio
 
     s = make_session(
@@ -202,7 +203,7 @@ def test_compute_equipment_trend_without_tank():
     ]
 
 
-def test_compute_equipment_trend_refinement_tank_filter():
+def test_compute_equipment_trend_refinement_tank_filter() -> Any:
     import asyncio
 
     s = make_session(
@@ -222,7 +223,7 @@ def test_compute_equipment_trend_refinement_tank_filter():
     assert params["tank"] == "T1"
 
 
-def test_compute_downstream_comparison():
+def test_compute_downstream_comparison() -> Any:
     import asyncio
 
     s = make_session(
@@ -254,7 +255,7 @@ def test_compute_downstream_comparison():
     assert result[1]["stage_n"] == 0
 
 
-def test_get_similar_cases():
+def test_get_similar_cases() -> Any:
     import asyncio
 
     s = make_session(
@@ -287,11 +288,11 @@ def test_get_similar_cases():
 # ═══════════ _call_llm_and_save ═══════════
 
 
-def _llm_config():
+def _llm_config() -> Any:
     return SimpleNamespace(api_base_url="https://mock", api_key="k", model_name="m")
 
 
-def _chat_mock(content: str):
+def _chat_mock(content: str) -> Any:
     client = MagicMock()
     resp = MagicMock()
     resp.choices = [MagicMock()]
@@ -300,7 +301,7 @@ def _chat_mock(content: str):
     return client
 
 
-def test_call_llm_and_save_success():
+def test_call_llm_and_save_success() -> Any:
     import asyncio
 
     s = make_session()
@@ -325,6 +326,7 @@ def test_call_llm_and_save_success():
                 [],
             )
         )
+    assert analysis is not None
     assert analysis.summary == "收率偏低"
     assert analysis.causes == ["a", "b", "c"]
     assert analysis.severity == "high"
@@ -333,7 +335,7 @@ def test_call_llm_and_save_success():
     s.commit.assert_awaited_once()
 
 
-def test_call_llm_and_save_retries_short_output():
+def test_call_llm_and_save_retries_short_output() -> Any:
     import asyncio
 
     s = make_session()
@@ -369,12 +371,14 @@ def test_call_llm_and_save_retries_short_output():
                 [],
             )
         )
+    assert analysis is not None
     assert analysis.summary == "完整"
+    assert analysis.causes is not None
     assert len(analysis.causes) == 3
     assert client.chat.completions.create.await_count == 2
 
 
-def test_call_llm_and_save_failure_fallback():
+def test_call_llm_and_save_failure_fallback() -> Any:
     import asyncio
 
     s = make_session()
@@ -395,8 +399,12 @@ def test_call_llm_and_save_failure_fallback():
                 [],
                 [],
             )
-        )
+    )
+    assert analysis is not None
+    assert analysis.summary is not None
     assert "LLM调用失败" in analysis.summary
+    assert analysis.suggestions is not None
+    assert analysis.anomalies is not None
     assert any("人工复核" in x for x in analysis.suggestions)
     assert analysis.anomalies[0]["metric"] == "yield_rate"
 
@@ -404,7 +412,7 @@ def test_call_llm_and_save_failure_fallback():
 # ═══════════ run_anomaly_detection 编排 ═══════════
 
 
-def test_run_anomaly_detection_no_new_batches():
+def test_run_anomaly_detection_no_new_batches() -> Any:
     import asyncio
 
     s = make_session([make_result(fetchall=[])])
@@ -420,7 +428,7 @@ def test_run_anomaly_detection_no_new_batches():
     }
 
 
-def test_run_anomaly_detection_insufficient_sample():
+def test_run_anomaly_detection_insufficient_sample() -> Any:
     import asyncio
 
     s = make_session(
@@ -444,7 +452,7 @@ def test_run_anomaly_detection_insufficient_sample():
     assert result["detected"] == 0
 
 
-def test_run_anomaly_detection_normal_skipped():
+def test_run_anomaly_detection_normal_skipped() -> Any:
     import asyncio
 
     s = make_session(
@@ -468,7 +476,7 @@ def test_run_anomaly_detection_normal_skipped():
     assert result["detected"] == 0
 
 
-def test_run_anomaly_detection_full_path():
+def test_run_anomaly_detection_full_path() -> Any:
     import asyncio
 
     s = make_session()
@@ -511,7 +519,7 @@ def test_run_anomaly_detection_full_path():
     ]
 
 
-def test_run_anomaly_detection_medium_and_error():
+def test_run_anomaly_detection_medium_and_error() -> Any:
     import asyncio
 
     s = make_session()

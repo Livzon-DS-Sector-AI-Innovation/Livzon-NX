@@ -1,848 +1,340 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import type { SubMenuItem } from '@/lib/menu-config'
-import { App,
+import { useEffect, useState, useCallback, useRef } from 'react'
+import {
+  App,
+  AutoComplete,
   Button,
-  Card,
   DatePicker,
   Form,
   Input,
-  Modal,
   Select,
   Space,
-  TimePicker
+  TimePicker,
 } from 'antd'
-import {
-  DownloadOutlined,
-  BellOutlined,
-  FileExcelOutlined,
-  BookOutlined,
-  SendOutlined
-} from '@ant-design/icons'
-import dayjs from 'dayjs'
-import {
-  fetchDepartments,
-  fetchEmployees,
-  fetchTrainingLedgerPages,
-  generateTrainingNotification,
-  generateTrainingSignInSheet,
-  generateTrainingEvaluation,
-  createTrainingLedger,
-  createTrainingLedgerPage,
-  sendTrainingNotification
-} from '@/lib/api/hr'
-import { moduleMenus } from '@/lib/menu-config'
+import { DownloadOutlined } from '@ant-design/icons'
+import dayjs, { type Dayjs } from 'dayjs'
+import { generateTrainingNotification } from '@/actions/hr'
+import { fetchTrainingDepartments } from '@/lib/api/client/hr'
+import { downloadBytes } from '@/lib/download'
+import { unify201Dept, ensureDeptMappings } from './trainingDept'
+import type { ExportedDoc, TrainingDocExporter, TrainingSessionData } from '@/types/hr'
+import TrainingDocStyle from './trainingDocStyle'
 
-const TRAINING_METHODS = [
-  { value: '面授', label: '面授' },
-  { value: '函授', label: '函授' },
-  { value: '远程教育', label: '远程教育' },
-  { value: '自学', label: '自学' },
-  { value: '其他', label: '其他' },
+// 培训考核方式：下拉可选，也可手动填写
+const ASSESS_METHODS = [
+  { value: '笔试' },
+  { value: '口试' },
+  { value: '实操' },
+  { value: '写总结' },
 ]
-
-const TD_LABEL = {
-  border: '1px solid #1f2937',
-  padding: '8px'
-} as React.CSSProperties
-
-/** Check whether an employee already has a dedicated training-ledger menu page (static + DB). */
-async function getExistingLedgerNumbers(): Promise<Set<string>> {
-  const numbers = new Set<string>()
-  const hr = moduleMenus.find((m) => m.key === 'hr')
-  const training = hr?.children?.find((c) => c.key === 'training')
-  const ledger = training?.children?.find((c) => c.key === 'training-ledger')
-
-  function collectChildren(items: SubMenuItem[] | undefined) {
-    items?.forEach((c) => {
-      const match = c.path.match(/employee_number=(\d+)/)
-      if (match) numbers.add(match[1])
-      collectChildren(c.children)
-    })
-  }
-  collectChildren(ledger?.children)
-
-  try {
-    const res = await fetchTrainingLedgerPages()
-    ;(res.data || []).forEach((p) => numbers.add(p.employee_number))
-  } catch {
-    // ignore
-  }
-  return numbers
+interface NotificationProps {
+  sessionData?: TrainingSessionData
+  registerDocBuilder?: (type: string, fn: () => Record<string, unknown> | null) => void
+  /** 注册导出器，供顶部"一键导出"聚合调用 */
+  registerExporter?: (type: string, fn: TrainingDocExporter) => void
+  draft?: Record<string, unknown> | null
+  onSessionChange?: (data: TrainingSessionData) => void
+  notifyInitialValues?: Record<string, unknown>
 }
 
-export default function TrainingNotificationClient() {
-  const { message, modal } = App.useApp()
+interface NotificationFormValues {
+  training_date?: Dayjs
+  subject?: string
+  content?: string
+  training_method?: string
+  trainer?: string
+  location?: string
+  department?: string
+  trainee_departments?: string[]
+  employee_names?: string[]
+  issuer_department?: string
+  issue_date?: Dayjs
+}
+
+export default function TrainingNotificationClient({
+  sessionData = {},
+  onSessionChange = () => undefined,
+  notifyInitialValues = {},
+  registerDocBuilder,
+  registerExporter,
+  draft,
+}: NotificationProps) {
+  const { message } = App.useApp()
   const [form] = Form.useForm()
+  const [exporting, setExporting] = useState(false)
   const [departments, setDepartments] = useState<{ value: string; label: string }[]>([])
-  const [employees, setEmployees] = useState<{ value: string; label: string }[]>([])
-  const [nameToNumberMap, setNameToNumberMap] = useState<Record<string, string>>({})
-  const [submittingWord, setSubmittingWord] = useState(false)
-  const [submittingExcel, setSubmittingExcel] = useState(false)
-  const [submittingEval, setSubmittingEval] = useState(false)
-  const [addingToLedger, setAddingToLedger] = useState(false)
-  const [sendingNotify, setSendingNotify] = useState(false)
 
   useEffect(() => {
-    fetchDepartments({ page_size: 100 }).then((res) => {
-      const list = (res.data || []).map((d) => ({ value: d.name, label: d.name }))
-      setDepartments(list)
-    })
+    ensureDeptMappings().catch(() => {})
+    fetchTrainingDepartments()
+      .then((depts) => {
+        setDepartments(depts.map((d) => ({ value: d, label: d })))
+      })
+      .catch(() => setDepartments([]))
   }, [])
 
-  const loadEmployees = async (depts: string[]) => {
-    if (!depts || depts.length === 0) {
-      setEmployees([])
-      setNameToNumberMap({})
-      form.setFieldsValue({ employee_names: [] })
-      return
+  // 从共享 session 恢复（首次）
+  const [notifyInitialized, setNotifyInitialized] = useState(false)
+  useEffect(() => {
+    if (notifyInitialized) return
+    const keys = Object.keys(notifyInitialValues)
+    if (keys.length === 0) return
+    form.setFieldsValue({ ...notifyInitialValues })
+    setNotifyInitialized(true)
+  }, [notifyInitialValues, form, notifyInitialized])
+
+  // 实时同步共享 session（签到表编辑的培训内容/对象/时间/地点自动带入通知）
+  useEffect(() => {
+    const patch: Record<string, unknown> = {}
+    if (sessionData.topic) patch.subject = sessionData.topic
+    if (sessionData.trainee_departments?.length) patch.trainee_departments = sessionData.trainee_departments
+    if (sessionData.training_time_start && sessionData.training_time_end) {
+      patch.training_time = [
+        dayjs(sessionData.training_time_start, 'HH:mm'),
+        dayjs(sessionData.training_time_end, 'HH:mm'),
+      ]
     }
-    const all: { value: string; label: string }[] = []
-    const numberMap: Record<string, string> = {}
-    for (const dept of depts) {
-      try {
-        const res = await fetchEmployees({ department: dept, page_size: 100 })
-        const list = (res.data || []).map((e) => ({
-          value: e.name,
-          label: `${e.name} (${e.employee_number || ''})`
-        }))
-        all.push(...list)
-        for (const e of res.data || []) {
-          if (e.name && e.employee_number) {
-            numberMap[e.name] = e.employee_number
-          }
+    if (sessionData.location) patch.location = sessionData.location
+    if (sessionData.assessment_method) patch.training_method = sessionData.assessment_method
+    if (Object.keys(patch).length) form.setFieldsValue(patch)
+  }, [sessionData.topic, sessionData.trainee_departments, sessionData.training_time_start, sessionData.training_time_end, sessionData.location, sessionData.assessment_method, form])
+
+  // 落款自动填充：部门=编辑信息的部门（公司级固定人事行政部），日期=填写的培训日期（未填则今天）；手动修改后不再覆盖
+  const [userDept, setUserDept] = useState('')
+  const lastAutoDeptRef = useRef('')
+  const lastAutoDateRef = useRef('')
+  useEffect(() => {
+    fetch('/api/v1/identity/me', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => setUserDept(j?.data?.department || ''))
+      .catch(() => {})
+  }, [])
+  useEffect(() => {
+    const patch: Record<string, unknown> = {}
+    const curDept = form.getFieldValue('issuer_department') || ''
+    // 落款部门默认取共享会话部门（公司级固定人事行政部），手动修改后不再覆盖
+    const wantDept = sessionData.department || '人事行政部'
+    if (wantDept && (!curDept || curDept === lastAutoDeptRef.current)) {
+      lastAutoDeptRef.current = wantDept
+      patch.issuer_department = wantDept
+    }
+    const curDate = form.getFieldValue('issue_date')
+    const curDateStr = curDate?.format?.('YYYY-MM-DD') || ''
+    const wantDate = sessionData.training_date || dayjs().format('YYYY-MM-DD')
+    if (!curDateStr || curDateStr === lastAutoDateRef.current) {
+      lastAutoDateRef.current = wantDate
+      patch.issue_date = dayjs(wantDate)
+    }
+    if (Object.keys(patch).length) form.setFieldsValue(patch)
+  }, [sessionData.department, sessionData.training_date, userDept, form])
+
+  // 注册草稿序列化函数，供顶部"保存"一键调用（时间区间拆成 start/end）
+  useEffect(() => {
+    registerDocBuilder?.('notification', () => {
+      const v = form.getFieldsValue(true)
+      const out: Record<string, unknown> = {}
+      for (const [k, val] of Object.entries(v)) {
+        if (Array.isArray(val) && dayjs.isDayjs(val[0])) {
+          out.training_time_start = val[0].format('HH:mm')
+          out.training_time_end = dayjs.isDayjs(val[1]) ? val[1].format('HH:mm') : undefined
+        } else {
+          out[k] = dayjs.isDayjs(val) ? val.format('YYYY-MM-DD') : val
         }
-      } catch {
-        // ignore
       }
+      return out
+    })
+  })
+
+  // 恢复草稿（台账"资料"抽屉打开编辑跳转）
+  useEffect(() => {
+    if (!draft) return
+    const patch: Record<string, unknown> = { ...draft }
+    if (draft.training_time_start && draft.training_time_end) {
+      patch.training_time = [dayjs(draft.training_time_start as string, 'HH:mm'), dayjs(draft.training_time_end as string, 'HH:mm')]
     }
-    const map = new Map(all.map((e) => [e.value, e]))
-    const uniqueList = Array.from(map.values())
-    setEmployees(uniqueList)
-    setNameToNumberMap(numberMap)
-    const names = uniqueList.map((e) => e.value)
-    form.setFieldsValue({ employee_names: names })
+    delete patch.training_time_start
+    delete patch.training_time_end
+    for (const k of ['training_date', 'issue_date']) {
+      if (typeof patch[k] === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(patch[k] as string)) patch[k] = dayjs(patch[k] as string)
+    }
+    form.setFieldsValue(patch)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft])
+
+  // ── 导出培训通知：页内按钮与顶部"一键导出"共用同一生成逻辑 ──
+  const buildNotificationPayload = () => {
+    const v = form.getFieldsValue(true)
+    const [t0, t1] = v.training_time || []
+    return {
+      department: unify201Dept(sessionData.department) || '公司',
+      training_date: sessionData.training_date!,
+      subject: v.subject || sessionData.topic!,
+      training_time_start: t0 ? dayjs(t0).format('HH:mm') : sessionData.training_time_start,
+      training_time_end: t1 ? dayjs(t1).format('HH:mm') : sessionData.training_time_end,
+      location: v.location || sessionData.location,
+      trainer: v.trainer || sessionData.instructor,
+      content: v.content || sessionData.content,
+      trainee_names: v.trainee_departments?.length ? v.trainee_departments : (sessionData.trainee_departments || []),
+      issuer_department: v.issuer_department || sessionData.issuer_department || unify201Dept(sessionData.department),
+      issue_date: v.issue_date ? dayjs(v.issue_date).format('YYYY-MM-DD') : (sessionData.issue_date || sessionData.training_date!),
+      assessment_method: v.training_method || sessionData.assessment_method,
+    }
   }
 
-  const handleExportWord = async () => {
-    const values = await form.validateFields()
-    const traineeDepts: string[] = values.trainee_departments || []
+  const buildExportEntries = async (): Promise<ExportedDoc[] | null> => {
+    if (!sessionData.training_date || !sessionData.topic) return null
+    const { bytes, filename } = await generateTrainingNotification(buildNotificationPayload())
+    return [{ name: filename, bytes }]
+  }
 
-    setSubmittingWord(true)
+  useEffect(() => {
+    registerExporter?.('notification', buildExportEntries)
+  })
+
+  const handleExport = async () => {
+    if (!sessionData.training_date) {
+      message.warning('请先在培训签到表选择培训日期')
+      return
+    }
+    if (!sessionData.topic) {
+      message.warning('请先关联计划项目或填写培训内容')
+      return
+    }
+    setExporting(true)
     try {
-      const payload = {
-        department: values.department,
-        training_date: values.training_date.format('YYYY-MM-DD'),
-        subject: values.subject,
-        training_time_start: values.training_time
-          ? dayjs(values.training_time[0]).format('HH:mm')
-          : undefined,
-        training_time_end: values.training_time
-          ? dayjs(values.training_time[1]).format('HH:mm')
-          : undefined,
-        location: values.location,
-        trainer: values.trainer,
-        content: values.content,
-        trainee_names: traineeDepts,
-        issuer_department: values.issuer_department || values.department,
-        issue_date: values.issue_date
-          ? values.issue_date.format('YYYY-MM-DD')
-          : values.training_date.format('YYYY-MM-DD')
-      }
-      await generateTrainingNotification(payload)
+      const entries = await buildExportEntries()
+      if (!entries) return
+      for (const e of entries) downloadBytes(e.bytes, e.name)
       message.success('培训通知已生成')
     } catch (err) {
-      message.error(err.message || '生成失败')
+      message.error((err instanceof Error ? err.message : '') || '生成失败')
     } finally {
-      setSubmittingWord(false)
+      setExporting(false)
     }
   }
 
-  const handleExportExcel = async () => {
-    const values = await form.validateFields()
-    const traineeDepts: string[] = values.trainee_departments || []
-
-    setSubmittingExcel(true)
-    try {
-      const topic = [values.subject, values.content].filter(Boolean).join(' ')
-      const payload = {
-        training_date: values.training_date.format('YYYY-MM-DD'),
-        training_time_start: values.training_time
-          ? dayjs(values.training_time[0]).format('HH:mm')
-          : undefined,
-        training_time_end: values.training_time
-          ? dayjs(values.training_time[1]).format('HH:mm')
-          : undefined,
-        department: traineeDepts[0] || values.department,
-        topic,
-        instructor: values.trainer,
-        location: values.location,
-        training_method: values.training_method,
-        employee_names: values.employee_names || []
-      }
-      await generateTrainingSignInSheet(payload)
-      message.success('培训签到表已生成')
-    } catch (err) {
-      message.error(err.message || '生成失败')
-    } finally {
-      setSubmittingExcel(false)
-    }
-  }
-
-  const handleExportEvaluation = async () => {
-    const values = await form.validateFields()
-    setSubmittingEval(true)
-    try {
-      let durationHours: number | undefined = undefined
-      if (values.training_time && values.training_time.length === 2) {
-        const start = dayjs(values.training_time[0])
-        const end = dayjs(values.training_time[1])
-        const diffMinutes = end.diff(start, 'minute')
-        durationHours = Math.round(diffMinutes / 30) / 2
-      }
-
-      const topicStr = [values.subject, values.content].filter(Boolean).join(' ')
-      const payload = {
-        subject: topicStr,
-        training_date: values.training_date.format('YYYY-MM-DD'),
-        duration_hours: durationHours,
-        training_method: values.training_method,
-        trainer_type: values.trainer,
-        textbook: `${values.department || ''} / ${(values.trainee_departments || []).join('、')} / ${(values.employee_names || []).length}人`,
-        expected_count: (values.employee_names || []).length
-      }
-      await generateTrainingEvaluation(payload)
-      message.success('培训效果评估表已生成')
-    } catch (err) {
-      message.error(err.message || '生成失败')
-    } finally {
-      setSubmittingEval(false)
-    }
-  }
-
-  const handleAddToLedger = async () => {
-    try {
-      await form.validateFields([
-        'department',
-        'training_date',
-        'subject',
-        'employee_names',
-      ])
-    } catch {
-      message.warning('请填写主办部门、培训日期、培训主题，并选择应出席受训人员')
-      return
-    }
-
-    const values = form.getFieldsValue()
-    const selectedNames: string[] = values.employee_names || []
-
-    if (selectedNames.length === 0) {
-      message.warning('请先选择应出席受训人员')
-      return
-    }
-
-    // 收集有工号的员工
-    const targets: { name: string; number: string }[] = []
-    const missing: string[] = []
-    for (const name of selectedNames) {
-      const num = nameToNumberMap[name]
-      if (num) {
-        targets.push({ name, number: num })
-      } else {
-        missing.push(name)
-      }
-    }
-
-    if (targets.length === 0) {
-      message.warning('所选人员缺少工号信息，无法添加到培训台账')
-      return
-    }
-
-    if (missing.length > 0) {
-      message.warning(`以下人员缺少工号，将跳过：${missing.join('、')}`)
-    }
-
-    // 检查哪些员工还没有专属培训台账菜单页面
-    const existingNumbers = await getExistingLedgerNumbers()
-    const noPage = targets.filter((t) => !existingNumbers.has(t.number))
-
-    modal.confirm({
-      title: '确认添加到培训台账',
-      content: `是否给 ${targets.map((t) => t.name).join('、')} 添加本次培训记录到培训台账？`,
-      onOk: async () => {
-        setAddingToLedger(true)
-        try {
-          const trainingDate = values.training_date.format('YYYY-MM-DD')
-          const subject = values.subject
-          const method = values.training_method || ''
-          const department = values.department || ''
-          const trainerVal = values.trainer || ''
-          const trainerFull = trainerVal
-            ? `${department}/${trainerVal}`
-            : department
-
-          let durationHours: number | undefined = undefined
-          if (values.training_time && values.training_time.length === 2) {
-            const start = dayjs(values.training_time[0])
-            const end = dayjs(values.training_time[1])
-            const diffMinutes = end.diff(start, 'minute')
-            durationHours = Math.round(diffMinutes / 30) / 2
-          }
-
-          for (const target of targets) {
-            await createTrainingLedger({
-              employee_number: target.number,
-              training_date: trainingDate,
-              training_subject: subject,
-              training_method: method,
-              duration_hours: durationHours,
-              trainer: trainerFull,
-              source_type: 'notification'
-            })
-          }
-          message.success(
-            `已成功为 ${targets.map((t) => t.name).join('、')} 添加培训台账记录`
-          )
-
-          // 对没有专属菜单页面的员工，询问是否新建页面
-          if (noPage.length > 0) {
-            modal.confirm({
-              title: '新建培训台账页面',
-              content: `当前没有 ${noPage.map((n) => n.name).join('、')} 的培训台账页面，是否新建？`,
-              onOk: async () => {
-                const created: string[] = []
-                for (const p of noPage) {
-                  try {
-                    await createTrainingLedgerPage({
-                      employee_number: p.number,
-                      employee_name: p.name
-                    })
-                    created.push(p.name)
-                  } catch {
-                    // 已存在或其他错误，跳过
-                  }
-                }
-                if (created.length > 0) {
-                  message.success(
-                    `已为 ${created.join('、')} 新建培训台账页面，刷新页面后可在左侧菜单查看`
-                  )
-                }
-              }
-            })
-          }
-        } catch (err) {
-          message.error(err.message || '添加到培训台账失败')
-        } finally {
-          setAddingToLedger(false)
-        }
-      }
-    })
-  }
-
-  const handleSendNotify = async () => {
-    const values = form.getFieldsValue()
-    const selectedNames: string[] = values.employee_names || []
-    if (selectedNames.length === 0) {
-      message.warning('请先选择应出席受训人员')
-      return
-    }
-
-    const numbers: string[] = []
-    for (const name of selectedNames) {
-      const num = nameToNumberMap[name]
-      if (num) numbers.push(num)
-    }
-
-    if (numbers.length === 0) {
-      message.warning('所选人员缺少工号信息，无法发送通知')
-      return
-    }
-
-    try {
-      await form.validateFields(['department', 'training_date', 'subject'])
-    } catch {
-      message.warning('请填写主办部门、培训日期和培训主题')
-      return
-    }
-
-    modal.confirm({
-      title: '确认发送培训通知',
-      content: `将向 ${numbers.length} 位受训人员发送飞书消息，是否继续？`,
-      onOk: async () => {
-        setSendingNotify(true)
-        try {
-          const payload = {
-            employee_numbers: numbers,
-            department: values.department,
-            subject: values.subject,
-            training_date: values.training_date.format('YYYY-MM-DD'),
-            training_time_start: values.training_time
-              ? dayjs(values.training_time[0]).format('HH:mm')
-              : undefined,
-            training_time_end: values.training_time
-              ? dayjs(values.training_time[1]).format('HH:mm')
-              : undefined,
-            location: values.location,
-            trainer: values.trainer,
-            content: values.content,
-            training_method: values.training_method,
-            issuer_department: values.issuer_department || values.department,
-            issue_date: values.issue_date
-              ? values.issue_date.format('YYYY-MM-DD')
-              : values.training_date.format('YYYY-MM-DD')
-          }
-          const res = await sendTrainingNotification(payload)
-          message.success(res.message)
-        } catch (err) {
-          message.error(err.message || '添加失败')
-        } finally {
-          setSendingNotify(false)
-        }
-      }
-    })
-  }
-
-  const formValues = form.getFieldsValue()
-  const traineeDepts: string[] = formValues?.trainee_departments || []
-  const deptValue = formValues?.department || ''
-  const dateValue = formValues?.training_date
-  const subjectValue = formValues?.subject || ''
-  const timeValue = formValues?.training_time
-  const locationValue = formValues?.location || ''
-  const trainerValue = formValues?.trainer || ''
-  const contentValue = formValues?.content || ''
-  const issuerValue = formValues?.issuer_department || deptValue
-  const issueDateValue = formValues?.issue_date || dateValue
-  const trainingMethodValue = formValues?.training_method || ''
-  const previewNames: string[] = formValues?.employee_names || []
-
-  const dateStr = dateValue ? dateValue.format('YYYY年MM月DD日') : '____年__月__日'
-  const timeStr =
-    timeValue
-      ? `${dayjs(timeValue[0]).format('HH:mm')} ~ ${dayjs(timeValue[1]).format('HH:mm')}`
-      : ''
-  const issueDateStr = issueDateValue
-    ? issueDateValue.format('YYYY年MM月DD日')
-    : dateStr
-  const topicStr = [subjectValue, contentValue].filter(Boolean).join(' ')
-
-  const signInPageSize = 30
-  const signInPages = previewNames.length > 0
-    ? Array.from({ length: Math.ceil(previewNames.length / signInPageSize) }, (_, i) =>
-        previewNames.slice(i * signInPageSize, (i + 1) * signInPageSize)
-      )
-    : []
-
-  const hasBasicInfo = !!deptValue && !!dateValue && !!subjectValue
-  const evalDurationHours = (() => {
-    if (timeValue && timeValue.length === 2) {
-      const diff = dayjs(timeValue[1]).diff(dayjs(timeValue[0]), 'minute')
-      return Math.round(diff / 30) / 2
-    }
-    return ''
-  })()
+  // 上报共享 session（导出/发送按钮在顶部控制条，依赖这些数据）
+  const handleNotifyFormChange = useCallback((_changed: Record<string, unknown>, allValues: NotificationFormValues) => {
+    const data: TrainingSessionData = {}
+    if (allValues.training_date) data.training_date = allValues.training_date.format('YYYY-MM-DD')
+    if (allValues.subject) data.topic = allValues.subject
+    if (allValues.content) data.content = allValues.content
+    // 六、培训考核 = 考核方式，与评估表共用 session.assessment_method 驱动口试/实操联动
+    if (allValues.training_method) data.assessment_method = allValues.training_method
+    if (allValues.trainer) data.instructor = allValues.trainer
+    if (allValues.location) data.location = allValues.location
+    if (allValues.department) data.department = allValues.department
+    if ((allValues.trainee_departments?.length ?? 0) > 0) data.trainee_departments = allValues.trainee_departments
+    if ((allValues.employee_names?.length ?? 0) > 0) data.employee_names = allValues.employee_names
+    if (allValues.issuer_department) data.issuer_department = allValues.issuer_department
+    if (allValues.issue_date) data.issue_date = allValues.issue_date.format('YYYY-MM-DD')
+    onSessionChange(data)
+  }, [onSessionChange])
 
   return (
-    <div className="space-y-6">
-      <Card title="填写培训通知">
-        <Form form={form} layout="vertical" className="max-w-4xl">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6">
-            <Form.Item
-              name="department"
-              label="主办部门"
-              rules={[{ required: true, message: '请选择主办部门' }]}
-            >
-              <Select
-                showSearch
-                placeholder="选择部门"
-                options={departments}
-                className="w-full"
-              />
-            </Form.Item>
+    <Form form={form} layout="vertical" onValuesChange={handleNotifyFormChange}>
+      <div className="space-y-4">
+        <Space className="mb-2 doc-toolbar">
+          <Button type="primary" icon={<DownloadOutlined />} loading={exporting} onClick={handleExport}>
+            导出培训通知
+          </Button>
+        </Space>
 
-            <Form.Item
-              name="training_date"
-              label="培训日期"
-              rules={[{ required: true, message: '请选择培训日期' }]}
-            >
-              <DatePicker className="w-full" placeholder="选择日期" />
-            </Form.Item>
+        {/* 培训通知模板文档（与 Word 模板逐行一致） */}
+        <div id="print-area">
+          <div className="a4-page doc-area" style={{ background: '#fff', padding: '28px 40px', margin: '0 auto' }}>
+            <h2 style={{ textAlign: 'center', fontSize: '16pt', fontWeight: 700, letterSpacing: 8, margin: '0 0 24px' }}>
+              培 训 通 知
+            </h2>
 
-            <Form.Item
-              name="subject"
-              label="培训主题"
-              rules={[{ required: true, message: '请填写培训主题' }]}
-              className="md:col-span-2"
-            >
-              <Input placeholder="请输入培训主题，如：安全生产规范培训" />
-            </Form.Item>
+            {/* 一、培训内容：可编辑框 */}
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 14, fontSize: '10.5pt', gap: 8 }}>
+              <span style={{ whiteSpace: 'nowrap', fontWeight: 600 }}>一、培训内容：</span>
+              <Form.Item name="subject" noStyle rules={[{ required: true, message: '请填写培训内容' }]}>
+                <Input placeholder="填写培训内容" style={{ flex: 1 }} />
+              </Form.Item>
+            </div>
 
-            <Form.Item
-              name="training_time"
-              label="培训时间"
-              initialValue={[dayjs('08:00', 'HH:mm'), dayjs('12:00', 'HH:mm')]}
-            >
-              <TimePicker.RangePicker className="w-full" format="HH:mm" />
-            </Form.Item>
+            {/* 二、培训对象 */}
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 14, fontSize: '10.5pt', gap: 8 }}>
+              <span style={{ whiteSpace: 'nowrap', fontWeight: 600 }}>二、培训对象：</span>
+              <Form.Item name="trainee_departments" noStyle>
+                <Select
+                  mode="tags"
+                  style={{ width: '50%' }}
+                  placeholder="选择或输入受训部门"
+                  options={departments.map((d) => ({ value: d.value, label: d.label }))}
+                />
+              </Form.Item>
+              <span style={{ color: '#666' }}>（具体人员名单详见培训签到表）</span>
+            </div>
 
-            <Form.Item name="location" label="培训地点">
-              <Input placeholder="请输入培训地点" />
-            </Form.Item>
+            {/* 三、培训时间 */}
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 14, fontSize: '10.5pt', gap: 8 }}>
+              <span style={{ whiteSpace: 'nowrap', fontWeight: 600 }}>三、培训时间：</span>
+              <Form.Item name="training_time" noStyle initialValue={[dayjs('08:00', 'HH:mm'), dayjs('12:00', 'HH:mm')]}>
+                <TimePicker.RangePicker format="HH:mm" style={{ flex: 1 }} />
+              </Form.Item>
+            </div>
 
-            <Form.Item name="trainer" label="培训师">
-              <Input placeholder="请输入培训师姓名" />
-            </Form.Item>
+            {/* 四、培训地点 */}
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 14, fontSize: '10.5pt', gap: 8 }}>
+              <span style={{ whiteSpace: 'nowrap', fontWeight: 600 }}>四、培训地点：</span>
+              <Form.Item name="location" noStyle>
+                <Input placeholder="填写培训地点" style={{ flex: 1 }} />
+              </Form.Item>
+            </div>
 
-            <Form.Item name="training_method" label="培训方式">
-              <Select
-                showSearch
-                placeholder="选择培训方式"
-                options={TRAINING_METHODS}
-                className="w-full"
-              />
-            </Form.Item>
+            {/* 五、培训要求 */}
+            <div style={{ marginBottom: 14, fontSize: '10.5pt' }}>
+              <p style={{ fontWeight: 600, margin: '0 0 4px' }}>五、培训要求：</p>
+              <p style={{ margin: '2px 0', textIndent: '2em' }}>1.以上课程属于培训课程的重要内容，要求各员工必须参加；</p>
+              <p style={{ margin: '2px 0', textIndent: '2em' }}>2.所有参训人员不得以任何理由拒绝参加培训，无故不参加培训的人员，将根据公司的相关规定给予相应的处罚；</p>
+              <p style={{ margin: '2px 0', textIndent: '2em' }}>3.在培训过程中所有参训人员不得迟到、早退、交头接耳、不得大声喧哗，把自己的手机调成静音或关机；</p>
+              <p style={{ margin: '2px 0', textIndent: '2em' }}>4.每位参训人员在培训时需要带上笔记本做好培训笔记。</p>
+            </div>
 
-            <Form.Item name="issuer_department" label="落款部门">
-              <Input placeholder="默认为主办部门" />
-            </Form.Item>
+            {/* 六、培训考核：下拉可编辑 */}
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 28, fontSize: '10.5pt', gap: 8 }}>
+              <span style={{ whiteSpace: 'nowrap', fontWeight: 600 }}>六、培训考核：</span>
+              <Form.Item name="training_method" noStyle>
+                <AutoComplete
+                  placeholder="选择或填写考核方式（笔试/口试/实操/写总结）"
+                  options={ASSESS_METHODS}
+                  allowClear
+                  style={{ flex: 1 }}
+                  filterOption={(input, option) => (option?.value ?? '').includes(input)}
+                />
+              </Form.Item>
+            </div>
 
-            <Form.Item name="issue_date" label="落款日期">
-              <DatePicker className="w-full" placeholder="默认为培训日期" />
-            </Form.Item>
+            {/* 特此通知 */}
+            <div style={{ textAlign: 'center', fontSize: '10.5pt', fontWeight: 600, margin: '28px 0' }}>
+              特此通知！
+            </div>
 
-            <Form.Item name="content" label="培训内容" className="md:col-span-2">
-              <Input.TextArea rows={3} placeholder="请输入培训内容" />
-            </Form.Item>
+            {/* 落款：单位 + 日期，均可编辑 */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', fontSize: '10.5pt', gap: 8 }}>
+              <Form.Item name="issuer_department" noStyle>
+                <Input placeholder="落款单位" style={{ width: 220, textAlign: 'center' }} />
+              </Form.Item>
+              <Form.Item name="issue_date" noStyle>
+                <DatePicker format="YYYY年MM月DD日" placeholder="年  月  日" style={{ width: 180 }} />
+              </Form.Item>
+            </div>
           </div>
-
-          <Form.Item
-            name="trainee_departments"
-            label="培训人员（受训部门）"
-          >
-            <Select
-              mode="multiple"
-              placeholder="选择受训部门（可多选）"
-              options={departments}
-              className="w-full"
-              onChange={(value: string[]) => loadEmployees(value)}
-            />
-          </Form.Item>
-
-          <Form.Item
-            name="employee_names"
-            label="应出席受训人员"
-          >
-            <Select
-              mode="multiple"
-              placeholder="选择应出席受训人员"
-              options={employees}
-              className="w-full"
-            />
-          </Form.Item>
-          {previewNames.length > 0 && (
-            <p className="text-gray-500 text-sm -mt-4 mb-4">
-              已选 {previewNames.length} 人
-              {previewNames.length > signInPageSize && (
-                <span>，签到表将分为 {Math.ceil(previewNames.length / signInPageSize)} 页</span>
-              )}
-            </p>
-          )}
-
-          <Form.Item>
-            <Space wrap>
-              <Button
-                type="primary"
-                icon={<DownloadOutlined />}
-                onClick={handleExportWord}
-                loading={submittingWord}
-              >
-                导出培训通知
-              </Button>
-              <Button
-                icon={<FileExcelOutlined />}
-                onClick={handleExportExcel}
-                loading={submittingExcel}
-              >
-                导出签到表
-              </Button>
-              <Button
-                icon={<DownloadOutlined />}
-                onClick={handleExportEvaluation}
-                loading={submittingEval}
-              >
-                导出培训效果评估表
-              </Button>
-              <Button
-                type="default"
-                icon={<BookOutlined />}
-                onClick={handleAddToLedger}
-                loading={addingToLedger}
-              >
-                添加到培训台账
-              </Button>
-              <Button
-                type="primary"
-                icon={<SendOutlined />}
-                onClick={handleSendNotify}
-                loading={sendingNotify}
-              >
-                通知受训人员
-              </Button>
-            </Space>
-          </Form.Item>
-        </Form>
-      </Card>
-
-      {/* Print preview area */}
-      {hasBasicInfo && (
-        <div id="print-area" className="space-y-6">
-          <Card>
-            <div className="max-w-3xl mx-auto p-8 text-sm leading-relaxed">
-              <h2 className="text-center text-xl font-bold mb-8">培训通知</h2>
-
-              <p className="mb-4 indent-8">
-                <span className="border-b border-gray-800 px-2">{deptValue}</span>
-                将于
-                <span className="border-b border-gray-800 px-2">{dateStr}</span>
-                举行
-                <span className="border-b border-gray-800 px-2">{subjectValue}</span>
-                的培训，详细培训安排如下：
-              </p>
-
-              <p className="mb-2">
-                <strong>培训时间：</strong>
-                <span className="border-b border-gray-800 px-2 min-w-[200px] inline-block">
-                  {timeStr || ' '}
-                </span>
-              </p>
-              <p className="mb-2">
-                <strong>培训地点：</strong>
-                <span className="border-b border-gray-800 px-2 min-w-[200px] inline-block">
-                  {locationValue || ' '}
-                </span>
-              </p>
-              <p className="mb-2">
-                <strong>培训师：</strong>
-                <span className="border-b border-gray-800 px-2 min-w-[200px] inline-block">
-                  {trainerValue || ' '}
-                </span>
-              </p>
-              <p className="mb-2">
-                <strong>培训内容：</strong>
-                <span className="border-b border-gray-800 px-2 min-w-[300px] inline-block">
-                  {contentValue || ' '}
-                </span>
-              </p>
-              <p className="mb-4">
-                <strong>培训人员：</strong>
-                <span className="border-b border-gray-800 px-2 min-w-[300px] inline-block">
-                  {traineeDepts.join('、') || ' '}
-                </span>
-              </p>
-
-              <div className="mb-6">
-                <p className="mb-1">
-                  <strong>备注：</strong>1.请培训人员自带笔记本、笔，做好笔记。
-                </p>
-                <p className="mb-1 pl-10">2.请部门安排好参训人员的工作时间，做到培训工作两不误。</p>
-                <p className="pl-10">3.不得无故缺席、迟到，到场签到，有特殊情况须提前请假。</p>
-              </div>
-
-              <div className="mt-10 flex justify-between items-end">
-                <div>
-                  <p className="mb-1">
-                    <strong>部门：</strong>
-                    <span className="border-b border-gray-800 px-2 min-w-[120px] inline-block">
-                      {issuerValue || ' '}
-                    </span>
-                  </p>
-                </div>
-                <div>
-                  <p>
-                    <span className="border-b border-gray-800 px-2 min-w-[80px] inline-block text-center">
-                      {issueDateValue ? issueDateValue.format('YYYY') : '____'}
-                    </span>
-                    年
-                    <span className="border-b border-gray-800 px-2 min-w-[40px] inline-block text-center">
-                      {issueDateValue ? issueDateValue.format('MM') : '__'}
-                    </span>
-                    月
-                    <span className="border-b border-gray-800 px-2 min-w-[40px] inline-block text-center">
-                      {issueDateValue ? issueDateValue.format('DD') : '__'}
-                    </span>
-                    日
-                  </p>
-                </div>
-              </div>
-            </div>
-          </Card>
-
-          {/* 签到表预览 */}
-          {signInPages.map((pageNames, pageIdx) => (
-            <Card key={pageIdx} className="mt-6">
-              <div className="max-w-3xl mx-auto p-8 text-sm leading-relaxed">
-                <h2 className="text-center text-xl font-bold mb-6">
-                  培训签到表{signInPages.length > 1 ? `（第${pageIdx + 1}/${signInPages.length}张）` : ''}
-                </h2>
-
-                <div className="grid grid-cols-2 gap-4 mb-4">
-                  <div>
-                    <strong>日期：</strong>
-                    <span className="border-b border-gray-800 px-2">{dateStr}</span>
-                  </div>
-                  <div>
-                    <strong>受训部门：</strong>
-                    <span className="border-b border-gray-800 px-2">{traineeDepts[0] || deptValue || ' '}</span>
-                  </div>
-                  <div>
-                    <strong>培训方式：</strong>
-                    <span className="border-b border-gray-800 px-2">{trainingMethodValue || ' '}</span>
-                  </div>
-                  <div>
-                    <strong>应受训人数：</strong>
-                    <span className="border-b border-gray-800 px-2">{previewNames.length}人</span>
-                  </div>
-                  <div>
-                    <strong>培训时间：</strong>
-                    <span className="border-b border-gray-800 px-2">{timeStr || ' '}</span>
-                  </div>
-                  <div>
-                    <strong>培训地点：</strong>
-                    <span className="border-b border-gray-800 px-2">{locationValue || ' '}</span>
-                  </div>
-                </div>
-                <div className="mb-4">
-                  <strong>培训题目/内容概要：</strong>
-                  <span className="border-b border-gray-800 px-2">{topicStr || ' '}</span>
-                </div>
-                <div className="mb-4">
-                  <strong>授课人：</strong>
-                  <span className="border-b border-gray-800 px-2">{trainerValue || ' '}</span>
-                </div>
-
-                <table className="w-full border-collapse border border-gray-800 text-center">
-                  <thead>
-                    <tr className="bg-gray-100">
-                      <th className="border border-gray-800 p-2 w-16">序号</th>
-                      <th className="border border-gray-800 p-2">姓名</th>
-                      <th className="border border-gray-800 p-2 w-24">签到</th>
-                      <th className="border border-gray-800 p-2 w-16">序号</th>
-                      <th className="border border-gray-800 p-2">姓名</th>
-                      <th className="border border-gray-800 p-2 w-24">签到</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {Array.from({ length: Math.max(15, Math.ceil(pageNames.length / 2)) }).map((_, rowIdx) => {
-                      const leftIdx = rowIdx
-                      const rightIdx = rowIdx + 15
-                      return (
-                        <tr key={rowIdx}>
-                          <td className="border border-gray-800 p-2">{leftIdx + 1 + pageIdx * 30}</td>
-                          <td className="border border-gray-800 p-2">{pageNames[leftIdx] || ''}</td>
-                          <td className="border border-gray-800 p-2"></td>
-                          <td className="border border-gray-800 p-2">{rightIdx + 1 + pageIdx * 30}</td>
-                          <td className="border border-gray-800 p-2">{pageNames[rightIdx] || ''}</td>
-                          <td className="border border-gray-800 p-2"></td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </Card>
-          ))}
-
-          {/* 培训效果评估表预览 */}
-          <Card className="mt-6">
-            <div className="max-w-3xl mx-auto p-4 text-sm leading-relaxed">
-              <div className="text-xs text-gray-500 mb-1">QR.SOP.PM.003/18（格式） P8/12</div>
-              <div className="text-center text-lg font-bold mb-1">丽珠集团新北江制药股份有限公司</div>
-              <div className="text-center text-xl font-bold mb-6">培训效果评估表</div>
-
-              <table className="w-full text-sm" style={{ borderCollapse: 'collapse' }}>
-                <tbody>
-                  <tr>
-                    <td style={TD_LABEL} colSpan={5} className="font-bold bg-gray-50">培训主题：{topicStr}</td>
-                  </tr>
-                  <tr>
-                    <td style={TD_LABEL} colSpan={3} className="bg-gray-50">培训时间：{dateStr}</td>
-                    <td style={TD_LABEL} colSpan={2} className="bg-gray-50">学时：{evalDurationHours}</td>
-                  </tr>
-                  <tr>
-                    <td style={TD_LABEL} colSpan={3} className="bg-gray-50">培训方式：{trainingMethodValue || '□面授  □函授  □远程教育  □自学  □其他方式'}</td>
-                    <td style={TD_LABEL} colSpan={2} className="bg-gray-50">□考试</td>
-                  </tr>
-                  <tr>
-                    <td style={TD_LABEL} colSpan={5} className="bg-gray-50">培训人员：□讲师/专家/官员等    {trainerValue}</td>
-                  </tr>
-                  <tr>
-                    <td style={TD_LABEL} colSpan={5} className="bg-gray-50">应出席 {previewNames.length} 人；实际出席 ___ 人；缺席 ___ 人。</td>
-                  </tr>
-                  <tr>
-                    <td style={TD_LABEL} colSpan={5} className="bg-gray-50">培训教材：{deptValue} / {traineeDepts.join('、')} / {previewNames.length}人</td>
-                  </tr>
-                  <tr>
-                    <td style={{ ...TD_LABEL, height: '48px' }} colSpan={5} className="bg-gray-50">缺席人员处理方式：</td>
-                  </tr>
-                  <tr>
-                    <td style={TD_LABEL} colSpan={5} className="bg-gray-50">考核方式：□ 笔试    □ 口试   □ 实操   □ 写总结</td>
-                  </tr>
-                  <tr>
-                    <td style={TD_LABEL} colSpan={5} className="bg-gray-50">考核结果：□合格 ___ 人；□不合格 ___ 人；缺考 ___ 人。</td>
-                  </tr>
-                  <tr>
-                    <td style={{ ...TD_LABEL, height: '36px' }} colSpan={5} className="bg-gray-50">缺考人员处理方式和原因：</td>
-                  </tr>
-                  <tr>
-                    <td style={TD_LABEL} colSpan={5} className="bg-gray-50">综合评分：□优秀 ___ 人；□合格 ___ 人；□不合格 ___ 人。</td>
-                  </tr>
-                  <tr>
-                    <td style={{ ...TD_LABEL, height: '24px' }} colSpan={5} className="bg-gray-50"></td>
-                  </tr>
-                  <tr>
-                    <td style={{ ...TD_LABEL, height: '48px' }} colSpan={5} className="bg-gray-50">培训效果评估及结论：</td>
-                  </tr>
-                  <tr>
-                    <td style={TD_LABEL} colSpan={5} className="bg-gray-50">培训组织人/日期：</td>
-                  </tr>
-                  <tr>
-                    <td style={{ ...TD_LABEL, height: '36px' }} colSpan={5} className="bg-gray-50">备注：</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </Card>
         </div>
-      )}
+      </div>
 
-      {!hasBasicInfo && (
-        <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-          <BellOutlined className="text-5xl mb-4" />
-          <p>填写主办部门、培训日期和培训主题后预览培训通知、签到表和效果评估表</p>
-        </div>
-      )}
-
+      <TrainingDocStyle />
       <style jsx global>{`
         @media print {
-          body * {
-            visibility: hidden;
-          }
-          #print-area,
-          #print-area * {
-            visibility: visible;
-          }
-          #print-area {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-          }
-          .ant-card-head {
-            border-bottom: 1px solid #000 !important;
-          }
+          body * { visibility: hidden; }
+          #print-area, #print-area * { visibility: visible; }
+          #print-area { position: absolute; left: 0; top: 0; width: 100%; }
         }
       `}</style>
-    </div>
+    </Form>
   )
 }

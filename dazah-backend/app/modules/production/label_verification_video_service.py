@@ -4,8 +4,7 @@ import base64
 import json
 import logging
 import os
-
-import cv2
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -13,8 +12,19 @@ logger = logging.getLogger(__name__)
 class LabelVerificationVideoService:
     """视频分析服务 - 提取帧并调用 AI 视觉模型识别标签信息，自动与表单对比"""
 
-    def __init__(self, upload_dir: str = "./uploads"):
+    def __init__(self, upload_dir: str = "./uploads") -> None:
         self.upload_dir = upload_dir
+
+    @staticmethod
+    def _get_cv2() -> Any:
+        """Load the optional video dependency only when video analysis is used."""
+        try:
+            import cv2  # type: ignore[import-not-found]
+        except ImportError as exc:
+            raise RuntimeError(
+                "视频分析依赖 OpenCV 未安装，请安装 opencv-python-headless"
+            ) from exc
+        return cv2
 
     # ─── 帧提取 ───
 
@@ -28,6 +38,7 @@ class LabelVerificationVideoService:
         if not os.path.exists(video_path):
             raise FileNotFoundError(f"视频文件不存在: {video_path}")
 
+        cv2 = self._get_cv2()
         cap = cv2.VideoCapture(video_path)
         if not cap.isOpened():
             raise ValueError(f"无法打开视频文件: {video_path}")
@@ -42,7 +53,7 @@ class LabelVerificationVideoService:
         )
 
         frame_interval = max(1, int(video_fps / fps))
-        frames_base64 = []
+        frames_base64: list[str] = []
         current_frame = 0
 
         while cap.isOpened() and len(frames_base64) < max_frames:
@@ -61,11 +72,12 @@ class LabelVerificationVideoService:
         logger.info(f"提取了 {len(frames_base64)} 帧 (目标 FPS={fps})")
         return frames_base64
 
-    def get_video_info(self, video_path: str) -> dict:
+    def get_video_info(self, video_path: str) -> dict[str, Any]:
         """获取视频基本信息"""
         if not os.path.exists(video_path):
             raise FileNotFoundError(f"视频文件不存在: {video_path}")
 
+        cv2 = self._get_cv2()
         cap = cv2.VideoCapture(video_path)
         if not cap.isOpened():
             raise ValueError(f"无法打开视频文件: {video_path}")
@@ -85,8 +97,9 @@ class LabelVerificationVideoService:
 
     def _build_recognition_prompt(self) -> str:
         """构建 AI 视觉识别的提示词"""
-        return
-        """你是一个药品生产标签核验专家。请仔细分析这些视频帧截图，识别标签上的所有信息。
+        return (
+            """
+你是一个药品生产标签核验专家。请仔细分析这些视频帧截图，识别标签上的所有信息。
 
 这些帧来自同一段视频，展示的是同一批产品的标签和桶。请综合所有帧的信息，尽量完整地识别以下内容。
 
@@ -115,11 +128,13 @@ class LabelVerificationVideoService:
 4. 如果某个信息在多帧中都能看到，以清晰度最高的那帧为准
 5. 如果某些信息完全无法识别，请设为 null，不要猜测
 6. barrels_seen 列出你在视频中实际看到的所有桶的编号"""
+        )
 
-    def _build_detailed_prompt(self, form_data: dict) -> str:
+    def _build_detailed_prompt(self, form_data: dict[str, Any]) -> str:
         """构建带表单数据的详细对比提示词"""
-        return
-        f"""你是一个药品生产标签核验专家。请仔细分析这些视频帧截图，将标签上的信息与以下表单数据进行逐项对比。
+        return (
+            f"""
+你是一个药品生产标签核验专家。请仔细分析这些视频帧截图，将标签上的信息与以下表单数据进行逐项对比。
 
 表单数据：
 - 批号：{form_data.get("batch_number", "未填写")}
@@ -179,8 +194,9 @@ class LabelVerificationVideoService:
   }},
   "notes": "其他备注"
 }}"""
+        )
 
-    def _parse_ai_response(self, raw: str) -> dict:
+    def _parse_ai_response(self, raw: str) -> dict[str, Any]:
         """解析 AI 返回的 JSON，处理 markdown 格式等"""
         cleaned = raw.strip()
         # 去掉 markdown 代码块
@@ -196,9 +212,12 @@ class LabelVerificationVideoService:
                 cleaned = cleaned[:-3]
             cleaned = cleaned.strip()
 
-        return json.loads(cleaned)
+        parsed = json.loads(cleaned)
+        if not isinstance(parsed, dict):
+            raise ValueError("AI 返回的识别结果不是 JSON 对象")
+        return parsed
 
-    def _is_recognition_complete(self, result: dict) -> bool:
+    def _is_recognition_complete(self, result: dict[str, Any]) -> bool:
         """判断识别结果是否完整（关键信息是否都有）"""
         critical_fields = [
             "batch_number",
@@ -216,7 +235,7 @@ class LabelVerificationVideoService:
 
         return True
 
-    def _is_comparison_complete(self, result: dict) -> bool:
+    def _is_comparison_complete(self, result: dict[str, Any]) -> bool:
         """判断对比结果是否完整（8项是否都有明确判断）"""
         check_fields = [
             "check_batch_number",
@@ -241,11 +260,11 @@ class LabelVerificationVideoService:
     async def analyze_and_compare(
         self,
         video_path: str,
-        form_data: dict,
-        ai_service,
+        form_data: dict[str, Any],
+        ai_service: Any,
         initial_fps: float = 1.0,
         max_retry_fps: float = 0.3,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """
         核心方法：分析视频并与表单数据自动对比。
         如果识别不全，自动降低帧率重试。
@@ -328,11 +347,11 @@ class LabelVerificationVideoService:
 
     def _format_comparison_result(
         self,
-        result: dict,
+        result: dict[str, Any],
         frames_count: int,
         fps_used: float,
         retry_count: int,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """格式化对比结果"""
         check_fields = [
             "check_batch_number",
@@ -344,7 +363,7 @@ class LabelVerificationVideoService:
             "check_all_barrels_identified",
         ]
 
-        checks = {}
+        checks: dict[str, bool] = {}
         for field in check_fields:
             checks[field] = bool(result.get(field, False))
 
@@ -353,7 +372,7 @@ class LabelVerificationVideoService:
         checks["check_exception_handled"] = all_pass
 
         # AI 识别到的数据
-        ai_data = {
+        ai_data: dict[str, Any] = {
             "batch_number": result.get("ai_batch_number"),
             "product_name": result.get("ai_product_name"),
             "production_date": result.get("ai_production_date"),

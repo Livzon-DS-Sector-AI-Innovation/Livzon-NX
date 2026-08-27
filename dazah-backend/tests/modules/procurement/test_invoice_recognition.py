@@ -1,13 +1,14 @@
 import uuid
 from decimal import Decimal
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
 from httpx import AsyncClient
 
 from app.main import app
-from app.modules.procurement.service import (
+from app.modules.procurement.service import (  # type: ignore[attr-defined]
     DuplicateInvoiceError,
     InvoiceRecognitionResult,
     _parse_invoice_text,
@@ -17,10 +18,12 @@ from app.modules.procurement.service import (
 )
 from app.platform.identity.deps import get_current_user
 
+SimpleNamespace: Any = _SimpleNamespace
+
 
 @pytest.fixture
-async def authenticated_client(client: AsyncClient):
-    async def _override_current_user():
+async def authenticated_client(client: AsyncClient) -> Any:
+    async def _override_current_user() -> Any:
         return SimpleNamespace(role="admin", status="active")
 
     app.dependency_overrides[get_current_user] = _override_current_user
@@ -43,10 +46,7 @@ def test_parse_invoice_text_from_layout_pdf_text() -> None:
                 "信  统一社会信用代码/纳税人识别号：91640221574877733M"
                 "           信  统一社会信用代码/纳税人识别号：91150103MA0Q8T6YX5"
             ),
-            (
-                "项目名称 规格型号 单 位 数 量 单 价 金 额 "
-                "税率/征收率 税 额"
-            ),
+            ("项目名称 规格型号 单 位 数 量 单 价 金 额 税率/征收率 税 额"),
             (
                 "*食品添加剂*黄原胶       25kg/袋        kg          "
                 "100012.5663716814159 12566.37   13%            1633.63"
@@ -75,10 +75,7 @@ def test_parse_invoice_text_uses_total_tax_amount_for_multi_page_invoice() -> No
                 "购  名称：丽珠集团（宁夏）制药有限公司"
                 "                            销  名称：宁夏金海星宁商贸有限公司"
             ),
-            (
-                "项目名称 规格型号 单 位 数 量 单 价 金 额 "
-                "税率/征收率 税 额"
-            ),
+            ("项目名称 规格型号 单 位 数 量 单 价 金 额 税率/征收率 税 额"),
             "*塑料制品*塑料三角瓶 250ml 个 30 4.8672566371681 146.02 13% 18.98",
             "小        计 ¥17399.99 ¥2262.01",
             "合        计 ¥70889.64 ¥9215.66",
@@ -105,10 +102,7 @@ def test_parse_invoice_text_includes_line_items_when_requested() -> None:
                 "购  名称：丽珠集团(宁夏)制药有限公司"
                 "                            销  名称：内蒙古臻合生物科技有限公司"
             ),
-            (
-                "项目名称 规格型号 单 位 数 量 单 价 金 额 "
-                "税率/征收率 税 额"
-            ),
+            ("项目名称 规格型号 单 位 数 量 单 价 金 额 税率/征收率 税 额"),
             (
                 "*食品添加剂*黄原胶       25kg/袋        kg          "
                 "100012.5663716814159 12566.37   13%            1633.63"
@@ -135,10 +129,7 @@ def test_parse_invoice_text_infers_conjoined_detail_quantity() -> None:
                 "购  名称：丽珠集团（宁夏）制药有限公司"
                 "                            销  名称：宁夏金海星宁商贸有限公司"
             ),
-            (
-                "项目名称 规格型号 单 位 数 量 单 价 金 额 "
-                "税率/征收率 税 额"
-            ),
+            ("项目名称 规格型号 单 位 数 量 单 价 金 额 税率/征收率 税 额"),
             (
                 "*橡胶制品*丁腈手套            中号               包"
                 "                  2115.0442477876106        230.09"
@@ -167,10 +158,7 @@ def test_parse_invoice_text_handles_reversed_seller_and_dense_amounts() -> None:
                 "                                   宁夏伊品贸易有限公司销"
                 "                                           名称："
             ),
-            (
-                "项目名称 规格型号 单 位 数 量 单 价 金 额 "
-                "税率/征收率 税 额"
-            ),
+            ("项目名称 规格型号 单 位 数 量 单 价 金 额 税率/征收率 税 额"),
             (
                 "*淀粉制品*液体葡萄糖                  吨"
                 "             345.021680.53095473579816.7913%"
@@ -199,12 +187,12 @@ def test_parse_invoice_text_handles_reversed_seller_and_dense_amounts() -> None:
 
 @pytest.mark.asyncio
 async def test_recognize_and_store_invoice_pdf_rejects_duplicate_invoice() -> None:
-    db = AsyncMock()
-    existing_record = SimpleNamespace(
+    db: Any = AsyncMock()
+    existing_record: Any = SimpleNamespace(
         id=uuid.uuid4(),
         file_name="existing.pdf",
     )
-    repo = AsyncMock()
+    repo: Any = AsyncMock()
     repo.find_duplicate.return_value = existing_record
 
     parsed_result = InvoiceRecognitionResult(
@@ -244,7 +232,7 @@ async def test_recognize_invoice_api_rejects_oversized_pdf(
         response = await authenticated_client.post(
             "/api/v1/procurement/invoices/recognize",
             files={"file": ("invoice.pdf", b"0123456789", "application/pdf")},
-    )
+        )
 
     assert response.status_code == 413
     assert "不能超过" in response.json()["message"]
@@ -254,12 +242,12 @@ async def test_recognize_invoice_api_rejects_oversized_pdf(
 async def test_recognize_invoice_api_maps_duplicate_to_409(
     authenticated_client: AsyncClient,
 ) -> None:
-    existing_record = SimpleNamespace(
+    existing_record: Any = SimpleNamespace(
         id=uuid.uuid4(),
         file_name="existing.pdf",
     )
 
-    async def _raise_duplicate(*args, **kwargs):
+    async def _raise_duplicate(*args: Any, **kwargs: Any) -> Any:
         raise DuplicateInvoiceError(existing_record)
 
     with patch(
@@ -277,9 +265,9 @@ async def test_recognize_invoice_api_maps_duplicate_to_409(
 
 @pytest.mark.asyncio
 async def test_delete_invoice_recognition_record_delegates_to_repository() -> None:
-    db = AsyncMock()
+    db: Any = AsyncMock()
     record_id = uuid.uuid4()
-    repo = AsyncMock()
+    repo: Any = AsyncMock()
     repo.delete_record.return_value = True
 
     with patch(
@@ -294,9 +282,9 @@ async def test_delete_invoice_recognition_record_delegates_to_repository() -> No
 
 @pytest.mark.asyncio
 async def test_batch_delete_invoice_records_delegates_to_repository() -> None:
-    db = AsyncMock()
+    db: Any = AsyncMock()
     record_ids = [uuid.uuid4(), uuid.uuid4()]
-    repo = AsyncMock()
+    repo: Any = AsyncMock()
     repo.batch_delete_records.return_value = 2
 
     with patch(

@@ -3,7 +3,7 @@
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -218,7 +218,7 @@ async def _get_supplier(db: AsyncSession, supplier_id: uuid.UUID) -> Supplier:
     supplier = await repository.get_record_by_id(db, Supplier, supplier_id)
     if supplier is None:
         raise NotFoundException("供应商", str(supplier_id))
-    return supplier
+    return cast(Supplier, supplier)
 
 
 async def get_supplier_qualification(
@@ -229,7 +229,7 @@ async def get_supplier_qualification(
     )
     if qualification is None:
         raise NotFoundException("供应商资质", str(qualification_id))
-    return qualification
+    return cast(SupplierQualification, qualification)
 
 
 async def list_supplier_qualifications(
@@ -257,10 +257,13 @@ async def create_supplier_qualification(
         value=code,
     ):
         raise DuplicateException("资质编号", code)
-    return await repository.create_record(
-        db,
+    return cast(
         SupplierQualification,
-        {**data, "supplier_id": supplier_id, "qualification_code": code},
+        await repository.create_record(
+            db,
+            SupplierQualification,
+            {**data, "supplier_id": supplier_id, "qualification_code": code},
+        ),
     )
 
 
@@ -285,7 +288,7 @@ async def update_supplier_qualification(
     )
     if refreshed is None:
         raise NotFoundException("供应商资质", str(qualification_id))
-    return refreshed
+    return cast(SupplierQualification, refreshed)
 
 
 async def delete_supplier_qualification(
@@ -303,7 +306,9 @@ async def start_complaint_investigation(
     if complaint.status != "pending":
         raise ValueError("仅待处理投诉可以启动调查")
     await repository.update_record(db, complaint, {"status": "investigating"})
-    return await _get_resource_record(db, "complaints", complaint_id)
+    return cast(
+        ComplaintRecord, await _get_resource_record(db, "complaints", complaint_id)
+    )
 
 
 async def respond_to_complaint(
@@ -327,7 +332,9 @@ async def respond_to_complaint(
             "response_date": response_date,
         },
     )
-    return await _get_resource_record(db, "complaints", complaint_id)
+    return cast(
+        ComplaintRecord, await _get_resource_record(db, "complaints", complaint_id)
+    )
 
 
 async def close_complaint(db: AsyncSession, complaint_id: uuid.UUID) -> ComplaintRecord:
@@ -339,7 +346,9 @@ async def close_complaint(db: AsyncSession, complaint_id: uuid.UUID) -> Complain
         complaint,
         {"status": "closed", "closed_at": datetime.now(UTC)},
     )
-    return await _get_resource_record(db, "complaints", complaint_id)
+    return cast(
+        ComplaintRecord, await _get_resource_record(db, "complaints", complaint_id)
+    )
 
 
 async def start_return_recall_assessment(
@@ -349,7 +358,9 @@ async def start_return_recall_assessment(
     if record.status != "pending":
         raise ValueError("仅待处理的退货/召回记录可以启动评估")
     await repository.update_record(db, record, {"status": "assessing"})
-    return await _get_resource_record(db, "return_recalls", record_id)
+    return cast(
+        ReturnRecallRecord, await _get_resource_record(db, "return_recalls", record_id)
+    )
 
 
 async def start_return_recall_processing(
@@ -363,7 +374,9 @@ async def start_return_recall_processing(
         record,
         {"status": "processing", "assessment_date": assessment_date},
     )
-    return await _get_resource_record(db, "return_recalls", record_id)
+    return cast(
+        ReturnRecallRecord, await _get_resource_record(db, "return_recalls", record_id)
+    )
 
 
 async def complete_return_recall(
@@ -385,7 +398,9 @@ async def complete_return_recall(
             "completion_date": completion_date,
         },
     )
-    return await _get_resource_record(db, "return_recalls", record_id)
+    return cast(
+        ReturnRecallRecord, await _get_resource_record(db, "return_recalls", record_id)
+    )
 
 
 async def complete_product_quality_record(
@@ -409,7 +424,10 @@ async def complete_product_quality_record(
             "review_date": review_date,
         },
     )
-    return await _get_resource_record(db, "product_quality_records", record_id)
+    return cast(
+        ProductQualityRecord,
+        await _get_resource_record(db, "product_quality_records", record_id),
+    )
 
 
 async def approve_product_quality_record(
@@ -423,7 +441,10 @@ async def approve_product_quality_record(
         record,
         {"status": "approved", "approved_at": datetime.now(UTC)},
     )
-    return await _get_resource_record(db, "product_quality_records", record_id)
+    return cast(
+        ProductQualityRecord,
+        await _get_resource_record(db, "product_quality_records", record_id),
+    )
 
 
 async def _get_product_quality_standard_record(
@@ -432,7 +453,7 @@ async def _get_product_quality_standard_record(
     record = await _get_resource_record(db, "product_quality_records", record_id)
     if record.record_type != "customer_standard":
         raise ValueError("仅客户质量标准记录可以维护标准明细")
-    return record
+    return cast(ProductQualityRecord, record)
 
 
 async def get_product_quality_standard_item(
@@ -441,7 +462,7 @@ async def get_product_quality_standard_item(
     item = await repository.get_record_by_id(db, ProductQualityStandardItem, item_id)
     if item is None:
         raise NotFoundException("产品质量标准明细", str(item_id))
-    return item
+    return cast(ProductQualityStandardItem, item)
 
 
 async def list_product_quality_standard_items(
@@ -471,10 +492,13 @@ async def create_product_quality_standard_item(
     )
     if any(item.display_order == display_order for item in existing_items):
         raise DuplicateException("产品质量标准明细显示顺序", str(display_order))
-    return await repository.create_record(
-        db,
+    return cast(
         ProductQualityStandardItem,
-        {**data, "product_quality_id": record_id, "display_order": display_order},
+        await repository.create_record(
+            db,
+            ProductQualityStandardItem,
+            {**data, "product_quality_id": record_id, "display_order": display_order},
+        ),
     )
 
 
@@ -503,7 +527,7 @@ async def update_product_quality_standard_item(
     )
     if refreshed is None:
         raise NotFoundException("产品质量标准明细", str(item_id))
-    return refreshed
+    return cast(ProductQualityStandardItem, refreshed)
 
 
 async def delete_product_quality_standard_item(

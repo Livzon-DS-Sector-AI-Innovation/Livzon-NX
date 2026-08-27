@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime
 from decimal import Decimal
+from typing import Any, cast
 from uuid import uuid4
 
 import httpx
@@ -28,7 +29,7 @@ from app.modules.energy.schemas import (
 from app.modules.energy.wiki_service import EnergyWikiService
 
 
-def test_parse_wiki_token_from_leaf_url():
+def test_parse_wiki_token_from_leaf_url() -> Any:
     assert (
         EnergyFeishuClient.parse_wiki_token(
             "https://example.feishu.cn/wiki/FYtAwGGFIiyJKNkYZNWcdn1cnfd?sheet=LlAw4G"
@@ -38,7 +39,9 @@ def test_parse_wiki_token_from_leaf_url():
 
 
 @pytest.mark.asyncio
-async def test_retry_retries_transient_failures_with_exponential_backoff(monkeypatch):
+async def test_retry_retries_transient_failures_with_exponential_backoff(
+    monkeypatch: Any,
+) -> Any:
     client = object.__new__(EnergyFeishuClient)
     attempts = 0
     delays: list[int] = []
@@ -61,12 +64,12 @@ async def test_retry_retries_transient_failures_with_exponential_backoff(monkeyp
 
 
 @pytest.mark.asyncio
-async def test_sheet_discovery_uses_the_official_sheet_query_endpoint():
+async def test_sheet_discovery_uses_the_official_sheet_query_endpoint() -> Any:
     class FakeFeishuClient:
-        def __init__(self) -> None:
+        def __init__(self: Any) -> None:
             self.path = ""
 
-        async def request(self, _method: str, path: str, **_kwargs):
+        async def request(self: Any, _method: str, path: str, **_kwargs: Any) -> Any:
             self.path = path
             return {"sheets": [{"sheet_id": "sheet-a", "title": "日总量"}]}
 
@@ -76,15 +79,15 @@ async def test_sheet_discovery_uses_the_official_sheet_query_endpoint():
     sheets = await client.list_workbook_sheets("spreadsheet-token")
 
     assert sheets == [{"sheet_id": "sheet-a", "title": "日总量"}]
-    assert client._client.path == (
+    assert client._client.path == (  # type: ignore[attr-defined]
         "/sheets/v3/spreadsheets/spreadsheet-token/sheets/query"
     )
 
 
 @pytest.mark.asyncio
-async def test_sheet_discovery_normalizes_camel_case_grid_size():
+async def test_sheet_discovery_normalizes_camel_case_grid_size() -> Any:
     class FakeFeishuClient:
-        async def request(self, _method: str, _path: str, **_kwargs):
+        async def request(self: Any, _method: str, _path: str, **_kwargs: Any) -> Any:
             return {
                 "sheets": [
                     {
@@ -106,12 +109,12 @@ async def test_sheet_discovery_normalizes_camel_case_grid_size():
 
 
 @pytest.mark.asyncio
-async def test_sheet_values_read_every_declared_row_even_after_empty_chunks():
+async def test_sheet_values_read_every_declared_row_even_after_empty_chunks() -> Any:
     class FakeFeishuClient:
-        def __init__(self) -> None:
+        def __init__(self: Any) -> None:
             self.paths: list[str] = []
 
-        async def request(self, _method: str, path: str, **_kwargs):
+        async def request(self: Any, _method: str, path: str, **_kwargs: Any) -> Any:
             self.paths.append(path)
             values = [["tail"]] if "A10001%3AAAA10001" in path else []
             return {"revision": 12, "valueRange": {"values": values}}
@@ -129,18 +132,18 @@ async def test_sheet_values_read_every_declared_row_even_after_empty_chunks():
     assert len(values) == 10_001
     assert values[-1] == ["tail"]
     assert revision == "12"
-    assert len(client._client.paths) == 21
-    assert client._client.paths[0].endswith("sheet-a!A1%3AAAA500")
-    assert client._client.paths[-1].endswith("sheet-a!A10001%3AAAA10001")
+    assert len(client._client.paths) == 21  # type: ignore[attr-defined]
+    assert client._client.paths[0].endswith("sheet-a!A1%3AAAA500")  # type: ignore[attr-defined]
+    assert client._client.paths[-1].endswith("sheet-a!A10001%3AAAA10001")  # type: ignore[attr-defined]
 
 
 @pytest.mark.asyncio
-async def test_sheet_values_request_calculated_values_and_formatted_dates():
+async def test_sheet_values_request_calculated_values_and_formatted_dates() -> Any:
     class FakeFeishuClient:
-        def __init__(self) -> None:
+        def __init__(self: Any) -> None:
             self.params: list[dict[str, str] | None] = []
 
-        async def request(self, _method: str, _path: str, **kwargs):
+        async def request(self: Any, _method: str, _path: str, **kwargs: Any) -> Any:
             self.params.append(kwargs.get("params"))
             return {"valueRange": {"values": [["2026/06/27", 1052]]}}
 
@@ -155,7 +158,7 @@ async def test_sheet_values_request_calculated_values_and_formatted_dates():
     )
 
     assert values == [["2026/06/27", 1052]]
-    assert client._client.params == [
+    assert client._client.params == [  # type: ignore[attr-defined]
         {
             "valueRenderOption": "UnformattedValue",
             "dateTimeRenderOption": "FormattedString",
@@ -164,12 +167,12 @@ async def test_sheet_values_request_calculated_values_and_formatted_dates():
 
 
 @pytest.mark.asyncio
-async def test_sheet_values_can_request_feishu_formatted_display_values():
+async def test_sheet_values_can_request_feishu_formatted_display_values() -> Any:
     class FakeFeishuClient:
-        def __init__(self) -> None:
+        def __init__(self: Any) -> None:
             self.params: list[dict[str, str] | None] = []
 
-        async def request(self, _method: str, _path: str, **kwargs):
+        async def request(self: Any, _method: str, _path: str, **kwargs: Any) -> Any:
             self.params.append(kwargs.get("params"))
             return {"valueRange": {"values": [["8%"]]}}
 
@@ -185,7 +188,7 @@ async def test_sheet_values_can_request_feishu_formatted_display_values():
     )
 
     assert values == [["8%"]]
-    assert client._client.params == [
+    assert client._client.params == [  # type: ignore[attr-defined]
         {
             "valueRenderOption": "FormattedValue",
             "dateTimeRenderOption": "FormattedString",
@@ -194,12 +197,12 @@ async def test_sheet_values_can_request_feishu_formatted_display_values():
 
 
 @pytest.mark.asyncio
-async def test_sheet_values_reduce_chunk_after_feishu_response_too_large():
+async def test_sheet_values_reduce_chunk_after_feishu_response_too_large() -> Any:
     class FakeFeishuClient:
-        def __init__(self) -> None:
+        def __init__(self: Any) -> None:
             self.paths: list[str] = []
 
-        async def request(self, _method: str, path: str, **_kwargs):
+        async def request(self: Any, _method: str, path: str, **_kwargs: Any) -> Any:
             self.paths.append(path)
             if len(self.paths) == 1:
                 raise RuntimeError(
@@ -219,7 +222,7 @@ async def test_sheet_values_reduce_chunk_after_feishu_response_too_large():
     )
 
     assert values == [[1], [2]]
-    assert client._client.paths == [
+    assert client._client.paths == [  # type: ignore[attr-defined]
         "/sheets/v2/spreadsheets/spreadsheet-token/values/sheet-a!A1%3AB2",
         "/sheets/v2/spreadsheets/spreadsheet-token/values/sheet-a!A1%3AB1",
         "/sheets/v2/spreadsheets/spreadsheet-token/values/sheet-a!A2%3AB2",
@@ -227,9 +230,9 @@ async def test_sheet_values_reduce_chunk_after_feishu_response_too_large():
 
 
 @pytest.mark.asyncio
-async def test_sheet_values_split_columns_and_preserve_cell_offsets():
+async def test_sheet_values_split_columns_and_preserve_cell_offsets() -> Any:
     class FakeFeishuClient:
-        async def request(self, _method: str, path: str, **_kwargs):
+        async def request(self: Any, _method: str, path: str, **_kwargs: Any) -> Any:
             if "A1%3AD1" in path:
                 raise RuntimeError("Feishu API error: code=90221")
             if "A1%3AB1" in path:
@@ -250,7 +253,7 @@ async def test_sheet_values_split_columns_and_preserve_cell_offsets():
 
 
 @pytest.mark.asyncio
-async def test_sheet_values_refuse_to_guess_missing_grid_size():
+async def test_sheet_values_refuse_to_guess_missing_grid_size() -> Any:
     client = object.__new__(EnergyFeishuClient)
 
     with pytest.raises(RuntimeError, match="无法保证完整读取"):
@@ -262,7 +265,7 @@ async def test_sheet_values_refuse_to_guess_missing_grid_size():
         )
 
 
-def test_parse_direct_spreadsheet_link():
+def test_parse_direct_spreadsheet_link() -> Any:
     url = "https://example.feishu.cn/sheets/shtcnExample?sheet=sheet-a"
 
     assert EnergyFeishuClient.is_spreadsheet_url(url)
@@ -270,31 +273,33 @@ def test_parse_direct_spreadsheet_link():
 
 
 @pytest.mark.asyncio
-async def test_sync_document_continues_after_one_sheet_fails(monkeypatch):
+async def test_sync_document_continues_after_one_sheet_fails(monkeypatch: Any) -> Any:
     class NestedTransaction:
-        async def __aenter__(self):
+        async def __aenter__(self: Any) -> Any:
             return None
 
-        async def __aexit__(self, _exc_type, _exc, _traceback):
+        async def __aexit__(
+            self: Any, _exc_type: Any, _exc: Any, _traceback: Any
+        ) -> Any:
             return False
 
     class FakeSession:
-        def begin_nested(self):
+        def begin_nested(self: Any) -> Any:
             return NestedTransaction()
 
-        async def flush(self):
+        async def flush(self: Any) -> Any:
             return None
 
     class FakeSheetClient:
-        async def list_workbook_sheets(self, _document_token: str):
+        async def list_workbook_sheets(self: Any, _document_token: str) -> Any:
             return [
                 {"sheet_id": "too-large", "title": "大表"},
                 {"sheet_id": "normal", "title": "正常表"},
             ]
 
-    service = EnergyWikiService(FakeSession())  # type: ignore[arg-type]
+    service = EnergyWikiService(cast(Any, FakeSession)())
 
-    async def fake_sync_workbook_sheet(**kwargs):
+    async def fake_sync_workbook_sheet(**kwargs: Any) -> Any:
         if kwargs["raw_sheet"]["sheet_id"] == "too-large":
             raise RuntimeError("Feishu API error: code=90221")
         return 1, 1, 2
@@ -327,12 +332,12 @@ async def test_sync_document_continues_after_one_sheet_fails(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_wiki_http_error_keeps_feishu_code_without_leaking_request_token():
+async def test_wiki_http_error_keeps_feishu_code_without_leaking_request_token() -> Any:
     class FailingFeishuClient:
-        def __init__(self) -> None:
+        def __init__(self: Any) -> None:
             self.calls = 0
 
-        async def request(self, _method: str, _path: str, **_kwargs):
+        async def request(self: Any, _method: str, _path: str, **_kwargs: Any) -> Any:
             self.calls += 1
             request = httpx.Request(
                 "GET",
@@ -357,10 +362,10 @@ async def test_wiki_http_error_keeps_feishu_code_without_leaking_request_token()
     assert raised.value.feishu_code == 131006
     assert raised.value.request_log_id == "log-123"
     assert "private-token" not in str(raised.value)
-    assert client._client.calls == 1
+    assert client._client.calls == 1  # type: ignore[attr-defined]
 
 
-def test_config_response_never_exposes_plaintext_app_secret():
+def test_config_response_never_exposes_plaintext_app_secret() -> Any:
     secret = "energy-secret-for-test"
     config = EnergyFeishuConfig(
         id=uuid4(),
@@ -382,7 +387,7 @@ def test_config_response_never_exposes_plaintext_app_secret():
     assert secret not in response.model_dump_json()
 
 
-def test_period_is_inherited_from_nearest_monthly_ancestor():
+def test_period_is_inherited_from_nearest_monthly_ancestor() -> Any:
     period = EnergyWikiService._period_from_path(
         [
             {"token": "root", "title": "能源台账"},
@@ -393,7 +398,7 @@ def test_period_is_inherited_from_nearest_monthly_ancestor():
     assert period == date(2026, 7, 1)
 
 
-def test_cumulative_mapping_requires_meter_key():
+def test_cumulative_mapping_requires_meter_key() -> Any:
     with pytest.raises(ValueError, match="计量点"):
         EnergyMappingMetricInput(
             metric_key="electricity_reading",
@@ -404,13 +409,13 @@ def test_cumulative_mapping_requires_meter_key():
         )
 
 
-def test_enabled_mapping_requires_date_and_metric():
+def test_enabled_mapping_requires_date_and_metric() -> Any:
     with pytest.raises(ValueError, match="日期列"):
         EnergySheetMappingUpsert(is_enabled=True)
 
 
 @pytest.mark.asyncio
-async def test_discover_tree_recurses_and_keeps_monthly_ancestor_path():
+async def test_discover_tree_recurses_and_keeps_monthly_ancestor_path() -> Any:
     client = object.__new__(EnergyFeishuClient)
     children = {
         "root": [
@@ -432,7 +437,7 @@ async def test_discover_tree_recurses_and_keeps_monthly_ancestor_path():
         ],
     }
 
-    async def get_node(_token: str):
+    async def get_node(_token: str) -> Any:
         return {
             "node_token": "root",
             "title": "能源台账",
@@ -440,11 +445,11 @@ async def test_discover_tree_recurses_and_keeps_monthly_ancestor_path():
             "has_child": True,
         }
 
-    async def list_children(*, space_id: str, parent_node_token: str):
+    async def list_children(*, space_id: str, parent_node_token: str) -> Any:
         assert space_id == "space"
         return children[parent_node_token]
 
-    client.get_wiki_node = get_node  # type: ignore[method-assign]
+    client.get_wiki_node = get_node  # type: ignore[method-assign, assignment]
     client.list_child_nodes = list_children  # type: ignore[method-assign]
 
     nodes = await client.discover_tree("root")
@@ -454,7 +459,9 @@ async def test_discover_tree_recurses_and_keeps_monthly_ancestor_path():
 
 
 @pytest.mark.asyncio
-async def test_overview_uses_latest_facts_and_excludes_negative_cumulative_delta():
+async def test_overview_uses_latest_facts_and_excludes_negative_cumulative_delta() -> (
+    Any
+):
     sheet_id = uuid4()
     snapshot_id = uuid4()
     mapping_id = uuid4()
@@ -541,10 +548,10 @@ async def test_overview_uses_latest_facts_and_excludes_negative_cumulative_delta
     ]
 
     class FactRepository:
-        async def list_page_bindings(self, _page_key):
+        async def list_page_bindings(self: Any, _page_key: Any) -> Any:
             return []
 
-        async def list_current_facts(self, **_kwargs):
+        async def list_current_facts(self: Any, **_kwargs: Any) -> Any:
             return facts
 
     service = EnergyWikiService(None)  # type: ignore[arg-type]
@@ -563,7 +570,7 @@ async def test_overview_uses_latest_facts_and_excludes_negative_cumulative_delta
     assert result.invalid_count == 1
 
 
-def test_mapping_parses_sparse_rows_by_actual_header_row_number():
+def test_mapping_parses_sparse_rows_by_actual_header_row_number() -> Any:
     sheet = EnergyWorkbookSheet(
         id=uuid4(),
         document_id=uuid4(),
@@ -622,7 +629,7 @@ def test_mapping_parses_sparse_rows_by_actual_header_row_number():
     assert float(parsed[0]["fact"].value) == 12.5
 
 
-def test_workshop_mapping_can_use_sheet_title_as_a_fixed_dimension():
+def test_workshop_mapping_can_use_sheet_title_as_a_fixed_dimension() -> Any:
     sheet = EnergyWorkbookSheet(
         id=uuid4(),
         document_id=uuid4(),

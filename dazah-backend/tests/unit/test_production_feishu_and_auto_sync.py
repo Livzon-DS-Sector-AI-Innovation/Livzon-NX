@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 from types import SimpleNamespace
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.modules.production import auto_sync_service as auto
@@ -11,7 +12,7 @@ from app.modules.production import fa_dashboard_api as fa
 from app.modules.production import production_feishu_service as pfs
 
 
-def make_config(**over):
+def make_config(**over: Any) -> Any:
     cfg = {
         "app_id": "app-id",
         "encrypted_app_secret": "enc",
@@ -24,7 +25,9 @@ def make_config(**over):
     return SimpleNamespace(**cfg)
 
 
-def make_client(items, has_more=False, page_token=None, fields=None):
+def make_client(
+    items: Any, has_more: Any = False, page_token: Any = None, fields: Any = None
+) -> Any:
     c = MagicMock()
     c.list_records = AsyncMock(
         return_value={"items": items, "has_more": has_more, "page_token": page_token}
@@ -33,7 +36,7 @@ def make_client(items, has_more=False, page_token=None, fields=None):
     return c
 
 
-def make_session(scalar_result=None, scalars=None):
+def make_session(scalar_result: Any = None, scalars: Any = None) -> Any:
     s = AsyncMock()
     result = MagicMock()
     result.scalar_one_or_none.return_value = scalar_result
@@ -49,20 +52,20 @@ def make_session(scalar_result=None, scalars=None):
 # ═══════════ production_feishu_service ═══════════
 
 
-def test_feishu_extract_text_and_number():
+def test_feishu_extract_text_and_number() -> Any:
     assert pfs._extract_text(None) is None
     assert pfs._extract_text(" 值 ") == "值"
     assert pfs._extract_text({"name": "甲"}) == "甲"
     assert pfs._extract_text([{"text": "乙"}]) == "乙"
     assert pfs._extract_text(["丙"]) == "丙"
     assert pfs._extract_text([]) is None
-    assert pfs._extract_text(5) is None
+    assert pfs._extract_text(cast(Any, 5)) is None
     assert pfs._extract_number("12.5") == 12.5
     assert pfs._extract_number("bad") is None
     assert pfs._extract_number(None) is None
 
 
-def test_sync_config_creates_and_updates():
+def test_sync_config_creates_and_updates() -> Any:
     import asyncio
 
     existing = SimpleNamespace(batch_no="F1", fermenter="T1", entry_date=None)
@@ -100,7 +103,7 @@ def test_sync_config_creates_and_updates():
     session.flush.assert_awaited()
 
 
-def test_sync_config_skips_without_required_fields():
+def test_sync_config_skips_without_required_fields() -> Any:
     import asyncio
 
     client = make_client([{"fields": {"发酵罐": "T1"}}])  # 无批号
@@ -120,7 +123,7 @@ def test_sync_config_skips_without_required_fields():
     assert result["updated"] == 0
 
 
-def test_sync_config_pagination_and_defaults():
+def test_sync_config_pagination_and_defaults() -> Any:
     import asyncio
 
     client = MagicMock()
@@ -157,14 +160,14 @@ def test_sync_config_pagination_and_defaults():
     assert client.list_records.await_args_list[1].kwargs["page_token"] == "p1"
 
 
-def test_sync_all_active_success_and_error():
+def test_sync_all_active_success_and_error() -> Any:
     import asyncio
 
     cfg1 = SimpleNamespace(product_name="苯丙氨酸")
     cfg2 = SimpleNamespace(product_name="丙氨酸")
     session = make_session(scalars=[cfg1, cfg2])
 
-    async def _sync(config, session):
+    async def _sync(config: Any, session: Any) -> Any:
         if config.product_name == "丙氨酸":
             raise RuntimeError("sync boom")
         return {"created": 1, "updated": 0, "product": config.product_name}
@@ -179,7 +182,7 @@ def test_sync_all_active_success_and_error():
 # ═══════════ fa_dashboard_api 辅助 ═══════════
 
 
-def test_to_yield_variants():
+def test_to_yield_variants() -> Any:
     assert fa._to_yield(None) == 0.0
     assert fa._to_yield(0.85) == 85.0  # 小数转百分比
     assert fa._to_yield(88.5) == 88.5
@@ -189,14 +192,14 @@ def test_to_yield_variants():
     assert fa._to_yield(1.5) == 150.0  # 1.5 → 150%
 
 
-def test_to_float_variants():
+def test_to_float_variants() -> Any:
     assert fa._to_float(None) == 0.0
     assert fa._to_float(12.5) == 12.5
     assert fa._to_float("98%") == 98.0
     assert fa._to_float("bad") == 0.0
 
 
-def test_get_suggestion():
+def test_get_suggestion() -> Any:
     sug = fa._get_suggestion("fermentation_yield", "low")
     if sug is not None:
         assert set(sug) == {"happened", "remedy", "impact", "prevent"}
@@ -206,13 +209,13 @@ def test_get_suggestion():
 # ═══════════ auto_sync_service ═══════════
 
 
-def test_safe_col_name():
+def test_safe_col_name() -> Any:
     assert auto._safe_col_name("batch_no") == "batch_no"
     assert auto._safe_col_name(" 车间 ") == "col_" + "车间".encode().hex()[:12]
     assert auto._safe_col_name("") == "col_"
 
 
-def test_extract_value_variants():
+def test_extract_value_variants() -> Any:
     from datetime import datetime
 
     assert auto._extract_value(None, 1) is None
@@ -230,7 +233,7 @@ def test_extract_value_variants():
     assert auto._extract_value(False, 1) is None
 
 
-def test_discover_and_save_mapping():
+def test_discover_and_save_mapping() -> Any:
     import asyncio
 
     client = make_client(
@@ -259,7 +262,7 @@ def test_discover_and_save_mapping():
     session.commit.assert_awaited()
 
 
-def test_auto_sync_config_upsert():
+def test_auto_sync_config_upsert() -> Any:
     import asyncio
 
     config = make_config(id="cfg-1234-abcd")
@@ -322,7 +325,7 @@ def test_auto_sync_config_upsert():
     assert result2["updated"] == 3
 
 
-def test_auto_sync_config_missing_mapping():
+def test_auto_sync_config_missing_mapping() -> Any:
     import asyncio
 
     config = make_config()

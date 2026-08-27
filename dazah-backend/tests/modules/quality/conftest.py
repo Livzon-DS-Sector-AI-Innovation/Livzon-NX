@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import warnings
 from collections.abc import Iterator
+from uuid import uuid4
 
 import pytest
 from pydantic.warnings import PydanticDeprecatedSince20
@@ -28,6 +29,7 @@ warnings.filterwarnings(
 def _authenticate_quality_routes() -> Iterator[None]:
     """Run quality API tests through the platform's module authorization guard."""
     user = User(
+        id=uuid4(),
         name="质量模块测试管理员",
         username="quality-test-admin",
         role="admin",

@@ -1,11 +1,13 @@
 """Production Feishu WebSocket lifecycle."""
-
 import asyncio
 import logging
 from datetime import UTC, datetime
+from typing import Any
 
-import lark_oapi as lark
-from lark_oapi.api.drive.v1 import P2DriveFileBitableRecordChangedV1
+import lark_oapi as lark  # type: ignore[import-untyped]
+from lark_oapi.api.drive.v1 import (  # type: ignore[import-untyped]
+    P2DriveFileBitableRecordChangedV1,
+)
 from sqlalchemy import select
 
 from app.core.database import async_session_factory
@@ -82,7 +84,7 @@ async def _handle_bitable_record_changed(file_token: str, table_id: str) -> None
             logger.exception("生产飞书 WS 自动同步失败")
 
 
-async def start_ws_from_db() -> dict:
+async def start_ws_from_db() -> dict[str, Any]:
     global _last_error
     if _main_loop is None:
         set_main_loop(asyncio.get_running_loop())
@@ -116,13 +118,13 @@ async def start_ws_from_db() -> dict:
         return await get_ws_status()
 
 
-async def restart_ws_from_db() -> dict:
+async def restart_ws_from_db() -> dict[str, Any]:
     return await start_ws_from_db()
 
 
 async def restart_ws_with_config(
     app_id: str, app_secret: str, app_tokens: dict[str, str]
-) -> dict:
+) -> dict[str, Any]:
     global _app_id, _app_tokens, _connected, _enabled, _last_error, _last_started_at
 
     if _main_loop is None:
@@ -167,7 +169,7 @@ async def stop_ws() -> None:
     _enabled = False
 
 
-async def get_ws_status() -> dict:
+async def get_ws_status() -> dict[str, Any]:
     return {
         "connected": _connected,
         "enabled": _enabled,

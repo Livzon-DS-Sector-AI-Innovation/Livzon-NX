@@ -16,6 +16,11 @@ export default defineConfig({
     },
   },
   test: {
+    // The merged production page tests exercise Ant Design portals and
+    // React 19 effects; under the full coverage worker fan-out they can
+    // legitimately exceed Vitest's 5s default even though they are fast in
+    // isolation. Keep a bounded suite-wide timeout instead of flaky failures.
+    testTimeout: 15000,
     coverage: {
       provider: 'v8',
       include: ['src/**/*.{ts,tsx}'],

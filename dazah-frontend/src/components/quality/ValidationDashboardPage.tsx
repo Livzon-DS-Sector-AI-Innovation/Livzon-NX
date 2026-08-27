@@ -1,302 +1,281 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
-import { Col, Empty, Row, Spin } from 'antd'
+import { Card, Col, Empty, Progress, Row, Spin, Statistic } from 'antd'
 import {
-  SafetyOutlined,
-  FileProtectOutlined,
+  CheckCircleOutlined,
+  ClockCircleOutlined,
+  ExclamationCircleOutlined,
+  FileTextOutlined,
   ToolOutlined,
   ExperimentOutlined,
-  BugOutlined,
+  ClearOutlined,
   AppstoreOutlined,
-  ClockCircleOutlined,
-  ApartmentOutlined,
-  RightOutlined,
 } from '@ant-design/icons'
 import ReactECharts from 'echarts-for-react'
-import { fetchValidationDashboardStats } from '@/lib/api/quality'
 import type { ValidationDashboardStats } from '@/types/quality'
 
-const navCards = [
-  {
-    href: '/quality/validation/plans',
-    label: '验证主计划',
-    desc: '验证主计划的列表与详情查看',
-    icon: <FileProtectOutlined style={{ fontSize: 24 }} />,
-    colorFrom: 'from-purple-500',
-    colorTo: 'to-fuchsia-500',
-    shadow: 'shadow-purple-500/20',
-  },
-  {
-    href: '/quality/validation/equipment-qualification',
-    label: '设备确认',
-    desc: '设备确认记录的列表与详情',
-    icon: <ToolOutlined style={{ fontSize: 24 }} />,
-    colorFrom: 'from-blue-400',
-    colorTo: 'to-indigo-500',
-    shadow: 'shadow-blue-500/20',
-  },
-  {
-    href: '/quality/validation/process-validation',
-    label: '工艺验证',
-    desc: '工艺验证记录的列表与详情',
-    icon: <ExperimentOutlined style={{ fontSize: 24 }} />,
-    colorFrom: 'from-teal-400',
-    colorTo: 'to-emerald-500',
-    shadow: 'shadow-teal-500/20',
-  },
-  {
-    href: '/quality/validation/cleaning-validation',
-    label: '清洁验证',
-    desc: '清洁验证记录的列表与详情',
-    icon: <BugOutlined style={{ fontSize: 24 }} />,
-    colorFrom: 'from-emerald-400',
-    colorTo: 'to-green-500',
-    shadow: 'shadow-green-500/20',
-  },
-  {
-    href: '/quality/validation/other-validations',
-    label: '其他验证',
-    desc: '其他验证记录的列表与详情',
-    icon: <AppstoreOutlined style={{ fontSize: 24 }} />,
-    colorFrom: 'from-orange-400',
-    colorTo: 'to-amber-500',
-    shadow: 'shadow-orange-500/20',
-  },
-]
-
-const STATUS_MAP: Record<string, string> = {
-  draft: '草稿',
-  pending_approval: '待审批',
-  approved: '已批准',
-  rejected: '已驳回',
-  closed: '已关闭',
-  in_execution: '执行中',
-}
-
-const VALIDATION_TYPE_MAP: Record<string, string> = {
+const validationTypeLabelMap: Record<string, string> = {
   equipment_qualification: '设备确认',
   process_validation: '工艺验证',
   cleaning_validation: '清洁验证',
-  analytical_method_validation: '分析方法验证',
-  computer_system_validation: '计算机化系统验证',
   other_validation: '其他验证',
 }
 
-export function ValidationDashboardPage() {
-  const [stats, setStats] = useState<ValidationDashboardStats | null>(null)
-  const [loading, setLoading] = useState(true)
+const statusLabelMap: Record<string, string> = {
+  '完成': '完成',
+  '未完成': '未完成',
+  '待完成': '待完成',
+  completed: '完成',
+  incomplete: '未完成',
+  pending: '待完成',
+  unknown: '未知',
+}
 
-  useEffect(() => {
-    void fetchValidationDashboardStats()
-      .then(setStats)
-      .finally(() => setLoading(false))
-  }, [])
+const validationLinks = [
+  { href: '/quality/validation/plans', label: '验证主计划', icon: <FileTextOutlined /> },
+  { href: '/quality/validation/equipment-qualification', label: '设备确认', icon: <ToolOutlined /> },
+  { href: '/quality/validation/process-validation', label: '工艺验证', icon: <ExperimentOutlined /> },
+  { href: '/quality/validation/cleaning-validation', label: '清洁验证', icon: <ClearOutlined /> },
+  { href: '/quality/validation/other-validations', label: '其他验证', icon: <AppstoreOutlined /> },
+]
 
-  // ECharts Options
-  const getStatusOption = () => {
-    const data = stats?.statusDistribution || []
-    return {
-      tooltip: { trigger: 'item' },
-      legend: { type: 'scroll', orient: 'vertical', right: 10, top: 20, bottom: 20 },
-      color: ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#64748b'],
-      series: [
-        {
-          name: '状态分布',
-          type: 'pie',
-          radius: '70%',
-          center: ['40%', '50%'],
-          itemStyle: { borderRadius: 4, borderColor: '#fff', borderWidth: 2 },
-          data: data.map(d => ({ name: STATUS_MAP[d.status] || d.status || '未知', value: d.count })),
-          emphasis: {
-            itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0, 0, 0, 0.5)' }
-          }
-        }
-      ]
-    }
-  }
+const chartColors = ['#5b8ff9', '#61ddaa', '#65789b', '#f6bd16', '#7262fd', '#78d3f8', '#9661bc']
 
-  const getTypeOption = () => {
-    const data = stats?.typeDistribution || []
-    return {
-      tooltip: { trigger: 'item' },
-      legend: { type: 'scroll', orient: 'vertical', right: 10, top: 20, bottom: 20 },
-      color: ['#8b5cf6', '#ec4899', '#f43f5e', '#f97316', '#eab308', '#84cc16'],
-      series: [
-        {
-          name: '验证类型',
-          type: 'pie',
-          radius: '70%',
-          center: ['40%', '50%'],
-          itemStyle: { borderRadius: 4, borderColor: '#fff', borderWidth: 2 },
-          data: data.map(d => ({ name: VALIDATION_TYPE_MAP[d.validation_type] || d.validation_type || '未知', value: d.count }))
-        }
-      ]
-    }
-  }
+export function ValidationDashboardClient({
+  initialStats,
+}: {
+  initialStats: ValidationDashboardStats | null
+}) {
+  const [stats, setStats] = useState<ValidationDashboardStats | null>(initialStats)
+  const [loading, setLoading] = useState(false)
 
-  const getExecutionOption = () => {
-    const data = stats?.executionDistribution || []
-    return {
-      tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-      grid: { left: '3%', right: '4%', bottom: '15%', containLabel: true },
-      xAxis: {
-        type: 'category',
-        data: data.map(d => VALIDATION_TYPE_MAP[d.validation_type] || d.validation_type || '未知'),
-        axisTick: { alignWithLabel: true },
-        axisLabel: { interval: 0, rotate: 45, fontSize: 11 }
+  const total = stats?.total ?? 0
+  const completedCount = stats?.statusDistribution
+    .filter((s) => s.status === '完成' || s.status === 'completed')
+    .reduce((sum, s) => sum + s.count, 0) ?? 0
+  const completionRate = total > 0 ? Math.round((completedCount / total) * 100) : 0
+
+  const typeChartOption = {
+    tooltip: {
+      trigger: 'axis',
+      formatter: (params: Array<{ name: string; value: number }>) => {
+        const item = params[0]
+        return `${item.name}<br/>数量：${item.value}`
       },
-      yAxis: { type: 'value' },
-      series: [
-        {
-          name: '执行数量',
-          type: 'bar',
-          barWidth: '60%',
-          itemStyle: {
-            color: '#8b5cf6',
-            borderRadius: [4, 4, 0, 0]
+    },
+    xAxis: {
+      type: 'category',
+      data: stats?.typeDistribution.map((t) => validationTypeLabelMap[t.validation_type] ?? t.validation_type) || [],
+      axisLabel: { fontSize: 13, color: '#555' },
+    },
+    yAxis: { type: 'value', name: '数量', axisLabel: { fontSize: 12 } },
+    series: [
+      {
+        type: 'bar',
+        data: stats?.typeDistribution.map((t) => t.count) || [],
+        itemStyle: {
+          color: {
+            type: 'linear' as const,
+            x: 0,
+            y: 0,
+            x2: 0,
+            y2: 1,
+            colorStops: [
+              { offset: 0, color: '#5b8ff9' },
+              { offset: 1, color: '#a0c4ff' },
+            ],
           },
-          data: data.map(d => d.count)
-        }
-      ]
-    }
+          borderRadius: [6, 6, 0, 0],
+        },
+        barWidth: '40%',
+        label: { show: true, position: 'top' as const, fontSize: 13, fontWeight: 'bold' },
+      },
+    ],
+    grid: { top: 30, bottom: 10, left: 40, right: 20 },
+  }
+
+  const statusChartOption = {
+    tooltip: {
+      trigger: 'item',
+      formatter: (params: { name: string; value: number; percent: number }) =>
+        `${params.name}<br/>数量：${params.value}（${params.percent}%）`,
+    },
+    legend: {
+      bottom: 5,
+      textStyle: { fontSize: 13 },
+    },
+    series: [
+      {
+        type: 'pie',
+        radius: ['40%', '70%'],
+        center: ['50%', '45%'],
+        avoidLabelOverlap: true,
+        itemStyle: { borderRadius: 6, borderColor: '#fff', borderWidth: 2 },
+        label: {
+          show: true,
+          formatter: '{b}\n{c}条',
+          fontSize: 13,
+        },
+        data:
+          stats?.statusDistribution.map((s, i) => ({
+            name: statusLabelMap[s.status] ?? s.status,
+            value: s.count,
+            itemStyle: { color: chartColors[i % chartColors.length] },
+          })) || [],
+      },
+    ],
   }
 
   return (
-    <div className="max-w-7xl mx-auto pb-8">
-      {/* ── 标题区 ── */}
-      <div className="mb-8">
-        <div className="flex items-center text-sm text-gray-400 mb-2 tracking-wide">
-          <span>质量管理</span>
-          <span className="mx-2">/</span>
-          <span className="text-gray-600 font-medium">验证与确认</span>
-        </div>
-        <h1 className="text-3xl font-bold text-gray-800 tracking-tight">验证与确认仪表盘</h1>
-        <p className="text-gray-500 mt-2 text-sm">全局监控验证主计划、设备/工艺验证记录及再验证提醒，关注合规风险</p>
+    <div>
+      <div style={{ marginBottom: 16 }}>
+        <p className="mb-2 text-[13px] text-[var(--color-stone)]">质量管理 / 验证与确认</p>
+        <h1 style={{ fontSize: 22, fontWeight: 600, margin: 0 }}>验证与确认仪表盘</h1>
       </div>
 
-      <Spin spinning={loading} size="large">
-        {/* ── 统计卡片区 ── */}
-        <Row gutter={[24, 24]} className="mb-8">
-          <Col xs={24} sm={8}>
-            <div className="relative overflow-hidden bg-white border border-gray-100 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow duration-300 group h-full">
-              <div className="absolute -right-6 -bottom-6 w-32 h-32 rounded-full bg-purple-50 blur-3xl group-hover:bg-purple-100 transition-colors duration-500" />
-              <div className="relative z-10 flex items-start gap-4">
-                <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-gradient-to-br from-purple-500 to-indigo-600 text-white shadow-lg shadow-purple-500/30">
-                  <SafetyOutlined style={{ fontSize: 24 }} />
-                </div>
-                <div>
-                  <div className="text-sm font-medium text-gray-500 mb-1">验证主计划总数</div>
-                  <div className="text-4xl font-bold text-gray-800 tracking-tight">
-                    {stats?.total ?? 0}
-                  </div>
-                </div>
-              </div>
-            </div>
+      {/* 快捷导航 */}
+      <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
+        {validationLinks.map((item) => (
+          <Col key={item.href} xs={12} md={4}>
+            <Link href={item.href}>
+              <Card
+                hoverable
+                size="small"
+                style={{ textAlign: 'center', borderRadius: 8 }}
+                styles={{ body: { padding: '12px 8px' } }}
+              >
+                <div style={{ fontSize: 22, color: '#5b8ff9', marginBottom: 4 }}>{item.icon}</div>
+                <div style={{ fontSize: 13, fontWeight: 500 }}>{item.label}</div>
+              </Card>
+            </Link>
+          </Col>
+        ))}
+      </Row>
+
+      <Spin spinning={loading}>
+        <Row gutter={[16, 16]}>
+          {/* 核心指标卡片 */}
+          <Col xs={24} md={6}>
+            <Card style={{ borderRadius: 8 }}>
+              <Statistic
+                title={<span style={{ fontSize: 14 }}>验证总数</span>}
+                value={total}
+                prefix={<FileTextOutlined style={{ color: '#5b8ff9' }} />}
+                styles={{ content: { fontSize: 28, fontWeight: 700 } }}
+              />
+            </Card>
+          </Col>
+          <Col xs={24} md={6}>
+            <Card style={{ borderRadius: 8 }}>
+              <Statistic
+                title={<span style={{ fontSize: 14 }}>已完成</span>}
+                value={completedCount}
+                prefix={<CheckCircleOutlined style={{ color: '#61ddaa' }} />}
+                styles={{ content: { fontSize: 28, fontWeight: 700, color: '#61ddaa' } }}
+              />
+            </Card>
+          </Col>
+          <Col xs={24} md={6}>
+            <Card style={{ borderRadius: 8 }}>
+              <Statistic
+                title={<span style={{ fontSize: 14 }}>待完成</span>}
+                value={total - completedCount}
+                prefix={<ClockCircleOutlined style={{ color: '#f6bd16' }} />}
+                styles={{ content: { fontSize: 28, fontWeight: 700, color: '#f6bd16' } }}
+              />
+            </Card>
+          </Col>
+          <Col xs={24} md={6}>
+            <Card style={{ borderRadius: 8 }}>
+              <Statistic
+                title={<span style={{ fontSize: 14 }}>近期待再验证</span>}
+                value={stats?.revalidationUpcoming ?? 0}
+                prefix={<ExclamationCircleOutlined style={{ color: '#ff4d4f' }} />}
+                styles={{ content: { fontSize: 28, fontWeight: 700, color: '#ff4d4f' } }}
+              />
+            </Card>
           </Col>
 
-          <Col xs={24} sm={8}>
-            <div className="relative overflow-hidden bg-white border border-gray-100 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow duration-300 group h-full">
-              <div className="absolute -right-6 -bottom-6 w-32 h-32 rounded-full bg-blue-50 blur-3xl group-hover:bg-blue-100 transition-colors duration-500" />
-              <div className="relative z-10 flex items-start gap-4">
-                <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-gradient-to-br from-blue-400 to-cyan-500 text-white shadow-lg shadow-blue-500/30">
-                  <ApartmentOutlined style={{ fontSize: 24 }} />
-                </div>
-                <div>
-                  <div className="text-sm font-medium text-gray-500 mb-1">执行子表总数</div>
-                  <div className="text-4xl font-bold text-gray-800 tracking-tight">
-                    {stats?.executionDistribution.reduce((sum, item) => sum + item.count, 0) ?? 0}
-                  </div>
-                </div>
+          {/* 完成率进度条 */}
+          <Col span={24}>
+            <Card title="验证完成率" style={{ borderRadius: 8 }}>
+              <Progress
+                percent={completionRate}
+                status={completionRate >= 80 ? 'success' : completionRate >= 50 ? 'active' : 'exception'}
+                strokeColor={completionRate >= 80 ? '#61ddaa' : completionRate >= 50 ? '#5b8ff9' : '#ff4d4f'}
+                format={(percent) => `${percent}%`}
+                size={['100%', 20]}
+              />
+              <div style={{ marginTop: 8, color: '#888', fontSize: 13 }}>
+                已完成 {completedCount} 条 / 共 {total} 条
               </div>
-            </div>
+            </Card>
           </Col>
 
-          <Col xs={24} sm={8}>
-            <div className="relative overflow-hidden bg-white border border-gray-100 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow duration-300 group h-full">
-              <div className={`absolute -right-6 -bottom-6 w-32 h-32 rounded-full blur-3xl transition-colors duration-500 ${stats && stats.revalidationUpcoming > 0 ? 'bg-orange-50 group-hover:bg-orange-100' : 'bg-green-50 group-hover:bg-green-100'}`} />
-              <div className="relative z-10 flex items-start gap-4">
-                <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-white shadow-lg ${stats && stats.revalidationUpcoming > 0 ? 'bg-gradient-to-br from-orange-400 to-red-500 shadow-orange-500/30' : 'bg-gradient-to-br from-green-400 to-emerald-500 shadow-green-500/30'}`}>
-                  <ClockCircleOutlined style={{ fontSize: 24 }} />
-                </div>
-                <div>
-                  <div className="text-sm font-medium text-gray-500 mb-1">近期待再验证</div>
-                  <div className="text-4xl font-bold text-gray-800 tracking-tight">
-                    {stats?.revalidationUpcoming ?? 0}
-                  </div>
-                </div>
-              </div>
-            </div>
+          {/* 验证类型分布柱状图 */}
+          <Col xs={24} md={12}>
+            <Card title="验证类型分布" style={{ borderRadius: 8 }}>
+              {stats?.typeDistribution.length ? (
+                <ReactECharts option={typeChartOption} style={{ height: 300 }} />
+              ) : (
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无数据" />
+              )}
+            </Card>
+          </Col>
+
+          {/* 状态分布饼图 */}
+          <Col xs={24} md={12}>
+            <Card title="状态分布" style={{ borderRadius: 8 }}>
+              {stats?.statusDistribution.length ? (
+                <ReactECharts option={statusChartOption} style={{ height: 300 }} />
+              ) : (
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无数据" />
+              )}
+            </Card>
+          </Col>
+
+          {/* 执行子表概览 */}
+          <Col span={24}>
+            <Card title="执行子表概览" style={{ borderRadius: 8 }}>
+              {stats?.executionDistribution.length ? (
+                <Row gutter={[16, 16]}>
+                  {stats.executionDistribution.map((item, idx) => {
+                    const label = validationTypeLabelMap[item.validation_type] ?? item.validation_type
+                    const percent = total > 0 ? Math.round((item.count / total) * 100) : 0
+                    return (
+                      <Col key={item.validation_type} xs={24} md={6}>
+                        <Card
+                          size="small"
+                          style={{
+                            borderRadius: 8,
+                            background: '#fafafa',
+                            border: `2px solid ${chartColors[idx % chartColors.length]}33`,
+                          }}
+                        >
+                          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>{label}</div>
+                          <div style={{ fontSize: 28, fontWeight: 700, color: chartColors[idx % chartColors.length] }}>
+                            {item.count}
+                            <span style={{ fontSize: 14, color: '#999', marginLeft: 4 }}>条</span>
+                          </div>
+                          <Progress
+                            percent={percent}
+                            size="small"
+                            strokeColor={chartColors[idx % chartColors.length]}
+                            format={(p) => `${p}%`}
+                          />
+                        </Card>
+                      </Col>
+                    )
+                  })}
+                </Row>
+              ) : (
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无数据" />
+              )}
+            </Card>
           </Col>
         </Row>
-
-        {/* ── 快捷导航区 ── */}
-        <div className="mb-10">
-          <h2 className="text-lg font-bold text-gray-800 mb-4 tracking-tight flex items-center gap-2">
-            <span className="w-1 h-5 bg-teal-500 rounded-full"></span>
-            快捷入口
-          </h2>
-          <Row gutter={[16, 16]}>
-            {navCards.map((card) => (
-              <Col key={card.href} xs={24} sm={12} md={8} lg={24 / 5}>
-                <Link href={card.href} className="block group h-full">
-                  <div className="h-full relative overflow-hidden bg-white border border-gray-100 rounded-2xl p-5 transition-all duration-300 hover:border-teal-200 hover:shadow-xl hover:shadow-teal-500/5 hover:-translate-y-1 flex flex-col items-center text-center">
-                    <div className={`w-12 h-12 rounded-xl mb-3 flex items-center justify-center bg-gradient-to-br ${card.colorFrom} ${card.colorTo} text-white shadow-lg ${card.shadow} group-hover:scale-110 transition-transform duration-300`}>
-                      {card.icon}
-                    </div>
-                    <h3 className="text-sm font-bold text-gray-800 mb-1 group-hover:text-teal-600 transition-colors">
-                      {card.label}
-                    </h3>
-                    <p className="text-[11px] text-gray-500 leading-snug line-clamp-2">
-                      {card.desc}
-                    </p>
-                  </div>
-                </Link>
-              </Col>
-            ))}
-          </Row>
-        </div>
-
-        {/* ── 分布图表区 ── */}
-        <div className="mb-4">
-          <h2 className="text-lg font-bold text-gray-800 mb-4 tracking-tight flex items-center gap-2">
-            <span className="w-1 h-5 bg-indigo-500 rounded-full"></span>
-            GMP质量体系分析
-          </h2>
-          <Row gutter={[24, 24]}>
-            <Col xs={24} md={12}>
-              <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
-                <h3 className="text-base font-semibold text-gray-800 mb-4">状态分布</h3>
-                {stats?.statusDistribution?.length ? (
-                  <ReactECharts option={getStatusOption()} style={{ height: '300px' }} />
-                ) : (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无数据" className="my-16" />
-                )}
-              </div>
-            </Col>
-            <Col xs={24} md={12}>
-              <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
-                <h3 className="text-base font-semibold text-gray-800 mb-4">验证类型分布</h3>
-                {stats?.typeDistribution?.length ? (
-                  <ReactECharts option={getTypeOption()} style={{ height: '300px' }} />
-                ) : (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无数据" className="my-16" />
-                )}
-              </div>
-            </Col>
-            <Col xs={24} md={24}>
-              <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
-                <h3 className="text-base font-semibold text-gray-800 mb-4">执行子表类型统计</h3>
-                {stats?.executionDistribution?.length ? (
-                  <ReactECharts option={getExecutionOption()} style={{ height: '300px' }} />
-                ) : (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无数据" className="my-16" />
-                )}
-              </div>
-            </Col>
-          </Row>
-        </div>
       </Spin>
     </div>
   )

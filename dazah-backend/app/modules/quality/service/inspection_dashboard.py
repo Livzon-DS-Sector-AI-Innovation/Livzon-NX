@@ -10,7 +10,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.quality.models.inspection import (
+from app.modules.quality.models import (
     FinishedProductInspection,
     InspectionRecord,
     LabInstrument,
@@ -21,11 +21,11 @@ from app.modules.quality.models.inspection import (
 from app.modules.quality.schemas.inspection_dashboard import (
     InspectionDashboardLatestRecord,
     InspectionDashboardResourceSummary,
-    InspectionDashboardResponse,
     InspectionTrendAlert,
     InspectionTrendPoint,
     InspectionTrendResponse,
     InspectionTrendSummary,
+    LegacyInspectionDashboardResponse,
 )
 
 _QUALIFIED_CONCLUSIONS = {"合格", "通过", "正常"}
@@ -113,7 +113,8 @@ def _get_value(record: Any, field_name: str | None) -> Any:
 
 
 def _record_conclusion(record: Any) -> str | None:
-    return _get_value(record, "conclusion") or _get_value(record, "status")
+    value = _get_value(record, "conclusion") or _get_value(record, "status")
+    return str(value) if value is not None else None
 
 
 def _parse_numeric_value(raw_value: str | None) -> float | None:
@@ -140,7 +141,9 @@ def _parse_specification_limits(
     return lower_limit, upper_limit
 
 
-async def get_inspection_dashboard(db: AsyncSession) -> InspectionDashboardResponse:
+async def get_inspection_dashboard(
+    db: AsyncSession,
+) -> LegacyInspectionDashboardResponse:
     summaries: list[InspectionDashboardResourceSummary] = []
     latest_records: list[InspectionDashboardLatestRecord] = []
 
@@ -148,7 +151,9 @@ async def get_inspection_dashboard(db: AsyncSession) -> InspectionDashboardRespo
         model = resource.model
         total = (
             await db.execute(
-                select(func.count()).select_from(model).where(model.is_deleted.is_(False))
+                select(func.count())
+                .select_from(model)
+                .where(model.is_deleted.is_(False))
             )
         ).scalar_one()
         conclusion_column = getattr(model, "conclusion", None)
@@ -215,7 +220,7 @@ async def get_inspection_dashboard(db: AsyncSession) -> InspectionDashboardRespo
         ),
         reverse=True,
     )
-    return InspectionDashboardResponse(
+    return LegacyInspectionDashboardResponse(
         resource_summaries=summaries,
         latest_records=latest_records[:12],
     )
@@ -283,19 +288,13 @@ async def get_inspection_trend(
         ) = _parse_specification_limits(row.specification)
         alert_type: str | None = None
         if (
-            lower_specification_limit is not None
-            and value < lower_specification_limit
+            lower_specification_limit is not None and value < lower_specification_limit
         ) or (
-            upper_specification_limit is not None
-            and value > upper_specification_limit
+            upper_specification_limit is not None and value > upper_specification_limit
         ):
             alert_type = "specification_limit"
-        elif (
-            lower_control_limit is not None
-            and value < lower_control_limit
-        ) or (
-            upper_control_limit is not None
-            and value > upper_control_limit
+        elif (lower_control_limit is not None and value < lower_control_limit) or (
+            upper_control_limit is not None and value > upper_control_limit
         ):
             alert_type = "control_limit"
 

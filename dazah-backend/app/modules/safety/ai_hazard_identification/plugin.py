@@ -25,13 +25,12 @@
 
 from __future__ import annotations
 
-from app.core.llm import llm_client
-
 import json as _json
 import logging
 import time
 from typing import Any
 
+from app.core.llm import llm_client
 from app.modules.safety.ai_hazard_identification.prompts import (
     SYSTEM_ROLE,
     build_context_text,
@@ -46,8 +45,8 @@ from app.modules.safety.ai_hazard_identification.rules import (
 from app.modules.safety.ai_hazard_identification.schemas import (
     HazardIdentificationInput,
     HazardIdentificationOutput,
-    RectificationSuggestion,
     PluginConfig,
+    RectificationSuggestion,
 )
 
 logger = logging.getLogger(__name__)
@@ -55,6 +54,7 @@ logger = logging.getLogger(__name__)
 
 class IdentificationError(Exception):
     """AI 识别失败异常。"""
+
     pass
 
 
@@ -81,10 +81,10 @@ class AIHazardIdentifier:
     def __init__(
         self,
         config: Any | None = None,
-    ):
+    ) -> None:
         if isinstance(config, PluginConfig) or config is None:
             self.config = config or PluginConfig()
-            self._llm = llm_client
+            self._llm: Any = llm_client
         else:
             self.config = PluginConfig()
             self._llm = config
@@ -135,10 +135,13 @@ class AIHazardIdentifier:
             if self.config.strict_mode:
                 raise IdentificationError(
                     f"AI 输出验证失败: {error_detail}\n"
-                    f"原始输出: {_json.dumps(raw_output, ensure_ascii=False, default=str)[:500]}"
+                    "原始输出: "
+                    f"{_json.dumps(raw_output, ensure_ascii=False, default=str)[:500]}"
                 )
             else:
-                logger.warning("AI 输出验证失败（非严格模式，继续返回）: %s", error_detail)
+                logger.warning(
+                    "AI 输出验证失败（非严格模式，继续返回）: %s", error_detail
+                )
 
         # ── 阶段四：返回结果 ──
         elapsed = time.monotonic() - start_time
@@ -167,7 +170,9 @@ class AIHazardIdentifier:
         """
         results: list[HazardIdentificationOutput] = []
         for i, input_data in enumerate(inputs):
-            logger.info("批量识别 [%d/%d]: %s", i + 1, len(inputs), input_data.hazard_no)
+            logger.info(
+                "批量识别 [%d/%d]: %s", i + 1, len(inputs), input_data.hazard_no
+            )
             try:
                 result = await self.identify(input_data)
                 results.append(result)
@@ -178,7 +183,9 @@ class AIHazardIdentifier:
 
     # ── 内部方法 ──
 
-    async def _call_text_ai(self, input_data: HazardIdentificationInput) -> dict:
+    async def _call_text_ai(
+        self, input_data: HazardIdentificationInput
+    ) -> dict[str, Any]:
         """纯文本模式 AI 调用。"""
         context = build_context_text(
             hazard_no=input_data.hazard_no,
@@ -188,7 +195,8 @@ class AIHazardIdentifier:
             discovered_by_name=input_data.discovered_by_name,
             discovered_at=(
                 input_data.discovered_at.strftime("%Y-%m-%d %H:%M")
-                if input_data.discovered_at else None
+                if input_data.discovered_at
+                else None
             ),
         )
 
@@ -202,21 +210,27 @@ class AIHazardIdentifier:
 
         try:
             if hasattr(self._llm, "chat_json"):
-                return await self._llm.chat_json(
+                result = await self._llm.chat_json(
                     messages=messages,
                     expected_keys=expected_keys,
                     temperature=self.config.temperature,
                 )
-            return await self._llm.chat_parsed(
-                messages,
-                expected_keys=expected_keys,
-                temperature=self.config.temperature,
-            )
+            else:
+                result = await self._llm.chat_parsed(
+                    messages,
+                    expected_keys=expected_keys,
+                    temperature=self.config.temperature,
+                )
+            if not isinstance(result, dict):
+                raise IdentificationError("AI 文本分析返回的不是 JSON 对象")
+            return result
         except Exception as e:
             logger.error("文本 AI 调用失败: %s", e)
             raise IdentificationError(f"AI 文本分析失败: {e}") from e
 
-    async def _call_vision_ai(self, input_data: HazardIdentificationInput) -> dict:
+    async def _call_vision_ai(
+        self, input_data: HazardIdentificationInput
+    ) -> dict[str, Any]:
         """多模态 AI 调用（带图片）。"""
         context = build_vision_context_text(
             hazard_no=input_data.hazard_no,
@@ -230,24 +244,28 @@ class AIHazardIdentifier:
         try:
             prompt = build_full_prompt(context, vision_mode=True, include_fewshot=True)
             if hasattr(self._llm, "chat_vision_json"):
-                return await self._llm.chat_vision_json(
+                result = await self._llm.chat_vision_json(
                     text_prompt=prompt,
                     image_urls=input_data.defect_photos,
                     expected_keys=expected_keys,
                     temperature=self.config.temperature,
                 )
-            return await self._llm.chat_vision_parsed(
-                prompt,
-                input_data.defect_photos,
-                expected_keys=expected_keys,
-                temperature=self.config.temperature,
-            )
+            else:
+                result = await self._llm.chat_vision_parsed(
+                    prompt,
+                    input_data.defect_photos,
+                    expected_keys=expected_keys,
+                    temperature=self.config.temperature,
+                )
+            if not isinstance(result, dict):
+                raise IdentificationError("AI 视觉分析返回的不是 JSON 对象")
+            return result
 
         except Exception as e:
             logger.error("多模态 AI 调用失败: %s", e)
             raise IdentificationError(f"AI 视觉分析失败: {e}") from e
 
-    def _parse_output(self, raw: dict) -> HazardIdentificationOutput:
+    def _parse_output(self, raw: dict[str, Any]) -> HazardIdentificationOutput:
         """将 AI 返回的字典解析为强类型输出。"""
         try:
             # 解析枚举
@@ -277,8 +295,12 @@ class AIHazardIdentifier:
                     long_term=rs.get("long_term", ""),
                 ),
                 major_hazard_basis=raw.get("major_hazard_basis", ""),
-                confidence=raw.get("confidence") if self.config.enable_reasoning else None,
-                reasoning=raw.get("reasoning") if self.config.enable_reasoning else None,
+                confidence=raw.get("confidence")
+                if self.config.enable_reasoning
+                else None,
+                reasoning=raw.get("reasoning")
+                if self.config.enable_reasoning
+                else None,
             )
         except (ValueError, KeyError, TypeError) as e:
             raise IdentificationError(

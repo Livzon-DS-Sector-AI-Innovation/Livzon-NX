@@ -1,6 +1,7 @@
 import json
 from datetime import datetime
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
@@ -9,26 +10,26 @@ import pytest
 from app.modules.safety.service import safety as safety_module
 from app.modules.safety.service.safety import SafetyService
 
+SimpleNamespace: Any = _SimpleNamespace
+
 
 class Payload:
-    def __init__(self, **values):
+    def __init__(self: Any, **values: Any) -> None:
         self.values = values
 
-    def model_dump(self, **kwargs):
+    def model_dump(self: Any, **kwargs: Any) -> Any:
         if kwargs.get("exclude_none"):
             return {
-                key: value
-                for key, value in self.values.items()
-                if value is not None
+                key: value for key, value in self.values.items() if value is not None
             }
         return dict(self.values)
 
 
 def make_service() -> tuple[SafetyService, SimpleNamespace]:
     service = SafetyService(SimpleNamespace())
-    repo = SimpleNamespace()
+    repo: Any = SimpleNamespace()
     service.repo = repo
-    service._audit = AsyncMock()
+    service._audit = AsyncMock()  # type: ignore[method-assign]
     return service, repo
 
 
@@ -36,7 +37,7 @@ def make_service() -> tuple[SafetyService, SimpleNamespace]:
 async def test_check_crud_and_state_machine() -> None:
     service, repo = make_service()
     check_id = uuid4()
-    item = SimpleNamespace(id=check_id, status="draft")
+    item: Any = SimpleNamespace(id=check_id, status="draft")
     repo.get_checks = AsyncMock(return_value=([item], 1))
     repo.get_check_by_id = AsyncMock(return_value=item)
     repo.create_check = AsyncMock(return_value=item)
@@ -45,9 +46,9 @@ async def test_check_crud_and_state_machine() -> None:
 
     assert await service.get_checks(2, 5, "draft", "daily", "质量部") == ([item], 1)
     assert await service.get_check(check_id) is item
-    assert await service.create_check(Payload(title="日常检查")) is item
+    assert await service.create_check(Payload(title="日常检查")) is item  # type: ignore[arg-type]
     assert (
-        await service.update_check(check_id, Payload(title="更新", ignored=None))
+        await service.update_check(check_id, Payload(title="更新", ignored=None))  # type: ignore[arg-type]
         is item
     )
     assert await service.submit_check(check_id) is item
@@ -70,14 +71,14 @@ async def test_check_crud_and_state_machine() -> None:
 
     assert repo.create_check.await_args.args[0] == {"title": "日常检查"}
     assert repo.update_check.await_args_list[0].args[1] == {"title": "更新"}
-    assert service._audit.await_count == 5
+    assert service._audit.await_count == 5  # type: ignore[attr-defined]
 
 
 @pytest.mark.anyio
-async def test_hazard_crud_photos_and_rectification_workflow(monkeypatch) -> None:
+async def test_hazard_crud_photos_and_rectification_workflow(monkeypatch: Any) -> None:
     service, repo = make_service()
     hazard_id = uuid4()
-    hazard = SimpleNamespace(
+    hazard: Any = SimpleNamespace(
         id=hazard_id,
         hazard_no="HZ-TEST-001",
         hazard_type="unsafe_condition",
@@ -100,7 +101,7 @@ async def test_hazard_crud_photos_and_rectification_workflow(monkeypatch) -> Non
     repo.update_hazard = AsyncMock(return_value=hazard)
     repo.delete_hazard = AsyncMock(return_value=True)
     monkeypatch.setattr(
-        safety_module.asyncio,
+        safety_module.asyncio,  # type: ignore[attr-defined]
         "create_task",
         lambda coroutine: coroutine.close(),
     )
@@ -110,7 +111,7 @@ async def test_hazard_crud_photos_and_rectification_workflow(monkeypatch) -> Non
     assert await service.get_hazard(hazard_id) is hazard
 
     created = await service.create_hazard(
-        Payload(hazard_no=None, description=None),
+        Payload(hazard_no=None, description=None),  # type: ignore[arg-type]
         auto_run_ai=False,
     )
     assert created is hazard
@@ -119,81 +120,105 @@ async def test_hazard_crud_photos_and_rectification_workflow(monkeypatch) -> Non
     assert create_data["hazard_type"] == "unsafe_condition"
     assert create_data["overall_status"] == "open"
 
-    assert await service.update_hazard(
-        hazard_id,
-        Payload(description="阀门泄漏", ignored=None),
-    ) is hazard
-    assert await service.upload_hazard_photo(
-        hazard_id,
-        "photo.jpg",
-        r"uploads\photo.jpg",
-    ) is hazard
+    assert (
+        await service.update_hazard(
+            hazard_id,
+            Payload(description="阀门泄漏", ignored=None),  # type: ignore[arg-type]
+        )
+        is hazard
+    )
+    assert (
+        await service.upload_hazard_photo(
+            hazard_id,
+            "photo.jpg",
+            r"uploads\photo.jpg",
+        )
+        is hazard
+    )
     saved_photos = json.loads(repo.update_hazard.await_args.args[1]["defect_photos"])
     assert saved_photos == ["old/photo.jpg", "uploads/photo.jpg"]
 
-    assert await service.upload_rectification_photo(
-        hazard_id,
-        r"uploads\fixed.jpg",
-    ) is hazard
+    assert (
+        await service.upload_rectification_photo(
+            hazard_id,
+            r"uploads\fixed.jpg",
+        )
+        is hazard
+    )
     fixed_photos = json.loads(
         repo.update_hazard.await_args.args[1]["rectification_photos"]
     )
     assert fixed_photos == ["uploads/fixed.jpg"]
 
     assert await service.start_rectification(hazard_id) is hazard
-    assert await service.reply_rectification(
-        hazard_id,
-        "已整改",
-        '["fixed.jpg"]',
-        corrective_preventive_measures="更换阀门",
-    ) is hazard
+    assert (
+        await service.reply_rectification(
+            hazard_id,
+            "已整改",
+            '["fixed.jpg"]',
+            corrective_preventive_measures="更换阀门",
+        )
+        is hazard
+    )
     reply = repo.update_hazard.await_args.args[1]
     assert reply["rectification_status"] == "replied"
     assert reply["rectification_reply"] == "更换阀门"
     assert isinstance(reply["actual_completion_date"], datetime)
 
     hazard.rectification_status = "replied"
-    assert await service.verify_level(
-        hazard_id,
-        1,
-        "approved",
-        "通过",
-        uuid4(),
-        "负责人",
-    ) is hazard
+    assert (
+        await service.verify_level(
+            hazard_id,
+            1,
+            "approved",
+            "通过",
+            uuid4(),
+            "负责人",
+        )
+        is hazard
+    )
     level_one = repo.update_hazard.await_args.args[1]
     assert level_one["verify_level_2_status"] == "approved"
     assert level_one["rectification_status"] == "level2_approved"
 
     hazard.verify_level_1_status = "approved"
-    assert await service.verify_level(
-        hazard_id,
-        3,
-        "approved",
-        None,
-        uuid4(),
-        "发现人",
-    ) is hazard
+    assert (
+        await service.verify_level(
+            hazard_id,
+            3,
+            "approved",
+            None,
+            uuid4(),
+            "发现人",
+        )
+        is hazard
+    )
     assert repo.update_hazard.await_args.args[1]["status"] == "closed"
 
-    assert await service.verify_level(
-        hazard_id,
-        1,
-        "rejected",
-        "重做",
-        uuid4(),
-        "负责人",
-    ) is hazard
+    assert (
+        await service.verify_level(
+            hazard_id,
+            1,
+            "rejected",
+            "重做",
+            uuid4(),
+            "负责人",
+        )
+        is hazard
+    )
     assert repo.update_hazard.await_args.args[1]["rectification_status"] == "rejected"
 
     hazard.rectification_status = "rejected"
-    assert await service.rework_rectification(
-        hazard_id,
-        "重新完成",
-        None,
-        uuid4(),
-        "整改人",
-    ) is hazard
+    assert (
+        await service.rework_rectification(
+            hazard_id,
+            "重新完成",
+            None,
+            uuid4(),
+            "整改人",
+        )
+        is hazard
+    )
     assert repo.update_hazard.await_args.args[1]["verify_level_3_status"] == "pending"
     assert await service.delete_hazard(hazard_id) is True
 
@@ -202,19 +227,19 @@ async def test_hazard_crud_photos_and_rectification_workflow(monkeypatch) -> Non
     assert await service.upload_rectification_photo(hazard_id, "x") is None
     assert await service.start_rectification(hazard_id) is None
     assert await service.reply_rectification(hazard_id, "x", None) is None
-    assert await service.verify_level(
-        hazard_id, 1, "approved", None, uuid4(), "x"
-    ) is None
-    assert await service.rework_rectification(
-        hazard_id, "x", None, uuid4(), "x"
-    ) is None
+    assert (
+        await service.verify_level(hazard_id, 1, "approved", None, uuid4(), "x") is None
+    )
+    assert (
+        await service.rework_rectification(hazard_id, "x", None, uuid4(), "x") is None
+    )
 
 
 @pytest.mark.anyio
 async def test_accident_contractor_and_work_record_state_machines() -> None:
     service, repo = make_service()
     item_id = uuid4()
-    item = SimpleNamespace(id=item_id, status="reported")
+    item: Any = SimpleNamespace(id=item_id, status="reported")
     for name, return_value in {
         "get_accidents": ([item], 1),
         "get_accident_by_id": item,
@@ -236,21 +261,24 @@ async def test_accident_contractor_and_work_record_state_machines() -> None:
 
     assert await service.get_accidents(keyword="泄漏") == ([item], 1)
     assert await service.get_accident(item_id) is item
-    assert await service.create_accident(Payload(title="事故")) is item
+    assert await service.create_accident(Payload(title="事故")) is item  # type: ignore[arg-type]
     assert (
-        await service.update_accident(item_id, Payload(title="更新", empty=None))
+        await service.update_accident(item_id, Payload(title="更新", empty=None))  # type: ignore[arg-type]
         is item
     )
     assert await service.investigate_accident(item_id, uuid4(), "调查员") is item
 
     item.status = "investigating"
-    assert await service.resolve_accident(
-        item_id,
-        "直接原因",
-        "根本原因",
-        "处置措施",
-        investigation_team=[{"name": "甲"}],
-    ) is item
+    assert (
+        await service.resolve_accident(
+            item_id,
+            "直接原因",
+            "根本原因",
+            "处置措施",
+            investigation_team=[{"name": "甲"}],
+        )
+        is item
+    )
     item.status = "investigated"
     assert await service.start_capa(item_id, datetime.now(), "责任人") is item
     assert await service.close_accident(item_id) is item
@@ -258,21 +286,19 @@ async def test_accident_contractor_and_work_record_state_machines() -> None:
     assert await service.verify_capa(item_id, uuid4(), "验证人") is item
     assert await service.delete_accident(item_id) is True
 
-    assert await service.get_contractors(keyword="承包商") == ([item], 1)
+    assert await service.get_contractors(keyword="承包商") == ([item], 1)  # type: ignore[comparison-overlap]
     assert await service.get_contractor(item_id) is item
-    assert await service.create_contractor(Payload(name="承包商")) is item
-    assert await service.update_contractor(item_id, Payload(name="新名称")) is item
+    assert await service.create_contractor(Payload(name="承包商")) is item  # type: ignore[arg-type]
+    assert await service.update_contractor(item_id, Payload(name="新名称")) is item  # type: ignore[arg-type]
     assert await service.blacklist_contractor(item_id) is item
     assert await service.activate_contractor(item_id) is item
     assert await service.update_contractor_training(item_id, "passed") is item
     assert await service.delete_contractor(item_id) is True
 
-    assert await service.get_work_records(item_id) == [item]
-    assert await service.create_work_record(item_id, Payload(project="检修")) is item
-    assert (
-        repo.create_work_record.await_args.args[0]["contractor_id"] == str(item_id)
-    )
-    assert await service.update_work_record(item_id, Payload(project="大修")) is item
+    assert await service.get_work_records(item_id) == [item]  # type: ignore[comparison-overlap]
+    assert await service.create_work_record(item_id, Payload(project="检修")) is item  # type: ignore[arg-type]
+    assert repo.create_work_record.await_args.args[0]["contractor_id"] == str(item_id)
+    assert await service.update_work_record(item_id, Payload(project="大修")) is item  # type: ignore[arg-type]
     assert await service.evaluate_work_record(item_id, 95, "良好", "主管") is item
     evaluation = repo.update_work_record.await_args.args[1]["evaluation"]
     assert evaluation["score"] == 95
@@ -297,7 +323,7 @@ async def test_accident_contractor_and_work_record_state_machines() -> None:
 async def test_training_and_certificate_workflows() -> None:
     service, repo = make_service()
     training_id = uuid4()
-    item = SimpleNamespace(id=training_id, status="draft")
+    item: Any = SimpleNamespace(id=training_id, status="draft")
     for name, return_value in {
         "get_trainings": ([item], 1),
         "get_training_by_id": item,
@@ -315,10 +341,14 @@ async def test_training_and_certificate_workflows() -> None:
 
     assert await service.get_trainings(department="安全部") == ([item], 1)
     assert await service.get_training(training_id) is item
-    assert await service.create_training(Payload(title="消防培训")) is item
-    assert await service.update_training(
-        training_id, Payload(title="更新培训", empty=None)
-    ) is item
+    assert await service.create_training(Payload(title="消防培训")) is item  # type: ignore[arg-type]
+    assert (
+        await service.update_training(
+            training_id,
+            Payload(title="更新培训", empty=None),  # type: ignore[arg-type]
+        )
+        is item
+    )
     assert await service.start_training(training_id) is item
     item.status = "in_progress"
     assert await service.complete_training(training_id) is item
@@ -326,20 +356,24 @@ async def test_training_and_certificate_workflows() -> None:
     assert await service.archive_training(training_id) is item
     assert await service.delete_training(training_id) is True
 
-    assert await service.get_training_records(training_id) == [item]
-    assert await service.create_training_record(Payload(employee="甲")) is item
-    assert await service.update_training_record(
-        training_id, Payload(score=90, empty=None)
-    ) is item
+    assert await service.get_training_records(training_id) == [item]  # type: ignore[comparison-overlap]
+    assert await service.create_training_record(Payload(employee="甲")) is item  # type: ignore[arg-type]
+    assert (
+        await service.update_training_record(
+            training_id,
+            Payload(score=90, empty=None),  # type: ignore[arg-type]
+        )
+        is item
+    )
     records = await service.batch_create_records(
         training_id,
-        [Payload(employee="甲"), Payload(employee="乙")],
+        [Payload(employee="甲"), Payload(employee="乙")],  # type: ignore[list-item]
     )
-    assert records == [item, item]
+    assert records == [item, item]  # type: ignore[comparison-overlap]
     assert repo.create_training_record.await_args.args[0]["training_id"] == training_id
     assert await service.delete_training_record(training_id) is True
-    assert await service.get_training_certificates(keyword="甲") == ([item], 1)
-    assert await service.get_expiring_certificates() == [item]
+    assert await service.get_training_certificates(keyword="甲") == ([item], 1)  # type: ignore[comparison-overlap]
+    assert await service.get_expiring_certificates() == [item]  # type: ignore[comparison-overlap]
 
     item.status = "archived"
     assert await service.start_training(training_id) is None
@@ -349,7 +383,7 @@ async def test_training_and_certificate_workflows() -> None:
 
 @pytest.mark.anyio
 async def test_hazard_identification_workflow_mapping_and_risk_calculation(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     from app.modules.safety import schemas
     from app.modules.safety.schemas.hazard_identifications import get_risk_level
@@ -357,7 +391,7 @@ async def test_hazard_identification_workflow_mapping_and_risk_calculation(
     monkeypatch.setattr(schemas, "get_risk_level", get_risk_level, raising=False)
     service, repo = make_service()
     item_id = uuid4()
-    item = SimpleNamespace(
+    item: Any = SimpleNamespace(
         id=item_id,
         overall_status="draft",
         ai_node_progress="pending_script1",
@@ -382,14 +416,17 @@ async def test_hazard_identification_workflow_mapping_and_risk_calculation(
         department="生产部"
     ) == {"total": 1}
     assert await service.get_hazard_identification(item_id) is item
-    assert await service.create_hazard_identification(
-        Payload(department="生产部")
-    ) is item
+    assert (
+        await service.create_hazard_identification(Payload(department="生产部")) is item
+    )
     create_values = repo.create_hazard_identification.await_args.args[0]
     assert create_values["overall_status"] == "draft"
-    assert await service.update_hazard_identification(
-        item_id, Payload(position="操作工", empty=None)
-    ) is item
+    assert (
+        await service.update_hazard_identification(
+            item_id, Payload(position="操作工", empty=None)
+        )
+        is item
+    )
     assert await service.delete_hazard_identification(item_id) is True
     assert await service.submit_hazard_identification(item_id) is item
 
@@ -421,10 +458,10 @@ async def test_hazard_identification_workflow_mapping_and_risk_calculation(
         7: {"l_post": 1, "e_post": 1, "c_post": 1, "post_risk_level": "level_4"},
     }
     for script_number, ai_output in output_by_script.items():
-        item.ai_node_progress = f"pending_script{script_number}"
+        item.ai_node_progress = f"pending_script{script_number}"  # type: ignore[union-attr]
         if script_number > 1:
             setattr(item, f"script{script_number - 1}_review_status", "approved")
-        assert await service.run_script(item_id, script_number, ai_output) is item
+        assert await service.run_script(item_id, script_number, ai_output) is item  # type: ignore[arg-type]
 
     script_three_update = repo.update_hazard_identification.await_args_list[-5].args[1]
     assert script_three_update["d_inherent"] == 60

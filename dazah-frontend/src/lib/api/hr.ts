@@ -1,31 +1,108 @@
 import {
   EmployeeListResponse,
   EmployeeResponse,
-  EmployeeCreateInput,
-  EmployeeUpdateInput,
   DepartmentListResponse,
-  DepartmentCreateInput,
-  DepartmentUpdateInput,
   TeamListResponse,
-  TeamCreateInput,
-  TeamUpdateInput,
   OffboardingRecordListResponse,
-  OffboardingRecordCreateInput,
-  OffboardingRecordUpdateInput,
   OnboardingRecordListResponse,
   DepartureRecordListResponse,
   SyncStatusResponse,
-  TrainingPlanListResponse,
-  TrainingPlanResponse,
-  TrainingPlanSopListResponse,
-  TrainingPlanSopResponse,
-  TrainingRecordListResponse,
-  TrainingRecordResponse,
-  TrainingAssessmentListResponse,
-  TrainingAssessmentResponse,
-  TrainingApprovalListResponse,
-  TrainingApprovalResponse,
+  TrainingLedgerListResponse,
+  EsgTrainingRecordListResponse,
+  HrFeishuAppSettingsDetail,
+  HrFeishuEntityFieldMappingBundle,
+  HrFeishuEntitySettingItem,
+  HrFeishuTableOption,
+  TurnoverAnalysisResponse,
 } from '@/types/hr'
+
+export async function fetchTrainingLedgersByDept(
+  department: string,
+  page = 1,
+  pageSize = 200
+): Promise<TrainingLedgerListResponse> {
+  const params = new URLSearchParams({
+    department,
+    page: String(page),
+    page_size: String(Math.min(pageSize, 200)),
+  })
+  const res = await fetch(`/api/v1/hr/training-ledgers?${params}`, { cache: 'no-store' })
+  if (!res.ok) throw new Error('获取培训台账列表失败')
+  return res.json()
+}
+
+export async function fetchEsgRecordsByDept(
+  department: string,
+  page = 1,
+  pageSize = 200
+): Promise<EsgTrainingRecordListResponse> {
+  const params = new URLSearchParams({
+    department,
+    page: String(page),
+    page_size: String(Math.min(pageSize, 200)),
+  })
+  const res = await fetch(`/api/v1/hr/esg-training-records?${params}`, { cache: 'no-store' })
+  if (!res.ok) throw new Error('获取 ESG 培训记录失败')
+  return res.json()
+}
+
+async function unwrapHrResponse<T>(responseOrPromise: Response | Promise<Response>): Promise<T> {
+  const response = await responseOrPromise
+  if (!response.ok) throw new Error(`请求失败: ${response.status}`)
+  const json = await response.json()
+  return (json.data ?? json) as T
+}
+
+export async function fetchHrFeishuAppSettings(): Promise<HrFeishuAppSettingsDetail> {
+  return unwrapHrResponse(fetch('/api/v1/hr/feishu-settings/app', { cache: 'no-store' }))
+}
+
+export async function fetchHrFeishuEntitySettings(): Promise<HrFeishuEntitySettingItem[]> {
+  return unwrapHrResponse(fetch('/api/v1/hr/feishu-settings/entities', { cache: 'no-store' }))
+}
+
+export async function fetchHrFeishuEntityTables(entityCode: string, appToken?: string): Promise<HrFeishuTableOption[]> {
+  const params = new URLSearchParams()
+  if (appToken?.trim()) params.set('app_token', appToken.trim())
+  return unwrapHrResponse(fetch(
+    `/api/v1/hr/feishu-settings/entities/${entityCode}/tables${params.size ? `?${params}` : ''}`,
+    { cache: 'no-store' }
+  ))
+}
+
+export async function fetchHrFeishuEntityFieldMappingBundle(
+  entityCode: string,
+  params?: { app_token?: string; table_id?: string }
+): Promise<HrFeishuEntityFieldMappingBundle> {
+  const search = new URLSearchParams()
+  if (params?.app_token?.trim()) search.set('app_token', params.app_token.trim())
+  if (params?.table_id?.trim()) search.set('table_id', params.table_id.trim())
+  return unwrapHrResponse(fetch(
+    `/api/v1/hr/feishu-settings/entities/${entityCode}/field-mapping${search.size ? `?${search}` : ''}`,
+    { cache: 'no-store' }
+  ))
+}
+
+export function formatHrFeishuTestSummary(result: { success?: boolean; message?: string } | null | undefined) {
+  if (!result) return '测试完成'
+  return `${result.success ? '连接成功' : '连接失败'}：${result.message || '未返回详细信息'}`
+}
+
+export async function fetchEmailConfig(): Promise<{
+  code: number
+  data: {
+    imap_host: string; imap_port: string; imap_user: string; imap_pass?: string
+    smtp_host: string; smtp_port: string; smtp_user: string; smtp_pass?: string
+    from_addr: string; fetch_enabled: boolean; fetch_interval_hours: number
+    fetch_schedule_hours: number[]; watch_dir: string
+    offer_subject: string; offer_body: string; reject_subject: string; reject_body: string
+    last_scan_at: string | null; last_fetched_count: number; last_fetch_status: string | null
+  }
+}> {
+  const res = await fetch('/api/v1/hr/email/config', { cache: 'no-store' })
+  if (!res.ok) throw new Error('获取邮箱配置失败')
+  return res.json()
+}
 
 export async function fetchEmployees(
   params?: {
@@ -209,162 +286,6 @@ export async function syncToFeishu(id: string): Promise<{ code: number; message:
   return res.json()
 }
 
-export async function fetchTrainingPlans(
-  params?: {
-    keyword?: string
-    page?: number
-    page_size?: number
-  }
-): Promise<TrainingPlanListResponse> {
-  const searchParams = new URLSearchParams()
-  if (params?.keyword) searchParams.set('keyword', params.keyword)
-  searchParams.set('page', String(params?.page || 1))
-  searchParams.set('page_size', String(params?.page_size || 20))
-
-  const res = await fetch(`/api/v1/hr/training-plans?${searchParams.toString()}`, {
-    cache: 'no-store',
-  })
-  if (!res.ok) throw new Error('获取培训计划列表失败')
-  return res.json()
-}
-
-export async function fetchTrainingPlanById(id: string): Promise<TrainingPlanResponse> {
-  const res = await fetch(`/api/v1/hr/training-plans/${id}`, {
-    cache: 'no-store',
-  })
-  if (!res.ok) throw new Error('获取培训计划详情失败')
-  return res.json()
-}
-
-export async function fetchTrainingPlanSops(
-  params?: {
-    plan_id?: string
-    keyword?: string
-    page?: number
-    page_size?: number
-  }
-): Promise<TrainingPlanSopListResponse> {
-  const searchParams = new URLSearchParams()
-  if (params?.plan_id) searchParams.set('plan_id', params.plan_id)
-  if (params?.keyword) searchParams.set('keyword', params.keyword)
-  searchParams.set('page', String(params?.page || 1))
-  searchParams.set('page_size', String(params?.page_size || 20))
-
-  const res = await fetch(`/api/v1/hr/training-plan-sops?${searchParams.toString()}`, {
-    cache: 'no-store',
-  })
-  if (!res.ok) throw new Error('获取培训计划SOP列表失败')
-  return res.json()
-}
-
-export async function fetchTrainingPlanSopById(id: string): Promise<TrainingPlanSopResponse> {
-  const res = await fetch(`/api/v1/hr/training-plan-sops/${id}`, {
-    cache: 'no-store',
-  })
-  if (!res.ok) throw new Error('获取培训计划SOP详情失败')
-  return res.json()
-}
-
-export async function fetchTrainingRecords(
-  params?: {
-    plan_id?: string
-    employee_id?: string
-    keyword?: string
-    page?: number
-    page_size?: number
-  }
-): Promise<TrainingRecordListResponse> {
-  const searchParams = new URLSearchParams()
-  if (params?.plan_id) searchParams.set('plan_id', params.plan_id)
-  if (params?.employee_id) searchParams.set('employee_id', params.employee_id)
-  if (params?.keyword) searchParams.set('keyword', params.keyword)
-  searchParams.set('page', String(params?.page || 1))
-  searchParams.set('page_size', String(params?.page_size || 20))
-
-  const res = await fetch(`/api/v1/hr/training-records?${searchParams.toString()}`, {
-    cache: 'no-store',
-  })
-  if (!res.ok) throw new Error('获取培训记录列表失败')
-  return res.json()
-}
-
-export async function fetchTrainingRecordById(id: string): Promise<TrainingRecordResponse> {
-  const res = await fetch(`/api/v1/hr/training-records/${id}`, {
-    cache: 'no-store',
-  })
-  if (!res.ok) throw new Error('获取培训记录详情失败')
-  return res.json()
-}
-
-export async function fetchTrainingAssessments(
-  params?: {
-    record_id?: string
-    keyword?: string
-    page?: number
-    page_size?: number
-  }
-): Promise<TrainingAssessmentListResponse> {
-  const searchParams = new URLSearchParams()
-  if (params?.record_id) searchParams.set('record_id', params.record_id)
-  if (params?.keyword) searchParams.set('keyword', params.keyword)
-  searchParams.set('page', String(params?.page || 1))
-  searchParams.set('page_size', String(params?.page_size || 20))
-
-  const res = await fetch(`/api/v1/hr/training-assessments?${searchParams.toString()}`, {
-    cache: 'no-store',
-  })
-  if (!res.ok) throw new Error('获取培训考核列表失败')
-  return res.json()
-}
-
-export async function fetchTrainingAssessmentById(id: string): Promise<TrainingAssessmentResponse> {
-  const res = await fetch(`/api/v1/hr/training-assessments/${id}`, {
-    cache: 'no-store',
-  })
-  if (!res.ok) throw new Error('获取培训考核详情失败')
-  return res.json()
-}
-
-export async function fetchTrainingApprovals(
-  params?: {
-    record_id?: string
-    keyword?: string
-    page?: number
-    page_size?: number
-  }
-): Promise<TrainingApprovalListResponse> {
-  const searchParams = new URLSearchParams()
-  if (params?.record_id) searchParams.set('record_id', params.record_id)
-  if (params?.keyword) searchParams.set('keyword', params.keyword)
-  searchParams.set('page', String(params?.page || 1))
-  searchParams.set('page_size', String(params?.page_size || 20))
-
-  try {
-    const res = await fetch(`/api/v1/hr/training-approvals?${searchParams.toString()}`, {
-      cache: 'no-store',
-    })
-    if (!res.ok) throw new Error('获取培训审批列表失败')
-    return res.json()
-  } catch {
-    return {
-      code: 500,
-      message: '服务暂不可用',
-      data: [],
-      meta: { page: params?.page || 1, page_size: params?.page_size || 20, total: 0 },
-    }
-  }
-}
-
-export async function fetchTrainingApprovalById(id: string): Promise<TrainingApprovalResponse> {
-  const res = await fetch(`/api/v1/hr/training-approvals/${id}`, {
-    cache: 'no-store',
-  })
-  if (!res.ok) throw new Error('获取培训审批详情失败')
-  return res.json()
-}
-
-export { fetchTrainingPlanSops as fetchTrainingSops }
-
 export async function syncOnboardingFromFeishu(): Promise<{ code: number; message: string; data: { created: number; updated: number; failed: number; total: number } }> {
   const res = await fetch(`/api/v1/hr/onboarding-records/sync-from-feishu`, {
     method: 'POST',
@@ -383,7 +304,7 @@ export async function syncDepartureFromFeishu(): Promise<{ code: number; message
   return res.json()
 }
 
-export async function fetchTurnoverAnalysis(): Promise<any> {
+export async function fetchTurnoverAnalysis(): Promise<TurnoverAnalysisResponse> {
   const res = await fetch(`/api/v1/hr/turnover-analysis`, {
     cache: 'no-store',
   })
@@ -522,7 +443,7 @@ export interface TrainingNotifyData {
 
 export async function sendTrainingNotification(
   data: TrainingNotifyData
-): Promise<{ code: number; message: string; data: { sent: number; failed: number; details: any[] } }> {
+): Promise<{ code: number; message: string; data: { sent: number; failed: number; details: unknown[] } }> {
   const res = await fetch(`/api/v1/hr/training-notifications/send`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -655,7 +576,6 @@ export async function fetchOnboardingEvaluationByEmployeeId(
 // ─── TrainingLedger APIs ───
 
 import {
-  TrainingLedgerListResponse,
   TrainingLedgerRecord,
   TrainingLedgerCreateInput,
   TrainingLedgerUpdateInput,
@@ -685,7 +605,7 @@ export async function fetchTrainingLedgers(
 }
 
 export async function createTrainingLedger(
-  data: TrainingLedgerCreateInput
+  data: TrainingLedgerCreateInput | Record<string, unknown>
 ): Promise<{ code: number; message: string; data: TrainingLedgerRecord }> {
   const res = await fetch(`/api/v1/hr/training-ledgers`, {
     method: 'POST',
@@ -935,14 +855,45 @@ export async function fetchPlanItems(id: string): Promise<{ code: number; messag
   return res.json()
 }
 
-// ─── 招聘候选人（待后端实现）───
+// ─── 招聘候选人（客户端）───
 
-export async function fetchCandidates(params: Record<string, unknown> = {}): Promise<{ data: any[]; meta?: { total: number } }> {
-  // TODO: backend candidate API not yet implemented
-  return { data: [], meta: { total: 0 } }
+interface CandidateQuery {
+  keyword?: string
+  fit_level?: string
+  interview_status?: string
+  job_id?: string
+  page?: number
+  page_size?: number
 }
 
-export async function fetchCandidateById(id: string): Promise<{ code: number; message: string; data: any }> {
-  // TODO: backend candidate API not yet implemented
-  return { code: 404, message: '招聘功能暂未实现', data: null }
+interface CandidateListResponse {
+  code: number
+  message: string
+  data: Array<Record<string, unknown>>
+  meta?: { total: number; page: number; page_size: number }
+}
+
+export async function fetchCandidates(
+  params?: CandidateQuery
+): Promise<CandidateListResponse> {
+  const search = new URLSearchParams()
+  if (params?.keyword) search.set('keyword', params.keyword)
+  if (params?.fit_level) search.set('fit_level', params.fit_level)
+  if (params?.interview_status) search.set('interview_status', params.interview_status)
+  if (params?.job_id) search.set('job_id', params.job_id)
+  search.set('page', String(params?.page ?? 1))
+  search.set('page_size', String(params?.page_size ?? 20))
+  const res = await fetch(`/api/v1/hr/candidates?${search.toString()}`, {
+    cache: 'no-store',
+  })
+  if (!res.ok) throw new Error('获取候选人列表失败')
+  return res.json()
+}
+
+export async function fetchCandidateById(
+  id: string
+): Promise<{ code: number; message: string; data: Record<string, unknown> }> {
+  const res = await fetch(`/api/v1/hr/candidates/${id}`, { cache: 'no-store' })
+  if (!res.ok) throw new Error('获取候选人详情失败')
+  return res.json()
 }

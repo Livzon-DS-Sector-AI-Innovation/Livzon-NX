@@ -1,0 +1,5 @@
+export { RoleManager } from "./RoleManager"
+export { UserRoleManager } from "./UserRoleManager"
+export { DeptRoleMapper } from "./DeptRoleMapper"
+export { DataScopeConfig } from "./DataScopeConfig"
+export { PermissionVerification } from "./PermissionVerification"

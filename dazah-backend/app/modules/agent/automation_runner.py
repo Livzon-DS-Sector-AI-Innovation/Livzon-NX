@@ -488,7 +488,7 @@ class AgentAutomationRunner:
         try:
             by_key = {step.key: step for step in definition.steps}
             order = [step.key for step in definition.steps]
-            current_key = run.current_step_key or order[0]
+            current_key: str | None = run.current_step_key or order[0]
             while current_key:
                 step = by_key[current_key]
                 run.current_step_key = step.key
@@ -738,7 +738,8 @@ class AgentAutomationRunner:
         if timed_out and getattr(step, "on_timeout", None):
             return str(step.on_timeout)
         if definition.schema_version == "1.1":
-            return step.next
+            next_key = getattr(step, "next", None)
+            return str(next_key) if next_key is not None else None
         index = order.index(step.key)
         return order[index + 1] if index + 1 < len(order) else None
 
@@ -824,7 +825,11 @@ class AgentAutomationRunner:
             .limit(1)
         )
         step_run = result.scalar_one_or_none()
-        waiting_since = step_run.started_at if step_run else datetime.now(UTC)
+        waiting_since = (
+            step_run.started_at
+            if step_run is not None and step_run.started_at is not None
+            else datetime.now(UTC)
+        )
         event_result = await session.execute(
             select(AgentDomainEvent)
             .where(
@@ -860,11 +865,10 @@ class AgentAutomationRunner:
                     status_value="waiting_event",
                 )
             run.status = AutomationRunStatus.WAITING.value
-            run.resume_at = (
-                waiting_since + timedelta(seconds=step.timeout_seconds)
-                if step.timeout_seconds is not None
-                else None
-            )
+            if step.timeout_seconds is not None:
+                run.resume_at = waiting_since + timedelta(seconds=step.timeout_seconds)
+            else:
+                run.resume_at = None
             run.output_summary = redact_sensitive({"steps": outputs})
             await self._event(
                 session,
@@ -942,12 +946,15 @@ class AgentAutomationRunner:
                 input_summary={"title": step.title, "detail": step.detail},
             )
         run.status = AutomationRunStatus.WAITING.value
-        run.resume_at = (
-            (task.started_at if task is not None else datetime.now(UTC))
-            + timedelta(seconds=step.timeout_seconds)
-            if step.timeout_seconds is not None
-            else None
-        )
+        if step.timeout_seconds is not None:
+            task_started_at = (
+                task.started_at
+                if task is not None and task.started_at is not None
+                else datetime.now(UTC)
+            )
+            run.resume_at = task_started_at + timedelta(seconds=step.timeout_seconds)
+        else:
+            run.resume_at = None
         run.output_summary = redact_sensitive({"steps": outputs})
         await self._event(
             session,
@@ -1111,16 +1118,18 @@ class AgentAutomationRunner:
                 ),
                 trusted_automation=True,
             )
-            item = await session.get(AgentInteractionRequest, artifact.request_id)
-            if item is None:
+            created_request = await session.get(
+                AgentInteractionRequest, artifact.request_id
+            )
+            if created_request is None:
                 raise RuntimeError("填写请求创建失败")
-            created.append(item)
+            created.append(created_request)
             await self.push_delivery_service.dispatch_interaction(
                 session,
                 automation=automation,
                 run=run,
                 owner=owner,
-                request=item,
+                request=created_request,
                 recipient=recipient,
                 rule=rule,
                 step_run_id=step_run.id,

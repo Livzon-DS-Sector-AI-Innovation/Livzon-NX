@@ -1,6 +1,7 @@
 """Production API routes."""
 
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
@@ -36,8 +37,14 @@ from app.modules.production.schemas import (  # noqa: E402
     ProductionRecordUpdate,
 )
 from app.modules.production.service import ProductionService
+from app.shared.module_registry import MODULES_BY_CODE
 
 router = APIRouter()
+
+
+@router.get("/", summary="生产管理模块信息")
+async def read_production_module() -> dict[str, str]:
+    return MODULES_BY_CODE["production"].as_dict()
 
 
 # ============ Batch Routes ============
@@ -55,7 +62,7 @@ async def get_batches(
     ),
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """获取批次列表"""
     service = ProductionService(db)
     skip = (page - 1) * page_size
@@ -77,7 +84,7 @@ async def get_batch(
     batch_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """获取批次详情"""
     service = ProductionService(db)
     batch = await service.get_batch(batch_id)
@@ -91,7 +98,7 @@ async def create_batch(
     data: BatchCreate,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """创建批次"""
     service = ProductionService(db)
     batch = await service.create_batch(data)
@@ -105,7 +112,7 @@ async def update_batch(
     data: BatchUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """更新批次"""
     service = ProductionService(db)
     batch = await service.update_batch(batch_id, data)
@@ -123,7 +130,7 @@ async def update_batch_status(
     data: BatchStatusUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """更新批次状态"""
     service = ProductionService(db)
     try:
@@ -141,7 +148,7 @@ async def delete_batch(
     batch_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """删除批次"""
     service = ProductionService(db)
     result = await service.delete_batch(batch_id)
@@ -163,7 +170,7 @@ async def get_batch_materials(
     batch_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """获取批次物料列表"""
     service = ProductionService(db)
     materials = await service.get_batch_materials(batch_id)
@@ -180,7 +187,7 @@ async def add_batch_material(
     data: BatchMaterialCreate,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """添加批次物料"""
     service = ProductionService(db)
     material = await service.add_batch_material(batch_id, data.model_dump())
@@ -196,7 +203,7 @@ async def update_batch_material(
     data: BatchMaterialUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """更新批次物料"""
     service = ProductionService(db)
     update_data = {k: v for k, v in data.model_dump().items() if v is not None}
@@ -214,7 +221,7 @@ async def delete_batch_material(
     material_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """删除批次物料"""
     service = ProductionService(db)
     result = await service.delete_batch_material(material_id)
@@ -235,7 +242,7 @@ async def get_plans(
     workshop: str | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """获取生产计划列表"""
     service = ProductionService(db)
     skip = (page - 1) * page_size
@@ -251,7 +258,7 @@ async def get_plan(
     plan_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """获取生产计划详情"""
     service = ProductionService(db)
     plan = await service.get_plan(plan_id)
@@ -265,7 +272,7 @@ async def create_plan(
     data: ProductionPlanCreate,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """创建生产计划"""
     service = ProductionService(db)
     plan = await service.create_plan(data)
@@ -279,7 +286,7 @@ async def update_plan(
     data: ProductionPlanUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """更新生产计划"""
     service = ProductionService(db)
     plan = await service.update_plan(plan_id, data)
@@ -294,7 +301,7 @@ async def delete_plan(
     plan_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """删除生产计划"""
     service = ProductionService(db)
     result = await service.delete_plan(plan_id)
@@ -315,7 +322,7 @@ async def get_process_specs(
     product_code: str | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """获取工艺规程列表"""
     service = ProductionService(db)
     skip = (page - 1) * page_size
@@ -335,7 +342,7 @@ async def get_process_spec(
     spec_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """获取工艺规程详情"""
     service = ProductionService(db)
     spec = await service.get_process_spec(spec_id)
@@ -349,7 +356,7 @@ async def create_process_spec(
     data: ProcessSpecCreate,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """创建工艺规程"""
     service = ProductionService(db)
     spec = await service.create_process_spec(data)
@@ -365,7 +372,7 @@ async def update_process_spec(
     data: ProcessSpecUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """更新工艺规程"""
     service = ProductionService(db)
     spec = await service.update_process_spec(spec_id, data)
@@ -382,7 +389,7 @@ async def delete_process_spec(
     spec_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """删除工艺规程"""
     service = ProductionService(db)
     result = await service.delete_process_spec(spec_id)
@@ -404,7 +411,7 @@ async def get_process_steps(
     spec_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """获取工艺步骤列表"""
     service = ProductionService(db)
     steps = await service.get_steps(spec_id)
@@ -416,7 +423,7 @@ async def create_process_step(
     data: ProcessStepCreate,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """创建工艺步骤"""
     service = ProductionService(db)
     step = await service.create_process_step(data)
@@ -430,7 +437,7 @@ async def update_process_step(
     data: ProcessStepUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """更新工艺步骤"""
     service = ProductionService(db)
     step = await service.update_process_step(step_id, data)
@@ -445,7 +452,7 @@ async def delete_process_step(
     step_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """删除工艺步骤"""
     service = ProductionService(db)
     result = await service.delete_process_step(step_id)
@@ -467,7 +474,7 @@ async def get_process_parameters(
     step_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """获取工艺参数列表"""
     service = ProductionService(db)
     params = await service.get_parameters(step_id)
@@ -481,7 +488,7 @@ async def create_process_parameter(
     data: ProcessParameterCreate,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """创建工艺参数"""
     service = ProductionService(db)
     param = await service.create_process_parameter(data)
@@ -497,7 +504,7 @@ async def update_process_parameter(
     data: ProcessParameterUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """更新工艺参数"""
     service = ProductionService(db)
     param = await service.update_process_parameter(param_id, data)
@@ -514,7 +521,7 @@ async def delete_process_parameter(
     param_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """删除工艺参数"""
     service = ProductionService(db)
     result = await service.delete_process_parameter(param_id)
@@ -538,7 +545,7 @@ async def get_production_records(
     page_size: int = Query(100, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """获取生产记录列表"""
     service = ProductionService(db)
     skip = (page - 1) * page_size
@@ -553,7 +560,7 @@ async def create_production_record(
     data: ProductionRecordCreate,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """创建生产记录"""
     service = ProductionService(db)
     record = await service.create_production_record(data)
@@ -567,11 +574,10 @@ async def update_production_record(
     data: ProductionRecordUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """更新生产记录"""
     service = ProductionService(db)
-    update_data = {k: v for k, v in data.model_dump().items() if v is not None}
-    record = await service.update_production_record(record_id, update_data)
+    record = await service.update_production_record(record_id, data)
     if not record:
         return ApiResponse(code=404, message="记录不存在")
     await db.commit()
@@ -585,7 +591,7 @@ async def delete_production_record(
     record_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """删除生产记录"""
     service = ProductionService(db)
     result = await service.delete_production_record(record_id)
@@ -605,7 +611,7 @@ async def get_material_balance(
     batch_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """获取物料平衡"""
     service = ProductionService(db)
     balance = await service.get_material_balance(batch_id)
@@ -624,7 +630,7 @@ async def calculate_material_balance(
     min_balance_rate: float = Query(95.0, ge=0, le=100),
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """计算物料平衡"""
     service = ProductionService(db)
     balance = await service.calculate_material_balance(batch_id, min_balance_rate)
@@ -642,7 +648,7 @@ async def update_material_balance(
     data: MaterialBalanceUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """更新物料平衡"""
     service = ProductionService(db)
     update_data = {k: v for k, v in data.model_dump().items() if v is not None}
@@ -660,7 +666,7 @@ async def delete_material_balance(
     batch_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """软删除物料平衡"""
     service = ProductionService(db)
     result = await service.delete_material_balance(batch_id)
@@ -942,7 +948,7 @@ async def get_sales_plan_details(
     page_size: int = Query(20, ge=1, le=200),
     product_name: str | None = None,
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     query = select(SalesPlanDetail).where(SalesPlanDetail.is_deleted.is_(False))
     count_q = select(func.count(SalesPlanDetail.id)).where(
         SalesPlanDetail.is_deleted.is_(False)
@@ -977,7 +983,7 @@ async def get_sales_plan_details(
 async def create_sales_plan_detail(
     data: SalesPlanDetailCreate,
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     detail = SalesPlanDetail(**data.model_dump(), source="manual")
     session.add(detail)
     await session.commit()
@@ -994,7 +1000,7 @@ async def update_sales_plan_detail(
     detail_id: uuid.UUID,
     data: SalesPlanDetailUpdate,
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     detail = await session.get(SalesPlanDetail, detail_id)
     if not detail or detail.is_deleted:
         return ApiResponse(code=404, message="记录不存在")
@@ -1013,7 +1019,7 @@ async def update_sales_plan_detail(
 async def delete_sales_plan_detail(
     detail_id: uuid.UUID,
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     detail = await session.get(SalesPlanDetail, detail_id)
     if not detail or detail.is_deleted:
         return ApiResponse(code=404, message="记录不存在")

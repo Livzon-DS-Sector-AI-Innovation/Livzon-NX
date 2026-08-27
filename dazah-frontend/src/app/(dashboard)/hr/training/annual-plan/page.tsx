@@ -4,7 +4,9 @@ import { Spin } from 'antd'
 import AnnualPlanListClient from '@/components/hr/AnnualPlanListClient'
 import AnnualPlanDeptClient from '@/components/hr/AnnualPlanDeptClient'
 import AnnualPlanDetailClient from '@/components/hr/AnnualPlanDetailClient'
-import { fetchAnnualTrainingPlanById } from '@/lib/api/hr'
+import { fetchAnnualTrainingPlanByIdServer } from '@/lib/api/server/hr'
+
+export const dynamic = 'force-dynamic'
 
 interface PageProps {
   searchParams: Promise<{
@@ -20,7 +22,7 @@ export async function generateMetadata({ searchParams }: PageProps) {
 
   if (planId) {
     try {
-      const res = await fetchAnnualTrainingPlanById(planId)
+      const res = await fetchAnnualTrainingPlanByIdServer(planId)
       if (res.data?.department) {
         return {
           title: `${res.data.department}${res.data.year}年度培训计划`,
@@ -43,24 +45,16 @@ export default async function AnnualPlanPage({ searchParams }: PageProps) {
   const planId = params.id
   const dept = params.department
 
-  // 模式3: 编辑详情页
+  // 模式3: 编辑详情页 — 不在 Server Component 中预取，避免认证问题
   if (planId) {
-    let plan: any = null
-    try {
-      const res = await fetchAnnualTrainingPlanById(planId)
-      plan = res.data
-    } catch {
-      plan = null
-    }
-
     return (
       <div className="space-y-6">
         <div>
           <h1 className="text-[22px] font-semibold text-[var(--color-charcoal)] mb-2">
-            {plan ? `${plan.department}${plan.year}年度培训计划` : '年度培训计划'}
+            年度培训计划
           </h1>
           <p className="text-[14px] text-[var(--color-steel)]">
-            编辑部门年度培训计划明细
+            编辑年度培训计划明细
           </p>
         </div>
 
@@ -71,7 +65,7 @@ export default async function AnnualPlanPage({ searchParams }: PageProps) {
             </div>
           }
         >
-          <AnnualPlanDetailClient planId={planId} plan={plan} />
+          <AnnualPlanDetailClient planId={planId} plan={null} />
         </Suspense>
       </div>
     )

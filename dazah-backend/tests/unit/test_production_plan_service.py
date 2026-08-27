@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.modules.production.production_plan_service import (
@@ -18,7 +19,7 @@ from app.modules.production.production_plan_service import (
 )
 
 
-def make_config(**over):
+def make_config(**over: Any) -> Any:
     cfg = {
         "app_id": "app-id",
         "encrypted_app_secret": "enc-secret",
@@ -31,7 +32,7 @@ def make_config(**over):
     return SimpleNamespace(**cfg)
 
 
-def make_session(scalar_result=None):
+def make_session(scalar_result: Any=None) -> Any:
     s = AsyncMock()
     result = MagicMock()
     result.scalar_one_or_none.return_value = scalar_result
@@ -44,7 +45,7 @@ def make_session(scalar_result=None):
 # ═══════════ 纯辅助函数 ═══════════
 
 
-def test_extract_text_variants():
+def test_extract_text_variants() -> Any:
     assert _extract_text(None) is None
     assert _extract_text("  值  ") == "值"
     assert _extract_text("") is None
@@ -56,7 +57,7 @@ def test_extract_text_variants():
     assert _extract_text(123) is None
 
 
-def test_extract_number_variants():
+def test_extract_number_variants() -> Any:
     assert _extract_number({"type": 2, "value": [12.5]}) == 12.5
     assert _extract_number({"type": 2, "value": ["x"]}) is None
     assert _extract_number({"type": 1, "value": [3]}) is None
@@ -65,7 +66,7 @@ def test_extract_number_variants():
     assert _extract_number(None) is None
 
 
-def test_extract_date_variants():
+def test_extract_date_variants() -> Any:
     from datetime import datetime
 
     assert _extract_date(None) is None
@@ -80,11 +81,11 @@ def test_extract_date_variants():
 # ═══════════ _sync_production_plan ═══════════
 
 
-def _records_page(items, has_more=False, page_token=None):
+def _records_page(items: Any, has_more: Any=False, page_token: Any=None) -> Any:
     return {"items": items, "has_more": has_more, "page_token": page_token}
 
 
-def test_sync_production_plan_creates_records():
+def test_sync_production_plan_creates_records() -> Any:
     import asyncio
 
     client = MagicMock()
@@ -124,7 +125,7 @@ def test_sync_production_plan_creates_records():
     assert result == {"created": 1, "updated": 0, "product": "霉酚酸"}
 
 
-def test_sync_production_plan_creates_and_paginates():
+def test_sync_production_plan_creates_and_paginates() -> Any:
     import asyncio
 
     client = MagicMock()
@@ -176,7 +177,7 @@ def test_sync_production_plan_creates_and_paginates():
     assert client.list_records.await_args_list[1].kwargs["page_token"] == "tok1"
 
 
-def test_sync_production_plan_updates_existing_and_skips():
+def test_sync_production_plan_updates_existing_and_skips() -> Any:
     import asyncio
 
     existing = SimpleNamespace(product_name="霉酚酸", workshop="201-2", plan_date=None)
@@ -222,7 +223,7 @@ def test_sync_production_plan_updates_existing_and_skips():
 # ═══════════ _sync_sales_plan ═══════════
 
 
-def test_sync_sales_plan_creates_and_updates():
+def test_sync_sales_plan_creates_and_updates() -> Any:
     import asyncio
 
     existing = SimpleNamespace(product_name="霉酚酸", unit=None)
@@ -263,7 +264,7 @@ def test_sync_sales_plan_creates_and_updates():
     assert existing.month_delivered_qty == 300.0
 
 
-def test_sync_sales_plan_creates_new_without_product_field():
+def test_sync_sales_plan_creates_new_without_product_field() -> Any:
     import asyncio
 
     client = MagicMock()
@@ -301,7 +302,7 @@ def test_sync_sales_plan_creates_new_without_product_field():
 # ═══════════ sync_config_by_target 路由 ═══════════
 
 
-def test_sync_config_by_target_production_plan():
+def test_sync_config_by_target_production_plan() -> Any:
     import asyncio
 
     with patch(
@@ -313,7 +314,7 @@ def test_sync_config_by_target_production_plan():
     mock_sync.assert_awaited_once()
 
 
-def test_sync_config_by_target_sales_plan():
+def test_sync_config_by_target_sales_plan() -> Any:
     import asyncio
 
     with patch(
@@ -327,7 +328,7 @@ def test_sync_config_by_target_sales_plan():
     mock_sync.assert_awaited_once()
 
 
-def test_sync_config_by_target_fermentation_record():
+def test_sync_config_by_target_fermentation_record() -> Any:
     import asyncio
 
     with patch(
@@ -343,7 +344,7 @@ def test_sync_config_by_target_fermentation_record():
     mock_sync.assert_awaited_once()
 
 
-def test_sync_config_by_target_seed_culture():
+def test_sync_config_by_target_seed_culture() -> Any:
     import asyncio
 
     with patch(
@@ -359,7 +360,7 @@ def test_sync_config_by_target_seed_culture():
     mock_sync.assert_awaited_once()
 
 
-def test_sync_config_by_target_dr_and_fallback():
+def test_sync_config_by_target_dr_and_fallback() -> Any:
     import asyncio
 
     with (
@@ -386,7 +387,7 @@ def test_sync_config_by_target_dr_and_fallback():
     mock_auto.assert_awaited_once()
 
 
-def test_sync_targets_catalog():
+def test_sync_targets_catalog() -> Any:
     assert SYNC_TARGETS["production_plan"] == "生产计划"
     assert SYNC_TARGETS["sales_plan"] == "销售计划执行表"
     assert SYNC_TARGETS["dr_fourth_refinement"] == "DR 四次精制"

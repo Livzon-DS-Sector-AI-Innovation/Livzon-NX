@@ -6,9 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.equipment.models.maintenance_config import MaintenanceConfig
 
 
-async def get_configs(
-    db: AsyncSession, keys: list[str]
-) -> dict[str, str]:
+async def get_configs(db: AsyncSession, keys: list[str]) -> dict[str, str]:
     result = await db.execute(
         select(MaintenanceConfig).where(
             MaintenanceConfig.config_key.in_(keys),
@@ -19,9 +17,7 @@ async def get_configs(
     return {c.config_key: c.config_value for c in configs}
 
 
-async def upsert_configs(
-    db: AsyncSession, data: dict[str, str]
-) -> None:
+async def upsert_configs(db: AsyncSession, data: dict[str, str]) -> None:
     existing = await get_configs(db, list(data.keys()))
     for key, value in data.items():
         if key in existing:

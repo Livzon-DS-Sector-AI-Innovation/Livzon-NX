@@ -8,6 +8,7 @@ Create Date: 2026-07-01 18:10:00.000000
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+
 from alembic import op
 
 # revision identifiers, used by Alembic.
@@ -36,8 +37,18 @@ def _create_execution_table(table_name: str, unique_name: str) -> None:
         sa.Column("approved_at_1", sa.Date(), nullable=True),
         sa.Column("revalidation_cycle_years", sa.Integer(), nullable=True),
         sa.Column("id", sa.Uuid(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.Column("created_by", sa.Uuid(), nullable=True),
         sa.Column("updated_by", sa.Uuid(), nullable=True),
         sa.Column("is_deleted", sa.Boolean(), server_default="false", nullable=False),
@@ -60,7 +71,10 @@ def upgrade() -> None:
     inspector = sa.inspect(bind)
 
     table_specs = [
-        ("equipment_qualification_records", "uq_equipment_qualification_master_validation_id"),
+        (
+            "equipment_qualification_records",
+            "uq_equipment_qualification_master_validation_id",
+        ),
         ("process_validation_records", "uq_process_validation_master_validation_id"),
         ("cleaning_validation_records", "uq_cleaning_validation_master_validation_id"),
         ("other_validation_records", "uq_other_validation_master_validation_id"),
@@ -84,7 +98,8 @@ def downgrade() -> None:
         if inspector.has_table(table_name, schema="quality"):
             index_name = f"ix_quality_{table_name}_master_validation_id"
             existing_indexes = {
-                index["name"] for index in inspector.get_indexes(table_name, schema="quality")
+                index["name"]
+                for index in inspector.get_indexes(table_name, schema="quality")
             }
             if index_name in existing_indexes:
                 op.drop_index(index_name, table_name=table_name, schema="quality")

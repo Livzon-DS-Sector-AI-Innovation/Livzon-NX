@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import uuid
 from datetime import date
+from typing import Any
 
 import pytest
 from docx import Document
@@ -13,14 +14,14 @@ from app.modules.quality.models.change_control import ChangeControl
 
 
 @pytest.fixture(autouse=True)
-async def _clean_change_controls(db_session: AsyncSession):
+async def _clean_change_controls(db_session: AsyncSession) -> Any:
     await db_session.execute(
-        ChangeControl.__table__.delete()
+        ChangeControl.__table__.delete()  # type: ignore[attr-defined]
     )
     await db_session.commit()
     yield
     await db_session.execute(
-        ChangeControl.__table__.delete()
+        ChangeControl.__table__.delete()  # type: ignore[attr-defined]
     )
     await db_session.commit()
 

@@ -1,5 +1,5 @@
 """生产日志与交接班 API routes."""
-
+from typing import Any
 from uuid import UUID
 
 from fastapi import Depends, Query
@@ -39,7 +39,7 @@ async def list_shift_logs(
     date_from: str | None = Query(None, description="开始日期"),
     date_to: str | None = Query(None, description="结束日期"),
     svc: ShiftLogService = Depends(get_shift_log_service),
-):
+) -> Any:
     items, total = await svc.list_records(
         page=page,
         page_size=page_size,
@@ -56,7 +56,7 @@ async def list_shift_logs(
 async def get_shift_log(
     record_id: UUID,
     svc: ShiftLogService = Depends(get_shift_log_service),
-):
+) -> Any:
     record = await svc.get_record(record_id)
     if not record:
         return success_response(None, message="记录不存在", status_code=404)
@@ -67,7 +67,7 @@ async def get_shift_log(
 async def create_shift_log(
     data: ShiftLogCreate,
     svc: ShiftLogService = Depends(get_shift_log_service),
-):
+) -> Any:
     record = await svc.create_record(data.model_dump())
     return success_response(ShiftLogResponse.model_validate(record), message="创建成功")
 
@@ -77,7 +77,7 @@ async def update_shift_log(
     record_id: UUID,
     data: ShiftLogUpdate,
     svc: ShiftLogService = Depends(get_shift_log_service),
-):
+) -> Any:
     record = await svc.update_record(record_id, data.model_dump(exclude_unset=True))
     return success_response(ShiftLogResponse.model_validate(record), message="更新成功")
 
@@ -86,6 +86,6 @@ async def update_shift_log(
 async def delete_shift_log(
     record_id: UUID,
     svc: ShiftLogService = Depends(get_shift_log_service),
-):
+) -> Any:
     await svc.delete_record(record_id)
     return success_response(None, message="删除成功")

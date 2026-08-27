@@ -1,12 +1,14 @@
 """MC 霉酚酸 - AI 分析 API"""
-
 import json
 import logging
+from collections.abc import AsyncIterator
 from datetime import date
+from typing import Any
 
 from fastapi import Depends, Query
 from fastapi.responses import StreamingResponse
 from openai import AsyncOpenAI
+from openai.types.chat import ChatCompletionUserMessageParam
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -73,8 +75,8 @@ async def _get_node_batch_date(
 
 async def _detect_yield_anomalies(
     session: AsyncSession,
-    stages: list[dict],
-) -> list[dict]:
+    stages: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     """用 3 月移动窗口 IQR 检测各节点的收率异常（替代旧的固定阈值法）"""
     anomalies = []
     for sg in stages:
@@ -119,7 +121,7 @@ async def ai_analyze(
     stage: str = Query(...),
     include_siblings: bool = Query(True),
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     # 1. trace
     trace_resp = await lineage_trace(
         batch_no=batch_no,
@@ -273,7 +275,9 @@ async def ai_analyze(
         )
 
         async def _call_llm(temperature: float, extra_hint: str = "") -> str:
-            msgs = [{"role": "user", "content": prompt + extra_hint}]
+            msgs: list[ChatCompletionUserMessageParam] = [
+                {"role": "user", "content": prompt + extra_hint}
+            ]
             resp = await client.chat.completions.create(
                 model=cfg.model_name or "deepseek-v4-pro",
                 messages=msgs,
@@ -376,13 +380,13 @@ async def ai_analyze_stream(
     stage: str = Query(...),
     include_siblings: bool = Query(True),
     session: AsyncSession = Depends(get_db),
-):
-    async def generate():
+) -> Any:
+    async def generate() -> AsyncIterator[Any]:
         import uuid as _uuid
 
         sid = str(_uuid.uuid4())
         cfg = await get_config("text")
-        def evt(t, d):
+        def evt(t: Any, d: Any) -> Any:
             return (
                     f"data: {json.dumps({'type': t, **d}, ensure_ascii=False)}\n\n"
                 )
@@ -579,9 +583,11 @@ async def ai_analyze_stream(
                 api_key=cfg.api_key or "",
             )
 
-            async def _call_llm_stream(temp, extra=""):
+            async def _call_llm_stream(temp: Any, extra: Any="") -> AsyncIterator[Any]:
                 nonlocal llm_text
-                msgs = [{"role": "user", "content": prompt + extra}]
+                msgs: list[ChatCompletionUserMessageParam] = [
+                    {"role": "user", "content": prompt + extra}
+                ]
                 s = await client.chat.completions.create(
                     model=cfg.model_name or "deepseek-v4-pro",
                     messages=msgs,
@@ -597,8 +603,8 @@ async def ai_analyze_stream(
                         llm_text += delta.content
                         yield evt("token", {"content": delta.content})
 
-            async for e in _call_llm_stream(0.3):
-                yield e
+            async for event in _call_llm_stream(0.3):
+                yield event
 
             parsed = _parse_json(llm_text)
             summary = parsed.get("summary", "")
@@ -609,11 +615,11 @@ async def ai_analyze_stream(
             if len(causes) < 3 or len(suggestions) < 3:
                 yield evt("step", {"step": "llm_retry", "msg": "分析过短，重新生成..."})
                 prev_text = llm_text
-                async for e in _call_llm_stream(
+                async for event in _call_llm_stream(
                     0.7,
                     "\n\n【重要提醒】上一轮分析太简略。请逐工段详细评价。causes和suggestions各至少4条。",
                 ):
-                    yield e
+                    yield event
                 parsed_retry = _parse_json(llm_text)
                 if not parsed_retry.get("summary") and prev_text:
                     parsed_retry = _parse_json(prev_text)
@@ -700,7 +706,7 @@ async def ai_history(
     stage: str = Query(...),
     limit: int = Query(5, ge=1, le=20),
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     """返回同批次同工段的历史分析记录（仅 seq=0 的首条报告）。
     兼容 MC- 前缀有无、阶段别名（如 na_batch→sub_tank）。"""
     # 阶段别名解析（与 mc_lineage_api._resolve_batch 一致）
@@ -762,15 +768,15 @@ async def ai_history(
 
 
 def _build_prompt(
-    batch_no,
-    stage,
-    stages,
-    cumulative_yield,
-    max_loss_stage,
-    anomalies,
-    impurities,
-    ref_cases,
-):
+    batch_no: Any,
+    stage: Any,
+    stages: Any,
+    cumulative_yield: Any,
+    max_loss_stage: Any,
+    anomalies: Any,
+    impurities: Any,
+    ref_cases: Any,
+) -> Any:
     label = STAGE_LABELS.get(stage, stage)
 
     # 找本批提炼批号（主线子罐的父批）
@@ -912,7 +918,7 @@ def _build_prompt(
     return "\n".join(lines)
 
 
-def _parse_json(text):
+def _parse_json(text: Any) -> Any:
     t = text.strip()
     if t.startswith("```json"):
         t = t[7:]

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 from datetime import date
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -24,7 +25,7 @@ from app.modules.production import mc_yield_anomaly_detector as anomaly
 # ═══════════ mc_feishu_sheets_sync 纯函数 ═══════════
 
 
-def test_safe_float_variants():
+def test_safe_float_variants() -> Any:
     assert sync._safe_float(None) is None
     assert sync._safe_float("") is None
     assert sync._safe_float("#REF!") is None
@@ -36,7 +37,7 @@ def test_safe_float_variants():
     assert sync._safe_float([]) is None
 
 
-def test_safe_int_variants():
+def test_safe_int_variants() -> Any:
     assert sync._safe_int(None) is None
     assert sync._safe_int("") is None
     assert sync._safe_int("#VALUE!") is None
@@ -45,7 +46,7 @@ def test_safe_int_variants():
     assert sync._safe_int("x") is None
 
 
-def test_safe_date_variants():
+def test_safe_date_variants() -> Any:
     assert sync._safe_date(None) is None
     assert sync._safe_date("") is None
     assert sync._safe_date("#N/A") is None
@@ -57,21 +58,21 @@ def test_safe_date_variants():
     assert sync._safe_date("not-a-date") is None
 
 
-def test_safe_yield_scales_small_fractions():
+def test_safe_yield_scales_small_fractions() -> Any:
     assert sync._safe_yield(0.91) == 91.0
     assert sync._safe_yield(1.0) == 1.0
     assert sync._safe_yield(98.5) == 98.5
     assert sync._safe_yield(None) is None
 
 
-def test_parse_csv_line():
+def test_parse_csv_line() -> Any:
     assert sync._parse_csv_line("a,b,c") == ["a", "b", "c"]
     assert sync._parse_csv_line("a,b") == ["a", "b"]
     assert sync._parse_csv_line('"a,b",c') == ["a,b", "c"]
     assert sync._parse_csv_line('"",c') == ["", "c"]
 
 
-def test_get_col_and_skip():
+def test_get_col_and_skip() -> Any:
     assert sync._get_col(["a", " b ", "c"], 1) == "b"
     assert sync._get_col(["a"], 5) == ""
     assert sync._get_col([], 0) == ""
@@ -88,25 +89,25 @@ def test_get_col_and_skip():
 # ═══════════ dr_lineage_api 纯函数 ═══════════
 
 
-def test_fmt_val():
+def test_fmt_val() -> Any:
     assert dr.fmt_val(3.5) == 3.5
     assert dr.fmt_val(None) == 0.0
     assert dr.fmt_val(0) == 0.0
 
 
-def test_to_f1_normalization():
+def test_to_f1_normalization() -> Any:
     assert dr._to_f1("DR-24019-1") == "DR-F1-24019-1"
     assert dr._to_f1("DR-F1-24019-1") == "DR-F1-24019-1"
     assert dr._to_f1("DR-24019-1 ") == "DR-F1-24019-1"
     assert dr._to_f1("OTHER") == "OTHER"
 
 
-def test_f1_to_dr():
+def test_f1_to_dr() -> Any:
     assert dr._f1_to_dr("DR-F1-24019-1") == "DR-24019-1"
     assert dr._f1_to_dr("DR-24019-1") == "DR-24019-1"
 
 
-def test_detect_stage_prefixes():
+def test_detect_stage_prefixes() -> Any:
     assert dr._detect_stage("DR-GB-1") == "fourth_refinement"
     assert dr._detect_stage("DR-F3-1") == "third_refinement"
     assert dr._detect_stage("DR-F2-1") == "second_refinement"
@@ -115,7 +116,7 @@ def test_detect_stage_prefixes():
     assert dr._detect_stage("DR-2601") is None
 
 
-def test_split_feeds():
+def test_split_feeds() -> Any:
     assert dr._split_feeds("DR-F1-1 + DR-F1-2") == ["DR-F1-1", "DR-F1-2"]
     assert dr._split_feeds("DR-F1-1、DR-F1-2") == ["DR-F1-1", "DR-F1-2"]
     assert dr._split_feeds("DR-F1-1,DR-F1-2") == ["DR-F1-1", "DR-F1-2"]
@@ -123,7 +124,7 @@ def test_split_feeds():
     assert dr._split_feeds("") == []
 
 
-def test_feed_stage():
+def test_feed_stage() -> Any:
     assert dr._feed_stage("DR-F2-1") == "second_refinement"
     assert dr._feed_stage("DR-F1-1") == "first_refinement"
     assert dr._feed_stage("DR-F3-1") == "third_refinement"
@@ -131,7 +132,7 @@ def test_feed_stage():
     assert dr._feed_stage("DR-H1/x") == "recovery"
 
 
-def test_to_feeds():
+def test_to_feeds() -> Any:
     up = [("second_refinement", "DR-F1-1", 3.5), ("recovery", "回收粉", 0.0)]
     feeds = dr._to_feeds(up)
     assert len(feeds) == 2
@@ -141,7 +142,7 @@ def test_to_feeds():
     assert feeds[1].qty == 0.0
 
 
-def test_drg_models_and_labels():
+def test_drg_models_and_labels() -> Any:
     # 常量检查（无欲通过）
     assert dr.DR_STAGE_ORDER[0] == "fermentation"
     assert "fourth_refinement" in dr.DR_STAGE_LABELS
@@ -151,7 +152,7 @@ def test_drg_models_and_labels():
 
 # ═══════════ mc_yield_anomaly_detector 纯函数 ═══════════
 
-def test_judge_anomaly_severity():
+def test_judge_anomaly_severity() -> Any:
     # median=90, iqr=20 → high < 60, medium < 70
     assert anomaly.judge_anomaly_severity(50, 90, 20) == "high"
     assert anomaly.judge_anomaly_severity(65, 90, 20) == "medium"
@@ -159,7 +160,7 @@ def test_judge_anomaly_severity():
     assert anomaly.judge_anomaly_severity(50, 90, 0) is None
 
 
-def test_parse_json_simple():
+def test_parse_json_simple() -> Any:
     assert anomaly._parse_json('{"a": 1}') == {"a": 1}
     assert anomaly._parse_json("not json") == {}
     # 带 markdown 代码块
@@ -171,7 +172,7 @@ def test_parse_json_simple():
 
 # ═══════════ fa_dashboard_api / fa_ai_analysis_api 纯函数 ═══════════
 
-def test_fa_dashboard_float_helpers():
+def test_fa_dashboard_float_helpers() -> Any:
     assert fdash._to_yield(None) == 0.0
     assert fdash._to_yield(1.5) == 150.0
     assert fdash._to_yield(98.5) == 98.5
@@ -184,7 +185,7 @@ def test_fa_dashboard_float_helpers():
     assert fdash._to_float("x") == 0.0
 
 
-def test_fa_suggestion_lookup():
+def test_fa_suggestion_lookup() -> Any:
     # 规则 key 为参数名（如 conductivity/acid_adj），direction 为 high/low
     assert fdash._get_suggestion("conductivity", "high") is not None
     assert fdash._get_suggestion("conductivity", "low") is not None
@@ -192,7 +193,7 @@ def test_fa_suggestion_lookup():
     assert fdash._get_suggestion("unknown_key", "high") is None
 
 
-def test_fa_ai_parse_json():
+def test_fa_ai_parse_json() -> Any:
     assert faai._parse_json('{"summary":"ok"}') == {"summary": "ok"}
     assert faai._parse_json('prefix ```json\n{"ox": 1}\n``` suffix') == {"ox": 1}
     assert faai._parse_json('plain { "a": 1 }') == {"a": 1}
@@ -201,20 +202,20 @@ def test_fa_ai_parse_json():
 
 # ═══════════ fa_feishu_sync 纯函数 ═══════════
 
-def test_fa_get_column():
+def test_fa_get_column() -> Any:
     assert fas._get(["a", " b ", "c"], 1) == "b"
     assert fas._get(["a"], 5) == ""
     assert fas._get([], 0) == ""
 
 
-def test_fa_parse_date():
+def test_fa_parse_date() -> Any:
     assert fas._parse_date("12月27日") == "2025-12-27"
     assert fas._parse_date("3月05日") == "2026-03-05"
     assert fas._parse_date("not-a-date") is None
     assert fas._parse_date("") is None
 
 
-def test_fa_safe_num():
+def test_fa_safe_num() -> Any:
     assert fas._safe_num(" 12.5 ") == "12.5"
     assert fas._safe_num("98%") == "98.0"
     assert fas._safe_num("-") == "NULL"
@@ -222,7 +223,7 @@ def test_fa_safe_num():
     assert fas._safe_num("abc") == "NULL"
 
 
-def test_fa_safe_pct():
+def test_fa_safe_pct() -> Any:
     assert fas._safe_pct("0.39") == "'39%'"
     assert fas._safe_pct("85") == "'85'"
     assert fas._safe_pct("-") == "NULL"
@@ -232,7 +233,7 @@ def test_fa_safe_pct():
 
 # ═══════════ fa_feishu_scheduler 纯辅助函数 ═══════════
 
-def test_fa_scheduler_g_and_pd_ed_n_p():
+def test_fa_scheduler_g_and_pd_ed_n_p() -> Any:
     # _g：安全取列
     assert fascheduler._g(["a", " b ", "c"], 1) == "b"
     assert fascheduler._g(["a"], 5) == ""
@@ -262,7 +263,7 @@ def test_fa_scheduler_g_and_pd_ed_n_p():
 
 # ═══════════ ai_analysis_api 纯函数 ═══════════
 
-def test_ai_api_parse_json():
+def test_ai_api_parse_json() -> Any:
     assert ai_api._parse_json('{"summary":"ok"}') == {"summary": "ok"}
     assert ai_api._parse_json('```json\n{"ox": 1}\n```') == {"ox": 1}
     # 截断补全 + 正则提取 summary/severity
@@ -272,7 +273,7 @@ def test_ai_api_parse_json():
     assert ai_api._parse_json("no json") == {}
 
 
-def test_ai_api_build_prompt_includes_labels():
+def test_ai_api_build_prompt_includes_labels() -> Any:
     # _build_prompt 根据 stages 生成 prompt（含阶段标签）
     prompt = ai_api._build_prompt(
         batch_no="MC-1", stage="sub_tank",
@@ -293,7 +294,7 @@ def test_ai_api_build_prompt_includes_labels():
 # ═══════════ fa_chat_api 纯函数 ═══════════
 
 
-def test_fa_chat_build_prompt_injects_context():
+def test_fa_chat_build_prompt_injects_context() -> Any:
     from app.modules.production import fa_chat_api as fchat
 
     msgs = fchat._build_chat_prompt(
@@ -313,7 +314,7 @@ def test_fa_chat_build_prompt_injects_context():
     assert msgs[-1]["content"] == "当前问题"
 
 
-def test_fa_chat_build_prompt_empty_context():
+def test_fa_chat_build_prompt_empty_context() -> Any:
     from app.modules.production import fa_chat_api as fchat
     msgs = fchat._build_chat_prompt(
         history=[], user_msg="hi", batch_no="", stage="x", trace_context=""
@@ -324,7 +325,7 @@ def test_fa_chat_build_prompt_empty_context():
 
 
 @pytest.mark.anyio
-async def test_fa_chat_gather_context_branch_queries():
+async def test_fa_chat_gather_context_branch_queries() -> Any:
     """覆盖 _gather_fa_context 的追溯 BFS、收率/产量查询、统计分支。"""
     from types import SimpleNamespace
     from unittest.mock import AsyncMock, MagicMock, patch
@@ -333,7 +334,7 @@ async def test_fa_chat_gather_context_branch_queries():
 
     session = AsyncMock()
 
-    async def branch(sql, params=None):
+    async def branch(sql: Any, params: Any=None) -> Any:
         s = str(sql)
         r = MagicMock()
         if "downstream_batch = :batch AND bl.downstream_type = :stage" in s:
@@ -379,7 +380,7 @@ async def test_fa_chat_gather_context_branch_queries():
 # ═══════════ mc_chat_api 对话 prompt / 追溯上下文 ═══════════
 
 
-def test_mc_chat_build_prompt_with_context():
+def test_mc_chat_build_prompt_with_context() -> Any:
     from app.modules.production import mc_chat_api as mchat
 
     msgs = mchat._build_chat_prompt(
@@ -405,7 +406,7 @@ def test_mc_chat_build_prompt_with_context():
     assert msgs[-1]["content"] == "新的问题"
 
 
-def test_mc_chat_build_prompt_no_context_and_stage_label():
+def test_mc_chat_build_prompt_no_context_and_stage_label() -> Any:
     from app.modules.production import mc_chat_api as mchat
 
     # 无批次 → 不注入；stage 未在 STAGE_LABELS 中 → 原样显示
@@ -414,11 +415,11 @@ def test_mc_chat_build_prompt_no_context_and_stage_label():
     )
     assert [m["role"] for m in msgs] == ["system", "user"]
     assert msgs[-1]["content"] == "hi"
-    assert "当前关注批次" not in msgs[0]["content"]
+    assert "当前关注批次" not in str(msgs[0]["content"])
 
 
 @pytest.mark.anyio
-async def test_mc_chat_gather_trace_context_full():
+async def test_mc_chat_gather_trace_context_full() -> Any:
     """覆盖 _gather_trace_context 的追溯链路、收率分布、RRT 杂质 RRT 分支。"""
     from types import SimpleNamespace
     from unittest.mock import AsyncMock, MagicMock, patch
@@ -480,10 +481,10 @@ async def test_mc_chat_gather_trace_context_full():
         }
     )
 
-    async def fake_trace(**kw):
+    async def fake_trace(**kw: Any) -> Any:
         return SimpleNamespace(body=trace_body)
 
-    async def fake_dist(**kw):
+    async def fake_dist(**kw: Any) -> Any:
         return SimpleNamespace(body=dist_body)
 
     with patch(
@@ -506,7 +507,7 @@ async def test_mc_chat_gather_trace_context_full():
 
 
 @pytest.mark.anyio
-async def test_mc_chat_gather_trace_context_exception():
+async def test_mc_chat_gather_trace_context_exception() -> Any:
     """追溯抛异常 → 返回占位文本，不扩散。"""
     from unittest.mock import AsyncMock, patch
 
@@ -524,7 +525,7 @@ async def test_mc_chat_gather_trace_context_exception():
 # ═══════════ fa_feishu_scheduler 纯函数 ═══════════
 
 
-def test_fa_scheduler_g():
+def test_fa_scheduler_g() -> Any:
     """_g: 从行中获取值并去除空白。"""
     from app.modules.production import fa_feishu_scheduler as fas
 
@@ -534,7 +535,7 @@ def test_fa_scheduler_g():
     assert fas._g([], 0) == ""
 
 
-def test_fa_scheduler_pd():
+def test_fa_scheduler_pd() -> Any:
     """_pd: 解析各种日期格式。"""
     from app.modules.production import fa_feishu_scheduler as fas
 
@@ -547,7 +548,7 @@ def test_fa_scheduler_pd():
     assert fas._pd("invalid") is None
 
 
-def test_fa_scheduler_ed():
+def test_fa_scheduler_ed() -> Any:
     """_ed: Excel 日期序列号转 ISO 日期。"""
     from app.modules.production import fa_feishu_scheduler as fas
 
@@ -558,7 +559,7 @@ def test_fa_scheduler_ed():
     assert fas._ed("") is None
 
 
-def test_fa_scheduler_n():
+def test_fa_scheduler_n() -> Any:
     """_n: 数值字符串转换。"""
     from app.modules.production import fa_feishu_scheduler as fas
 
@@ -571,7 +572,7 @@ def test_fa_scheduler_n():
     assert fas._n("invalid") == "NULL"
 
 
-def test_fa_scheduler_p():
+def test_fa_scheduler_p() -> Any:
     """_p: 百分比格式化。"""
     from app.modules.production import fa_feishu_scheduler as fas
 
@@ -586,7 +587,7 @@ def test_fa_scheduler_p():
 # ═══════════ fa_ai_analysis_api 纯函数 ═══════════
 
 
-def test_fa_ai_analysis_parse_json():
+def test_fa_ai_analysis_parse_json() -> Any:
     """_parse_json: 从 LLM 回复中提取 JSON。"""
     from app.modules.production import fa_ai_analysis_api as faai
 
@@ -619,7 +620,7 @@ Some text after"""
 # ═══════════ dr_feishu_sync 纯函数 ═══════════
 
 
-def test_dr_feishu_sync_g():
+def test_dr_feishu_sync_g() -> Any:
     """_g: 从行中获取值并去除空白。"""
     from app.modules.production import dr_feishu_sync as drsync
 
@@ -633,7 +634,7 @@ def test_dr_feishu_sync_g():
     assert drsync._g([], "batch_no") == ""
 
 
-def test_dr_feishu_sync_f():
+def test_dr_feishu_sync_f() -> Any:
     """_f: 从行中获取浮点数值。"""
     from app.modules.production import dr_feishu_sync as drsync
 
@@ -651,7 +652,7 @@ def test_dr_feishu_sync_f():
     assert drsync._f(row6, "filtrate_potency") is None
 
 
-def test_dr_feishu_sync_i():
+def test_dr_feishu_sync_i() -> Any:
     """_i: 从行中获取整数值。"""
     from app.modules.production import dr_feishu_sync as drsync
 
@@ -667,7 +668,7 @@ def test_dr_feishu_sync_i():
     assert drsync._i(row5, "tank_no") is None
 
 
-def test_dr_feishu_sync_is_empty():
+def test_dr_feishu_sync_is_empty() -> Any:
     """_is_empty: 判断行是否为空。"""
     from app.modules.production import dr_feishu_sync as drsync
 
@@ -682,7 +683,7 @@ def test_dr_feishu_sync_is_empty():
 
 
 @pytest.mark.anyio
-async def test_fa_ai_analysis_get_trace_data():
+async def test_fa_ai_analysis_get_trace_data() -> Any:
     """_get_trace_data: 收集批次全量数据。"""
     from app.modules.production import fa_ai_analysis_api as faai
 
@@ -726,7 +727,7 @@ async def test_fa_ai_analysis_get_trace_data():
     stats_result = MagicMock()
     stats_result.fetchone.return_value = None
 
-    def execute_side_effect(query, params=None):
+    def execute_side_effect(query: Any, params: Any=None) -> Any:
         sql_str = str(query)
         if "fa_fermentation_batches" in sql_str and "LEFT JOIN" in sql_str:
             return ferment_result

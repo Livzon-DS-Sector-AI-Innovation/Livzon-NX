@@ -1,5 +1,9 @@
-import { ChangePage } from '@/components/quality'
+import { ChangePage, QualityQueryProvider } from '@/components/quality'
 
 export default function ChangeLedgerPage() {
-  return <ChangePage />
+  return (
+    <QualityQueryProvider>
+      <ChangePage />
+    </QualityQueryProvider>
+  )
 }

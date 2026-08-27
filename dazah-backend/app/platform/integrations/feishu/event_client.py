@@ -8,6 +8,7 @@ import asyncio
 import json
 import logging
 import ssl
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 import httpx
@@ -18,7 +19,8 @@ from app.core.config import get_settings
 logger = logging.getLogger(__name__)
 
 # 事件类型 → 处理器列表
-_handlers: dict[str, list] = {}
+EventHandler = Callable[[dict[str, Any]], Awaitable[None]]
+_handlers: dict[str, list[EventHandler]] = {}
 _stop: asyncio.Event | None = None
 
 # 飞书 endpoint
@@ -26,12 +28,14 @@ FEISHU_DOMAIN = "https://open.feishu.cn"
 WS_ENDPOINT_URL = f"{FEISHU_DOMAIN}/callback/ws/endpoint"
 
 
-def on_event(event_type: str):
+def on_event(event_type: str) -> Callable[[EventHandler], EventHandler]:
     """装饰器：注册事件处理器。"""
-    def decorator(func):
+
+    def decorator(func: EventHandler) -> EventHandler:
         _handlers.setdefault(event_type, []).append(func)
         logger.info("注册飞书事件: type=%s handler=%s", event_type, func.__name__)
         return func
+
     return decorator
 
 
@@ -57,11 +61,16 @@ async def _get_ws_url(app_id: str, app_secret: str) -> str | None:
         if resp.status_code == 200:
             data = resp.json()
             if data.get("code") == 0:
-                url = data.get("data", {}).get("URL")
+                candidate = data.get("data", {}).get("URL")
+                url = candidate if isinstance(candidate, str) else None
                 logger.info("获取 WebSocket URL 成功: %s", url[:80] if url else "empty")
                 return url
             else:
-                logger.error("获取 WebSocket URL 失败: code=%s msg=%s", data.get("code"), data.get("msg"))
+                logger.error(
+                    "获取 WebSocket URL 失败: code=%s msg=%s",
+                    data.get("code"),
+                    data.get("msg"),
+                )
         else:
             logger.error("获取 WebSocket URL HTTP 错误: %s", resp.status_code)
     return None
@@ -83,7 +92,9 @@ async def start_ws() -> None:
     while not _stop.is_set():
         try:
             # 1. 获取 WebSocket URL
-            ws_url = await _get_ws_url(settings.FEISHU_APP_ID, settings.FEISHU_APP_SECRET)
+            ws_url = await _get_ws_url(
+                settings.FEISHU_APP_ID, settings.FEISHU_APP_SECRET
+            )
             if not ws_url:
                 logger.error("无法获取 WebSocket URL，10 秒后重试")
                 await asyncio.sleep(10)
@@ -94,7 +105,7 @@ async def start_ws() -> None:
             async with websockets.connect(
                 ws_url,
                 ssl=ssl_context,
-                max_size=2 ** 23,
+                max_size=2**23,
                 ping_interval=60,
                 ping_timeout=10,
                 close_timeout=5,
@@ -105,15 +116,21 @@ async def start_ws() -> None:
                 while not _stop.is_set():
                     try:
                         message = await asyncio.wait_for(ws.recv(), timeout=120)
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         continue
 
                     # 处理消息
                     if isinstance(message, bytes):
                         # protobuf 二进制帧 → 用 lark_oapi Frame 解析
                         try:
-                            from lark_oapi.ws.pb.pbbp2_pb2 import Frame
-                            from lark_oapi.ws.client import MessageType, HEADER_TYPE, _get_by_key
+                            from lark_oapi.ws.client import (  # type: ignore[import-untyped]
+                                HEADER_TYPE,
+                                MessageType,
+                                _get_by_key,
+                            )
+                            from lark_oapi.ws.pb.pbbp2_pb2 import (  # type: ignore[import-untyped]
+                                Frame,
+                            )
 
                             frame = Frame()
                             frame.ParseFromString(message)
@@ -129,12 +146,17 @@ async def start_ws() -> None:
                                 # 事件帧 → 解析 JSON payload
                                 event = json.loads(frame.payload.decode("utf-8"))
                                 # 临时完整打印事件用于调试
-                                logger.info("📨 收到飞书事件(完整): %s", json.dumps(event, ensure_ascii=False)[:800])
+                                logger.info(
+                                    "📨 收到飞书事件(完整): %s",
+                                    json.dumps(event, ensure_ascii=False)[:800],
+                                )
                                 await _dispatch_event(event)
                             else:
                                 logger.debug("收到非事件帧: type=%s", msg_type)
                         except Exception as e:
-                            logger.debug("protobuf 解析失败 (%d bytes): %s", len(message), e)
+                            logger.debug(
+                                "protobuf 解析失败 (%d bytes): %s", len(message), e
+                            )
                     else:
                         # 文本消息（ping/pong 等）
                         try:
@@ -156,7 +178,7 @@ async def start_ws() -> None:
 
         try:
             await asyncio.wait_for(_stop.wait(), timeout=10)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             pass
 
     logger.info("飞书 WebSocket 客户端已停止")
@@ -175,9 +197,12 @@ async def _dispatch_event(event: dict[str, Any]) -> None:
 
     if event_type:
         event_data = event.get("event", event)
-        await _dispatch(event_type, event_data)
+        if isinstance(event_data, dict):
+            await _dispatch(event_type, event_data)
     else:
-        logger.debug("无法确定事件类型: %s", json.dumps(event, ensure_ascii=False)[:200])
+        logger.debug(
+            "无法确定事件类型: %s", json.dumps(event, ensure_ascii=False)[:200]
+        )
 
 
 async def stop_ws() -> None:

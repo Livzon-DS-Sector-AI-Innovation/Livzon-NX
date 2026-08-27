@@ -1,27 +1,20 @@
-import { getServerApiBaseUrl } from '@/lib/server-api'
-import { DeviationDetail } from '@/components/quality'
-import { updateFeishuDeviationLedgerRecord as updateDeviationAction } from '@/actions/quality'
-import type { FeishuDeviationLedgerRecordItem } from '@/types/quality'
+import { DeviationDetail, QualityQueryProvider } from '@/components/quality'
+import { updateDeviation } from '@/actions/quality-deviation'
+import type { DeviationLevel } from '@/types/quality'
+import type { DeviationDetail as DeviationDetailType } from '@/types/quality'
+import { fetchDeviationServer } from '@/lib/api/server/quality'
 import { redirect } from 'next/navigation'
 
 export const dynamic = 'force-dynamic'
 
-const API_BASE_URL = getServerApiBaseUrl()
-
 async function getInitialDeviationDetail(id: string): Promise<{
-  deviation: FeishuDeviationLedgerRecordItem | null
+  deviation: DeviationDetailType | null
   loadError: string | null
 }> {
   try {
-    const detailResponse = await fetch(`${API_BASE_URL}/api/v1/quality/deviation-ledger-records/${id}`, {
-      cache: 'no-store',
-    })
-    if (!detailResponse.ok) {
-      throw new Error(`请求失败: ${detailResponse.status} ${detailResponse.statusText}`)
-    }
-    const detailJson = await detailResponse.json()
+    const deviation = await fetchDeviationServer(id)
     return {
-      deviation: detailJson.data || null,
+      deviation: deviation as DeviationDetailType | null,
       loadError: null,
     }
   } catch (error) {
@@ -60,22 +53,18 @@ export default async function DeviationDetailPage({
       return null
     }
 
-    await updateDeviationAction(id, {
+    await updateDeviation(id, {
       title: getText('description') || '',
       description: getText('description'),
       affected_items: getText('affected_items'),
       has_occurred_before: getBoolean('has_occurred_before'),
       root_cause_analysis: getText('root_cause_analysis'),
-      level: getText('level') as FeishuDeviationLedgerRecordItem['level'],
+      level: getText('level') as DeviationLevel | null,
       investigation_completed_at: getText('investigation_completed_at')
         ? new Date(getText('investigation_completed_at') as string).toISOString()
         : null,
       corrective_actions: getText('corrective_actions'),
       material_disposition: getText('material_disposition'),
-      is_closed: getBoolean('is_closed'),
-      close_time: getText('close_time')
-        ? new Date(getText('close_time') as string).toISOString()
-        : null,
     })
 
     redirect(`/quality/deviations/${id}`)
@@ -85,11 +74,13 @@ export default async function DeviationDetailPage({
   const initialEditMode = Array.isArray(editParam) ? editParam.includes('1') : editParam === '1'
 
   return (
-    <DeviationDetail
-      initialDeviation={deviation}
-      initialLoadError={loadError}
-      initialEditMode={initialEditMode}
-      saveAction={saveAction}
-    />
+    <QualityQueryProvider>
+      <DeviationDetail
+        initialDeviation={deviation}
+        initialLoadError={loadError}
+        initialEditMode={initialEditMode}
+        saveAction={saveAction}
+      />
+    </QualityQueryProvider>
   )
 }

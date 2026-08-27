@@ -9,9 +9,10 @@ against the ICH Q3C(R9) database.
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 
-def load_synonyms():
+def load_synonyms() -> dict[str, Any]:
     """Load solvent synonym database."""
     try:
         from app.modules.research.ich_service import DATA_DIR
@@ -19,13 +20,16 @@ def load_synonyms():
         synonym_file = DATA_DIR / "solvent-synonyms.json"
         if synonym_file.exists():
             with open(synonym_file) as f:
-                return json.load(f)
+                loaded = json.load(f)
+                return loaded if isinstance(loaded, dict) else {}
     except Exception:
         pass
     return {}
 
 
-def build_solvent_index(ich_data, synonyms):
+def build_solvent_index(
+    ich_data: dict[str, Any], synonyms: dict[str, Any]
+) -> dict[str, dict[str, Any]]:
     """
     Build a searchable index of solvents from ICH data and synonyms.
 
@@ -40,7 +44,7 @@ def build_solvent_index(ich_data, synonyms):
         }
     }
     """
-    index = {}
+    index: dict[str, dict[str, Any]] = {}
 
     # Handle both flat structure and nested structure (from ich-q3c-full.json)
     classes_data = ich_data.get("classes", ich_data)
@@ -80,7 +84,10 @@ def build_solvent_index(ich_data, synonyms):
         canonical_lower = canonical.lower()
 
         if canonical_lower in index:
-            for alias in alias_list:
+            aliases = alias_list if isinstance(alias_list, list) else []
+            for alias in aliases:
+                if not isinstance(alias, str):
+                    continue
                 alias_lower = alias.lower()
                 index[canonical_lower]["aliases"].append(alias_lower)
                 if alias_lower not in index:
@@ -89,7 +96,10 @@ def build_solvent_index(ich_data, synonyms):
     return index
 
 
-def classify_solvents(solvents, solvent_index):
+def classify_solvents(
+    solvents: list[dict[str, Any]],
+    solvent_index: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
     """
     Classify LLM-extracted solvents against ICH database.
 
@@ -103,7 +113,7 @@ def classify_solvents(solvents, solvent_index):
     Returns:
         List of classified solvents
     """
-    classified = []
+    classified: list[dict[str, Any]] = []
 
     for solvent_entry in solvents:
         solvent_name = solvent_entry.get("solvent", "")
@@ -202,7 +212,9 @@ def classify_solvents(solvents, solvent_index):
     return classified
 
 
-def analyze_steps(llm_data, solvent_index):
+def analyze_steps(
+    llm_data: dict[str, Any], solvent_index: dict[str, dict[str, Any]]
+) -> dict[str, Any]:
     """
     Analyze LLM-extracted solvents and classify against ICH database.
 
@@ -213,8 +225,8 @@ def analyze_steps(llm_data, solvent_index):
     Returns:
         Structured analysis
     """
-    analysis = []
-    all_solvents = {}
+    analysis: list[dict[str, Any]] = []
+    all_solvents: dict[str, dict[str, Any]] = {}
 
     for step_data in llm_data.get("step_analysis", []):
         step_number = step_data["step_number"]
@@ -247,7 +259,7 @@ def analyze_steps(llm_data, solvent_index):
     }
 
 
-def main():
+def main() -> None:
     if len(sys.argv) < 3:
         print(
             "Usage: solvent_match.py --llm <llm_analysis_json> <ich_json> [output_json]"

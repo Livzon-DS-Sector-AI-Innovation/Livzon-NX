@@ -1,5 +1,11 @@
-import { ChangeDashboardPage } from '@/components/quality'
+import { ChangeDashboardPage, QualityQueryProvider } from '@/components/quality'
+
+export const dynamic = 'force-dynamic'
 
 export default function QualityChangePage() {
-  return <ChangeDashboardPage />
+  return (
+    <QualityQueryProvider>
+      <ChangeDashboardPage />
+    </QualityQueryProvider>
+  )
 }

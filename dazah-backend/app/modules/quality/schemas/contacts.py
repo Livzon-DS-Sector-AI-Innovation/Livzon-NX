@@ -1,8 +1,8 @@
 """Department contacts Pydantic schemas."""
 
-
 import uuid
 from datetime import datetime
+
 from pydantic import BaseModel, ConfigDict
 
 
@@ -20,6 +20,24 @@ class DepartmentContactOut(BaseModel):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class FeishuDepartmentContactOut(BaseModel):
+    """飞书多维表直读的部门联系人输出 schema"""
+
+    id: str
+    name: str | None = None
+    bitable_user_id: str | None = None
+    department: str = ""
+    enterprise_email: str | None = None
+    open_id: str | None = None
+    department_head_name: str | None = None
+    department_head_bitable_user_id: str | None = None
+    department_head_enterprise_email: str | None = None
+    department_head_open_id: str | None = None
+    feishu_record_id: str | None = None
+    created_at: str = ""
+    updated_at: str = ""
 
 
 class CreateDepartmentContactRequest(BaseModel):

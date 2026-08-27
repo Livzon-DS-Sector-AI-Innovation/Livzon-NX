@@ -8,8 +8,9 @@ Create Date: 2026-07-08 00:00:00.000000
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "a7c100000019"
@@ -22,8 +23,12 @@ def upgrade() -> None:
     op.execute("CREATE SCHEMA IF NOT EXISTS production")
     op.create_table(
         "feishu_configs",
-        sa.Column("config_name", sa.String(length=128), nullable=False, comment="配置名称"),
-        sa.Column("app_id", sa.String(length=128), nullable=False, comment="飞书应用 App ID"),
+        sa.Column(
+            "config_name", sa.String(length=128), nullable=False, comment="配置名称"
+        ),
+        sa.Column(
+            "app_id", sa.String(length=128), nullable=False, comment="飞书应用 App ID"
+        ),
         sa.Column(
             "encrypted_app_secret",
             sa.String(length=1024),

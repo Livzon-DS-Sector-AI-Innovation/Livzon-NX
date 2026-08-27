@@ -12,9 +12,11 @@
 
 import asyncio
 import logging
-import sys
-from app.platform.identity.models import User  # noqa: F401
 import os
+import sys
+from typing import Any
+
+from app.platform.identity.models import User  # noqa: F401
 
 # 设置环境
 os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "/tmp/playwright-browsers"
@@ -23,16 +25,15 @@ os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "/tmp/playwright-browsers"
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from sqlalchemy import select, text
+
 from app.core.database import async_session_factory
+from app.modules.regulatory_tracker import repository as repo
 from app.modules.regulatory_tracker.models import (
-    DataSource,
     DataChannel,
+    DataSource,
     RegulatoryDocument,
     SyncJob,
-    SyncJobPage,
 )
-from app.modules.regulatory_tracker import repository as repo
-from app.modules.regulatory_tracker.crawler.cde_crawler import CdeDomesticGuidelineAdapter
 from app.modules.regulatory_tracker.services.sync_service import run_sync_job
 
 logging.basicConfig(
@@ -47,7 +48,9 @@ async def check_prerequisites() -> tuple[DataSource, DataChannel] | None:
     async with async_session_factory() as db:
         # 检查表是否存在
         try:
-            await db.execute(text("SELECT 1 FROM regulatory_tracker.data_sources LIMIT 1"))
+            await db.execute(
+                text("SELECT 1 FROM regulatory_tracker.data_sources LIMIT 1")
+            )
         except Exception as e:
             logger.error(f"数据库表不存在或未创建: {e}")
             logger.error("请先执行: .venv/bin/alembic upgrade head")
@@ -61,7 +64,9 @@ async def check_prerequisites() -> tuple[DataSource, DataChannel] | None:
             return None
 
         # 检查栏目
-        channel = await repo.get_channel_by_code(db, source.id, "cde_domestic_guideline")
+        channel = await repo.get_channel_by_code(
+            db, source.id, "cde_domestic_guideline"
+        )
         if not channel:
             logger.error("cde_domestic_guideline 栏目不存在，请先执行 seed")
             return None
@@ -72,7 +77,7 @@ async def check_prerequisites() -> tuple[DataSource, DataChannel] | None:
         return source, channel
 
 
-async def test_sync_page_1(source: DataSource, channel: DataChannel):
+async def test_sync_page_1(source: DataSource, channel: DataChannel) -> Any:
     """测试同步第 1 页"""
     logger.info("\n" + "=" * 60)
     logger.info("测试 1: 同步第 1 页")
@@ -93,7 +98,7 @@ async def test_sync_page_1(source: DataSource, channel: DataChannel):
         return result
 
 
-async def test_sync_pages_1_3(source: DataSource, channel: DataChannel):
+async def test_sync_pages_1_3(source: DataSource, channel: DataChannel) -> Any:
     """测试同步第 1-3 页"""
     logger.info("\n" + "=" * 60)
     logger.info("测试 2: 同步第 1-3 页")
@@ -114,20 +119,29 @@ async def test_sync_pages_1_3(source: DataSource, channel: DataChannel):
         return result
 
 
-async def show_db_stats():
+async def show_db_stats() -> Any:
     """显示数据库统计"""
     async with async_session_factory() as db:
         # 文档数量
         source = await repo.get_data_source_by_code(db, "CDE")
-        channel = await repo.get_channel_by_code(db, source.id, "cde_domestic_guideline")
+        if source is None:
+            raise RuntimeError("CDE data source is not configured")
+        channel = await repo.get_channel_by_code(
+            db, source.id, "cde_domestic_guideline"
+        )
+        if channel is None:
+            raise RuntimeError("CDE domestic guideline channel is not configured")
         doc_count = await repo.count_documents(db, source.id, channel.id)
 
         # 同步任务数量
         job_result = await db.execute(
-            select(SyncJob).where(
+            select(SyncJob)
+            .where(
                 SyncJob.source_id == source.id,
                 SyncJob.channel_id == channel.id,
-            ).order_by(SyncJob.created_at.desc()).limit(5)
+            )
+            .order_by(SyncJob.created_at.desc())
+            .limit(5)
         )
         jobs = list(job_result.scalars().all())
 
@@ -140,7 +154,8 @@ async def show_db_stats():
         for job in jobs:
             logger.info(
                 f"  [{job.status}] {job.job_type} | "
-                f"checked={job.checked_count} new={job.new_count} updated={job.updated_count} | "
+                f"checked={job.checked_count} new={job.new_count} "
+                f"updated={job.updated_count} | "
                 f"{job.started_at}"
             )
 
@@ -165,7 +180,7 @@ async def show_db_stats():
                 )
 
 
-async def main():
+async def main() -> Any:
     logger.info("Regulatory Tracker 同步测试")
     logger.info("=" * 60)
 
@@ -189,10 +204,14 @@ async def main():
     logger.info("\n" + "=" * 60)
     logger.info("测试完成")
     logger.info("=" * 60)
-    logger.info(f"测试 1 (第 1 页): {'✅' if result1['status'] == 'success' else '❌'} "
-                f"new={result1['new']} checked={result1['checked']}")
-    logger.info(f"测试 2 (第 1-3 页): {'✅' if result2['status'] == 'success' else '❌'} "
-                f"new={result2['new']} checked={result2['checked']}")
+    logger.info(
+        f"测试 1 (第 1 页): {'✅' if result1['status'] == 'success' else '❌'} "
+        f"new={result1['new']} checked={result1['checked']}"
+    )
+    logger.info(
+        f"测试 2 (第 1-3 页): {'✅' if result2['status'] == 'success' else '❌'} "
+        f"new={result2['new']} checked={result2['checked']}"
+    )
 
 
 if __name__ == "__main__":

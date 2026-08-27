@@ -35,7 +35,7 @@ class SopGeneratorService:
 
     # ── Public API ─────────────────────────────────────────────────
 
-    async def generate_from_draft(self, file: Any) -> dict:
+    async def generate_from_draft(self, file: Any) -> dict[str, Any]:
         """上传旧版操规 → 运行三层 pipeline → 返回标准化内容
 
         Args:
@@ -156,7 +156,7 @@ class SopGeneratorService:
 
         return pdf_path
 
-    async def get_content(self, regulation_id: uuid.UUID) -> dict | None:
+    async def get_content(self, regulation_id: uuid.UUID) -> dict[str, Any] | None:
         """获取 Markdown 内容（供编辑器加载）"""
         reg = await self.repo.get_regulation_by_id(regulation_id)
         if not reg:
@@ -184,9 +184,7 @@ class SopGeneratorService:
 
         return file_path
 
-    async def _create_draft_regulation(
-        self, filename: str, draft_path: str
-    ) -> Any:
+    async def _create_draft_regulation(self, filename: str, draft_path: str) -> Any:
         """Create an initial OperationRegulation record with draft status."""
         base_name = os.path.splitext(os.path.basename(filename))[0]
         create_data = {
@@ -200,22 +198,23 @@ class SopGeneratorService:
         return reg
 
     @staticmethod
-    def _run_pipeline_sync(draft_path: str, pdf_path: str) -> dict:
+    def _run_pipeline_sync(draft_path: str, pdf_path: str) -> dict[str, Any]:
         """Synchronous pipeline call — runs in asyncio.to_thread."""
-        from pipeline import run_pipeline
+        from pipeline import run_pipeline  # type: ignore[import-not-found]
 
-        return run_pipeline(
+        result = run_pipeline(
             draft_path=draft_path,
             output_pdf=pdf_path,
             keep_intermediate=True,  # Keep JSON & MD so we can read content
             work_dir=os.path.dirname(pdf_path),
         )
+        return result if isinstance(result, dict) else {}
 
     @staticmethod
     def _render_markdown_sync(
-        content: str, pdf_path: str, meta: dict
+        content: str, pdf_path: str, meta: dict[str, Any]
     ) -> None:
         """Synchronous Markdown → PDF render — runs in asyncio.to_thread."""
-        from layer3_render_pdf import render
+        from layer3_render_pdf import render  # type: ignore[import-not-found]
 
         render(content, pdf_path, meta)

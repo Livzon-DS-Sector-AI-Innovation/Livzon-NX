@@ -1,6 +1,6 @@
 from io import BytesIO
 
-from openpyxl import Workbook
+from openpyxl import Workbook  # type: ignore[import-untyped]
 
 from app.modules.procurement.service import (
     _build_supplier_from_row,

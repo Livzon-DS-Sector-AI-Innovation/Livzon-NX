@@ -1,5 +1,7 @@
 """Feishu HTTP client with auth and retry."""
 
+from typing import Any
+
 import httpx
 
 from app.platform.integrations.base import IntegrationClient
@@ -18,7 +20,7 @@ class FeishuClient(IntegrationClient):
         self.app_id = app_id
         self.app_secret = app_secret
 
-    async def health_check(self) -> dict:
+    async def health_check(self) -> dict[str, Any]:
         try:
             token = await FeishuAuth.get_tenant_access_token()
             return {"status": "ok", "token_prefix": token[:10] + "..."}
@@ -30,10 +32,10 @@ class FeishuClient(IntegrationClient):
         method: str,
         path: str,
         *,
-        json: dict | None = None,
-        params: dict | None = None,
+        json: dict[str, Any] | None = None,
+        params: dict[str, Any] | None = None,
         timeout: float | None = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         token = await FeishuAuth.get_tenant_access_token(self.app_id, self.app_secret)
         headers = {
             "Authorization": f"Bearer {token}",
@@ -52,9 +54,12 @@ class FeishuClient(IntegrationClient):
             resp.raise_for_status()
             data = resp.json()
 
+        if not isinstance(data, dict):
+            raise RuntimeError(f"Feishu API response was not an object: path={path}")
         if data.get("code") != 0:
             raise RuntimeError(
                 f"Feishu API error: code={data.get('code')}, msg={data.get('msg')}, "
                 f"path={path}"
             )
-        return data.get("data", {})
+        payload = data.get("data", {})
+        return payload if isinstance(payload, dict) else {}

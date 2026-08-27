@@ -42,7 +42,9 @@ class WorkOrder(BaseModel):
             name="uq_work_orders_work_order_no",
         ),
         CheckConstraint(
-            "order_type IN ('故障维修', '计划维护', '巡检', '校准', '异常处理', '日常维护')",
+            "order_type IN ("
+            "'故障维修', '计划维护', '巡检', '校准', '异常处理', '日常维护'"
+            ")",
             name="ck_work_orders_order_type",
         ),
         CheckConstraint(
@@ -60,9 +62,7 @@ class WorkOrder(BaseModel):
         {"schema": "equipment"},
     )
 
-    work_order_no: Mapped[str] = mapped_column(
-        String(50), comment="工单编号"
-    )
+    work_order_no: Mapped[str] = mapped_column(String(50), comment="工单编号")
     equipment_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("equipment.equipments.id"),
         comment="设备ID",
@@ -218,6 +218,9 @@ class WorkOrder(BaseModel):
     images: Mapped[list[WorkOrderImage]] = relationship(
         "WorkOrderImage",
         foreign_keys="WorkOrderImage.work_order_id",
-        primaryjoin="and_(WorkOrder.id == foreign(WorkOrderImage.work_order_id), WorkOrderImage.is_deleted == False)",
+        primaryjoin=(
+            "and_(WorkOrder.id == foreign(WorkOrderImage.work_order_id), "
+            "WorkOrderImage.is_deleted == False)"
+        ),
         lazy="selectin",
     )

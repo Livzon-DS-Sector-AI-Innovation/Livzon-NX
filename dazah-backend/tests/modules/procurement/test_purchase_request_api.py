@@ -1,6 +1,7 @@
 from datetime import date
 from decimal import Decimal
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
+from typing import Any
 from uuid import uuid4
 
 import pytest
@@ -19,10 +20,12 @@ from app.modules.procurement.schemas import (
 )
 from app.platform.identity.deps import get_current_user
 
+SimpleNamespace: Any = _SimpleNamespace
+
 
 @pytest.fixture
-async def authenticated_client(client: AsyncClient):
-    async def _override_current_user():
+async def authenticated_client(client: AsyncClient) -> Any:
+    async def _override_current_user() -> Any:
         return SimpleNamespace(role="admin", status="active")
 
     app.dependency_overrides[get_current_user] = _override_current_user
@@ -71,7 +74,7 @@ async def test_create_purchase_request_api_accepts_new_fields_and_attachment_not
 ) -> None:
     expected = _response()
 
-    async def create(_db, payload):
+    async def create(_db: Any, payload: Any) -> Any:
         assert payload.category == PurchaseRequestCategory.fire
         assert payload.attachment_note == "消防器材技术参数附件"
         assert payload.items[0].material_code == "FIRE-001"
@@ -113,7 +116,7 @@ async def test_create_purchase_request_api_maps_material_validation_to_400(
     authenticated_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def create(_db, _payload):
+    async def create(_db: Any, _payload: Any) -> Any:
         raise ValueError("第1条明细缺少物料编码")
 
     monkeypatch.setattr(procurement_api, "create_purchase_request", create)
@@ -145,7 +148,7 @@ async def test_create_urgent_purchase_request_api_accepts_mixed_item_categories(
     expected = _response()
     expected.category = PurchaseRequestCategory.urgent
 
-    async def create(_db, payload):
+    async def create(_db: Any, payload: Any) -> Any:
         assert payload.category == PurchaseRequestCategory.urgent
         assert [item.item_category for item in payload.items] == [
             PurchaseRequestCategory.hardware,
@@ -189,7 +192,7 @@ async def test_create_urgent_purchase_request_api_maps_missing_item_category_to_
     authenticated_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def create(_db, _payload):
+    async def create(_db: Any, _payload: Any) -> Any:
         raise ValueError("第1条明细缺少申请类型")
 
     monkeypatch.setattr(procurement_api, "create_purchase_request", create)
@@ -265,7 +268,9 @@ async def test_approve_purchase_request_api_accepts_new_approval_role(
     expected.category = PurchaseRequestCategory.electrical
     expected.status = PurchaseRequestStatus.pending_equipment_power
 
-    async def approve(_db, request_id, payload: PurchaseApprovalRequest):
+    async def approve(
+        _db: Any, request_id: Any, payload: PurchaseApprovalRequest
+    ) -> Any:
         assert request_id
         assert payload.approval_role == PurchaseApprovalRole.equipment_power
         assert payload.approver_name == "何学斌"
@@ -292,7 +297,7 @@ async def test_approve_purchase_request_api_returns_400_for_invalid_workflow_ste
     authenticated_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def approve(_db, _request_id, _payload):
+    async def approve(_db: Any, _request_id: Any, _payload: Any) -> Any:
         raise ValueError("该采购类型不包含此审批步骤")
 
     monkeypatch.setattr(procurement_api, "approve_purchase_request", approve)
@@ -320,7 +325,7 @@ async def test_import_purchase_requests_api_accepts_table_file(
         PurchaseRequestImportSummary,
     )
 
-    async def import_table(_db, _file_bytes, *, file_name):
+    async def import_table(_db: Any, _file_bytes: Any, *, file_name: Any) -> Any:
         assert file_name == "采购申请.xlsx"
         return PurchaseRequestImportResult(
             file_name=file_name,
@@ -381,7 +386,7 @@ async def test_import_purchase_requests_api_maps_service_error_to_400(
     authenticated_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def import_table(_db, _file_bytes, *, file_name):
+    async def import_table(_db: Any, _file_bytes: Any, *, file_name: Any) -> Any:
         raise ValueError("上传文件为空")
 
     monkeypatch.setattr(
@@ -398,7 +403,6 @@ async def test_import_purchase_requests_api_maps_service_error_to_400(
     assert response.json()["message"] == "上传文件为空"
 
 
-
 @pytest.mark.anyio
 async def test_delete_purchase_request_api_deletes_draft(
     authenticated_client: AsyncClient,
@@ -406,7 +410,7 @@ async def test_delete_purchase_request_api_deletes_draft(
 ) -> None:
     request_id = uuid4()
 
-    async def delete_request(_db, delete_id):
+    async def delete_request(_db: Any, delete_id: Any) -> Any:
         assert delete_id == request_id
         return True
 
@@ -427,7 +431,7 @@ async def test_delete_purchase_request_api_maps_status_error_to_400(
     authenticated_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def delete_request(_db, _delete_id):
+    async def delete_request(_db: Any, _delete_id: Any) -> Any:
         raise ValueError("仅草稿状态的采购申请可以删除")
 
     monkeypatch.setattr(procurement_api, "delete_purchase_request", delete_request)
@@ -439,13 +443,12 @@ async def test_delete_purchase_request_api_maps_status_error_to_400(
     assert response.json()["message"] == "仅草稿状态的采购申请可以删除"
 
 
-
 @pytest.mark.anyio
 async def test_submit_purchase_request_api_maps_total_amount_error_to_400(
     authenticated_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def submit(_db, _request_id):
+    async def submit(_db: Any, _request_id: Any) -> Any:
         raise ValueError(
             "第1条明细总额（0.00）与数量×单价（50.00）不一致，请修改后重新提交"
         )

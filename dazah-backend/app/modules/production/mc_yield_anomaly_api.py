@@ -2,9 +2,9 @@
 
 提供手动触发和状态查询端点。
 """
-
 import logging
 from datetime import UTC, datetime
+from typing import Any
 
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,12 +18,12 @@ from app.shared.module_registry import MODULES_BY_CODE
 logger = logging.getLogger(__name__)
 router = create_module_router(MODULES_BY_CODE["production"])
 
-_last_run_result: dict | None = None
+_last_run_result: dict[str, Any] | None = None
 _last_run_time: str | None = None
 
 
 @router.post("/mc/anomaly/run", summary="手动触发MC收率异常自动检测")
-async def trigger_anomaly_detection(session: AsyncSession = Depends(get_db)):
+async def trigger_anomaly_detection(session: AsyncSession = Depends(get_db)) -> Any:
     """无需等待飞书同步，手动触发一次收率异常检测。
     返回扫描批次数、检测到的异常数(high/medium)、跳过的正常批次数。
     """
@@ -57,7 +57,7 @@ async def trigger_anomaly_detection(session: AsyncSession = Depends(get_db)):
 
 
 @router.get("/mc/anomaly/status", summary="查看最近一次自动检测结果")
-async def get_anomaly_detection_status():
+async def get_anomaly_detection_status() -> Any:
     """返回最近一次异常检测的运行时间和汇总结果（内存缓存）。"""
     if _last_run_result is None:
         return success_response(

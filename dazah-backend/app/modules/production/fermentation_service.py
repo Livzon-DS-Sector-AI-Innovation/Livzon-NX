@@ -1,6 +1,6 @@
 """Fermentation record service."""
-
 from datetime import date as date_type
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,11 +9,11 @@ from app.modules.production.fermentation_repository import FermentationRepositor
 
 
 class FermentationService:
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession) -> None:
         self.repo = FermentationRepository(session)
 
     @staticmethod
-    def _prepare_data(data: dict) -> dict:
+    def _prepare_data(data: dict[str, Any]) -> dict[str, Any]:
         """Convert string dates to date objects."""
         for field in ("entry_date", "discharge_date"):
             if field in data and data[field] is not None:
@@ -29,7 +29,7 @@ class FermentationService:
         batch_no: str | None = None,
         status: str | None = None,
         fermenter: str | None = None,
-    ):
+    ) -> Any:
         return await self.repo.list(
             page=page,
             page_size=page_size,
@@ -39,23 +39,23 @@ class FermentationService:
             fermenter=fermenter,
         )
 
-    async def get_record(self, record_id: UUID):
+    async def get_record(self, record_id: UUID) -> Any:
         return await self.repo.get_by_id(record_id)
 
-    async def create_record(self, data: dict):
+    async def create_record(self, data: dict[str, Any]) -> Any:
         return await self.repo.create(self._prepare_data(data))
 
-    async def update_record(self, record_id: UUID, data: dict):
+    async def update_record(self, record_id: UUID, data: dict[str, Any]) -> Any:
         record = await self.repo.update(record_id, self._prepare_data(data))
         if not record:
             raise ValueError(f"Fermentation record {record_id} not found")
         return record
 
-    async def delete_record(self, record_id: UUID):
+    async def delete_record(self, record_id: UUID) -> Any:
         if not await self.repo.delete(record_id):
             raise ValueError(f"Fermentation record {record_id} not found")
 
-    async def update_status(self, record_id: UUID, status: str):
+    async def update_status(self, record_id: UUID, status: str) -> Any:
         record = await self.repo.update(record_id, {"status": status})
         if not record:
             raise ValueError(f"Fermentation record {record_id} not found")

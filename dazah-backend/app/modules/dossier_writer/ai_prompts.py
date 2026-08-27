@@ -1,12 +1,13 @@
 """AI 填充服务的 Prompt 模板"""
-from typing import List, Dict, Any
+
+from typing import Any
 
 
 def build_extract_fields_prompt(
-    fields: List[Dict[str, str]],
-    asset_texts: Dict[str, str],
+    fields: list[dict[str, str]],
+    asset_texts: dict[str, str],
     product_name: str,
-) -> List[Dict[str, str]]:
+) -> list[dict[str, str]]:
     """构建字段提取的 Prompt
 
     Args:
@@ -32,7 +33,8 @@ def build_extract_fields_prompt(
                 "你是药品申报资料撰写助手。你的任务是从药品相关素材文档中准确提取结构化字段值。\n"
                 "规则：\n"
                 "1. 只返回 JSON 格式结果，不要添加任何额外文字\n"
-                "2. 每个字段必须包含 value（提取的值）和 source（来自哪个素材文件的哪个位置）\n"
+                "2. 每个字段必须包含 value（提取的值）和 source（来自哪个素材文件的"
+                "哪个位置）\n"
                 "3. 如果在素材中找不到某个字段的值，将 value 设为 null，不要编造\n"
                 "4. 表格类字段返回 JSON 数组格式\n"
                 "5. confidence 是你对提取结果的信心评分，0-1 之间"
@@ -63,9 +65,9 @@ def build_extract_fields_prompt(
 
 
 def build_split_pages_prompt(
-    page_texts: List[Dict[str, Any]],
-    available_appendix_slots: List[str],
-) -> List[Dict[str, str]]:
+    page_texts: list[dict[str, Any]],
+    available_appendix_slots: list[str],
+) -> list[dict[str, str]]:
     """构建多页文档拆分的 Prompt
 
     Args:
@@ -77,7 +79,9 @@ def build_split_pages_prompt(
         truncated = p["text"][:500] if len(p["text"]) > 500 else p["text"]
         pages_desc += f"\n--- 第 {p['page']} 页 ---\n{truncated}\n"
 
-    appendix_desc = ", ".join(available_appendix_slots) if available_appendix_slots else "无"
+    appendix_desc = (
+        ", ".join(available_appendix_slots) if available_appendix_slots else "无"
+    )
 
     return [
         {
@@ -87,7 +91,8 @@ def build_split_pages_prompt(
                 "并将其分配到模板中对应的附录位置。\n"
                 "规则：\n"
                 "1. 只返回 JSON 格式\n"
-                "2. 每页需要识别出页面类型（如：营业执照、CDE公示、检验报告单、质量标准等）\n"
+                "2. 每页需要识别出页面类型（如：营业执照、CDE公示、检验报告单、"
+                "质量标准等）\n"
                 "3. 如果某页内容属于可用附录中的某一类，填入对应的 appendix_slot\n"
                 "4. 如果某页不属于任何附录位置，appendix_slot 设为 null\n"
                 "5. 给出简短的内容摘要（content_summary）"
@@ -117,10 +122,10 @@ def build_split_pages_prompt(
 
 
 def build_fill_location_prompt(
-    template_paragraphs: List[Dict[str, Any]],
-    template_tables: List[Dict[str, Any]],
-    extracted_fields: List[Dict[str, Any]],
-) -> List[Dict[str, str]]:
+    template_paragraphs: list[dict[str, Any]],
+    template_tables: list[dict[str, Any]],
+    extracted_fields: list[dict[str, Any]],
+) -> list[dict[str, str]]:
     """构建模板填充定位的 Prompt
 
     告诉 LLM：这是模板文档的结构，这是提取到的字段值，请告诉我每个值应该填到哪个位置。

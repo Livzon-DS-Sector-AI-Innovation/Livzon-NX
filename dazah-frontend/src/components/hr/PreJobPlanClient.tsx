@@ -32,12 +32,12 @@ export default function PreJobPlanClient() {
         setEmployees(res.data || [])
       })
       .catch((err) => {
-        message.error('加载员工列表失败: ' + (err.message || '未知错误'))
+        message.error('加载员工列表失败: ' + ((err instanceof Error ? err.message : '') || '未知错误'))
       })
       .finally(() => {
         setLoading(false)
       })
-  }, [])
+  }, [message])
 
   const selectedEmployee = employees.find((e) => e.id === selectedEmployeeId)
 
@@ -51,7 +51,7 @@ export default function PreJobPlanClient() {
       await fetchPrejobTrainingPlan(selectedEmployee.id, selectedEmployee.name)
       message.success('岗前培训计划已导出')
     } catch (err) {
-      message.error(err.message || '导出失败')
+      message.error((err instanceof Error ? err.message : '') || '导出失败')
     } finally {
       setDownloading(false)
     }

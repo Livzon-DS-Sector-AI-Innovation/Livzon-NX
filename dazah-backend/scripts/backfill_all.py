@@ -12,14 +12,14 @@ import asyncio
 import logging
 import os
 import sys
+from typing import Any
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.platform.identity.models import User  # noqa: F401
 from app.core.database import async_session_factory
 from app.modules.regulatory_tracker import repository as repo
-from app.modules.regulatory_tracker.models import DataChannel, DataSource
 from app.modules.regulatory_tracker.services.sync_service import run_sync_job
+from app.platform.identity.models import User  # noqa: F401
 
 logging.basicConfig(
     level=logging.INFO,
@@ -28,7 +28,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-async def backfill_all():
+async def backfill_all() -> Any:
     """同步所有页面的历史数据。"""
     logger.info("=" * 60)
     logger.info("开始全量抓取 CDE 国内药品技术指导原则")
@@ -38,10 +38,15 @@ async def backfill_all():
         # 检查数据源
         source = await repo.get_data_source_by_code(db, "CDE")
         if not source:
-            logger.error("❌ CDE 数据源不存在，请先执行：python scripts/seed_regulatory_tracker.py")
+            logger.error(
+                "❌ CDE 数据源不存在，请先执行："
+                "python scripts/seed_regulatory_tracker.py"
+            )
             return False
 
-        channel = await repo.get_channel_by_code(db, source.id, "cde_domestic_guideline")
+        channel = await repo.get_channel_by_code(
+            db, source.id, "cde_domestic_guideline"
+        )
         if not channel:
             logger.error("❌ cde_domestic_guideline 栏目不存在，请先执行 seed")
             return False
@@ -54,7 +59,7 @@ async def backfill_all():
         if doc_count > 0:
             logger.warning(f"⚠️  已存在 {doc_count} 条法规数据，是否继续？(y/n)")
             response = input()
-            if response.lower() != 'y':
+            if response.lower() != "y":
                 logger.info("取消初始化")
                 return False
 
@@ -77,10 +82,10 @@ async def backfill_all():
         logger.info(f"检查: {result['checked']} 条")
         logger.info(f"新增: {result['new']} 条")
         logger.info(f"更新: {result['updated']} 条")
-        if result.get('error'):
+        if result.get("error"):
             logger.error(f"错误: {result['error']}")
 
-        return result['status'] == 'success'
+        return result["status"] == "success"
 
 
 if __name__ == "__main__":

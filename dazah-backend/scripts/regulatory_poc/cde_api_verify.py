@@ -9,17 +9,15 @@ CDE API 接口链路验证脚本
 5. Playwright 自动化获取 MmEwMD+Cookie 后调接口
 """
 
-import os
-import sys
 import json
-import time
+import os
 from datetime import datetime
-from urllib.parse import urlparse, parse_qs
+from typing import Any
+from urllib.parse import parse_qs, urlparse
 
 os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "/tmp/playwright-browsers"
 
 from playwright.sync_api import sync_playwright
-
 
 LAUNCH_ARGS = [
     "--no-sandbox",
@@ -33,8 +31,8 @@ LAUNCH_ARGS = [
 ]
 
 
-def verify_cde_api():
-    results = {
+def verify_cde_api() -> Any:
+    results: dict[str, Any] = {
         "timestamp": datetime.now().isoformat(),
         "q1_mmewmd": {"status": "pending", "details": None},
         "q2_cookie": {"status": "pending", "details": None},
@@ -80,14 +78,18 @@ def verify_cde_api():
 
     context = browser.new_context(
         viewport={"width": 1920, "height": 1080},
-        user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        user_agent=(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        ),
     )
     page = context.new_page()
 
     # 拦截所有网络请求
-    api_responses = []
+    api_responses: list[dict[str, Any]] = []
 
-    def on_response(response):
+    def on_response(response: Any) -> Any:
         url = response.url
         if "getDomesticGuideList" in url or "cde.org.cn" in url:
             entry = {
@@ -103,7 +105,11 @@ def verify_cde_api():
                     try:
                         jd = json.loads(body)
                         entry["is_json"] = True
-                        entry["json_keys"] = list(jd.keys()) if isinstance(jd, dict) else f"list[{len(jd)}]"
+                        entry["json_keys"] = (
+                            list(jd.keys())
+                            if isinstance(jd, dict)
+                            else f"list[{len(jd)}]"
+                        )
                         if isinstance(jd, dict):
                             for k in ("records", "total", "pages", "current"):
                                 if k in jd:
@@ -111,7 +117,9 @@ def verify_cde_api():
                                     if isinstance(v, list):
                                         entry[f"field_{k}_len"] = len(v)
                                         if v and isinstance(v[0], dict):
-                                            entry[f"field_{k}_item_keys"] = list(v[0].keys())
+                                            entry[f"field_{k}_item_keys"] = list(
+                                                v[0].keys()
+                                            )
                                     else:
                                         entry[f"field_{k}"] = v
                         entry["body_preview"] = body[:2000]
@@ -131,7 +139,11 @@ def verify_cde_api():
     # ========== Step 1: 加载页面，等待 WAF 通过 ==========
     print("\n[Step 1] 加载 CDE 指导原则页面...")
     try:
-        page.goto("https://www.cde.org.cn/zdyz/index", timeout=30000, wait_until="domcontentloaded")
+        page.goto(
+            "https://www.cde.org.cn/zdyz/index",
+            timeout=30000,
+            wait_until="domcontentloaded",
+        )
         print(f"   页面标题: {page.title()}")
 
         # 等待 WAF challenge 完成
@@ -173,14 +185,14 @@ def verify_cde_api():
         if c.get("expires", -1) > 0:
             print(f"      expires: {info.get('expires_human', 'N/A')}")
         else:
-            print(f"      expires: Session")
+            print("      expires: Session")
 
     results["q2_cookie"] = {
         "status": "completed",
         "details": {
             "cookie_count": len(cookies),
             "cookies": cookie_info,
-        }
+        },
     }
 
     # ========== Q1: MmEwMD 参数分析 ==========
@@ -194,7 +206,7 @@ def verify_cde_api():
             mmewmd_found = True
             parsed = urlparse(url)
             params = parse_qs(parsed.query)
-            print(f"   ✅ 发现 MmEwMD 参数在 URL 中")
+            print("   ✅ 发现 MmEwMD 参数在 URL 中")
             print(f"   URL: {url[:200]}")
             if "MmEwMD" in params:
                 mm_value = params["MmEwMD"][0]
@@ -207,13 +219,13 @@ def verify_cde_api():
                     "mmewmd_value": params.get("MmEwMD", ["N/A"])[0][:200],
                     "mmewmd_length": len(params.get("MmEwMD", [""])[0]),
                     "all_params": {k: v[0] for k, v in params.items()},
-                }
+                },
             }
 
         # 也检查 POST body
         if resp.get("body_preview") and "MmEwMD" in resp.get("body_preview", ""):
             mmewmd_found = True
-            print(f"   ✅ 发现 MmEwMD 在响应体中")
+            print("   ✅ 发现 MmEwMD 在响应体中")
 
     # 检查页面中的 JS 变量
     try:
@@ -226,14 +238,20 @@ def verify_cde_api():
             const metas = document.querySelectorAll('meta');
             metas.forEach(m => {
                 if (m.name && m.name.toLowerCase().includes('mm')) {
-                    results['meta_' + m.name] = m.content ? m.content.substring(0, 100) : 'empty';
+                    results['meta_' + m.name] = m.content
+                        ? m.content.substring(0, 100) : 'empty';
                 }
             });
             // 检查 cookie 中是否有 MmEwMD
             document.cookie.split(';').forEach(c => {
                 const parts = c.trim().split('=');
-                if (parts[0].toLowerCase().includes('mm') || parts[0].toLowerCase().includes('ew')) {
-                    results['cookie_' + parts[0]] = parts.slice(1).join('=').substring(0, 100);
+                if (
+                    parts[0].toLowerCase().includes('mm') ||
+                    parts[0].toLowerCase().includes('ew')
+                ) {
+                    results['cookie_' + parts[0]] = parts.slice(1).join('=').substring(
+                        0, 100
+                    );
                 }
             });
             return results;
@@ -252,7 +270,8 @@ def verify_cde_api():
         try:
             fetch_result = page.evaluate("""async () => {
                 try {
-                    const resp = await fetch('/zdyz/getDomesticGuideList?pageNum=1&pageSize=10', {
+                const resp = await fetch(
+                    '/zdyz/getDomesticGuideList?pageNum=1&pageSize=10', {
                         method: 'GET',
                         credentials: 'include',
                         headers: {
@@ -293,7 +312,8 @@ def verify_cde_api():
         # 方式1: 通过页面 fetch
         api_result = page.evaluate("""async () => {
             try {
-                const resp = await fetch('/zdyz/getDomesticGuideList?pageNum=1&pageSize=5', {
+                const resp = await fetch(
+                    '/zdyz/getDomesticGuideList?pageNum=1&pageSize=5', {
                     method: 'GET',
                     credentials: 'include',
                 });
@@ -318,7 +338,7 @@ def verify_cde_api():
 
         if api_result.get("is_json") and api_result.get("data"):
             data = api_result["data"]
-            print(f"   ✅ 成功获取 JSON 数据!")
+            print("   ✅ 成功获取 JSON 数据!")
             print(f"   keys: {list(data.keys())}")
             if "records" in data:
                 print(f"   records: {len(data['records'])} 条")
@@ -345,11 +365,13 @@ def verify_cde_api():
                     "total": data.get("total"),
                     "pages": data.get("pages"),
                     "current": data.get("current"),
-                    "first_record": data.get("records", [{}])[0] if data.get("records") else None,
-                }
+                    "first_record": data.get("records", [{}])[0]
+                    if data.get("records")
+                    else None,
+                },
             }
         else:
-            print(f"   ❌ 未获取到 JSON 数据")
+            print("   ❌ 未获取到 JSON 数据")
             print(f"   body_preview: {api_result.get('body_preview', 'N/A')[:300]}")
             results["q5_playwright_auto"] = {
                 "status": "failed",
@@ -368,7 +390,8 @@ def verify_cde_api():
     try:
         page2_result = page.evaluate("""async () => {
             try {
-                const resp = await fetch('/zdyz/getDomesticGuideList?pageNum=2&pageSize=5', {
+                const resp = await fetch(
+                    '/zdyz/getDomesticGuideList?pageNum=2&pageSize=5', {
                     method: 'GET',
                     credentials: 'include',
                 });
@@ -390,7 +413,7 @@ def verify_cde_api():
 
         if page2_result.get("is_json") and page2_result.get("data"):
             data2 = page2_result["data"]
-            print(f"   ✅ 第二页数据获取成功!")
+            print("   ✅ 第二页数据获取成功!")
             if "records" in data2:
                 print(f"   records: {len(data2['records'])} 条")
             if "current" in data2:
@@ -398,13 +421,22 @@ def verify_cde_api():
 
             # 对比 page1 和 page2 的记录是否不同
             if results["q5_playwright_auto"].get("status") == "success":
-                page1_records = results["q5_playwright_auto"]["details"].get("first_record")
-                page2_records = data2.get("records", [{}])[0] if data2.get("records") else None
+                page1_records = results["q5_playwright_auto"]["details"].get(
+                    "first_record"
+                )
+                page2_records = (
+                    data2.get("records", [{}])[0] if data2.get("records") else None
+                )
                 if page1_records and page2_records:
-                    same = page1_records.get("zdyzIdCODE") == page2_records.get("zdyzIdCODE")
+                    same = page1_records.get("zdyzIdCODE") == page2_records.get(
+                        "zdyzIdCODE"
+                    )
                     print(f"   第1页首条 ID: {page1_records.get('zdyzIdCODE', 'N/A')}")
                     print(f"   第2页首条 ID: {page2_records.get('zdyzIdCODE', 'N/A')}")
-                    print(f"   数据是否不同: {'❌ 相同(异常)' if same else '✅ 不同(正常)'}")
+                    print(
+                        f"   数据是否不同: "
+                        f"{'❌ 相同(异常)' if same else '✅ 不同(正常)'}"
+                    )
 
             results["q3_pagination"] = {
                 "status": "success",
@@ -414,10 +446,10 @@ def verify_cde_api():
                     "page2_current": data2.get("current"),
                     "page2_total": data2.get("total"),
                     "data_different_from_page1": True,
-                }
+                },
             }
         else:
-            print(f"   ❌ 第二页数据获取失败")
+            print("   ❌ 第二页数据获取失败")
             print(f"   preview: {page2_result.get('body_preview', 'N/A')[:300]}")
             results["q3_pagination"] = {
                 "status": "failed",
@@ -459,7 +491,8 @@ def verify_cde_api():
                             status: resp.status,
                             content_type: resp.headers.get('content-type'),
                             body_length: text.length,
-                            is_html: text.includes('<html') || text.includes('<!DOCTYPE'),
+                            is_html: text.includes('<html') ||
+                                text.includes('<!DOCTYPE'),
                             has_content: text.length > 1000,
                             body_preview: text.substring(0, 500),
                         }};
@@ -472,8 +505,10 @@ def verify_cde_api():
                 print(f"      body_length: {detail_result.get('body_length')}")
                 print(f"      is_html: {detail_result.get('is_html')}")
 
-                if detail_result.get("status") == 200 and detail_result.get("has_content"):
-                    print(f"      ✅ 详情页可访问!")
+                if detail_result.get("status") == 200 and detail_result.get(
+                    "has_content"
+                ):
+                    print("      ✅ 详情页可访问!")
                     results["q4_detail_page"] = {
                         "status": "success",
                         "details": {
@@ -482,13 +517,15 @@ def verify_cde_api():
                             "http_status": detail_result["status"],
                             "content_type": detail_result.get("content_type"),
                             "body_length": detail_result.get("body_length"),
-                        }
+                        },
                     }
                     break
             else:
                 # 也尝试直接导航
-                print(f"\n   尝试直接导航到详情页...")
-                full_url = f"https://www.cde.org.cn/zdyz/domesticinfopage?zdyzIdCODE={zdyz_id}"
+                print("\n   尝试直接导航到详情页...")
+                full_url = (
+                    f"https://www.cde.org.cn/zdyz/domesticinfopage?zdyzIdCODE={zdyz_id}"
+                )
                 try:
                     page.goto(full_url, timeout=15000, wait_until="domcontentloaded")
                     page.wait_for_timeout(3000)
@@ -505,7 +542,7 @@ def verify_cde_api():
                             "final_url": page.url,
                             "title": page.title(),
                             "content_length": len(content),
-                        }
+                        },
                     }
                 except Exception as nav_e:
                     print(f"      导航失败: {nav_e}")
@@ -514,7 +551,7 @@ def verify_cde_api():
                         "details": {"zdyzIdCODE": zdyz_id, "error": str(nav_e)},
                     }
         else:
-            print(f"   ⚠️ 无法获取 zdyzIdCODE (第一条记录数据不可用)")
+            print("   ⚠️ 无法获取 zdyzIdCODE (第一条记录数据不可用)")
             results["q4_detail_page"] = {
                 "status": "skipped",
                 "details": "No zdyzIdCODE available from API response",
@@ -531,7 +568,11 @@ def verify_cde_api():
             print(f"      JSON keys: {resp.get('json_keys')}")
 
     results["api_calls_captured"] = [
-        {"url": r["url"][:200], "status": r["status"], "is_json": r.get("is_json", False)}
+        {
+            "url": r["url"][:200],
+            "status": r["status"],
+            "is_json": r.get("is_json", False),
+        }
         for r in api_responses
     ]
 
@@ -543,7 +584,7 @@ def verify_cde_api():
     return results
 
 
-def main():
+def main() -> Any:
     output_path = "/tmp/cde_api_verify_results.json"
 
     results = verify_cde_api()
@@ -552,9 +593,9 @@ def main():
         json.dump(results, f, ensure_ascii=False, indent=2)
 
     # 打印最终汇总
-    print(f"\n\n{'='*70}")
+    print(f"\n\n{'=' * 70}")
     print("验证结果汇总")
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
 
     for key, label in [
         ("q1_mmewmd", "Q1: MmEwMD 参数"),
@@ -565,7 +606,13 @@ def main():
     ]:
         r = results.get(key, {})
         status = r.get("status", "unknown")
-        icon = "✅" if status in ("success", "found_in_url", "navigated") else "⚠️" if status == "completed" else "❌"
+        icon = (
+            "✅"
+            if status in ("success", "found_in_url", "navigated")
+            else "⚠️"
+            if status == "completed"
+            else "❌"
+        )
         print(f"  {icon} {label}: {status}")
 
     print(f"\n💾 结果已保存: {output_path}")

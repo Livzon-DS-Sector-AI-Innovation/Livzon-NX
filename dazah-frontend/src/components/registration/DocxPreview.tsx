@@ -55,7 +55,7 @@ export function DocxPreview({ chapterId, chapterTitle, onDownload, refreshKey }:
       })
     } catch (err) {
       console.error('DocxPreview render error:', err)
-      setError(err.message || '文档渲染失败')
+      setError((err instanceof Error ? err.message : '') || '文档渲染失败')
       setHasContent(false)
     } finally {
       setLoading(false)
@@ -63,7 +63,7 @@ export function DocxPreview({ chapterId, chapterTitle, onDownload, refreshKey }:
   }, [chapterId])
 
   useEffect(() => {
-    renderDocx()
+    queueMicrotask(renderDocx)
   }, [renderDocx, refreshKey])
 
   const handleRefresh = () => {

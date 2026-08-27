@@ -42,6 +42,7 @@ async def db_session() -> AsyncIterator[AsyncSession]:
 async def client() -> AsyncIterator[AsyncClient]:
     """Provide an AsyncClient with get_db overridden to use a rolled-back session."""
     async with _test_session_factory() as session:
+
         async def _override_get_db() -> AsyncIterator[AsyncSession]:
             try:
                 yield session

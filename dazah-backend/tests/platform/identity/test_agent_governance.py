@@ -1,4 +1,5 @@
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
+from typing import Any, cast
 from uuid import uuid4
 
 import pytest
@@ -13,6 +14,8 @@ from app.platform.identity.schemas import (
     ExternalIdentityBindingStatusUpdate,
     FeishuConfigUpsert,
 )
+
+SimpleNamespace: Any = _SimpleNamespace
 
 
 def test_external_identity_lifecycle_contracts() -> None:
@@ -33,19 +36,19 @@ def test_external_identity_lifecycle_contracts() -> None:
 @pytest.mark.anyio
 async def test_external_identity_status_transition_records_actor() -> None:
     actor_id = uuid4()
-    binding = SimpleNamespace(status="active", updated_by=None)
+    binding: Any = SimpleNamespace(status="active", updated_by=None)
 
     class FakeSession:
         flushed = False
         refreshed = None
 
-        async def flush(self) -> None:
+        async def flush(self: Any) -> None:
             self.flushed = True
 
-        async def refresh(self, value) -> None:
+        async def refresh(self: Any, value: Any) -> None:
             self.refreshed = value
 
-    session = FakeSession()
+    session: Any = cast(Any, FakeSession)()
     result = await ExternalIdentityBindingRepository().set_status(
         session,
         binding,
@@ -85,10 +88,10 @@ async def test_directory_reconciliation_creates_binding_once(
     )
     db_session.add(user)
     await db_session.flush()
-    config = SimpleNamespace(tenant_id=tenant_id, app_id="cli_directory")
+    config: Any = SimpleNamespace(tenant_id=tenant_id, app_id="cli_directory")
 
     class FakeConfigRepository:
-        async def get_active(self, db):
+        async def get_active(self: Any, db: Any) -> Any:
             return config
 
     monkeypatch.setattr(service, "_feishu_config_repo", FakeConfigRepository())

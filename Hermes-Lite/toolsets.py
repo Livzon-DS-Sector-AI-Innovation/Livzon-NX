@@ -25,6 +25,8 @@ Usage:
 
 from typing import List, Dict, Any, Set, Optional
 
+from hermes_cli._stubs import platform_registry
+
 
 # Hermes-Lite - lightweight web-safe toolsets
 # Keep only conversational/research tools by default; local file/terminal
@@ -199,7 +201,7 @@ def resolve_toolset(name: str, visited: Set[str] = None) -> List[str]:
             platform_name = name[len("hermes-"):]
             try:
                 # gateway platform_registry removed in Hermes-Lite
-                if platform_registry.is_registered(platform_name):
+                if platform_registry.get(platform_name) is not None:
                     plugin_tools = set(_HERMES_CORE_TOOLS)
                     try:
                         from tools.registry import registry

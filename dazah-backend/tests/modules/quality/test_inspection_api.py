@@ -1,6 +1,8 @@
 """Integration tests for the quality inspection foundation API."""
 
+from collections.abc import AsyncIterator
 from datetime import date
+from typing import Any
 
 import pytest
 from httpx import AsyncClient
@@ -35,7 +37,7 @@ _TABLES = (
 
 
 @pytest.fixture(autouse=True)
-async def _clean_inspection_tables(db_session: AsyncSession) -> None:
+async def _clean_inspection_tables(db_session: AsyncSession) -> AsyncIterator[Any]:
     missing_tables = [
         table_name
         for table_name in _TABLES
@@ -51,11 +53,11 @@ async def _clean_inspection_tables(db_session: AsyncSession) -> None:
         )
 
     for model in _MODELS:
-        await db_session.execute(model.__table__.delete())
+        await db_session.execute(model.__table__.delete())  # type: ignore[attr-defined]
     await db_session.commit()
     yield
     for model in _MODELS:
-        await db_session.execute(model.__table__.delete())
+        await db_session.execute(model.__table__.delete())  # type: ignore[attr-defined]
     await db_session.commit()
 
 

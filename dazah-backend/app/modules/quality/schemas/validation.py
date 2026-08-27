@@ -33,6 +33,7 @@ class ValidationListItem(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+
 class ValidationDetail(ValidationListItem):
     created_by: uuid.UUID | None = None
     updated_by: uuid.UUID | None = None

@@ -17,45 +17,29 @@ class MaintenancePlanCreate(BaseModel):
 
     equipment_id: uuid.UUID = Field(..., description="设备ID")
     plan_name: str = Field(..., max_length=200, description="计划名称")
-    plan_type: MaintenancePlanType = Field(
-        default="预防性维护", description="计划类型"
-    )
+    plan_type: MaintenancePlanType = Field(default="预防性维护", description="计划类型")
     frequency: int = Field(..., ge=1, description="维护频率数值")
     frequency_unit: FrequencyUnit = Field(..., description="频率单位")
-    last_maintenance_date: date | None = Field(
-        default=None, description="上次维护日期"
-    )
+    last_maintenance_date: date | None = Field(default=None, description="上次维护日期")
     responsible_person_id: uuid.UUID | None = Field(
         default=None, description="负责人ID"
     )
-    maintenance_content: str | None = Field(
-        default=None, description="维护内容说明"
-    )
+    maintenance_content: str | None = Field(default=None, description="维护内容说明")
     remark: str | None = Field(default=None, description="备注")
 
 
 class MaintenancePlanUpdate(BaseModel):
     """更新维护计划请求"""
 
-    plan_name: str | None = Field(
-        default=None, max_length=200, description="计划名称"
-    )
-    plan_type: MaintenancePlanType | None = Field(
-        default=None, description="计划类型"
-    )
+    plan_name: str | None = Field(default=None, max_length=200, description="计划名称")
+    plan_type: MaintenancePlanType | None = Field(default=None, description="计划类型")
     frequency: int | None = Field(default=None, ge=1, description="维护频率数值")
-    frequency_unit: FrequencyUnit | None = Field(
-        default=None, description="频率单位"
-    )
-    last_maintenance_date: date | None = Field(
-        default=None, description="上次维护日期"
-    )
+    frequency_unit: FrequencyUnit | None = Field(default=None, description="频率单位")
+    last_maintenance_date: date | None = Field(default=None, description="上次维护日期")
     responsible_person_id: uuid.UUID | None = Field(
         default=None, description="负责人ID"
     )
-    maintenance_content: str | None = Field(
-        default=None, description="维护内容说明"
-    )
+    maintenance_content: str | None = Field(default=None, description="维护内容说明")
     status: MaintenancePlanStatus | None = Field(default=None, description="状态")
     remark: str | None = Field(default=None, description="备注")
 

@@ -160,10 +160,10 @@ export default function LabelVerificationClient({
       }
     } catch (err) {
       setAutoCompareProgress('')
-      if (err.errorFields) {
+      if ((typeof err === 'object' && err !== null && 'errorFields' in err)) {
         message.warning('请先填写表单基本信息并上传视频')
       } else {
-        message.error(err.message || '自动对比失败')
+        message.error((err instanceof Error ? err.message : '') || '自动对比失败')
       }
     } finally {
       setAutoComparing(false)

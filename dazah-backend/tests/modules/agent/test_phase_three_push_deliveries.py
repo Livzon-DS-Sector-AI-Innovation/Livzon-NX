@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import pytest
 from sqlalchemy import select
@@ -61,7 +62,7 @@ async def test_notify_creates_one_idempotent_delivery_per_local_recipient(
     db_session.add(run)
     await db_session.flush()
 
-    async def fake_send(*_args: object, **_kwargs: object) -> dict:
+    async def fake_send(*_args: object, **_kwargs: object) -> dict[str, Any]:
         return {"status": "sent", "message_id": "om_phase_three_delivery"}
 
     monkeypatch.setattr(
@@ -150,9 +151,7 @@ async def test_notify_creates_one_idempotent_delivery_per_local_recipient(
     db_session.add(other_user)
     await db_session.flush()
     with pytest.raises(PermissionError):
-        await service.get_for_user(
-            db_session, user=other_user, delivery_id=delivery.id
-        )
+        await service.get_for_user(db_session, user=other_user, delivery_id=delivery.id)
     admin = _user()
     admin.role = "admin"
     db_session.add(admin)
@@ -216,7 +215,9 @@ async def test_notify_creates_one_idempotent_delivery_per_local_recipient(
     )
     assert silenced["deliveries"][0]["status"] == "suppressed"
 
-    async def fake_timeout_after_accept(*_args: object, **_kwargs: object) -> dict:
+    async def fake_timeout_after_accept(
+        *_args: object, **_kwargs: object
+    ) -> dict[str, Any]:
         return {
             "status": "failed",
             "message_id": "om_phase_three_timeout_reconciled",
@@ -242,7 +243,7 @@ async def test_notify_creates_one_idempotent_delivery_per_local_recipient(
     )
     assert timeout_delivery["deliveries"][0]["status"] == "sent"
 
-    async def fake_failed(*_args: object, **_kwargs: object) -> dict:
+    async def fake_failed(*_args: object, **_kwargs: object) -> dict[str, Any]:
         return {"status": "failed", "error_code": "unavailable"}
 
     monkeypatch.setattr(

@@ -1,6 +1,6 @@
 """DR 多拉菌素 — 层析及一次结晶岗位飞书电子表格同步"""
-
 import logging
+from typing import Any
 
 import httpx
 from sqlalchemy import text
@@ -125,7 +125,7 @@ def _is_empty(row: list[str]) -> bool:
 
 async def sync_dr_chromatography(
     config: ProductionFeishuConfig, session: AsyncSession
-) -> dict:
+) -> dict[str, Any]:
     app_secret = decrypt_secret(config.encrypted_app_secret)
     token = await _get_token(config.app_id, app_secret)
     logger.info("[DR层析同步] 读取飞书表格...")
@@ -135,7 +135,7 @@ async def sync_dr_chromatography(
 
     # 合并单元格继承
     inherited: dict[str, str] = {}
-    data_rows: list[dict] = []
+    data_rows: list[dict[str, Any]] = []
 
     for ri, row in enumerate(rows):
         if _is_empty(row):
@@ -153,7 +153,7 @@ async def sync_dr_chromatography(
                 stats["skipped"] += 1
                 continue
 
-            data = {"row_no": ri + DATA_START_ROW}
+            data: dict[str, Any] = {"row_no": ri + DATA_START_ROW}
             for key in COL:
                 if key in MERGE_KEYS:
                     data[key] = inherited.get(key)

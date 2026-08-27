@@ -1,22 +1,21 @@
 """Validation Audit schemas."""
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-
 # ── 枚举 ──────────────────────────────────────────────────
 
 
-class AuditMode(str, Enum):
+class AuditMode(StrEnum):
     PROTOCOL = "protocol"
     REPORT = "report"
     PROTOCOL_REPORT = "protocol_report"
 
 
-class TaskStatus(str, Enum):
+class TaskStatus(StrEnum):
     DRAFT = "draft"
     UPLOADED = "uploaded"
     PARSING = "parsing"
@@ -25,26 +24,26 @@ class TaskStatus(str, Enum):
     FAILED = "failed"
 
 
-class TaskConclusion(str, Enum):
+class TaskConclusion(StrEnum):
     PASS = "pass"
     CONDITIONAL_PASS = "conditional_pass"
     FAIL = "fail"
 
 
-class FileType(str, Enum):
+class FileType(StrEnum):
     PROTOCOL = "protocol"
     REPORT = "report"
     ATTACHMENT = "attachment"
 
 
-class ParseStatus(str, Enum):
+class ParseStatus(StrEnum):
     PENDING = "pending"
     PARSING = "parsing"
     COMPLETED = "completed"
     FAILED = "failed"
 
 
-class IssueType(str, Enum):
+class IssueType(StrEnum):
     SERIOUS = "serious"
     GENERAL = "general"
     SUGGESTION = "suggestion"
@@ -55,6 +54,7 @@ class IssueType(str, Enum):
 
 class ValidationAuditTaskCreate(BaseModel):
     """创建审核任务"""
+
     task_name: str = Field(..., max_length=300, description="任务名称")
     product_name: str = Field(..., max_length=200, description="品种名称")
     method_name: str = Field(..., max_length=300, description="方法名称")
@@ -64,6 +64,7 @@ class ValidationAuditTaskCreate(BaseModel):
 
 class ValidationAuditTaskUpdate(BaseModel):
     """更新审核任务"""
+
     task_name: str | None = Field(None, max_length=300, description="任务名称")
     product_name: str | None = Field(None, max_length=200, description="品种名称")
     method_name: str | None = Field(None, max_length=300, description="方法名称")
@@ -73,6 +74,7 @@ class ValidationAuditTaskUpdate(BaseModel):
 
 class ValidationAuditTaskResponse(BaseModel):
     """审核任务详情"""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
@@ -96,6 +98,7 @@ class ValidationAuditTaskResponse(BaseModel):
 
 class ValidationAuditTaskListItem(BaseModel):
     """审核任务列表项"""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
@@ -116,6 +119,7 @@ class ValidationAuditTaskListItem(BaseModel):
 
 class ValidationAuditFileResponse(BaseModel):
     """审核文件详情"""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
@@ -130,6 +134,7 @@ class ValidationAuditFileResponse(BaseModel):
 
 class ValidationAuditFileListItem(BaseModel):
     """审核文件列表项"""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
@@ -145,6 +150,7 @@ class ValidationAuditFileListItem(BaseModel):
 
 class ValidationAuditIssueResponse(BaseModel):
     """审核问题详情"""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
@@ -166,6 +172,7 @@ class ValidationAuditIssueResponse(BaseModel):
 
 class ValidationAuditReportResponse(BaseModel):
     """审核报告详情"""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
@@ -182,6 +189,7 @@ class ValidationAuditReportResponse(BaseModel):
 
 class ValidationAuditKnowledgeBaseResponse(BaseModel):
     """知识库条目"""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
@@ -201,6 +209,7 @@ class ValidationAuditKnowledgeBaseResponse(BaseModel):
 
 class AuditIssueItem(BaseModel):
     """AI 审核返回的单个问题"""
+
     issue_no: str = Field(..., description="问题编号")
     dimension: str = Field(..., description="所属维度")
     check_item: str = Field(..., description="检查项")
@@ -213,6 +222,7 @@ class AuditIssueItem(BaseModel):
 
 class AuditResult(BaseModel):
     """AI 审核返回的完整结果"""
+
     conclusion: TaskConclusion = Field(..., description="审核结论")
     risk_level: str = Field(..., description="风险等级: high/medium/low")
     compliant_count: int = Field(0, description="合规项数")

@@ -43,6 +43,6 @@ export async function analyzeDeviation(
     if (err?.name === 'AbortError') {
       throw new Error(`AI分析超时（${AI_TIMEOUT_MS / 1000}秒）`);
     }
-    throw new Error(err?.message || 'AI分析失败');
+    throw new Error((err instanceof Error ? err.message : '') || 'AI分析失败');
   }
 }

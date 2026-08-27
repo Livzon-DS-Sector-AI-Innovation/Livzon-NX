@@ -28,11 +28,16 @@ Usage:
         result = apply_v4a_operations(operations, file_ops)
 """
 
+from __future__ import annotations
+
 import difflib
 import re
 from dataclasses import dataclass, field
-from typing import List, Optional, Tuple, Any
+from typing import TYPE_CHECKING, Any, List, Optional, Tuple
 from enum import Enum
+
+if TYPE_CHECKING:
+    from tools.file_operations import PatchResult
 
 
 class OperationType(Enum):
@@ -263,7 +268,11 @@ def _validate_operations(
 
             simulated = read_result.content
             for hunk in op.hunks:
-                search_lines = [l.content for l in hunk.lines if l.prefix in {' ', '-'}]
+                search_lines = [
+                    hunk_line.content
+                    for hunk_line in hunk.lines
+                    if hunk_line.prefix in {' ', '-'}
+                ]
                 if not search_lines:
                     # Addition-only hunk: validate context hint uniqueness
                     if hunk.context_hint:
@@ -282,7 +291,11 @@ def _validate_operations(
                     continue
 
                 search_pattern = '\n'.join(search_lines)
-                replace_lines = [l.content for l in hunk.lines if l.prefix in {' ', '+'}]
+                replace_lines = [
+                    hunk_line.content
+                    for hunk_line in hunk.lines
+                    if hunk_line.prefix in {' ', '+'}
+                ]
                 replacement = '\n'.join(replace_lines)
 
                 new_simulated, count, _strategy, match_error = fuzzy_find_and_replace(
@@ -328,8 +341,9 @@ def _validate_operations(
     return errors
 
 
-def apply_v4a_operations(operations: List[PatchOperation],
-                          file_ops: Any) -> 'PatchResult':
+def apply_v4a_operations(
+    operations: List[PatchOperation], file_ops: Any
+) -> PatchResult:
     """Apply V4A patch operations using a file operations interface.
 
     Uses a two-phase validate-then-apply approach:

@@ -6,6 +6,7 @@ import AuditLogClient from './AuditLogClient'
 import FeishuSettingsClient from './FeishuSettingsClient'
 import LLMConfigClient from './LLMConfigClient'
 import LivzonTaskClient from './LivzonTaskClient'
+import SystemPermissionsPanel from './SystemPermissionsPanel'
 import UserManagementClient from './UserManagementClient'
 
 export default function SettingsAdminClient() {
@@ -26,6 +27,11 @@ export default function SettingsAdminClient() {
             key: 'users',
             label: '用户管理',
             children: <UserManagementClient />,
+          },
+          {
+            key: 'permissions',
+            label: '权限与数据范围',
+            children: <SystemPermissionsPanel />,
           },
           {
             key: 'audit',

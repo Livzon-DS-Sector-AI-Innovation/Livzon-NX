@@ -1,5 +1,11 @@
-import { CapaDetail } from '@/components/quality'
+import { CapaDetail, ErrorBoundary, QualityQueryProvider } from '@/components/quality'
 
 export default function CapaDetailPage() {
-  return <CapaDetail />
+  return (
+    <ErrorBoundary>
+      <QualityQueryProvider>
+        <CapaDetail />
+      </QualityQueryProvider>
+    </ErrorBoundary>
+  )
 }

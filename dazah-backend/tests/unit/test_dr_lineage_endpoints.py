@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -11,7 +12,7 @@ import pytest
 from app.modules.production import dr_lineage_api as dr
 
 
-def _result(fetchone=False, fetchall=None, scalar=None):
+def _result(fetchone: Any=False, fetchall: Any=None, scalar: Any=None) -> Any:
     r = MagicMock()
     r.fetchone.return_value = fetchone
     r.fetchall.return_value = fetchall if fetchall is not None else []
@@ -19,12 +20,12 @@ def _result(fetchone=False, fetchall=None, scalar=None):
     return r
 
 
-def _session():
+def _session() -> Any:
     return AsyncMock()
 
 
 @pytest.mark.anyio
-async def test_dr_lineage_trace_full_flow():
+async def test_dr_lineage_trace_full_flow() -> Any:
     """主端点全流程：明确工段 → BFS 展开 → 组装 stage groups → 输出。"""
     s = AsyncMock()
     branch, _ = _route_all()
@@ -40,9 +41,9 @@ async def test_dr_lineage_trace_full_flow():
         await dr.dr_lineage_trace(batch_no="", stage="", session=s2)
 
 
-def _route_all():
+def _route_all() -> Any:
     """一条通用路由：合理返回 fetchall/fetchone/scalar。"""
-    def branch(sql, params=None):
+    def branch(sql: Any, params: Any=None) -> Any:
         s = str(sql)
         r = MagicMock()
         if "SELECT 1 FROM" in s:
@@ -96,7 +97,7 @@ def _route_all():
 
 
 @pytest.mark.anyio
-async def test_dr_distribution_reuse_coverage():
+async def test_dr_distribution_reuse_coverage() -> Any:
     """三条聚合端点：yield-distribution / material-reuse / coverage 返回空。"""
     s = AsyncMock()
     branch, _ = _route_all()
@@ -111,7 +112,7 @@ async def test_dr_distribution_reuse_coverage():
     assert isinstance(cov_data["broken"], dict)
 
 
-def _dist_branch(sql, params=None):
+def _dist_branch(sql: Any, params: Any=None) -> Any:
     r = MagicMock()
     # 让所有查询返回空，覆盖三端点的空数据路径
     r.fetchall.return_value = []
@@ -121,7 +122,7 @@ def _dist_branch(sql, params=None):
 
 
 @pytest.mark.anyio
-async def test_dr_loss_funnel_and_stats():
+async def test_dr_loss_funnel_and_stats() -> Any:
     s = AsyncMock()
     branch, _ = _route_all()
     s.execute.side_effect = branch
@@ -133,7 +134,7 @@ async def test_dr_loss_funnel_and_stats():
         await dr.dr_loss_funnel(batch_no="", stage="", session=s)
 
 
-def test_route_all_return_value():
+def test_route_all_return_value() -> Any:
     # 验证 _route_all 对所有 SQL 类型都能安全返回
     branch, _ = _route_all()
     r = branch("SELECT 1 FROM production.dr_extractions WHERE ...")
@@ -152,7 +153,7 @@ _MAIN_TABLES = {
 
 
 @pytest.mark.anyio
-async def test_dr_coverage_full():
+async def test_dr_coverage_full() -> Any:
     """覆盖完整性：各工段计数 + 断链 _missing 无前缀/有前缀 + 特殊投料标签。"""
     s = AsyncMock()
     s.execute.return_value = SimpleNamespace(
@@ -167,7 +168,7 @@ async def test_dr_coverage_full():
 
 
 @pytest.mark.anyio
-async def test_dr_material_reuse_full():
+async def test_dr_material_reuse_full() -> Any:
     """物料复用：单 union 查询返回多个投料复用项。"""
     s = AsyncMock()
     rows = [
@@ -183,11 +184,11 @@ async def test_dr_material_reuse_full():
 
 
 @pytest.mark.anyio
-async def test_dr_loss_stats_full():
+async def test_dr_loss_stats_full() -> Any:
     """损耗统计：按年月聚合行 + 三次/四次未闭合投料。"""
     s = AsyncMock()
 
-    def branch(sql, params=None):
+    def branch(sql: Any, params: Any=None) -> Any:
         ssql = str(sql)
         r = MagicMock()
         if "SELECT stage, ym, COUNT(*)" in ssql:
@@ -212,7 +213,7 @@ async def test_dr_loss_stats_full():
 
 
 @pytest.mark.anyio
-async def test_dr_loss_stats_empty():
+async def test_dr_loss_stats_empty() -> Any:
     s = AsyncMock()
     s.execute.return_value = MagicMock(fetchall=lambda: [])
     resp = await dr.dr_loss_stats(session=s)
@@ -224,7 +225,7 @@ async def test_dr_loss_stats_empty():
 # ═══════════ dr_lineage_api 纯函数 ═══════════
 
 
-def test_fmt_val():
+def test_fmt_val() -> Any:
     """格式化各种类型的值为浮点数。"""
     from app.modules.production import dr_lineage_api as dr
 
@@ -234,7 +235,7 @@ def test_fmt_val():
     assert dr.fmt_val("45.6") == 45.6
 
 
-def test_to_f1_and_f1_to_dr():
+def test_to_f1_and_f1_to_dr() -> Any:
     """F1 批号与 DR 批号的相互转换。"""
     from app.modules.production import dr_lineage_api as dr
 
@@ -249,7 +250,7 @@ def test_to_f1_and_f1_to_dr():
     assert dr._f1_to_dr("DR-26026") == "DR-26026"  # 不是 DR-F1 前缀，保持原样
 
 
-def test_detect_stage():
+def test_detect_stage() -> Any:
     """根据批号前缀推断工段。"""
     from app.modules.production import dr_lineage_api as dr
 
@@ -262,7 +263,7 @@ def test_detect_stage():
     assert dr._detect_stage("UNKNOWN") is None
 
 
-def test_split_feeds_and_feed_stage():
+def test_split_feeds_and_feed_stage() -> Any:
     """拆分投料字符串并推断投料工段。"""
     from app.modules.production import dr_lineage_api as dr
 
@@ -286,7 +287,7 @@ def test_split_feeds_and_feed_stage():
 
 
 @pytest.mark.anyio
-async def test_stage_exists():
+async def test_stage_exists() -> Any:
     """_stage_exists: 查询表是否存在批号。"""
     from unittest.mock import MagicMock
 
@@ -307,7 +308,7 @@ async def test_stage_exists():
 
 
 @pytest.mark.anyio
-async def test_resolve_with_stage():
+async def test_resolve_with_stage() -> Any:
     """_resolve: 有明确 stage 时直接返回。"""
     from app.modules.production import dr_lineage_api as dr
 
@@ -320,7 +321,7 @@ async def test_resolve_with_stage():
 
 
 @pytest.mark.anyio
-async def test_resolve_with_detect():
+async def test_resolve_with_detect() -> Any:
     """_resolve: 无 stage 时通过前缀检测。"""
     from app.modules.production import dr_lineage_api as dr
 
@@ -333,7 +334,7 @@ async def test_resolve_with_detect():
 
 
 @pytest.mark.anyio
-async def test_resolve_fallback_probe():
+async def test_resolve_fallback_probe() -> Any:
     """_resolve: 前缀检测失败时逐表探测。"""
     from app.modules.production import dr_lineage_api as dr
 
@@ -341,7 +342,7 @@ async def test_resolve_fallback_probe():
     # Mock _stage_exists to return False for first two stages, True for third
     call_count = [0]
 
-    async def mock_stage_exists(session, stage, batch):
+    async def mock_stage_exists(session: Any, stage: Any, batch: Any) -> Any:
         call_count[0] += 1
         return call_count[0] >= 3  # 第三次返回 True
 
@@ -352,7 +353,7 @@ async def test_resolve_fallback_probe():
 
 
 @pytest.mark.anyio
-async def test_resolve_not_found():
+async def test_resolve_not_found() -> Any:
     """_resolve: 所有探测都失败时返回 None。"""
     from app.modules.production import dr_lineage_api as dr
 
@@ -367,7 +368,7 @@ async def test_resolve_not_found():
 
 
 @pytest.mark.anyio
-async def test_fa_lineage_node_info_fermentation():
+async def test_fa_lineage_node_info_fermentation() -> Any:
     """_node_info: fermentation 工段返回发酵数据。"""
     from app.modules.production import fa_lineage_api as fa
 
@@ -382,7 +383,7 @@ async def test_fa_lineage_node_info_fermentation():
         汇总总量_kg=500.0, 放罐体积_kl=200.0
     )
 
-    def execute_side_effect(query, params=None):
+    def execute_side_effect(query: Any, params: Any=None) -> Any:
         sql_str = str(query)
         if "fa_batch_lineage" in sql_str:
             return result
@@ -399,7 +400,7 @@ async def test_fa_lineage_node_info_fermentation():
 
 
 @pytest.mark.anyio
-async def test_fa_lineage_node_info_acidification():
+async def test_fa_lineage_node_info_acidification() -> Any:
     """_node_info: acidification 工段返回酸化数据。"""
     from app.modules.production import fa_lineage_api as fa
 
@@ -410,7 +411,7 @@ async def test_fa_lineage_node_info_acidification():
     acid_result = MagicMock()
     acid_result.fetchone.return_value = SimpleNamespace(max_qty=300.0)
 
-    def execute_side_effect(query, params=None):
+    def execute_side_effect(query: Any, params: Any=None) -> Any:
         sql_str = str(query)
         if "fa_batch_lineage" in sql_str:
             return result
@@ -426,7 +427,7 @@ async def test_fa_lineage_node_info_acidification():
 
 
 @pytest.mark.anyio
-async def test_fa_lineage_node_info_decolor1():
+async def test_fa_lineage_node_info_decolor1() -> Any:
     """_node_info: decolor1 工段返回脱色数据。"""
     from app.modules.production import fa_lineage_api as fa
 
@@ -437,7 +438,7 @@ async def test_fa_lineage_node_info_decolor1():
     decolor_result = MagicMock()
     decolor_result.fetchone.return_value = (150.0, 25.5)  # 体积, 碳后含量
 
-    def execute_side_effect(query, params=None):
+    def execute_side_effect(query: Any, params: Any=None) -> Any:
         sql_str = str(query)
         if "fa_batch_lineage" in sql_str:
             return result
@@ -454,7 +455,7 @@ async def test_fa_lineage_node_info_decolor1():
 
 
 @pytest.mark.anyio
-async def test_fa_lineage_node_info_decolor_centrifuge():
+async def test_fa_lineage_node_info_decolor_centrifuge() -> Any:
     """_node_info: decolor_centrifuge 工段返回离心数据。"""
     from app.modules.production import fa_lineage_api as fa
 
@@ -465,7 +466,7 @@ async def test_fa_lineage_node_info_decolor_centrifuge():
     centrifuge_result = MagicMock()
     centrifuge_result.fetchone.return_value = (120.0, 0.95)  # 进料体积, 收率
 
-    def execute_side_effect(query, params=None):
+    def execute_side_effect(query: Any, params: Any=None) -> Any:
         sql_str = str(query)
         if "fa_batch_lineage" in sql_str:
             return result

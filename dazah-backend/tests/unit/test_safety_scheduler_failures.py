@@ -1,7 +1,8 @@
 """Failure-isolation tests for the safety scheduled-task loop."""
 
 from datetime import UTC, datetime
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
@@ -9,8 +10,10 @@ import pytest
 
 from app.modules.safety import scheduler
 
+SimpleNamespace: Any = _SimpleNamespace
 
-def _task():
+
+def _task() -> Any:
     return SimpleNamespace(
         id=uuid4(),
         name="每日安全提醒",
@@ -34,9 +37,9 @@ def test_compute_next_run_preserves_timezone() -> None:
 
 
 @pytest.mark.asyncio
-async def test_execute_single_task_records_success(monkeypatch) -> None:
+async def test_execute_single_task_records_success(monkeypatch: Any) -> None:
     task = _task()
-    repo = SimpleNamespace(
+    repo: Any = SimpleNamespace(
         create_task_log=AsyncMock(return_value=SimpleNamespace(id=uuid4())),
         update_task_log=AsyncMock(),
         update_scheduled_task=AsyncMock(),
@@ -71,15 +74,13 @@ async def test_execute_single_task_records_success(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_execute_single_task_contains_fetch_and_status_update_failures(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     task = _task()
-    repo = SimpleNamespace(
+    repo: Any = SimpleNamespace(
         create_task_log=AsyncMock(return_value=SimpleNamespace(id=uuid4())),
         update_task_log=AsyncMock(side_effect=RuntimeError("log unavailable")),
-        update_scheduled_task=AsyncMock(
-            side_effect=RuntimeError("task unavailable")
-        ),
+        update_scheduled_task=AsyncMock(side_effect=RuntimeError("task unavailable")),
     )
     monkeypatch.setattr(
         "app.modules.safety.card_builder.fetch_data_sources",
@@ -99,18 +100,18 @@ async def test_execute_single_task_contains_fetch_and_status_update_failures(
 
 @pytest.mark.asyncio
 async def test_scheduled_task_loop_commits_due_tasks_and_stops(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     scheduler.stop_scheduled_task_flag.clear()
     task = _task()
-    repo = SimpleNamespace(get_due_scheduled_tasks=AsyncMock(return_value=[task]))
-    session = SimpleNamespace(commit=AsyncMock())
+    repo: Any = SimpleNamespace(get_due_scheduled_tasks=AsyncMock(return_value=[task]))
+    session: Any = SimpleNamespace(commit=AsyncMock())
 
     class SessionContext:
-        async def __aenter__(self):
+        async def __aenter__(self: Any) -> Any:
             return session
 
-        async def __aexit__(self, *_args):
+        async def __aexit__(self: Any, *_args: Any) -> Any:
             return False
 
     monkeypatch.setattr(
@@ -121,15 +122,15 @@ async def test_scheduled_task_loop_commits_due_tasks_and_stops(
         "app.modules.safety.repository.SafetyRepository",
         lambda _session: repo,
     )
-    execute = AsyncMock()
+    execute: Any = AsyncMock()
     monkeypatch.setattr(scheduler, "execute_single_task", execute)
 
-    async def fake_wait_for(awaitable, *, timeout):
+    async def fake_wait_for(awaitable: Any, *, timeout: Any) -> Any:
         awaitable.close()
         scheduler.stop_scheduled_task_flag.set()
         raise TimeoutError
 
-    monkeypatch.setattr(scheduler.asyncio, "wait_for", fake_wait_for)
+    monkeypatch.setattr(scheduler.asyncio, "wait_for", fake_wait_for)  # type: ignore[attr-defined]
     await scheduler.scheduled_task_loop()
 
     execute.assert_awaited_once_with(task, repo)
@@ -139,15 +140,15 @@ async def test_scheduled_task_loop_commits_due_tasks_and_stops(
 
 @pytest.mark.asyncio
 async def test_scheduled_task_loop_contains_database_failure(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     scheduler.stop_scheduled_task_flag.clear()
 
     class FailingContext:
-        async def __aenter__(self):
+        async def __aenter__(self: Any) -> Any:
             raise RuntimeError("database unavailable")
 
-        async def __aexit__(self, *_args):
+        async def __aexit__(self: Any, *_args: Any) -> Any:
             return False
 
     monkeypatch.setattr(
@@ -155,10 +156,10 @@ async def test_scheduled_task_loop_contains_database_failure(
         FailingContext,
     )
 
-    async def fake_wait_for(awaitable, *, timeout):
+    async def fake_wait_for(awaitable: Any, *, timeout: Any) -> Any:
         awaitable.close()
         scheduler.stop_scheduled_task_flag.set()
 
-    monkeypatch.setattr(scheduler.asyncio, "wait_for", fake_wait_for)
+    monkeypatch.setattr(scheduler.asyncio, "wait_for", fake_wait_for)  # type: ignore[attr-defined]
     await scheduler.scheduled_task_loop()
     scheduler.stop_scheduled_task_flag.clear()

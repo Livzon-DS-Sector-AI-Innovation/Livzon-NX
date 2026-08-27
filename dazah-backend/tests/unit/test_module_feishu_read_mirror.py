@@ -1,17 +1,18 @@
 from __future__ import annotations
 
+from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy import func, select
 
-from app.modules.quality.models import (
-    QualityFeishuReadField,
-    QualityFeishuReadPageBinding,
-    QualityFeishuReadRecord,
-    QualityFeishuReadResource,
-    QualityFeishuReadSourceRoot,
-    QualityFeishuReadSyncRun,
+from app.modules.production.models import (
+    ProductionFeishuReadField,
+    ProductionFeishuReadPageBinding,
+    ProductionFeishuReadRecord,
+    ProductionFeishuReadResource,
+    ProductionFeishuReadSourceRoot,
+    ProductionFeishuReadSyncRun,
 )
 from app.platform.integrations.feishu.read_mirror import (
     ModuleFeishuReadMirrorService,
@@ -19,26 +20,26 @@ from app.platform.integrations.feishu.read_mirror import (
 )
 
 MODELS = ReadMirrorModels(
-    root=QualityFeishuReadSourceRoot,
-    resource=QualityFeishuReadResource,
-    field=QualityFeishuReadField,
-    record=QualityFeishuReadRecord,
-    binding=QualityFeishuReadPageBinding,
-    sync_run=QualityFeishuReadSyncRun,
+    root=ProductionFeishuReadSourceRoot,
+    resource=ProductionFeishuReadResource,
+    field=ProductionFeishuReadField,
+    record=ProductionFeishuReadRecord,
+    binding=ProductionFeishuReadPageBinding,
+    sync_run=ProductionFeishuReadSyncRun,
 )
 
 
 class PagedClient:
-    def __init__(self, *, broken: bool = False) -> None:
+    def __init__(self: Any, *, broken: bool = False) -> None:
         self.broken = broken
 
-    async def list_fields(self, _table_id: str, *, page_size: int = 100):
+    async def list_fields(self: Any, _table_id: str, *, page_size: int = 100) -> Any:
         assert page_size == 100
         return [{"field_id": "fld_name", "field_name": "名称", "type": 1}]
 
     async def search_records(
-        self, _table_id: str, *, page_size: int, page_token: str | None
-    ):
+        self: Any, _table_id: str, *, page_size: int, page_token: str | None
+    ) -> Any:
         assert page_size == 500
         if page_token is None:
             return {
@@ -59,8 +60,8 @@ class PagedClient:
         }
 
 
-async def _resource(db_session) -> QualityFeishuReadResource:
-    root = QualityFeishuReadSourceRoot(
+async def _resource(db_session: Any) -> ProductionFeishuReadResource:
+    root = ProductionFeishuReadSourceRoot(
         config_id=uuid4(),
         name="测试 Base",
         source_type="base",
@@ -69,7 +70,7 @@ async def _resource(db_session) -> QualityFeishuReadResource:
     )
     db_session.add(root)
     await db_session.flush()
-    resource = QualityFeishuReadResource(
+    resource = ProductionFeishuReadResource(
         source_root_id=root.id,
         app_token=f"base-{uuid4().hex}",
         table_id=f"tbl-{uuid4().hex}",
@@ -83,12 +84,12 @@ async def _resource(db_session) -> QualityFeishuReadResource:
 
 @pytest.mark.asyncio
 async def test_read_mirror_stitches_all_pages_and_publishes_only_complete_version(
-    db_session, monkeypatch
-):
+    db_session: Any, monkeypatch: Any
+) -> Any:
     resource = await _resource(db_session)
     service = ModuleFeishuReadMirrorService(
         db_session,
-        module_code="quality",
+        module_code="production",
         app_id="dummy",
         app_secret="dummy",
         models=MODELS,
@@ -100,10 +101,10 @@ async def test_read_mirror_stitches_all_pages_and_publishes_only_complete_versio
     await db_session.refresh(resource)
     count = await db_session.scalar(
         select(func.count())
-        .select_from(QualityFeishuReadRecord)
+        .select_from(ProductionFeishuReadRecord)
         .where(
-            QualityFeishuReadRecord.resource_id == resource.id,
-            QualityFeishuReadRecord.mirror_version == resource.active_mirror_version,
+            ProductionFeishuReadRecord.resource_id == resource.id,
+            ProductionFeishuReadRecord.mirror_version == resource.active_mirror_version,
         )
     )
     assert result["record_count"] == 501
@@ -134,13 +135,13 @@ async def test_read_mirror_stitches_all_pages_and_publishes_only_complete_versio
 
 @pytest.mark.asyncio
 async def test_read_mirror_rejects_broken_page_chain_without_switching_version(
-    db_session, monkeypatch
-):
+    db_session: Any, monkeypatch: Any
+) -> Any:
     resource = await _resource(db_session)
     old_version = uuid4()
     resource.active_mirror_version = old_version
     db_session.add(
-        QualityFeishuReadRecord(
+        ProductionFeishuReadRecord(
             resource_id=resource.id,
             record_id="old-record",
             mirror_version=old_version,
@@ -152,7 +153,7 @@ async def test_read_mirror_rejects_broken_page_chain_without_switching_version(
     await db_session.commit()
     service = ModuleFeishuReadMirrorService(
         db_session,
-        module_code="quality",
+        module_code="production",
         app_id="dummy",
         app_secret="dummy",
         models=MODELS,

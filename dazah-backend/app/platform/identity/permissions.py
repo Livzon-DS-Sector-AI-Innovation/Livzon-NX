@@ -178,7 +178,7 @@ class IdentityPermissionService:
 
     @classmethod
     def _normalize_grants(
-        cls, grants: list[ModulePermissionGrantInput]
+        cls: Any, grants: list[ModulePermissionGrantInput]
     ) -> list[dict[str, Any]]:
         seen_modules: set[str] = set()
         normalized: list[dict[str, Any]] = []
@@ -217,7 +217,7 @@ class IdentityPermissionService:
         return sorted(normalized, key=lambda item: item["module_code"])
 
     @classmethod
-    def _validate_data_scope(cls, value: Any, path: str = "data_scope") -> None:
+    def _validate_data_scope(cls: Any, value: Any, path: str = "data_scope") -> None:
         if isinstance(value, dict):
             for key, item in value.items():
                 if is_sensitive_key(key):

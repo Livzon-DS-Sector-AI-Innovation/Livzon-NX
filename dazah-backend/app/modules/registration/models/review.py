@@ -1,5 +1,9 @@
 """Review node configuration (static data)."""
 
+from __future__ import annotations
+
+from typing import Any
+
 
 class ReviewNode:
     """审评节点配置"""
@@ -18,11 +22,11 @@ class ReviewNode:
     ]
 
     @classmethod
-    def get_all(cls) -> list[dict]:
-        return cls.NODES
+    def get_all(cls: type[ReviewNode]) -> list[dict[str, Any]]:
+        return list(cls.NODES)
 
     @classmethod
-    def get_by_index(cls, index: int) -> dict | None:
+    def get_by_index(cls: type[ReviewNode], index: int) -> dict[str, Any] | None:
         for node in cls.NODES:
             if node["index"] == index:
                 return node

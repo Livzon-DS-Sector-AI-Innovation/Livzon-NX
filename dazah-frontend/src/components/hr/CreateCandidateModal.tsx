@@ -56,7 +56,7 @@ export default function CreateCandidateModal({
       setParsed(true)
       message.success('简历解析完成，请确认以下信息')
     } catch (err) {
-      message.error(err.message || '解析失败')
+      message.error((err instanceof Error ? err.message : '') || '解析失败')
     } finally {
       setParsing(false)
     }
@@ -90,7 +90,7 @@ export default function CreateCandidateModal({
       onSuccess()
       handleReset()
     } catch (err) {
-      message.error(err.message || '创建失败')
+      message.error((err instanceof Error ? err.message : '') || '创建失败')
     } finally {
       setCreating(false)
     }

@@ -3,19 +3,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { App, Button, Space } from 'antd'
-import {
-  createChangeActionPlan,
-  deleteChangeActionPlan,
-  syncChangeActionPlanToFeishu,
-  syncChangeActionPlansFromFeishu,
-  updateChangeActionPlan,
-} from '@/actions/quality'
-import {
-  fetchChangeActionPlans,
-} from '@/lib/api/quality'
-import type { ChangeActionPlanListItem } from '@/types/quality'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { createChangeActionPlan, deleteChangeActionPlan, syncChangeActionPlanToFeishu, syncChangeActionPlansFromFeishu, updateChangeActionPlan } from '@/actions/quality-change'
+import { fetchChangeActionPlans } from '@/lib/api/client/quality'
 import { ChangeActionPlanTable } from './ChangeActionPlanTable'
-import { ChangeActionPlanEditModal } from './change-action-plan-edit-modal'
+
+import type { ChangeActionPlanListItem } from '@/types/quality'
+import { ChangeActionPlanEditModal } from './ChangeActionPlanEditModal'
 
 function getErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof Error && error.message) {
@@ -26,10 +20,8 @@ function getErrorMessage(error: unknown, fallback: string): string {
 
 export function ChangeActionPlanPage() {
   const { message, modal } = App.useApp()
+  const queryClient = useQueryClient()
   const searchParams = useSearchParams()
-  const [items, setItems] = useState<ChangeActionPlanListItem[]>([])
-  const [total, setTotal] = useState(0)
-  const [loading, setLoading] = useState(false)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const [filters, setFilters] = useState({
@@ -43,29 +35,23 @@ export function ChangeActionPlanPage() {
   const [saving, setSaving] = useState(false)
   const [editingRecord, setEditingRecord] = useState<ChangeActionPlanListItem | null>(null)
 
-  const loadData = useCallback(async () => {
-    try {
-      setLoading(true)
-      const result = await fetchChangeActionPlans({
-        ...filters,
-        page,
-        page_size: pageSize,
-      })
-      setItems(result.items)
-      setTotal(result.total)
-    } catch (error: unknown) {
-      message.error(getErrorMessage(error, '加载变更计划失败'))
-    } finally {
-      setLoading(false)
-    }
-  }, [filters, message, page, pageSize])
+  const { data, isLoading: loading, error } = useQuery({
+    queryKey: ['quality-change-plan', 'list', { ...filters, page, pageSize }],
+    queryFn: () => fetchChangeActionPlans({
+      ...filters,
+      page,
+      page_size: pageSize,
+    }),
+  })
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void loadData()
-    }, 0)
-    return () => window.clearTimeout(timer)
-  }, [loadData])
+    if (error) {
+      message.error(getErrorMessage(error, '加载变更计划失败'))
+    }
+  }, [error, message])
+
+  const items = data?.items ?? []
+  const total = data?.total ?? 0
 
   const handleCreate = useCallback(() => {
     setEditingRecord(null)
@@ -77,57 +63,44 @@ export function ChangeActionPlanPage() {
       try {
         setSaving(true)
         if (editingRecord) {
-          const payload = { ...values }
-          if (payload.owner_user_id === editingRecord.owner_user_id) {
-            delete payload.owner_user_id
-          }
-          if (payload.owner_name === editingRecord.owner_name) {
-            delete payload.owner_name
-          }
-          if (payload.director_user_id === editingRecord.director_user_id) {
-            delete payload.director_user_id
-          }
-          if (payload.director_name === editingRecord.director_name) {
-            delete payload.director_name
-          }
-          await updateChangeActionPlan(editingRecord.id, payload)
-          message.success('变更计划已更新并同步飞书')
+          await updateChangeActionPlan(editingRecord.id, values)
+          message.success('变更计划已更新，人员字段请在飞书多维表维护后再同步回系统')
         } else {
           await createChangeActionPlan(values)
           message.success('变更计划已创建')
         }
         setEditorOpen(false)
-        await loadData()
+        queryClient.invalidateQueries({ queryKey: ['quality-change-plan'] })
       } catch (error: unknown) {
         message.error(getErrorMessage(error, '保存变更计划失败'))
       } finally {
         setSaving(false)
       }
     },
-    [editingRecord, loadData, message]
+    [editingRecord, message, queryClient]
   )
 
-  const handlePullFromFeishu = useCallback(async () => {
+  const handleSyncAll = useCallback(async () => {
     try {
       const result = await syncChangeActionPlansFromFeishu()
-      message.success(`拉取完成：成功 ${result.synced} 条，失败 ${result.failed} 条。飞书多维表中的负责人/部门负责人已按最新结果回写系统。`)
-      await loadData()
+      message.success(`同步完成：成功 ${result.synced} 条，失败 ${result.failed} 条。飞书多维表中的负责人/部门总监已按最新结果回写系统。`)
+      queryClient.invalidateQueries({ queryKey: ['quality-change-plan'] })
     } catch (error: unknown) {
-      message.error(getErrorMessage(error, '拉取飞书失败'))
+      message.error(getErrorMessage(error, '同步飞书失败'))
     }
-  }, [loadData, message])
+  }, [message, queryClient])
 
   const handleSyncSingle = useCallback(
     async (record: ChangeActionPlanListItem) => {
       try {
         await syncChangeActionPlanToFeishu(record.id)
         message.success('已回写飞书')
-        await loadData()
+        queryClient.invalidateQueries({ queryKey: ['quality-change-plan'] })
       } catch (error: unknown) {
         message.error(getErrorMessage(error, '回写飞书失败'))
       }
     },
-    [loadData, message]
+    [message, queryClient]
   )
 
   const handleDelete = useCallback(
@@ -142,14 +115,14 @@ export function ChangeActionPlanPage() {
           try {
             await deleteChangeActionPlan(record.id)
             message.success('变更计划已删除')
-            await loadData()
+            queryClient.invalidateQueries({ queryKey: ['quality-change-plan'] })
           } catch (error: unknown) {
             message.error(getErrorMessage(error, '删除变更计划失败'))
           }
         },
       })
     },
-    [loadData, message, modal]
+    [message, modal, queryClient]
   )
 
   return (
@@ -177,8 +150,8 @@ export function ChangeActionPlanPage() {
           setPage(nextPage)
           setPageSize(nextPageSize)
         }}
-        onRefresh={loadData}
-        onSyncAll={handlePullFromFeishu}
+        onRefresh={() => queryClient.invalidateQueries({ queryKey: ['quality-change-plan'] })}
+        onSyncAll={handleSyncAll}
         onEdit={(record) => {
           setEditingRecord(record)
           setEditorOpen(true)

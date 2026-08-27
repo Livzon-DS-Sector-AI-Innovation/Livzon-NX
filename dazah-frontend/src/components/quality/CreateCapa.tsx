@@ -3,16 +3,14 @@
 import { useRouter } from 'next/navigation'
 import { App, Card, Form, Input, Select, Button, DatePicker, Space } from 'antd'
 import { ArrowLeftOutlined } from '@ant-design/icons'
-import { createCapa } from '@/actions/quality'
-import type { CreateCapaRequest } from '@/types/quality'
-import dayjs from 'dayjs'
+import { createCapa } from '@/actions/quality-capa'
 
 export function CreateCapa() {
   const router = useRouter()
   const { message } = App.useApp()
   const [form] = Form.useForm()
 
-  const handleSubmit = async (values: Omit<CreateCapaRequest, 'expected_completion_date'> & { expected_completion_date?: dayjs.Dayjs }) => {
+  const handleSubmit = async (values: any) => {
     try {
       const result = await createCapa({
         ...values,
@@ -21,7 +19,7 @@ export function CreateCapa() {
       message.success('创建成功')
       router.push('/quality/capas')
     } catch (error) {
-      message.error(error?.message || '创建失败')
+      message.error((error instanceof Error ? error.message : '') || '创建失败')
     }
   }
 

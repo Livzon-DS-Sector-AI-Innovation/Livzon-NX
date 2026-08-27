@@ -28,7 +28,9 @@ class CpvParameterCreate(BaseModel):
 class CpvParameterUpdate(BaseModel):
     """更新参数请求"""
 
-    name: str | None = Field(default=None, min_length=1, max_length=200, description="参数名称")
+    name: str | None = Field(
+        default=None, min_length=1, max_length=200, description="参数名称"
+    )
     code: str | None = Field(default=None, max_length=100, description="参数代码")
     unit: str | None = Field(default=None, max_length=50, description="单位")
     lower_limit: float | None = Field(default=None, description="标准下限")

@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-import uuid
 from datetime import UTC, datetime
-from typing import Any, cast
+from typing import Any
 
 from sqlalchemy import or_, select
 
@@ -56,7 +55,7 @@ class AgentAccessScopeSyncGenerator(TaskGenerator):
         try:
             await self.scope_service.synchronize(
                 session,
-                user_id=cast(uuid.UUID, item.user_id),
+                user_id=item.user_id,
                 actor_id=item.updated_by or item.created_by,
             )
             await self.permission_repo.mark_outbox_processed(

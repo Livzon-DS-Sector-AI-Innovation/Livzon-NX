@@ -1,6 +1,6 @@
 """二次浓缩 API"""
-
 from datetime import datetime as dt
+from typing import Any
 from uuid import UUID
 
 from fastapi import Depends, Query
@@ -66,7 +66,7 @@ async def _list(
     s: str | None = Query(None, alias="batch_no"),
     workshop: str = Query("203"),
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     q = select(Conc2).where(Conc2.is_deleted.is_(False), Conc2.workshop == workshop)
     if s:
         q = q.where(Conc2.batch_no.ilike(f"%{s}%"))
@@ -82,7 +82,7 @@ async def _list(
 
 
 @router.post("/conc2", summary="创建二次浓缩")
-async def _create(d: CD, session: AsyncSession = Depends(get_db)):
+async def _create(d: CD, session: AsyncSession = Depends(get_db)) -> Any:
     r = Conc2(**d.model_dump())
     session.add(r)
     await session.flush()
@@ -92,7 +92,7 @@ async def _create(d: CD, session: AsyncSession = Depends(get_db)):
 
 
 @router.put("/conc2/{rid}", summary="更新二次浓缩")
-async def _update(rid: UUID, d: CD, session: AsyncSession = Depends(get_db)):
+async def _update(rid: UUID, d: CD, session: AsyncSession = Depends(get_db)) -> Any:
     r = await session.get(Conc2, rid)
     if not r or r.is_deleted:
         return success_response(None, message="记录不存在", status_code=404)
@@ -103,7 +103,7 @@ async def _update(rid: UUID, d: CD, session: AsyncSession = Depends(get_db)):
 
 
 @router.delete("/conc2/{rid}", summary="删除二次浓缩")
-async def _delete(rid: UUID, session: AsyncSession = Depends(get_db)):
+async def _delete(rid: UUID, session: AsyncSession = Depends(get_db)) -> Any:
     r = await session.get(Conc2, rid)
     if not r:
         return success_response(None, message="记录不存在", status_code=404)

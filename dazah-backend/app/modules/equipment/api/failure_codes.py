@@ -45,9 +45,7 @@ def _register_failure_code_routes(
             data=[FailureCodeResponse.model_validate(c) for c in codes]
         )
 
-    @router.get(
-        f"/{path}/{{code_id}}", summary=f"查询单个{summary_prefix}"
-    )
+    @router.get(f"/{path}/{{code_id}}", summary=f"查询单个{summary_prefix}")
     async def get_one(
         code_id: uuid.UUID,
         db: AsyncSession = Depends(get_db),
@@ -55,9 +53,7 @@ def _register_failure_code_routes(
         result = await service.get_failure_code_by_id(db, model_class, code_id)
         return success_response(data=FailureCodeResponse.model_validate(result))
 
-    @router.put(
-        f"/{path}/{{code_id}}", summary=f"修改{summary_prefix}"
-    )
+    @router.put(f"/{path}/{{code_id}}", summary=f"修改{summary_prefix}")
     async def update(
         code_id: uuid.UUID,
         data: FailureCodeUpdate,
@@ -67,9 +63,7 @@ def _register_failure_code_routes(
         result = await service.update_failure_code(db, model_class, code_id, data)
         return success_response(data=FailureCodeResponse.model_validate(result))
 
-    @router.delete(
-        f"/{path}/{{code_id}}", summary=f"删除{summary_prefix}"
-    )
+    @router.delete(f"/{path}/{{code_id}}", summary=f"删除{summary_prefix}")
     async def delete(
         code_id: uuid.UUID,
         db: AsyncSession = Depends(get_db),

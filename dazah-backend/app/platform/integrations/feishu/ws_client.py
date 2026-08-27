@@ -7,6 +7,7 @@
 import asyncio
 import logging
 import threading
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +18,7 @@ _stop_flags: dict[str, threading.Event] = {}
 def start_ws_client(
     app_id: str | None = None,
     app_secret: str | None = None,
-    event_handler=None,
+    event_handler: Any = None,
     name: str = "feishu-ws",
 ) -> None:
     """启动飞书 WebSocket 长连接（非阻塞，在后台线程运行）。
@@ -36,7 +37,8 @@ def start_ws_client(
 
     if not resolved_app_id or not resolved_app_secret:
         logger.warning(
-            "[%s] 飞书 APP_ID/APP_SECRET 未配置，跳过长连接启动", name,
+            "[%s] 飞书 APP_ID/APP_SECRET 未配置，跳过长连接启动",
+            name,
         )
         return
 
@@ -77,13 +79,13 @@ def stop_ws_client(name: str | None = None) -> None:
 def _run_ws_in_thread(
     app_id: str,
     app_secret: str,
-    event_handler,
+    event_handler: Any,
     name: str,
     stop_flag: threading.Event,
 ) -> None:
     """在独立线程中创建 event loop 并运行 WS client。"""
-    import lark_oapi as lark
-    import lark_oapi.ws as lark_ws
+    import lark_oapi as lark  # type: ignore[import-untyped]
+    import lark_oapi.ws as lark_ws  # type: ignore[import-untyped]
 
     if event_handler is None:
         from app.platform.integrations.feishu.event_handler import (

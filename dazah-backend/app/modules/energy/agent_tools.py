@@ -111,9 +111,7 @@ def _dump(item: BaseModel) -> dict[str, Any]:
     sensitivity="sensitive",
     output_hint="返回能源飞书配置、同步状态和密钥配置状态；不会返回飞书应用密钥明文。",
 )
-async def get_feishu_config(
-    context: ToolContext, _: BaseModel
-) -> dict[str, Any]:
+async def get_feishu_config(context: ToolContext, _: BaseModel) -> dict[str, Any]:
     result = await _service(context).get_config()
     return _dump(EnergyFeishuConfigResponse.model_validate(result))
 
@@ -132,8 +130,7 @@ async def list_feishu_source_roots(
 ) -> list[dict[str, Any]]:
     items = await _service(context).list_source_roots()
     return [
-        _dump(EnergyFeishuSourceRootResponse.model_validate(item))
-        for item in items
+        _dump(EnergyFeishuSourceRootResponse.model_validate(item)) for item in items
     ]
 
 
@@ -175,8 +172,7 @@ async def create_feishu_source_root(
     path="/energy/feishu/roots/{root_id}",
     sensitivity="sensitive",
     output_hint=(
-        "生成待确认项；确认后修改入口名称、类型、链接或启用状态，"
-        "不会修改飞书原表内容。"
+        "生成待确认项；确认后修改入口名称、类型、链接或启用状态，不会修改飞书原表内容。"
     ),
 )
 async def update_feishu_source_root(
@@ -266,17 +262,13 @@ async def test_feishu_connectivity(
     path="/energy/sync-runs",
     output_hint="分页返回能源飞书同步运行记录和处理数量。",
 )
-async def list_sync_runs(
-    context: ToolContext, data: EnergyPageInput
-) -> dict[str, Any]:
+async def list_sync_runs(context: ToolContext, data: EnergyPageInput) -> dict[str, Any]:
     items, total = await _service(context).list_sync_runs(
         page=data.page,
         page_size=data.page_size,
     )
     return {
-        "items": [
-            _dump(EnergySyncRunResponse.model_validate(item)) for item in items
-        ],
+        "items": [_dump(EnergySyncRunResponse.model_validate(item)) for item in items],
         "total": total,
         "page": data.page,
         "page_size": data.page_size,
@@ -294,13 +286,8 @@ async def list_sync_runs(
 async def list_source_documents(
     context: ToolContext, data: EnergyDocumentFilterInput
 ) -> list[dict[str, Any]]:
-    items = await _service(context).list_documents(
-        period_month=data.period_month
-    )
-    return [
-        _dump(EnergySourceDocumentResponse.model_validate(item))
-        for item in items
-    ]
+    items = await _service(context).list_documents(period_month=data.period_month)
+    return [_dump(EnergySourceDocumentResponse.model_validate(item)) for item in items]
 
 
 @agent_tool(
@@ -353,9 +340,7 @@ async def list_sheet_snapshots(
     context: ToolContext, data: EnergySheetInput
 ) -> list[dict[str, Any]]:
     items = await _service(context).list_snapshots(data.sheet_id)
-    return [
-        _dump(EnergySnapshotResponse.model_validate(item)) for item in items
-    ]
+    return [_dump(EnergySnapshotResponse.model_validate(item)) for item in items]
 
 
 @agent_tool(
@@ -394,8 +379,7 @@ async def list_snapshot_rows(
     return {
         "snapshot": _dump(EnergySnapshotResponse.model_validate(snapshot)),
         "rows": [
-            _dump(EnergySnapshotRowResponse.model_validate(item))
-            for item in rows
+            _dump(EnergySnapshotRowResponse.model_validate(item)) for item in rows
         ],
         "total": total,
         "page": data.page,
@@ -438,8 +422,6 @@ async def get_overview(
     timeout_seconds=120,
     output_hint="生成待确认项；确认执行后返回本次能源飞书同步运行结果。",
 )
-async def trigger_sync(
-    context: ToolContext, data: EnergySyncInput
-) -> dict[str, Any]:
+async def trigger_sync(context: ToolContext, data: EnergySyncInput) -> dict[str, Any]:
     item = await _service(context).trigger_sync(force=data.force)
     return _dump(EnergySyncRunResponse.model_validate(item))

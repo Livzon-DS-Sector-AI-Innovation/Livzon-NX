@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import uuid
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
@@ -9,14 +10,14 @@ import pytest
 from app.modules.production import pressure_service as module
 from app.modules.production.pressure_schemas import BatchManualEntryRow
 
+SimpleNamespace: Any = _SimpleNamespace
+
 
 def _service() -> tuple[module.PressureService, SimpleNamespace]:
-    service = module.PressureService(object())
-    repo = SimpleNamespace(
+    service = module.PressureService(object())  # type: ignore[arg-type]
+    repo: Any = SimpleNamespace(
         get_point_mapping_by_point_id=AsyncMock(return_value=None),
-        create_record=AsyncMock(
-            return_value=SimpleNamespace(id=uuid.uuid4())
-        ),
+        create_record=AsyncMock(return_value=SimpleNamespace(id=uuid.uuid4())),
         get_points_by_area=AsyncMock(return_value=[]),
         create_records_batch=AsyncMock(),
         update_ocr_task=AsyncMock(),
@@ -48,10 +49,10 @@ def _service() -> tuple[module.PressureService, SimpleNamespace]:
 @pytest.mark.anyio
 async def test_manual_batch_and_ocr_record_creation_paths() -> None:
     service, repo = _service()
-    manual = module.CreateManualRecordRequest.model_construct(
+    manual = module.CreateManualRecordRequest.model_construct(  # type: ignore[attr-defined]
         point_id="P-001",
         pressure_value=15,
-        record_time=None,
+        record_time=None,  # type: ignore[arg-type]
         time_slot="morning",
         remark="人工录入",
     )
@@ -69,7 +70,7 @@ async def test_manual_batch_and_ocr_record_creation_paths() -> None:
             standard_pressure=12,
         )
     ]
-    batch = module.BatchManualEntryRequest.model_construct(
+    batch = module.BatchManualEntryRequest.model_construct(  # type: ignore[attr-defined]
         area="洁净区",
         time_slots=["morning", "evening", "night"],
         rows=[
@@ -92,10 +93,10 @@ async def test_manual_batch_and_ocr_record_creation_paths() -> None:
     assert records[0].standard_pressure == 12
     assert records[1].area == "洁净区"
 
-    mapping = SimpleNamespace(area="生产区", standard_pressure=10)
+    mapping: Any = SimpleNamespace(area="生产区", standard_pressure=10)
     repo.get_point_mapping_by_point_id.return_value = mapping
     task_id = uuid.uuid4()
-    ocr = module.CreateOcrRecordRequest.model_construct(
+    ocr = module.CreateOcrRecordRequest.model_construct(  # type: ignore[attr-defined]
         records=[
             {
                 "point_id": "P-002",
@@ -138,7 +139,7 @@ async def test_record_delete_audit_and_batch_result_boundaries() -> None:
     with pytest.raises(Exception):
         await service.audit_record(
             record_id,
-            module.AuditRequest.model_construct(
+            module.AuditRequest.model_construct(  # type: ignore[attr-defined]
                 status="approved",
                 reject_reason=None,
             ),
@@ -149,7 +150,7 @@ async def test_record_delete_audit_and_batch_result_boundaries() -> None:
     repo.delete_record.assert_awaited_once_with(record_id)
     assert await service.audit_record(
         record_id,
-        module.AuditRequest.model_construct(
+        module.AuditRequest.model_construct(  # type: ignore[attr-defined]
             status="rejected",
             reject_reason="读数异常",
         ),
@@ -166,7 +167,7 @@ async def test_record_delete_audit_and_batch_result_boundaries() -> None:
     assert deleted.fail_count == 2
 
     audited = await service.batch_audit(
-        module.BatchAuditRequest.model_construct(
+        module.BatchAuditRequest.model_construct(  # type: ignore[attr-defined]
             ids=ids,
             status="approved",
             reject_reason=None,
@@ -191,7 +192,7 @@ async def test_merged_export_and_empty_list_paths() -> None:
     assert repo.list_merged_records.await_args.kwargs["page"] == 2
 
     deleted = await service.delete_merged_row(
-        module.DeleteMergedRowRequest.model_construct(
+        module.DeleteMergedRowRequest.model_construct(  # type: ignore[attr-defined]
             point_id="P-001",
             date="2026-07-01",
         )
@@ -199,22 +200,22 @@ async def test_merged_export_and_empty_list_paths() -> None:
     assert deleted == {"success_count": 1, "success": True}
 
     rows = [
-        module.DeleteMergedRowRequest.model_construct(
+        module.DeleteMergedRowRequest.model_construct(  # type: ignore[attr-defined]
             point_id="P-001",
             date="2026-07-01",
         ),
-        module.DeleteMergedRowRequest.model_construct(
+        module.DeleteMergedRowRequest.model_construct(  # type: ignore[attr-defined]
             point_id="P-002",
             date="2026-07-01",
         ),
     ]
     batch_deleted = await service.batch_delete_merged_rows(
-        module.BatchDeleteMergedRowsRequest.model_construct(rows=rows)
+        module.BatchDeleteMergedRowsRequest.model_construct(rows=rows)  # type: ignore[attr-defined]
     )
     assert batch_deleted["success_count"] == 2
 
     updated = await service.update_merged_row(
-        module.UpdateMergedRowRequest.model_construct(
+        module.UpdateMergedRowRequest.model_construct(  # type: ignore[attr-defined]
             point_id="P-001",
             date="2026-07-01",
             time_slot_values={"morning": 12},
@@ -226,9 +227,7 @@ async def test_merged_export_and_empty_list_paths() -> None:
     tasks, task_total = await service.list_ocr_tasks(status="completed")
     assert tasks == []
     assert task_total == 0
-    items, item_total = await service.list_data_master(
-        material_name="物料A"
-    )
+    items, item_total = await service.list_data_master(material_name="物料A")
     assert items == []
     assert item_total == 0
 
@@ -244,7 +243,7 @@ async def test_missing_ocr_data_master_and_notification_paths() -> None:
     with pytest.raises(Exception):
         await service.submit_ocr_task_result(
             task_id,
-            module.SubmitOcrTaskResultRequest.model_construct(records=[]),
+            module.SubmitOcrTaskResultRequest.model_construct(records=[]),  # type: ignore[attr-defined]
         )
     with pytest.raises(Exception):
         await service.get_data_master(item_id)
@@ -253,9 +252,7 @@ async def test_missing_ocr_data_master_and_notification_paths() -> None:
     with pytest.raises(Exception):
         await service.delete_data_master(item_id)
 
-    deleted = await service.batch_delete_data_master(
-        [item_id, uuid.uuid4()]
-    )
+    deleted = await service.batch_delete_data_master([item_id, uuid.uuid4()])
     assert deleted.success_count == 1
     assert deleted.fail_count == 1
 

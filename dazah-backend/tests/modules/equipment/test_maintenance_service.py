@@ -58,9 +58,7 @@ async def test_create_failure_code_success(
     db_session: AsyncSession, sample_symptom_data: FailureCodeCreate
 ) -> None:
     """测试成功创建故障代码"""
-    result = await create_failure_code(
-        db_session, FailureSymptom, sample_symptom_data
-    )
+    result = await create_failure_code(db_session, FailureSymptom, sample_symptom_data)
     assert result.code == "NOISE"
     assert result.name == "异响"
     assert result.id is not None
@@ -79,12 +77,8 @@ async def test_get_failure_code_by_id_success(
     db_session: AsyncSession, sample_symptom_data: FailureCodeCreate
 ) -> None:
     """测试根据ID获取故障代码"""
-    created = await create_failure_code(
-        db_session, FailureSymptom, sample_symptom_data
-    )
-    result = await get_failure_code_by_id(
-        db_session, FailureSymptom, created.id
-    )
+    created = await create_failure_code(db_session, FailureSymptom, sample_symptom_data)
+    result = await get_failure_code_by_id(db_session, FailureSymptom, created.id)
     assert result.id == created.id
     assert result.code == "NOISE"
 
@@ -101,9 +95,7 @@ async def test_update_failure_code_success(
     db_session: AsyncSession, sample_symptom_data: FailureCodeCreate
 ) -> None:
     """测试成功更新故障代码"""
-    created = await create_failure_code(
-        db_session, FailureSymptom, sample_symptom_data
-    )
+    created = await create_failure_code(db_session, FailureSymptom, sample_symptom_data)
     updated = await update_failure_code(
         db_session,
         FailureSymptom,
@@ -119,12 +111,8 @@ async def test_delete_failure_code_success(
     db_session: AsyncSession, sample_symptom_data: FailureCodeCreate
 ) -> None:
     """测试成功删除故障代码"""
-    created = await create_failure_code(
-        db_session, FailureSymptom, sample_symptom_data
-    )
-    result = await delete_failure_code(
-        db_session, FailureSymptom, created.id
-    )
+    created = await create_failure_code(db_session, FailureSymptom, sample_symptom_data)
+    result = await delete_failure_code(db_session, FailureSymptom, created.id)
     assert result is True
     # 验证已被软删除
     with pytest.raises(NotFoundException):

@@ -18,6 +18,7 @@ from app.modules.safety.models import (
     Accident,
     Contractor,
     ContractorWorkRecord,
+    HazardIdentification,
     HazardReport,
     SafetyCheck,
     SafetyTraining,
@@ -250,7 +251,9 @@ class _SafetyCoreService:
                 "触发 AI 隐患识别: hazard_id=%s hazard_no=%s", item.id, item.hazard_no
             )
             try:
-                item = await self.run_hazard_ai_script(item.id, 1)
+                ai_item = await self.run_hazard_ai_script(item.id, 1)
+                if ai_item is not None:
+                    item = ai_item
                 logger.info(
                     "AI 隐患识别完成: hazard_id=%s type=%s level=%s category=%s"
                     " error=%s",
@@ -287,12 +290,17 @@ class _SafetyCoreService:
             return None
         # 标准化为 / 分隔符：避免 Windows 反斜杠在 JSON 中被当作非法转义符
         safe_path = file_path.replace("\\", "/")
+        defect_photos = hazard.defect_photos
         try:
-            photos = json.loads(hazard.defect_photos) if hazard.defect_photos else []
+            photos = json.loads(defect_photos) if defect_photos else []
         except (json.JSONDecodeError, TypeError):
             # 兼容历史损坏数据：尝试替换反斜杠后解析，仍失败则视为空列表
             try:
-                photos = json.loads(hazard.defect_photos.replace("\\", "/"))
+                photos = (
+                    json.loads(defect_photos.replace("\\", "/"))
+                    if defect_photos
+                    else []
+                )
             except Exception:
                 photos = []
         if not isinstance(photos, list):
@@ -312,15 +320,16 @@ class _SafetyCoreService:
         if not hazard:
             return None
         safe_path = file_path.replace("\\", "/")
+        rectification_photos = hazard.rectification_photos
         try:
-            photos = (
-                json.loads(hazard.rectification_photos)
-                if hazard.rectification_photos
-                else []
-            )
+            photos = json.loads(rectification_photos) if rectification_photos else []
         except (json.JSONDecodeError, TypeError):
             try:
-                photos = json.loads(hazard.rectification_photos.replace("\\", "/"))
+                photos = (
+                    json.loads(rectification_photos.replace("\\", "/"))
+                    if rectification_photos
+                    else []
+                )
             except Exception:
                 photos = []
         if not isinstance(photos, list):
@@ -419,11 +428,11 @@ class _SafetyCoreService:
 
         datetime.now()
         if action == "rejected":
-            update_data: dict[str, Any] = {
+            rejected_update: dict[str, Any] = {
                 "rectification_status": "rejected",
                 f"verify_level_{level}_status": "rejected",
             }
-            return await self.repo.update_hazard(hazard_id, update_data)
+            return await self.repo.update_hazard(hazard_id, rejected_update)
 
         # action == "approved"
         if level == 1 and is_general:
@@ -507,7 +516,7 @@ class _SafetyCoreService:
 
     async def _generate_hazard_ai_output(
         self, script_number: int, item: HazardReport
-    ) -> dict:
+    ) -> dict[str, Any]:
         """调用 AI 服务为隐患模块生成工作流输出。失败时抛出 AIOutputError。
 
         script 1 → AIHazardIdentifier 插件（含 few-shot prompt、规则引擎、自动修正）
@@ -520,7 +529,9 @@ class _SafetyCoreService:
         logger.debug("Script 2 无需额外 AI 调用，整改建议已由插件生成")
         return {}
 
-    async def _generate_hazard_identification(self, item: HazardReport) -> dict:
+    async def _generate_hazard_identification(
+        self, item: HazardReport
+    ) -> dict[str, Any]:
         """使用 AIHazardIdentifier 插件执行 AI 隐患识别（script 1）。
 
         插件负责：prompt 构建（含 few-shot）、视觉/文本路由、输出解析、
@@ -702,7 +713,7 @@ class _SafetyCoreService:
     }
 
     def _map_hazard_ai_output(
-        self, script_number: int, output: dict, update_data: dict[str, Any]
+        self, script_number: int, output: dict[str, Any], update_data: dict[str, Any]
     ) -> None:
         """将 AI JSON 输出映射到 HazardReport 字段（校验枚举值）。"""
         if script_number == 1:
@@ -767,7 +778,7 @@ async def _build_verify_card_content(
     level: int,
     button_state: str | None = None,
     skip_photos: bool = False,
-) -> tuple[str, str, list[dict]]:
+) -> tuple[str, str, list[dict[str, Any]]]:
     """构建复核通知卡片内容（header + markdown + 照片 + 操作按钮）。
 
     Args:
@@ -814,7 +825,7 @@ async def _build_verify_card_content(
         + ("\n⬇ 请到在下方点击「同意」或「驳回」操作" if button_state is None else "")
     )
 
-    elements: list[dict] = []
+    elements: list[dict[str, Any]] = []
 
     # ── 照片（卡片就地更新时跳过上传，避免超时）──
     if not skip_photos:
@@ -855,9 +866,9 @@ async def _build_verify_card_content(
         rectification_keys = []
 
     if defect_keys or rectification_keys:
-        columns: list[dict] = []
+        columns: list[dict[str, Any]] = []
         if defect_keys:
-            defect_col: dict = {
+            defect_col: dict[str, Any] = {
                 "tag": "column",
                 "width": "weighted",
                 "weight": 1,
@@ -874,7 +885,7 @@ async def _build_verify_card_content(
             columns.append(defect_col)
 
         if rectification_keys:
-            rect_col: dict = {
+            rect_col: dict[str, Any] = {
                 "tag": "column",
                 "width": "weighted",
                 "weight": 1,
@@ -1200,7 +1211,7 @@ async def _send_rectification_notification(hazard: HazardReport) -> None:
             " 请在多维表格中填写「纠正预防措施」并上传整改照片，该记录可转发"
         )
 
-        elements: list[dict] = []
+        elements: list[dict[str, Any]] = []
 
         # ── 缺陷照片 ──
         if hazard.defect_photos:
@@ -1237,7 +1248,7 @@ async def _send_rectification_notification(hazard: HazardReport) -> None:
                 logger.exception("整改通知照片处理异常: hazard_no=%s", hazard.hazard_no)
 
         # ── 操作按钮 ──
-        button_actions: list[dict] = []
+        button_actions: list[dict[str, Any]] = []
         if bitable_url:
             button_actions.append(
                 {
@@ -1375,7 +1386,7 @@ class SafetyService(_SafetyCoreService):
         corrective_actions: str | None = None,
         investigation_findings: str | None = None,
         investigation_method: str | None = None,
-        investigation_team: list | None = None,
+        investigation_team: list[Any] | None = None,
     ) -> Accident | None:
         """完成调查事故"""
         accident = await self.repo.get_accident_by_id(accident_id)
@@ -1719,7 +1730,7 @@ class SafetyService(_SafetyCoreService):
         risk_level: str | None = None,
         date_from: str | None = None,
         date_to: str | None = None,
-    ) -> tuple[list, int]:
+    ) -> tuple[list[HazardIdentification], int]:
         """获取危险源辨识列表"""
         return await self.repo.get_hazard_identifications(
             skip,
@@ -1755,11 +1766,23 @@ class SafetyService(_SafetyCoreService):
             date_to,
         )
 
-    async def get_hazard_identification(self, hid: uuid.UUID):
+    async def get_hazard_risk_options(
+        self,
+        department: str | None = None,
+        keyword: str | None = None,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> tuple[list[HazardIdentification], int]:
+        """获取可用于风险作业报备的一、二级风险危险源。"""
+        return await self.repo.get_hazard_risk_options(department, keyword, skip, limit)
+
+    async def get_hazard_identification(
+        self, hid: uuid.UUID
+    ) -> HazardIdentification | None:
         """获取危险源辨识详情"""
         return await self.repo.get_hazard_identification_by_id(hid)
 
-    async def create_hazard_identification(self, data) -> Any:
+    async def create_hazard_identification(self, data: Any) -> HazardIdentification:
         """创建危险源辨识记录"""
 
         create_data = data.model_dump()
@@ -1769,7 +1792,9 @@ class SafetyService(_SafetyCoreService):
         await self._audit("create", "hazard_identification", resource_id=item.id)
         return item
 
-    async def update_hazard_identification(self, hid: uuid.UUID, data) -> Any | None:
+    async def update_hazard_identification(
+        self, hid: uuid.UUID, data: Any
+    ) -> HazardIdentification | None:
         """更新危险源辨识"""
         update_data = {k: v for k, v in data.model_dump().items() if v is not None}
         item = await self.repo.update_hazard_identification(hid, update_data)
@@ -1886,7 +1911,9 @@ class SafetyService(_SafetyCoreService):
 
         return "\n".join(parts)
 
-    async def _generate_ai_output(self, script_number: int, item: Any) -> dict:
+    async def _generate_ai_output(
+        self, script_number: int, item: Any
+    ) -> dict[str, Any]:
         """调用 AI 服务生成工作流输出。失败时抛出 AIOutputError。
 
         优先从数据库 ai_workflow_configs 表读取对应模块的工作流配置，
@@ -1976,7 +2003,10 @@ class SafetyService(_SafetyCoreService):
             raise
 
     async def run_script(
-        self, hid: uuid.UUID, script_number: int, ai_output: dict | None = None
+        self,
+        hid: uuid.UUID,
+        script_number: int,
+        ai_output: dict[str, Any] | None = None,
     ) -> Any | None:
         """执行AI脚本（状态机推进）"""
 
@@ -2078,7 +2108,7 @@ class SafetyService(_SafetyCoreService):
         return None
 
     def _map_ai_output(
-        self, script_number: int, ai_output: dict, update_data: dict[str, Any]
+        self, script_number: int, ai_output: dict[str, Any], update_data: dict[str, Any]
     ) -> None:
         """将 AI 输出映射到模型字段。
 
@@ -2156,16 +2186,24 @@ class SafetyService(_SafetyCoreService):
         AI 在脚本3/5/7中直接输出 D 值和风险等级；此处仅在后端可计算且 AI
         未提供对应字段时做兜底计算，同时补充 label、control_level 等展示字段。
         """
-        from app.modules.safety.schemas import RISK_LEVELS, get_risk_level
+        from app.modules.safety.schemas import RISK_LEVELS
+        from app.modules.safety.schemas.hazard_identifications import get_risk_level
 
         if script_number == 3:
             likelihood = update_data.get("l_inherent")
             e = update_data.get("e_inherent")
             c = update_data.get("c_inherent")
-            if all(v is not None for v in (likelihood, e, c)):
+            if (
+                isinstance(likelihood, (int, float))
+                and isinstance(e, (int, float))
+                and isinstance(c, (int, float))
+            ):
+                likelihood_value = float(likelihood)
+                e_value = float(e)
+                c_value = float(c)
                 # D 值：优先用 AI 输出，否则后端计算
                 if update_data.get("d_inherent") is None:
-                    update_data["d_inherent"] = likelihood * e * c
+                    update_data["d_inherent"] = likelihood_value * e_value * c_value
                 # 风险等级 key：优先用 AI 输出
                 if update_data.get("inherent_risk_level") is None:
                     level = get_risk_level(update_data["d_inherent"])
@@ -2182,9 +2220,16 @@ class SafetyService(_SafetyCoreService):
             likelihood = update_data.get("l_residual")
             e = update_data.get("e_residual")
             c = update_data.get("c_residual")
-            if all(v is not None for v in (likelihood, e, c)):
+            if (
+                isinstance(likelihood, (int, float))
+                and isinstance(e, (int, float))
+                and isinstance(c, (int, float))
+            ):
+                likelihood_value = float(likelihood)
+                e_value = float(e)
+                c_value = float(c)
                 if update_data.get("d_residual") is None:
-                    update_data["d_residual"] = likelihood * e * c
+                    update_data["d_residual"] = likelihood_value * e_value * c_value
                 if update_data.get("residual_risk_level") is None:
                     level = get_risk_level(update_data["d_residual"])
                     update_data["residual_risk_level"] = level["key"]
@@ -2197,11 +2242,18 @@ class SafetyService(_SafetyCoreService):
             likelihood = update_data.get("l_post")
             e = update_data.get("e_post")
             c = update_data.get("c_post")
-            if all(v is not None for v in (likelihood, e, c)):
+            if (
+                isinstance(likelihood, (int, float))
+                and isinstance(e, (int, float))
+                and isinstance(c, (int, float))
+            ):
+                likelihood_value = float(likelihood)
+                e_value = float(e)
+                c_value = float(c)
                 if update_data.get("d_post") is None:
-                    update_data["d_post"] = likelihood * e * c
+                    update_data["d_post"] = likelihood_value * e_value * c_value
                 if update_data.get("post_risk_level") is None:
-                    level = get_risk_level(update_data["post_risk_level"])
+                    level = get_risk_level(update_data["d_post"])
                     update_data["post_risk_level"] = level["key"]
                 for rl in RISK_LEVELS:
                     if rl["key"] == update_data.get("post_risk_level"):
@@ -2224,7 +2276,7 @@ class SafetyService(_SafetyCoreService):
 
     # ── AI 导出 ──
 
-    async def parse_hazard_export_query(self, natural_query: str) -> dict:
+    async def parse_hazard_export_query(self, natural_query: str) -> dict[str, Any]:
         """使用 AI 将自然语言筛选条件解析为结构化参数。
 
         支持的自然语言示例：
@@ -2334,7 +2386,9 @@ class SafetyService(_SafetyCoreService):
         logger.debug("使用 reportlab 固定模板生成 PDF")
         return await self._export_hazard_ledger_pdf_fallback(items, filters)
 
-    def _export_via_template_plugin(self, items, filters: dict) -> bytes:
+    def _export_via_template_plugin(
+        self, items: list[HazardIdentification], filters: dict[str, Any]
+    ) -> bytes:
         """使用 Excel 标准化输出插件填充模板并导出 PDF。
 
         流程：ORM 对象 → dict 列表 → openpyxl 填表 → LibreOffice → PDF bytes
@@ -2370,7 +2424,7 @@ class SafetyService(_SafetyCoreService):
 
             return pdf_path.read_bytes()
 
-    def _item_to_dict(self, item) -> dict:
+    def _item_to_dict(self, item: HazardIdentification) -> dict[str, Any]:
         """将 HazardIdentification ORM 对象转为可 JSON 序列化的 dict"""
         return {
             "hazard_id_no": item.hazard_id_no,
@@ -2408,17 +2462,25 @@ class SafetyService(_SafetyCoreService):
 
     # ── 固定模板 PDF 回退（reportlab）──
 
-    async def _export_hazard_ledger_pdf_fallback(self, items, filters: dict) -> bytes:
+    async def _export_hazard_ledger_pdf_fallback(
+        self, items: list[HazardIdentification], filters: dict[str, Any]
+    ) -> bytes:
         """固定模板 PDF 生成（reportlab）—— AI 格式化失败时的回退方案"""
         import io
         from datetime import datetime as dt_module
 
-        from reportlab.lib import colors
-        from reportlab.lib.enums import TA_CENTER
-        from reportlab.lib.pagesizes import A4, landscape
-        from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-        from reportlab.lib.units import mm
-        from reportlab.platypus import (
+        from reportlab.lib import colors  # type: ignore[import-untyped]
+        from reportlab.lib.enums import TA_CENTER  # type: ignore[import-untyped]
+        from reportlab.lib.pagesizes import (  # type: ignore[import-untyped]
+            A4,
+            landscape,
+        )
+        from reportlab.lib.styles import (  # type: ignore[import-untyped]
+            ParagraphStyle,
+            getSampleStyleSheet,
+        )
+        from reportlab.lib.units import mm  # type: ignore[import-untyped]
+        from reportlab.platypus import (  # type: ignore[import-untyped]
             Paragraph,
             SimpleDocTemplate,
             Spacer,
@@ -2442,8 +2504,8 @@ class SafetyService(_SafetyCoreService):
         )
 
         # 字体注册
-        from reportlab.pdfbase import pdfmetrics
-        from reportlab.pdfbase.ttfonts import TTFont
+        from reportlab.pdfbase import pdfmetrics  # type: ignore[import-untyped]
+        from reportlab.pdfbase.ttfonts import TTFont  # type: ignore[import-untyped]
 
         _font_name = "Helvetica"
         _font_name_bold = "Helvetica-Bold"
@@ -2490,7 +2552,7 @@ class SafetyService(_SafetyCoreService):
             textColor=colors.grey,
         )
 
-        elements: list = []
+        elements: list[Any] = []
 
         # 标题
         elements.append(Paragraph("危险源辨识台账", title_style))
@@ -2673,7 +2735,7 @@ class SafetyService(_SafetyCoreService):
         elements.append(Spacer(1, 4 * mm))
         elements.append(sign_table2)
 
-        def add_page_number(canvas, doc_obj):
+        def add_page_number(canvas: Any, doc_obj: Any) -> None:
             canvas.saveState()
             canvas.setFont(_font_name, 8)
             canvas.drawCentredString(

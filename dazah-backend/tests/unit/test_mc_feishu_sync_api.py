@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -11,7 +12,7 @@ from app.modules.production import mc_feishu_sync_api as api
 
 
 @pytest.mark.anyio
-async def test_trigger_mc_sync_valid():
+async def test_trigger_mc_sync_valid() -> Any:
     """触发同步：有效模块 → 调用 run_mc_sync + 汇总创建/更新数。"""
     s = AsyncMock()
     with patch(
@@ -37,7 +38,7 @@ async def test_trigger_mc_sync_valid():
 
 
 @pytest.mark.anyio
-async def test_trigger_mc_sync_no_valid():
+async def test_trigger_mc_sync_no_valid() -> Any:
     """无有效模块 → 400。"""
     s = AsyncMock()
     resp = await api.trigger_mc_sync(
@@ -47,7 +48,7 @@ async def test_trigger_mc_sync_no_valid():
     assert json.loads(resp.body)["code"] == 400
 
 
-async def test_get_mc_sync_status():
+async def test_get_mc_sync_status() -> Any:
     """同步状态：返回各模块的 last_sync 与标签。"""
     api._last_sync["crude"] = "2026-08-21T00:00:00+00:00"
     resp = await api.get_mc_sync_status()
@@ -62,7 +63,7 @@ async def test_get_mc_sync_status():
 
 
 @pytest.mark.anyio
-async def test_start_stop_mc_sync_scheduler():
+async def test_start_stop_mc_sync_scheduler() -> Any:
     """启动/停止 MC 飞书同步定时任务（幂等）。"""
     from app.modules.production import mc_feishu_sheets_sync as mcsync
 
@@ -74,7 +75,7 @@ async def test_start_stop_mc_sync_scheduler():
 
 
 @pytest.mark.anyio
-async def test_mc_sync_scheduler_double_start():
+async def test_mc_sync_scheduler_double_start() -> Any:
     """重复启动不重复创建。"""
     from unittest.mock import MagicMock
 
@@ -92,7 +93,7 @@ async def test_mc_sync_scheduler_double_start():
 
 
 @pytest.mark.anyio
-async def test_sync_lineage_all_segments():
+async def test_sync_lineage_all_segments() -> Any:
     """6 段血链表 INSERT 全部执·行并累计 rowcount。"""
     from unittest.mock import MagicMock
 
@@ -107,7 +108,7 @@ async def test_sync_lineage_all_segments():
 
 
 @pytest.mark.anyio
-async def test_sync_lineage_zero_rows():
+async def test_sync_lineage_zero_rows() -> Any:
     """无插入 → 返回 0。"""
     from unittest.mock import MagicMock
 
@@ -124,7 +125,7 @@ async def test_sync_lineage_zero_rows():
 
 
 @pytest.mark.anyio
-async def test_mc_sync_crude_full_path():
+async def test_mc_sync_crude_full_path() -> Any:
     """覆盖 _sync_crude 的新批次、子罐2、追加步骤等主路径。"""
     from app.modules.production import mc_feishu_sheets_sync as sync
 

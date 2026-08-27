@@ -1,5 +1,11 @@
-import { CapaPlanTrackPage } from '@/components/quality'
+import { CapaPlanTrackPage, ErrorBoundary, QualityQueryProvider } from '@/components/quality'
 
 export default function CapaPlansPage() {
-  return <CapaPlanTrackPage />
+  return (
+    <ErrorBoundary>
+      <QualityQueryProvider>
+        <CapaPlanTrackPage />
+      </QualityQueryProvider>
+    </ErrorBoundary>
+  )
 }

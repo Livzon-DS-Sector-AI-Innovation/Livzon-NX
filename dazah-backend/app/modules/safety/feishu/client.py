@@ -9,7 +9,7 @@ import logging
 import os
 from pathlib import Path
 
-import lark_oapi as lark
+import lark_oapi as lark  # type: ignore[import-untyped]
 from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
@@ -45,7 +45,7 @@ async def get_safety_feishu_client() -> lark.Client:
 
 async def get_safety_tenant_token(client: lark.Client | None = None) -> str:
     """获取安全模块飞书应用的 tenant_access_token。"""
-    from lark_oapi.api.auth.v3 import (
+    from lark_oapi.api.auth.v3 import (  # type: ignore[import-untyped]
         InternalTenantAccessTokenRequest,
         InternalTenantAccessTokenRequestBody,
     )
@@ -71,6 +71,8 @@ async def get_safety_tenant_token(client: lark.Client | None = None) -> str:
     if resp.raw and resp.raw.content:
         data = _json.loads(resp.raw.content.decode("utf-8"))
         token = data.get("tenant_access_token", "")
+        if not isinstance(token, str):
+            raise RuntimeError("安全模块飞书 tenant token 格式无效")
         logger.debug("安全模块飞书 tenant token 获取成功")
         return token
     raise RuntimeError("安全模块飞书 tenant token 响应为空")

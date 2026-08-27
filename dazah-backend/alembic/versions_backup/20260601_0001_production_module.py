@@ -8,6 +8,7 @@ Create Date: 2026-06-01
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision: str = "20260601_0001"
@@ -25,7 +26,12 @@ def upgrade() -> None:
         sa.Column("product_name", sa.String(length=255), nullable=True),
         sa.Column("specification", sa.String(length=100), nullable=True),
         sa.Column("unit", sa.String(length=20), nullable=True),
-        sa.Column("status", sa.String(length=32), server_default=sa.text("'draft'"), nullable=False),
+        sa.Column(
+            "status",
+            sa.String(length=32),
+            server_default=sa.text("'draft'"),
+            nullable=False,
+        ),
         sa.Column("planned_qty", sa.Float(), nullable=True),
         sa.Column("actual_qty", sa.Float(), nullable=True),
         sa.Column("process_spec_id", sa.Uuid(), nullable=True),
@@ -61,10 +67,18 @@ def upgrade() -> None:
         schema="production",
     )
     op.create_index(
-        "idx_batches_batch_no", "batches", ["batch_no"], unique=False, schema="production"
+        "idx_batches_batch_no",
+        "batches",
+        ["batch_no"],
+        unique=False,
+        schema="production",
     )
     op.create_index(
-        "idx_batches_product_code", "batches", ["product_code"], unique=False, schema="production"
+        "idx_batches_product_code",
+        "batches",
+        ["product_code"],
+        unique=False,
+        schema="production",
     )
     op.create_index(
         "idx_batches_status", "batches", ["status"], unique=False, schema="production"
@@ -111,7 +125,11 @@ def upgrade() -> None:
         schema="production",
     )
     op.create_index(
-        "idx_batch_materials_batch_id", "batch_materials", ["batch_id"], unique=False, schema="production"
+        "idx_batch_materials_batch_id",
+        "batch_materials",
+        ["batch_id"],
+        unique=False,
+        schema="production",
     )
 
     # ========== Production Plans Table ==========
@@ -121,7 +139,12 @@ def upgrade() -> None:
         sa.Column("plan_name", sa.String(length=255), nullable=True),
         sa.Column("plan_type", sa.String(length=50), nullable=True),
         sa.Column("plan_month", sa.String(length=7), nullable=True),
-        sa.Column("status", sa.String(length=32), server_default=sa.text("'draft'"), nullable=False),
+        sa.Column(
+            "status",
+            sa.String(length=32),
+            server_default=sa.text("'draft'"),
+            nullable=False,
+        ),
         sa.Column("total_batches", sa.Integer(), nullable=True),
         sa.Column("completed_batches", sa.Integer(), nullable=True),
         sa.Column("notes", sa.Text(), nullable=True),
@@ -153,10 +176,18 @@ def upgrade() -> None:
         schema="production",
     )
     op.create_index(
-        "idx_production_plans_plan_month", "production_plans", ["plan_month"], unique=False, schema="production"
+        "idx_production_plans_plan_month",
+        "production_plans",
+        ["plan_month"],
+        unique=False,
+        schema="production",
     )
     op.create_index(
-        "idx_production_plans_status", "production_plans", ["status"], unique=False, schema="production"
+        "idx_production_plans_status",
+        "production_plans",
+        ["status"],
+        unique=False,
+        schema="production",
     )
 
     # ========== Plan Tasks Table ==========
@@ -169,7 +200,12 @@ def upgrade() -> None:
         sa.Column("assigned_to", sa.Uuid(), nullable=True),
         sa.Column("assigned_to_name", sa.String(length=100), nullable=True),
         sa.Column("due_date", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("status", sa.String(length=32), server_default=sa.text("'pending'"), nullable=False),
+        sa.Column(
+            "status",
+            sa.String(length=32),
+            server_default=sa.text("'pending'"),
+            nullable=False,
+        ),
         sa.Column("notes", sa.Text(), nullable=True),
         sa.Column("id", sa.Uuid(), nullable=False),
         sa.Column(
@@ -200,7 +236,11 @@ def upgrade() -> None:
         schema="production",
     )
     op.create_index(
-        "idx_plan_tasks_plan_id", "plan_tasks", ["plan_id"], unique=False, schema="production"
+        "idx_plan_tasks_plan_id",
+        "plan_tasks",
+        ["plan_id"],
+        unique=False,
+        schema="production",
     )
 
     # ========== Process Specs Table ==========
@@ -210,8 +250,18 @@ def upgrade() -> None:
         sa.Column("spec_name", sa.String(length=255), nullable=True),
         sa.Column("product_code", sa.String(length=64), nullable=False),
         sa.Column("product_name", sa.String(length=255), nullable=True),
-        sa.Column("version", sa.String(length=20), server_default=sa.text("'1.0'"), nullable=False),
-        sa.Column("status", sa.String(length=32), server_default=sa.text("'draft'"), nullable=False),
+        sa.Column(
+            "version",
+            sa.String(length=20),
+            server_default=sa.text("'1.0'"),
+            nullable=False,
+        ),
+        sa.Column(
+            "status",
+            sa.String(length=32),
+            server_default=sa.text("'draft'"),
+            nullable=False,
+        ),
         sa.Column("effective_date", sa.DateTime(timezone=True), nullable=True),
         sa.Column("approved_by", sa.Uuid(), nullable=True),
         sa.Column("approved_by_name", sa.String(length=100), nullable=True),
@@ -243,14 +293,24 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["created_by"], ["identity.users.id"]),
         sa.ForeignKeyConstraint(["updated_by"], ["identity.users.id"]),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("spec_code", "version", name="uq_process_specs_code_version"),
+        sa.UniqueConstraint(
+            "spec_code", "version", name="uq_process_specs_code_version"
+        ),
         schema="production",
     )
     op.create_index(
-        "idx_process_specs_product_code", "process_specs", ["product_code"], unique=False, schema="production"
+        "idx_process_specs_product_code",
+        "process_specs",
+        ["product_code"],
+        unique=False,
+        schema="production",
     )
     op.create_index(
-        "idx_process_specs_status", "process_specs", ["status"], unique=False, schema="production"
+        "idx_process_specs_status",
+        "process_specs",
+        ["status"],
+        unique=False,
+        schema="production",
     )
 
     # ========== Process Steps Table ==========
@@ -293,7 +353,11 @@ def upgrade() -> None:
         schema="production",
     )
     op.create_index(
-        "idx_process_steps_spec_id", "process_steps", ["spec_id"], unique=False, schema="production"
+        "idx_process_steps_spec_id",
+        "process_steps",
+        ["spec_id"],
+        unique=False,
+        schema="production",
     )
 
     # ========== Process Parameters Table ==========
@@ -306,7 +370,9 @@ def upgrade() -> None:
         sa.Column("min_value", sa.Float(), nullable=True),
         sa.Column("max_value", sa.Float(), nullable=True),
         sa.Column("target_value", sa.Float(), nullable=True),
-        sa.Column("is_critical", sa.Boolean(), server_default=sa.text("false"), nullable=False),
+        sa.Column(
+            "is_critical", sa.Boolean(), server_default=sa.text("false"), nullable=False
+        ),
         sa.Column("data_type", sa.String(length=20), nullable=True),
         sa.Column("notes", sa.Text(), nullable=True),
         sa.Column("id", sa.Uuid(), nullable=False),
@@ -337,7 +403,11 @@ def upgrade() -> None:
         schema="production",
     )
     op.create_index(
-        "idx_process_parameters_step_id", "process_parameters", ["step_id"], unique=False, schema="production"
+        "idx_process_parameters_step_id",
+        "process_parameters",
+        ["step_id"],
+        unique=False,
+        schema="production",
     )
 
     # ========== Production Records Table ==========
@@ -385,14 +455,24 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["created_by"], ["identity.users.id"]),
         sa.ForeignKeyConstraint(["updated_by"], ["identity.users.id"]),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("batch_id", "record_no", name="uq_production_records_batch_record"),
+        sa.UniqueConstraint(
+            "batch_id", "record_no", name="uq_production_records_batch_record"
+        ),
         schema="production",
     )
     op.create_index(
-        "idx_production_records_batch_id", "production_records", ["batch_id"], unique=False, schema="production"
+        "idx_production_records_batch_id",
+        "production_records",
+        ["batch_id"],
+        unique=False,
+        schema="production",
     )
     op.create_index(
-        "idx_production_records_operation_time", "production_records", ["operation_time"], unique=False, schema="production"
+        "idx_production_records_operation_time",
+        "production_records",
+        ["operation_time"],
+        unique=False,
+        schema="production",
     )
 
     # ========== Material Balances Table ==========
@@ -403,8 +483,15 @@ def upgrade() -> None:
         sa.Column("output_qty", sa.Float(), nullable=True),
         sa.Column("loss_qty", sa.Float(), nullable=True),
         sa.Column("balance_rate", sa.Float(), nullable=True),
-        sa.Column("min_balance_rate", sa.Float(), server_default=sa.text("95.0"), nullable=False),
-        sa.Column("is_balanced", sa.Boolean(), server_default=sa.text("false"), nullable=False),
+        sa.Column(
+            "min_balance_rate",
+            sa.Float(),
+            server_default=sa.text("95.0"),
+            nullable=False,
+        ),
+        sa.Column(
+            "is_balanced", sa.Boolean(), server_default=sa.text("false"), nullable=False
+        ),
         sa.Column("deviation_rate", sa.Float(), nullable=True),
         sa.Column("calculated_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("notes", sa.Text(), nullable=True),

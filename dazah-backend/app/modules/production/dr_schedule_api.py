@@ -7,14 +7,14 @@
 关联 dr_fermentation_batches 标注该批号 DB 是否已有记录（是否已实际投产/接罐），
 帮助提炼车间区分「历史已完成」与「未来待接罐」。
 """
-
 import logging
 import os
 import re
 from datetime import date, datetime
 from pathlib import Path
+from typing import Any
 
-import openpyxl
+import openpyxl  # type: ignore[import-untyped]
 from fastapi import Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import text
@@ -81,7 +81,7 @@ class ApproveBody(BaseModel):
     operator: str | None = None  # 审批人（默认取登录用户）
 
 
-async def _sync_receiving_tasks(session: AsyncSession, plans):
+async def _sync_receiving_tasks(session: AsyncSession, plans: Any) -> Any:
     """排产解析后按批号生成/更新待接罐任务（幂等，GET 内调用可安全重复）。
 
     - 批号不存在 → 新建 pending（计划罐号/日期取排产）
@@ -121,7 +121,7 @@ async def _sync_receiving_tasks(session: AsyncSession, plans):
     await session.commit()
 
 
-async def _receiving_task_map(session: AsyncSession) -> dict[str, dict]:
+async def _receiving_task_map(session: AsyncSession) -> dict[str, dict[str, Any]]:
     """批号 → 任务状态映射（供 dump-plans 每批附加任务状态）。
 
     actual_time 存为 timestamptz（UTC），读出须转本地时区，避免差 8 小时。
@@ -136,7 +136,7 @@ async def _receiving_task_map(session: AsyncSession) -> dict[str, dict]:
             )
         )
     ).fetchall()
-    m: dict[str, dict] = {}
+    m: dict[str, dict[str, Any]] = {}
     for bn, st, at, cb, atk, dr, aps in rows:
         m[bn] = {
             "task_status": st,
@@ -149,7 +149,7 @@ async def _receiving_task_map(session: AsyncSession) -> dict[str, dict]:
     return m
 
 
-def _pick_latest_sheet(wb):
+def _pick_latest_sheet(wb: Any) -> Any:
     """取 sheet 名中日期最大的版本（当前排产）。无日期可解析则返回第一个 sheet。"""
     best, best_d = None, None
     for ws in wb.worksheets:
@@ -162,7 +162,7 @@ def _pick_latest_sheet(wb):
     return best or (wb.worksheets[0] if wb.worksheets else None)
 
 
-def _parse_dump_plans(ws):
+def _parse_dump_plans(ws: Any) -> Any:
     """解析一个 sheet 的全部「放罐」行 → [(year, month, day, batch_no, tank)]"""
     rows = [
         [ws.cell(r, c).value for c in range(1, ws.max_column + 1)]
@@ -195,7 +195,7 @@ async def dr_dump_plans(
     session: AsyncSession = Depends(get_db),
     from_date: str = Query("", description="起始日期 YYYY-MM-DD，空则全部"),
     to_date: str = Query("", description="截止日期 YYYY-MM-DD，空则全部"),
-):
+) -> Any:
     files = sorted(_SCHEDULE_DIR.glob("*.xlsx"))
     if not files:
         return success_response(data={"version": None, "items": [], "summary": {}})
@@ -295,7 +295,7 @@ async def dr_dump_plans(
 )
 async def dr_schedule_upload(
     file: UploadFile = File(..., description="最新排产 Excel（.xlsx）"),
-):
+) -> Any:
     """计划员在系统内上传最新排产 Excel → 保存到 schedule_data/。
 
     直接使用原文件名保存（同名覆盖，与「手动替换文件」语义一致）；
@@ -352,7 +352,7 @@ async def dr_receiving_tasks(
     status: str = Query(
         "", description="pending/confirmed/delayed/pending_approval/cancelled，空则全部"
     ),
-):
+) -> Any:
     """接罐任务明细列表：排产解析自动生成，确认/延期/审批在此更新。"""
     where = ["is_deleted = false"]
     params = {}
@@ -393,10 +393,10 @@ async def dr_receiving_tasks(
     return success_response(data={"items": items, "total": len(items)})
 
 
-def _operator_name(current_user, fallback: str | None) -> str:
+def _operator_name(current_user: Any, fallback: str | None) -> str:
     """确认/审批人：优先登录用户姓名，其次手动填写，兜底「未登录」。"""
     if current_user is not None and getattr(current_user, "name", None):
-        return current_user.name
+        return str(current_user.name)
     return fallback or "未登录"
 
 
@@ -406,7 +406,7 @@ async def confirm_receiving(
     body: ConfirmBody,
     session: AsyncSession = Depends(get_db),
     current_user: CurrentUser = None,
-):
+) -> Any:
     """现场接罐确认。
 
     - 默认 status=confirmed（记 actual_time / confirmed_by / actual_tank_no）
@@ -499,7 +499,7 @@ async def delay_receiving(
     body: DelayBody,
     session: AsyncSession = Depends(get_db),
     current_user: CurrentUser = None,
-):
+) -> Any:
     """未接罐批次填报延期原因（等料/等水/等蒸汽/人员不足/设备问题/其他）。"""
     if not body.delay_reason.strip():
         raise HTTPException(status_code=400, detail="请选择延期原因")
@@ -543,7 +543,7 @@ async def approve_receiving(
     body: ApproveBody,
     session: AsyncSession = Depends(get_db),
     current_user: CurrentUser = None,
-):
+) -> Any:
     """班组长对「待审批」的接罐确认进行批准/驳回。"""
     row = (
         await session.execute(

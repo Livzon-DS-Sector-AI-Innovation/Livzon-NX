@@ -1,12 +1,12 @@
 import asyncio
-from typing import Any
+from typing import Any, cast
 from uuid import uuid4
 
 import pytest
 
 from app.core.exceptions import AppException
 from app.modules.warehouse import service as warehouse_service
-from app.modules.warehouse.models import (
+from app.modules.warehouse.models import (  # type: ignore[attr-defined]
     WarehouseFeishuAnalysisProfile,
     WarehouseFeishuConfig,
     WarehouseFeishuField,
@@ -35,11 +35,11 @@ def test_build_search_text_flattens_nested_feishu_fields() -> None:
 
 
 class FakeRecordClient:
-    def __init__(self) -> None:
+    def __init__(self: Any) -> None:
         self.calls: list[str | None] = []
 
     async def search_records(
-        self,
+        self: Any,
         table_id: str,
         *,
         page_size: int,
@@ -62,9 +62,9 @@ class FakeRecordClient:
 @pytest.mark.asyncio
 async def test_read_all_records_reads_all_pages() -> None:
     service = WarehouseService.__new__(WarehouseService)
-    client = FakeRecordClient()
+    client: Any = FakeRecordClient()
 
-    records, total = await service._read_all_records(client, "tbl1")  # type: ignore[arg-type]
+    records, total = await service._read_all_records(client, "tbl1")
 
     assert [record["record_id"] for record in records] == ["rec1", "rec2"]
     assert total is None
@@ -72,29 +72,29 @@ async def test_read_all_records_reads_all_pages() -> None:
 
 
 class FakeSession:
-    def __init__(self) -> None:
+    def __init__(self: Any) -> None:
         self.commits = 0
         self.rollbacks = 0
         self.refreshes = 0
 
-    async def commit(self) -> None:
+    async def commit(self: Any) -> None:
         self.commits += 1
 
-    async def flush(self) -> None:
+    async def flush(self: Any) -> None:
         return None
 
-    async def rollback(self) -> None:
+    async def rollback(self: Any) -> None:
         self.rollbacks += 1
 
-    async def refresh(self, _instance: object) -> None:
+    async def refresh(self: Any, _instance: object) -> None:
         self.refreshes += 1
 
 
 class FakeRepo:
-    def __init__(self) -> None:
-        self.session = FakeSession()
+    def __init__(self: Any) -> None:
+        self.session = cast(Any, FakeSession)()
 
-    async def fail_running_sync_runs(self, *args, **kwargs) -> None:
+    async def fail_running_sync_runs(self: Any, *args: Any, **kwargs: Any) -> None:
         return None
 
 
@@ -110,15 +110,15 @@ async def test_save_feishu_config_uses_unified_credentials_only() -> None:
     )
 
     class ConfigRepo(FakeRepo):
-        async def get_any_feishu_config(self) -> WarehouseFeishuConfig:
+        async def get_any_feishu_config(self: Any) -> WarehouseFeishuConfig:
             return config
 
-    service.repo = ConfigRepo()
+    service.repo = ConfigRepo()  # type: ignore[assignment]
 
     async def skip_ws_restart(_config: WarehouseFeishuConfig) -> None:
         return None
 
-    service._after_feishu_config_saved = skip_ws_restart  # type: ignore[method-assign]
+    service._after_feishu_config_saved = skip_ws_restart  # type: ignore[method-assign, assignment]
 
     response = await service.save_feishu_config(
         WarehouseFeishuConfigUpsert(
@@ -134,11 +134,11 @@ async def test_save_feishu_config_uses_unified_credentials_only() -> None:
     assert response.app_id == "cli_new"
     assert response.daily_sync_time == "03:15"
     assert not hasattr(response, "bitable_app_token")
-    assert service.repo.session.refreshes == 1
+    assert service.repo.session.refreshes == 1  # type: ignore[attr-defined]
 
 
 @pytest.mark.asyncio
-async def test_discover_feishu_source_root_maps_remote_error_to_business_error() -> None:
+async def test_discover_root_maps_remote_error() -> None:
     service = WarehouseService.__new__(WarehouseService)
     config_id = uuid4()
     root_id = uuid4()
@@ -161,35 +161,39 @@ async def test_discover_feishu_source_root_maps_remote_error_to_business_error()
     )
 
     class RootRepo(FakeRepo):
-        async def get_active_feishu_config(self) -> WarehouseFeishuConfig:
+        async def get_active_feishu_config(self: Any) -> WarehouseFeishuConfig:
             return config
 
         async def get_feishu_source_root(
-            self, requested_root_id: object
+            self: Any, requested_root_id: object
         ) -> WarehouseFeishuSourceRoot:
             assert requested_root_id == root_id
             return root
 
     class FailedClient:
-        async def list_tables(self, *, page_size: int) -> list[dict[str, Any]]:
+        async def list_tables(self: Any, *, page_size: int) -> list[dict[str, Any]]:
             assert page_size == 100
             raise RuntimeError("app_token invalid")
 
-    service.repo = RootRepo()
+    service.repo = RootRepo()  # type: ignore[assignment]
     service._build_feishu_client = (  # type: ignore[method-assign]
-        lambda _config, _token: FailedClient()
+        lambda _config, _token: FailedClient()  # type: ignore[assignment, return-value]
     )
 
-    with pytest.raises(AppException, match="飞书数据入口发现失败：app_token invalid"):
+    with pytest.raises(
+        AppException, match="飞书数据入口发现失败，请检查配置和入口权限"
+    ):
         await service.discover_feishu_source_root(root_id)
 
     assert root.discovery_status == "failed"
-    assert root.discovery_error == "app_token invalid"
-    assert service.repo.session.rollbacks == 1
+    assert root.discovery_error == "飞书数据入口发现失败，请检查配置和入口权限"
+    assert service.repo.session.rollbacks == 1  # type: ignore[attr-defined]
 
 
 @pytest.mark.asyncio
-async def test_sync_feishu_table_marks_failed_when_sync_timeout(monkeypatch) -> None:
+async def test_sync_feishu_table_marks_failed_when_sync_timeout(
+    monkeypatch: Any,
+) -> None:
     service = WarehouseService.__new__(WarehouseService)
     table_id = uuid4()
     table = WarehouseFeishuTable(
@@ -205,17 +209,17 @@ async def test_sync_feishu_table_marks_failed_when_sync_timeout(monkeypatch) -> 
         encrypted_app_secret="encrypted",
         is_active=True,
     )
-    service.repo = FakeRepo()
+    service.repo = cast(Any, FakeRepo)()
 
-    async def fake_get_table(table_pk):
+    async def fake_get_table(table_pk: Any) -> Any:
         assert table_pk == table_id
         return table
 
-    async def slow_snapshot(_config, _table, *, trigger_type):
+    async def slow_snapshot(_config: Any, _table: Any, *, trigger_type: Any) -> Any:
         await asyncio.sleep(0.05)
 
-    service._get_table_by_id_or_raise = fake_get_table  # type: ignore[method-assign]
-    service._sync_feishu_table_snapshot = slow_snapshot  # type: ignore[method-assign]
+    service._get_table_by_id_or_raise = fake_get_table  # type: ignore[method-assign, assignment]
+    service._sync_feishu_table_snapshot = slow_snapshot  # type: ignore[method-assign, assignment]
     monkeypatch.setattr(
         warehouse_service,
         "WAREHOUSE_FEISHU_TABLE_SYNC_TIMEOUT_SECONDS",
@@ -227,12 +231,12 @@ async def test_sync_feishu_table_marks_failed_when_sync_timeout(monkeypatch) -> 
 
     assert table.sync_status == "failed"
     assert table.sync_error == "同步超过 0.01 秒未完成，已自动标记失败"
-    assert service.repo.session.commits == 2
-    assert service.repo.session.rollbacks == 1
+    assert service.repo.session.commits == 2  # type: ignore[attr-defined]
+    assert service.repo.session.rollbacks == 1  # type: ignore[attr-defined]
 
 
 class FakeAnalysisRepo:
-    async def list_feishu_fields(self, *args) -> list[WarehouseFeishuField]:
+    async def list_feishu_fields(self: Any, *args: Any) -> list[WarehouseFeishuField]:
         return [
             WarehouseFeishuField(field_id="fld_name", field_name="姓名"),
             WarehouseFeishuField(field_id="fld_token", field_name="API Token"),
@@ -240,7 +244,7 @@ class FakeAnalysisRepo:
         ]
 
     async def list_analysis_records(
-        self, table: WarehouseFeishuTable, limit: int
+        self: Any, table: WarehouseFeishuTable, limit: int
     ) -> list[WarehouseFeishuRecord]:
         return [
             WarehouseFeishuRecord(
@@ -285,7 +289,7 @@ async def test_analysis_input_excludes_credentials_and_masks_personal_data() -> 
 
 class HugeRecordClient:
     async def search_records(
-        self,
+        self: Any,
         table_id: str,
         *,
         page_size: int,
@@ -308,9 +312,7 @@ class HugeRecordClient:
 async def test_read_all_records_keeps_twenty_thousand_rows_complete() -> None:
     service = WarehouseService.__new__(WarehouseService)
 
-    records, total = await service._read_all_records(  # type: ignore[arg-type]
-        HugeRecordClient(), "tbl-large"
-    )
+    records, total = await service._read_all_records(HugeRecordClient(), "tbl-large")
 
     assert total == 20_000
     assert len(records) == 20_000
@@ -320,7 +322,7 @@ async def test_read_all_records_keeps_twenty_thousand_rows_complete() -> None:
 
 
 class BrokenPageChainClient:
-    async def search_records(self, *args, **kwargs) -> dict[str, Any]:
+    async def search_records(self: Any, *args: Any, **kwargs: Any) -> dict[str, Any]:
         return {
             "items": [{"record_id": "rec-1"}],
             "has_more": True,
@@ -334,6 +336,4 @@ async def test_read_all_records_rejects_missing_next_page_token() -> None:
     service = WarehouseService.__new__(WarehouseService)
 
     with pytest.raises(AppException, match="分页链不完整"):
-        await service._read_all_records(  # type: ignore[arg-type]
-            BrokenPageChainClient(), "tbl-broken"
-        )
+        await service._read_all_records(BrokenPageChainClient(), "tbl-broken")

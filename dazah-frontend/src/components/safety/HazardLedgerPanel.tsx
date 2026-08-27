@@ -129,11 +129,11 @@ export default function HazardLedgerPanel() {
   }
 
   useEffect(() => {
-    loadStats()
+    queueMicrotask(loadStats)
   }, [])
 
   useEffect(() => {
-    loadData()
+    queueMicrotask(loadData)
   }, [queryParams])
 
   const handleSearch = () => {

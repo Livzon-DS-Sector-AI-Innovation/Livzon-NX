@@ -2,28 +2,43 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import io
+import logging
 import os
 import uuid
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
-import pytesseract
+import pytesseract  # type: ignore[import-untyped]
 from docx import Document
 from fastapi import UploadFile
-from openpyxl import load_workbook
+from openpyxl import load_workbook  # type: ignore[import-untyped]
 from PIL import Image
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.elements import ColumnElement
 
 from app.core.config import get_settings
 from app.core.database import async_session_factory
-from app.core.llm import llm_client
+from app.core.exceptions import AppException, NotFoundException
+from app.core.llm import (
+    LLMConfigError,
+    LLMOutputError,
+    LLMProviderError,
+    LLMRateLimitError,
+    llm_client,
+)
 from app.core.llm.config import get_config
 from app.core.storage import delete_object, upload_object
 from app.core.storage import is_enabled as minio_enabled
+from app.core.upload_security import (
+    read_upload_secure,
+    safe_upload_filename,
+    sniff_upload_mime,
+)
 from app.modules.quality.models import (
     CAPA,
     ChangeControl,
@@ -38,9 +53,12 @@ from app.modules.quality.schemas.deviation_ai_session import (
     DeviationAiSessionResultPayload,
 )
 from app.modules.quality.schemas.quality_ai import (
-    QualityAiApplicableField,
     QualityAiAnalysisLogOut,
+    QualityAiApplicableField,
 )
+from app.platform.identity.models import User
+
+logger = logging.getLogger(__name__)
 
 QUALITY_AI_RESPONSE_KEYS = [
     "summary",
@@ -56,6 +74,46 @@ DEVIATION_AI_SESSION_RESPONSE_KEYS = [
     "capa_suggestion",
 ]
 
+QUALITY_AI_ATTACHMENT_EXTENSIONS = {
+    ".doc",
+    ".docx",
+    ".xls",
+    ".xlsx",
+    ".png",
+    ".jpg",
+    ".jpeg",
+}
+QUALITY_AI_ATTACHMENT_MIMES = {
+    "application/msword",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "image/png",
+    "image/jpeg",
+}
+
+
+async def _require_quality_ai_config() -> Any:
+    try:
+        return await get_config("text")
+    except LLMConfigError as exc:
+        raise AppException(status_code=503, message="AI 服务尚未配置") from exc
+
+
+async def _get_persisted_user_id(
+    db: AsyncSession,
+    user_id: str,
+) -> uuid.UUID | None:
+    """Keep FK-backed actor fields valid for direct service/test callers."""
+    if user_id == "system":
+        return None
+    try:
+        candidate = uuid.UUID(str(user_id))
+    except (TypeError, ValueError):
+        return None
+    result = await db.execute(select(User.id).where(User.id == candidate))
+    return result.scalar_one_or_none()
+
 
 def _to_iso(value: Any) -> Any:
     if isinstance(value, (datetime, date)):
@@ -70,7 +128,7 @@ def _to_iso(value: Any) -> Any:
 
 
 def _build_applicable_fields(
-    entity_type: str, analysis_type: str, output_payload: dict | None
+    entity_type: str, analysis_type: str, output_payload: dict[str, Any] | None
 ) -> list[QualityAiApplicableField]:
     structured_fields = (output_payload or {}).get("structured_fields") or {}
     field_map: dict[str, tuple[str, str]] = {}
@@ -131,7 +189,7 @@ def _log_to_schema(log: QualityAiAnalysisLog) -> QualityAiAnalysisLogOut:
     )
 
 
-def _normalize_result(raw: dict) -> dict[str, Any]:
+def _normalize_result(raw: dict[str, Any]) -> dict[str, Any]:
     structured_fields = raw.get("structured_fields") or {}
     risks = raw.get("risks") or []
     suggestions = raw.get("suggestions") or []
@@ -147,7 +205,9 @@ def _normalize_result(raw: dict) -> dict[str, Any]:
         "missing_info": missing_info
         if isinstance(missing_info, list)
         else [str(missing_info)],
-        "structured_fields": structured_fields if isinstance(structured_fields, dict) else {},
+        "structured_fields": structured_fields
+        if isinstance(structured_fields, dict)
+        else {},
         "disclaimer": "AI 结果仅供辅助判断，需人工复核后使用",
     }
 
@@ -191,22 +251,25 @@ def _attachment_to_schema(
 
 
 def _build_deviation_snapshot(deviation: Deviation) -> dict[str, Any]:
-    return _to_iso(
-        {
-            "deviation_code": deviation.deviation_code,
-            "title": deviation.title,
-            "department": deviation.department,
-            "discovery_date": deviation.discovery_date,
-            "discovery_time": deviation.discovery_time,
-            "discovery_location": deviation.discovery_location,
-            "level": deviation.level,
-            "description": deviation.description,
-            "immediate_actions": deviation.immediate_actions,
-            "affected_items": deviation.affected_items,
-            "batch_number": deviation.batch_number,
-            "root_cause_analysis": deviation.root_cause_analysis,
-            "corrective_actions": deviation.corrective_actions,
-        }
+    return cast(
+        dict[str, Any],
+        _to_iso(
+            {
+                "deviation_code": deviation.deviation_code,
+                "title": deviation.title,
+                "department": deviation.department,
+                "discovery_date": deviation.discovery_date,
+                "discovery_time": deviation.discovery_time,
+                "discovery_location": deviation.discovery_location,
+                "level": deviation.level,
+                "description": deviation.description,
+                "immediate_actions": deviation.immediate_actions,
+                "affected_items": deviation.affected_items,
+                "batch_number": deviation.batch_number,
+                "root_cause_analysis": deviation.root_cause_analysis,
+                "corrective_actions": deviation.corrective_actions,
+            }
+        ),
     )
 
 
@@ -261,24 +324,27 @@ def _deviation_conversation_prompt(
 
 
 def _build_capa_snapshot(capa: CAPA) -> dict[str, Any]:
-    return _to_iso(
-        {
-            "capa_code": capa.capa_code,
-            "title": capa.title,
-            "deviation_id": capa.deviation_id,
-            "source": capa.source,
-            "source_code": capa.source_code,
-            "category": capa.category,
-            "department": capa.department,
-            "affected_product": capa.affected_product,
-            "non_conformity_description": capa.non_conformity_description,
-            "root_cause_analysis": capa.root_cause_analysis,
-            "capa_content": capa.capa_content,
-            "capa_items": capa.capa_items,
-            "execution_status": capa.execution_status,
-            "evaluation_result": capa.evaluation_result,
-            "closure_date": capa.closure_date,
-        }
+    return cast(
+        dict[str, Any],
+        _to_iso(
+            {
+                "capa_code": capa.capa_code,
+                "title": capa.title,
+                "deviation_id": capa.deviation_id,
+                "source": capa.source,
+                "source_code": capa.source_code,
+                "category": capa.category,
+                "department": capa.department,
+                "affected_product": capa.affected_product,
+                "non_conformity_description": capa.non_conformity_description,
+                "root_cause_analysis": capa.root_cause_analysis,
+                "capa_content": capa.capa_content,
+                "capa_items": capa.capa_items,
+                "execution_status": capa.execution_status,
+                "evaluation_result": capa.evaluation_result,
+                "closure_date": capa.closure_date,
+            }
+        ),
     )
 
 
@@ -300,7 +366,7 @@ async def _resolve_related_deviation_for_capa(
     if capa.source == "deviation" and capa.source_code:
         result = await db.execute(
             select(Deviation).where(
-                Deviation.is_deleted == False,
+                Deviation.is_deleted.is_(False),
                 Deviation.deviation_code == capa.source_code,
             )
         )
@@ -312,7 +378,7 @@ async def _resolve_related_deviation_for_capa(
     if derived_deviation_code:
         result = await db.execute(
             select(Deviation).where(
-                Deviation.is_deleted == False,
+                Deviation.is_deleted.is_(False),
                 Deviation.deviation_code == derived_deviation_code,
             )
         )
@@ -323,58 +389,61 @@ async def _resolve_related_deviation_for_capa(
     return None, None
 
 
-async def _build_capa_analysis_snapshot(
-    db: AsyncSession, capa: CAPA
-) -> dict[str, Any]:
+async def _build_capa_analysis_snapshot(db: AsyncSession, capa: CAPA) -> dict[str, Any]:
     capa_snapshot = _build_capa_snapshot(capa)
     linked_deviation, match_rule = await _resolve_related_deviation_for_capa(db, capa)
     deviation_snapshot = (
         _build_deviation_snapshot(linked_deviation) if linked_deviation else None
     )
-    return _to_iso(
-        {
-            "capa": capa_snapshot,
-            "linked_deviation": deviation_snapshot,
-            "analysis_context": {
-                "has_linked_deviation": linked_deviation is not None,
-                "match_rule": match_rule,
-                "analysis_basis": (
-                    "capa_and_deviation"
-                    if linked_deviation is not None
-                    else "capa_only"
-                ),
-            },
-        }
+    return cast(
+        dict[str, Any],
+        _to_iso(
+            {
+                "capa": capa_snapshot,
+                "linked_deviation": deviation_snapshot,
+                "analysis_context": {
+                    "has_linked_deviation": linked_deviation is not None,
+                    "match_rule": match_rule,
+                    "analysis_basis": (
+                        "capa_and_deviation"
+                        if linked_deviation is not None
+                        else "capa_only"
+                    ),
+                },
+            }
+        ),
     )
 
 
 def _build_change_snapshot(change: ChangeControl) -> dict[str, Any]:
-    return _to_iso(
-        {
-            "change_code": change.change_code,
-            "serial_number": change.serial_number,
-            "applicant_department": change.applicant_department,
-            "change_object": change.change_object,
-            "change_content": change.change_content,
-            "impact_assessment": change.impact_assessment,
-            "change_level": change.change_level,
-            "application_date": change.application_date,
-            "planned_approval_date": change.planned_approval_date,
-            "execution_date": change.execution_date,
-            "closure_date": change.closure_date,
-        }
+    return cast(
+        dict[str, Any],
+        _to_iso(
+            {
+                "change_code": change.change_code,
+                "serial_number": change.serial_number,
+                "applicant_department": change.applicant_department,
+                "change_object": change.change_object,
+                "change_content": change.change_content,
+                "impact_assessment": change.impact_assessment,
+                "change_level": change.change_level,
+                "application_date": change.application_date,
+                "planned_approval_date": change.planned_approval_date,
+                "execution_date": change.execution_date,
+                "closure_date": change.closure_date,
+            }
+        ),
     )
 
 
 def _deviation_prompt(snapshot: dict[str, Any], analysis_type: str) -> str:
     if analysis_type == "capa_suggestion":
         task_text = (
-            "请只重点生成偏差对应的纠正预防措施建议，强调措施是否对因、是否可执行、是否可验证。"
+            "请只重点生成偏差对应的纠正预防措施建议，强调措施是否对因、是否可执行、是否可验证"
+            "。"
         )
     else:
-        task_text = (
-            "请完成偏差摘要、可能根因、风险评估、临时控制措施建议和 CAPA 建议。"
-        )
+        task_text = "请完成偏差摘要、可能根因、风险评估、临时控制措施建议和 CAPA 建议。"
     return f"""
 你是原料药工厂质量管理助理，只能基于提供数据分析，禁止编造事实或法规条文。
 当前任务：{task_text}
@@ -417,7 +486,8 @@ def _capa_prompt(snapshot: dict[str, Any]) -> str:
         )
     return f"""
 你是原料药工厂质量管理助理，只能基于提供数据分析，禁止编造事实或法规条文。
-请审查以下 CAPA 记录，重点判断措施是否对因、是否缺责任人/时限、是否可验证，并给出有效性评估建议。
+请审查以下 CAPA 记录，重点判断措施是否对因、是否缺责任人/时限、
+是否可验证，并给出有效性评估建议。
 
 分析上下文：
 {context_text}
@@ -504,18 +574,28 @@ async def analyze_deviation_record(
 ) -> QualityAiAnalysisLogOut:
     deviation = await db.get(Deviation, deviation_id)
     if not deviation or deviation.is_deleted:
-        raise ValueError("偏差不存在")
+        raise NotFoundException(resource="偏差")
 
     snapshot = _build_deviation_snapshot(deviation)
     prompt = _deviation_prompt(snapshot, analysis_type)
-    config = await get_config("text")
+    config = await _require_quality_ai_config()
 
     try:
-        raw = await llm_client.chat_json(
-            [{"role": "user", "content": prompt}],
-            expected_keys=QUALITY_AI_RESPONSE_KEYS,
-            temperature=0.2,
-        )
+        raw: dict[str, Any] = {}
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                raw = await llm_client.chat_json(
+                    [{"role": "user", "content": prompt}],
+                    expected_keys=QUALITY_AI_RESPONSE_KEYS,
+                    temperature=0.2,
+                )
+                break
+            except LLMRateLimitError:
+                if attempt == max_retries - 1:
+                    logger.warning("LLM 速率限制，偏差 AI 分析跳过")
+                    raise RuntimeError("LLM 速率限制，重试耗尽")
+                await asyncio.sleep(2**attempt)
         result = _normalize_result(raw)
         log = await _create_log(
             db,
@@ -532,12 +612,15 @@ async def analyze_deviation_record(
             deviation.ai_analysis = result
         if transition_status and deviation.status == "pending_ai_analysis":
             deviation.status = "pending_investigation"
-            deviation.status_updated_at = datetime.now(timezone.utc)
+            deviation.status_updated_at = datetime.now(UTC)
             deviation.updated_by = uuid.UUID(user_id) if user_id != "system" else None
         await db.commit()
-        await db.flush()
+        query_result = await db.execute(
+            select(QualityAiAnalysisLog).where(QualityAiAnalysisLog.id == log.id)
+        )
+        log = query_result.scalar_one()
         return _log_to_schema(log)
-    except Exception as exc:
+    except LLMRateLimitError:
         log = await _create_log(
             db,
             entity_type="deviation",
@@ -546,12 +629,41 @@ async def analyze_deviation_record(
             input_snapshot=snapshot,
             model_name=config.model_name,
             status="failed",
-            error_message=str(exc),
+            error_message="LLM 速率限制，重试耗尽",
             user_id=user_id,
         )
         await db.commit()
-        await db.flush()
-        raise RuntimeError(str(exc)) from exc
+        raise RuntimeError("LLM 速率限制，重试耗尽")
+    except LLMOutputError:
+        logger.exception("LLM 输出格式错误，偏差 AI 分析失败")
+        log = await _create_log(
+            db,
+            entity_type="deviation",
+            entity_id=deviation.id,
+            analysis_type=analysis_type,
+            input_snapshot=snapshot,
+            model_name=config.model_name,
+            status="failed",
+            error_message="LLM 输出格式错误",
+            user_id=user_id,
+        )
+        await db.commit()
+        raise RuntimeError("LLM 输出格式错误")
+    except LLMProviderError:
+        logger.exception("LLM 服务调用失败，偏差 AI 分析不可用")
+        log = await _create_log(
+            db,
+            entity_type="deviation",
+            entity_id=deviation.id,
+            analysis_type=analysis_type,
+            input_snapshot=snapshot,
+            model_name=config.model_name,
+            status="failed",
+            error_message="LLM 服务调用失败",
+            user_id=user_id,
+        )
+        await db.commit()
+        raise RuntimeError("LLM 服务调用失败")
 
 
 async def suggest_capa_for_deviation(
@@ -571,18 +683,28 @@ async def analyze_capa_record(
 ) -> QualityAiAnalysisLogOut:
     capa = await db.get(CAPA, capa_id)
     if not capa or capa.is_deleted:
-        raise ValueError("CAPA 不存在")
+        raise NotFoundException(resource="CAPA")
 
     snapshot = await _build_capa_analysis_snapshot(db, capa)
     prompt = _capa_prompt(snapshot)
-    config = await get_config("text")
+    config = await _require_quality_ai_config()
 
     try:
-        raw = await llm_client.chat_json(
-            [{"role": "user", "content": prompt}],
-            expected_keys=QUALITY_AI_RESPONSE_KEYS,
-            temperature=0.2,
-        )
+        raw: dict[str, Any] = {}
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                raw = await llm_client.chat_json(
+                    [{"role": "user", "content": prompt}],
+                    expected_keys=QUALITY_AI_RESPONSE_KEYS,
+                    temperature=0.2,
+                )
+                break
+            except LLMRateLimitError:
+                if attempt == max_retries - 1:
+                    logger.warning("LLM 速率限制，CAPA AI 分析跳过")
+                    raise RuntimeError("LLM 速率限制，重试耗尽")
+                await asyncio.sleep(2**attempt)
         result = _normalize_result(raw)
         log = await _create_log(
             db,
@@ -596,9 +718,12 @@ async def analyze_capa_record(
             user_id=user_id,
         )
         await db.commit()
-        await db.flush()
+        query_result = await db.execute(
+            select(QualityAiAnalysisLog).where(QualityAiAnalysisLog.id == log.id)
+        )
+        log = query_result.scalar_one()
         return _log_to_schema(log)
-    except Exception as exc:
+    except LLMRateLimitError:
         log = await _create_log(
             db,
             entity_type="capa",
@@ -607,12 +732,41 @@ async def analyze_capa_record(
             input_snapshot=snapshot,
             model_name=config.model_name,
             status="failed",
-            error_message=str(exc),
+            error_message="LLM 速率限制，重试耗尽",
             user_id=user_id,
         )
         await db.commit()
-        await db.flush()
-        raise RuntimeError(str(exc)) from exc
+        raise RuntimeError("LLM 速率限制，重试耗尽")
+    except LLMOutputError:
+        logger.exception("LLM 输出格式错误，CAPA AI 分析失败")
+        log = await _create_log(
+            db,
+            entity_type="capa",
+            entity_id=capa.id,
+            analysis_type="capa_review",
+            input_snapshot=snapshot,
+            model_name=config.model_name,
+            status="failed",
+            error_message="LLM 输出格式错误",
+            user_id=user_id,
+        )
+        await db.commit()
+        raise RuntimeError("LLM 输出格式错误")
+    except LLMProviderError:
+        logger.exception("LLM 服务调用失败，CAPA AI 分析不可用")
+        log = await _create_log(
+            db,
+            entity_type="capa",
+            entity_id=capa.id,
+            analysis_type="capa_review",
+            input_snapshot=snapshot,
+            model_name=config.model_name,
+            status="failed",
+            error_message="LLM 服务调用失败",
+            user_id=user_id,
+        )
+        await db.commit()
+        raise RuntimeError("LLM 服务调用失败")
 
 
 async def analyze_change_record(
@@ -620,18 +774,28 @@ async def analyze_change_record(
 ) -> QualityAiAnalysisLogOut:
     change = await db.get(ChangeControl, change_id)
     if not change or change.is_deleted:
-        raise ValueError("变更不存在")
+        raise NotFoundException(resource="变更")
 
     snapshot = _build_change_snapshot(change)
     prompt = _change_prompt(snapshot)
-    config = await get_config("text")
+    config = await _require_quality_ai_config()
 
     try:
-        raw = await llm_client.chat_json(
-            [{"role": "user", "content": prompt}],
-            expected_keys=QUALITY_AI_RESPONSE_KEYS,
-            temperature=0.2,
-        )
+        raw: dict[str, Any] = {}
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                raw = await llm_client.chat_json(
+                    [{"role": "user", "content": prompt}],
+                    expected_keys=QUALITY_AI_RESPONSE_KEYS,
+                    temperature=0.2,
+                )
+                break
+            except LLMRateLimitError:
+                if attempt == max_retries - 1:
+                    logger.warning("LLM 速率限制，变更 AI 分析跳过")
+                    raise RuntimeError("LLM 速率限制，重试耗尽")
+                await asyncio.sleep(2**attempt)
         result = _normalize_result(raw)
         log = await _create_log(
             db,
@@ -645,9 +809,12 @@ async def analyze_change_record(
             user_id=user_id,
         )
         await db.commit()
-        await db.flush()
+        query_result = await db.execute(
+            select(QualityAiAnalysisLog).where(QualityAiAnalysisLog.id == log.id)
+        )
+        log = query_result.scalar_one()
         return _log_to_schema(log)
-    except Exception as exc:
+    except LLMRateLimitError:
         log = await _create_log(
             db,
             entity_type="change",
@@ -656,12 +823,41 @@ async def analyze_change_record(
             input_snapshot=snapshot,
             model_name=config.model_name,
             status="failed",
-            error_message=str(exc),
+            error_message="LLM 速率限制，重试耗尽",
             user_id=user_id,
         )
         await db.commit()
-        await db.flush()
-        raise RuntimeError(str(exc)) from exc
+        raise RuntimeError("LLM 速率限制，重试耗尽")
+    except LLMOutputError:
+        logger.exception("LLM 输出格式错误，变更 AI 分析失败")
+        log = await _create_log(
+            db,
+            entity_type="change",
+            entity_id=change.id,
+            analysis_type="change_impact",
+            input_snapshot=snapshot,
+            model_name=config.model_name,
+            status="failed",
+            error_message="LLM 输出格式错误",
+            user_id=user_id,
+        )
+        await db.commit()
+        raise RuntimeError("LLM 输出格式错误")
+    except LLMProviderError:
+        logger.exception("LLM 服务调用失败，变更 AI 分析不可用")
+        log = await _create_log(
+            db,
+            entity_type="change",
+            entity_id=change.id,
+            analysis_type="change_impact",
+            input_snapshot=snapshot,
+            model_name=config.model_name,
+            status="failed",
+            error_message="LLM 服务调用失败",
+            user_id=user_id,
+        )
+        await db.commit()
+        raise RuntimeError("LLM 服务调用失败")
 
 
 async def list_ai_logs(
@@ -672,7 +868,7 @@ async def list_ai_logs(
     page: int = 1,
     page_size: int = 20,
 ) -> dict[str, Any]:
-    filters = [QualityAiAnalysisLog.is_deleted == False]
+    filters: list[ColumnElement[bool]] = [QualityAiAnalysisLog.is_deleted.is_(False)]
     if entity_type:
         filters.append(QualityAiAnalysisLog.entity_type == entity_type)
     if entity_id:
@@ -701,7 +897,7 @@ async def get_ai_log_detail(
 ) -> QualityAiAnalysisLogOut:
     log = await db.get(QualityAiAnalysisLog, log_id)
     if not log or log.is_deleted:
-        raise ValueError("AI 分析记录不存在")
+        raise NotFoundException(resource="AI分析记录")
     return _log_to_schema(log)
 
 
@@ -713,9 +909,9 @@ async def apply_ai_log(
 ) -> QualityAiAnalysisLogOut:
     log = await db.get(QualityAiAnalysisLog, log_id)
     if not log or log.is_deleted:
-        raise ValueError("AI 分析记录不存在")
+        raise NotFoundException(resource="AI分析记录")
     if log.status != "completed" or not log.output_payload:
-        raise ValueError("只有成功的 AI 分析记录才可以应用")
+        raise AppException(message="只有成功的 AI 分析记录才可以应用")
 
     structured_fields = (log.output_payload or {}).get("structured_fields") or {}
     allowed = {
@@ -725,44 +921,57 @@ async def apply_ai_log(
         )
     }
     if not field_keys:
-        raise ValueError("请选择要应用的字段")
+        raise AppException(message="请选择要应用的字段")
     invalid = [field for field in field_keys if field not in allowed]
     if invalid:
-        raise ValueError(f"存在不允许应用的字段: {', '.join(invalid)}")
+        raise AppException(message=f"存在不允许应用的字段: {', '.join(invalid)}")
 
+    entity: Deviation | CAPA | ChangeControl
     if log.entity_type == "deviation":
-        entity = await db.get(Deviation, log.entity_id)
-        if not entity or entity.is_deleted:
-            raise ValueError("偏差不存在")
+        deviation_entity = await db.get(Deviation, log.entity_id)
+        if not deviation_entity or deviation_entity.is_deleted:
+            raise NotFoundException(resource="偏差")
+        entity = deviation_entity
         if "root_cause_analysis" in field_keys:
-            entity.root_cause_analysis = structured_fields.get(
+            deviation_entity.root_cause_analysis = structured_fields.get(
                 "preliminary_cause_analysis"
             )
         if "corrective_actions" in field_keys:
-            entity.corrective_actions = structured_fields.get("capa_suggestions")
+            deviation_entity.corrective_actions = structured_fields.get(
+                "capa_suggestions"
+            )
     elif log.entity_type == "capa":
-        entity = await db.get(CAPA, log.entity_id)
-        if not entity or entity.is_deleted:
-            raise ValueError("CAPA 不存在")
+        capa_entity = await db.get(CAPA, log.entity_id)
+        if not capa_entity or capa_entity.is_deleted:
+            raise NotFoundException(resource="CAPA")
+        entity = capa_entity
         if "root_cause_analysis" in field_keys:
-            entity.root_cause_analysis = structured_fields.get("root_cause_analysis")
+            capa_entity.root_cause_analysis = structured_fields.get(
+                "root_cause_analysis"
+            )
         if "capa_content" in field_keys:
-            entity.capa_content = structured_fields.get("capa_content")
+            capa_entity.capa_content = structured_fields.get("capa_content")
         if "evaluation_target" in field_keys:
-            entity.evaluation_target = structured_fields.get("effectiveness_review")
+            capa_entity.evaluation_target = structured_fields.get(
+                "effectiveness_review"
+            )
     else:
-        entity = await db.get(ChangeControl, log.entity_id)
-        if not entity or entity.is_deleted:
-            raise ValueError("变更不存在")
+        change_entity = await db.get(ChangeControl, log.entity_id)
+        if not change_entity or change_entity.is_deleted:
+            raise NotFoundException(resource="变更")
+        entity = change_entity
         if "impact_assessment" in field_keys:
-            entity.impact_assessment = structured_fields.get("impact_assessment")
+            change_entity.impact_assessment = structured_fields.get("impact_assessment")
 
     entity.updated_by = uuid.UUID(user_id) if user_id != "system" else None
     log.is_applied = True
-    log.applied_at = datetime.now(timezone.utc)
+    log.applied_at = datetime.now(UTC)
     log.applied_by = uuid.UUID(user_id) if user_id != "system" else None
     await db.commit()
-    await db.flush()
+    result = await db.execute(
+        select(QualityAiAnalysisLog).where(QualityAiAnalysisLog.id == log.id)
+    )
+    log = result.scalar_one()
     return _log_to_schema(log)
 
 
@@ -791,7 +1000,9 @@ def _build_attachment_summary_from_rows(
         if attachment.parsed_summary:
             parts.append(f"{attachment.file_name}：{attachment.parsed_summary}")
         elif attachment.parsed_text:
-            parts.append(f"{attachment.file_name}：{_truncate_text(attachment.parsed_text, 400)}")
+            parts.append(
+                f"{attachment.file_name}：{_truncate_text(attachment.parsed_text, 400)}"
+            )
     return "\n\n".join(parts)
 
 
@@ -803,7 +1014,7 @@ async def _list_deviation_ai_session_attachments(
         select(DeviationAiSessionAttachment)
         .where(
             DeviationAiSessionAttachment.session_id == session_id,
-            DeviationAiSessionAttachment.is_deleted == False,
+            DeviationAiSessionAttachment.is_deleted.is_(False),
         )
         .order_by(
             DeviationAiSessionAttachment.sort_order.asc(),
@@ -847,8 +1058,78 @@ async def _get_deviation_or_raise(
 ) -> Deviation:
     deviation = await db.get(Deviation, deviation_id)
     if not deviation or deviation.is_deleted:
-        raise ValueError("偏差不存在")
+        raise NotFoundException(resource="偏差")
     return deviation
+
+
+async def _resolve_deviation_id(
+    db: AsyncSession,
+    deviation_key: str,
+) -> uuid.UUID:
+    """Resolve deviation key (UUID or Feishu record_id) to local Deviation UUID.
+
+    When deviation_key is not a UUID, treat it as a Feishu record_id and look up
+    the local Deviation by feishu_base_record_id. If not found, create a placeholder
+    Deviation record using data from the Feishu report record.
+    """
+    # Try parsing as UUID first
+    try:
+        return uuid.UUID(deviation_key)
+    except (ValueError, AttributeError):
+        pass
+
+    # Treat as Feishu record_id - look up local Deviation
+    result = await db.execute(
+        select(Deviation).where(
+            Deviation.feishu_base_record_id == deviation_key,
+            Deviation.is_deleted.is_(False),
+        )
+    )
+    deviation = result.scalar_one_or_none()
+    if deviation:
+        return deviation.id
+
+    # Not found locally - create a placeholder from Feishu report record
+    from app.modules.quality.service.tracking_records import (
+        get_deviation_report_record_from_feishu,
+    )
+
+    try:
+        report = await get_deviation_report_record_from_feishu(db, deviation_key)
+    except AppException:
+        raise AppException(message=f"无法找到飞书报告记录: {deviation_key}")
+
+    # 先尝试通过deviation_code查找已存在的偏差（可能由其他飞书记录创建）
+    existing = await db.execute(
+        select(Deviation).where(
+            Deviation.deviation_code == report.get("deviation_code"),
+            Deviation.is_deleted.is_(False),
+        )
+    )
+    existing_deviation = existing.scalar_one_or_none()
+    if existing_deviation:
+        # 更新已有偏差的飞书记录关联
+        existing_deviation.feishu_base_record_id = deviation_key
+        existing_deviation.feishu_base_table_id = report.get("feishu_base_table_id")
+        await db.flush()
+        return existing_deviation.id
+
+    deviation = Deviation(
+        deviation_code=report.get("deviation_code") or deviation_key,
+        title=report.get("description")
+        or report.get("deviation_code")
+        or deviation_key,
+        department=report.get("department"),
+        description=report.get("description"),
+        status="draft",
+        feishu_base_table_id=report.get("feishu_base_table_id"),
+        feishu_base_record_id=deviation_key,
+        feishu_sync_status="synced",
+        feishu_last_sync_direction="base_to_system",
+    )
+    db.add(deviation)
+    await db.flush()
+    return deviation.id
 
 
 async def _get_or_create_deviation_ai_session_record(
@@ -861,7 +1142,7 @@ async def _get_or_create_deviation_ai_session_record(
     result = await db.execute(
         select(DeviationAiSession).where(
             DeviationAiSession.deviation_id == deviation_id,
-            DeviationAiSession.is_deleted == False,
+            DeviationAiSession.is_deleted.is_(False),
         )
     )
     session = result.scalar_one_or_none()
@@ -879,21 +1160,6 @@ async def _get_or_create_deviation_ai_session_record(
     db.add(session)
     await db.flush()
     return session
-
-
-async def _get_deviation_ai_session_by_id(
-    db: AsyncSession,
-    session_id: uuid.UUID,
-) -> DeviationAiSession | None:
-    result = await db.execute(
-        select(DeviationAiSession)
-        .where(
-            DeviationAiSession.id == session_id,
-            DeviationAiSession.is_deleted == False,
-        )
-        .execution_options(populate_existing=True)
-    )
-    return result.scalar_one_or_none()
 
 
 def _extract_docx_text(content: bytes) -> str:
@@ -935,7 +1201,10 @@ def _extract_excel_text(content: bytes) -> str:
     return "\n".join(lines).strip()
 
 
-async def _extract_image_text(content: bytes, content_type: str) -> tuple[str, str | None]:
+async def _extract_image_text(
+    content: bytes, content_type: str
+) -> tuple[str, str | None]:
+    ocr_error: str | None = None
     try:
         image = Image.open(io.BytesIO(content))
         text = pytesseract.image_to_string(image, lang="chi_sim+eng").strip()
@@ -943,14 +1212,12 @@ async def _extract_image_text(content: bytes, content_type: str) -> tuple[str, s
             return text, None
     except Exception as exc:  # noqa: BLE001
         ocr_error = str(exc)
-    else:
-        ocr_error = None
 
     try:
         encoded = base64.b64encode(content).decode("ascii")
         image_url = f"data:{content_type};base64,{encoded}"
         vision_result = await llm_client.chat_vision_json(
-            "请提取图片中的可读文字，并返回 JSON：{\"text\": \"...\", \"summary\": \"...\"}",
+            '请提取图片中的可读文字，并返回 JSON：{"text": "...", "summary": "..."}',
             image_urls=[image_url],
             expected_keys=["text", "summary"],
         )
@@ -981,22 +1248,18 @@ async def _parse_attachment_content(
     if suffix in {".png", ".jpg", ".jpeg"}:
         parsed_text, summary = await _extract_image_text(content, content_type)
         return parsed_text or None, summary or _truncate_text(parsed_text, 600) or None
-    raise ValueError("仅支持 Word、Excel、图片附件")
+    raise AppException(message="仅支持 Word、Excel、图片附件")
 
 
-async def _read_upload_file_with_limit(file: UploadFile) -> bytes:
+async def _read_upload_file_with_limit(file: UploadFile) -> tuple[str, bytes]:
     max_bytes = get_settings().MAX_UPLOAD_SIZE_MB * 1024 * 1024
-    chunks: list[bytes] = []
-    total_size = 0
-    while True:
-        chunk = await file.read(1024 * 1024)
-        if not chunk:
-            break
-        total_size += len(chunk)
-        if total_size > max_bytes:
-            raise ValueError(f"附件不能超过 {get_settings().MAX_UPLOAD_SIZE_MB}MB")
-        chunks.append(chunk)
-    return b"".join(chunks)
+    return await read_upload_secure(
+        file,
+        max_bytes=max_bytes,
+        allowed_extensions=QUALITY_AI_ATTACHMENT_EXTENSIONS,
+        allowed_mimes=QUALITY_AI_ATTACHMENT_MIMES,
+        what="偏差 AI 附件",
+    )
 
 
 def _store_deviation_ai_attachment(
@@ -1004,7 +1267,9 @@ def _store_deviation_ai_attachment(
     content: bytes,
     content_type: str,
 ) -> str:
-    safe_name = f"{uuid.uuid4()}_{Path(file_name).name}"
+    safe_name = (
+        f"{uuid.uuid4()}_{safe_upload_filename(file_name, fallback='attachment.bin')}"
+    )
     object_key = f"deviation-ai/{safe_name}"
     if minio_enabled():
         upload_object(
@@ -1016,21 +1281,20 @@ def _store_deviation_ai_attachment(
         )
         return object_key
 
-    file_path = os.path.normpath(str(_quality_ai_local_upload_dir() / safe_name))
-    allowed_root = os.path.normpath(str(_quality_ai_local_upload_dir()))
-    if not file_path.startswith(allowed_root):
-        raise ValueError("非法文件路径")
+    root = _quality_ai_local_upload_dir().resolve()
+    file_path = (root / safe_name).resolve()
+    try:
+        file_path.relative_to(root)
+    except ValueError as exc:
+        raise AppException(message="非法文件路径") from exc
     with open(file_path, "wb") as file_obj:
         file_obj.write(content)
-    return file_path
+    return str(file_path)
 
 
 def _delete_deviation_ai_attachment_file(storage_path: str) -> None:
     if minio_enabled():
-        try:
-            delete_object("quality", storage_path)
-        except Exception:  # noqa: BLE001
-            return
+        delete_object("quality", storage_path)
         return
     if os.path.exists(storage_path):
         os.remove(storage_path)
@@ -1041,11 +1305,11 @@ async def get_or_create_deviation_ai_session(
     deviation_id: uuid.UUID,
 ) -> DeviationAiSessionOut:
     session = await _get_or_create_deviation_ai_session_record(db, deviation_id)
-    session_id = session.id
     await db.commit()
-    session = await _get_deviation_ai_session_by_id(db, session_id)
-    if not session:
-        raise ValueError("AI 会话不存在")
+    result = await db.execute(
+        select(DeviationAiSession).where(DeviationAiSession.id == session.id)
+    )
+    session = result.scalar_one()
     return await _session_to_schema(db, session)
 
 
@@ -1060,11 +1324,11 @@ async def update_deviation_ai_session(
     )
     session.supplement_text = supplement_text.strip()
     session.updated_by = uuid.UUID(user_id) if user_id != "system" else None
-    session_id = session.id
     await db.commit()
-    session = await _get_deviation_ai_session_by_id(db, session_id)
-    if not session:
-        raise ValueError("AI 会话不存在")
+    result = await db.execute(
+        select(DeviationAiSession).where(DeviationAiSession.id == session.id)
+    )
+    session = result.scalar_one()
     return await _session_to_schema(db, session)
 
 
@@ -1075,22 +1339,23 @@ async def upload_deviation_ai_session_attachment(
     user_id: str,
 ) -> DeviationAiSessionAttachmentOut:
     if not file.filename:
-        raise ValueError("附件文件名不能为空")
-    content = await _read_upload_file_with_limit(file)
+        raise AppException(message="附件文件名不能为空")
+    file_name, content = await _read_upload_file_with_limit(file)
+    content_type = sniff_upload_mime(file_name, content)
     session = await _get_or_create_deviation_ai_session_record(
         db, deviation_id, user_id=user_id
     )
     existing_attachments = await _list_deviation_ai_session_attachments(db, session.id)
     stored_path = _store_deviation_ai_attachment(
-        file.filename,
+        file_name,
         content,
-        file.content_type or "application/octet-stream",
+        content_type,
     )
     try:
         parsed_text, parsed_summary = await _parse_attachment_content(
-            file.filename,
+            file_name,
             content,
-            file.content_type or "application/octet-stream",
+            content_type,
         )
         parse_status = "completed"
         parse_error = None
@@ -1102,8 +1367,8 @@ async def upload_deviation_ai_session_attachment(
 
     attachment = DeviationAiSessionAttachment(
         session_id=session.id,
-        file_name=file.filename,
-        file_type=file.content_type or "application/octet-stream",
+        file_name=file_name,
+        file_type=content_type,
         file_size=len(content),
         storage_path=stored_path,
         parsed_text=parsed_text,
@@ -1116,14 +1381,18 @@ async def upload_deviation_ai_session_attachment(
     )
     db.add(attachment)
     await db.flush()
-    attachment_id = attachment.id
     current_attachments = existing_attachments + [attachment]
-    session.attachment_summary = _build_attachment_summary_from_rows(current_attachments)
+    session.attachment_summary = _build_attachment_summary_from_rows(
+        current_attachments
+    )
     session.updated_by = uuid.UUID(user_id) if user_id != "system" else None
     await db.commit()
-    attachment = await db.get(DeviationAiSessionAttachment, attachment_id)
-    if not attachment:
-        raise ValueError("附件不存在")
+    result = await db.execute(
+        select(DeviationAiSessionAttachment).where(
+            DeviationAiSessionAttachment.id == attachment.id
+        )
+    )
+    attachment = result.scalar_one()
     return _attachment_to_schema(attachment)
 
 
@@ -1137,14 +1406,16 @@ async def delete_deviation_ai_session_attachment(
         db, deviation_id, user_id=user_id
     )
     attachment = await db.get(DeviationAiSessionAttachment, attachment_id)
-    if (
-        not attachment
-        or attachment.is_deleted
-        or attachment.session_id != session.id
-    ):
-        raise ValueError("附件不存在")
+    if not attachment or attachment.is_deleted or attachment.session_id != session.id:
+        raise NotFoundException(resource="附件")
 
-    _delete_deviation_ai_attachment_file(attachment.storage_path)
+    try:
+        _delete_deviation_ai_attachment_file(attachment.storage_path)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception(
+            "quality AI attachment storage delete failed: %s", attachment.storage_path
+        )
+        raise AppException(status_code=502, message="附件删除失败，请稍后重试") from exc
     attachment.is_deleted = True
     attachment.updated_by = uuid.UUID(user_id) if user_id != "system" else None
     remaining_attachments = [
@@ -1152,13 +1423,15 @@ async def delete_deviation_ai_session_attachment(
         for item in await _list_deviation_ai_session_attachments(db, session.id)
         if item.id != attachment.id
     ]
-    session.attachment_summary = _build_attachment_summary_from_rows(remaining_attachments)
+    session.attachment_summary = _build_attachment_summary_from_rows(
+        remaining_attachments
+    )
     session.updated_by = uuid.UUID(user_id) if user_id != "system" else None
-    session_id = session.id
     await db.commit()
-    session = await _get_deviation_ai_session_by_id(db, session_id)
-    if not session:
-        raise ValueError("AI 会话不存在")
+    result = await db.execute(
+        select(DeviationAiSession).where(DeviationAiSession.id == session.id)
+    )
+    session = result.scalar_one()
     return await _session_to_schema(db, session)
 
 
@@ -1177,40 +1450,66 @@ async def regenerate_deviation_ai_session(
         session.supplement_text,
         session.attachment_summary,
     )
-    config = await get_config("text")
+    config = await _require_quality_ai_config()
     session.status = "processing"
     session.error_message = None
     session.updated_by = uuid.UUID(user_id) if user_id != "system" else None
     await db.flush()
 
     try:
-        raw = await llm_client.chat_json(
-            [{"role": "user", "content": prompt}],
-            expected_keys=DEVIATION_AI_SESSION_RESPONSE_KEYS,
-            temperature=0.2,
-        )
+        raw: dict[str, Any] = {}
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                raw = await llm_client.chat_json(
+                    [{"role": "user", "content": prompt}],
+                    expected_keys=DEVIATION_AI_SESSION_RESPONSE_KEYS,
+                    temperature=0.2,
+                )
+                break
+            except LLMRateLimitError:
+                if attempt == max_retries - 1:
+                    logger.warning("LLM 速率限制，偏差 AI 会话生成跳过")
+                    raise RuntimeError("LLM 速率限制，重试耗尽")
+                await asyncio.sleep(2**attempt)
+        deviation_analysis = raw.get("deviation_analysis")
+        capa_suggestion = raw.get("capa_suggestion")
         session.deviation_analysis_payload = _normalize_result(
-            raw.get("deviation_analysis") or {}
+            deviation_analysis if isinstance(deviation_analysis, dict) else {}
         )
         session.capa_suggestion_payload = _normalize_result(
-            raw.get("capa_suggestion") or {}
+            capa_suggestion if isinstance(capa_suggestion, dict) else {}
         )
         session.model_name = config.model_name
         session.status = "completed"
         session.error_message = None
-        session.last_generated_at = datetime.now(timezone.utc)
-        session_id = session.id
+        session.last_generated_at = datetime.now(UTC)
         await db.commit()
-    except Exception as exc:  # noqa: BLE001
+    except LLMRateLimitError:
         session.model_name = config.model_name
         session.status = "failed"
-        session.error_message = str(exc)
+        session.error_message = "LLM 速率限制，重试耗尽"
         await db.commit()
-        raise RuntimeError(str(exc)) from exc
+        raise RuntimeError("LLM 速率限制，重试耗尽")
+    except LLMOutputError:
+        logger.exception("LLM 输出格式错误，偏差 AI 会话生成失败")
+        session.model_name = config.model_name
+        session.status = "failed"
+        session.error_message = "LLM 输出格式错误"
+        await db.commit()
+        raise RuntimeError("LLM 输出格式错误")
+    except LLMProviderError:
+        logger.exception("LLM 服务调用失败，偏差 AI 会话生成不可用")
+        session.model_name = config.model_name
+        session.status = "failed"
+        session.error_message = "LLM 服务调用失败"
+        await db.commit()
+        raise RuntimeError("LLM 服务调用失败")
 
-    session = await _get_deviation_ai_session_by_id(db, session_id)
-    if not session:
-        raise ValueError("AI 会话不存在")
+    result = await db.execute(
+        select(DeviationAiSession).where(DeviationAiSession.id == session.id)
+    )
+    session = result.scalar_one()
     return await _session_to_schema(db, session)
 
 
@@ -1226,9 +1525,9 @@ async def apply_deviation_ai_session(
     )
     deviation = await _get_deviation_or_raise(db, deviation_id)
     if section not in {"deviation_analysis", "capa_suggestion"}:
-        raise ValueError("section 不合法")
+        raise AppException(message="section 不合法")
     if not field_keys:
-        raise ValueError("请选择要应用的字段")
+        raise AppException(message="请选择要应用的字段")
 
     payload = (
         session.deviation_analysis_payload
@@ -1236,36 +1535,43 @@ async def apply_deviation_ai_session(
         else session.capa_suggestion_payload
     )
     if not payload:
-        raise ValueError("当前会话暂无可应用结果")
+        raise AppException(message="当前会话暂无可应用结果")
 
-    analysis_type = "deviation_analysis" if section == "deviation_analysis" else "capa_suggestion"
+    analysis_type = (
+        "deviation_analysis" if section == "deviation_analysis" else "capa_suggestion"
+    )
     allowed = {
         field.field_key: field
         for field in _build_applicable_fields("deviation", analysis_type, payload)
     }
     invalid = [field for field in field_keys if field not in allowed]
     if invalid:
-        raise ValueError(f"存在不允许应用的字段: {', '.join(invalid)}")
+        raise AppException(message=f"存在不允许应用的字段: {', '.join(invalid)}")
 
     structured_fields = (payload or {}).get("structured_fields") or {}
     if "root_cause_analysis" in field_keys:
-        deviation.root_cause_analysis = structured_fields.get("preliminary_cause_analysis")
+        deviation.root_cause_analysis = structured_fields.get(
+            "preliminary_cause_analysis"
+        )
     if "corrective_actions" in field_keys:
         deviation.corrective_actions = structured_fields.get("capa_suggestions")
     if section == "deviation_analysis":
         deviation.ai_analysis = payload
-    deviation.updated_by = uuid.UUID(user_id) if user_id != "system" else None
-    session.updated_by = uuid.UUID(user_id) if user_id != "system" else None
-    session_id = session.id
+    persisted_user_id = await _get_persisted_user_id(db, user_id)
+    deviation.updated_by = persisted_user_id
+    session.updated_by = persisted_user_id
     await db.commit()
-    session = await _get_deviation_ai_session_by_id(db, session_id)
-    if not session:
-        raise ValueError("AI 会话不存在")
+    result = await db.execute(
+        select(DeviationAiSession).where(DeviationAiSession.id == session.id)
+    )
+    session = result.scalar_one()
     return await _session_to_schema(db, session)
 
 
-async def analyze_deviation_async(deviation_id: uuid.UUID, user_id: str) -> None:
+async def analyze_deviation_async(
+    deviation_id: uuid.UUID, user_id: str
+) -> QualityAiAnalysisLogOut:
     async with async_session_factory() as db:
-        await analyze_deviation_record(
+        return await analyze_deviation_record(
             db, deviation_id, user_id, transition_status=True
         )

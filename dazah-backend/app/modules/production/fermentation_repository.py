@@ -1,5 +1,6 @@
 """Fermentation record repository."""
 
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -9,7 +10,7 @@ from app.modules.production.fermentation_models import FermentationRecord
 
 
 class FermentationRepository:
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
     async def list(
@@ -20,8 +21,10 @@ class FermentationRepository:
         batch_no: str | None = None,
         status: str | None = None,
         fermenter: str | None = None,
-    ):
-        query = select(FermentationRecord).where(FermentationRecord.is_deleted.is_(False))  # noqa: E501
+    ) -> Any:
+        query = select(FermentationRecord).where(
+            FermentationRecord.is_deleted.is_(False)
+        )  # noqa: E501
 
         if product_name:
             query = query.where(FermentationRecord.product_name == product_name)
@@ -52,7 +55,7 @@ class FermentationRepository:
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
 
-    async def create(self, data: dict) -> FermentationRecord:
+    async def create(self, data: dict[str, Any]) -> FermentationRecord:
         record = FermentationRecord(**data)
         self.session.add(record)
         await self.session.flush()
@@ -61,7 +64,9 @@ class FermentationRepository:
         await self.session.refresh(record)
         return record
 
-    async def update(self, record_id: UUID, data: dict) -> FermentationRecord | None:
+    async def update(
+        self, record_id: UUID, data: dict[str, Any]
+    ) -> FermentationRecord | None:
         record = await self.get_by_id(record_id)
         if not record:
             return None

@@ -99,7 +99,7 @@ export default function TurnoverAnalysisPanel() {
 
       setStage('streaming')
     } catch (err) {
-      setErrorMsg(err.message || '分析失败，请稍后重试')
+      setErrorMsg((err instanceof Error ? err.message : '') || '分析失败，请稍后重试')
       setStage('error')
     }
   }, [])

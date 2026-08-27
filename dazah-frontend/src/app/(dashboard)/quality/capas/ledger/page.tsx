@@ -1,5 +1,11 @@
-import { CapaPage } from '@/components/quality'
+import { CapaPage, ErrorBoundary, QualityQueryProvider } from '@/components/quality'
 
 export default function CapaLedgerPage() {
-  return <CapaPage />
+  return (
+    <ErrorBoundary>
+      <QualityQueryProvider>
+        <CapaPage />
+      </QualityQueryProvider>
+    </ErrorBoundary>
+  )
 }

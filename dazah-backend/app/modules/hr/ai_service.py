@@ -4,8 +4,9 @@ Uses core.llm for streaming completions.
 """
 
 from collections.abc import AsyncGenerator
-from app.core.llm import llm_client
+
 from app.core.config import get_settings
+from app.core.llm import llm_client
 
 
 class AiChatService:

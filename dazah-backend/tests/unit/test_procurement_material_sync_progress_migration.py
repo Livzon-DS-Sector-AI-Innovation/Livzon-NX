@@ -1,5 +1,6 @@
 import importlib.util
 from pathlib import Path
+from typing import Any
 
 MIGRATION_PATH = (
     Path(__file__).parents[2]
@@ -9,7 +10,7 @@ MIGRATION_PATH = (
 )
 
 
-def _load_migration():
+def _load_migration() -> Any:
     spec = importlib.util.spec_from_file_location(
         "material_sync_progress_migration",
         MIGRATION_PATH,
@@ -21,7 +22,9 @@ def _load_migration():
     return module
 
 
-def test_material_sync_progress_migration_adds_progress_columns(monkeypatch) -> None:
+def test_material_sync_progress_migration_adds_progress_columns(
+    monkeypatch: Any,
+) -> None:
     migration = _load_migration()
     added_columns: list[tuple[str, str, bool]] = []
 
@@ -41,7 +44,9 @@ def test_material_sync_progress_migration_adds_progress_columns(monkeypatch) -> 
     ]
 
 
-def test_material_sync_progress_migration_downgrade_drops_columns(monkeypatch) -> None:
+def test_material_sync_progress_migration_downgrade_drops_columns(
+    monkeypatch: Any,
+) -> None:
     migration = _load_migration()
     dropped_columns: list[tuple[str, str]] = []
 

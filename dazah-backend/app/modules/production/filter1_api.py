@@ -1,6 +1,6 @@
 """一次板框过滤 API"""
-
 from datetime import datetime as dt
+from typing import Any
 from uuid import UUID
 
 from fastapi import Depends, Query
@@ -72,7 +72,7 @@ async def _list(
     s: str | None = Query(None, alias="batch_no"),
     workshop: str = Query("203"),
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     q = select(Filter1).where(Filter1.is_deleted.is_(False), Filter1.workshop == workshop)  # noqa: E501
     if s:
         q = q.where(Filter1.batch_no.ilike(f"%{s}%"))
@@ -88,7 +88,7 @@ async def _list(
 
 
 @router.post("/filter1", summary="创建一次板框过滤")
-async def _create(d: CD, session: AsyncSession = Depends(get_db)):
+async def _create(d: CD, session: AsyncSession = Depends(get_db)) -> Any:
     r = Filter1(**d.model_dump())
     session.add(r)
     await session.flush()
@@ -98,7 +98,7 @@ async def _create(d: CD, session: AsyncSession = Depends(get_db)):
 
 
 @router.put("/filter1/{rid}", summary="更新一次板框过滤")
-async def _update(rid: UUID, d: CD, session: AsyncSession = Depends(get_db)):
+async def _update(rid: UUID, d: CD, session: AsyncSession = Depends(get_db)) -> Any:
     r = await session.get(Filter1, rid)
     if not r or r.is_deleted:
         return success_response(None, message="记录不存在", status_code=404)
@@ -109,7 +109,7 @@ async def _update(rid: UUID, d: CD, session: AsyncSession = Depends(get_db)):
 
 
 @router.delete("/filter1/{rid}", summary="删除一次板框过滤")
-async def _delete(rid: UUID, session: AsyncSession = Depends(get_db)):
+async def _delete(rid: UUID, session: AsyncSession = Depends(get_db)) -> Any:
     r = await session.get(Filter1, rid)
     if not r:
         return success_response(None, message="记录不存在", status_code=404)

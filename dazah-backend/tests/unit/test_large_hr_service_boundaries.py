@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
+from typing import Any, cast
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
@@ -10,26 +11,28 @@ import pytest
 from app.core.exceptions import DuplicateException, NotFoundException
 from app.modules.hr import service as hr_service
 
+SimpleNamespace: Any = _SimpleNamespace
+
 
 class Dump:
-    def __init__(self, **values):
+    def __init__(self: Any, **values: Any) -> None:
         self.values = values
         for key, value in values.items():
             setattr(self, key, value)
 
-    def model_dump(self, **kwargs):
+    def model_dump(self: Any, **kwargs: Any) -> Any:
         excluded = kwargs.get("exclude", set())
         return {key: value for key, value in self.values.items() if key not in excluded}
 
 
-def _bare(service_type, **dependencies):
+def _bare(service_type: Any, **dependencies: Any) -> Any:
     service = service_type.__new__(service_type)
     for name, dependency in dependencies.items():
         setattr(service, name, dependency)
     return service
 
 
-def _employee(**overrides):
+def _employee(**overrides: Any) -> Any:
     values = {
         "id": uuid4(),
         "employee_number": "E001",
@@ -92,7 +95,7 @@ def _employee(**overrides):
     return SimpleNamespace(**values)
 
 
-def test_hr_feishu_parsers_cover_types_dates_and_cleanup():
+def test_hr_feishu_parsers_cover_types_dates_and_cleanup() -> Any:
     assert hr_service._extract_text([{"text": "A"}]) == "A"
     assert hr_service._extract_text({"text": "B"}) == "B"
     assert hr_service._extract_text({"value": [{"text": "C"}]}) == "C"
@@ -126,19 +129,23 @@ def test_hr_feishu_parsers_cover_types_dates_and_cleanup():
     assert parsed["hire_date"] is not None
     assert parsed["qualifications"] == ["A"]
     assert parsed["feishu_synced_at"] == date(2026, 1, 1)
-    assert hr_service._parse_feishu_record(
-        {"record_id": "bad", "updated_time": "invalid"}
-    )["feishu_synced_at"] is not None
-    assert hr_service._parse_feishu_record(
-        {"record_id": "none"}
-    )["feishu_synced_at"] is not None
+    assert (
+        hr_service._parse_feishu_record(
+            {"record_id": "bad", "updated_time": "invalid"}
+        )["feishu_synced_at"]
+        is not None
+    )
+    assert (
+        hr_service._parse_feishu_record({"record_id": "none"})["feishu_synced_at"]
+        is not None
+    )
 
 
 @pytest.mark.asyncio
-async def test_employee_crud_duplicate_and_feishu_failures(monkeypatch):
-    repo = AsyncMock()
-    bitable = AsyncMock()
-    feishu = AsyncMock()
+async def test_employee_crud_duplicate_and_feishu_failures(monkeypatch: Any) -> Any:
+    repo: Any = AsyncMock()
+    bitable: Any = AsyncMock()
+    feishu: Any = AsyncMock()
     service = _bare(
         hr_service.EmployeeService, repo=repo, bitable=bitable, feishu=feishu
     )
@@ -153,7 +160,7 @@ async def test_employee_crud_duplicate_and_feishu_failures(monkeypatch):
     repo.get_by_employee_number.return_value = _employee()
     with pytest.raises(DuplicateException):
         await service.create_employee(
-            Dump(
+            cast(Any, Dump)(
                 employee_number="E001",
                 name="张三",
                 department="生产部",
@@ -169,7 +176,7 @@ async def test_employee_crud_duplicate_and_feishu_failures(monkeypatch):
     bitable.create.return_value = "rec-1"
     assert (
         await service.create_employee(
-            Dump(
+            cast(Any, Dump)(
                 employee_number="E001",
                 name="张三",
                 department="生产部",
@@ -185,7 +192,9 @@ async def test_employee_crud_duplicate_and_feishu_failures(monkeypatch):
     repo.get_by_id.return_value = created
     repo.get_by_employee_number.return_value = _employee(id=uuid4())
     with pytest.raises(DuplicateException):
-        await service.update_employee(employee_id, Dump(employee_number="E002"))
+        await service.update_employee(
+            employee_id, cast(Any, Dump)(employee_number="E002")
+        )
 
     repo.get_by_employee_number.return_value = None
     repo.update.return_value = created
@@ -194,7 +203,10 @@ async def test_employee_crud_duplicate_and_feishu_failures(monkeypatch):
         "_sync_single_to_feishu",
         AsyncMock(side_effect=RuntimeError("offline")),
     )
-    assert await service.update_employee(employee_id, Dump(position="主管")) is created
+    assert (
+        await service.update_employee(employee_id, cast(Any, Dump)(position="主管"))
+        is created
+    )
     assert created.position == "主管"
 
     created.feishu_record_id = "rec-delete"
@@ -222,9 +234,9 @@ async def test_employee_crud_duplicate_and_feishu_failures(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_employee_approval_notification_and_sync_paths(monkeypatch):
-    repo = AsyncMock()
-    bitable = AsyncMock()
+async def test_employee_approval_notification_and_sync_paths(monkeypatch: Any) -> Any:
+    repo: Any = AsyncMock()
+    bitable: Any = AsyncMock()
     service = _bare(
         hr_service.EmployeeService, repo=repo, bitable=bitable, feishu=AsyncMock()
     )
@@ -255,13 +267,13 @@ async def test_employee_approval_notification_and_sync_paths(monkeypatch):
         employee_without_open_id,
         None,
     ]
-    im = AsyncMock()
+    im: Any = AsyncMock()
     im.send_text_message.side_effect = RuntimeError("send failed")
     import app.modules.hr.feishu.im as im_module
 
     monkeypatch.setattr(im_module, "FeishuIM", lambda: im)
     result = await service.notify_training(
-        Dump(
+        cast(Any, Dump)(
             employee_numbers=["E001", "E002", "E003"],
             subject="GMP",
             training_date=date(2026, 1, 1),
@@ -302,9 +314,9 @@ async def test_employee_approval_notification_and_sync_paths(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_employee_bitable_mapping_and_create_update_sync(monkeypatch):
-    repo = AsyncMock()
-    bitable = AsyncMock()
+async def test_employee_bitable_mapping_and_create_update_sync(monkeypatch: Any) -> Any:
+    repo: Any = AsyncMock()
+    bitable: Any = AsyncMock()
     service = _bare(
         hr_service.EmployeeService, repo=repo, bitable=bitable, feishu=AsyncMock()
     )
@@ -345,12 +357,12 @@ async def test_employee_bitable_mapping_and_create_update_sync(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_department_team_and_offboarding_transaction_boundaries():
+async def test_department_team_and_offboarding_transaction_boundaries() -> Any:
     department_id = uuid4()
-    department = SimpleNamespace(id=department_id, code="D1", name="生产部")
+    department: Any = SimpleNamespace(id=department_id, code="D1", name="生产部")
 
-    department_repo = AsyncMock()
-    department_feishu = AsyncMock()
+    department_repo: Any = AsyncMock()
+    department_feishu: Any = AsyncMock()
     department_service = _bare(
         hr_service.DepartmentService,
         repo=department_repo,
@@ -361,13 +373,17 @@ async def test_department_team_and_offboarding_transaction_boundaries():
         await department_service.get_department(department_id)
     department_repo.get_by_code.return_value = department
     with pytest.raises(DuplicateException):
-        await department_service.create_department(Dump(code="D1", name="生产部"))
+        await department_service.create_department(
+            cast(Any, Dump)(code="D1", name="生产部")
+        )
 
     department_repo.get_by_code.return_value = None
     department_repo.create.return_value = department
     department_feishu.sync_department_created.side_effect = RuntimeError("offline")
     assert (
-        await department_service.create_department(Dump(code="D1", name="生产部"))
+        await department_service.create_department(
+            cast(Any, Dump)(code="D1", name="生产部")
+        )
         is department
     )
 
@@ -375,14 +391,14 @@ async def test_department_team_and_offboarding_transaction_boundaries():
     department_repo.get_by_code.return_value = SimpleNamespace(id=uuid4())
     with pytest.raises(DuplicateException):
         await department_service.update_department(
-            department_id, Dump(code="D2")
+            department_id, cast(Any, Dump)(code="D2")
         )
     department_repo.get_by_code.return_value = None
     department_repo.update.return_value = department
     department_feishu.sync_department_updated.side_effect = RuntimeError("offline")
     assert (
         await department_service.update_department(
-            department_id, Dump(name="质量部")
+            department_id, cast(Any, Dump)(name="质量部")
         )
         is department
     )
@@ -394,34 +410,36 @@ async def test_department_team_and_offboarding_transaction_boundaries():
         await department_service.list_departments(keyword="部", page=2, page_size=3)
     )[1] == 1
 
-    team_repo = AsyncMock()
+    team_repo: Any = AsyncMock()
     team_service = _bare(
         hr_service.TeamService,
         repo=team_repo,
         department_repo=department_repo,
     )
     team_id = uuid4()
-    team = SimpleNamespace(id=team_id, department_id=department_id)
+    team: Any = SimpleNamespace(id=team_id, department_id=department_id)
     team_repo.get_by_id.return_value = None
     with pytest.raises(NotFoundException):
         await team_service.get_team(team_id)
     department_repo.get_by_id.return_value = None
     with pytest.raises(NotFoundException):
         await team_service.create_team(
-            Dump(name="一班", department_id=department_id)
+            cast(Any, Dump)(name="一班", department_id=department_id)
         )
     department_repo.get_by_id.return_value = department
     team_repo.create.return_value = team
     assert (
-        await team_service.create_team(Dump(name="一班", department_id=department_id))
+        await team_service.create_team(
+            cast(Any, Dump)(name="一班", department_id=department_id)
+        )
         is team
     )
     team_repo.get_by_id.return_value = team
     department_repo.get_by_id.return_value = None
     with pytest.raises(NotFoundException):
-        await team_service.update_team(team_id, Dump(department_id=uuid4()))
+        await team_service.update_team(team_id, cast(Any, Dump)(department_id=uuid4()))
     team_repo.update.return_value = team
-    assert await team_service.update_team(team_id, Dump(name="二班")) is team
+    assert await team_service.update_team(team_id, cast(Any, Dump)(name="二班")) is team
     await team_service.delete_team(team_id)
     team_repo.list_teams.return_value = ([team], 1)
     assert (
@@ -430,9 +448,9 @@ async def test_department_team_and_offboarding_transaction_boundaries():
         )
     )[1] == 1
 
-    off_repo = AsyncMock()
-    employee_repo = AsyncMock()
-    off_feishu = AsyncMock()
+    off_repo: Any = AsyncMock()
+    employee_repo: Any = AsyncMock()
+    off_feishu: Any = AsyncMock()
     off_service = _bare(
         hr_service.OffboardingRecordService,
         repo=off_repo,
@@ -446,16 +464,16 @@ async def test_department_team_and_offboarding_transaction_boundaries():
     employee_repo.get_by_id.return_value = None
     with pytest.raises(NotFoundException):
         await off_service.create_record(
-            Dump(employee_id=uuid4(), offboarding_date=date.today())
+            cast(Any, Dump)(employee_id=uuid4(), offboarding_date=date.today())
         )
     employee = _employee()
-    record = SimpleNamespace(id=record_id, employee_id=employee.id)
+    record: Any = SimpleNamespace(id=record_id, employee_id=employee.id)
     employee_repo.get_by_id.return_value = employee
     off_repo.create.return_value = record
     off_feishu.sync_offboarding_created.side_effect = RuntimeError("offline")
     assert (
         await off_service.create_record(
-            Dump(employee_id=employee.id, offboarding_date=date.today())
+            cast(Any, Dump)(employee_id=employee.id, offboarding_date=date.today())
         )
         is record
     )
@@ -464,7 +482,7 @@ async def test_department_team_and_offboarding_transaction_boundaries():
     off_repo.update.return_value = record
     off_feishu.sync_offboarding_updated.side_effect = RuntimeError("offline")
     assert (
-        await off_service.update_record(record_id, Dump(reason="个人原因"))
+        await off_service.update_record(record_id, cast(Any, Dump)(reason="个人原因"))
         is record
     )
     await off_service.delete_record(record_id)
@@ -477,14 +495,14 @@ async def test_department_team_and_offboarding_transaction_boundaries():
 
 
 @pytest.mark.asyncio
-async def test_onboarding_and_departure_sync_boundaries(monkeypatch):
+async def test_onboarding_and_departure_sync_boundaries(monkeypatch: Any) -> Any:
     now = datetime.utcnow()
     for service_type, datasource_module_name in (
         (hr_service.OnboardingRecordService, "onboarding_datasource"),
         (hr_service.DepartureRecordService, "departure_datasource"),
     ):
-        repo = AsyncMock()
-        bitable = AsyncMock()
+        repo: Any = AsyncMock()
+        bitable: Any = AsyncMock()
         service = _bare(service_type, repo=repo, bitable=bitable)
         record_id = uuid4()
         repo.get_by_id.return_value = None
@@ -518,7 +536,7 @@ async def test_onboarding_and_departure_sync_boundaries(monkeypatch):
 
         class Parsed:
             @classmethod
-            def from_api(cls, item):
+            def from_api(cls: Any, item: Any) -> Any:
                 if item["record_id"] == "bad":
                     raise ValueError("bad")
                 return SimpleNamespace(to_dict=lambda: next(values))
@@ -549,16 +567,19 @@ async def test_onboarding_and_departure_sync_boundaries(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_departure_training_pages_and_annual_plan_boundaries():
+async def test_departure_training_pages_and_annual_plan_boundaries() -> Any:
     record_id = uuid4()
-    record = SimpleNamespace(id=record_id)
-    repo = AsyncMock()
+    record: Any = SimpleNamespace(id=record_id)
+    repo: Any = AsyncMock()
     departure = _bare(hr_service.DepartureRecordService, repo=repo, bitable=AsyncMock())
     repo.get_by_id.return_value = record
     repo.create.return_value = record
     repo.update.return_value = record
-    assert await departure.create_record(Dump(name="张三")) is record
-    assert await departure.update_record(record_id, Dump(reason="原因")) is record
+    assert await departure.create_record(cast(Any, Dump)(name="张三")) is record
+    assert (
+        await departure.update_record(record_id, cast(Any, Dump)(reason="原因"))
+        is record
+    )
     await departure.delete_record(record_id)
     repo.list_records.return_value = ([record], 1)
     assert (
@@ -571,16 +592,16 @@ async def test_departure_training_pages_and_annual_plan_boundaries():
         )
     )[1] == 1
 
-    ledger_repo = AsyncMock()
+    ledger_repo: Any = AsyncMock()
     ledger = _bare(hr_service.TrainingLedgerService, repo=ledger_repo)
     ledger_repo.get_by_id.return_value = None
     with pytest.raises(NotFoundException):
         await ledger.get_record(record_id)
     ledger_repo.create.return_value = record
-    assert await ledger.create_record(Dump(employee_number="E1")) is record
+    assert await ledger.create_record(cast(Any, Dump)(employee_number="E1")) is record
     ledger_repo.get_by_id.return_value = record
     ledger_repo.update.return_value = record
-    assert await ledger.update_record(record_id, Dump(trainer="T")) is record
+    assert await ledger.update_record(record_id, cast(Any, Dump)(trainer="T")) is record
     await ledger.delete_record(record_id)
     ledger_repo.list_records.return_value = ([record], 1)
     assert (
@@ -616,7 +637,7 @@ async def test_departure_training_pages_and_annual_plan_boundaries():
         is record
     )
 
-    page_repo = AsyncMock()
+    page_repo: Any = AsyncMock()
     page_service = _bare(hr_service.TrainingLedgerPageService, repo=page_repo)
     page_repo.list_pages.return_value = [record]
     page_repo.list_pages_with_department.return_value = [(record, "D")]
@@ -624,15 +645,17 @@ async def test_departure_training_pages_and_annual_plan_boundaries():
     assert await page_service.list_pages_with_department() == [(record, "D")]
     page_repo.get_by_employee_number.return_value = record
     with pytest.raises(DuplicateException):
-        await page_service.create_page(Dump(employee_number="E1"))
+        await page_service.create_page(cast(Any, Dump)(employee_number="E1"))
     page_repo.get_by_employee_number.return_value = None
     page_repo.create.return_value = record
-    assert await page_service.create_page(Dump(employee_number="E1")) is record
+    assert (
+        await page_service.create_page(cast(Any, Dump)(employee_number="E1")) is record
+    )
 
     plan_id = uuid4()
-    plan = SimpleNamespace(id=plan_id, name="P")
-    plan_repo = AsyncMock()
-    item_repo = AsyncMock()
+    plan: Any = SimpleNamespace(id=plan_id, name="P")
+    plan_repo: Any = AsyncMock()
+    item_repo: Any = AsyncMock()
     plan_service = _bare(
         hr_service.AnnualTrainingPlanService,
         repo=plan_repo,
@@ -643,19 +666,20 @@ async def test_departure_training_pages_and_annual_plan_boundaries():
         await plan_service.get_plan(plan_id)
     plan_repo.get_by_year_and_department.return_value = plan
     with pytest.raises(DuplicateException):
-        await plan_service.create_plan(Dump(year=2026, department="D"))
+        await plan_service.create_plan(cast(Any, Dump)(year=2026, department="D"))
     plan_repo.get_by_year_and_department.return_value = None
     plan_repo.create.return_value = plan
-    assert await plan_service.create_plan(Dump(year=2026, department="D")) is plan
+    assert (
+        await plan_service.create_plan(cast(Any, Dump)(year=2026, department="D"))
+        is plan
+    )
     plan_repo.get_by_id.return_value = plan
     plan_repo.update.return_value = plan
-    assert await plan_service.update_plan(plan_id, Dump(name="new")) is plan
+    assert await plan_service.update_plan(plan_id, cast(Any, Dump)(name="new")) is plan
     await plan_service.delete_plan(plan_id)
     plan_repo.list_plans.return_value = ([plan], 1)
     assert (
-        await plan_service.list_plans(
-            year=2026, department="D", page=1, page_size=5
-        )
+        await plan_service.list_plans(year=2026, department="D", page=1, page_size=5)
     )[1] == 1
 
     item_service = _bare(
@@ -667,7 +691,7 @@ async def test_departure_training_pages_and_annual_plan_boundaries():
     assert await item_service.list_items(plan_id) == [record]
     plan_repo.get_by_id.return_value = None
     with pytest.raises(NotFoundException):
-        await item_service.batch_update_items(plan_id, Dump(items=[]))
+        await item_service.batch_update_items(plan_id, cast(Any, Dump)(items=[]))
     plan_repo.get_by_id.return_value = plan
     item_repo.create.side_effect = [
         SimpleNamespace(id=uuid4()),
@@ -675,10 +699,10 @@ async def test_departure_training_pages_and_annual_plan_boundaries():
     ]
     result = await item_service.batch_update_items(
         plan_id,
-        Dump(
+        cast(Any, Dump)(
             items=[
-                Dump(month="1月", sort_order=9),
-                Dump(month="2月", sort_order=9),
+                cast(Any, Dump)(month="1月", sort_order=9),
+                cast(Any, Dump)(month="2月", sort_order=9),
             ]
         ),
     )

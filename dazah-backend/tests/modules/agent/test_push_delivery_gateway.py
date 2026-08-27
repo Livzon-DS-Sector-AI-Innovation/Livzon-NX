@@ -1,45 +1,48 @@
 import uuid
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
+from typing import Any
 
 import pytest
 
 from app.modules.agent import push_delivery_service
 from app.modules.agent.push_delivery_service import PushDeliveryService
 
+SimpleNamespace: Any = _SimpleNamespace
+
 
 class ScalarDb:
-    def __init__(self, value) -> None:
+    def __init__(self: Any, value: Any) -> None:
         self.value = value
 
-    async def scalar(self, statement):
+    async def scalar(self: Any, statement: Any) -> Any:
         return self.value
 
 
 class FakeResponse:
-    def raise_for_status(self) -> None:
+    def raise_for_status(self: Any) -> None:
         return None
 
-    def json(self) -> dict[str, str]:
+    def json(self: Any) -> dict[str, str]:
         return {"id": "delivery-1", "status": "queued"}
 
 
 class FakeHttpClient:
     request = None
 
-    def __init__(self, **kwargs) -> None:
+    def __init__(self: Any, **kwargs: Any) -> None:
         self.kwargs = kwargs
 
-    async def __aenter__(self):
+    async def __aenter__(self: Any) -> Any:
         return self
 
-    async def __aexit__(self, exc_type, exc, traceback) -> None:
+    async def __aexit__(self: Any, exc_type: Any, exc: Any, traceback: Any) -> None:
         return None
 
-    async def post(self, url, **kwargs):
+    async def post(self: Any, url: Any, **kwargs: Any) -> Any:
         type(self).request = {"url": url, **kwargs}
         return FakeResponse()
 
-    async def get(self, url, **kwargs):
+    async def get(self: Any, url: Any, **kwargs: Any) -> Any:
         type(self).request = {"url": url, **kwargs}
         if url.endswith("/message-queued"):
             return QueuedReceiptResponse()
@@ -47,7 +50,7 @@ class FakeHttpClient:
 
 
 class ReceiptResponse(FakeResponse):
-    def json(self) -> dict[str, str]:
+    def json(self: Any) -> dict[str, str]:
         return {
             "status": "delivered",
             "message_id": "message-final",
@@ -56,26 +59,26 @@ class ReceiptResponse(FakeResponse):
 
 
 class QueuedReceiptResponse(FakeResponse):
-    def json(self) -> dict[str, str]:
+    def json(self: Any) -> dict[str, str]:
         return {"status": "queued"}
 
 
 class ReceiptResult:
-    def __init__(self, delivery) -> None:
+    def __init__(self: Any, delivery: Any) -> None:
         self.delivery = delivery
 
-    def scalars(self):
+    def scalars(self: Any) -> Any:
         return [self.delivery]
 
 
 class ReceiptDb:
-    def __init__(self, delivery) -> None:
+    def __init__(self: Any, delivery: Any) -> None:
         self.delivery = delivery
 
-    async def execute(self, statement):
+    async def execute(self: Any, statement: Any) -> Any:
         return ReceiptResult(self.delivery)
 
-    async def get(self, model, item_id):
+    async def get(self: Any, model: Any, item_id: Any) -> Any:
         return None
 
 
@@ -100,7 +103,7 @@ async def test_gateway_delivery_requires_configuration_and_identity(
     )
     with pytest.raises(RuntimeError, match="not configured"):
         await service._enqueue_gateway_delivery(
-            ScalarDb("ou-user"),
+            ScalarDb("ou-user"),  # type: ignore[arg-type]
             delivery=_delivery(),
             title="Title",
             markdown="Body",
@@ -117,7 +120,7 @@ async def test_gateway_delivery_requires_configuration_and_identity(
     )
     with pytest.raises(RuntimeError, match="identity binding"):
         await service._enqueue_gateway_delivery(
-            ScalarDb(None),
+            ScalarDb(None),  # type: ignore[arg-type]
             delivery=_delivery(),
             title="Title",
             markdown="Body",
@@ -138,10 +141,10 @@ async def test_gateway_delivery_builds_controlled_card_and_metadata(
             HERMES_INTERNAL_TOKEN="token",
         ),
     )
-    monkeypatch.setattr(push_delivery_service.httpx, "AsyncClient", FakeHttpClient)
+    monkeypatch.setattr(push_delivery_service.httpx, "AsyncClient", FakeHttpClient)  # type: ignore[attr-defined]
 
     result = await PushDeliveryService()._enqueue_gateway_delivery(
-        ScalarDb("ou-user"),
+        ScalarDb("ou-user"),  # type: ignore[arg-type]
         delivery=delivery,
         title="受控提醒",
         markdown="请查看业务详情",
@@ -154,16 +157,16 @@ async def test_gateway_delivery_builds_controlled_card_and_metadata(
         "gateway_status": "queued",
     }
     request = FakeHttpClient.request
-    assert request["url"] == "http://hermes.internal/internal/feishu/deliveries"
-    assert request["headers"] == {"Authorization": "Bearer token"}
-    assert request["json"]["idempotency_key"] == "push:test"
-    assert request["json"]["chat_id"] == "ou-user"
-    assert request["json"]["metadata"] == {
+    assert request["url"] == "http://hermes.internal/internal/feishu/deliveries"  # type: ignore[index]
+    assert request["headers"] == {"Authorization": "Bearer token"}  # type: ignore[index]
+    assert request["json"]["idempotency_key"] == "push:test"  # type: ignore[index]
+    assert request["json"]["chat_id"] == "ou-user"  # type: ignore[index]
+    assert request["json"]["metadata"] == {  # type: ignore[index]
         "trace_id": str(delivery.run_id),
         "agent_push_delivery_id": str(delivery.id),
         "receive_id_type": "open_id",
     }
-    action = request["json"]["card"]["body"]["elements"][1]["actions"][0]
+    action = request["json"]["card"]["body"]["elements"][1]["actions"][0]  # type: ignore[index]
     assert action["text"]["content"] == "打开详情"
     assert action["value"]["resource_domain"] == "dazah_business"
     assert action["value"]["trace_id"] == str(delivery.run_id)
@@ -173,7 +176,7 @@ async def test_gateway_delivery_builds_controlled_card_and_metadata(
 async def test_gateway_receipt_reconciliation_updates_delivery(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    delivery = SimpleNamespace(
+    delivery: Any = SimpleNamespace(
         run_id=uuid.uuid4(),
         external_message_id="message-pending",
         status="sent",
@@ -188,10 +191,10 @@ async def test_gateway_receipt_reconciliation_updates_delivery(
             HERMES_INTERNAL_TOKEN="token",
         ),
     )
-    monkeypatch.setattr(push_delivery_service.httpx, "AsyncClient", FakeHttpClient)
+    monkeypatch.setattr(push_delivery_service.httpx, "AsyncClient", FakeHttpClient)  # type: ignore[attr-defined]
 
     updated = await PushDeliveryService().reconcile_gateway_receipts(
-        ReceiptDb(delivery)
+        ReceiptDb(delivery)  # type: ignore[arg-type]
     )
 
     assert updated == 1
@@ -199,7 +202,7 @@ async def test_gateway_receipt_reconciliation_updates_delivery(
     assert delivery.external_message_id == "message-final"
     assert delivery.delivered_at is not None
     assert delivery.last_error_message == ""
-    assert FakeHttpClient.request["url"].endswith(
+    assert FakeHttpClient.request["url"].endswith(  # type: ignore[index]
         "/internal/feishu/deliveries/message-pending"
     )
 
@@ -208,7 +211,7 @@ async def test_gateway_receipt_reconciliation_updates_delivery(
 async def test_gateway_receipt_reconciliation_ignores_nonterminal_receipt(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    delivery = SimpleNamespace(
+    delivery: Any = SimpleNamespace(
         run_id=uuid.uuid4(),
         external_message_id="message-queued",
         status="sent",
@@ -221,10 +224,10 @@ async def test_gateway_receipt_reconciliation_ignores_nonterminal_receipt(
             HERMES_INTERNAL_TOKEN="token",
         ),
     )
-    monkeypatch.setattr(push_delivery_service.httpx, "AsyncClient", FakeHttpClient)
+    monkeypatch.setattr(push_delivery_service.httpx, "AsyncClient", FakeHttpClient)  # type: ignore[attr-defined]
 
     updated = await PushDeliveryService().reconcile_gateway_receipts(
-        ReceiptDb(delivery)
+        ReceiptDb(delivery)  # type: ignore[arg-type]
     )
 
     assert updated == 0

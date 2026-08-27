@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
+from typing import Any
 from uuid import uuid4
 
 import pytest
@@ -15,6 +16,8 @@ from app.modules.energy.schemas import (
     EnergyOverviewResponse,
 )
 
+SimpleNamespace: Any = _SimpleNamespace
+
 
 def _context() -> ToolContext:
     return ToolContext(
@@ -23,7 +26,7 @@ def _context() -> ToolContext:
         user_id=None,
         user=None,
         reason=None,
-        raw_request=SimpleNamespace(),  # type: ignore[arg-type]
+        raw_request=SimpleNamespace(),
     )
 
 
@@ -81,7 +84,7 @@ async def test_get_feishu_config_returns_only_masked_secret_state(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     class FakeService:
-        async def get_config(self) -> EnergyFeishuConfigResponse:
+        async def get_config(self: Any) -> EnergyFeishuConfigResponse:
             return EnergyFeishuConfigResponse(
                 id=uuid4(),
                 config_name="能源配置",
@@ -115,8 +118,8 @@ async def test_energy_source_root_handlers_call_service_after_confirmation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     root_id = uuid4()
-    calls = []
-    response = SimpleNamespace(
+    calls: list[Any] = []
+    response: Any = SimpleNamespace(
         model_dump=lambda **_kwargs: {
             "id": str(root_id),
             "name": "能源 Base",
@@ -124,18 +127,20 @@ async def test_energy_source_root_handlers_call_service_after_confirmation(
     )
 
     class FakeService:
-        async def create_source_root(self, payload):
+        async def create_source_root(self: Any, payload: Any) -> Any:
             calls.append(("create", payload))
             return response
 
-        async def update_source_root(self, requested_root_id, payload):
+        async def update_source_root(
+            self: Any, requested_root_id: Any, payload: Any
+        ) -> Any:
             calls.append(("update", requested_root_id, payload))
             return response
 
-        async def delete_source_root(self, requested_root_id):
+        async def delete_source_root(self: Any, requested_root_id: Any) -> Any:
             calls.append(("delete", requested_root_id))
 
-        async def delete_sources(self, sheet_ids):
+        async def delete_sources(self: Any, sheet_ids: Any) -> Any:
             calls.append(("delete_sheets", sheet_ids))
             return {
                 "deleted_count": 1,
@@ -170,7 +175,7 @@ async def test_energy_source_root_handlers_call_service_after_confirmation(
     )
     deleted_sheets = await agent_tools.delete_source_sheets(
         _context(),
-        agent_tools.EnergySourceBatchRequest(sheet_ids=[root_id]),
+        agent_tools.EnergySourceBatchRequest(sheet_ids=[root_id]),  # type: ignore[attr-defined]
     )
 
     assert [item[0] for item in calls] == [
@@ -189,7 +194,7 @@ async def test_list_source_sheets_includes_document_and_mapping(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     sheet_id = uuid4()
-    sheet = SimpleNamespace(
+    sheet: Any = SimpleNamespace(
         id=sheet_id,
         document_id=uuid4(),
         external_sheet_id="sheet-a",
@@ -202,16 +207,16 @@ async def test_list_source_sheets_includes_document_and_mapping(
         latest_snapshot_id=uuid4(),
         last_synced_at=datetime.now(UTC),
     )
-    document = SimpleNamespace(
+    document: Any = SimpleNamespace(
         title="7月能源日报",
         period_month=date(2026, 7, 1),
     )
 
     class FakeService:
-        async def list_sources(self, **_kwargs):
+        async def list_sources(self: Any, **_kwargs: Any) -> Any:
             return [(sheet, document)]
 
-        async def get_mapping(self, requested_sheet_id):
+        async def get_mapping(self: Any, requested_sheet_id: Any) -> Any:
             assert requested_sheet_id == sheet_id
             return SimpleNamespace(source_role="workshop_detail")
 
@@ -230,10 +235,10 @@ async def test_list_source_sheets_includes_document_and_mapping(
 async def test_get_overview_passes_all_filters_to_service(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    calls = []
+    calls: list[Any] = []
 
     class FakeService:
-        async def get_overview(self, **kwargs):
+        async def get_overview(self: Any, **kwargs: Any) -> Any:
             calls.append(kwargs)
             return EnergyOverviewResponse(
                 source_scope="detail",

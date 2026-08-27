@@ -2,9 +2,9 @@
 Feishu → seed_cultures sync service.
 Maps Feishu field names to seed_cultures columns using predefined mapping.
 """
-
 import logging
 from datetime import date, datetime
+from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -79,7 +79,7 @@ STRING_FIELDS = {k for k in FIELD_MAPPING.values() if k not in TYPE_CONVERTERS}
 DATE_FIELDS = {"prepare_date", "shaker_start_date", "merge_time"}
 
 
-def _parse_date(v):
+def _parse_date(v: Any) -> Any:
     if v is None:
         return None
     if isinstance(v, (int, float)) and v > 0 and v < 1e15:
@@ -92,7 +92,7 @@ def _parse_date(v):
     return v
 
 
-def _extract_text(field_value) -> str | None:
+def _extract_text(field_value: Any) -> str | None:
     if field_value is None:
         return None
     if isinstance(field_value, str):
@@ -111,7 +111,7 @@ def _extract_text(field_value) -> str | None:
     return str(field_value).strip() or None
 
 
-def _extract_number(field_value) -> float | None:
+def _extract_number(field_value: Any) -> float | None:
     if isinstance(field_value, (int, float)):
         return float(field_value)
     text = _extract_text(field_value)
@@ -125,7 +125,7 @@ def _extract_number(field_value) -> float | None:
 
 async def sync_seed_culture_to_table(
     config: ProductionFeishuConfig, session: AsyncSession
-) -> dict:
+) -> dict[str, Any]:
     """Sync feishu records to seed_cultures table using bulk upsert."""
     app_secret = decrypt_secret(config.encrypted_app_secret)
     client = ProductionFeishuClient(
@@ -142,7 +142,7 @@ async def sync_seed_culture_to_table(
     rows = []
     for item in items:
         fields = item.get("fields", {})
-        mapped: dict = {"product_name": config.product_name or ""}
+        mapped: dict[str, Any] = {"product_name": config.product_name or ""}
         for feishu_name, db_col in FIELD_MAPPING.items():
             raw = fields.get(feishu_name)
             if raw is None:
@@ -152,16 +152,17 @@ async def sync_seed_culture_to_table(
                 if isinstance(raw, (int, float)):
                     mapped[db_col] = _parse_date(raw)
                 else:
-                    val = _extract_text(raw)
-                    if val is not None:
-                        mapped[db_col] = _parse_date(val)
+                    date_value = _extract_text(raw)
+                    if date_value is not None:
+                        mapped[db_col] = _parse_date(date_value)
                 continue
-            elif db_col in STRING_FIELDS:
+            val: Any
+            if db_col in STRING_FIELDS:
                 val = _extract_text(raw)
             else:
                 val = _extract_number(raw)
             if val is not None:
-                conv = TYPE_CONVERTERS.get(db_col)
+                conv: Any = TYPE_CONVERTERS.get(db_col)
                 mapped[db_col] = conv(val) if conv else val
         if not mapped.get("batch_no"):
             continue
@@ -171,13 +172,13 @@ async def sync_seed_culture_to_table(
         return {"created": 0, "updated": 0}
 
     # 收集所有行中的列名（第一行可能字段不全）
-    all_cols_set: set = set()
+    all_cols_set: set[Any] = set()
     for row in rows:
         all_cols_set.update(row.keys())
     cols = sorted(all_cols_set)  # 确保每次查询顺序一致
     ", ".join(f":{c}_{i}" for i in range(len(rows)) for c in cols)
     # Re-structure: one flat dict with indexed param names
-    params: dict = {}
+    params: dict[str, Any] = {}
     for i, row in enumerate(rows):
         for c in cols:
             params[f"{c}_{i}"] = row.get(c)

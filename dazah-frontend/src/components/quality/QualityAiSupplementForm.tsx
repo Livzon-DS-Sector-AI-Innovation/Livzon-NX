@@ -19,14 +19,14 @@ export function QualityAiSupplementForm({
 }: QualityAiSupplementFormProps) {
   return (
     <Card size="small" title="补充信息">
-      <Space direction="vertical" style={{ width: '100%' }}>
+      <Space orientation="vertical" style={{ width: '100%' }}>
         <Input.TextArea
           rows={6}
           value={value}
           onChange={(event) => onChange(event.target.value)}
           placeholder="补充调查说明、现场情况、原因线索、附件背景说明"
         />
-        {dirty ? <Alert type="info" showIcon message="存在未应用补充信息" /> : null}
+        {dirty ? <Alert type="info" showIcon title="存在未应用补充信息" /> : null}
         <Button type="primary" loading={saving} onClick={onSubmit}>
           重新完善分析
         </Button>

@@ -5,12 +5,13 @@ CDE 页面驱动采集脚本
 通过点击分页按钮触发翻页
 """
 
-import os
 import json
-import time
+import os
 import threading
+import time
 from datetime import datetime
-from urllib.parse import urlparse, parse_qs
+from typing import Any
+from urllib.parse import parse_qs, urlparse
 
 os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "/tmp/playwright-browsers"
 
@@ -33,13 +34,15 @@ Object.defineProperty(navigator, 'languages', {get: () => ['zh-CN', 'zh', 'en']}
 window.chrome = {runtime: {}};
 const origQuery = window.navigator.permissions.query;
 window.navigator.permissions.query = (p) => (
-    p.name === 'notifications' ? Promise.resolve({state: Notification.permission}) : origQuery(p)
+    p.name === 'notifications'
+        ? Promise.resolve({state: Notification.permission})
+        : origQuery(p)
 );
 """
 
 
-def main():
-    output = {
+def main() -> Any:
+    output: dict[str, Any] = {
         "timestamp": datetime.now().isoformat(),
         "approach": "page-driven (listen only, no manual API calls)",
         "target_url": "https://www.cde.org.cn/zdyz/index",
@@ -77,7 +80,11 @@ def main():
 
     context = browser.new_context(
         viewport={"width": 1920, "height": 1080},
-        user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        user_agent=(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        ),
         locale="zh-CN",
         timezone_id="Asia/Shanghai",
     )
@@ -85,10 +92,10 @@ def main():
     page = context.new_page()
 
     # 用于存储捕获的 getDomesticGuideList 响应
-    guide_list_responses = []
-    page_load_event = threading.Event()
+    guide_list_responses: list[dict[str, Any]] = []
+    threading.Event()
 
-    def on_response(response):
+    def on_response(response: Any) -> Any:
         url = response.url
         if "cde.org.cn" not in url:
             return
@@ -130,25 +137,47 @@ def main():
                     }
 
                     if jd and jd.get("code") == 200:
-                        records = jd.get("data", {}).get("records", []) if isinstance(jd.get("data"), dict) else jd.get("records", [])
-                        total = jd.get("data", {}).get("total") if isinstance(jd.get("data"), dict) else jd.get("total")
-                        pages = jd.get("data", {}).get("pages") if isinstance(jd.get("data"), dict) else jd.get("pages")
-                        current = jd.get("data", {}).get("current") if isinstance(jd.get("data"), dict) else jd.get("current")
+                        records = (
+                            jd.get("data", {}).get("records", [])
+                            if isinstance(jd.get("data"), dict)
+                            else jd.get("records", [])
+                        )
+                        total = (
+                            jd.get("data", {}).get("total")
+                            if isinstance(jd.get("data"), dict)
+                            else jd.get("total")
+                        )
+                        pages = (
+                            jd.get("data", {}).get("pages")
+                            if isinstance(jd.get("data"), dict)
+                            else jd.get("pages")
+                        )
+                        current = (
+                            jd.get("data", {}).get("current")
+                            if isinstance(jd.get("data"), dict)
+                            else jd.get("current")
+                        )
                         capture["records_count"] = len(records)
                         capture["total"] = total
                         capture["pages"] = pages
                         capture["current"] = current
                         capture["records"] = records
                         capture["success"] = True
-                        print(f"\n   🎯 getDomesticGuideList page={page_num} | records={len(records)} total={total} current={current}")
+                        print(
+                            f"\n   🎯 getDomesticGuideList page={page_num} | "
+                            f"records={len(records)} total={total} current={current}"
+                        )
                     else:
                         capture["success"] = False
                         capture["msg"] = jd.get("msg") if jd else "non-JSON"
-                        print(f"\n   ⚠️ getDomesticGuideList page={page_num} | msg={capture.get('msg')}")
+                        print(
+                            f"\n   ⚠️ getDomesticGuideList page={page_num} | "
+                            f"msg={capture.get('msg')}"
+                        )
 
                     guide_list_responses.append(capture)
 
-            except Exception as ex:
+            except Exception:
                 pass
 
     page.on("response", on_response)
@@ -156,7 +185,11 @@ def main():
     # Step 2: 加载页面
     print("\n[2] 加载 CDE 指导原则页面...")
     try:
-        page.goto("https://www.cde.org.cn/zdyz/index", timeout=30000, wait_until="domcontentloaded")
+        page.goto(
+            "https://www.cde.org.cn/zdyz/index",
+            timeout=30000,
+            wait_until="domcontentloaded",
+        )
     except Exception as e:
         print(f"   导航异常: {e}")
 
@@ -166,7 +199,7 @@ def main():
         time.sleep(2)
         title = page.title()
         content_len = len(page.content())
-        print(f"   [{(i+1)*2}s] title='{title[:40]}' content={content_len}")
+        print(f"   [{(i + 1) * 2}s] title='{title[:40]}' content={content_len}")
         if title and len(title.strip()) > 2:
             print(f"   ✅ WAF 通过! 标题: {title}")
             output["waf_passed"] = True
@@ -187,10 +220,16 @@ def main():
     print(f"   已捕获 getDomesticGuideList 响应: {len(guide_list_responses)}")
 
     # 也检查其他 API
-    other_apis = [r for r in output["all_api_responses"] if "getDomesticGuideList" not in r["url"]]
+    other_apis = [
+        r for r in output["all_api_responses"] if "getDomesticGuideList" not in r["url"]
+    ]
     print(f"   其他 API 响应: {len(other_apis)}")
     for r in other_apis:
-        url_short = r["url"].split("?")[0].split("/")[-1] if "?" in r["url"] else r["url"].split("/")[-1]
+        url_short = (
+            r["url"].split("?")[0].split("/")[-1]
+            if "?" in r["url"]
+            else r["url"].split("/")[-1]
+        )
         print(f"      {r['status']} {url_short[:60]} keys={r.get('json_keys', 'N/A')}")
 
     # Step 5: 如果首页没有触发 getDomesticGuideList，尝试点击相关 tab/链接
@@ -202,7 +241,9 @@ def main():
 
         # 列出所有可点击的链接/按钮
         links = page.evaluate("""() => {
-            const els = document.querySelectorAll('a, button, [onclick], [role="tab"], .tab-item, .nav-item');
+            const els = document.querySelectorAll(
+                'a, button, [onclick], [role="tab"], .tab-item, .nav-item'
+            );
             return Array.from(els).map(el => ({
                 tag: el.tagName,
                 text: el.textContent.trim().substring(0, 50),
@@ -212,8 +253,11 @@ def main():
             })).filter(el => el.text.length > 0);
         }""")
         print(f"   找到 {len(links)} 个可交互元素:")
-        for l in links[:20]:
-            print(f"      <{l['tag']}> '{l['text']}' class='{l['class'][:40]}' href='{l['href'][:60]}'")
+        for link in links[:20]:
+            print(
+                f"      <{link['tag']}> '{link['text']}' "
+                f"class='{link['class'][:40]}' href='{link['href'][:60]}'"
+            )
 
         # 尝试点击包含"指导原则"或"国内"的元素
         clicked = False
@@ -247,7 +291,9 @@ def main():
         print("   尝试查找列表区域...")
         # 检查页面上是否有列表内容
         list_content = page.evaluate("""() => {
-            const items = document.querySelectorAll('.list-item, .guide-item, [class*="list"] li, .zdyz-list');
+            const items = document.querySelectorAll(
+                '.list-item, .guide-item, [class*="list"] li, .zdyz-list'
+            );
             return items.length;
         }""")
         print(f"   列表项数量: {list_content}")
@@ -257,7 +303,7 @@ def main():
         page.wait_for_timeout(2000)
 
     # Step 7: 翻页测试 - 通过点击分页按钮
-    print(f"\n[7] 翻页测试...")
+    print("\n[7] 翻页测试...")
     page.screenshot(path="/tmp/cde_page_before_pagination.png")
 
     # 查找分页元素
@@ -290,10 +336,12 @@ def main():
 
     print(f"   找到 {len(pagination_info)} 个分页相关元素:")
     for p in pagination_info[:10]:
-        print(f"      [{p['selector']}] <{p['tag']}> '{p['text']}' visible={p['visible']}")
+        print(
+            f"      [{p['selector']}] <{p['tag']}> '{p['text']}' visible={p['visible']}"
+        )
 
     # 尝试点击下一页
-    pages_captured = len(guide_list_responses)
+    len(guide_list_responses)
     next_btn_selectors = [
         "a:has-text('下一页')",
         "button:has-text('下一页')",
@@ -314,7 +362,7 @@ def main():
             try:
                 el = page.query_selector(sel)
                 if el and el.is_visible():
-                    print(f"\n   点击翻页 [{attempt+1}]: {sel}")
+                    print(f"\n   点击翻页 [{attempt + 1}]: {sel}")
                     el.click()
                     page.wait_for_timeout(4000)
                     clicked_next = True
@@ -325,28 +373,37 @@ def main():
         if not clicked_next:
             # 尝试通过 JS 点击
             try:
-                clicked = page.evaluate("""() => {
+                clicked = page.evaluate(
+                    """() => {
                     const btns = document.querySelectorAll('a, button, li');
                     for (const b of btns) {
                         const text = b.textContent.trim();
-                        if (text === '下一页' || text === '>' || text === '›' || text === '>>') {
+                        if (
+                            text === '下一页' || text === '>' || text === '›' ||
+                            text === '>>'
+                        ) {
                             b.click();
                             return text;
                         }
                     }
                     // 尝试点击页码数字
-                    const pageNums = document.querySelectorAll('.el-pager li, .ant-pagination-item a, [class*="page-num"]');
+                    const pageNums = document.querySelectorAll(
+                        '.el-pager li, .ant-pagination-item a, [class*="page-num"]'
+                    );
                     for (const pn of pageNums) {
                         const text = pn.textContent.trim();
-                        if (text === '""" + str(attempt + 2) + """') {
+                        if (text === '"""
+                    + str(attempt + 2)
+                    + """') {
                             pn.click();
                             return 'page_' + text;
                         }
                     }
                     return null;
-                }""")
+                }"""
+                )
                 if clicked:
-                    print(f"   JS 点击翻页 [{attempt+1}]: {clicked}")
+                    print(f"   JS 点击翻页 [{attempt + 1}]: {clicked}")
                     page.wait_for_timeout(4000)
                     clicked_next = True
             except Exception as e:
@@ -356,14 +413,14 @@ def main():
         new_captures = after_count - before_count
 
         if new_captures > 0:
-            print(f"   ✅ 翻页 {attempt+1} 成功! 新捕获 {new_captures} 个响应")
+            print(f"   ✅ 翻页 {attempt + 1} 成功! 新捕获 {new_captures} 个响应")
         else:
-            print(f"   ⚠️ 翻页 {attempt+1} 未触发新请求")
+            print(f"   ⚠️ 翻页 {attempt + 1} 未触发新请求")
 
-        page.screenshot(path=f"/tmp/cde_page_after_page{attempt+2}.png")
+        page.screenshot(path=f"/tmp/cde_page_after_page{attempt + 2}.png")
 
     # Step 8: 保存结果
-    print(f"\n[8] 保存结果...")
+    print("\n[8] 保存结果...")
 
     # 整理捕获的页面数据
     for cap in guide_list_responses:
@@ -390,10 +447,18 @@ def main():
         first_ids = set()
         second_ids = set()
         if successful_pages[0].get("records"):
-            first_ids = {r.get("zdyzIdCODE") or r.get("id") or r.get("title") for r in successful_pages[0]["records"]}
+            first_ids = {
+                r.get("zdyzIdCODE") or r.get("id") or r.get("title")
+                for r in successful_pages[0]["records"]
+            }
         if successful_pages[1].get("records"):
-            second_ids = {r.get("zdyzIdCODE") or r.get("id") or r.get("title") for r in successful_pages[1]["records"]}
-        output["pagination_works"] = len(first_ids) > 0 and len(second_ids) > 0 and first_ids != second_ids
+            second_ids = {
+                r.get("zdyzIdCODE") or r.get("id") or r.get("title")
+                for r in successful_pages[1]["records"]
+            }
+        output["pagination_works"] = (
+            len(first_ids) > 0 and len(second_ids) > 0 and first_ids != second_ids
+        )
     elif len(successful_pages) == 1:
         output["pagination_works"] = "only_page1_captured"
     else:
@@ -402,9 +467,15 @@ def main():
     # Cookie 快照
     cookies = context.cookies()
     output["cookies"] = [
-        {"name": c["name"], "domain": c["domain"], "expires": c.get("expires", -1),
-         "expires_human": datetime.fromtimestamp(c["expires"]).isoformat() if c.get("expires", 0) > 0 else "Session",
-         "httpOnly": c.get("httpOnly", False)}
+        {
+            "name": c["name"],
+            "domain": c["domain"],
+            "expires": c.get("expires", -1),
+            "expires_human": datetime.fromtimestamp(c["expires"]).isoformat()
+            if c.get("expires", 0) > 0
+            else "Session",
+            "httpOnly": c.get("httpOnly", False),
+        }
         for c in cookies
     ]
 
@@ -413,14 +484,17 @@ def main():
     _print_summary(output)
 
 
-def _save(output):
-    path = "/home/chenyingying/dazah/dazah-backend/scripts/regulatory_poc/cde_guideline_pages_1_3.json"
+def _save(output: Any) -> Any:
+    path = (
+        "/home/chenyingying/dazah/dazah-backend/scripts/regulatory_poc/"
+        "cde_guideline_pages_1_3.json"
+    )
     with open(path, "w", encoding="utf-8") as f:
         json.dump(output, f, ensure_ascii=False, indent=2)
     print(f"\n💾 数据已保存: {path}")
 
 
-def _cleanup(context, browser, pw, output):
+def _cleanup(context: Any, browser: Any, pw: Any, output: Any) -> Any:
     try:
         context.close()
         browser.close()
@@ -429,10 +503,10 @@ def _cleanup(context, browser, pw, output):
         pass
 
 
-def _print_summary(output):
-    print(f"\n\n{'='*70}")
+def _print_summary(output: Any) -> Any:
+    print(f"\n\n{'=' * 70}")
     print("最终报告")
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
     print(f"  WAF 通过: {'✅' if output['waf_passed'] else '❌'}")
     print(f"  页面标题: {output['page_title']}")
     print(f"  捕获 getDomesticGuideList 次数: {len(output['captured_pages'])}")
@@ -443,7 +517,10 @@ def _print_summary(output):
         status = "✅" if p["success"] else "❌"
         print(f"\n  [{status}] Page {p['page_num']}:")
         print(f"      HTTP: {p['http_status']}")
-        print(f"      MmEwMD: {'有' if p['mmewmd_present'] else '无'} (长度: {p.get('mmewmd_length', 0)})")
+        print(
+            f"      MmEwMD: {'有' if p['mmewmd_present'] else '无'} "\
+            f"(长度: {p.get('mmewmd_length', 0)})"
+        )
         if p["success"]:
             print(f"      records: {p['records_count']} 条")
             print(f"      total: {p['total']}")
@@ -461,7 +538,9 @@ def _print_summary(output):
         print(f"      {c['name']} @ {c['domain']} expires={c['expires_human']}")
 
     # 其他 API
-    other = [r for r in output["all_api_responses"] if "getDomesticGuideList" not in r["url"]]
+    other = [
+        r for r in output["all_api_responses"] if "getDomesticGuideList" not in r["url"]
+    ]
     if other:
         print(f"\n  其他 API 响应 ({len(other)} 个):")
         for r in other:
@@ -474,7 +553,9 @@ def _print_summary(output):
                     if isinstance(data_val, list):
                         print(f"         data: list[{len(data_val)}]")
                         if data_val and isinstance(data_val[0], dict):
-                            print(f"         首条: {data_val[0].get('title', 'N/A')[:60]}")
+                            print(
+                                f"         首条: {data_val[0].get('title', 'N/A')[:60]}"
+                            )
 
 
 if __name__ == "__main__":

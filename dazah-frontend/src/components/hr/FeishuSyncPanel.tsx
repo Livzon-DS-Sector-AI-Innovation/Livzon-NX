@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { App, Card, Button, Statistic, Row, Col, Tag, Spin } from 'antd'
-import { SyncOutlined, CloudSyncOutlined, CheckCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons'
+import { SyncOutlined, CloudSyncOutlined, ExclamationCircleOutlined } from '@ant-design/icons'
 import { fetchSyncStatus, syncFromFeishu } from '@/lib/api/hr'
 
 interface SyncStatus {
@@ -26,14 +26,14 @@ export default function FeishuSyncPanel({ onSynced }: { onSynced?: () => void })
       const res = await fetchSyncStatus()
       setStatus(res.data)
     } catch (err) {
-      message.error(err.message || '获取同步状态失败')
+      message.error((err instanceof Error ? err.message : '') || '获取同步状态失败')
     } finally {
       setLoading(false)
     }
   }
 
   useEffect(() => {
-    loadStatus()
+    queueMicrotask(loadStatus)
   }, [])
 
   const handleSync = async () => {
@@ -44,7 +44,7 @@ export default function FeishuSyncPanel({ onSynced }: { onSynced?: () => void })
       await loadStatus()
       onSynced?.()
     } catch (err) {
-      message.error(err.message || '同步失败')
+      message.error((err instanceof Error ? err.message : '') || '同步失败')
     } finally {
       setSyncing(false)
     }

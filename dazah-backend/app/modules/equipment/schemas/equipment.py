@@ -2,7 +2,7 @@
 
 import uuid
 from datetime import date, datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -119,25 +119,26 @@ class EquipmentCreate(BaseModel):
     specification: str | None = Field(
         default=None, max_length=200, description="设备规格"
     )
-    manufacturer: str | None = Field(
-        default=None, max_length=200, description="制造商"
-    )
-    supplier: str | None = Field(
-        default=None, max_length=200, description="供应商"
-    )
+    manufacturer: str | None = Field(default=None, max_length=200, description="制造商")
+    supplier: str | None = Field(default=None, max_length=200, description="供应商")
     production_date: date | None = Field(default=None, description="出厂日期")
     commissioning_date: date | None = Field(default=None, description="投用日期")
     description: str | None = Field(default=None, description="设备描述")
-    importance: EquipmentImportance = Field(default="低", description="设备重要性：高/中/低")
+    importance: EquipmentImportance = Field(
+        default="低", description="设备重要性：高/中/低"
+    )
     warranty_expire_date: date | None = Field(default=None, description="保修到期日")
     asset_value: float | None = Field(default=None, ge=0, description="资产原值（元）")
     depreciation_years: int | None = Field(default=None, ge=1, description="折旧年限")
-    technical_params: dict | None = Field(default=None, description="技术参数")
+    technical_params: dict[str, Any] | None = Field(
+        default=None, description="技术参数"
+    )
     department_id: uuid.UUID | None = Field(
         default=None, description="归属部门ID，逻辑引用 identity.departments.id"
     )
     responsible_person_id: uuid.UUID | None = Field(
-        default=None, description="负责人ID，逻辑引用 identity.users.id；未设置时由部门负责人推导"
+        default=None,
+        description="负责人ID，逻辑引用 identity.users.id；未设置时由部门负责人推导",
     )
 
 
@@ -158,25 +159,26 @@ class EquipmentUpdate(BaseModel):
     specification: str | None = Field(
         default=None, max_length=200, description="设备规格"
     )
-    manufacturer: str | None = Field(
-        default=None, max_length=200, description="制造商"
-    )
-    supplier: str | None = Field(
-        default=None, max_length=200, description="供应商"
-    )
+    manufacturer: str | None = Field(default=None, max_length=200, description="制造商")
+    supplier: str | None = Field(default=None, max_length=200, description="供应商")
     production_date: date | None = Field(default=None, description="出厂日期")
     commissioning_date: date | None = Field(default=None, description="投用日期")
     description: str | None = Field(default=None, description="设备描述")
-    importance: EquipmentImportance | None = Field(default=None, description="设备重要性：高/中/低")
+    importance: EquipmentImportance | None = Field(
+        default=None, description="设备重要性：高/中/低"
+    )
     warranty_expire_date: date | None = Field(default=None, description="保修到期日")
     asset_value: float | None = Field(default=None, ge=0, description="资产原值（元）")
     depreciation_years: int | None = Field(default=None, ge=1, description="折旧年限")
-    technical_params: dict | None = Field(default=None, description="技术参数")
+    technical_params: dict[str, Any] | None = Field(
+        default=None, description="技术参数"
+    )
     department_id: uuid.UUID | None = Field(
         default=None, description="归属部门ID，逻辑引用 identity.departments.id"
     )
     responsible_person_id: uuid.UUID | None = Field(
-        default=None, description="负责人ID，逻辑引用 identity.users.id；未设置时由部门负责人推导"
+        default=None,
+        description="负责人ID，逻辑引用 identity.users.id；未设置时由部门负责人推导",
     )
 
 
@@ -202,7 +204,7 @@ class EquipmentResponse(BaseModel):
     warranty_expire_date: date | None
     asset_value: float | None
     depreciation_years: int | None
-    technical_params: dict | None
+    technical_params: dict[str, Any] | None
     department_id: uuid.UUID | None = None
     department_name: str | None = None
     responsible_person_id: uuid.UUID | None = None

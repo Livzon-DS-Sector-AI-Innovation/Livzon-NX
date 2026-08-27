@@ -1,6 +1,6 @@
 """FA 苯丙氨酸 — 发酵液放罐 API"""
-
 import logging
+from typing import Any
 
 from fastapi import Depends, Query
 from sqlalchemy import func, select, text
@@ -24,7 +24,7 @@ router = create_module_router(MODULES_BY_CODE["production"])
 # ========== 格式化 ==========
 
 
-def format_batch(b: FaFermentationBatch) -> dict:
+def format_batch(b: FaFermentationBatch) -> dict[str, Any]:
     return {
         "发酵罐号": b.发酵罐号,
         "放罐日期": str(b.放罐日期) if b.放罐日期 else None,
@@ -43,7 +43,7 @@ def format_batch(b: FaFermentationBatch) -> dict:
     }
 
 
-def format_sub(s: FaFermentationSubBatch) -> dict:
+def format_sub(s: FaFermentationSubBatch) -> dict[str, Any]:
     return {
         "id": str(s.id),
         "发酵批号": s.发酵批号,
@@ -64,7 +64,7 @@ async def list_batches(
     page_size: int = Query(20, ge=1, le=200),
     tank_no: str | None = Query(None, description="罐号筛选"),
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     """返回主批列表，每条主批包含 C/D 子批数据"""
     # 查询条件
     q = (
@@ -91,7 +91,7 @@ async def list_batches(
 
     # 获取所有相关子批
     tank_nos = [b.发酵罐号 for b in batches]
-    subs_by_parent: dict[str, list] = {}
+    subs_by_parent: dict[str, list[Any]] = {}
     if tank_nos:
         sub_q = (
             select(FaFermentationSubBatch)
@@ -105,7 +105,7 @@ async def list_batches(
         for s in subs:
             subs_by_parent.setdefault(s.父发酵罐号, []).append(format_sub(s))
 
-    items = []
+    items: list[dict[str, Any]] = []
     for b in batches:
         item = format_batch(b)
         item["子批"] = subs_by_parent.get(b.发酵罐号, [])
@@ -130,7 +130,7 @@ async def list_flat(
     tank_no: str | None = Query(None, description="罐号筛选"),
     month: int | None = Query(None, ge=1, le=12),
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     """返回平铺列表：每行=一个子批+主批所有字段，_is_first 标记 rowSpan 起始行"""
     # 按主批分页
     b_q = select(FaFermentationBatch).where(FaFermentationBatch.is_deleted.is_(False))
@@ -161,7 +161,7 @@ async def list_flat(
 
     # 查所有子批
     tank_nos = [b.发酵罐号 for b in batches]
-    subs_by_parent: dict[str, list] = {}
+    subs_by_parent: dict[str, list[Any]] = {}
     if tank_nos:
         sub_q = (
             select(FaFermentationSubBatch)
@@ -199,7 +199,7 @@ async def list_flat(
 async def get_batch(
     tank_no: str,
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     b = (
         await session.execute(
             select(FaFermentationBatch).where(
@@ -237,9 +237,9 @@ async def get_batch(
 @router.put("/fa/fermentation/sub-batches/{sub_id}", summary="更新子批记录")
 async def update_sub_batch(
     sub_id: str,
-    data: dict,
+    data: dict[str, Any],
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     s = (
         await session.execute(
             select(FaFermentationSubBatch).where(
@@ -267,7 +267,7 @@ async def list_acidification(
     batch_no: str | None = Query(None, description="批号筛选"),
     month: int | None = Query(None, ge=1, le=12),
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     """返回平铺列表，_is_first 标记 rowSpan 起始行"""
     q = select(FaAcidificationRecord).order_by(FaAcidificationRecord.id.asc())
     count_q = select(func.count()).select_from(FaAcidificationRecord)
@@ -298,7 +298,7 @@ async def list_acidification(
         date_str = None
         if r.日期:
             date_str = f"{r.日期.month}月{r.日期.day}日"
-        item = {
+        item: dict[str, Any] = {
             "id": r.id,
             "日期": date_str,
             "批号": r.批号,
@@ -332,8 +332,8 @@ async def list_acidification(
             "平衡率": r.平衡率,
             "消泡剂使用量（L）": r.消泡剂使用量_L,
         }
-        item["_is_first"] = item["批号"] != last_batch
-        last_batch = item["批号"] or ""
+        item["_is_first"] = str(item["批号"] or "") != last_batch
+        last_batch = str(item["批号"] or "")
         items.append(item)
 
     return success_response(
@@ -355,7 +355,7 @@ async def list_decolor1(
     page_size: int = Query(20, ge=1, le=200),
     month: int | None = Query(None, ge=1, le=12),
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     q = select(FaDecolor1Record).order_by(FaDecolor1Record.id.asc())
     count_q = select(func.count()).select_from(FaDecolor1Record)
     if month is not None:
@@ -409,7 +409,7 @@ async def list_mvr(
     page_size: int = Query(20, ge=1, le=200),
     month: int | None = Query(None, ge=1, le=12),
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     from app.modules.production.fa_models import FaMvrRecord
 
     q = select(FaMvrRecord).order_by(FaMvrRecord.id.asc())
@@ -457,7 +457,7 @@ async def list_mother_liquor(
     page_size: int = Query(20, ge=1, le=200),
     month: int | None = Query(None, ge=1, le=12),
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     from app.modules.production.fa_models import FaMotherLiquorRecord
 
     q = select(FaMotherLiquorRecord).order_by(FaMotherLiquorRecord.id.asc())
@@ -503,7 +503,7 @@ async def list_plate_recovery(
     page_size: int = Query(20, ge=1, le=200),
     month: int | None = Query(None, ge=1, le=12),
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     from app.modules.production.fa_models import FaPlateRecoveryRecord
 
     q = select(FaPlateRecoveryRecord).order_by(FaPlateRecoveryRecord.id.asc())
@@ -556,7 +556,7 @@ async def list_decolor_centrifuge(
     page_size: int = Query(20, ge=1, le=200),
     month: int | None = Query(None, ge=1, le=12),
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     where = (
         ""
         if month is None
@@ -616,7 +616,7 @@ async def list_intermediate(
     page_size: int = Query(20, ge=1, le=200),
     month: int | None = Query(None, ge=1, le=12),
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     from sqlalchemy import text as stext
 
     where = (
@@ -685,7 +685,7 @@ AVG_TABLES = {
 async def monthly_averages(
     table: str = Query(..., description="表名"),
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     if table not in AVG_TABLES:
         return success_response(None, message=f"未知表: {table}", status_code=400)
     tbl, date_col = AVG_TABLES[table]
@@ -720,9 +720,9 @@ async def monthly_averages(
 
 @router.post("/fa/sync/trigger", summary="手动触发 FA 飞书同步")
 async def trigger_fa_sync(
-    data: dict = {},
+    data: dict[str, Any] = {},
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     """同 MC 的 /mc/sync/trigger"""
     modules = data.get(
         "modules",

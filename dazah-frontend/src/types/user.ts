@@ -15,4 +15,6 @@ export type User = Pick<
   | 'department'
   | 'position'
   | 'module_codes'
+  | 'permissions'
+  | 'roles'
 >

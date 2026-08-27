@@ -22,11 +22,16 @@
 
 import os
 from contextlib import contextmanager
+from typing import Any
+
 from playwright.sync_api import sync_playwright
 
 # 浏览器二进制文件路径
 CHROME_EXECUTABLE = "/tmp/chromium-extracted/chrome-linux64/chrome"
-HEADLESS_SHELL = "/tmp/playwright-browsers/chromium_headless_shell-1223/chrome-headless-shell-linux64/chrome-headless-shell"
+HEADLESS_SHELL = (
+    "/tmp/playwright-browsers/chromium_headless_shell-1223/"
+    "chrome-headless-shell-linux64/chrome-headless-shell"
+)
 
 # Playwright 浏览器缓存路径
 BROWSERS_PATH = "/tmp/playwright-browsers"
@@ -40,12 +45,12 @@ LAUNCH_ARGS = [
 ]
 
 
-def _setup_env():
+def _setup_env() -> Any:
     """设置 Playwright 环境变量"""
     os.environ["PLAYWRIGHT_BROWSERS_PATH"] = BROWSERS_PATH
 
 
-def create_browser(headless=True, use_full_chrome=True):
+def create_browser(headless: Any = True, use_full_chrome: Any = True) -> Any:
     """
     创建并返回 (playwright_instance, browser) 元组。
 
@@ -70,7 +75,9 @@ def create_browser(headless=True, use_full_chrome=True):
 
 
 @contextmanager
-def create_page(headless=True, use_full_chrome=True, viewport=None):
+def create_page(
+    headless: Any = True, use_full_chrome: Any = True, viewport: Any = None
+) -> Any:
     """
     上下文管理器：自动创建和关闭浏览器。
 

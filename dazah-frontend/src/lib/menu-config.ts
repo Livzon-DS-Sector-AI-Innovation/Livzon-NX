@@ -1,4 +1,12 @@
 import { ENERGY_DATA_PAGES } from "./energy-data-pages"
+import { registrationCertificateSheets } from "./registration-certificate"
+import { registrationDeclarationProgressSheets } from "./registration-declaration-progress"
+import { registrationProjectLedgerSheets } from "./registration-project-ledger"
+import {
+  liquidInspectionGroups,
+  solidInspectionGroups,
+} from "./quality-inspection-material-groups"
+import { warehouseHardwarePages } from "./warehouse-hardware-pages"
 
 export interface SubMenuItem {
   key: string
@@ -8,6 +16,7 @@ export interface SubMenuItem {
   disabled?: boolean         // 灰显占位，功能未开发
   placement?: "bottom"       // 置底显示，例如模块设置入口
   adminOnly?: boolean         // 仅系统管理员可见
+  permission?: string         // 细粒度权限（仍由后端负责最终鉴权）
   feishuPageKey?: string      // 可绑定飞书只读数据表的稳定页面标识
   /** localStorage key 读取激活产品集合，用于动态菜单标签 */
   labelStorageKey?: string
@@ -269,13 +278,60 @@ export const moduleMenus: ModuleMenu[] = [
     icon: "document",
     path: "/registration",
     children: [
+      {
+        key: "project",
+        label: "申报项目",
+        path: "/registration/project",
+        children: [
+          {
+            key: "project-ledger",
+            label: "申报台账",
+            path: "/registration/project-ledger",
+            children: registrationProjectLedgerSheets.map((item) => ({
+              key: item.key,
+              label: item.name,
+              path: item.path,
+            })),
+          },
+          {
+            key: "declaration-progress",
+            label: "申报进度",
+            path: "/registration/declaration-progress",
+            children: registrationDeclarationProgressSheets.map((item) => ({
+              key: item.key,
+              label: item.name,
+              path: item.path,
+            })),
+          },
+        ],
+      },
       { key: "dossier-writer", label: "卷宗编写", path: "/registration/dossier-writer" },
       { key: "validation-audit", label: "验证文件审核", path: "/registration/validation-audit" },
       { key: "review", label: "申报进度查询", path: "/registration/review" },
       { key: "authorization-letter", label: "授权书管理", path: "/registration/authorization-letter" },
       { key: "supplementary-reply", label: "发补回复", path: "/registration/supplementary-reply" },
       { key: "reference-standard", label: "对照物质说明表", path: "/registration/reference-standard" },
+      {
+        key: "certificate-management",
+        label: "证书管理",
+        path: "/registration/certificate-management",
+        children: registrationCertificateSheets.map((item) => ({
+          key: item.key,
+          label: item.name,
+          path: item.path,
+        })),
+      },
       { key: "regulation", label: "法规跟踪", path: "/registration/regulation" },
+      {
+        key: "fees",
+        label: "注册费用",
+        path: "/registration/fees",
+        children: [
+          { key: "fee-ledger", label: "费用台账", path: "/registration/fees/ledger" },
+          { key: "inspection-contacts", label: "外检联系", path: "/registration/fees/contacts" },
+        ],
+      },
+      { key: "knowledge", label: "注册知识库", path: "/registration/knowledge" },
     ],
   },
   {
@@ -285,17 +341,163 @@ export const moduleMenus: ModuleMenu[] = [
     icon: "check-circle",
     path: "/quality",
     children: [
-      { key: "deviations", label: "偏差管理", path: "/quality/deviations" },
-      { key: "capas", label: "CAPA管理", path: "/quality/capas" },
+      { key: "documents", label: "文件管理", path: "/quality/documents" },
+      {
+        key: "deviations",
+        label: "偏差管理",
+        path: "/quality/deviations",
+        children: [
+          { key: "deviation-records", label: "报告记录", path: "/quality/deviations/records" },
+          { key: "deviation-investigations", label: "调查推送", path: "/quality/deviations/investigations" },
+          { key: "deviation-ledger", label: "偏差台账", path: "/quality/deviations/ledger" },
+        ],
+      },
+      {
+        key: "capas",
+        label: "CAPA管理",
+        path: "/quality/capas",
+        children: [
+          { key: "capa-ledger", label: "CAPA台账", path: "/quality/capas/ledger" },
+          { key: "capa-plans", label: "计划跟踪", path: "/quality/capas/plans" },
+        ],
+      },
+      {
+        key: "complaints",
+        label: "投诉管理",
+        path: "/quality/complaints",
+        children: [
+          { key: "complaint-ledger", label: "投诉台账", path: "/quality/complaints/ledger" },
+        ],
+      },
       { key: "department-contacts", label: "部门联系人", path: "/quality/department-contacts" },
-      { key: "change", label: "变更控制", path: "/quality/change" },
-      { key: "validation", label: "验证与确认", path: "/quality/validation" },
-      { key: "inspection", label: "检验管理", path: "/quality/inspection" },
-      { key: "oos-oot", label: "OOS/OOT管理", path: "/quality/oos-oot" },
-      { key: "suppliers", label: "供应商管理", path: "/quality/suppliers" },
-      { key: "complaints", label: "投诉管理", path: "/quality/complaints" },
-      { key: "return-recalls", label: "退货召回", path: "/quality/return-recalls" },
+      {
+        key: "inspection",
+        label: "质量检验",
+        path: "/quality/inspection",
+        children: [
+          {
+            key: "inspection-items",
+            label: "物品管理",
+            path: "/quality/inspection/items",
+            children: [
+              { key: "inspection-items-inventory", label: "库存台账", path: "/quality/inspection/items/inventory" },
+              { key: "inspection-items-inbound", label: "入库记录", path: "/quality/inspection/items/inbound" },
+              { key: "inspection-items-outbound", label: "出库记录", path: "/quality/inspection/items/outbound" },
+            ],
+          },
+          {
+            key: "inspection-instruments",
+            label: "仪器管理",
+            path: "/quality/inspection/instruments",
+            children: [
+              { key: "inspection-instruments-equipment", label: "仪器设备", path: "/quality/inspection/instruments/equipment" },
+              { key: "inspection-instruments-assets", label: "资产台账", path: "/quality/inspection/instruments/assets" },
+              { key: "inspection-instruments-calibration", label: "校准计划", path: "/quality/inspection/instruments/calibration" },
+              { key: "inspection-instruments-maintenance", label: "维护保养", path: "/quality/inspection/instruments/maintenance" },
+              { key: "inspection-instruments-repair", label: "维修记录", path: "/quality/inspection/instruments/repair" },
+              { key: "inspection-instruments-change", label: "变更记录", path: "/quality/inspection/instruments/change" },
+              { key: "inspection-instruments-contracts", label: "外协合同", path: "/quality/inspection/instruments/contracts" },
+              { key: "inspection-instruments-plans", label: "年度计划", path: "/quality/inspection/instruments/plans" },
+            ],
+          },
+          {
+            key: "inspection-finished",
+            label: "成品检验",
+            path: "/quality/inspection/finished",
+            children: [
+              { key: "inspection-finished-mpa", label: "霉酚酸", path: "/quality/inspection/finished/mpa" },
+              { key: "inspection-finished-mvt", label: "美伐他汀", path: "/quality/inspection/finished/mvt" },
+              { key: "inspection-finished-lft", label: "洛伐他汀", path: "/quality/inspection/finished/lft" },
+              { key: "inspection-finished-dls", label: "多拉菌素", path: "/quality/inspection/finished/dls" },
+              { key: "inspection-finished-lkms", label: "林可霉素", path: "/quality/inspection/finished/lkms" },
+              { key: "inspection-finished-bbas", label: "L-苯丙氨酸", path: "/quality/inspection/finished/bbas" },
+              { key: "inspection-finished-formulations", label: "预混剂", path: "/quality/inspection/finished/formulations" },
+              { key: "inspection-finished-tryptophan", label: "色氨酸", path: "/quality/inspection/finished/tryptophan" },
+              { key: "inspection-finished-water", label: "纯化水", path: "/quality/inspection/finished/water" },
+            ],
+          },
+          {
+            key: "inspection-solid",
+            label: "固体物料检验",
+            path: "/quality/inspection/solid",
+            children: [
+              { key: "inspection-solid-raw", label: "原料检验", path: "/quality/inspection/solid/raw-inspection" },
+              ...solidInspectionGroups.map((item) => ({
+                key: `inspection-solid-${item.key}`,
+                label: item.label,
+                path: `/quality/inspection/solid/${item.key}`,
+              })),
+            ],
+          },
+          {
+            key: "inspection-liquid",
+            label: "液体物料检验",
+            path: "/quality/inspection/liquid",
+            children: [
+              { key: "inspection-liquid-raw", label: "原料检验", path: "/quality/inspection/liquid/raw-inspection" },
+              ...liquidInspectionGroups.map((item) => ({
+                key: `inspection-liquid-${item.key}`,
+                label: item.label,
+                path: `/quality/inspection/liquid/${item.key}`,
+              })),
+            ],
+          },
+        ],
+      },
+      {
+        key: "oos-oot",
+        label: "OOS/OOT管理",
+        path: "/quality/oos-oot",
+        children: [
+          { key: "oos-oot-report-records", label: "报告记录", path: "/quality/oos-oot/report-records" },
+          { key: "oos-oot-investigation-push", label: "调查推送", path: "/quality/oos-oot/investigation-push" },
+          { key: "oos-ledger", label: "OOS台账", path: "/quality/oos-oot/oos-ledger" },
+          { key: "oot-ledger", label: "OOT台账", path: "/quality/oos-oot/oot-ledger" },
+          { key: "oot-limits", label: "各产品OOT限度", path: "/quality/oos-oot/oot-limits" },
+          { key: "product-departments", label: "产品涉及部门", path: "/quality/oos-oot/product-departments" },
+        ],
+      },
       { key: "product-quality", label: "产品质量标准", path: "/quality/product-quality" },
+      {
+        key: "return-recalls",
+        label: "退货召回",
+        path: "/quality/return-recalls",
+        children: [
+          { key: "return-application", label: "退货申请", path: "/quality/return-recalls/return-application" },
+          { key: "return-ledger", label: "退货台账", path: "/quality/return-recalls/return-ledger" },
+        ],
+      },
+      {
+        key: "suppliers",
+        label: "供应商管理",
+        path: "/quality/suppliers",
+        children: [
+          { key: "supplier-qualification", label: "供应商资质台账", path: "/quality/suppliers/qualification" },
+        ],
+      },
+      {
+        key: "validation",
+        label: "验证与确认",
+        path: "/quality/validation",
+        children: [
+          { key: "validation-plans", label: "验证主计划", path: "/quality/validation/plans" },
+          { key: "equipment-qualification", label: "设备确认", path: "/quality/validation/equipment-qualification" },
+          { key: "process-validation", label: "工艺验证", path: "/quality/validation/process-validation" },
+          { key: "cleaning-validation", label: "清洁验证", path: "/quality/validation/cleaning-validation" },
+          { key: "other-validations", label: "其他验证", path: "/quality/validation/other-validations" },
+        ],
+      },
+      {
+        key: "change",
+        label: "变更控制",
+        path: "/quality/change",
+        children: [
+          { key: "change-ledger", label: "技术变更台账", path: "/quality/change/ledger" },
+          { key: "file-change-ledger", label: "文件变更台账", path: "/quality/file-change/ledger" },
+          { key: "change-action-plans", label: "变更计划", path: "/quality/change/action-plans" },
+        ],
+      },
+      { key: "cpv", label: "持续工艺验证", path: "/quality/cpv" },
       { key: "feishu-data", label: "飞书数据", path: "/quality/data" },
       { key: "feishu-settings", label: "飞书设置", path: "/quality/feishu-settings", placement: "bottom" },
     ],
@@ -320,6 +522,28 @@ export const moduleMenus: ModuleMenu[] = [
     path: "/hr",
     children: [
       {
+        key: "employee-management",
+        label: "员工管理",
+        path: "/hr/employee-management",
+        children: [
+          { key: "employee-dashboard", label: "员工总览", path: "/hr/employee-management" },
+          { key: "employee-fill", label: "员工信息填报", path: "/hr/employee-fill" },
+          { key: "feishu-contacts", label: "飞书联系人", path: "/hr/feishu-contacts" },
+        ],
+      },
+      { key: "recruitment", label: "招聘管理", path: "/hr/recruitment" },
+      { key: "onboarding-management", label: "入职管理", path: "/hr/onboarding-management" },
+      { key: "position-transfer", label: "岗位调动管理", path: "/hr/position-transfer" },
+      {
+        key: "contracts",
+        label: "合同管理",
+        path: "/hr/contracts",
+        children: [
+          { key: "contracts-ledger", label: "合同台账", path: "/hr/contracts" },
+          { key: "contract-approval-results", label: "合同到期审批结果", path: "/hr/contracts/approval-results" },
+        ],
+      },
+      {
         key: "old-factory",
         label: "老厂",
         path: "/hr/departments",
@@ -330,7 +554,6 @@ export const moduleMenus: ModuleMenu[] = [
           { key: "onboarding", label: "入职台账", path: "/hr/onboarding" },
           { key: "departure", label: "离职台账", path: "/hr/departure" },
           { key: "offboarding", label: "离职管理", path: "/hr/offboarding" },
-          { key: "attendance", label: "考勤管理（开发中）", path: "/hr/attendance" },
           {
             key: "training",
             label: "培训管理",
@@ -342,6 +565,11 @@ export const moduleMenus: ModuleMenu[] = [
               { key: "ai-exam", label: "AI 出题", path: "/hr/training/ai-exam" },
               { key: "annual-plan", label: "年度培训计划", path: "/hr/training/annual-plan" },
               { key: "training-ledger", label: "培训台账", path: "/hr/training/ledger" },
+              { key: "new-employee-training", label: "新员工培训", path: "/hr/training/new-employee" },
+              { key: "employee-training-list", label: "员工培训清单", path: "/hr/training/employee-training-list" },
+              { key: "trainer", label: "培训师管理", path: "/hr/training/trainer" },
+              { key: "position-training", label: "岗位培训清单", path: "/hr/training/position-training" },
+              { key: "plan-tracking", label: "培训计划跟踪", path: "/hr/training/plan-tracking" },
             ],
           },
         ],
@@ -358,6 +586,18 @@ export const moduleMenus: ModuleMenu[] = [
           { key: "new-offboarding", label: "离职管理", path: "/hr/new/offboarding" },
         ],
       },
+      {
+        key: "hr-settings",
+        label: "HR设置",
+        path: "/hr/settings/feishu",
+        children: [
+          { key: "hr-settings-feishu", label: "飞书设置", path: "/hr/settings/feishu" },
+          { key: "hr-settings-reminder", label: "提醒设置", path: "/hr/settings/reminder" },
+          { key: "hr-settings-approval", label: "审批流程设置", path: "/hr/settings/approval" },
+          { key: "hr-settings-dept-mapping", label: "培训部门映射", path: "/hr/settings/dept-mapping", permission: "hr:write" },
+          { key: "hr-settings-dept-scopes", label: "部门权限配置", path: "/hr/settings/dept-scopes", permission: "hr:write" },
+        ],
+      },
     ],
   },
   {
@@ -370,6 +610,45 @@ export const moduleMenus: ModuleMenu[] = [
       { key: "raw-material", label: "成品", path: "/warehouse/raw-material", feishuPageKey: "warehouse.raw_material" },
       { key: "packaging", label: "原辅料及包材", path: "/warehouse/packaging", feishuPageKey: "warehouse.packaging" },
       { key: "product", label: "五金", path: "/warehouse/product", feishuPageKey: "warehouse.product" },
+      { key: "ai-analysis", label: "AI分析", path: "/warehouse/ai-analysis" },
+      {
+        key: "materials",
+        label: "原辅料及包材台账",
+        path: "/warehouse/materials/dashboard",
+        children: [
+          { key: "raw-summary", label: "原辅料库存总表", path: "/warehouse/materials/raw-summary" },
+          { key: "raw-detail", label: "原辅料库存明细表", path: "/warehouse/materials/raw-detail" },
+          { key: "raw-ledger", label: "原辅料出库总账", path: "/warehouse/materials/raw-ledger" },
+          { key: "packaging-summary", label: "包材库存总表", path: "/warehouse/materials/packaging-summary" },
+          { key: "packaging-detail", label: "包材库存明细表", path: "/warehouse/materials/packaging-detail" },
+          { key: "packaging-ledger", label: "包材出库总账", path: "/warehouse/materials/packaging-ledger" },
+          { key: "inbound-ledger", label: "入库总账", path: "/warehouse/materials/inbound-ledger" },
+          { key: "qualified-suppliers", label: "原辅材料合格供应商一览表", path: "/warehouse/materials/qualified-suppliers" },
+          { key: "material-name-code-map", label: "物料名称及代码对应表", path: "/warehouse/materials/material-name-code-map" },
+        ],
+      },
+      {
+        key: "hardware",
+        label: "五金台账",
+        path: "/warehouse/hardware/dashboard",
+        children: warehouseHardwarePages.map((item) => ({
+          key: `hardware-${item.pageKey}`,
+          label: item.label,
+          path: item.path,
+        })),
+      },
+      {
+        key: "product-inventory",
+        label: "成品库存台账",
+        path: "/warehouse/product/dashboard",
+        children: [
+          { key: "product-summary", label: "产品汇总", path: "/warehouse/product/summary" },
+          { key: "product-inbound-ledger", label: "入库总账", path: "/warehouse/product/inbound-ledger" },
+          { key: "product-outbound-ledger", label: "出库台账", path: "/warehouse/product/outbound-ledger" },
+          { key: "product-shipping", label: "发货情况", path: "/warehouse/product/shipping" },
+        ],
+      },
+      { key: "warehouse-settings", label: "仓储设置", path: "/warehouse/settings", placement: "bottom" },
       { key: "feishu-config", label: "飞书配置", path: "/warehouse/feishu-config", placement: "bottom" },
     ],
   },

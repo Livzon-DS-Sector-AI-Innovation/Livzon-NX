@@ -1,4 +1,5 @@
 import uuid
+from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
@@ -25,14 +26,14 @@ def _user(*, role: str = "user", tenant_key: str | None = None) -> User:
 
 @pytest.mark.anyio
 async def test_user_mode_pause_resume_and_restriction_source_persist(
-    db_session,
+    db_session: Any,
 ) -> None:
     user = _user()
     db_session.add(user)
     await db_session.flush()
     service = AgentMemoryPolicyService(Settings())
 
-    assert "已暂停" in await service.handle_command(
+    assert "已暂停" in await service.handle_command(  # type: ignore[operator]
         db_session, user=user, message="/memory pause", private_channel=True
     )
     status = await service.handle_command(
@@ -50,13 +51,13 @@ async def test_user_mode_pause_resume_and_restriction_source_persist(
 
 @pytest.mark.anyio
 async def test_clear_confirmation_is_one_time_and_hermes_receives_marker(
-    db_session, monkeypatch
+    db_session: Any, monkeypatch: Any
 ) -> None:
     user = _user()
     db_session.add(user)
     await db_session.flush()
     service = AgentMemoryPolicyService(Settings())
-    control = AsyncMock(return_value={"cleared": True})
+    control: Any = AsyncMock(return_value={"cleared": True})
     monkeypatch.setattr(service, "_hermes_control", control)
 
     prompt = await service.handle_command(
@@ -84,7 +85,7 @@ async def test_clear_confirmation_is_one_time_and_hermes_receives_marker(
 
 @pytest.mark.anyio
 async def test_tenant_policy_api_requires_admin_validates_and_only_tightens(
-    client, db_session
+    client: Any, db_session: Any
 ) -> None:
     assert (await client.get("/api/v1/agent/memory/tenant-policy")).status_code == 401
 

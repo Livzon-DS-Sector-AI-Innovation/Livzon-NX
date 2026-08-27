@@ -30,7 +30,7 @@ import {
   message,
   type TableColumnsType,
 } from 'antd'
-import { useEffect, useMemo, useState, useTransition } from 'react'
+import { useCallback, useMemo, useState, useTransition } from 'react'
 
 import {
   closeOosOotRecord,
@@ -50,13 +50,15 @@ import {
   type OotLimitProduct,
 } from '@/lib/api/quality-oos-oot'
 import type { components } from '@/types/generated/schema'
+import type { CreateOosOotRecordRequest, CloseOosOotRecordRequest } from '@/types/quality'
 
-type RecordCreateInput = components['schemas']['CreateOosOotRecordRequest']
+type RecordCreateInput = CreateOosOotRecordRequest
 type ProductCreateInput = components['schemas']['CreateOotLimitProductRequest']
 type ItemCreateInput = components['schemas']['CreateOotLimitItemRequest']
-type RecordCloseInput = components['schemas']['CloseOosOotRecordRequest']
+type RecordCloseInput = CloseOosOotRecordRequest
 
 type Notice = { type: 'success' | 'error' | 'info'; text: string } | null
+type RecordStatus = 'open' | 'investigating' | 'closed'
 
 function statusTag(status: OosOotRecord['status']) {
   const tags: Record<OosOotRecord['status'], { color: string; label: string }> = {
@@ -74,7 +76,7 @@ function formatDate(value: string | null | undefined): string {
 export function OosOotManagementPage() {
   const queryClient = useQueryClient()
   const [recordType, setRecordType] = useState<'OOS' | 'OOT' | undefined>()
-  const [recordStatus, setRecordStatus] = useState<OosOotRecord['status'] | undefined>()
+  const [recordStatus, setRecordStatus] = useState<RecordStatus | undefined>()
   const [notice, setNotice] = useState<Notice>(null)
   const [recordDrawerOpen, setRecordDrawerOpen] = useState(false)
   const [productDrawerOpen, setProductDrawerOpen] = useState(false)
@@ -96,21 +98,25 @@ export function OosOotManagementPage() {
     queryKey: ['quality-oot-limit-products'],
     queryFn: fetchOotLimitProducts,
   })
+  const currentProductId = selectedProductId ?? productsQuery.data?.data[0]?.id
   const itemsQuery = useQuery({
-    queryKey: ['quality-oot-limit-items', selectedProductId],
-    queryFn: () => fetchOotLimitItems(selectedProductId!),
-    enabled: Boolean(selectedProductId),
+    queryKey: ['quality-oot-limit-items', currentProductId],
+    queryFn: () => fetchOotLimitItems(currentProductId!),
+    enabled: Boolean(currentProductId),
   })
 
-  useEffect(() => {
-    if (!selectedProductId && productsQuery.data?.data[0]) {
-      setSelectedProductId(productsQuery.data.data[0].id)
-    }
-  }, [productsQuery.data, selectedProductId])
-
-  const refreshRecords = () => queryClient.invalidateQueries({ queryKey: ['quality-oos-oot-records'] })
-  const refreshProducts = () => queryClient.invalidateQueries({ queryKey: ['quality-oot-limit-products'] })
-  const refreshItems = () => queryClient.invalidateQueries({ queryKey: ['quality-oot-limit-items'] })
+  const refreshRecords = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: ['quality-oos-oot-records'] }),
+    [queryClient],
+  )
+  const refreshProducts = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: ['quality-oot-limit-products'] }),
+    [queryClient],
+  )
+  const refreshItems = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: ['quality-oot-limit-items'] }),
+    [queryClient],
+  )
 
   const recordColumns = useMemo<TableColumnsType<OosOotRecord>>(
     () => [
@@ -131,13 +137,13 @@ export function OosOotManagementPage() {
           <Space direction="vertical" size={0}>
             <Typography.Text>{record.title}</Typography.Text>
             <Typography.Text type="secondary">
-              {[record.product_name, record.batch_no].filter(Boolean).join(' / ') || '-'}
+              {[record.product_name, record.batch_number].filter(Boolean).join(' / ') || '-'}
             </Typography.Text>
           </Space>
         ),
       },
       { title: '检验项目', dataIndex: 'test_item', key: 'test_item', render: (value) => value || '-' },
-      { title: '发现日期', dataIndex: 'discovered_date', key: 'discovered_date', render: formatDate },
+      { title: '发现日期', dataIndex: 'discovery_date', key: 'discovery_date', render: formatDate },
       { title: '状态', dataIndex: 'status', key: 'status', render: statusTag },
       {
         title: '操作',
@@ -190,14 +196,14 @@ export function OosOotManagementPage() {
         ),
       },
     ],
-    [isPending, queryClient, startTransition],
+    [isPending, refreshRecords, startTransition],
   )
 
   const productColumns = useMemo<TableColumnsType<OotLimitProduct>>(
     () => [
       { title: '产品编码', dataIndex: 'product_code', key: 'product_code' },
       { title: '产品名称', dataIndex: 'product_name', key: 'product_name' },
-      { title: '标准文件', key: 'document', render: (_, record) => [record.document_no, record.document_version].filter(Boolean).join(' / ') || '-' },
+      { title: '标准文件', key: 'document', render: (_, record) => [record.document_title, record.version_label].filter(Boolean).join(' / ') || '-' },
       { title: '状态', dataIndex: 'is_active', key: 'is_active', render: (value) => value ? <Tag color="success">启用</Tag> : <Tag>停用</Tag> },
       {
         title: '操作',
@@ -247,7 +253,7 @@ export function OosOotManagementPage() {
         type="error"
         showIcon
         title="OOS/OOT 工作台加载失败"
-        description={error?.message ?? '请稍后重试'}
+        description={(error instanceof Error ? error.message : '') ?? '请稍后重试'}
         action={<Button onClick={() => void refreshRecords()}>重试</Button>}
       />
     )
@@ -294,11 +300,11 @@ export function OosOotManagementPage() {
               <Row gutter={[16, 16]}>
                 <Col xs={24} xl={13}>
                   <Card title="产品限度主数据" extra={<Space><Button icon={<ReloadOutlined />} onClick={() => void refreshProducts()}>刷新</Button><Button type="primary" icon={<PlusOutlined />} onClick={() => setProductDrawerOpen(true)}>新增产品</Button></Space>}>
-                    <Table<OotLimitProduct> rowKey="id" columns={productColumns} dataSource={products} pagination={false} size="small" onRow={(record) => ({ onClick: () => setSelectedProductId(record.id), style: { cursor: 'pointer', background: selectedProductId === record.id ? '#f6f0ff' : undefined } })} />
+                    <Table<OotLimitProduct> rowKey="id" columns={productColumns} dataSource={products} pagination={false} size="small" onRow={(record) => ({ onClick: () => setSelectedProductId(record.id), style: { cursor: 'pointer', background: currentProductId === record.id ? '#f6f0ff' : undefined } })} />
                   </Card>
                 </Col>
                 <Col xs={24} xl={11}>
-                  <Card title="限度项目" extra={<Space><Select value={selectedProductId} placeholder="选择产品" style={{ minWidth: 180 }} options={products.map((product) => ({ value: product.id, label: `${product.product_code} · ${product.product_name}` }))} onChange={setSelectedProductId} /><Button type="primary" disabled={!selectedProductId} icon={<PlusOutlined />} onClick={() => setItemDrawerOpen(true)}>新增项目</Button></Space>}>
+                  <Card title="限度项目" extra={<Space><Select value={currentProductId} placeholder="选择产品" style={{ minWidth: 180 }} options={products.map((product) => ({ value: product.id, label: `${product.product_code} · ${product.product_name}` }))} onChange={setSelectedProductId} /><Button type="primary" disabled={!currentProductId} icon={<PlusOutlined />} onClick={() => setItemDrawerOpen(true)}>新增项目</Button></Space>}>
                     <Table<OotLimitItem> rowKey="id" columns={itemColumns} dataSource={items} loading={itemsQuery.isLoading} pagination={false} size="small" locale={{ emptyText: <Empty description="选择产品后维护 OOT 限度项目" /> }} />
                   </Card>
                 </Col>
@@ -312,8 +318,8 @@ export function OosOotManagementPage() {
         <Form<RecordCreateInput> form={recordForm} layout="vertical" initialValues={{ record_type: 'OOS' }} onFinish={(values) => { startTransition(async () => { try { await createOosOotRecord(values); message.success('OOS/OOT 记录已创建'); recordForm.resetFields(); setRecordDrawerOpen(false); await refreshRecords() } catch (error) { message.error(error instanceof Error ? error.message : '创建失败') } }) }}>
           <Row gutter={16}><Col span={12}><Form.Item name="record_type" label="记录类型" rules={[{ required: true }]}><Select options={[{ value: 'OOS', label: 'OOS（超标）' }, { value: 'OOT', label: 'OOT（超趋势）' }]} /></Form.Item></Col><Col span={12}><Form.Item name="record_code" label="记录编号" rules={[{ required: true }]}><Input placeholder="例如 OOS-202607-001" /></Form.Item></Col></Row>
           <Form.Item name="title" label="事件标题" rules={[{ required: true }]}><Input /></Form.Item>
-          <Row gutter={16}><Col span={12}><Form.Item name="product_name" label="产品名称"><Input /></Form.Item></Col><Col span={12}><Form.Item name="batch_no" label="批号"><Input /></Form.Item></Col></Row>
-          <Row gutter={16}><Col span={12}><Form.Item name="test_item" label="检验项目"><Input /></Form.Item></Col><Col span={12}><Form.Item name="discovered_date" label="发现日期"><Input type="date" /></Form.Item></Col></Row>
+          <Row gutter={16}><Col span={12}><Form.Item name="product_name" label="产品名称"><Input /></Form.Item></Col><Col span={12}><Form.Item name="batch_number" label="批号"><Input /></Form.Item></Col></Row>
+          <Row gutter={16}><Col span={12}><Form.Item name="test_item" label="检验项目"><Input /></Form.Item></Col><Col span={12}><Form.Item name="discovery_date" label="发现日期"><Input type="date" /></Form.Item></Col></Row>
           <Form.Item name="specification" label="标准规定"><Input.TextArea rows={2} /></Form.Item>
           <Form.Item name="test_result" label="检验结果"><Input.TextArea rows={2} /></Form.Item>
           <Form.Item name="description" label="事件描述"><Input.TextArea rows={3} /></Form.Item>
@@ -323,12 +329,12 @@ export function OosOotManagementPage() {
 
       <Drawer title="新增 OOT 限度产品" width={480} open={productDrawerOpen} onClose={() => setProductDrawerOpen(false)} destroyOnHidden>
         <Form<ProductCreateInput> form={productForm} layout="vertical" initialValues={{ is_active: true }} onFinish={(values) => { startTransition(async () => { try { const product = await createOotLimitProduct(values); message.success('OOT 限度产品已创建'); productForm.resetFields(); setProductDrawerOpen(false); setSelectedProductId(product.id); await refreshProducts() } catch (error) { message.error(error instanceof Error ? error.message : '创建失败') } }) }}>
-          <Form.Item name="product_code" label="产品编码" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="product_name" label="产品名称" rules={[{ required: true }]}><Input /></Form.Item><Row gutter={16}><Col span={12}><Form.Item name="document_no" label="标准文件编号"><Input /></Form.Item></Col><Col span={12}><Form.Item name="document_version" label="版本"><Input /></Form.Item></Col></Row><Form.Item name="remark" label="备注"><Input.TextArea rows={2} /></Form.Item><Button type="primary" htmlType="submit" loading={isPending}>创建产品</Button>
+          <Form.Item name="product_code" label="产品编码" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="product_name" label="产品名称" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="document_title" label="标准文件标题" rules={[{ required: true }]}><Input /></Form.Item><Row gutter={16}><Col span={12}><Form.Item name="document_year" label="年份"><Input type="number" /></Form.Item></Col><Col span={12}><Form.Item name="version_label" label="版本"><Input /></Form.Item></Col></Row><Form.Item name="remark" label="备注"><Input.TextArea rows={2} /></Form.Item><Button type="primary" htmlType="submit" loading={isPending}>创建产品</Button>
         </Form>
       </Drawer>
 
       <Drawer title="新增 OOT 限度项目" width={480} open={itemDrawerOpen} onClose={() => setItemDrawerOpen(false)} destroyOnHidden>
-        <Form<ItemCreateInput> form={itemForm} layout="vertical" initialValues={{ display_order: (items.at(-1)?.display_order ?? 0) + 1 }} onFinish={(values) => { if (!selectedProductId) return; startTransition(async () => { try { await createOotLimitItem(selectedProductId, values); message.success('OOT 限度项目已创建'); itemForm.resetFields(); setItemDrawerOpen(false); await refreshItems() } catch (error) { message.error(error instanceof Error ? error.message : '创建失败') } }) }}>
+        <Form<ItemCreateInput> form={itemForm} layout="vertical" initialValues={{ display_order: (items.at(-1)?.display_order ?? 0) + 1 }} onFinish={(values) => { if (!currentProductId) return; startTransition(async () => { try { await createOotLimitItem(currentProductId, values); message.success('OOT 限度项目已创建'); itemForm.resetFields(); setItemDrawerOpen(false); await refreshItems() } catch (error) { message.error(error instanceof Error ? error.message : '创建失败') } }) }}>
           <Row gutter={16}><Col span={12}><Form.Item name="display_order" label="显示顺序" rules={[{ required: true }]}><Input type="number" /></Form.Item></Col><Col span={12}><Form.Item name="item_group" label="项目分组"><Input /></Form.Item></Col></Row><Form.Item name="item_name" label="项目名称" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="specification" label="标准规定"><Input.TextArea rows={2} /></Form.Item><Form.Item name="oot_limit" label="OOT 限度" rules={[{ required: true }]}><Input.TextArea rows={2} /></Form.Item><Form.Item name="remark" label="备注"><Input.TextArea rows={2} /></Form.Item><Button type="primary" htmlType="submit" loading={isPending}>创建项目</Button>
         </Form>
       </Drawer>

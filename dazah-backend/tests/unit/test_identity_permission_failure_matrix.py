@@ -1,7 +1,8 @@
 """Permission dependency, service, and repository failure-path tests."""
 
 from datetime import UTC, datetime
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
@@ -15,8 +16,10 @@ from app.platform.identity.permission_repository import PermissionGrantRepositor
 from app.platform.identity.permissions import IdentityPermissionService
 from app.platform.identity.schemas import UserModulePermissionsUpdate
 
+SimpleNamespace: Any = _SimpleNamespace
 
-def _user(*, role="user", status="active"):
+
+def _user(*, role: Any = "user", status: Any = "active") -> Any:
     return SimpleNamespace(
         id=uuid4(),
         role=role,
@@ -28,7 +31,7 @@ def _user(*, role="user", status="active"):
 
 
 def _request(token: str | None = None) -> Request:
-    headers = []
+    headers: list[Any] = []
     if token is not None:
         headers.append((b"authorization", f"Bearer {token}".encode()))
     return Request(
@@ -44,43 +47,52 @@ def _request(token: str | None = None) -> Request:
 
 @pytest.mark.asyncio
 async def test_current_user_rejects_missing_invalid_and_disabled_tokens(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
-    settings = SimpleNamespace(SECRET_KEY="secret")
-    session = object()
-    assert await deps.get_current_user(
-        _request(),
-        session,
-        settings,
-        None,
-    ) is None
-    assert await deps.get_current_user(
-        _request("invalid"),
-        session,
-        settings,
-        None,
-    ) is None
+    settings: Any = SimpleNamespace(SECRET_KEY="secret")
+    session: Any = object()
+    assert (
+        await deps.get_current_user(
+            _request(),
+            session,
+            settings,
+            None,
+        )
+        is None
+    )
+    assert (
+        await deps.get_current_user(
+            _request("invalid"),
+            session,
+            settings,
+            None,
+        )
+        is None
+    )
 
     disabled = _user(status="disabled")
-    repository = SimpleNamespace(
+    repository: Any = SimpleNamespace(
         get_by_id=AsyncMock(return_value=disabled),
         get_by_feishu_open_id=AsyncMock(),
     )
     monkeypatch.setattr(deps, "UserRepository", lambda: repository)
     token = jwt.encode({"sub": str(disabled.id)}, "secret", algorithm="HS256")
-    assert await deps.get_current_user(
-        _request(token),
-        session,
-        settings,
-        None,
-    ) is None
+    assert (
+        await deps.get_current_user(
+            _request(token),
+            session,
+            settings,
+            None,
+        )
+        is None
+    )
 
 
 @pytest.mark.asyncio
-async def test_current_user_falls_back_to_cookie_and_open_id(monkeypatch) -> None:
-    settings = SimpleNamespace(SECRET_KEY="secret")
+async def test_current_user_falls_back_to_cookie_and_open_id(monkeypatch: Any) -> None:
+    settings: Any = SimpleNamespace(SECRET_KEY="secret")
     user = _user()
-    repository = SimpleNamespace(
+    repository: Any = SimpleNamespace(
         get_by_id=AsyncMock(return_value=None),
         get_by_feishu_open_id=AsyncMock(return_value=user),
     )
@@ -90,12 +102,15 @@ async def test_current_user_falls_back_to_cookie_and_open_id(monkeypatch) -> Non
         "secret",
         algorithm="HS256",
     )
-    assert await deps.get_current_user(
-        _request(),
-        object(),
-        settings,
-        token,
-    ) is user
+    assert (
+        await deps.get_current_user(
+            _request(),
+            object(),  # type: ignore[arg-type]
+            settings,
+            token,
+        )
+        is user
+    )
     repository.get_by_feishu_open_id.assert_awaited_once()
 
 
@@ -117,7 +132,7 @@ async def test_required_user_and_admin_matrix() -> None:
 async def test_module_view_supports_all_mode_and_role_grants() -> None:
     dependency = deps.require_module_view("energy")
     regular = _user()
-    all_mode = SimpleNamespace(effective_module_access_mode="all")
+    all_mode: Any = SimpleNamespace(effective_module_access_mode="all")
     assert (
         await dependency(
             current_user=regular,
@@ -127,9 +142,9 @@ async def test_module_view_supports_all_mode_and_role_grants() -> None:
         is regular
     )
 
-    role_mode = SimpleNamespace(effective_module_access_mode="roles")
-    result = SimpleNamespace(scalar_one_or_none=lambda: None)
-    session = SimpleNamespace(execute=AsyncMock(return_value=result))
+    role_mode: Any = SimpleNamespace(effective_module_access_mode="roles")
+    result: Any = SimpleNamespace(scalar_one_or_none=lambda: None)
+    session: Any = SimpleNamespace(execute=AsyncMock(return_value=result))
     with pytest.raises(HTTPException) as missing:
         await dependency(current_user=regular, db=session, settings=role_mode)
     assert missing.value.status_code == 403
@@ -161,7 +176,7 @@ async def test_permission_service_rejects_actor_target_and_version_errors() -> N
     assert actor_error.value.status_code == 403
 
     admin = _user(role="admin")
-    session = SimpleNamespace(get=AsyncMock(return_value=None))
+    session: Any = SimpleNamespace(get=AsyncMock(return_value=None))
     with pytest.raises(HTTPException) as missing:
         await service.get_user_permissions(
             session,
@@ -194,7 +209,7 @@ async def test_permission_service_rejects_actor_target_and_version_errors() -> N
     assert precondition.value.status_code == 428
 
     target_id = uuid4()
-    repo = SimpleNamespace(get_user_for_update=AsyncMock(return_value=None))
+    repo: Any = SimpleNamespace(get_user_for_update=AsyncMock(return_value=None))
     service = IdentityPermissionService(repo=repo)
     with pytest.raises(HTTPException) as target_missing:
         await service.replace_user_permissions(
@@ -220,12 +235,12 @@ async def test_permission_service_rejects_actor_target_and_version_errors() -> N
 
 @pytest.mark.asyncio
 async def test_permission_repository_replaces_revokes_and_creates(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     repository = PermissionGrantRepository()
     actor_id = uuid4()
     user_id = uuid4()
-    existing = SimpleNamespace(
+    existing: Any = SimpleNamespace(
         module_code="energy",
         status="active",
         permissions=["module.view"],
@@ -239,8 +254,8 @@ async def test_permission_repository_replaces_revokes_and_creates(
         "list_grants",
         AsyncMock(return_value=[existing]),
     )
-    added = []
-    session = SimpleNamespace(add=added.append, flush=AsyncMock())
+    added: list[Any] = []
+    session: Any = SimpleNamespace(add=added.append, flush=AsyncMock())
 
     grants = await repository.replace_grants(
         session,
@@ -266,8 +281,8 @@ async def test_permission_repository_replaces_revokes_and_creates(
 async def test_permission_outbox_state_transitions_truncate_errors() -> None:
     repository = PermissionGrantRepository()
     actor_id = uuid4()
-    session = SimpleNamespace(flush=AsyncMock())
-    event = SimpleNamespace(
+    session: Any = SimpleNamespace(flush=AsyncMock())
+    event: Any = SimpleNamespace(
         status="pending",
         processed_at=None,
         last_error="old",

@@ -6,17 +6,19 @@
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 import pytest
 
 from app.modules.safety.ai_hazard_identification.prompts import (
+    FEWSHOT_EXAMPLES,
+    OUTPUT_FORMAT,
     SYSTEM_ROLE,
     WORK_RULES,
-    OUTPUT_FORMAT,
-    FEWSHOT_EXAMPLES,
     build_context_text,
     build_full_prompt,
-    get_expected_keys,
     get_db_seed_config,
+    get_expected_keys,
 )
 from app.modules.safety.ai_hazard_identification.rules import (
     RuleEngine,
@@ -32,7 +34,6 @@ from app.modules.safety.ai_hazard_identification.schemas import (
     RectificationSuggestion,
 )
 
-
 # ═══════════════════════════════════════════════════════════════════════════
 # 测试数据
 # ═══════════════════════════════════════════════════════════════════════════
@@ -47,17 +48,22 @@ VALID_OUTPUT_DICT = {
         "short_term": "一周内排查全区域所有防爆电箱，确保封堵完好",
         "long_term": "修订防爆设备巡检制度，将封堵检查纳入周检",
     },
-    "major_hazard_basis": "《化工和危险化学品生产经营单位重大生产安全事故隐患判定标准》第十条：爆炸危险场所未按国家标准安装使用防爆电气设备；GB 3836.1-2010 第15章",
+    "major_hazard_basis": (
+        "《化工和危险化学品生产经营单位重大生产安全事故隐患判定标准》第十条："
+        "爆炸危险场所未按国家标准安装使用防爆电气设备；GB 3836.1-2010 第15章"
+    ),
 }
 
 
-def make_input(description: str = "测试隐患", **kwargs) -> HazardIdentificationInput:
+def make_input(
+    description: str = "测试隐患", **kwargs: Any
+) -> HazardIdentificationInput:
     kwargs.setdefault("department", "生产部")
     kwargs.setdefault("location", "合成车间")
     return HazardIdentificationInput(description=description, **kwargs)
 
 
-def make_output(**overrides) -> HazardIdentificationOutput:
+def make_output(**overrides: Any) -> HazardIdentificationOutput:
     data = {**VALID_OUTPUT_DICT, **overrides}
     return HazardIdentificationOutput(**data)
 
@@ -70,13 +76,13 @@ def make_output(**overrides) -> HazardIdentificationOutput:
 class TestSchemas:
     """输入/输出数据模型验证。"""
 
-    def test_input_minimal(self):
+    def test_input_minimal(self) -> None:
         """最小输入（只有描述）应该创建成功。"""
         inp = make_input("防爆电箱堵头缺失")
         assert inp.description == "防爆电箱堵头缺失"
         assert inp.defect_photos == []
 
-    def test_input_full(self):
+    def test_input_full(self) -> None:
         """完整输入应包含所有字段。"""
         inp = HazardIdentificationInput(
             hazard_no="HZ-2026-0001",
@@ -89,7 +95,7 @@ class TestSchemas:
         assert inp.hazard_no == "HZ-2026-0001"
         assert len(inp.defect_photos) == 1
 
-    def test_output_from_valid_dict(self):
+    def test_output_from_valid_dict(self) -> None:
         """有效字典应成功构建输出。"""
         output = HazardIdentificationOutput(**VALID_OUTPUT_DICT)
         assert output.hazard_type == HazardTypeEnum.UNSAFE_CONDITION
@@ -97,12 +103,14 @@ class TestSchemas:
         assert output.hazard_level == HazardLevelEnum.MAJOR
         assert output.rectification_suggestion.immediate
 
-    def test_output_invalid_enum_rejected(self):
+    def test_output_invalid_enum_rejected(self) -> None:
         """无效枚举值应被 Pydantic 拒绝。"""
         with pytest.raises(ValueError):
-            HazardIdentificationOutput(**{**VALID_OUTPUT_DICT, "hazard_type": "invalid_type"})
+            HazardIdentificationOutput(
+                **{**VALID_OUTPUT_DICT, "hazard_type": "invalid_type"}
+            )
 
-    def test_plugin_config_defaults(self):
+    def test_plugin_config_defaults(self) -> None:
         """默认配置应合理。"""
         config = PluginConfig()
         assert config.temperature == 0.05
@@ -118,21 +126,27 @@ class TestSchemas:
 class TestPrompts:
     """Prompt 构建测试。"""
 
-    def test_system_role_not_empty(self):
+    def test_system_role_not_empty(self) -> None:
         assert len(SYSTEM_ROLE) > 100
 
-    def test_work_rules_contains_all_sections(self):
-        sections = ["隐患分类判定规则", "隐患类别判定规则", "隐患级别判定规则", "整改建议生成规则", "判定依据引用规则"]
+    def test_work_rules_contains_all_sections(self) -> None:
+        sections = [
+            "隐患分类判定规则",
+            "隐患类别判定规则",
+            "隐患级别判定规则",
+            "整改建议生成规则",
+            "判定依据引用规则",
+        ]
         for section in sections:
             assert section in WORK_RULES, f"缺少规则节: {section}"
 
-    def test_output_format_is_valid_json_template(self):
+    def test_output_format_is_valid_json_template(self) -> None:
         # 输出格式应该是一个描述（不是 JSON，因为在 Python 字符串里）
         assert "key_defect" in OUTPUT_FORMAT
         assert "hazard_type" in OUTPUT_FORMAT
         assert "rectification_suggestion" in OUTPUT_FORMAT
 
-    def test_expected_keys(self):
+    def test_expected_keys(self) -> None:
         keys = get_expected_keys()
         assert "key_defect" in keys
         assert "hazard_type" in keys
@@ -142,10 +156,12 @@ class TestPrompts:
         assert "major_hazard_basis" in keys
         assert len(keys) == 6
 
-    def test_fewshot_examples_complete(self):
+    def test_fewshot_examples_complete(self) -> None:
         """4 个 few-shot 示例应覆盖 4 种隐患分类。"""
         assert len(FEWSHOT_EXAMPLES) == 4
-        types = {ex["output"]["hazard_type"] for ex in FEWSHOT_EXAMPLES}
+        types = {
+            cast(dict[str, Any], ex["output"])["hazard_type"] for ex in FEWSHOT_EXAMPLES
+        }
         assert types == {
             "unsafe_condition",
             "unsafe_action",
@@ -153,17 +169,18 @@ class TestPrompts:
             "management_defect",
         }
 
-    def test_fewshot_examples_have_valid_enums(self):
+    def test_fewshot_examples_have_valid_enums(self) -> None:
         """Few-shot 示例的枚举值应合法。"""
         valid_types = {e.value for e in HazardTypeEnum}
         valid_cats = {e.value for e in HazardCategoryEnum}
         valid_levels = {e.value for e in HazardLevelEnum}
         for ex in FEWSHOT_EXAMPLES:
-            assert ex["output"]["hazard_type"] in valid_types
-            assert ex["output"]["hazard_category"] in valid_cats
-            assert ex["output"]["hazard_level"] in valid_levels
+            output = cast(dict[str, Any], ex["output"])
+            assert output["hazard_type"] in valid_types
+            assert output["hazard_category"] in valid_cats
+            assert output["hazard_level"] in valid_levels
 
-    def test_build_context_text(self):
+    def test_build_context_text(self) -> None:
         text = build_context_text(
             hazard_no="HZ-001",
             description="管道泄漏",
@@ -175,8 +192,10 @@ class TestPrompts:
         assert "生产部" in text
         assert "合成车间" in text
 
-    def test_build_full_prompt_includes_all_sections(self):
-        prompt = build_full_prompt("测试上下文", vision_mode=False, include_fewshot=True)
+    def test_build_full_prompt_includes_all_sections(self) -> None:
+        prompt = build_full_prompt(
+            "测试上下文", vision_mode=False, include_fewshot=True
+        )
         assert "测试上下文" in prompt
         assert "工作规则" in prompt
         assert "输出格式" in prompt
@@ -184,11 +203,11 @@ class TestPrompts:
         assert "示例1" in prompt
         assert "示例4" in prompt
 
-    def test_build_full_prompt_without_fewshot(self):
+    def test_build_full_prompt_without_fewshot(self) -> None:
         prompt = build_full_prompt("测试", vision_mode=False, include_fewshot=False)
         assert "参考示例" not in prompt
 
-    def test_get_db_seed_config(self):
+    def test_get_db_seed_config(self) -> None:
         config = get_db_seed_config()
         assert config["module_code"] == "hazard"
         assert config["is_enabled"] is True
@@ -205,59 +224,62 @@ class TestPrompts:
 class TestRuleEngine:
     """规则引擎验证。"""
 
-    def setup_method(self):
+    def setup_method(self) -> None:
         self.engine = RuleEngine()
 
-    def test_valid_output_passes(self):
+    def test_valid_output_passes(self) -> None:
         result = self.engine.validate(make_input(), make_output())
         assert result.is_valid, f"Unexpected errors: {result.errors}"
 
-    def test_invalid_enum_detected(self):
+    def test_invalid_enum_detected(self) -> None:
         # 绕过 Pydantic 枚举校验，直接构造以测试 RuleEngine 的枚举验证
-        output = HazardIdentificationOutput.model_construct(
-            **{**VALID_OUTPUT_DICT, "hazard_type": "invalid"}
-        )
+        output_data: dict[str, Any] = {**VALID_OUTPUT_DICT, "hazard_type": "invalid"}
+        output = HazardIdentificationOutput.model_construct(**output_data)
         result = self.engine.validate(make_input(), output)
         assert not result.is_valid
         assert any("隐患分类" in e for e in result.errors)
 
-    def test_short_key_defect_detected(self):
+    def test_short_key_defect_detected(self) -> None:
         output = make_output(key_defect="很短")
         result = self.engine.validate(make_input(), output)
         assert not result.is_valid
         assert any("过短" in e for e in result.errors)
 
-    def test_empty_rectification_detected(self):
-        output = make_output(rectification_suggestion=RectificationSuggestion(
-            immediate="", short_term="", long_term=""
-        ))
+    def test_empty_rectification_detected(self) -> None:
+        output = make_output(
+            rectification_suggestion=RectificationSuggestion(
+                immediate="", short_term="", long_term=""
+            )
+        )
         result = self.engine.validate(make_input(), output)
         assert not result.is_valid
         assert len([e for e in result.errors if "不能为空" in e]) == 3
 
-    def test_basis_too_short_detected(self):
+    def test_basis_too_short_detected(self) -> None:
         # 5-19 字的依据（通过 Pydantic min_length=5，但触发 RuleEngine <20 检查）
         output = make_output(major_hazard_basis="这是一个很短的依据文本")
         result = self.engine.validate(make_input(), output)
         assert not result.is_valid
         assert any("过短" in e for e in result.errors)
 
-    def test_banned_phrase_detected(self):
-        output = make_output(rectification_suggestion=RectificationSuggestion(
-            immediate="加强管理，注意安全",
-            short_term="需加强培训，提高意识",
-            long_term="制定制度加强管理",
-        ))
+    def test_banned_phrase_detected(self) -> None:
+        output = make_output(
+            rectification_suggestion=RectificationSuggestion(
+                immediate="加强管理，注意安全",
+                short_term="需加强培训，提高意识",
+                long_term="制定制度加强管理",
+            )
+        )
         result = self.engine.validate(make_input(), output)
         assert any("加强管理" in w for w in result.warnings)
 
-    def test_no_regulation_ref_detected(self):
+    def test_no_regulation_ref_detected(self) -> None:
         output = make_output(major_hazard_basis="这是一个隐患，需要立即整改处理")
         result = self.engine.validate(make_input(), output)
         assert not result.is_valid
         assert any("法规" in e for e in result.errors)
 
-    def test_consistency_warning(self):
+    def test_consistency_warning(self) -> None:
         # 物的不安全状态 对应 三违作业 不太合理
         output = make_output(
             hazard_type="unsafe_condition",
@@ -276,15 +298,17 @@ class TestRuleEngine:
 class TestAutoCorrect:
     """自动修正功能测试。"""
 
-    def test_strips_key_defect(self):
+    def test_strips_key_defect(self) -> None:
         output = make_output(key_defect="  多余的空白描述  ")
         corrected = auto_correct(output)
         assert corrected.key_defect == "多余的空白描述"
 
-    def test_fills_empty_rectification(self):
-        output = make_output(rectification_suggestion=RectificationSuggestion(
-            immediate="具体措施", short_term="", long_term=""
-        ))
+    def test_fills_empty_rectification(self) -> None:
+        output = make_output(
+            rectification_suggestion=RectificationSuggestion(
+                immediate="具体措施", short_term="", long_term=""
+            )
+        )
         corrected = auto_correct(output)
         assert corrected.rectification_suggestion.short_term != ""
         assert "整改方案" in corrected.rectification_suggestion.short_term
@@ -298,26 +322,37 @@ class TestAutoCorrect:
 class MockAIService:
     """Mock AI 服务，返回固定的标准输出。"""
 
-    def __init__(self, fail: bool = False):
+    def __init__(self, fail: bool = False) -> None:
         self.fail = fail
         self.call_count = 0
-        self.last_messages = None
+        self.last_messages: list[dict[str, Any]] | None = None
 
-    async def chat_parsed(self, messages, expected_keys, temperature=0.1):
+    async def chat_parsed(
+        self,
+        messages: list[dict[str, Any]],
+        expected_keys: list[str],
+        temperature: float = 0.1,
+    ) -> dict[str, Any]:
         self.call_count += 1
         self.last_messages = messages
         if self.fail:
             raise Exception("模拟 AI 调用失败")
         return {**VALID_OUTPUT_DICT}
 
-    async def chat_vision_parsed(self, text_prompt, image_urls, expected_keys, temperature=0.1):
+    async def chat_vision_parsed(
+        self,
+        text_prompt: str,
+        image_urls: list[str],
+        expected_keys: list[str],
+        temperature: float = 0.1,
+    ) -> dict[str, Any]:
         self.call_count += 1
         self.last_messages = [{"role": "user", "content": text_prompt}]
         if self.fail:
             raise Exception("模拟 Vision AI 调用失败")
         return {**VALID_OUTPUT_DICT}
 
-    async def close(self):
+    async def close(self) -> None:
         pass
 
 
@@ -325,8 +360,10 @@ class TestIntegration:
     """集成测试：端到端调用插件。"""
 
     @pytest.mark.asyncio
-    async def test_identify_basic(self):
-        from app.modules.safety.ai_hazard_identification.plugin import AIHazardIdentifier
+    async def test_identify_basic(self) -> None:
+        from app.modules.safety.ai_hazard_identification.plugin import (
+            AIHazardIdentifier,
+        )
 
         mock_ai = MockAIService()
         plugin = AIHazardIdentifier(mock_ai)
@@ -337,26 +374,30 @@ class TestIntegration:
         assert mock_ai.call_count == 1
 
     @pytest.mark.asyncio
-    async def test_identify_uses_vision_when_photos_available(self):
-        from app.modules.safety.ai_hazard_identification.plugin import AIHazardIdentifier
+    async def test_identify_uses_vision_when_photos_available(self) -> None:
+        from app.modules.safety.ai_hazard_identification.plugin import (
+            AIHazardIdentifier,
+        )
 
         # Mock with vision support
         class VisionMockService(MockAIService):
             pass  # chat_vision_parsed already defined
 
         mock_ai = VisionMockService()
-        mock_ai.chat_vision_parsed = mock_ai.chat_vision_parsed  # ensure available
+        assert callable(mock_ai.chat_vision_parsed)
         plugin = AIHazardIdentifier(mock_ai)
 
-        output = await plugin.identify(make_input(
-            "防爆电箱堵头缺失",
-            defect_photos=["https://example.com/photo.jpg"],
-        ))
+        output = await plugin.identify(
+            make_input(
+                "防爆电箱堵头缺失",
+                defect_photos=["https://example.com/photo.jpg"],
+            )
+        )
         assert output.hazard_type == HazardTypeEnum.UNSAFE_CONDITION
         assert mock_ai.call_count == 1
 
     @pytest.mark.asyncio
-    async def test_identify_ai_failure_raises(self):
+    async def test_identify_ai_failure_raises(self) -> None:
         from app.modules.safety.ai_hazard_identification.plugin import (
             AIHazardIdentifier,
             IdentificationError,
@@ -369,8 +410,10 @@ class TestIntegration:
             await plugin.identify(make_input("测试"))
 
     @pytest.mark.asyncio
-    async def test_identify_batch(self):
-        from app.modules.safety.ai_hazard_identification.plugin import AIHazardIdentifier
+    async def test_identify_batch(self) -> None:
+        from app.modules.safety.ai_hazard_identification.plugin import (
+            AIHazardIdentifier,
+        )
 
         mock_ai = MockAIService()
         plugin = AIHazardIdentifier(mock_ai)
@@ -385,14 +428,19 @@ class TestIntegration:
         assert mock_ai.call_count == 3
 
     @pytest.mark.asyncio
-    async def test_identify_validates_output_on_failure(self):
+    async def test_identify_validates_output_on_failure(self) -> None:
         from app.modules.safety.ai_hazard_identification.plugin import (
             AIHazardIdentifier,
             IdentificationError,
         )
 
         class BadAIService(MockAIService):
-            async def chat_parsed(self, messages, expected_keys, temperature=0.1):
+            async def chat_parsed(
+                self,
+                messages: list[dict[str, Any]],
+                expected_keys: list[str],
+                temperature: float = 0.1,
+            ) -> dict[str, Any]:
                 return {"key_defect": "短"}  # 缺少其他字段
 
         mock_ai = BadAIService()
@@ -402,20 +450,25 @@ class TestIntegration:
             await plugin.identify(make_input("测试"))
 
     @pytest.mark.asyncio
-    async def test_prompt_includes_context(self):
-        from app.modules.safety.ai_hazard_identification.plugin import AIHazardIdentifier
+    async def test_prompt_includes_context(self) -> None:
+        from app.modules.safety.ai_hazard_identification.plugin import (
+            AIHazardIdentifier,
+        )
 
         mock_ai = MockAIService()
         plugin = AIHazardIdentifier(mock_ai)
 
-        await plugin.identify(make_input(
-            "管道法兰泄漏",
-            hazard_no="HZ-2026-0001",
-            department="生产部",
-            location="合成车间",
-        ))
+        await plugin.identify(
+            make_input(
+                "管道法兰泄漏",
+                hazard_no="HZ-2026-0001",
+                department="生产部",
+                location="合成车间",
+            )
+        )
 
         # 检查 AI 收到的 prompt 包含所有上下文
+        assert mock_ai.last_messages is not None
         user_prompt = mock_ai.last_messages[1]["content"]
         assert "HZ-2026-0001" in user_prompt
         assert "管道法兰泄漏" in user_prompt
@@ -430,10 +483,10 @@ class TestIntegration:
 class TestQualityBenchmarks:
     """基于设计方案的 4 个标准示例验证规则一致性。"""
 
-    def setup_method(self):
+    def setup_method(self) -> None:
         self.engine = RuleEngine()
 
-    def test_example1_electric_box(self):
+    def test_example1_electric_box(self) -> None:
         """示例1: 防爆电箱堵头 — 应通过所有规则。"""
         output = HazardIdentificationOutput(
             key_defect="现场防爆电箱一处备用引入口未使用防爆堵头封堵，箱体内部积尘严重，存在粉尘进入电箱引发短路或爆炸的风险",
@@ -445,12 +498,16 @@ class TestQualityBenchmarks:
                 short_term="由电气工程师对责任区域内所有防爆电箱逐一排查，确保所有备用引入口封堵完好，3个工作日内完成",
                 long_term="修订防爆电气设备巡检制度，将引入口封堵状态纳入每周例行检查项，建立检查台账",
             ),
-            major_hazard_basis="《化工和危险化学品生产经营单位重大生产安全事故隐患判定标准》第十条：爆炸危险场所未按国家标准安装使用防爆电气设备；GB 3836.1-2010 第15章：电气设备引入装置的密封要求",
+        major_hazard_basis=(
+            "《化工和危险化学品生产经营单位重大生产安全事故隐患判定标准》第十条："
+            "爆炸危险场所未按国家标准安装使用防爆电气设备；GB 3836.1-2010 第15章："
+            "电气设备引入装置的密封要求"
+        ),
         )
         result = self.engine.validate(make_input("防爆电箱接线口未封堵"), output)
         assert result.is_valid, f"示例1验证失败: {result.errors}"
 
-    def test_example2_height_work(self):
+    def test_example2_height_work(self) -> None:
         """示例2: 高处作业未佩戴安全带。"""
         output = HazardIdentificationOutput(
             key_defect="作业人员在2.5m高的脚手架平台进行管道焊接作业，未佩戴安全带，且平台上未设置安全绳挂点，存在高处坠落风险",
@@ -462,12 +519,15 @@ class TestQualityBenchmarks:
                 short_term="对当班全体作业人员进行高处作业安全专项培训，重点讲解安全带正确佩戴方法",
                 long_term="在车间高处作业区域统一设置固定式安全绳挂点装置，纳入每日班前安全检查项",
             ),
-            major_hazard_basis="GB 30871-2022 第5.2条：高处作业人员应正确佩戴符合国家标准的安全带；《安全生产法》第四十五条",
+        major_hazard_basis=(
+            "GB 30871-2022 第5.2条：高处作业人员应正确佩戴符合国家标准的安全带；"
+            "《安全生产法》第四十五条"
+        ),
         )
         result = self.engine.validate(make_input("高处作业未佩戴安全带"), output)
         assert result.is_valid, f"示例2验证失败: {result.errors}"
 
-    def test_example3_blocked_fire_exit(self):
+    def test_example3_blocked_fire_exit(self) -> None:
         """示例3: 消防通道堵塞。"""
         output = HazardIdentificationOutput(
             key_defect="车间南侧消防疏散通道堆放约30袋成品包装物料，通道有效通行宽度不足0.8m，应急疏散指示灯被物料遮挡",
@@ -479,12 +539,15 @@ class TestQualityBenchmarks:
                 short_term="在消防通道两侧地面施划黄色禁停标线，在墙面张贴'消防通道禁止堆放'警示标识",
                 long_term="修订车间定置管理制度，明确消防疏散通道净宽≥1.4m的硬性指标，由安全员每月专项检查",
             ),
-            major_hazard_basis="GB 50016-2014（2018年版）第7.3.1条：疏散通道的净宽度不应小于1.1m；《安全生产法》第四十二条",
+        major_hazard_basis=(
+            "GB 50016-2014（2018年版）第7.3.1条：疏散通道的净宽度不应小于1.1m；"
+            "《安全生产法》第四十二条"
+        ),
         )
         result = self.engine.validate(make_input("消防通道堆放物料"), output)
         assert result.is_valid, f"示例3验证失败: {result.errors}"
 
-    def test_example4_permit_issue(self):
+    def test_example4_permit_issue(self) -> None:
         """示例4: 动火票证审批不完整。"""
         output = HazardIdentificationOutput(
             key_defect="一级动火作业票（编号DH-2026-0612）审批流程不完整：现场监护人、动火负责人签章栏均为空白",
@@ -496,7 +559,10 @@ class TestQualityBenchmarks:
                 short_term="组织涉及动火作业审批的相关人员进行作业票证规范填写专项培训",
                 long_term="建立特殊作业票证三级审核制度，每周对已归档票证做10%随机抽查",
             ),
-            major_hazard_basis="GB 30871-2022 第4.7条：特殊作业审批手续应齐全；《安全生产法》第四十六条",
+        major_hazard_basis=(
+            "GB 30871-2022 第4.7条：特殊作业审批手续应齐全；"
+            "《安全生产法》第四十六条"
+        ),
         )
         result = self.engine.validate(make_input("动火作业票证审批签章不完整"), output)
         assert result.is_valid, f"示例4验证失败: {result.errors}"

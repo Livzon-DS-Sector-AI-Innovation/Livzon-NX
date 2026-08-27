@@ -2,11 +2,12 @@
 
 import logging
 from datetime import date, datetime
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import DuplicateException, NotFoundException
+from app.core.exceptions import NotFoundException
 from app.modules.product.models import Product
 from app.modules.product.repository import ProductRepository
 from app.modules.product.schemas import ProductCreate, ProductUpdate, SyncStatusResponse
@@ -18,10 +19,10 @@ logger = logging.getLogger(__name__)
 # ─── Feishu field mapping helpers ───
 
 
-def _extract_text(value) -> str | None:
+def _extract_text(value: Any) -> str | None:
     """Extract text from Feishu array format or plain string."""
     if isinstance(value, list):
-        texts = []
+        texts: list[str] = []
         for v in value:
             if isinstance(v, dict):
                 t = v.get("text", "")
@@ -45,13 +46,13 @@ def _extract_text(value) -> str | None:
     return text if text else None
 
 
-def _parse_feishu_record(record: dict) -> dict:
+def _parse_feishu_record(record: dict[str, Any]) -> dict[str, Any]:
     """Convert a raw Feishu record into Product constructor kwargs."""
     fields = record.get("fields", {})
     rid = record.get("record_id", "")
     updated_time = record.get("updated_time", "")
 
-    def gt(key: str):
+    def gt(key: str) -> Any:
         return fields.get(key)
 
     data = {
@@ -78,8 +79,7 @@ def _parse_feishu_record(record: dict) -> dict:
 
     # Remove empty strings for optional text fields to avoid overwriting
     cleaned = {
-        k: v for k, v in data.items()
-        if v is not None or k in ("feishu_record_id",)
+        k: v for k, v in data.items() if v is not None or k in ("feishu_record_id",)
     }
     return cleaned
 
@@ -168,7 +168,7 @@ class ProductService:
 
     # ─── Feishu sync ───
 
-    async def sync_from_feishu(self) -> dict:
+    async def sync_from_feishu(self) -> dict[str, Any]:
         """Pull all records from Feishu Bitable and upsert into local PG."""
         raw_records = await self.bitable.query(page_size=500)
         stats = {"created": 0, "updated": 0, "failed": 0, "total": len(raw_records)}
@@ -184,14 +184,20 @@ class ProductService:
                 existing = await self.repo.get_by_feishu_record_id(
                     parsed["feishu_record_id"]
                 )
-                if existing and existing.created_at and (
-                    datetime.utcnow() - existing.created_at.replace(tzinfo=None)
-                ).total_seconds() < 60:
+                if (
+                    existing
+                    and existing.created_at
+                    and (
+                        datetime.utcnow() - existing.created_at.replace(tzinfo=None)
+                    ).total_seconds()
+                    < 60
+                ):
                     stats["created"] += 1
                 else:
                     stats["updated"] += 1
             except Exception as e:
                 import traceback
+
                 logger.error(
                     "Failed to sync Feishu record %s: %s\n%s",
                     rec.get("record_id"),
@@ -230,7 +236,7 @@ class ProductService:
 
     async def _sync_to_feishu(self, product: Product) -> str:
         """Sync one product to Feishu, creating or updating as needed."""
-        fields: dict = {}
+        fields: dict[str, Any] = {}
         if product.name:
             fields["产品名称"] = product.name
         if product.major_category:

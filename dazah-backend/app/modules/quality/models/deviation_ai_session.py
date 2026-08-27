@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Any
 
-from sqlalchemy import DateTime, Integer, JSON, String, Text, UniqueConstraint
+from sqlalchemy import JSON, DateTime, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -38,8 +39,12 @@ class DeviationAiSession(BaseModel):
         default="",
         server_default="",
     )
-    deviation_analysis_payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    capa_suggestion_payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    deviation_analysis_payload: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON, nullable=True
+    )
+    capa_suggestion_payload: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON, nullable=True
+    )
     model_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     status: Mapped[str] = mapped_column(
         String(50),

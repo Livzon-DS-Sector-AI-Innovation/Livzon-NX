@@ -1,8 +1,8 @@
-import { fetchNewEmployees } from '@/lib/api/hr'
+import { fetchNewEmployeesServer } from '@/lib/api/server/hr'
 import EmployeeProfileClient from '@/components/hr/EmployeeProfileClient'
 
 export default async function NewEmployeeProfilePage() {
-  const res = await fetchNewEmployees({ page: 1, page_size: 20 })
+  const res = await fetchNewEmployeesServer({ page: 1, page_size: 20 })
 
   return (
     <div className="space-y-4">

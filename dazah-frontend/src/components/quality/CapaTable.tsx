@@ -1,199 +1,223 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { App, Table, Tag, Space, Button, Input, Modal, Form, DatePicker, Select } from 'antd'
-import { EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons'
-import type { DepartmentContact, FeishuCapaLedgerItem } from '@/types/quality'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { App, Table, Space, Button, Input, Select, Tooltip, DatePicker } from 'antd'
+import { EditOutlined, DeleteOutlined, SearchOutlined, ImportOutlined, ExportOutlined, FilterOutlined, ReloadOutlined } from '@ant-design/icons'
+import { useQueryClient } from '@tanstack/react-query'
+import { CapaListItem, CapaWorkflowStatus, CapaSource } from '@/types/quality'
 import { useCapaStore } from '@/stores/quality'
-import { deleteFeishuCapa, updateFeishuCapa } from '@/actions/quality'
-import { fetchDepartmentContacts } from '@/lib/api/quality'
-import { buildResizableColumns, ResizableHeaderCell } from './resizable-table-header'
-import dayjs, { type Dayjs } from 'dayjs'
+import { deleteCapa, batchDeleteFeishuCapas } from '@/actions/quality-capa'
+import Link from 'next/link'
+import { CapaImportDrawer } from './CapaImportDrawer'
+import { buildResizableColumns, ResizableHeaderCell } from './ResizableTableHeader'
+import dayjs, { Dayjs } from 'dayjs'
 
-const statusConfig: Record<string, { label: string }> = {
-  进行中: { label: '进行中' },
-  已完成: { label: '已完成' },
-  已关闭: { label: '已关闭' },
+const statusConfig: Record<CapaWorkflowStatus, { color: string; bgColor: string; label: string }> = {
+  draft: { color: '#787671', bgColor: '#f0eeec', label: '草稿' },
+  part_a: { color: '#1677ff', bgColor: '#e6f4ff', label: 'A部分' },
+  part_b: { color: '#1677ff', bgColor: '#e6f4ff', label: 'B部分' },
+  part_c: { color: '#1677ff', bgColor: '#e6f4ff', label: 'C部分' },
+  pending_dept_head_confirm: { color: '#fa8c16', bgColor: '#fff7e6', label: '待部门主管确认' },
+  pending_qa_review: { color: '#fa8c16', bgColor: '#fff7e6', label: '待QA审核' },
+  pending_q_head_approval: { color: '#fa8c16', bgColor: '#fff7e6', label: '待质量主管审批' },
+  executing: { color: '#13c2c2', bgColor: '#e6fffb', label: '执行中' },
+  pending_evaluation: { color: '#722ed1', bgColor: '#f9f0ff', label: '待效果评价' },
+  submitted: { color: '#1677ff', bgColor: '#e6f4ff', label: '已提交' },
+  under_execution: { color: '#7b3ff2', bgColor: '#e6e0f5', label: '执行中' },
+  evaluation: { color: '#dd5b00', bgColor: '#fff7e6', label: '评估中' },
+  closed: { color: '#1aae39', bgColor: '#e6f7e6', label: '已关闭' },
+  returned: { color: '#e03131', bgColor: '#fff1f0', label: '已退回' },
+  cancelled: { color: '#787671', bgColor: '#f0eeec', label: '已取消' },
 }
 
-const statusOptions = [
-  { value: '进行中', label: '进行中' },
-  { value: '已完成', label: '已完成' },
-  { value: '已关闭', label: '已关闭' },
+const sourceConfig: Record<CapaSource, { label: string }> = {
+  deviation: { label: '偏差' },
+  audit: { label: '审计' },
+  customer_complaint: { label: '客户投诉' },
+  internal_inspection: { label: '内部检查' },
+}
+
+const categoryOptions = [
+  { label: 'A类', value: 'A' },
+  { label: 'B类', value: 'B' },
+  { label: 'C类', value: 'C' },
+]
+
+const statusOptions = Object.entries(statusConfig).map(([value, config]) => ({
+  label: config.label,
+  value,
+}))
+
+const sourceOptions = Object.entries(sourceConfig).map(([value, config]) => ({
+  label: config.label,
+  value,
+}))
+
+const evaluationResultOptions = [
+  { label: '有效', value: '有效' },
+  { label: '无效', value: '无效' },
 ]
 
 interface CapaTableProps {
+  capas: CapaListItem[]
+  total: number
   loading?: boolean
-  onRefresh?: () => void
 }
 
-interface CapaEditFormValues {
-  CAPA编号: string
-  启动日期?: Dayjs | null
-  事件部门?: string
-  涉及产品?: string
-  CAPA简述?: string
-  CAPA效果评估?: string
-  关闭日期?: Dayjs | null
-  QA质量员?: string
-  QA质量员确认日期?: Dayjs | null
-  CAPA状态?: string
-}
-
-const COLUMN_WIDTH_STORAGE_KEY = 'quality-capa-table-column-widths-v3'
+const COLUMN_WIDTH_STORAGE_KEY = 'quality-capa-table-column-widths-v2'
 
 const defaultColumnWidths: Record<string, number> = {
-  CAPA编号: 150,
-  启动日期: 130,
-  事件部门: 110,
-  涉及产品: 150,
-  CAPA简述: 420,
-  CAPA效果评估: 120,
-  关闭日期: 120,
-  qa_info: 150,
-  CAPA状态: 120,
-  action: 100,
+  capa_code: 150,
+  created_at: 140,
+  department: 110,
+  affected_product: 150,
+  source_code: 140,
+  title: 420,
+  action: 120,
 }
 
 const minColumnWidths: Record<string, number> = {
-  CAPA编号: 120,
-  启动日期: 110,
-  事件部门: 90,
-  涉及产品: 120,
-  CAPA简述: 260,
-  CAPA效果评估: 100,
-  关闭日期: 110,
-  qa_info: 120,
-  CAPA状态: 100,
-  action: 80,
+  capa_code: 120,
+  created_at: 130,
+  department: 90,
+  affected_product: 120,
+  source_code: 120,
+  title: 260,
+  action: 100,
 }
 
 function formatDate(v: string | null | undefined): string {
   if (!v) return '-'
   const d = new Date(v)
-  if (isNaN(d.getTime())) return v
+  if (Number.isNaN(d.getTime())) return '-'
   return d.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })
 }
 
-export function CapaTable({ loading = false, onRefresh }: CapaTableProps) {
+export function CapaTable({ capas, total, loading = false }: CapaTableProps) {
   const { message, modal } = App.useApp()
-  const [editOpen, setEditOpen] = useState(false)
-  const [editingRecord, setEditingRecord] = useState<FeishuCapaLedgerItem | null>(null)
-  const [saving, setSaving] = useState(false)
-  const [editForm] = Form.useForm<CapaEditFormValues>()
-  const [qaContacts, setQaContacts] = useState<DepartmentContact[]>([])
+  const queryClient = useQueryClient()
+  const [importOpen, setImportOpen] = useState(false)
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
+  const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([])
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>(defaultColumnWidths)
-  const resizingRef = useRef<{
-    columnKey: string
-    startX: number
-    startWidth: number
-  } | null>(null)
   const {
-    capas,
-    total,
     page,
     pageSize,
-    keyword,
-    departmentFilter,
-    productFilter,
     statusFilter,
-    setKeyword,
-    setDepartmentFilter,
-    setProductFilter,
-    setStatusFilter,
+    sourceFilter,
+    categoryFilter,
+    keyword,
+    capaCodeFilter,
+    affectedProductFilter,
+    sourceCodeFilter,
+    evaluationResultFilter,
+    closureDateFrom,
+    closureDateTo,
+    departmentFilter,
+    qaConfirmerFilter,
     setPage,
     setPageSize,
+    setStatusFilter,
+    setSourceFilter,
+    setCategoryFilter,
+    setKeyword,
+    setCapaCodeFilter,
+    setAffectedProductFilter,
+    setSourceCodeFilter,
+    setEvaluationResultFilter,
+    setClosureDateRange,
+    setDepartmentFilter,
+    setQaConfirmerFilter,
+    resetFilters,
   } = useCapaStore()
 
-  // Client-side filtering
-  const filteredCapas = useMemo(() => {
-    return capas.filter(item => {
-      if (keyword && !(item.CAPA编号 || '').toLowerCase().includes(keyword.toLowerCase())) return false
-      if (departmentFilter && (item.事件部门 || '') !== departmentFilter) return false
-      if (productFilter && !(item.涉及产品 || '').includes(productFilter)) return false
-      if (statusFilter && (item.CAPA状态 || '') !== statusFilter) return false
-      return true
-    })
-  }, [capas, keyword, departmentFilter, productFilter, statusFilter])
-
-  const filteredTotal = filteredCapas.length
-
-  const qaOptions = useMemo(() =>
-    qaContacts
-      .filter(c => c.department === 'QA')
-      .map(c => ({ label: c.name ?? '', value: c.name ?? '' })),
-    [qaContacts],
-  )
-
-  useEffect(() => {
-    fetchDepartmentContacts().then(setQaContacts)
-  }, [])
-
-  const handleDelete = useCallback((record: FeishuCapaLedgerItem) => {
+  const handleDelete = useCallback((record: CapaListItem) => {
     modal.confirm({
       title: '确认删除',
-      content: `确定要删除CAPA "${record.CAPA编号}" 吗？`,
+      content: `确定要删除CAPA "${record.title}" 吗？`,
       okText: '确认',
       cancelText: '取消',
       okButtonProps: { danger: true },
       onOk: async () => {
         try {
-          await deleteFeishuCapa(record.record_id)
+          await deleteCapa(record.id)
           message.success('删除成功')
-          onRefresh?.()
-        } catch (error) {
-          message.error(error?.message || '删除失败')
+          queryClient.invalidateQueries({ queryKey: ['quality-capa'] })
+        } catch (error: unknown) {
+          message.error(error instanceof Error ? error.message : '删除失败')
         }
       },
     })
-  }, [modal, message, onRefresh])
+  }, [modal, message, queryClient])
 
-  const openEdit = useCallback((record: FeishuCapaLedgerItem) => {
-    setEditingRecord(record)
-    editForm.setFieldsValue({
-      CAPA编号: record.CAPA编号,
-      启动日期: record.启动日期 ? dayjs(record.启动日期) : null,
-      事件部门: record.事件部门 || undefined,
-      涉及产品: record.涉及产品 || undefined,
-      CAPA简述: record.CAPA简述 || undefined,
-      CAPA效果评估: record.CAPA效果评估 || undefined,
-      关闭日期: record.关闭日期 ? dayjs(record.关闭日期) : null,
-      QA质量员: record.QA质量员 || undefined,
-      QA质量员确认日期: record.QA质量员确认日期 ? dayjs(record.QA质量员确认日期) : null,
-      CAPA状态: record.CAPA状态 || undefined,
-    })
-    setEditOpen(true)
-  }, [editForm])
-
-  const handleEditSubmit = useCallback(async () => {
-    const values = await editForm.validateFields()
-    if (!editingRecord) return
-    const payload: Record<string, unknown> = {
-      CAPA编号: values.CAPA编号,
-      启动日期: values.启动日期 ? values.启动日期.format('YYYY-MM-DD') : null,
-      事件部门: values.事件部门 || null,
-      涉及产品: values.涉及产品 || null,
-      CAPA简述: values.CAPA简述 || null,
-      CAPA效果评估: values.CAPA效果评估 || null,
-      关闭日期: values.关闭日期 ? values.关闭日期.format('YYYY-MM-DD') : null,
-      QA质量员: values.QA质量员 || null,
-      QA质量员确认日期: values.QA质量员确认日期 ? values.QA质量员确认日期.format('YYYY-MM-DD') : null,
-      CAPA状态: values.CAPA状态 || null,
-    }
+  const handleExport = useCallback(async () => {
     try {
-      setSaving(true)
-      await updateFeishuCapa(editingRecord.record_id, payload)
-      message.success('CAPA更新成功')
-      setEditOpen(false)
-      onRefresh?.()
-    } catch (error) {
-      message.error(error?.message || '更新CAPA失败')
-    } finally {
-      setSaving(false)
+      const params = new URLSearchParams()
+      if (statusFilter) params.set('status', statusFilter)
+      if (sourceFilter) params.set('source', sourceFilter)
+      if (categoryFilter) params.set('category', categoryFilter)
+      if (keyword) params.set('keyword', keyword)
+      if (capaCodeFilter) params.set('capa_code', capaCodeFilter)
+      if (affectedProductFilter) params.set('affected_product', affectedProductFilter)
+      if (sourceCodeFilter) params.set('source_code', sourceCodeFilter)
+      if (evaluationResultFilter) params.set('evaluation_result', evaluationResultFilter)
+      if (closureDateFrom) params.set('closure_date_from', closureDateFrom)
+      if (closureDateTo) params.set('closure_date_to', closureDateTo)
+      if (departmentFilter) params.set('department', departmentFilter)
+      if (qaConfirmerFilter) params.set('qa_confirmer', qaConfirmerFilter)
+      const res = await fetch(`/api/v1/quality/capas/export?${params.toString()}`)
+      if (!res.ok) throw new Error('导出失败')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `CAPA登记汇总表_${new Date().toISOString().slice(0, 10)}.docx`
+      a.click()
+      URL.revokeObjectURL(url)
+      message.success('导出成功')
+    } catch (err: unknown) {
+      message.error(err instanceof Error ? err.message : '导出失败')
     }
-  }, [editForm, editingRecord, message, onRefresh])
+  }, [
+    statusFilter,
+    sourceFilter,
+    categoryFilter,
+    keyword,
+    capaCodeFilter,
+    affectedProductFilter,
+    sourceCodeFilter,
+    evaluationResultFilter,
+    closureDateFrom,
+    closureDateTo,
+    departmentFilter,
+    qaConfirmerFilter,
+    message,
+  ])
 
-  // Column resize logic
+  const handleBatchDelete = useCallback(() => {
+    if (selectedRowKeys.length === 0) {
+      message.warning('请先选择要删除的记录')
+      return
+    }
+    modal.confirm({
+      title: '确认批量删除',
+      content: `确定要删除选中的 ${selectedRowKeys.length} 条 CAPA 记录吗？`,
+      okText: '确认',
+      cancelText: '取消',
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        try {
+          const result = await batchDeleteFeishuCapas(selectedRowKeys)
+          message.success(result.message)
+          setSelectedRowKeys([])
+          queryClient.invalidateQueries({ queryKey: ['quality-capa'] })
+        } catch (error: unknown) {
+          message.error(error instanceof Error ? error.message : '批量删除失败')
+        }
+      },
+    })
+  }, [message, modal, queryClient, selectedRowKeys])
+
   useEffect(() => {
     try {
       const raw = window.localStorage.getItem(COLUMN_WIDTH_STORAGE_KEY)
@@ -218,20 +242,19 @@ export function CapaTable({ loading = false, onRefresh }: CapaTableProps) {
   const handleResizeStart = useCallback((columnKey: string, event: React.MouseEvent<HTMLDivElement>) => {
     event.preventDefault()
     event.stopPropagation()
-    resizingRef.current = {
-      columnKey,
-      startX: event.clientX,
-      startWidth: columnWidths[columnKey] ?? defaultColumnWidths[columnKey] ?? 120,
-    }
+    const startX = event.clientX
+    const startWidth = columnWidths[columnKey] ?? defaultColumnWidths[columnKey] ?? 120
+
     const handleMouseMove = (moveEvent: MouseEvent) => {
-      const current = resizingRef.current
-      if (!current) return
-      const delta = moveEvent.clientX - current.startX
-      const nextWidth = Math.max(minColumnWidths[current.columnKey] ?? 80, current.startWidth + delta)
-      setColumnWidths((prev) => ({ ...prev, [current.columnKey]: nextWidth }))
+      const delta = moveEvent.clientX - startX
+      const nextWidth = Math.max(minColumnWidths[columnKey] ?? 80, startWidth + delta)
+      setColumnWidths((prev) => ({
+        ...prev,
+        [columnKey]: nextWidth,
+      }))
     }
+
     const handleMouseUp = () => {
-      resizingRef.current = null
       document.removeEventListener('mousemove', handleMouseMove)
       document.removeEventListener('mouseup', handleMouseUp)
     }
@@ -245,139 +268,89 @@ export function CapaTable({ loading = false, onRefresh }: CapaTableProps) {
     message.success('已恢复默认列宽')
   }, [message])
 
-  const baseColumns = [
+  const resetAllFilters = useCallback(() => {
+    resetFilters()
+    message.success('已清空筛选条件')
+  }, [message, resetFilters])
+
+  const closureDateRangeValue = useMemo<[Dayjs, Dayjs] | null>(() => {
+    if (!closureDateFrom || !closureDateTo) return null
+    return [dayjs(closureDateFrom), dayjs(closureDateTo)]
+  }, [closureDateFrom, closureDateTo])
+
+  const baseColumns = useMemo(() => [
     {
       title: 'CAPA编号',
-      dataIndex: 'CAPA编号',
-      key: 'CAPA编号',
-      width: defaultColumnWidths.CAPA编号,
+      dataIndex: 'capa_code',
+      key: 'capa_code',
+      width: defaultColumnWidths.capa_code,
       fixed: 'start' as const,
     },
     {
       title: '启动日期',
-      dataIndex: '启动日期',
-      key: '启动日期',
-      width: defaultColumnWidths.启动日期,
-      render: (v: string | null) => formatDate(v),
+      dataIndex: 'created_at',
+      key: 'created_at',
+      width: defaultColumnWidths.created_at,
+      render: (v: string) => formatDate(v),
     },
     {
       title: '事件部门',
-      dataIndex: '事件部门',
-      key: '事件部门',
-      width: defaultColumnWidths.事件部门,
+      dataIndex: 'department',
+      key: 'department',
+      width: defaultColumnWidths.department,
       render: (v: string | null) => v || '-',
     },
     {
       title: '涉及产品',
-      dataIndex: '涉及产品',
-      key: '涉及产品',
-      width: defaultColumnWidths.涉及产品,
+      dataIndex: 'affected_product',
+      key: 'affected_product',
+      width: defaultColumnWidths.affected_product,
+      render: (v: string | null) => v || '-',
+    },
+    {
+      title: '来源编号',
+      dataIndex: 'source_code',
+      key: 'source_code',
+      width: defaultColumnWidths.source_code,
       render: (v: string | null) => v || '-',
     },
     {
       title: 'CAPA简述',
-      dataIndex: 'CAPA简述',
-      key: 'CAPA简述',
-      width: defaultColumnWidths.CAPA简述,
-      render: (text: string | null) => (
-        <div style={{ whiteSpace: 'normal', wordBreak: 'break-all', lineHeight: 1.5 }}>
-          {text || '-'}
-        </div>
+      dataIndex: 'title',
+      key: 'title',
+      width: defaultColumnWidths.title,
+      render: (text: string | null, record: CapaListItem) => (
+        <Tooltip title={text} placement="topLeft">
+          <Link href={`/quality/capas/${record.id}`} className="text-blue-600 hover:text-blue-800">
+            <div style={{ whiteSpace: 'normal', wordBreak: 'break-all', lineHeight: 1.5 }}>
+              {text || '-'}
+            </div>
+          </Link>
+        </Tooltip>
       ),
-    },
-    {
-      title: 'CAPA效果评估',
-      dataIndex: 'CAPA效果评估',
-      key: 'CAPA效果评估',
-      width: defaultColumnWidths.CAPA效果评估,
-      render: (v: string | null) => {
-        if (!v) return '-'
-        const isEffective = v === '有效' || v.includes('有效')
-        return (
-          <Tag color={isEffective ? 'green' : 'default'} style={{ borderRadius: 4, fontWeight: 500 }}>
-            {v}
-          </Tag>
-        )
-      },
-    },
-    {
-      title: '关闭日期',
-      dataIndex: '关闭日期',
-      key: '关闭日期',
-      width: defaultColumnWidths.关闭日期,
-      render: (v: string | null) => formatDate(v),
-    },
-    {
-      title: 'QA质量员/日期',
-      key: 'qa_info',
-      width: defaultColumnWidths.qa_info,
-      render: (_: unknown, record: FeishuCapaLedgerItem) => {
-        const qaName = record.QA质量员?.trim() || ''
-        const qaConfirmDate = record.QA质量员确认日期 || null
-        if (!qaName && !qaConfirmDate) return '-'
-        return (
-          <div style={{ lineHeight: 1.5 }}>
-            {qaName ? <div>{qaName}</div> : null}
-            {qaConfirmDate ? (
-              <div style={{ color: '#999', fontSize: 12 }}>
-                {formatDate(qaConfirmDate)}
-              </div>
-            ) : null}
-          </div>
-        )
-      },
-    },
-    {
-      title: 'CAPA状态',
-      dataIndex: 'CAPA状态',
-      key: 'CAPA状态',
-      width: defaultColumnWidths.CAPA状态,
-      render: (value: string | null) => {
-        const config = statusConfig[value || ''] || { label: value || '-' }
-        if (value === '已完成') {
-          return <Tag color="blue" style={{ borderRadius: 4, fontWeight: 500 }}>{config.label}</Tag>
-        }
-        if (value === '已关闭') {
-          return <Tag color="green" style={{ borderRadius: 4, fontWeight: 500 }}>{config.label}</Tag>
-        }
-        if (value === '进行中') {
-          return <Tag color="orange" style={{ borderRadius: 4, fontWeight: 500 }}>{config.label}</Tag>
-        }
-        return <Tag style={{ borderRadius: 4 }}>{config.label}</Tag>
-      },
     },
     {
       title: '操作',
       key: 'action',
       width: defaultColumnWidths.action,
       fixed: 'end' as const,
-      render: (_: unknown, record: FeishuCapaLedgerItem) => (
+      render: (_: unknown, record: CapaListItem) => (
         <Space>
-          <Button
-            type="link"
-            icon={<EditOutlined />}
-            onClick={() => openEdit(record)}
-            style={{ padding: 0 }}
-          >
-            修改
-          </Button>
-          <Button
-            type="link"
-            danger
-            icon={<DeleteOutlined />}
-            onClick={() => handleDelete(record)}
-            style={{ padding: 0 }}
-          >
+          <Link href={`/quality/capas/${record.id}`}>
+            <Button type="link" icon={<EditOutlined />} style={{ padding: 0 }}>
+              详情
+            </Button>
+          </Link>
+          <Button type="link" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)} style={{ padding: 0 }}>
             删除
           </Button>
         </Space>
       ),
     },
-  ]
+  ], [handleDelete])
 
   const columns = useMemo(
     () =>
-      // eslint-disable-next-line react-hooks/refs
       buildResizableColumns(baseColumns, {
         widths: columnWidths,
         minWidths: minColumnWidths,
@@ -390,48 +363,131 @@ export function CapaTable({ loading = false, onRefresh }: CapaTableProps) {
     <div>
       <div style={{ marginBottom: 16, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
         <Input
-          placeholder="CAPA编号搜索"
-          prefix={<SearchOutlined style={{ color: '#a4a097' }} />}
-          style={{ width: 200 }}
-          value={keyword}
-          onChange={(e) => setKeyword(e.target.value)}
-          allowClear
-        />
-        <Input
-          placeholder="事件部门"
-          style={{ width: 140 }}
-          value={departmentFilter}
-          onChange={(e) => setDepartmentFilter(e.target.value)}
+          placeholder="CAPA编号"
+          style={{ width: 160 }}
+          value={capaCodeFilter}
+          onChange={(e) => setCapaCodeFilter(e.target.value)}
           allowClear
         />
         <Input
           placeholder="涉及产品"
-          style={{ width: 160 }}
-          value={productFilter}
-          onChange={(e) => setProductFilter(e.target.value)}
+          prefix={<SearchOutlined style={{ color: '#a4a097' }} />}
+          style={{ width: 180 }}
+          value={affectedProductFilter}
+          onChange={(e) => setAffectedProductFilter(e.target.value)}
           allowClear
         />
         <Select
-          placeholder="CAPA状态"
+          placeholder="效果评估"
           allowClear
-          style={{ width: 130 }}
-          value={statusFilter || undefined}
-          onChange={(value) => setStatusFilter(value || '')}
-          options={statusOptions}
+          style={{ width: 120 }}
+          value={evaluationResultFilter || undefined}
+          onChange={(value) => setEvaluationResultFilter((value || '') as '' | '有效' | '无效')}
+          options={evaluationResultOptions}
         />
+        <Input
+          placeholder="来源编号"
+          style={{ width: 160 }}
+          value={sourceCodeFilter}
+          onChange={(e) => setSourceCodeFilter(e.target.value)}
+          allowClear
+        />
+        <Button icon={<FilterOutlined />} onClick={() => setShowAdvancedFilters((prev) => !prev)}>
+          {showAdvancedFilters ? '收起筛选' : '更多筛选'}
+        </Button>
+        <Button icon={<ReloadOutlined />} onClick={resetAllFilters}>
+          重置筛选
+        </Button>
         <div style={{ flex: 1 }} />
+        <Button icon={<ImportOutlined />} onClick={() => setImportOpen(true)}>
+          导入
+        </Button>
+        <Button danger disabled={selectedRowKeys.length === 0} onClick={handleBatchDelete}>
+          批量删除
+        </Button>
         <Button onClick={resetColumnWidths}>
           恢复默认列宽
         </Button>
+        <Button icon={<ExportOutlined />} onClick={handleExport}>
+          导出
+        </Button>
       </div>
+      {showAdvancedFilters ? (
+        <div
+          style={{
+            marginBottom: 16,
+            padding: 16,
+            border: '1px solid #f0f0f0',
+            borderRadius: 8,
+            background: '#fafafa',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+            gap: 12,
+          }}
+        >
+          <Select
+            placeholder="状态"
+            allowClear
+            value={statusFilter || undefined}
+            onChange={(value) => setStatusFilter(value || '')}
+            options={statusOptions}
+          />
+          <Select
+            placeholder="来源"
+            allowClear
+            value={sourceFilter || undefined}
+            onChange={(value) => setSourceFilter(value || '')}
+            options={sourceOptions}
+          />
+          <Select
+            placeholder="类别"
+            allowClear
+            value={categoryFilter || undefined}
+            onChange={(value) => setCategoryFilter(value || '')}
+            options={categoryOptions}
+          />
+          <Input
+            placeholder="事件部门"
+            value={departmentFilter}
+            onChange={(e) => setDepartmentFilter(e.target.value)}
+            allowClear
+          />
+          <Input
+            placeholder="CAPA简述关键词"
+            value={keyword}
+            onChange={(e) => setKeyword(e.target.value)}
+            allowClear
+          />
+          <DatePicker.RangePicker
+            placeholder={['关闭日期开始', '关闭日期结束']}
+            value={closureDateRangeValue}
+            onChange={(dates) =>
+              setClosureDateRange(
+                dates?.[0] ? dates[0].format('YYYY-MM-DD') : '',
+                dates?.[1] ? dates[1].format('YYYY-MM-DD') : '',
+              )
+            }
+          />
+          <Input
+            placeholder="QA质量员"
+            value={qaConfirmerFilter}
+            onChange={(e) => setQaConfirmerFilter(e.target.value)}
+            allowClear
+          />
+        </div>
+      ) : null}
       <Table
         columns={columns}
-        dataSource={filteredCapas}
-        rowKey="record_id"
+        dataSource={capas}
+        rowKey="id"
         components={{
           header: {
             cell: ResizableHeaderCell,
           },
+        }}
+        rowSelection={{
+          selectedRowKeys,
+          onChange: (keys) => setSelectedRowKeys(keys as string[]),
         }}
         size="small"
         loading={loading}
@@ -439,7 +495,7 @@ export function CapaTable({ loading = false, onRefresh }: CapaTableProps) {
         pagination={{
           current: page,
           pageSize: pageSize,
-          total: filteredTotal,
+          total: total,
           showSizeChanger: true,
           showQuickJumper: true,
           showTotal: (value) => `共 ${value} 条`,
@@ -449,48 +505,11 @@ export function CapaTable({ loading = false, onRefresh }: CapaTableProps) {
           },
         }}
       />
-      <Modal
-        title="修改CAPA"
-        open={editOpen}
-        onOk={() => void handleEditSubmit()}
-        onCancel={() => setEditOpen(false)}
-        confirmLoading={saving}
-        destroyOnHidden
-        width={640}
-      >
-        <Form form={editForm} layout="vertical">
-          <Form.Item name="CAPA编号" label="CAPA编号" rules={[{ required: true, message: '请输入CAPA编号' }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item name="启动日期" label="启动日期">
-            <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
-          </Form.Item>
-          <Form.Item name="事件部门" label="事件部门">
-            <Input />
-          </Form.Item>
-          <Form.Item name="涉及产品" label="涉及产品">
-            <Input />
-          </Form.Item>
-          <Form.Item name="CAPA简述" label="CAPA简述">
-            <Input.TextArea rows={3} />
-          </Form.Item>
-          <Form.Item name="CAPA效果评估" label="CAPA效果评估">
-            <Input />
-          </Form.Item>
-          <Form.Item name="关闭日期" label="关闭日期">
-            <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
-          </Form.Item>
-          <Form.Item name="QA质量员" label="QA质量员">
-            <Select showSearch allowClear placeholder="选择QA质量员" options={qaOptions} />
-          </Form.Item>
-          <Form.Item name="QA质量员确认日期" label="QA质量员确认日期">
-            <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
-          </Form.Item>
-          <Form.Item name="CAPA状态" label="CAPA状态">
-            <Select options={statusOptions} />
-          </Form.Item>
-        </Form>
-      </Modal>
+      <CapaImportDrawer
+        isOpen={importOpen}
+        onClose={() => setImportOpen(false)}
+        onSuccess={() => queryClient.invalidateQueries({ queryKey: ['quality-capa'] })}
+      />
     </div>
   )
 }

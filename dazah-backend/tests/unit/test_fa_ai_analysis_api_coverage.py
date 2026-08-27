@@ -10,7 +10,9 @@
 from __future__ import annotations
 
 import json
+from collections.abc import AsyncIterator
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -19,11 +21,11 @@ from fastapi import HTTPException
 from app.modules.production import fa_ai_analysis_api as api
 
 
-def _parse(resp):
+def _parse(resp: Any) -> Any:
     return json.loads(resp.body)["data"]
 
 
-def _session():
+def _session() -> Any:
     s = AsyncMock()
     res = MagicMock()
     res.fetchall.return_value = []
@@ -38,7 +40,7 @@ def _session():
 # ── 纯函数补充 ──
 
 
-def test_parse_json_invalid_brace_fallback():
+def test_parse_json_invalid_brace_fallback() -> Any:
     # 外层 JSON 失败，尝试提取 { ... } 后仍失败 → {}
     assert api._parse_json('prefix {"causes": } suffix') == {}
     assert api._parse_json('{"unclosed') == {}
@@ -47,11 +49,11 @@ def test_parse_json_invalid_brace_fallback():
 # ── _get_trace_data 统计分支 ──
 
 
-def _trace_session(ferment=None, acid=None, dec=None, cent=None,
-                   conductance=None, yield_stats=None, slag=None):
+def _trace_session(ferment: Any=None, acid: Any=None, dec: Any=None, cent: Any=None,
+                   conductance: Any=None, yield_stats: Any=None, slag: Any=None) -> Any:
     s = AsyncMock()
 
-    def exec(*args, **kw):
+    def exec(*args: Any, **kw: Any) -> Any:
         stmt = args[0]
         sql = str(stmt)
         r = MagicMock()
@@ -79,7 +81,7 @@ def _trace_session(ferment=None, acid=None, dec=None, cent=None,
 
 
 @pytest.mark.anyio
-async def test_get_trace_data_with_stats():
+async def test_get_trace_data_with_stats() -> Any:
     s = _trace_session(
         ferment=("FA-EX21", "2026-05-10", 5000.0, 6200.0, 150.0, 12.0, 3.0,
                  "子批1(100kl/50gL/200kg)"),
@@ -101,7 +103,7 @@ cent=[SimpleNamespace(批号="FA-EX21-C1", in_vol=120.0, yield_rate=0.88, before
 
 
 @pytest.mark.anyio
-async def test_get_trace_data_no_stats():
+async def test_get_trace_data_no_stats() -> Any:
     s = _trace_session(
         ferment=("FA-EX21", "2026-05-10", 500.0, 6200.0, 150.0, 12.0, 3.2,
                  "区(1)"),
@@ -121,7 +123,7 @@ async def test_get_trace_data_no_stats():
 
 
 @pytest.mark.anyio
-async def test_ai_analysis_invalid_stage_400():
+async def test_ai_analysis_invalid_stage_400() -> Any:
     s = _session()
     with pytest.raises(HTTPException) as exc:
         await api.fa_ai_analysis(batch_no="FA-1", stage="bad_stage", session=s)
@@ -129,7 +131,7 @@ async def test_ai_analysis_invalid_stage_400():
 
 
 @pytest.mark.anyio
-async def test_ai_analysis_batch_not_found_404():
+async def test_ai_analysis_batch_not_found_404() -> Any:
     s = _session()
     with (
         patch.object(api, "_get_trace_data", AsyncMock(return_value=("", "stats"))),
@@ -140,7 +142,7 @@ async def test_ai_analysis_batch_not_found_404():
 
 
 @pytest.mark.anyio
-async def test_ai_analysis_success():
+async def test_ai_analysis_success() -> Any:
     client = MagicMock()
     resp = MagicMock()
     resp.choices = [MagicMock()]
@@ -166,7 +168,7 @@ async def test_ai_analysis_success():
 
 
 @pytest.mark.anyio
-async def test_ai_analysis_success_empty_content_and_dict_msg():
+async def test_ai_analysis_success_empty_content_and_dict_msg() -> Any:
     """resp.content 为空字符串 → summary 用默认 '分析完成'；入库失败被吞掉。"""
     client = MagicMock()
     resp = MagicMock()
@@ -188,7 +190,7 @@ async def test_ai_analysis_success_empty_content_and_dict_msg():
 
 
 @pytest.mark.anyio
-async def test_ai_analysis_llm_failure_fallback():
+async def test_ai_analysis_llm_failure_fallback() -> Any:
     s = _session()
     with (
         patch.object(api, "_get_trace_data", AsyncMock(return_value=("批次", "统计"))),
@@ -206,29 +208,29 @@ async def test_ai_analysis_llm_failure_fallback():
 
 
 class _Delta:
-    def __init__(self, content):
+    def __init__(self, content: Any) -> None:
         self.content = content
 
 
 class _Choice:
-    def __init__(self, delta):
+    def __init__(self, delta: Any) -> None:
         self.delta = delta
 
 
 class _Chunk:
-    def __init__(self, content="", no_choices=False):
+    def __init__(self, content: Any="", no_choices: Any=False) -> None:
         if no_choices:
             self.choices = []
         else:
             self.choices = [_Choice(_Delta(content))]
 
 
-async def _make_stream(*contents):
+async def _make_stream(*contents: Any) -> AsyncIterator[Any]:
     for c in contents:
         yield _Chunk(c)
 
 
-async def _body_text(resp):
+async def _body_text(resp: Any) -> Any:
     parts = []
     async for chunk in resp.body_iterator:
         if isinstance(chunk, bytes):
@@ -239,7 +241,7 @@ async def _body_text(resp):
 
 
 @pytest.mark.anyio
-async def test_stream_success():
+async def test_stream_success() -> Any:
     s = _session()
     client = MagicMock()
     client.chat.completions.create = AsyncMock(
@@ -260,7 +262,7 @@ async def test_stream_success():
 
 
 @pytest.mark.anyio
-async def test_stream_no_batch_error_path():
+async def test_stream_no_batch_error_path() -> Any:
     """批次数据为空 → error 事件并结束，不调用 LLM。"""
     s = _session()
     with (
@@ -274,7 +276,7 @@ async def test_stream_no_batch_error_path():
 
 
 @pytest.mark.anyio
-async def test_stream_batch_no_stats_path():
+async def test_stream_batch_no_stats_path() -> Any:
     """有批次但 stats 为空 → 走 else 分支完成统计，LLM 失败不影响。"""
     s = _session()
     with (
@@ -288,7 +290,7 @@ async def test_stream_batch_no_stats_path():
 
 
 @pytest.mark.anyio
-async def test_stream_retry():
+async def test_stream_retry() -> Any:
     s = _session()
     client = MagicMock()
     client.chat.completions.create = AsyncMock(
@@ -310,7 +312,7 @@ async def test_stream_retry():
 
 
 @pytest.mark.anyio
-async def test_stream_llm_failure_fallback():
+async def test_stream_llm_failure_fallback() -> Any:
     s = _session()
     with (
         patch.object(api, "_get_trace_data", AsyncMock(return_value=("批次数据", "统计"))),  # noqa: E501

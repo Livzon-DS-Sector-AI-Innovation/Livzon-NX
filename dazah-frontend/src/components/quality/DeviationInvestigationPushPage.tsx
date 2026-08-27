@@ -3,20 +3,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import dayjs, { type Dayjs } from 'dayjs'
-import { App, Button, DatePicker, Form, Input, Modal, Popconfirm, Select, Space, Table, Tag, Tooltip, Typography } from 'antd'
+import { App, Avatar, Button, DatePicker, Descriptions, Drawer, Form, Input, Modal, Popconfirm, Select, Space, Table, Tag, Tooltip, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import {
-  createDeviationInvestigationPushRecord as createDeviationInvestigationPushRecordAction,
-  deleteDeviationInvestigationPushRecord as deleteDeviationInvestigationPushRecordAction,
-  pullQualityRecordsFromFeishu,
-  updateDeviationInvestigationPushRecord as updateDeviationInvestigationPushRecordAction,
-} from '@/actions/quality'
-import {
-  fetchDeviationInvestigationPushRecords,
-  fetchDeviationReportRecords,
-} from '@/lib/api/quality'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { deleteDeviationInvestigationPushRecord as deleteDeviationInvestigationPushRecordAction, updateDeviationInvestigationPushRecord as updateDeviationInvestigationPushRecordAction } from '@/actions/quality-deviation'
+import { pullQualityRecordsFromFeishu } from '@/actions/quality'
+import { fetchDeviationInvestigationPushRecords, fetchDeviationReportRecords, fetchQualityFeishuAppSettings } from '@/lib/api/client/quality'
+
 import type {
-  CreateDeviationInvestigationPushRecordRequest,
   DepartmentContact,
   DeviationInvestigationPushRecordItem,
   DeviationReportRecordItem,
@@ -39,6 +33,27 @@ function renderReviewResult(value: string | null | undefined): React.ReactNode {
   if (value === 'approved') return <Tag color="green" style={{ borderRadius: 999 }}>通过</Tag>
   if (value === 'rejected') return <Tag color="red" style={{ borderRadius: 999 }}>不通过</Tag>
   return value
+}
+
+/** 人员列渲染：头像+姓名，无对象时回退字符串姓名 */
+function renderPerson(
+  persons: Array<{ name?: string; avatar_url?: string; id?: string }> | null | undefined,
+  fallbackName?: string | null,
+): React.ReactNode {
+  const list = persons && persons.length > 0 ? persons : fallbackName ? [{ name: fallbackName }] : []
+  if (list.length === 0) return <span>-</span>
+  return (
+    <Space size={4} wrap>
+      {list.map((person, index) => (
+        <span key={index} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          <Avatar size={20} src={person.avatar_url || undefined}>
+            {person.name?.slice(0, 1) || '?'}
+          </Avatar>
+          <span>{person.name || '-'}</span>
+        </span>
+      ))}
+    </Space>
+  )
 }
 
 const baseColumns: ColumnsType<DeviationInvestigationPushRecordItem> = [
@@ -72,8 +87,20 @@ const baseColumns: ColumnsType<DeviationInvestigationPushRecordItem> = [
     width: 150,
     render: (value: string | null | undefined) => formatDateTime(value),
   },
-  { title: '提交人', dataIndex: 'submitter', key: 'submitter', width: 110, render: (value) => value || '-' },
-  { title: '部门负责人', dataIndex: 'department_head', key: 'department_head', width: 120, render: (value) => value || '-' },
+  {
+    title: '提交人',
+    key: 'submitters',
+    width: 120,
+    render: (_: unknown, record: DeviationInvestigationPushRecordItem) =>
+      renderPerson(record.submitters, record.submitter),
+  },
+  {
+    title: '部门负责人',
+    key: 'department_heads',
+    width: 140,
+    render: (_: unknown, record: DeviationInvestigationPushRecordItem) =>
+      renderPerson(record.department_heads, record.department_head),
+  },
   {
     title: '部门负责人审核结果',
     dataIndex: 'department_head_result',
@@ -85,36 +112,6 @@ const baseColumns: ColumnsType<DeviationInvestigationPushRecordItem> = [
     title: '部门负责人审核时间',
     dataIndex: 'department_head_reviewed_at',
     key: 'department_head_reviewed_at',
-    width: 170,
-    render: (value: string | null | undefined) => formatDateTime(value),
-  },
-  { title: 'QA', dataIndex: 'qa_name', key: 'qa_name', width: 100, render: (value) => value || '-' },
-  {
-    title: 'QA审核结果',
-    dataIndex: 'qa_result',
-    key: 'qa_result',
-    width: 130,
-    render: (value: string | null | undefined) => renderReviewResult(value),
-  },
-  {
-    title: 'QA审核时间',
-    dataIndex: 'qa_reviewed_at',
-    key: 'qa_reviewed_at',
-    width: 150,
-    render: (value: string | null | undefined) => formatDateTime(value),
-  },
-  { title: 'QA负责人', dataIndex: 'qa_head_name', key: 'qa_head_name', width: 120, render: (value) => value || '-' },
-  {
-    title: 'QA负责人审核结果',
-    dataIndex: 'qa_head_result',
-    key: 'qa_head_result',
-    width: 160,
-    render: (value: string | null | undefined) => renderReviewResult(value),
-  },
-  {
-    title: 'QA负责人审核时间',
-    dataIndex: 'qa_head_reviewed_at',
-    key: 'qa_head_reviewed_at',
     width: 170,
     render: (value: string | null | undefined) => formatDateTime(value),
   },
@@ -133,7 +130,7 @@ interface InvestigationPushFormValues {
 }
 
 interface DeviationInvestigationPushPageProps {
-  submitterContacts: DepartmentContact[]
+  submitterContacts?: DepartmentContact[]
 }
 
 const pushRoundOptions = ['第1次', '第2次', '第3次'].map((value) => ({
@@ -158,19 +155,46 @@ function buildReportRecordOptions(items: DeviationReportRecordItem[]): Deviation
 }
 
 export function DeviationInvestigationPushPage({
-  submitterContacts,
+  submitterContacts = [],
 }: DeviationInvestigationPushPageProps) {
   const { message } = App.useApp()
-  const [items, setItems] = useState<DeviationInvestigationPushRecordItem[]>([])
-  const [reportRecordOptions, setReportRecordOptions] = useState<DeviationReportRecordItem[]>([])
-  const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [pulling, setPulling] = useState(false)
   const [deletingRecordId, setDeletingRecordId] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
   const [editingRecord, setEditingRecord] = useState<DeviationInvestigationPushRecordItem | null>(null)
+  const [detailRecord, setDetailRecord] = useState<DeviationInvestigationPushRecordItem | null>(null)
   const [form] = Form.useForm<InvestigationPushFormValues>()
   const selectedDeviationCode = Form.useWatch('deviation_code', form)
+
+  const queryClient = useQueryClient()
+
+  const { data: pushRecordsData, isLoading: loading, error } = useQuery({
+    queryKey: ['quality-deviation', 'investigation-push'],
+    queryFn: () => fetchDeviationInvestigationPushRecords({ page: 1, page_size: 50 }),
+  })
+
+  const { data: reportRecordsData } = useQuery({
+    queryKey: ['quality-deviation', 'report-records-options'],
+    queryFn: () => fetchDeviationReportRecords({ page: 1, page_size: 1000 }),
+  })
+
+  const { data: appSettings } = useQuery({
+    queryKey: ['quality-feishu-settings', 'app'],
+    queryFn: fetchQualityFeishuAppSettings,
+  })
+
+  useEffect(() => {
+    if (error) {
+      message.error(getErrorMessage(error, '加载调查推送失败'))
+    }
+  }, [error, message])
+
+  const items: DeviationInvestigationPushRecordItem[] = pushRecordsData?.items ?? []
+  const reportRecordOptions = useMemo(
+    () => buildReportRecordOptions(reportRecordsData?.items ?? []),
+    [reportRecordsData?.items]
+  )
 
   const selectedReportRecord = useMemo(
     () =>
@@ -210,39 +234,10 @@ export function DeviationInvestigationPushPage({
     return options
   }, [editingRecord, reportRecordOptions])
 
-  const loadData = useCallback(async () => {
-    try {
-      setLoading(true)
-      const [records, reportRecords] = await Promise.all([
-        fetchDeviationInvestigationPushRecords({ page: 1, page_size: 50 }),
-        fetchDeviationReportRecords({ page: 1, page_size: 1000 }),
-      ])
-      setItems(records.items)
-      setReportRecordOptions(buildReportRecordOptions(reportRecords.items))
-    } catch (error: unknown) {
-      message.error(getErrorMessage(error, '加载调查推送失败'))
-    } finally {
-      setLoading(false)
-    }
-  }, [message])
-
-  useEffect(() => {
-    void loadData()
-  }, [loadData])
-
   const closeModal = useCallback(() => {
     setOpen(false)
     setEditingRecord(null)
     form.resetFields()
-  }, [form])
-
-  const openCreate = useCallback(() => {
-    setEditingRecord(null)
-    form.resetFields()
-    form.setFieldsValue({
-      submitted_at: dayjs(),
-    })
-    setOpen(true)
   }, [form])
 
   const resolveSubmitterOpenId = useCallback(
@@ -288,6 +283,15 @@ export function DeviationInvestigationPushPage({
     [form, reportRecordOptions, resolveSubmitterOpenId]
   )
 
+  const handleCreateNew = useCallback(() => {
+    const url = (appSettings?.deviation_investigation_push_form_url || '').trim()
+    if (!url) {
+      message.warning('请在飞书设置中配置新建表单链接')
+      return
+    }
+    window.open(url, '_blank', 'noopener,noreferrer')
+  }, [appSettings, message])
+
   const handleSubmit = useCallback(async () => {
     const values = await form.validateFields()
     try {
@@ -302,51 +306,44 @@ export function DeviationInvestigationPushPage({
       if (editingRecord) {
         await updateDeviationInvestigationPushRecordAction(editingRecord.record_id, payload)
         message.success('调查推送记录已更新')
-      } else {
-        if (!payload.submitter_open_id) {
-          throw new Error('请选择提交人')
-        }
-        const createPayload: CreateDeviationInvestigationPushRecordRequest = {
-          ...payload,
-          submitter_open_id: payload.submitter_open_id,
-        }
-        await createDeviationInvestigationPushRecordAction(createPayload)
-        message.success('调查推送记录已创建')
       }
       closeModal()
-      await loadData()
+      queryClient.invalidateQueries({ queryKey: ['quality-deviation', 'investigation-push'] })
+      queryClient.invalidateQueries({ queryKey: ['quality-deviation', 'report-records-options'] })
     } catch (error: unknown) {
       message.error(getErrorMessage(error, '保存调查推送记录失败'))
     } finally {
       setSaving(false)
     }
-  }, [closeModal, editingRecord, form, loadData, message])
+  }, [closeModal, editingRecord, form, queryClient, message])
 
   const handleDelete = useCallback(async (recordId: string) => {
     try {
       setDeletingRecordId(recordId)
       await deleteDeviationInvestigationPushRecordAction(recordId)
       message.success('调查推送记录已删除')
-      await loadData()
+      queryClient.invalidateQueries({ queryKey: ['quality-deviation', 'investigation-push'] })
+      queryClient.invalidateQueries({ queryKey: ['quality-deviation', 'report-records-options'] })
     } catch (error: unknown) {
       message.error(getErrorMessage(error, '删除调查推送记录失败'))
     } finally {
       setDeletingRecordId(null)
     }
-  }, [loadData, message])
+  }, [queryClient, message])
 
   const handlePullFromFeishu = useCallback(async () => {
     try {
       setPulling(true)
       const result = await pullQualityRecordsFromFeishu('deviation_investigation_push_record')
       message.success(`从飞书拉取完成：成功 ${result?.synced ?? 0} 条，失败 ${result?.failed ?? 0} 条`)
-      await loadData()
+      queryClient.invalidateQueries({ queryKey: ['quality-deviation', 'investigation-push'] })
+      queryClient.invalidateQueries({ queryKey: ['quality-deviation', 'report-records-options'] })
     } catch (error: unknown) {
       message.error(getErrorMessage(error, '从飞书拉取调查推送失败'))
     } finally {
       setPulling(false)
     }
-  }, [loadData, message])
+  }, [queryClient, message])
 
   const columns = useMemo<ColumnsType<DeviationInvestigationPushRecordItem>>(
     () => [
@@ -354,10 +351,11 @@ export function DeviationInvestigationPushPage({
       {
         title: '操作',
         key: 'action',
-        width: 160,
+        width: 200,
         fixed: 'right',
         render: (_, record) => (
           <Space size="small">
+            <Button type="link" onClick={() => setDetailRecord(record)}>详情</Button>
             <Button type="link" onClick={() => openEdit(record)}>修改</Button>
             <Popconfirm
               title="确认删除这条调查推送记录？"
@@ -387,7 +385,7 @@ export function DeviationInvestigationPushPage({
         <Typography.Title level={3} style={{ margin: 0 }}>偏差调查推送</Typography.Title>
       </div>
       <Space style={{ marginBottom: 16 }} wrap>
-        <Button type="primary" onClick={openCreate}>新增推送记录</Button>
+        <Button type="primary" onClick={handleCreateNew}>新增推送记录</Button>
         <Button loading={pulling} onClick={() => void handlePullFromFeishu()}>从飞书拉取</Button>
         <Link href="/quality/deviations/records"><Button>返回报告记录</Button></Link>
         <Link href="/quality/deviations/ledger"><Button>查看偏差台账</Button></Link>
@@ -398,10 +396,10 @@ export function DeviationInvestigationPushPage({
         columns={columns}
         dataSource={items}
         pagination={false}
-        scroll={{ x: 2400 }}
+        scroll={{ x: 1440 }}
       />
       <Modal
-        title={editingRecord ? '修改推送记录' : '新增推送记录'}
+        title="修改推送记录"
         open={open}
         onOk={() => void handleSubmit()}
         onCancel={closeModal}
@@ -456,7 +454,7 @@ export function DeviationInvestigationPushPage({
           <Form.Item
             name="submitter_open_id"
             label="提交人"
-            rules={editingRecord ? [] : [{ required: true, message: '请选择提交人' }]}
+            rules={[]}
           >
             <Select
               showSearch
@@ -466,14 +464,63 @@ export function DeviationInvestigationPushPage({
               placeholder={
                 selectedReportRecord?.department
                   ? `请选择${selectedReportRecord.department}部门联系人中的提交人`
-                  : editingRecord
-                    ? '如需修改提交人，请重新选择'
-                    : '请先选择偏差编号，再选择提交人'
+                  : '如需修改提交人，请重新选择'
               }
             />
           </Form.Item>
         </Form>
       </Modal>
+      <Drawer
+        title="调查推送详情"
+        open={!!detailRecord}
+        onClose={() => setDetailRecord(null)}
+        size="large"
+      >
+        {detailRecord ? (
+          <Descriptions column={1} bordered size="small">
+            <Descriptions.Item label="偏差编号">{detailRecord.deviation_code || '-'}</Descriptions.Item>
+            <Descriptions.Item label="第N次推送">{detailRecord.push_round || '-'}</Descriptions.Item>
+            <Descriptions.Item label="偏差调查报告">
+              {detailRecord.investigation_report_url ? (
+                <a href={detailRecord.investigation_report_url} target="_blank" rel="noreferrer">
+                  偏差调查报告
+                </a>
+              ) : '-'}
+            </Descriptions.Item>
+            <Descriptions.Item label="提交日期">{formatDateTime(detailRecord.submitted_at)}</Descriptions.Item>
+            <Descriptions.Item label="提交人">
+              {renderPerson(detailRecord.submitters, detailRecord.submitter)}
+            </Descriptions.Item>
+            <Descriptions.Item label="部门负责人">
+              {renderPerson(detailRecord.department_heads, detailRecord.department_head)}
+            </Descriptions.Item>
+            <Descriptions.Item label="部门负责人审核结果">
+              {renderReviewResult(detailRecord.department_head_result)}
+            </Descriptions.Item>
+            <Descriptions.Item label="部门负责人审核时间">
+              {formatDateTime(detailRecord.department_head_reviewed_at)}
+            </Descriptions.Item>
+            <Descriptions.Item label="QA">
+              {renderPerson(detailRecord.qas, detailRecord.qa_name)}
+            </Descriptions.Item>
+            <Descriptions.Item label="QA审核结果">
+              {renderReviewResult(detailRecord.qa_result)}
+            </Descriptions.Item>
+            <Descriptions.Item label="QA审核时间">
+              {formatDateTime(detailRecord.qa_reviewed_at)}
+            </Descriptions.Item>
+            <Descriptions.Item label="QA负责人">
+              {renderPerson(detailRecord.qa_heads, detailRecord.qa_head_name)}
+            </Descriptions.Item>
+            <Descriptions.Item label="QA负责人审核结果">
+              {renderReviewResult(detailRecord.qa_head_result)}
+            </Descriptions.Item>
+            <Descriptions.Item label="QA负责人审核时间">
+              {formatDateTime(detailRecord.qa_head_reviewed_at)}
+            </Descriptions.Item>
+          </Descriptions>
+        ) : null}
+      </Drawer>
     </div>
   )
 }

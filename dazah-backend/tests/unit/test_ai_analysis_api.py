@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import json
+from collections.abc import AsyncIterator
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.modules.production import ai_analysis_api as api
 
 
-def make_session(execute_results=None):
+def make_session(execute_results: Any=None) -> Any:
     s = AsyncMock()
     if execute_results is None:
         s.execute.return_value = MagicMock()
@@ -23,7 +25,7 @@ def make_session(execute_results=None):
 _MISSING = object()
 
 
-def make_result(fetchone=_MISSING, fetchall=_MISSING):
+def make_result(fetchone: Any=_MISSING, fetchall: Any=_MISSING) -> Any:
     r = MagicMock()
     if fetchone is not _MISSING:
         r.fetchone.return_value = fetchone
@@ -32,7 +34,7 @@ def make_result(fetchone=_MISSING, fetchall=_MISSING):
     return r
 
 
-def llm_client(content: str):
+def llm_client(content: str) -> Any:
     client = MagicMock()
     resp = MagicMock()
     resp.choices = [MagicMock()]
@@ -41,11 +43,11 @@ def llm_client(content: str):
     return client
 
 
-def llm_config():
+def llm_config() -> Any:
     return SimpleNamespace(api_base_url="https://mock", api_key="k", model_name="m")
 
 
-def trace_response(stages=None, **over):
+def trace_response(stages: Any=None, **over: Any) -> Any:
     data = {
         "stages": stages or [],
         "cumulative_yield": 90,
@@ -59,7 +61,7 @@ def trace_response(stages=None, **over):
 # ═══════════ _get_node_batch_date ═══════════
 
 
-def test_get_node_batch_date_branches():
+def test_get_node_batch_date_branches() -> Any:
     import asyncio
 
     # sub_tank / crude_product
@@ -86,10 +88,10 @@ def test_get_node_batch_date_branches():
 # ═══════════ _detect_yield_anomalies ═══════════
 
 
-def test_detect_yield_anomalies_finds_high_and_medium():
+def test_detect_yield_anomalies_finds_high_and_medium() -> Any:
     import asyncio
 
-    stages = [
+    stages: list[dict[str, Any]] = [
         {
             "stage": "sub_tank",
             "nodes": [
@@ -119,7 +121,7 @@ def test_detect_yield_anomalies_finds_high_and_medium():
     assert "低于" in anomalies[0]["detail"]
 
 
-def test_detect_yield_anomalies_skips_low_sample_and_errors():
+def test_detect_yield_anomalies_skips_low_sample_and_errors() -> Any:
     import asyncio
 
     stages = [
@@ -127,7 +129,7 @@ def test_detect_yield_anomalies_skips_low_sample_and_errors():
     ]
     s = make_session()
 
-    async def _iqr(session, stage, d):
+    async def _iqr(session: Any, stage: Any, d: Any) -> Any:
         return {"n": 3, "median": 90.0, "q1": 85.0, "q3": 95.0, "iqr": 10.0}  # 样本不足
 
     with (
@@ -149,11 +151,11 @@ def test_detect_yield_anomalies_skips_low_sample_and_errors():
 # ═══════════ ai_analyze ═══════════
 
 
-def _parse_response(resp):
+def _parse_response(resp: Any) -> Any:
     return json.loads(resp.body)["data"]
 
 
-def test_ai_analyze_llm_failure_no_anomalies_fallback():
+def test_ai_analyze_llm_failure_no_anomalies_fallback() -> Any:
     """LLM 失败且无异常时，causes/suggestions 走固定兜底文案。"""
     import asyncio
 
@@ -178,7 +180,7 @@ def test_ai_analyze_llm_failure_no_anomalies_fallback():
     assert data["suggestions"] == ["持续监控各工段关键参数，保持当前操作水平"]
 
 
-def test_ai_analyze_blending_skips_empty_nodes():
+def test_ai_analyze_blending_skips_empty_nodes() -> Any:
     """blending 节点无批号或无记录行时跳过，不进入杂质异常逻辑。"""
     import asyncio
 
@@ -220,7 +222,7 @@ def test_ai_analyze_blending_skips_empty_nodes():
     assert data["anomalies"] == []
 
 
-def test_ai_analyze_blending_skips_non_blend_stage_and_no_row():
+def test_ai_analyze_blending_skips_non_blend_stage_and_no_row() -> Any:
     """blending 分支里存在非 blending 工段（149 continue）与有批号但无记录行（166 continue）。"""  # noqa: E501
     import asyncio
 
@@ -266,7 +268,7 @@ def test_ai_analyze_blending_skips_non_blend_stage_and_no_row():
     assert data["anomalies"] == []
 
 
-def test_ai_analyze_success_path():
+def test_ai_analyze_success_path() -> Any:
     import asyncio
 
     s = make_session()
@@ -295,7 +297,7 @@ def test_ai_analyze_success_path():
     s.commit.assert_awaited_once()
 
 
-def test_ai_analyze_retry_short_output_and_blending_impurities():
+def test_ai_analyze_retry_short_output_and_blending_impurities() -> Any:
     import asyncio
 
     s = make_session(
@@ -373,7 +375,7 @@ def test_ai_analyze_retry_short_output_and_blending_impurities():
     assert data["reference_cases"][0]["batch_no"] == "MC-0"
 
 
-def test_ai_analyze_llm_failure_fallback():
+def test_ai_analyze_llm_failure_fallback() -> Any:
     import asyncio
 
     s = make_session()
@@ -414,7 +416,7 @@ def test_ai_analyze_llm_failure_fallback():
 # ═══════════ ai_history ═══════════
 
 
-def test_ai_history_alias_and_records():
+def test_ai_history_alias_and_records() -> Any:
     import asyncio
 
     s = make_session(
@@ -447,7 +449,7 @@ def test_ai_history_alias_and_records():
     assert params["bn1"] == "1"
 
 
-def test_ai_history_empty():
+def test_ai_history_empty() -> Any:
     import asyncio
 
     s = make_session([make_result(fetchall=[])])
@@ -460,7 +462,7 @@ def test_ai_history_empty():
 # ═══════════ _build_prompt ═══════════
 
 
-def test_build_prompt_groups_lines_and_ext_refining():
+def test_build_prompt_groups_lines_and_ext_refining() -> Any:
     stages = [
         {
             "stage": "sub_tank",
@@ -486,7 +488,7 @@ def test_build_prompt_groups_lines_and_ext_refining():
     assert "同级" in prompt
 
 
-def test_build_prompt_no_ext_fallback():
+def test_build_prompt_no_ext_fallback() -> Any:
     stages = [
         {
             "stage": "extraction",
@@ -499,41 +501,41 @@ def test_build_prompt_no_ext_fallback():
 
 
 class _StreamChunk:
-    def __init__(self, content):
+    def __init__(self, content: Any) -> None:
         self.choices = [_StreamChoice(content)]
 
 
 class _StreamChoice:
-    def __init__(self, content):
+    def __init__(self, content: Any) -> None:
         self.delta = _StreamDelta(content)
         self.content = content
 
 
 class _StreamDelta:
-    def __init__(self, content):
+    def __init__(self, content: Any) -> None:
         self.content = content
 
 
-async def _stream_client(content: str):
+async def _stream_client(content: str) -> AsyncIterator[Any]:
     """异步生成逐 token 的流式响应。"""
     yield _StreamChunk(content)
 
 
-def _run_stream_events(resp):
+def _run_stream_events(resp: Any) -> Any:
     """收集 StreamingResponse.generate() 的 SSE 事件文本。"""
     import asyncio
 
     return asyncio.run(_collect(resp))
 
 
-async def _collect(resp):
+async def _collect(resp: Any) -> Any:
     return [e async for e in resp]
 
 
 # ═══════════ ai_analyze_stream ═══════════
 
 
-def test_ai_analyze_stream_success_path():
+def test_ai_analyze_stream_success_path() -> Any:
     import asyncio
 
     # blending 节点 + history 行
@@ -594,22 +596,22 @@ def test_ai_analyze_stream_success_path():
     assert "RRT" not in text or True
 
 
-async def _iter_body(resp):
+async def _iter_body(resp: Any) -> Any:
     parts = []
     async for chunk in resp.body_iterator:
         parts.append(chunk if isinstance(chunk, bytes) else chunk.encode("utf-8"))
     return b"".join(parts)
 
 
-async def _body_text(resp):
+async def _body_text(resp: Any) -> Any:
     return (await _iter_body(resp)).decode("utf-8")
 
 
-def test_ai_analyze_stream_llm_retry():
+def test_ai_analyze_stream_llm_retry() -> Any:
     import asyncio
 
     s = make_session([make_result(fetchall=[])])
-    stages = []
+    stages: list[Any] = []
     full = _stream_client(
         '{"summary": "完整", "causes": ["a", "b", "c"], "suggestions": ["x", "y", "z"], "severity": "medium"}'  # noqa: E501
     )
@@ -640,7 +642,7 @@ def test_ai_analyze_stream_llm_retry():
     assert client.chat.completions.create.await_count == 2
 
 
-def test_ai_analyze_stream_llm_failure_fallback():
+def test_ai_analyze_stream_llm_failure_fallback() -> Any:
     import asyncio
 
     s = make_session(
@@ -702,7 +704,7 @@ def test_ai_analyze_stream_llm_failure_fallback():
 # ═══════════ _parse_json ═══════════
 
 
-def test_parse_json_variants():
+def test_parse_json_variants() -> Any:
     assert api._parse_json('{"a": 1}') == {"a": 1}
     assert api._parse_json('```json\n{"a": 1}\n```') == {"a": 1}
     assert api._parse_json('{"causes": ["x", "y') == {"causes": ["x", "y"]}

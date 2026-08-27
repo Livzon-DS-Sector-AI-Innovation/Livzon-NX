@@ -3,6 +3,7 @@
 import os
 import uuid
 from datetime import datetime
+from typing import Any
 
 from fastapi import APIRouter, Depends, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,7 +23,9 @@ from app.modules.safety.service import (
 knowledge_router = APIRouter()
 
 
-@knowledge_router.get("/knowledge-articles", response_model=ApiResponse, summary="获取安全知识库文章列表")
+@knowledge_router.get(
+    "/knowledge-articles", response_model=ApiResponse, summary="获取安全知识库文章列表"
+)
 async def get_knowledge_articles(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=200),
@@ -31,23 +34,27 @@ async def get_knowledge_articles(
     keyword: str | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """获取安全知识库文章列表"""
     service = KnowledgeService(db)
     skip = (page - 1) * page_size
-    items, total = await service.get_articles(skip, page_size, category, status, keyword)
+    items, total = await service.get_articles(
+        skip, page_size, category, status, keyword
+    )
     return ApiResponse(
         data=[SafetyKnowledgeArticleResponse.model_validate(a) for a in items],
         meta={"page": page, "page_size": page_size, "total": total},
     )
 
 
-@knowledge_router.post("/knowledge-articles", response_model=ApiResponse, summary="创建安全知识库文章")
+@knowledge_router.post(
+    "/knowledge-articles", response_model=ApiResponse, summary="创建安全知识库文章"
+)
 async def create_knowledge_article(
     data: SafetyKnowledgeArticleCreate,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """创建安全知识库文章"""
     service = KnowledgeService(db)
     item = await service.create_article(data)
@@ -55,12 +62,16 @@ async def create_knowledge_article(
     return ApiResponse(data=SafetyKnowledgeArticleResponse.model_validate(item))
 
 
-@knowledge_router.get("/knowledge-articles/{article_id}", response_model=ApiResponse, summary="获取安全知识库文章详情")
+@knowledge_router.get(
+    "/knowledge-articles/{article_id}",
+    response_model=ApiResponse,
+    summary="获取安全知识库文章详情",
+)
 async def get_knowledge_article(
     article_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """获取安全知识库文章详情"""
     service = KnowledgeService(db)
     item = await service.get_article(article_id)
@@ -69,13 +80,17 @@ async def get_knowledge_article(
     return ApiResponse(data=SafetyKnowledgeArticleResponse.model_validate(item))
 
 
-@knowledge_router.put("/knowledge-articles/{article_id}", response_model=ApiResponse, summary="更新安全知识库文章")
+@knowledge_router.put(
+    "/knowledge-articles/{article_id}",
+    response_model=ApiResponse,
+    summary="更新安全知识库文章",
+)
 async def update_knowledge_article(
     article_id: uuid.UUID,
     data: SafetyKnowledgeArticleUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """更新安全知识库文章"""
     service = KnowledgeService(db)
     item = await service.update_article(article_id, data)
@@ -85,12 +100,16 @@ async def update_knowledge_article(
     return ApiResponse(data=SafetyKnowledgeArticleResponse.model_validate(item))
 
 
-@knowledge_router.delete("/knowledge-articles/{article_id}", response_model=ApiResponse, summary="删除安全知识库文章")
+@knowledge_router.delete(
+    "/knowledge-articles/{article_id}",
+    response_model=ApiResponse,
+    summary="删除安全知识库文章",
+)
 async def delete_knowledge_article(
     article_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """删除安全知识库文章"""
     service = KnowledgeService(db)
     result = await service.delete_article(article_id)
@@ -100,12 +119,16 @@ async def delete_knowledge_article(
     return ApiResponse(message="删除成功")
 
 
-@knowledge_router.post("/knowledge-articles/{article_id}/publish", response_model=ApiResponse, summary="发布知识库文章")
+@knowledge_router.post(
+    "/knowledge-articles/{article_id}/publish",
+    response_model=ApiResponse,
+    summary="发布知识库文章",
+)
 async def publish_knowledge_article(
     article_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """发布文章（草稿→已发布）"""
     service = KnowledgeService(db)
     item = await service.publish_article(article_id)
@@ -115,12 +138,16 @@ async def publish_knowledge_article(
     return ApiResponse(data=SafetyKnowledgeArticleResponse.model_validate(item))
 
 
-@knowledge_router.post("/knowledge-articles/{article_id}/archive", response_model=ApiResponse, summary="归档知识库文章")
+@knowledge_router.post(
+    "/knowledge-articles/{article_id}/archive",
+    response_model=ApiResponse,
+    summary="归档知识库文章",
+)
 async def archive_knowledge_article(
     article_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """归档文章（已发布→已归档）"""
     service = KnowledgeService(db)
     item = await service.archive_article(article_id)
@@ -130,13 +157,17 @@ async def archive_knowledge_article(
     return ApiResponse(data=SafetyKnowledgeArticleResponse.model_validate(item))
 
 
-@knowledge_router.post("/knowledge-articles/{article_id}/upload", response_model=ApiResponse, summary="上传知识库文章附件")
+@knowledge_router.post(
+    "/knowledge-articles/{article_id}/upload",
+    response_model=ApiResponse,
+    summary="上传知识库文章附件",
+)
 async def upload_knowledge_article_attachment(
     article_id: uuid.UUID,
     file: UploadFile,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """上传知识库文章附件"""
 
     upload_dir = os.path.join("uploads", "safety", "knowledge")
@@ -151,6 +182,7 @@ async def upload_knowledge_article_attachment(
         f.write(content)
 
     from app.modules.safety.repository import SafetyRepository
+
     repo = SafetyRepository(db)
     item = await repo.update_knowledge_article(
         article_id,
@@ -163,5 +195,3 @@ async def upload_knowledge_article_attachment(
         return ApiResponse(code=404, message="文章不存在")
     await db.commit()
     return ApiResponse(data=SafetyKnowledgeArticleResponse.model_validate(item))
-
-

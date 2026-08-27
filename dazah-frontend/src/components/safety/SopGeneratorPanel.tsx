@@ -77,7 +77,7 @@ export default function SopGeneratorPanel({
   }, [])
 
   useEffect(() => {
-    loadGeneratedSops()
+    queueMicrotask(loadGeneratedSops)
   }, [loadGeneratedSops])
 
   /* ── file handling ── */

@@ -1,16 +1,21 @@
 """LLM configuration API endpoints."""
 
 import uuid
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.platform.identity.deps import AdminUser
 
-from .capabilities import LLMCapabilities, detect_model_capabilities
+from .capabilities import (
+    LLMCapabilities,
+    detect_model_capabilities,
+    probe_api_base_url,
+)
 from .config import LLMConfigModel
 from .encryption import decrypt_api_key, encrypt_api_key, mask_api_key
 from .exceptions import LLMConfigError
@@ -20,6 +25,7 @@ router = APIRouter(prefix="/llm/configs", tags=["LLM Configuration"])
 
 class LLMConfigCreate(BaseModel):
     """Request body for creating LLM config."""
+
     config_name: str = Field(..., max_length=128)
     api_base_url: str = Field(..., max_length=500)
     api_key: str = Field(..., max_length=500)
@@ -32,6 +38,7 @@ class LLMConfigCreate(BaseModel):
 
 class LLMConfigUpdate(BaseModel):
     """Request body for updating LLM config."""
+
     config_name: str | None = Field(None, max_length=128)
     api_base_url: str | None = Field(None, max_length=500)
     api_key: str | None = Field(None, max_length=500)
@@ -44,6 +51,7 @@ class LLMConfigUpdate(BaseModel):
 
 class LLMConfigResponse(BaseModel):
     """Response body for LLM config (never returns raw API key)."""
+
     id: str
     config_name: str
     config_type: str
@@ -63,6 +71,30 @@ class LLMCapabilityDetectionResponse(BaseModel):
     status: str = "ok"
     config_type: str
     capabilities: list[str]
+    detail: str
+
+
+class LLMConfigProbeRequest(BaseModel):
+    """Unsaved LLM configuration connectivity test."""
+
+    probe_type: Literal["url", "model"]
+    api_base_url: str = Field(..., max_length=500)
+    api_key: str = Field(..., min_length=1, max_length=500)
+    model_name: str | None = Field(None, max_length=128)
+    timeout_seconds: int = Field(default=120, ge=10, le=600)
+
+    @model_validator(mode="after")
+    def require_model_for_model_probe(self) -> "LLMConfigProbeRequest":
+        if self.probe_type == "model" and not self.model_name:
+            raise ValueError("模型连通性测试需要模型名称")
+        return self
+
+
+class LLMConfigProbeResponse(BaseModel):
+    status: str = "ok"
+    probe_type: Literal["url", "model"]
+    config_type: str | None = None
+    capabilities: list[str] = Field(default_factory=list)
     detail: str
 
 
@@ -124,6 +156,17 @@ async def _detect_capabilities(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+async def _probe_url(*, api_base_url: str, api_key: str, timeout_seconds: int) -> None:
+    try:
+        await probe_api_base_url(
+            api_base_url=api_base_url,
+            api_key=api_key,
+            timeout_seconds=timeout_seconds,
+        )
+    except LLMConfigError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 async def _deactivate_other_configs(
     db: AsyncSession, *, exclude_id: uuid.UUID | None = None
 ) -> None:
@@ -138,7 +181,7 @@ async def list_configs(
     config_type: str | None = Query(None, pattern="^(text|vision)$"),
     db: AsyncSession = Depends(get_db),
     current_user: AdminUser = None,
-):
+) -> Any:
     """List all LLM configurations."""
     query = select(LLMConfigModel).where(LLMConfigModel.is_deleted.is_(False))
 
@@ -158,7 +201,7 @@ async def create_config(
     data: LLMConfigCreate,
     db: AsyncSession = Depends(get_db),
     current_user: AdminUser = None,
-):
+) -> Any:
     """Create a new LLM configuration (admin only)."""
     capabilities = await _detect_capabilities(
         api_base_url=data.api_base_url,
@@ -193,7 +236,7 @@ async def get_config(
     config_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: AdminUser = None,
-):
+) -> Any:
     """Get a specific LLM configuration."""
     result = await db.execute(
         select(LLMConfigModel).where(
@@ -215,7 +258,7 @@ async def update_config(
     data: LLMConfigUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: AdminUser = None,
-):
+) -> Any:
     """Update an LLM configuration (admin only)."""
     result = await db.execute(
         select(LLMConfigModel).where(
@@ -256,10 +299,12 @@ async def update_config(
 
     await db.flush()
     result = await db.execute(
-        select(LLMConfigModel).where(
+        select(LLMConfigModel)
+        .where(
             LLMConfigModel.id == config.id,
             LLMConfigModel.is_deleted.is_(False),
-        ).execution_options(populate_existing=True)
+        )
+        .execution_options(populate_existing=True)
     )
     refreshed_config = result.scalar_one()
     return _to_response(refreshed_config)
@@ -270,7 +315,7 @@ async def delete_config(
     config_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: AdminUser = None,
-):
+) -> None:
     """Soft delete an LLM configuration (admin only)."""
     result = await db.execute(
         select(LLMConfigModel).where(
@@ -308,7 +353,7 @@ async def test_saved_config(
     config_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: AdminUser = None,
-):
+) -> Any:
     result = await db.execute(
         select(LLMConfigModel).where(
             LLMConfigModel.id == uuid.UUID(config_id),
@@ -321,11 +366,43 @@ async def test_saved_config(
     return await _detect_saved_config(db, config)
 
 
+@router.post("/probe", response_model=LLMConfigProbeResponse)
+async def probe_config(
+    data: LLMConfigProbeRequest,
+    current_user: AdminUser = None,
+) -> Any:
+    """Test an unsaved API URL or model without persisting its credential."""
+    if data.probe_type == "url":
+        await _probe_url(
+            api_base_url=data.api_base_url,
+            api_key=data.api_key,
+            timeout_seconds=data.timeout_seconds,
+        )
+        return LLMConfigProbeResponse(
+            probe_type="url",
+            detail="API URL 与密钥连通正常",
+        )
+
+    capabilities = await _detect_capabilities(
+        api_base_url=data.api_base_url,
+        api_key=data.api_key,
+        model_name=data.model_name or "",
+        timeout_seconds=data.timeout_seconds,
+    )
+    detection = _detection_response(capabilities)
+    return LLMConfigProbeResponse(
+        probe_type="model",
+        config_type=detection.config_type,
+        capabilities=detection.capabilities,
+        detail=f"模型连通正常；{detection.detail}",
+    )
+
+
 @router.post("/test", response_model=LLMCapabilityDetectionResponse)
 async def test_connection(
     db: AsyncSession = Depends(get_db),
     current_user: AdminUser = None,
-):
+) -> Any:
     """Detect the active model's text and vision capabilities."""
     result = await db.execute(
         select(LLMConfigModel)

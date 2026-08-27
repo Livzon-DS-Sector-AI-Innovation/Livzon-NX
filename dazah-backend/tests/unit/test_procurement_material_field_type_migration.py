@@ -1,5 +1,6 @@
 import importlib.util
 from pathlib import Path
+from typing import Any
 
 MIGRATION_PATH = (
     Path(__file__).parents[2]
@@ -9,7 +10,7 @@ MIGRATION_PATH = (
 )
 
 
-def _load_migration():
+def _load_migration() -> Any:
     spec = importlib.util.spec_from_file_location(
         "procurement_material_field_type_migration",
         MIGRATION_PATH,
@@ -21,13 +22,13 @@ def _load_migration():
     return module
 
 
-def test_material_field_type_migration_upgrade_and_downgrade(monkeypatch) -> None:
+def test_material_field_type_migration_upgrade_and_downgrade(monkeypatch: Any) -> None:
     migration = _load_migration()
     added: list[tuple[str, str, bool, str]] = []
     altered: list[tuple[str, str, str | None, str | None, str]] = []
     dropped: list[tuple[str, str, str]] = []
 
-    def capture_add_column(table_name, column, schema):
+    def capture_add_column(table_name: Any, column: Any, schema: Any) -> Any:
         added.append((table_name, column.name, column.nullable, schema))
 
     monkeypatch.setattr(migration.op, "add_column", capture_add_column)

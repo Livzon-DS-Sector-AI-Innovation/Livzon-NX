@@ -196,7 +196,7 @@ export default function HazardInspectionFlow({ variant = 'page', onDone }: Props
   }, [])
 
   useEffect(() => {
-    loadDrafts()
+    queueMicrotask(loadDrafts)
   }, [loadDrafts])
 
   // ── 提交隐患 → 创建/更新记录 + 上传图片 + 触发AI ──

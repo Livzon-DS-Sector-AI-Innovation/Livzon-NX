@@ -72,9 +72,7 @@ def _redact_value(
             )
             for key, item in value.items()
         }
-    if isinstance(value, Sequence) and not isinstance(
-        value, (str, bytes, bytearray)
-    ):
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
         return [
             _redact_value(
                 item,

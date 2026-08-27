@@ -68,7 +68,7 @@ export function CapaImportDrawer({ isOpen, onClose, onSuccess }: CapaImportDrawe
       formData.append("file", file)
       setPreview(await previewCapaImport(formData))
     } catch (err) {
-      setErrorMsg(err.message || "预览失败")
+      setErrorMsg((err instanceof Error ? err.message : '') || "预览失败")
     } finally {
       setPreviewing(false)
     }
@@ -92,7 +92,7 @@ export function CapaImportDrawer({ isOpen, onClose, onSuccess }: CapaImportDrawe
       setSuccessMsg(msg)
       setTimeout(() => { handleClose(); onSuccess() }, 2000)
     } catch (err) {
-      setErrorMsg(err.message || "导入失败")
+      setErrorMsg((err instanceof Error ? err.message : '') || "导入失败")
     } finally {
       setImporting(false)
     }

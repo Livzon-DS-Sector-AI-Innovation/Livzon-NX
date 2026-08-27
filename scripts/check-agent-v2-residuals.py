@@ -6,7 +6,6 @@ import re
 import sys
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 SCAN_ROOTS = (
     ROOT / "Hermes-Lite" / "services",
@@ -25,12 +24,8 @@ RULES = {
     "removed AgentBackend V1 route": re.compile(
         r"(?<!/llm)(?<!/coding)/v1/chat(?:/stream)?(?!/completions)"
     ),
-    "removed AgentBackend legacy URL setting": re.compile(
-        r"\bHERMES_AGENT_URL\b"
-    ),
-    "removed per-operation Hermes registry": re.compile(
-        r"\bALLOWED_OPERATIONS\b"
-    ),
+    "removed AgentBackend legacy URL setting": re.compile(r"\bHERMES_AGENT_URL\b"),
+    "removed per-operation Hermes registry": re.compile(r"\bALLOWED_OPERATIONS\b"),
     "removed user tool endpoint": re.compile(r"/tools/execute/user\b"),
     "removed Feishu delivery tool alias": re.compile(
         r"identity\.send_feishu_(?:message|text_message|card_message)"
@@ -76,15 +71,11 @@ def main() -> int:
             for label, pattern in RULES.items():
                 for match in pattern.finditer(text):
                     line = text.count("\n", 0, match.start()) + 1
-                    failures.append(
-                        f"{path.relative_to(ROOT)}:{line}: {label}"
-                    )
+                    failures.append(f"{path.relative_to(ROOT)}:{line}: {label}")
             for label, pattern in PATH_RULES.get(path, {}).items():
                 for match in pattern.finditer(text):
                     line = text.count("\n", 0, match.start()) + 1
-                    failures.append(
-                        f"{path.relative_to(ROOT)}:{line}: {label}"
-                    )
+                    failures.append(f"{path.relative_to(ROOT)}:{line}: {label}")
     if failures:
         print("\n".join(failures), file=sys.stderr)
         return 1

@@ -23,9 +23,7 @@ class ReferenceStandard(BaseModel):
     reference_substance_name: Mapped[str] = mapped_column(
         String(256), nullable=True, comment="对照物质名称"
     )
-    batch_number: Mapped[str] = mapped_column(
-        String(64), nullable=True, comment="批号"
-    )
+    batch_number: Mapped[str] = mapped_column(String(64), nullable=True, comment="批号")
     manufacturer: Mapped[str] = mapped_column(
         String(256), nullable=True, comment="生产厂家/来源"
     )
@@ -38,18 +36,12 @@ class ReferenceStandard(BaseModel):
     molecular_weight: Mapped[str] = mapped_column(
         String(64), nullable=True, comment="分子量"
     )
-    cas_number: Mapped[str] = mapped_column(
-        String(64), nullable=True, comment="CAS号"
-    )
-    content: Mapped[str] = mapped_column(
-        String(64), nullable=True, comment="含量"
-    )
+    cas_number: Mapped[str] = mapped_column(String(64), nullable=True, comment="CAS号")
+    content: Mapped[str] = mapped_column(String(64), nullable=True, comment="含量")
     moisture: Mapped[str] = mapped_column(
         String(64), nullable=True, comment="水分/干燥失重"
     )
-    rsd: Mapped[str] = mapped_column(
-        String(64), nullable=True, comment="RSD"
-    )
+    rsd: Mapped[str] = mapped_column(String(64), nullable=True, comment="RSD")
     expiration_date: Mapped[str] = mapped_column(
         String(64), nullable=True, comment="有效期"
     )
@@ -72,6 +64,4 @@ class ReferenceStandard(BaseModel):
     )
 
     # 备注
-    remarks: Mapped[str | None] = mapped_column(
-        Text, nullable=True, comment="备注"
-    )
+    remarks: Mapped[str | None] = mapped_column(Text, nullable=True, comment="备注")

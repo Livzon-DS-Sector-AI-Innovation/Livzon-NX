@@ -39,7 +39,7 @@ from app.modules.production.schemas import (
 class ProductionService:
     """Production module service"""
 
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession) -> None:
         self.session = session
         self.repo = ProductionRepository(session)
 
@@ -89,25 +89,37 @@ class ProductionService:
             return None
 
         # 状态流转校验
-        valid_transitions = {
-            BatchStatus.DRAFT: [BatchStatus.RELEASED, BatchStatus.CANCELLED],
-            BatchStatus.RELEASED: [BatchStatus.IN_PROGRESS, BatchStatus.CANCELLED],
-            BatchStatus.IN_PROGRESS: [BatchStatus.COMPLETED, BatchStatus.CANCELLED],
-            BatchStatus.COMPLETED: [],
-            BatchStatus.CANCELLED: [],
+        valid_transitions: dict[str, list[str]] = {
+            BatchStatus.DRAFT.value: [
+                BatchStatus.RELEASED.value,
+                BatchStatus.CANCELLED.value,
+            ],
+            BatchStatus.RELEASED.value: [
+                BatchStatus.IN_PROGRESS.value,
+                BatchStatus.CANCELLED.value,
+            ],
+            BatchStatus.IN_PROGRESS.value: [
+                BatchStatus.COMPLETED.value,
+                BatchStatus.CANCELLED.value,
+            ],
+            BatchStatus.COMPLETED.value: [],
+            BatchStatus.CANCELLED.value: [],
         }
 
-        if data.status not in valid_transitions.get(batch.status, []):
+        current_status = str(getattr(batch.status, "value", batch.status))
+        target_status = data.status.value
+        if target_status not in valid_transitions.get(current_status, []):
             raise ValueError(
-                f"无效的状态转换: {batch.status.value} -> {data.status.value}"
+                f"无效的状态转换: {current_status} -> {target_status}"
             )
 
         # 处理状态变更的副作用
-        update_data: dict[str, Any] = {"status": data.status}
+        next_status = BatchStatus(target_status)
+        update_data: dict[str, Any] = {"status": next_status.value}
 
-        if data.status == BatchStatus.IN_PROGRESS and not batch.start_time:
+        if next_status == BatchStatus.IN_PROGRESS and not batch.start_time:
             update_data["start_time"] = datetime.now()
-        elif data.status == BatchStatus.COMPLETED:
+        elif next_status == BatchStatus.COMPLETED:
             update_data["end_time"] = datetime.now()
 
         return await self.repo.update_batch(batch_id, update_data)

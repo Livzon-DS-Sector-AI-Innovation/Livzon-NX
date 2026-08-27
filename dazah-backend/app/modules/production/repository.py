@@ -18,13 +18,28 @@ from app.modules.production.models import (
     ProductionPlan,
     ProductionRecord,
 )
+from app.modules.production.production_feishu_models import ProductionFeishuConfig
 
 
 class ProductionRepository:
     """Production module repository"""
 
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession) -> None:
         self.session = session
+
+    async def get_active_feishu_config(self) -> ProductionFeishuConfig | None:
+        """Return the latest active Feishu configuration for compatibility jobs."""
+        query = (
+            select(ProductionFeishuConfig)
+            .where(
+                ProductionFeishuConfig.is_deleted.is_(False),
+                ProductionFeishuConfig.is_active.is_(True),
+            )
+            .order_by(ProductionFeishuConfig.updated_at.desc())
+            .limit(1)
+        )
+        result = await self.session.execute(query)
+        return result.scalar_one_or_none()
 
     # ============ Batch Operations ============
 
@@ -110,7 +125,7 @@ class ProductionRepository:
             .values(is_deleted=True)
         )
         result = await self.session.execute(query)
-        return result.rowcount > 0
+        return bool(getattr(result, "rowcount", 0))
 
     # ============ BatchMaterial Operations ============
 
@@ -151,7 +166,7 @@ class ProductionRepository:
             .values(is_deleted=True)
         )
         result = await self.session.execute(query)
-        return result.rowcount > 0
+        return bool(getattr(result, "rowcount", 0))
 
     # ============ ProductionPlan Operations ============
 
@@ -228,7 +243,7 @@ class ProductionRepository:
             .values(is_deleted=True)
         )
         result = await self.session.execute(query)
-        return result.rowcount > 0
+        return bool(getattr(result, "rowcount", 0))
 
     # ============ ProcessSpec Operations ============
 
@@ -302,7 +317,7 @@ class ProductionRepository:
             .values(is_deleted=True)
         )
         result = await self.session.execute(query)
-        return result.rowcount > 0
+        return bool(getattr(result, "rowcount", 0))
 
     # ============ ProcessStep Operations ============
 
@@ -345,7 +360,7 @@ class ProductionRepository:
             .values(is_deleted=True)
         )
         result = await self.session.execute(query)
-        return result.rowcount > 0
+        return bool(getattr(result, "rowcount", 0))
 
     # ============ ProcessParameter Operations ============
 
@@ -392,7 +407,7 @@ class ProductionRepository:
             .values(is_deleted=True)
         )
         result = await self.session.execute(query)
-        return result.rowcount > 0
+        return bool(getattr(result, "rowcount", 0))
 
     # ============ ProductionRecord Operations ============
 
@@ -454,7 +469,7 @@ class ProductionRepository:
             .values(is_deleted=True)
         )
         result = await self.session.execute(query)
-        return result.rowcount > 0
+        return bool(getattr(result, "rowcount", 0))
 
     # ============ MaterialBalance Operations ============
 
@@ -501,4 +516,4 @@ class ProductionRepository:
             .values(is_deleted=True)
         )
         result = await self.session.execute(query)
-        return result.rowcount > 0
+        return bool(getattr(result, "rowcount", 0) > 0)

@@ -2,27 +2,56 @@
 
 import uuid
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, Field
 
 # ── 风险等级常量 ──
-RISK_LEVELS = [
-    {"key": "level_1", "label": "一级/重大风险", "min_d": 320, "max_d": 99999, "color": "red",
-     "control_level": "公司级", "responsible_person": "公司主要负责人",
-     "requirement": "必须建立管控档案，立即整改，风险降低后方可作业"},
-    {"key": "level_2", "label": "二级/较大风险", "min_d": 160, "max_d": 319, "color": "orange",
-     "control_level": "部门级", "responsible_person": "安全工程中心 + 各部门按职责分工",
-     "requirement": "必须建立管控档案，制定措施控制管理"},
-    {"key": "level_3", "label": "三级/一般风险", "min_d": 70, "max_d": 159, "color": "yellow",
-     "control_level": "班组/岗位级", "responsible_person": "所在部门负责管控",
-     "requirement": "安全工程中心监督落实"},
-    {"key": "level_4", "label": "四级/低风险", "min_d": 0, "max_d": 69, "color": "blue",
-     "control_level": "班组/岗位级", "responsible_person": "所在班组/岗位负责管控",
-     "requirement": "部门安全员监督落实"},
+RISK_LEVELS: list[dict[str, Any]] = [
+    {
+        "key": "level_1",
+        "label": "一级/重大风险",
+        "min_d": 320,
+        "max_d": 99999,
+        "color": "red",
+        "control_level": "公司级",
+        "responsible_person": "公司主要负责人",
+        "requirement": "必须建立管控档案，立即整改，风险降低后方可作业",
+    },
+    {
+        "key": "level_2",
+        "label": "二级/较大风险",
+        "min_d": 160,
+        "max_d": 319,
+        "color": "orange",
+        "control_level": "部门级",
+        "responsible_person": "安全工程中心 + 各部门按职责分工",
+        "requirement": "必须建立管控档案，制定措施控制管理",
+    },
+    {
+        "key": "level_3",
+        "label": "三级/一般风险",
+        "min_d": 70,
+        "max_d": 159,
+        "color": "yellow",
+        "control_level": "班组/岗位级",
+        "responsible_person": "所在部门负责管控",
+        "requirement": "安全工程中心监督落实",
+    },
+    {
+        "key": "level_4",
+        "label": "四级/低风险",
+        "min_d": 0,
+        "max_d": 69,
+        "color": "blue",
+        "control_level": "班组/岗位级",
+        "responsible_person": "所在班组/岗位负责管控",
+        "requirement": "部门安全员监督落实",
+    },
 ]
 
 
-def get_risk_level(d_value: float) -> dict:
+def get_risk_level(d_value: float) -> dict[str, Any]:
     """根据 D 值获取风险等级"""
     for level in RISK_LEVELS:
         if level["min_d"] <= d_value <= level["max_d"]:
@@ -68,11 +97,13 @@ class HazardIdentificationBase(BaseModel):
 
 class HazardIdentificationCreate(HazardIdentificationBase):
     """创建危险源辨识记录"""
+
     pass
 
 
 class HazardIdentificationUpdate(BaseModel):
     """更新危险源辨识记录（人工编辑字段）"""
+
     hazard_id_no: str | None = Field(None, max_length=64)
     department: str | None = Field(None, max_length=100)
     position: str | None = Field(None, max_length=100)
@@ -116,14 +147,16 @@ class HazardIdentificationUpdate(BaseModel):
 
 class HazardIdentificationReview(BaseModel):
     """审核请求"""
+
     script_number: int = Field(..., ge=1, le=7, description="脚本编号(1-7)")
     action: str = Field(..., description="审核动作: approved/rejected")
 
 
 class HazardIdentificationRunScript(BaseModel):
     """触发脚本执行请求"""
+
     script_number: int = Field(..., ge=1, le=7, description="脚本编号(1-7)")
-    ai_output: dict | None = Field(None, description="AI 输出内容")
+    ai_output: dict[str, Any] | None = Field(None, description="AI 输出内容")
 
 
 class HazardIdentificationResponse(HazardIdentificationBase):
@@ -185,5 +218,3 @@ class HazardIdentificationResponse(HazardIdentificationBase):
 
     class Config:
         from_attributes = True
-
-

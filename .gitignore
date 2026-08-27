@@ -23,6 +23,7 @@ desktop.ini
 !/docs/
 /docs/*
 !/docs/module-development-ci.md
+!/docs/module-migration-audit.md
 !/docs/dazah-enterprise-agent-gateway-tool-registry-implementation-plan-2026-07-30.md
 !/docs/hermes-memory-governance.md
 !/docs/tasks/

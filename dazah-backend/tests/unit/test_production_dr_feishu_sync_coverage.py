@@ -5,10 +5,12 @@ upsert 创建与更新路径 / 合并单元格继承 / 杂质更新 / 空行跳�
 run_dr_sync 无配置与回滚、_dr_scheduled_sync_job 成功与异常分支。
 全部 mock，无真实网络/DB。
 """
+
 from __future__ import annotations
 
 import importlib
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
@@ -37,7 +39,7 @@ def _row(values: dict[int, str]) -> list[str]:
     return row
 
 
-def _scalar_result(fetchone=None, scalar=None):
+def _scalar_result(fetchone: Any = None, scalar: Any = None) -> Any:
     """模拟 sqlalchemy Result：fetchone 决定 update/insert，scalar_one 返回新 UUID。"""
     r = MagicMock()
     r.fetchone.return_value = fetchone
@@ -49,15 +51,15 @@ def _scalar_result(fetchone=None, scalar=None):
 class _DrSession:
     """按表判定 update/create：已有表 SELECT 返回已有行，否则返回 None 走 INSERT。"""
 
-    def __init__(self, existing=()):
+    def __init__(self, existing: Any = ()) -> None:
         self.existing = set(existing)
         self.commits = 0
         self.rollbacks = 0
         self.flushes = 0
-        self.executed: list = []
+        self.executed: list[Any] = []
         self.fail_rollback = False
 
-    async def execute(self, stmt, *args, **kwargs):
+    async def execute(self, stmt: Any, *args: Any, **kwargs: Any) -> Any:
         s = str(stmt)
         self.executed.append(s)
         if s.startswith("SELECT id FROM"):
@@ -67,15 +69,15 @@ class _DrSession:
             return _scalar_result(fetchone=None, scalar=f"new-uuid-{table}")
         return MagicMock()
 
-    async def commit(self):
+    async def commit(self) -> Any:
         self.commits += 1
 
-    async def rollback(self):
+    async def rollback(self) -> Any:
         if self.fail_rollback:
             raise RuntimeError("rollback failed")
         self.rollbacks += 1
 
-    async def flush(self):
+    async def flush(self) -> Any:
         self.flushes += 1
 
 
@@ -134,7 +136,7 @@ _created_sheet_mock = AsyncMock(return_value=CREATED_ROWS)
 
 
 @pytest.mark.anyio
-async def test_dr_get_token_fetch_cache_error():
+async def test_dr_get_token_fetch_cache_error() -> Any:
     mod = importlib.import_module("app.modules.production.dr_feishu_sync")
     mod._token_cache.clear()
     real_client = httpx.AsyncClient
@@ -143,10 +145,10 @@ async def test_dr_get_token_fetch_cache_error():
     )
     err_transport = httpx.MockTransport(lambda req: httpx.Response(500, text="boom"))
 
-    def fake_ok(*, base_url=None, timeout=30, **kw):
+    def fake_ok(*, base_url: Any = None, timeout: Any = 30, **kw: Any) -> Any:
         return real_client(transport=ok_transport, timeout=timeout, base_url=base_url)
 
-    def fake_err(*, base_url=None, timeout=30, **kw):
+    def fake_err(*, base_url: Any = None, timeout: Any = 30, **kw: Any) -> Any:
         return real_client(transport=err_transport, timeout=timeout, base_url=base_url)
 
     with patch.object(mod.httpx, "AsyncClient", fake_ok):
@@ -165,10 +167,10 @@ async def test_dr_get_token_fetch_cache_error():
 
 
 @pytest.mark.anyio
-async def test_dr_read_sheet_ok_code_zero_and_code_error():
+async def test_dr_read_sheet_ok_code_zero_and_code_error() -> Any:
     mod = importlib.import_module("app.modules.production.dr_feishu_sync")
 
-    def ok_handler(req):
+    def ok_handler(req: Any) -> Any:
         return httpx.Response(
             200,
             json={
@@ -180,7 +182,7 @@ async def test_dr_read_sheet_ok_code_zero_and_code_error():
 
     real_client = httpx.AsyncClient
 
-    def fake_ok(*, base_url=None, timeout=30, **kw):
+    def fake_ok(*, base_url: Any = None, timeout: Any = 30, **kw: Any) -> Any:
         return real_client(
             transport=httpx.MockTransport(ok_handler),
             timeout=timeout,
@@ -192,10 +194,10 @@ async def test_dr_read_sheet_ok_code_zero_and_code_error():
     assert rows[0] == ["1", "", "x"]
     assert rows[1][0] == "a"
 
-    def err_handler(request):
+    def err_handler(request: Any) -> Any:
         return httpx.Response(200, json={"code": 8, "msg": "not-found"})
 
-    def fake_err(*, base_url=None, timeout=30, **kw):
+    def fake_err(*, base_url: Any = None, timeout: Any = 30, **kw: Any) -> Any:
         return real_client(
             transport=httpx.MockTransport(err_handler),
             timeout=timeout,
@@ -206,10 +208,10 @@ async def test_dr_read_sheet_ok_code_zero_and_code_error():
         with pytest.raises(RuntimeError):
             await mod._read_sheet("tok", "s1", "spread")
 
-    def http_err_handler(request):
+    def http_err_handler(request: Any) -> Any:
         return httpx.Response(400, text="bad request")
 
-    def fake_http_err(*, base_url=None, timeout=30, **kw):
+    def fake_http_err(*, base_url: Any = None, timeout: Any = 30, **kw: Any) -> Any:
         return real_client(
             transport=httpx.MockTransport(http_err_handler),
             timeout=timeout,
@@ -225,7 +227,7 @@ async def test_dr_read_sheet_ok_code_zero_and_code_error():
 
 
 @pytest.mark.anyio
-async def test_dr_sync_creates_all_tables():
+async def test_dr_sync_creates_all_tables() -> Any:
     mod = importlib.import_module("app.modules.production.dr_feishu_sync")
     session = _DrSession(existing=())
     with patch.object(mod, "decrypt_secret", return_value="secret"):
@@ -241,7 +243,7 @@ async def test_dr_sync_creates_all_tables():
 
 
 @pytest.mark.anyio
-async def test_dr_dr_sync_updates_existing_tables():
+async def test_dr_dr_sync_updates_existing_tables() -> Any:
     mod = importlib.import_module("app.modules.production.dr_feishu_sync")
     tables = (
         "production.dr_fermentation_batches",
@@ -262,7 +264,7 @@ async def test_dr_dr_sync_updates_existing_tables():
 
 
 @pytest.mark.anyio
-async def test_dr_dr_sync_row_exception_rolls_back():
+async def test_dr_dr_sync_row_exception_rolls_back() -> Any:
     """单行异常 → errors++；回滚失败也要继续。"""
     mod = importlib.import_module("app.modules.production.dr_feishu_sync")
     session = _DrSession(existing=())
@@ -273,7 +275,14 @@ async def test_dr_dr_sync_row_exception_rolls_back():
     ]
     orig = mod._upsert
 
-    async def flaky_upsert(session_, table, data, unique_keys, stats, stat_key):
+    async def flaky_upsert(
+        session_: Any,
+        table: Any,
+        data: Any,
+        unique_keys: Any,
+        stats: Any,
+        stat_key: Any,
+    ) -> Any:
         if table == "production.dr_extractions":
             raise RuntimeError("db down")
         return await orig(session_, table, data, unique_keys, stats, stat_key)
@@ -292,18 +301,18 @@ async def test_dr_dr_sync_row_exception_rolls_back():
 
 
 class _Ctx:
-    def __init__(self, session):
+    def __init__(self, session: Any) -> None:
         self.session = session
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> Any:
         return self.session
 
-    async def __aexit__(self, *args):
+    async def __aexit__(self, *args: Any) -> Any:
         return False
 
 
 @pytest.mark.anyio
-async def test_run_dr_sync_no_config_returns_error():
+async def test_run_dr_sync_no_config_returns_error() -> Any:
     mod = importlib.import_module("app.modules.production.dr_feishu_sync")
     session = AsyncMock()
     result = MagicMock()
@@ -314,28 +323,28 @@ async def test_run_dr_sync_no_config_returns_error():
 
 
 @pytest.mark.anyio
-async def test_run_dr_sync_partial_fail_rollback():
+async def test_run_dr_sync_partial_fail_rollback() -> Any:
     """某一 target 失败 → 该 target error，session.rollback 被调用。"""
     mod = importlib.import_module("app.modules.production.dr_feishu_sync")
     cfg1 = SimpleNamespace(id="c1", sync_target="extraction")
     cfg2 = SimpleNamespace(id="c2", sync_target="dr_plan")
 
     class _ResultAll:
-        def scalars(self):
+        def scalars(self) -> Any:
             return self
 
-        def all(self):
+        def all(self) -> Any:
             return [cfg1, cfg2]
 
     class _SessionAll:
-        def __init__(self):
+        def __init__(self) -> None:
             self.rolled = 0
             self.rollback_raises = True
 
-        async def execute(self, stmt, *args, **kwargs):
+        async def execute(self, stmt: Any, *args: Any, **kwargs: Any) -> Any:
             return _ResultAll()
 
-        async def rollback(self):
+        async def rollback(self) -> Any:
             if self.rollback_raises:
                 self.rollback_raises = False
                 raise RuntimeError("rollback failed")
@@ -351,7 +360,7 @@ async def test_run_dr_sync_partial_fail_rollback():
 
 
 @pytest.mark.anyio
-async def test_dr_scheduled_sync_job_success_and_exception():
+async def test_dr_scheduled_sync_job_success_and_exception() -> Any:
     mod = importlib.import_module("app.modules.production.dr_feishu_sync")
     session = AsyncMock()
 
@@ -376,28 +385,30 @@ async def test_dr_scheduled_sync_job_success_and_exception():
 
 
 @pytest.mark.anyio
-async def test_dr_scheduler_start_double_and_stop():
+async def test_dr_scheduler_start_double_and_stop() -> Any:
     mod = importlib.import_module("app.modules.production.dr_feishu_sync")
-    from apscheduler.schedulers import asyncio as aps_asyncio
+    from apscheduler.schedulers import (  # type: ignore[import-untyped]
+        asyncio as aps_asyncio,
+    )
 
-    mod._dr_sync_scheduler = None
+    setattr(mod, "_dr_sync_scheduler", None)
     fake = MagicMock()
     with patch.object(aps_asyncio, "AsyncIOScheduler", return_value=fake):
         mod.start_dr_sync_scheduler()
-        assert mod._dr_sync_scheduler is fake
+        assert getattr(mod, "_dr_sync_scheduler") is fake
         fake.add_job.assert_called_once()
         fake.start.assert_called_once()
 
     # 已存在 → 直接返回
-    mod._dr_sync_scheduler = MagicMock()
+    setattr(mod, "_dr_sync_scheduler", MagicMock())
     with patch.object(
         aps_asyncio, "AsyncIOScheduler", new=MagicMock(side_effect=AssertionError("no"))
     ):
         mod.start_dr_sync_scheduler()
 
     # stop 正常 + 幂等
-    mod._dr_sync_scheduler = MagicMock()
+    setattr(mod, "_dr_sync_scheduler", MagicMock())
     mod.stop_dr_sync_scheduler()
-    assert mod._dr_sync_scheduler is None
+    assert getattr(mod, "_dr_sync_scheduler") is None
     mod.stop_dr_sync_scheduler()
-    assert mod._dr_sync_scheduler is None
+    assert getattr(mod, "_dr_sync_scheduler") is None

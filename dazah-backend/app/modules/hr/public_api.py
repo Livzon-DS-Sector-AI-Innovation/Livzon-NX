@@ -33,6 +33,28 @@ _VALID_FILTER_KEYS = {
 }
 
 
+# 公共 API 允许的聚合/去重字段白名单（禁止对敏感列如
+# id_card/phone/bank_account 做聚合泄露）
+_ALLOWED_AGG_FIELDS = frozenset(
+    {
+        "department",
+        "education",
+        "position",
+        "gender",
+        "status",
+        "employee_type",
+        "sub_department",
+        "level",
+        "job_title",
+    }
+)
+
+
+def _assert_field_allowed(field: str, kind: str = "field") -> None:
+    if field not in _ALLOWED_AGG_FIELDS:
+        raise ValueError(f"{kind} '{field}' 不在允许的字段列表中")
+
+
 def _normalize_filters(filters: dict[str, Any]) -> dict[str, Any]:
     """Normalize raw filter dict for EmployeeRepository queries.
 
@@ -69,9 +91,25 @@ async def list_employees_by_department(
 ) -> tuple[list[dict[str, str | None]], int]:
     """List employees by department name."""
     repo = EmployeeRepository(session)
-    employees, total = await repo.list_employees(department=department, page=1, page_size=200)
+    employees, total = await repo.list_employees(
+        department=department, page=1, page_size=200
+    )
     data = [_employee_to_dict(e) for e in employees]
     return data, total
+
+
+async def resolve_visible_dept_alias_set(
+    session: AsyncSession,
+    user: Any,
+) -> set[str] | None:
+    """解析用户 HR 可见培训部门别名集合（跨模块调用入口，供权限验证台等使用）。
+
+    返回 None 表示管理员全部可见，与 hr/api.py `_resolve_visible_scope` 语义一致。
+    延迟导入 hr.api 避免模块级循环依赖。
+    """
+    from app.modules.hr.api import _resolve_visible_scope
+
+    return await _resolve_visible_scope(session, user)
 
 
 async def query_employees(
@@ -84,7 +122,8 @@ async def query_employees(
     """Flexible employee query for AI context injection.
 
     Args:
-        filters: Dict of filter conditions (e.g. {"department": "生产部", "status": "在职"})
+        filters: Dict of filter conditions (e.g.
+        {"department": "生产部", "status": "在职"})
         page: Page number (1-based)
         page_size: Items per page
 
@@ -112,7 +151,9 @@ async def count_employees(
     return total
 
 
-async def search_employees_by_name(session: AsyncSession, name: str) -> list[dict[str, str | None]]:
+async def search_employees_by_name(
+    session: AsyncSession, name: str
+) -> list[dict[str, str | None]]:
     """Search employees by name keyword.
 
     Returns a lightweight list of employee facts for AI context injection.
@@ -122,7 +163,9 @@ async def search_employees_by_name(session: AsyncSession, name: str) -> list[dic
     return [_employee_to_dict(e) for e in employees]
 
 
-async def search_employees_fuzzy(session: AsyncSession, name: str) -> list[dict[str, str | None]]:
+async def search_employees_fuzzy(
+    session: AsyncSession, name: str
+) -> list[dict[str, str | None]]:
     """Fuzzy search: when exact match returns empty, search by each Chinese character.
 
     Returns employees whose name contains any character from the query name.
@@ -148,7 +191,7 @@ async def group_count_employees(
     *,
     group_by: str,
     filters: dict[str, Any],
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Group employees by a field and count occurrences.
 
     Args:
@@ -158,6 +201,7 @@ async def group_count_employees(
     Returns:
         List of {"value": field_value, "count": int} sorted by count descending.
     """
+    _assert_field_allowed(group_by, "group_by")
     repo = EmployeeRepository(session)
     normalized = _normalize_filters(filters)
     return await repo.group_count(group_by, **normalized)
@@ -178,6 +222,7 @@ async def get_distinct_employee_values(
     Returns:
         List of distinct values.
     """
+    _assert_field_allowed(field, "field")
     repo = EmployeeRepository(session)
     normalized = _normalize_filters(filters)
     return await repo.get_distinct_values(field, **normalized)

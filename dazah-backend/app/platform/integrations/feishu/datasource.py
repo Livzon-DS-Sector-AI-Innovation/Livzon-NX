@@ -5,7 +5,7 @@
 """
 
 import logging
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 from typing import Any
 
 from app.platform.integrations.feishu.bitable import BitableClient, _to_ms_timestamp
@@ -49,7 +49,7 @@ class BitableDataSource:
         record = await self.client.create_record(self.table_id, fields)
         rid = record.get("record_id", "")
         logger.info("[BitableDS] created record %s in %s", rid, self.table_id)
-        return rid
+        return rid if isinstance(rid, str) else str(rid)
 
     async def update(self, record_id: str, fields: dict[str, Any]) -> None:
         """更新指定行。"""
@@ -77,9 +77,7 @@ class BitableDataSource:
     async def get_by_field(self, field_name: str, value: str) -> dict[str, Any] | None:
         """根据单个字段精确查找一行。"""
         # 注意：field_name 是飞书字段名，如果包含特殊字符建议用 field_id
-        items = await self.query(
-            filter_str=f'CurrentValue.[{field_name}] = "{value}"'
-        )
+        items = await self.query(filter_str=f'CurrentValue.[{field_name}] = "{value}"')
         return items[0] if items else None
 
     # ─── 批量同步（本地 PostgreSQL ↔ 多维表格） ───
@@ -95,6 +93,8 @@ class BitableDataSource:
         existing = await self.get_by_field(key_field, key_value)
         if existing:
             rid = existing["record_id"]
+            if not isinstance(rid, str):
+                raise RuntimeError("Feishu record_id is not a string")
             await self.update(rid, fields)
             return rid
         else:
@@ -140,7 +140,9 @@ class BitableDataSource:
     # ─── 字段类型转换辅助 ───
 
     @staticmethod
-    def prepare_fields(raw: dict[str, Any], date_fields: set[str] | None = None) -> dict[str, Any]:
+    def prepare_fields(
+        raw: dict[str, Any], date_fields: set[str] | None = None
+    ) -> dict[str, Any]:
         """将 Python 原生类型转换为飞书多维表格接受的格式。
 
         自动处理：

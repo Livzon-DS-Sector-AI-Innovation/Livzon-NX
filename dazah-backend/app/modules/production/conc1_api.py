@@ -1,6 +1,6 @@
 """一次浓缩 API"""
-
 from datetime import datetime as dt
+from typing import Any
 from uuid import UUID
 
 from fastapi import Depends, Query
@@ -76,7 +76,7 @@ async def _list(
     s: str | None = Query(None, alias="batch_no"),
     workshop: str = Query("203"),
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     q = select(Conc1).where(Conc1.is_deleted.is_(False), Conc1.workshop == workshop)
     if s:
         q = q.where(Conc1.batch_no.ilike(f"%{s}%"))
@@ -92,7 +92,7 @@ async def _list(
 
 
 @router.post("/conc1", summary="创建一次浓缩")
-async def _create(d: CD, session: AsyncSession = Depends(get_db)):
+async def _create(d: CD, session: AsyncSession = Depends(get_db)) -> Any:
     r = Conc1(**d.model_dump())
     session.add(r)
     await session.flush()
@@ -102,7 +102,7 @@ async def _create(d: CD, session: AsyncSession = Depends(get_db)):
 
 
 @router.put("/conc1/{rid}", summary="更新一次浓缩")
-async def _update(rid: UUID, d: CD, session: AsyncSession = Depends(get_db)):
+async def _update(rid: UUID, d: CD, session: AsyncSession = Depends(get_db)) -> Any:
     r = await session.get(Conc1, rid)
     if not r or r.is_deleted:
         return success_response(None, message="记录不存在", status_code=404)
@@ -113,7 +113,7 @@ async def _update(rid: UUID, d: CD, session: AsyncSession = Depends(get_db)):
 
 
 @router.delete("/conc1/{rid}", summary="删除一次浓缩")
-async def _delete(rid: UUID, session: AsyncSession = Depends(get_db)):
+async def _delete(rid: UUID, session: AsyncSession = Depends(get_db)) -> Any:
     r = await session.get(Conc1, rid)
     if not r:
         return success_response(None, message="记录不存在", status_code=404)

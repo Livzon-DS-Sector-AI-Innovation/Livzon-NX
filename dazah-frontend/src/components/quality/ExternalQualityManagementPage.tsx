@@ -67,12 +67,13 @@ import type { components } from '@/types/generated/schema'
 
 type ExternalQualityTab = 'suppliers' | 'complaints' | 'return-recalls' | 'product-quality'
 type SupplierCreateInput = components['schemas']['CreateSupplierRequest']
-type SupplierQualificationCreateInput = components['schemas']['CreateSupplierQualificationRequest']
+type SupplierQualificationCreateInput =
+  components['schemas']['app__modules__quality__schemas__external_quality__CreateSupplierQualificationRequest']
 type ComplaintCreateInput = components['schemas']['CreateComplaintRequest']
 type ComplaintResponseInput = components['schemas']['RespondComplaintRequest']
 type ReturnRecallCreateInput = components['schemas']['CreateReturnRecallRequest']
 type ReturnRecallCompleteInput = components['schemas']['CompleteReturnRecallRequest']
-type ProductQualityCreateInput = components['schemas']['CreateProductQualityRecordRequest']
+type ProductQualityCreateInput = Record<string, unknown>
 type ProductQualityCompleteInput = components['schemas']['CompleteProductQualityRecordRequest']
 type ProductQualityStandardItemCreateInput = components['schemas']['CreateProductQualityStandardItemRequest']
 

@@ -3,19 +3,19 @@
 from __future__ import annotations
 
 import copy
+import logging
+import os
 from io import BytesIO
-from pathlib import Path
 from typing import Any
 
 from docx import Document
 from docx.oxml.ns import qn
+from docx.table import _Cell
+
+logger = logging.getLogger(__name__)
 
 
-_TEMPLATE_PATH = (
-    Path(__file__).resolve().parent.parent
-    / "templates"
-    / "CAPA登记汇总表-模板.docx"
-)
+_TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), "_capa_export_template.docx")
 
 
 def _date_dot(value: str | None) -> str:
@@ -33,7 +33,7 @@ def _safe_str(value: Any) -> str:
     return str(value)
 
 
-def _set_cell_text(cell: Any, text: str) -> None:
+def _set_cell_text(cell: _Cell, text: str) -> None:
     """Replace text in first paragraph of a cell, preserving formatting."""
     p = cell.paragraphs[0]
     # preserve formatting from the first run if exists
@@ -47,7 +47,7 @@ def _set_cell_text(cell: Any, text: str) -> None:
         p.add_run(text)
 
 
-def _set_cell_multiline(cell: Any, text: str) -> None:
+def _set_cell_multiline(cell: _Cell, text: str) -> None:
     """Handle multiline text. Preserve styling of existing first paragraph,
     add extra paragraphs for additional lines."""
     lines = text.split("\n")
@@ -93,8 +93,34 @@ def _set_cell_multiline(cell: Any, text: str) -> None:
 
 
 def generate_capa_export_docx(items: list[dict[str, Any]]) -> bytes:
-    """Open the local template, replace table data with Feishu records, save to bytes."""
-    doc = Document(str(_TEMPLATE_PATH))
+    """将飞书CAPA台账记录填入本地 Word 模板，返回 .docx 字节流。
+
+    基于模板文件 ``_capa_export_template.docx`` 的首张表格，清除表头以外的
+    数据行后，复制表头行样式逐条写入 ``items`` 数据。日期字段会被转换为
+    ``YYYY.MM.DD`` 格式。
+
+    表格列映射关系（从 0 开始）：
+
+    | 列 | 内容 | 数据来源字段 | 备注 |
+    |----|------|-------------|------|
+    | 0 | CAPA编号 | ``CAPA编号`` | |
+    | 1 | 启动日期 | ``启动日期`` | 转为 ``YYYY.MM.DD`` |
+    | 2 | 事件部门 | ``事件部门`` | |
+    | 3 | 涉及产品 | ``涉及产品`` | |
+    | 4 | （空） | — | 预留列 |
+    | 5 | CAPA简述 | ``CAPA简述`` | 支持多行，按换行符拆分到多个段落 |
+    | 6 | CAPA效果评估 | ``CAPA效果评估`` | |
+    | 7 | 关闭日期 | ``关闭日期`` | 转为 ``YYYY.MM.DD`` |
+    | 8 | QA质量员/确认日期 | ``QA质量员`` +
+    ``QA质量员确认日期`` | 拼接为 ``姓名+日期`` |
+
+    Args:
+        items: 已解析的 CAPA 台账 item 列表，键为中文字段名。
+
+    Returns:
+        生成的 .docx 文件字节内容。
+    """
+    doc = Document(_TEMPLATE_PATH)
     table = doc.tables[0]
 
     # ── 1. Remove all existing data rows (keep only header row 0) ──
@@ -121,7 +147,11 @@ def generate_capa_export_docx(items: list[dict[str, Any]]) -> bytes:
     # ── 3. Add data rows ──
     for item in items:
         # clone header row for styling
-        row_elem = copy.deepcopy(header_row_elem) if header_row_elem is not None else _clone_row(header_elem)
+        row_elem = (
+            copy.deepcopy(header_row_elem)
+            if header_row_elem is not None
+            else _clone_row(header_elem)
+        )
         tbl_element.append(row_elem)
 
         # now write data into cells
@@ -138,7 +168,17 @@ def generate_capa_export_docx(items: list[dict[str, Any]]) -> bytes:
         qa_date = _date_dot(_safe_str(item.get("QA质量员确认日期")))
         qa_combined = f"{qa_name}{qa_date}" if qa_name or qa_date else ""
 
-        col_values = [capa_code, start_date, department, product, "", summary, evaluation, close_date, qa_combined]
+        col_values = [
+            capa_code,
+            start_date,
+            department,
+            product,
+            "",
+            summary,
+            evaluation,
+            close_date,
+            qa_combined,
+        ]
 
         for ci, val in enumerate(col_values):
             if ci >= len(cells):

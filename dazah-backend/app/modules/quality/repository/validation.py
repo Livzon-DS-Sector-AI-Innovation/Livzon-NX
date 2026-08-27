@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date
+from typing import Any
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -32,7 +33,7 @@ async def exists_by_record_code(
 ) -> bool:
     query = select(ValidationRecord.id).where(
         ValidationRecord.record_code == record_code,
-        ValidationRecord.is_deleted == False,
+        ValidationRecord.is_deleted.is_(False),
     )
     if exclude_id is not None:
         query = query.where(ValidationRecord.id != exclude_id)
@@ -42,11 +43,10 @@ async def exists_by_record_code(
 
 async def create_validation(
     db: AsyncSession,
-    data: dict,
+    data: dict[str, Any],
 ) -> ValidationRecord:
     record = ValidationRecord(**data)
     db.add(record)
-    await db.flush()
     await db.flush()
     return record
 
@@ -58,8 +58,8 @@ async def get_validation_by_id(
     result = await db.execute(
         select(ValidationRecord).where(
             ValidationRecord.id == validation_id,
-            ValidationRecord.is_deleted == False,
-        ).execution_options(populate_existing=True)
+            ValidationRecord.is_deleted.is_(False),
+        )
     )
     return result.scalar_one_or_none()
 
@@ -67,13 +67,16 @@ async def get_validation_by_id(
 async def update_validation(
     db: AsyncSession,
     record: ValidationRecord,
-    data: dict,
+    data: dict[str, Any],
 ) -> ValidationRecord:
     for field, value in data.items():
         setattr(record, field, value)
     await db.flush()
-    await db.flush()
-    return record
+    # UPDATE 后必须 select re-fetch（规范：禁止 db.refresh()）
+    result = await db.execute(
+        select(ValidationRecord).where(ValidationRecord.id == record.id)
+    )
+    return result.scalar_one()
 
 
 async def delete_validation(
@@ -102,7 +105,7 @@ async def batch_delete_validations(
     result = await db.execute(
         select(ValidationRecord).where(
             ValidationRecord.id.in_(ids),
-            ValidationRecord.is_deleted == False,
+            ValidationRecord.is_deleted.is_(False),
         )
     )
     records = result.scalars().all()
@@ -127,9 +130,11 @@ async def get_validations(
     page: int = 1,
     page_size: int = 20,
 ) -> tuple[list[ValidationRecord], int]:
-    query = select(ValidationRecord).where(ValidationRecord.is_deleted == False)
-    count_query = select(func.count()).select_from(ValidationRecord).where(
-        ValidationRecord.is_deleted == False
+    query = select(ValidationRecord).where(ValidationRecord.is_deleted.is_(False))
+    count_query = (
+        select(func.count())
+        .select_from(ValidationRecord)
+        .where(ValidationRecord.is_deleted.is_(False))
     )
 
     filters = []
@@ -180,4 +185,4 @@ async def get_validations(
         .offset((page - 1) * page_size)
         .limit(page_size)
     )
-    return result.scalars().all(), total
+    return list(result.scalars().all()), total

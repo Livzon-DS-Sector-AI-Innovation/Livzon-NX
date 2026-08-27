@@ -142,7 +142,7 @@ def _is_empty(row: list[str]) -> bool:
 
 async def sync_dr_extraction(
     config: ProductionFeishuConfig, session: AsyncSession
-) -> dict:
+) -> dict[str, Any]:
     app_secret = decrypt_secret(config.encrypted_app_secret)
     token = await _get_token(config.app_id, app_secret)
     logger.info("[DR同步] 读取飞书表格...")
@@ -281,8 +281,8 @@ async def sync_dr_extraction(
 
             # ─ 5. 杂质（仅在该行有值时更新） ─
             if cur_batch_id:
-                imp_updates = {}
-                imp_params = {}
+                imp_updates: dict[str, Any] = {}
+                imp_params: dict[str, Any] = {}
                 for field in [
                     "impurity_6",
                     "impurity_1",
@@ -332,9 +332,9 @@ async def sync_dr_extraction(
 async def _upsert(
     session: AsyncSession,
     table: str,
-    data: dict,
+    data: dict[str, Any],
     unique_keys: list[str],
-    stats: dict,
+    stats: dict[str, Any],
     stat_key: str,
 ) -> str:
     """按 unique_keys 去重 upsert，返回记录 UUID"""
@@ -387,7 +387,7 @@ async def _upsert(
 DR_PRODUCT_NAME = "多拉菌素"
 
 
-async def run_dr_sync(session: AsyncSession) -> dict:
+async def run_dr_sync(session: AsyncSession) -> dict[str, Any]:
     """遍历 DR 全部启用配置并同步（对齐 MC/FA 的 run_*_sync 统一入口）。
 
     注意：sync_dr_extraction 会顺带 upsert dr_fermentation_batches（发酵批次），
@@ -430,7 +430,7 @@ _dr_sync_scheduler: Any = None
 DR_SYNC_INTERVAL_MINUTES = 10
 
 
-async def _dr_scheduled_sync_job():
+async def _dr_scheduled_sync_job() -> Any:
     """定时同步任务：每 10 分钟从飞书同步 DR 多拉菌素全部工段（含发酵批次）。"""
     logger.info("⏰ [DR飞书同步] 定时任务触发")
     try:
@@ -445,11 +445,15 @@ async def _dr_scheduled_sync_job():
         logger.exception("[DR飞书同步] 定时任务异常")
 
 
-def start_dr_sync_scheduler():
+def start_dr_sync_scheduler() -> Any:
     """启动 DR 飞书同步定时任务（每 10 分钟，与 MC/FA 对齐）。"""
     global _dr_sync_scheduler
-    from apscheduler.schedulers.asyncio import AsyncIOScheduler
-    from apscheduler.triggers.interval import IntervalTrigger
+    from apscheduler.schedulers.asyncio import (  # type: ignore[import-untyped]
+        AsyncIOScheduler,
+    )
+    from apscheduler.triggers.interval import (  # type: ignore[import-untyped]
+        IntervalTrigger,
+    )
 
     if _dr_sync_scheduler is not None:
         return
@@ -465,7 +469,7 @@ def start_dr_sync_scheduler():
     logger.info("[DR飞书同步] 定时任务已启动，间隔 %d 分钟", DR_SYNC_INTERVAL_MINUTES)
 
 
-def stop_dr_sync_scheduler():
+def stop_dr_sync_scheduler() -> Any:
     """停止 DR 飞书同步定时任务。"""
     global _dr_sync_scheduler
     if _dr_sync_scheduler is not None:

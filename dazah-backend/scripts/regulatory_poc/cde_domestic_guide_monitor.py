@@ -4,11 +4,12 @@ CDE 国内药品技术指导原则页面监听脚本
 直接打开目标页面，只监听不构造
 """
 
-import os
 import json
+import os
 import time
 from datetime import datetime
-from urllib.parse import urlparse, parse_qs
+from typing import Any
+from urllib.parse import parse_qs, urlparse
 
 os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "/tmp/playwright-browsers"
 
@@ -32,8 +33,9 @@ window.chrome = {runtime: {}};
 
 TARGET_URL = "https://www.cde.org.cn/zdyz/listpage/9cd8db3b7530c6fa0c86485e563f93c7"
 
-def main():
-    output = {
+
+def main() -> Any:
+    output: dict[str, Any] = {
         "timestamp": datetime.now().isoformat(),
         "target_url": TARGET_URL,
         "approach": "direct page load + listen only",
@@ -71,14 +73,18 @@ def main():
 
     context = browser.new_context(
         viewport={"width": 1920, "height": 1080},
-        user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        user_agent=(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        ),
         locale="zh-CN",
     )
     context.add_init_script(STEALTH_JS)
     page = context.new_page()
 
     # 监听所有 XHR/Fetch
-    def on_response(response):
+    def on_response(response: Any) -> Any:
         url = response.url
         if "cde.org.cn" not in url:
             return
@@ -103,7 +109,7 @@ def main():
             entry["post_data"] = req.post_data
             try:
                 entry["post_json"] = json.loads(req.post_data)
-            except:
+            except Exception:
                 pass
 
         # 解析 URL 参数
@@ -115,7 +121,9 @@ def main():
         try:
             body = response.text()
             entry["response_length"] = len(body)
-            if body.strip().startswith("{") or "json" in response.headers.get("content-type", ""):
+            if body.strip().startswith("{") or "json" in response.headers.get(
+                "content-type", ""
+            ):
                 try:
                     jd = json.loads(body)
                     entry["is_json"] = True
@@ -167,7 +175,7 @@ def main():
         time.sleep(2)
         title = page.title()
         content_len = len(page.content())
-        print(f"   [{(i+1)*2}s] title='{title[:50]}' content={content_len}")
+        print(f"   [{(i + 1) * 2}s] title='{title[:50]}' content={content_len}")
         if title and len(title.strip()) > 2:
             print(f"   ✅ WAF 通过! 标题: {title}")
             output["waf_passed"] = True
@@ -190,12 +198,12 @@ def main():
     print("   截图: /tmp/cde_domestic_guide_page.png")
 
     # 统计
-    print(f"\n[5] 监听结果:")
+    print("\n[5] 监听结果:")
     print(f"   总 XHR/Fetch: {len(output['all_xhr_fetch'])}")
     print(f"   getDomesticGuideList: {len(output['getDomesticGuideList_captured'])}")
 
     # 列出所有接口
-    print(f"\n[6] 所有接口列表:")
+    print("\n[6] 所有接口列表:")
     for i, entry in enumerate(output["all_xhr_fetch"], 1):
         url_short = entry["url"].split("?")[0]
         api_name = url_short.split("/")[-1]
@@ -210,8 +218,13 @@ def main():
     # Cookie
     cookies = context.cookies()
     output["cookies"] = [
-        {"name": c["name"], "domain": c["domain"],
-         "expires_human": datetime.fromtimestamp(c["expires"]).isoformat() if c.get("expires", 0) > 0 else "Session"}
+        {
+            "name": c["name"],
+            "domain": c["domain"],
+            "expires_human": datetime.fromtimestamp(c["expires"]).isoformat()
+            if c.get("expires", 0) > 0
+            else "Session",
+        }
         for c in cookies
     ]
 
@@ -220,38 +233,44 @@ def main():
     _print_summary(output)
 
 
-def _save(output):
-    path = "/home/chenyingying/dazah/dazah-backend/scripts/regulatory_poc/cde_domestic_guide_monitor.json"
+def _save(output: Any) -> Any:
+    path = (
+        "/home/chenyingying/dazah/dazah-backend/scripts/regulatory_poc/"
+        "cde_domestic_guide_monitor.json"
+    )
     with open(path, "w", encoding="utf-8") as f:
         json.dump(output, f, ensure_ascii=False, indent=2)
     print(f"\n💾 已保存: {path}")
 
 
-def _cleanup(context, browser, pw, output):
+def _cleanup(context: Any, browser: Any, pw: Any, output: Any) -> Any:
     try:
         context.close()
         browser.close()
         pw.stop()
-    except:
+    except Exception:
         pass
 
 
-def _print_summary(output):
-    print(f"\n\n{'='*70}")
+def _print_summary(output: Any) -> Any:
+    print(f"\n\n{'=' * 70}")
     print("最终报告")
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
     print(f"  WAF 通过: {'✅' if output['waf_passed'] else '❌'}")
     print(f"  页面标题: {output['page_title']}")
     print(f"  总 XHR/Fetch: {len(output['all_xhr_fetch'])}")
     print(f"  getDomesticGuideList: {len(output['getDomesticGuideList_captured'])}")
 
     if output["getDomesticGuideList_captured"]:
-        print(f"\n  getDomesticGuideList 详情:")
+        print("\n  getDomesticGuideList 详情:")
         for i, cap in enumerate(output["getDomesticGuideList_captured"], 1):
             print(f"\n  [{i}] {cap['method']} {cap['url'][:150]}")
             print(f"      Status: {cap['status']}")
             if cap.get("query_params"):
-                print(f"      参数: {json.dumps(cap['query_params'], ensure_ascii=False)[:200]}")
+                print(
+                    f"      参数: "
+                    f"{json.dumps(cap['query_params'], ensure_ascii=False)[:200]}"
+                )
             if cap.get("is_json") and cap.get("response_json"):
                 jd = cap["response_json"]
                 print(f"      响应 keys: {list(jd.keys())}")

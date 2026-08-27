@@ -132,6 +132,13 @@ interface CapaStore {
   keyword: string
   departmentFilter: string
   productFilter: string
+  capaCodeFilter: string
+  affectedProductFilter: string
+  sourceCodeFilter: string
+  evaluationResultFilter: string
+  closureDateFrom: string
+  closureDateTo: string
+  qaConfirmerFilter: string
   page: number
   pageSize: number
 
@@ -145,6 +152,12 @@ interface CapaStore {
   setKeyword: (keyword: string) => void
   setDepartmentFilter: (value: string) => void
   setProductFilter: (value: string) => void
+  setCapaCodeFilter: (value: string) => void
+  setAffectedProductFilter: (value: string) => void
+  setSourceCodeFilter: (value: string) => void
+  setEvaluationResultFilter: (value: string) => void
+  setClosureDateRange: (from: string, to: string) => void
+  setQaConfirmerFilter: (value: string) => void
   setPage: (page: number) => void
   setPageSize: (pageSize: number) => void
   resetFilters: () => void
@@ -163,6 +176,13 @@ export const useCapaStore = create<CapaStore>()(
       keyword: '',
       departmentFilter: '',
       productFilter: '',
+      capaCodeFilter: '',
+      affectedProductFilter: '',
+      sourceCodeFilter: '',
+      evaluationResultFilter: '',
+      closureDateFrom: '',
+      closureDateTo: '',
+      qaConfirmerFilter: '',
       page: 1,
       pageSize: 20,
 
@@ -175,6 +195,12 @@ export const useCapaStore = create<CapaStore>()(
       setKeyword: (keyword) => set({ keyword, page: 1 }),
       setDepartmentFilter: (departmentFilter) => set({ departmentFilter, page: 1 }),
       setProductFilter: (productFilter) => set({ productFilter, page: 1 }),
+      setCapaCodeFilter: (capaCodeFilter) => set({ capaCodeFilter, page: 1 }),
+      setAffectedProductFilter: (affectedProductFilter) => set({ affectedProductFilter, page: 1 }),
+      setSourceCodeFilter: (sourceCodeFilter) => set({ sourceCodeFilter, page: 1 }),
+      setEvaluationResultFilter: (evaluationResultFilter) => set({ evaluationResultFilter, page: 1 }),
+      setClosureDateRange: (closureDateFrom, closureDateTo) => set({ closureDateFrom, closureDateTo, page: 1 }),
+      setQaConfirmerFilter: (qaConfirmerFilter) => set({ qaConfirmerFilter, page: 1 }),
       setPage: (page) => set({ page }),
       setPageSize: (pageSize) => set({ pageSize, page: 1 }),
       resetFilters: () =>
@@ -185,6 +211,13 @@ export const useCapaStore = create<CapaStore>()(
           keyword: '',
           departmentFilter: '',
           productFilter: '',
+          capaCodeFilter: '',
+          affectedProductFilter: '',
+          sourceCodeFilter: '',
+          evaluationResultFilter: '',
+          closureDateFrom: '',
+          closureDateTo: '',
+          qaConfirmerFilter: '',
           page: 1,
           pageSize: 20,
         }),
@@ -194,7 +227,7 @@ export const useCapaStore = create<CapaStore>()(
 )
 
 interface ChangeStore {
-  changes: any[]
+  changes: unknown[]
   total: number
   loading: boolean
   page: number
@@ -212,7 +245,7 @@ interface ChangeStore {
   closureDateFrom: string
   closureDateTo: string
   contentKeywordFilter: string
-  setChanges: (changes: any[]) => void
+  setChanges: (changes: unknown[]) => void
   setTotal: (total: number) => void
   setLoading: (loading: boolean) => void
   setPage: (page: number) => void

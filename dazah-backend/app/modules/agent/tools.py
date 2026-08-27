@@ -254,6 +254,11 @@ class ToolExecutor:
     ) -> AgentToolExecuteResponse:
         spec = self.registry.require(request.operation)
         session_id, user_id, user = await self._resolve_identity(db, request)
+        if user_id is None:
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                "Trusted Agent subject is missing a local user identity",
+            )
         call = await self.repo.create_tool_call(
             db,
             session_id=session_id,

@@ -2748,6 +2748,10 @@ class AgentService:
                     continue
                 if expires_at.tzinfo is None:
                     expires_at = expires_at.replace(tzinfo=UTC)
+                impact_count = item.get("impact_count")
+                impact_count_value = (
+                    impact_count if isinstance(impact_count, int) else 0
+                )
                 await self.repo.mirror_external_confirmation(
                     db,
                     confirmation_id=confirmation_id,
@@ -2761,12 +2765,7 @@ class AgentService:
                         "remote_confirmation_id": str(confirmation_id),
                         "resource": str(item.get("resource") or "飞书资源")[:120],
                         "reason": str(item.get("reason") or "")[:300],
-                        "impact_count": max(
-                            0,
-                            item.get("impact_count")
-                            if isinstance(item.get("impact_count"), int)
-                            else 0,
-                        ),
+                        "impact_count": max(0, impact_count_value),
                         "allow_always": bool(item.get("allow_always")),
                         "trace_id": str(item.get("trace_id") or "")[:64] or None,
                         "run_id": str(item.get("run_id") or "")[:64] or None,
@@ -2793,8 +2792,8 @@ class AgentService:
         ):
             await append_confirmation(confirmation)
 
-        for confirmation_id in self._extract_confirmation_ids(hermes_result):
-            parsed_id = self._uuid_or_none(confirmation_id)
+        for raw_confirmation_id in self._extract_confirmation_ids(hermes_result):
+            parsed_id = self._uuid_or_none(raw_confirmation_id)
             if not parsed_id:
                 continue
             fetched_confirmation = await self.repo.get_confirmation(db, parsed_id)

@@ -12,19 +12,15 @@ import json
 import logging
 import os
 import sys
-from datetime import date, datetime, timezone
-from uuid import uuid4
+from datetime import UTC, date, datetime
+from typing import Any
 
 # Load .env before importing app modules
 from dotenv import load_dotenv
+
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
-from sqlalchemy import text
-
-from app.core.database import engine
-from app.platform.integrations.feishu.client import FeishuClient
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -64,21 +60,24 @@ TABLE_CONFIGS = {
 
 # ─── Field value extractors ───
 
-def _extract_text(value) -> str | None:
+
+def _extract_text(value: Any) -> str | None:
     """Extract text from Feishu text / multi-line-text / formula field."""
     if value is None:
         return None
     if isinstance(value, list) and len(value) > 0:
         first = value[0]
         if isinstance(first, dict):
-            return first.get("text", "")
+            text_value = first.get("text")
+            return str(text_value) if text_value is not None else None
         return str(first)
     if isinstance(value, dict):
         # formula with text
         if value.get("type") == 1:
             vals = value.get("value", [])
             if vals and isinstance(vals[0], dict):
-                return vals[0].get("text", "")
+                text_value = vals[0].get("text")
+                return str(text_value) if text_value is not None else None
             if vals:
                 return str(vals[0])
         # formula with number -> convert to string
@@ -90,7 +89,7 @@ def _extract_text(value) -> str | None:
     return str(value) if value != "" else None
 
 
-def _extract_number(value) -> int | None:
+def _extract_number(value: Any) -> int | None:
     """Extract integer from Feishu number / formula field."""
     if value is None:
         return None
@@ -111,14 +110,14 @@ def _extract_number(value) -> int | None:
     return None
 
 
-def _extract_date(value) -> date | None:
+def _extract_date(value: Any) -> date | None:
     """Extract date from Feishu date field (ms timestamp or text)."""
     if value is None or value == "":
         return None
     if isinstance(value, (int, float)):
         # Feishu returns milliseconds
         ts = value / 1000
-        dt = datetime.fromtimestamp(ts, tz=timezone.utc)
+        dt = datetime.fromtimestamp(ts, tz=UTC)
         return dt.date()
     if isinstance(value, str):
         text = value.strip()
@@ -148,7 +147,7 @@ def _extract_date(value) -> date | None:
     return None
 
 
-def _extract_multi_select_first(value) -> str | None:
+def _extract_multi_select_first(value: Any) -> str | None:
     """Extract first value from multi-select as text."""
     if value is None:
         return None
@@ -157,18 +156,19 @@ def _extract_multi_select_first(value) -> str | None:
         if isinstance(first, str):
             return first
         if isinstance(first, dict):
-            return first.get("text", "")
+            text_value = first.get("text")
+            return str(text_value) if text_value is not None else None
         return str(first)
     return _extract_single_select(value)
 
 
-def _extract_single_select_as_list(value) -> list[str] | None:
+def _extract_single_select_as_list(value: Any) -> list[str] | None:
     """Extract single select value and wrap in list for JSON fields."""
     val = _extract_single_select(value)
     return [val] if val else None
 
 
-def _extract_single_select(value) -> str | None:
+def _extract_single_select(value: Any) -> str | None:
     """Extract single select value."""
     if value is None or value == "":
         return None
@@ -179,7 +179,7 @@ def _extract_single_select(value) -> str | None:
     return str(value)
 
 
-def _extract_multi_select(value) -> list[str] | None:
+def _extract_multi_select(value: Any) -> list[str] | None:
     """Extract multi-select values as JSON-compatible list."""
     if value is None:
         return None
@@ -188,7 +188,7 @@ def _extract_multi_select(value) -> list[str] | None:
     return None
 
 
-def _extract_phone(value) -> str | None:
+def _extract_phone(value: Any) -> str | None:
     """Extract phone number."""
     if value is None or value == "":
         return None
@@ -344,7 +344,8 @@ DEPARTURE_FIELD_MAP = {
 }
 
 
-# New factory departure table has different field types (text dates, multi-select team, etc.)
+# New factory departure table has different field types (text dates,
+# multi-select team, etc.)
 DEPARTURE_NEW_FIELD_MAP = {
     "name": ("姓名", _extract_text),
     "department": ("部门", _extract_text),
@@ -380,7 +381,11 @@ DEPARTURE_NEW_FIELD_MAP = {
 }
 
 
-def _build_record(fields: dict, mapping: dict, defaults: dict | None = None) -> dict:
+def _build_record(
+    fields: dict[Any, Any],
+    mapping: dict[Any, Any],
+    defaults: dict[Any, Any] | None = None,
+) -> dict[Any, Any]:
     """Map Feishu fields to DB record using a field mapping."""
     record = {}
     if defaults:
@@ -404,7 +409,7 @@ def _build_record(fields: dict, mapping: dict, defaults: dict | None = None) -> 
     return record
 
 
-def _build_insert_sql(table: str, record: dict) -> tuple[str, dict]:
+def _build_insert_sql(table: str, record: dict[Any, Any]) -> tuple[str, dict[Any, Any]]:
     """Build INSERT SQL and parameters."""
     cols = list(record.keys())
     placeholders = [f":{c}" for c in cols]
@@ -414,15 +419,18 @@ def _build_insert_sql(table: str, record: dict) -> tuple[str, dict]:
 
 # ─── Sync logic ───
 
+
 async def sync_table(
-    client: FeishuClient,
-    conn,
+    client: Any,
+    conn: Any,
     feishu_table_id: str,
     db_table: str,
-    field_map: dict,
-    defaults: dict | None = None,
-):
+    field_map: dict[Any, Any],
+    defaults: dict[Any, Any] | None = None,
+) -> Any:
     """Sync all records from a Feishu table to a DB table."""
+    from sqlalchemy import text
+
     logger.info("Syncing %s -> %s", feishu_table_id, db_table)
 
     # Clear existing data
@@ -448,14 +456,20 @@ async def sync_table(
         record["feishu_record_id"] = record_id
 
         # Post-process: employees_old has no "入职时间", use "入丽珠时间" as hire_date
-        if db_table == "hr.employees_old" and not record.get("hire_date") and record.get("livo_entry_date"):
+        if (
+            db_table == "hr.employees_old"
+            and not record.get("hire_date")
+            and record.get("livo_entry_date")
+        ):
             record["hire_date"] = record["livo_entry_date"]
 
         # Skip records with empty required fields
         if db_table in ("hr.employees_old", "hr.employees_new"):
             if not record.get("employee_number"):
                 errors += 1
-                logger.warning("  Skipping record %s: missing employee_number", record_id)
+                logger.warning(
+                    "  Skipping record %s: missing employee_number", record_id
+                )
                 continue
             if not record.get("hire_date"):
                 errors += 1
@@ -464,7 +478,9 @@ async def sync_table(
         if db_table in ("hr.onboarding_records_old", "hr.onboarding_records_new"):
             if not record.get("employee_number"):
                 errors += 1
-                logger.warning("  Skipping record %s: missing employee_number", record_id)
+                logger.warning(
+                    "  Skipping record %s: missing employee_number", record_id
+                )
                 continue
             if not record.get("hire_date"):
                 errors += 1
@@ -484,20 +500,28 @@ async def sync_table(
             errors += 1
             logger.error("  Insert error for record %s: %s", record_id, e)
             if errors <= 3:
-                logger.error("  Record data: %s", json.dumps(record, ensure_ascii=False, default=str))
+                logger.error(
+                    "  Record data: %s",
+                    json.dumps(record, ensure_ascii=False, default=str),
+                )
             raise  # re-raise so the per-table transaction can rollback
 
     logger.info("  Inserted: %d, Errors: %d", inserted, errors)
     return inserted, errors
 
 
-async def _sync_one_table(client, config_key, field_map, defaults=None):
+async def _sync_one_table(
+    client: Any, config_key: Any, field_map: Any, defaults: Any = None
+) -> Any:
     """Sync a single table in its own transaction."""
+    from app.core.database import engine
+
     cfg = TABLE_CONFIGS[config_key]
     try:
         async with engine.begin() as conn:
             return await sync_table(
-                client, conn,
+                client,
+                conn,
                 cfg["feishu_table_id"],
                 cfg["db_table"],
                 field_map,
@@ -508,16 +532,22 @@ async def _sync_one_table(client, config_key, field_map, defaults=None):
         return 0, 0
 
 
-async def main():
+async def main() -> Any:
+    from app.platform.integrations.feishu.client import FeishuClient
+
     client = FeishuClient()
 
     # ─── 在职花名册 ───
     await _sync_one_table(
-        client, "employees_old", EMPLOYEE_FIELD_MAP,
+        client,
+        "employees_old",
+        EMPLOYEE_FIELD_MAP,
         defaults={"status": "在职"},
     )
     await _sync_one_table(
-        client, "employees_new", EMPLOYEE_FIELD_MAP,
+        client,
+        "employees_new",
+        EMPLOYEE_FIELD_MAP,
         defaults={"status": "在职"},
     )
 
@@ -527,11 +557,15 @@ async def main():
 
     # ─── 离职 ───
     await _sync_one_table(
-        client, "departure_old", DEPARTURE_FIELD_MAP,
+        client,
+        "departure_old",
+        DEPARTURE_FIELD_MAP,
         defaults={"offboarding_type": "辞职"},
     )
     await _sync_one_table(
-        client, "departure_new", DEPARTURE_NEW_FIELD_MAP,
+        client,
+        "departure_new",
+        DEPARTURE_NEW_FIELD_MAP,
     )
 
     logger.info("Sync completed.")

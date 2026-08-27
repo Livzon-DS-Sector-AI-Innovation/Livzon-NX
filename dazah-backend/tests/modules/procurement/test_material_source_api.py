@@ -1,6 +1,7 @@
 import asyncio
 from datetime import UTC, datetime
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
+from typing import Any, cast
 from unittest.mock import ANY, AsyncMock
 from uuid import uuid4
 
@@ -17,6 +18,8 @@ from app.modules.procurement.material_source import (
 )
 from app.platform.identity.deps import get_current_user
 from app.platform.identity.models import User, UserModuleGrant
+
+SimpleNamespace: Any = _SimpleNamespace
 
 
 def _config() -> SimpleNamespace:
@@ -43,8 +46,8 @@ def _config() -> SimpleNamespace:
 
 
 @pytest.fixture
-async def admin_client(client: AsyncClient):
-    async def _override_current_user():
+async def admin_client(client: AsyncClient) -> Any:
+    async def _override_current_user() -> Any:
         return SimpleNamespace(role="admin", status="active", id=uuid4())
 
     app.dependency_overrides[get_current_user] = _override_current_user
@@ -55,8 +58,8 @@ async def admin_client(client: AsyncClient):
 
 
 @pytest.fixture
-async def regular_client(client: AsyncClient):
-    async def _override_current_user():
+async def regular_client(client: AsyncClient) -> Any:
+    async def _override_current_user() -> Any:
         return SimpleNamespace(role="user", status="active", id=uuid4())
 
     app.dependency_overrides[get_current_user] = _override_current_user
@@ -83,7 +86,7 @@ async def test_admin_can_get_and_save_material_source_config(
     assert response.status_code == 200
     assert response.json()["data"]["table_id"] == "tbl123456"
 
-    async def save(_db, payload, *, user_id):
+    async def save(_db: Any, payload: Any, *, user_id: Any) -> Any:
         assert payload.source_url.startswith("https://feishu.cn/base/")
         assert user_id
         return config
@@ -123,7 +126,7 @@ async def test_admin_config_endpoints_map_material_source_errors(
     admin_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def test_config(*_args, **_kwargs):
+    async def test_config(*_args: Any, **_kwargs: Any) -> Any:
         raise MaterialSourcePermissionError("飞书多维表格访问失败")
 
     monkeypatch.setattr(
@@ -139,7 +142,7 @@ async def test_admin_config_endpoints_map_material_source_errors(
     assert response.status_code == 502
     assert response.json()["message"] == "飞书多维表格访问失败"
 
-    async def save_config(*_args, **_kwargs):
+    async def save_config(*_args: Any, **_kwargs: Any) -> Any:
         raise MaterialSourceTimeoutError("飞书多维表格请求超时")
 
     monkeypatch.setattr(
@@ -157,15 +160,15 @@ async def test_admin_config_endpoints_map_material_source_errors(
 
 
 class _FakeSyncSession:
-    def __init__(self) -> None:
+    def __init__(self: Any) -> None:
         self.commit = AsyncMock()
         self.rollback = AsyncMock()
         self.refresh = AsyncMock()
 
-    async def __aenter__(self) -> "_FakeSyncSession":
-        return self
+    async def __aenter__(self: Any) -> "_FakeSyncSession":
+        return self  # type: ignore[no-any-return]
 
-    async def __aexit__(self, *_args) -> bool:
+    async def __aexit__(self: Any, *_args: Any) -> bool:
         return False
 
 
@@ -177,19 +180,19 @@ def _install_fake_sync_session(monkeypatch: pytest.MonkeyPatch) -> _FakeSyncSess
 
 @pytest.mark.anyio
 async def test_material_sync_lock_heartbeat_renews_lock_until_cancelled(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
-    renew = AsyncMock()
+    renew: Any = AsyncMock()
     monkeypatch.setattr(procurement_api, "renew_lock", renew)
     sleeps = 0
 
-    async def fake_sleep(_seconds):
+    async def fake_sleep(_seconds: Any) -> Any:
         nonlocal sleeps
         sleeps += 1
         if sleeps >= 3:
             raise asyncio.CancelledError
 
-    monkeypatch.setattr(procurement_api.asyncio, "sleep", fake_sleep)
+    monkeypatch.setattr(procurement_api.asyncio, "sleep", fake_sleep)  # type: ignore[attr-defined]
 
     with pytest.raises(asyncio.CancelledError):
         await procurement_api._lock_heartbeat("lock-key")
@@ -208,13 +211,13 @@ async def test_admin_can_sync_material_source_and_records_audit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     config = _config()
-    result = SimpleNamespace(
+    result: Any = SimpleNamespace(
         config=_config(),
         synced_count=24,
         deactivated_count=3,
     )
 
-    async def sync(_db, *, user_id):
+    async def sync(_db: Any, *, user_id: Any) -> Any:
         assert user_id
         return result
 
@@ -231,7 +234,7 @@ async def test_admin_can_sync_material_source_and_records_audit(
     )
     release = _async_mock()
     monkeypatch.setattr(procurement_api, "release_lock", release)
-    audit = AsyncMock()
+    audit: Any = AsyncMock()
     monkeypatch.setattr(procurement_api, "record_audit_log", audit)
     fake_session = _install_fake_sync_session(monkeypatch)
 
@@ -310,7 +313,7 @@ async def test_sync_recovers_stale_lock_when_status_is_clear(
     release = _async_mock()
     monkeypatch.setattr(procurement_api, "release_lock", release)
 
-    async def sync(_db, *, user_id):
+    async def sync(_db: Any, *, user_id: Any) -> Any:
         return SimpleNamespace(
             config=_config(),
             synced_count=0,
@@ -334,35 +337,33 @@ async def test_sync_recovers_stale_lock_when_status_is_clear(
 
 @pytest.mark.anyio
 async def test_clear_stale_material_sync_lock_releases_residual_lock(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     config = _config()
 
     class FakeSession:
-        async def __aenter__(self):
+        async def __aenter__(self: Any) -> Any:
             return self
 
-        async def __aexit__(self, *_args):
+        async def __aexit__(self: Any, *_args: Any) -> Any:
             return None
 
     monkeypatch.setattr(
         procurement_api,
         "async_session_factory",
-        lambda: FakeSession(),
+        lambda: cast(Any, FakeSession)(),
     )
     monkeypatch.setattr(
         procurement_api,
         "get_material_source_config",
         AsyncMock(return_value=config),
     )
-    release = AsyncMock()
+    release: Any = AsyncMock()
     monkeypatch.setattr(procurement_api, "release_lock", release)
 
     await procurement_api.clear_stale_material_sync_lock()
 
-    release.assert_awaited_once_with(
-        procurement_api._material_sync_lock_key(config.id)
-    )
+    release.assert_awaited_once_with(procurement_api._material_sync_lock_key(config.id))
 
     monkeypatch.setattr(
         procurement_api,
@@ -386,7 +387,7 @@ async def test_sync_conflict_when_redis_down_and_status_syncing(
         lambda _db: _async_value(config),
     )
 
-    async def unavailable(*_args, **_kwargs):
+    async def unavailable(*_args: Any, **_kwargs: Any) -> Any:
         raise ConnectionError("redis down")
 
     monkeypatch.setattr(procurement_api, "acquire_lock", unavailable)
@@ -414,14 +415,14 @@ async def test_sync_proceeds_when_redis_down_but_status_clear(
         lambda _db: _async_value(_config()),
     )
 
-    async def unavailable(*_args, **_kwargs):
+    async def unavailable(*_args: Any, **_kwargs: Any) -> Any:
         raise ConnectionError("redis down")
 
     monkeypatch.setattr(procurement_api, "acquire_lock", unavailable)
     release = _async_mock()
     monkeypatch.setattr(procurement_api, "release_lock", release)
 
-    async def sync(_db, *, user_id):
+    async def sync(_db: Any, *, user_id: Any) -> Any:
         return SimpleNamespace(
             config=_config(),
             synced_count=0,
@@ -447,7 +448,7 @@ async def test_authorized_user_can_list_material_catalog_with_filters(
     admin_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def list_catalog(_db, **kwargs):
+    async def list_catalog(_db: Any, **kwargs: Any) -> Any:
         assert kwargs == {
             "keyword": "MAT",
             "material_code": "MAT-001",
@@ -456,7 +457,7 @@ async def test_authorized_user_can_list_material_catalog_with_filters(
             "page": 2,
             "page_size": 20,
         }
-        record = SimpleNamespace(
+        record: Any = SimpleNamespace(
             id=uuid4(),
             feishu_record_id="rec-1",
             material_code="MAT-001",
@@ -500,7 +501,7 @@ async def test_regular_user_can_query_duplicate_material_options(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def override_db():
+    async def override_db() -> Any:
         yield db_session
 
     original_db_override = app.dependency_overrides.get(get_db)
@@ -532,7 +533,7 @@ async def test_regular_user_can_query_duplicate_material_options(
     )
     await db_session.flush()
 
-    async def list_options(_db, *, keyword, limit):
+    async def list_options(_db: Any, *, keyword: Any, limit: Any) -> Any:
         assert keyword == "MAT"
         assert limit == 20
         return [
@@ -581,7 +582,7 @@ async def test_material_option_external_failures_have_stable_status(
     error: Exception,
     status_code: int,
 ) -> None:
-    async def list_options(*_args, **_kwargs):
+    async def list_options(*_args: Any, **_kwargs: Any) -> Any:
         raise error
 
     monkeypatch.setattr(procurement_api, "list_material_options", list_options)
@@ -601,7 +602,7 @@ async def test_material_options_timeout_returns_504(
     admin_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def list_options(*_args, **_kwargs):
+    async def list_options(*_args: Any, **_kwargs: Any) -> Any:
         raise MaterialSourceTimeoutError("飞书物料数据源请求超时")
 
     monkeypatch.setattr(procurement_api, "list_material_options", list_options)
@@ -614,16 +615,16 @@ async def test_material_options_timeout_returns_504(
 
 
 class _AsyncMock:
-    def __init__(self) -> None:
+    def __init__(self: Any) -> None:
         self.await_count = 0
 
-    def assert_awaited_once(self) -> None:
+    def assert_awaited_once(self: Any) -> None:
         assert self.await_count == 1
 
-    def assert_not_awaited(self) -> None:
+    def assert_not_awaited(self: Any) -> None:
         assert self.await_count == 0
 
-    async def __call__(self, *_args, **_kwargs):
+    async def __call__(self: Any, *_args: Any, **_kwargs: Any) -> Any:
         self.await_count += 1
 
 
@@ -631,7 +632,7 @@ def _async_mock() -> _AsyncMock:
     return _AsyncMock()
 
 
-async def _async_value(value):
+async def _async_value(value: Any) -> Any:
     return value
 
 
@@ -646,97 +647,105 @@ async def test_sync_endpoint_serializes_real_orm_config_after_commit(
     """
     from sqlalchemy import delete, select
 
-    from app.core.database import async_session_factory
+    from app.core.database import async_session_factory, engine
     from app.modules.procurement.models import (
         MaterialCatalogRecord,
         MaterialSourceConfig,
     )
     from app.platform.identity.deps import get_current_user
 
-    async with async_session_factory() as session:
-        async def _override_get_db():
+    # The application engine uses a QueuePool in production, while pytest
+    # creates a fresh event loop for async tests.  Drop idle connections that
+    # may belong to a previous loop before opening the real ORM session, and
+    # again after the test so they cannot be reused by a later loop.
+    await engine.dispose(close=False)
+    try:
+        async with async_session_factory() as session:
+
+            async def _override_get_db() -> Any:
+                try:
+                    yield session
+                finally:
+                    pass
+
+            app.dependency_overrides[get_db] = _override_get_db
+            app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(
+                role="admin",
+                status="active",
+                id=uuid4(),
+            )
             try:
-                yield session
+                await session.execute(
+                    delete(MaterialCatalogRecord).where(
+                        MaterialCatalogRecord.source_config_id.in_(
+                            select(MaterialSourceConfig.id).where(
+                                MaterialSourceConfig.config_key == "material-master"
+                            )
+                        )
+                    )
+                )
+                await session.execute(
+                    delete(MaterialSourceConfig).where(
+                        MaterialSourceConfig.config_key == "material-master"
+                    )
+                )
+                await session.commit()
+
+                session.add(
+                    MaterialSourceConfig(
+                        config_key="material-master",
+                        source_url="https://feishu.cn/base/appToken123456?table=tbl123456",
+                        app_token="appToken123456",
+                        table_id="tbl123456",
+                        material_code_field="物料编码",
+                        material_description_field="物料说明",
+                        rule_model_field="规格型号",
+                        last_test_status="success",
+                        sync_status="not_synced",
+                        sync_phase="idle",
+                        last_sync_record_count=0,
+                        sync_persisted_count=0,
+                    )
+                )
+                await session.commit()
+
+                monkeypatch.setattr(
+                    procurement_api,
+                    "acquire_lock",
+                    AsyncMock(return_value=True),
+                )
+                monkeypatch.setattr(procurement_api, "release_lock", AsyncMock())
+                monkeypatch.setattr(procurement_api, "record_audit_log", AsyncMock())
+                monkeypatch.setattr(
+                    procurement_api,
+                    "_run_material_source_sync",
+                    AsyncMock(),
+                )
+
+                response = await client.post(
+                    "/api/v1/procurement/material-source-config/sync",
+                    json={},
+                )
+                assert response.status_code == 200
+                assert response.json()["message"] == "采购物料数据同步已启动"
+                assert response.json()["data"]["config"]["sync_status"] == "syncing"
             finally:
-                pass
-
-        app.dependency_overrides[get_db] = _override_get_db
-        app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(
-            role="admin",
-            status="active",
-            id=uuid4(),
-        )
-        try:
-            await session.execute(
-                delete(MaterialCatalogRecord).where(
-                    MaterialCatalogRecord.source_config_id.in_(
-                        select(MaterialSourceConfig.id).where(
-                            MaterialSourceConfig.config_key == "material-master"
+                await session.execute(
+                    delete(MaterialCatalogRecord).where(
+                        MaterialCatalogRecord.source_config_id.in_(
+                            select(MaterialSourceConfig.id).where(
+                                MaterialSourceConfig.config_key == "material-master"
+                            )
                         )
                     )
                 )
-            )
-            await session.execute(
-                delete(MaterialSourceConfig).where(
-                    MaterialSourceConfig.config_key == "material-master"
-                )
-            )
-            await session.commit()
-
-            session.add(
-                MaterialSourceConfig(
-                    config_key="material-master",
-                    source_url="https://feishu.cn/base/appToken123456?table=tbl123456",
-                    app_token="appToken123456",
-                    table_id="tbl123456",
-                    material_code_field="物料编码",
-                    material_description_field="物料说明",
-                    rule_model_field="规格型号",
-                    last_test_status="success",
-                    sync_status="not_synced",
-                    sync_phase="idle",
-                    last_sync_record_count=0,
-                    sync_persisted_count=0,
-                )
-            )
-            await session.commit()
-
-            monkeypatch.setattr(
-                procurement_api,
-                "acquire_lock",
-                AsyncMock(return_value=True),
-            )
-            monkeypatch.setattr(procurement_api, "release_lock", AsyncMock())
-            monkeypatch.setattr(procurement_api, "record_audit_log", AsyncMock())
-            monkeypatch.setattr(
-                procurement_api,
-                "_run_material_source_sync",
-                AsyncMock(),
-            )
-
-            response = await client.post(
-                "/api/v1/procurement/material-source-config/sync",
-                json={},
-            )
-            assert response.status_code == 200
-            assert response.json()["message"] == "采购物料数据同步已启动"
-            assert response.json()["data"]["config"]["sync_status"] == "syncing"
-        finally:
-            await session.execute(
-                delete(MaterialCatalogRecord).where(
-                    MaterialCatalogRecord.source_config_id.in_(
-                        select(MaterialSourceConfig.id).where(
-                            MaterialSourceConfig.config_key == "material-master"
-                        )
+                await session.execute(
+                    delete(MaterialSourceConfig).where(
+                        MaterialSourceConfig.config_key == "material-master"
                     )
                 )
-            )
-            await session.execute(
-                delete(MaterialSourceConfig).where(
-                    MaterialSourceConfig.config_key == "material-master"
-                )
-            )
-            await session.commit()
-            app.dependency_overrides.pop(get_db, None)
-            app.dependency_overrides.pop(get_current_user, None)
-
+                await session.commit()
+                app.dependency_overrides.pop(get_db, None)
+                app.dependency_overrides.pop(get_current_user, None)
+    finally:
+        await engine.dispose(close=False)

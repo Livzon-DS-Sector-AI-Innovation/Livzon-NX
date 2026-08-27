@@ -1,16 +1,19 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import dayjs from 'dayjs'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import type { ReactNode } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Alert, App, Button, Card, Space, Table, Typography } from 'antd'
+import { Alert, App, Avatar, Button, Card, Descriptions, Drawer, Form, Input, Modal, Select, Space, Table, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { ReloadOutlined } from '@ant-design/icons'
-import { ensureDeviationFromReportRecord, pullQualityRecordsFromFeishu } from '@/actions/quality'
-import { fetchFeishuDeviationReportRecords, formatQualitySyncSummary } from '@/lib/api/quality'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { pullQualityRecordsFromFeishu } from '@/actions/quality'
+import { deleteDeviationReportRecord, updateDeviationReportRecord } from '@/actions/quality-deviation'
+import { fetchDepartmentContacts, fetchFeishuDeviationReportRecords, fetchQualityFeishuAppSettings, formatQualitySyncSummary } from '@/lib/api/client/quality'
+
 import type { FeishuDeviationReportRecordItem } from '@/types/quality'
-import { buildResizableColumns, ResizableHeaderCell } from './resizable-table-header'
+import { buildResizableColumns, ResizableHeaderCell } from './ResizableTableHeader'
 
 const COLUMN_WIDTH_STORAGE_KEY = 'quality-deviation-report-record-table-column-widths-v1'
 
@@ -20,18 +23,9 @@ const defaultColumnWidths: Record<string, number> = {
   description: 280,
   product_batch: 220,
   department: 140,
-  reporter_name: 120,
-  department_head: 140,
-  department_head_result: 140,
-  department_head_reviewed_at: 180,
-  qa_name: 120,
-  qa_result: 120,
-  qa_reviewed_at: 180,
-  qa_head_name: 120,
-  qa_head_result: 140,
-  qa_head_reviewed_at: 180,
-  report_status: 140,
-  actions: 180,
+  reporters: 160,
+  attachments: 200,
+  actions: 220,
 }
 
 const minColumnWidths: Record<string, number> = {
@@ -40,44 +34,183 @@ const minColumnWidths: Record<string, number> = {
   description: 220,
   product_batch: 160,
   department: 100,
-  reporter_name: 100,
-  department_head: 120,
-  department_head_result: 120,
-  department_head_reviewed_at: 150,
-  qa_name: 100,
-  qa_result: 100,
-  qa_reviewed_at: 150,
-  qa_head_name: 100,
-  qa_head_result: 120,
-  qa_head_reviewed_at: 150,
-  report_status: 120,
-  actions: 140,
+  reporters: 100,
+  attachments: 140,
+  actions: 160,
 }
 
 function formatDateTime(value: string | null | undefined): string {
   if (!value) return '-'
-  const parsed = dayjs(value)
-  return parsed.isValid() ? parsed.format('YYYY-MM-DD HH:mm:ss') : value
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  const y = date.getFullYear()
+  const m = `${date.getMonth() + 1}`.padStart(2, '0')
+  const d = `${date.getDate()}`.padStart(2, '0')
+  const h = `${date.getHours()}`.padStart(2, '0')
+  const mi = `${date.getMinutes()}`.padStart(2, '0')
+  return `${y}-${m}-${d} ${h}:${mi}`
 }
 
 function formatBaseText(value: string | null | undefined): string {
   return value?.trim() || '-'
 }
 
-function formatApprovalResult(value: string | null | undefined): string {
+function formatReportStatus(value: string | null | undefined): string {
   if (!value) return '-'
-  if (value === 'approved') return '已确认'
-  if (value === 'rejected') return '已拒绝'
-  if (value === 'resubmitted') return '已退回'
   return value
 }
 
-function formatReportStatus(value: string | null | undefined): string {
-  if (!value) return '-'
-  if (value === 'approved') return 'QA负责人已确认'
-  if (value === 'rejected') return '审核驳回'
-  if (value === 'resubmitted') return '待重新提交'
-  return value
+interface EditFormValues {
+  description: string
+  product_batch: string
+  reporter_open_id?: string
+}
+
+type ReportPersonItem = { name?: string; avatar_url?: string; id?: string }
+type ReportAttachmentItem = { name?: string; url?: string; type?: string; size?: number }
+
+/** 编辑偏差弹窗：独立子组件，仅在打开时挂载，避免 useForm 未连接与 SSR hydration 问题 */
+function EditDeviationRecordModal({
+  record,
+  onClose,
+  onSuccess,
+}: {
+  record: FeishuDeviationReportRecordItem
+  onClose: () => void
+  onSuccess?: () => void
+}) {
+  const { message } = App.useApp()
+  const [submitting, setSubmitting] = useState(false)
+  const [form] = Form.useForm<EditFormValues>()
+
+  // 编辑弹窗的报告人选项
+  const { data: contacts = [], isLoading: contactsLoading } = useQuery({
+    queryKey: ['quality-department-contacts', 'for-deviation-report-edit', record.record_id || record.id],
+    queryFn: () => fetchDepartmentContacts(),
+  })
+
+  const contactOptions = useMemo(
+    () =>
+      contacts
+        .filter((c) => c.name && c.open_id)
+        .map((c) => ({ label: c.name, value: c.open_id! })),
+    [contacts],
+  )
+
+  // 打开时回填（报告人 id 为飞书 open_id，需能在联系人中匹配）
+  useEffect(() => {
+    const reporterId = record.reporters?.[0]?.id
+    const matched = reporterId ? contacts.some((c) => c.open_id === reporterId) : false
+    form.setFieldsValue({
+      description: record.description || '',
+      product_batch: record.product_batch || record.product_name_batch || '',
+      reporter_open_id: matched ? reporterId : undefined,
+    })
+  }, [record, contacts, form])
+
+  const handleSave = async () => {
+    try {
+      const values = await form.validateFields()
+      setSubmitting(true)
+      await updateDeviationReportRecord(record.record_id || record.id, {
+        description: values.description.trim(),
+        product_batch: values.product_batch.trim(),
+        reporter_open_id: values.reporter_open_id,
+      })
+      message.success('偏差报告记录已更新')
+      onClose()
+      onSuccess?.()
+    } catch (error) {
+      if (error && typeof error === 'object' && 'errorFields' in error) return
+      message.error(error instanceof Error ? error.message : '更新失败')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <Modal
+      title="编辑偏差"
+      open
+      onCancel={onClose}
+      onOk={() => void handleSave()}
+      confirmLoading={submitting}
+      okText="保存"
+      cancelText="取消"
+      width={560}
+    >
+      <Form form={form} layout="vertical">
+        <Form.Item
+          name="description"
+          label="偏差内容"
+          rules={[{ required: true, message: '请输入偏差内容' }]}
+        >
+          <Input.TextArea
+            rows={4}
+            placeholder="请输入偏差内容"
+            maxLength={2000}
+            showCount
+          />
+        </Form.Item>
+        <Form.Item
+          name="product_batch"
+          label="涉及产品名称/批号"
+          rules={[{ required: true, message: '请输入涉及产品名称/批号' }]}
+        >
+          <Input placeholder="请输入涉及产品名称/批号" maxLength={255} />
+        </Form.Item>
+        <Form.Item
+          name="reporter_open_id"
+          label="报告人"
+          rules={[{ required: true, message: '请选择报告人' }]}
+        >
+          <Select
+            placeholder="请选择报告人"
+            loading={contactsLoading}
+            options={contactOptions}
+            showSearch
+            optionFilterProp="label"
+          />
+        </Form.Item>
+      </Form>
+    </Modal>
+  )
+}
+
+/** 人员列渲染：优先展示人员对象（头像+姓名），无对象时回退到姓名字符串 */
+function renderPersons(
+  persons: ReportPersonItem[] | null | undefined,
+  fallbackName?: string | null,
+): ReactNode {
+  const list = persons && persons.length > 0 ? persons : fallbackName ? [{ name: fallbackName }] : []
+  if (list.length === 0) return <span>-</span>
+  return (
+    <Space size={4} wrap>
+      {list.map((person, index) => (
+        <span key={index} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          <Avatar size={20} src={person.avatar_url || undefined}>
+            {person.name?.slice(0, 1) || '?'}
+          </Avatar>
+          <span>{person.name || '-'}</span>
+        </span>
+      ))}
+    </Space>
+  )
+}
+
+/** 附件列渲染：附件链接列表，无附件显示 - */
+function renderAttachments(attachments: ReportAttachmentItem[] | null | undefined): ReactNode {
+  const list = attachments || []
+  if (list.length === 0) return <span>-</span>
+  return (
+    <Space orientation="vertical" size={2}>
+      {list.map((attachment, index) => (
+        <a key={index} href={attachment.url} target="_blank" rel="noopener noreferrer">
+          {attachment.name || attachment.url || '附件'}
+        </a>
+      ))}
+    </Space>
+  )
 }
 
 export function DeviationReportRecordPage({
@@ -87,39 +220,39 @@ export function DeviationReportRecordPage({
   initialItems?: FeishuDeviationReportRecordItem[]
   initialLoadError?: string | null
 }) {
-  const { message } = App.useApp()
+  const { message, modal } = App.useApp()
   const router = useRouter()
-  const [items, setItems] = useState<FeishuDeviationReportRecordItem[]>(initialItems)
-  const [loading, setLoading] = useState(initialItems.length === 0 && !initialLoadError)
-  const [loadError, setLoadError] = useState<string | null>(initialLoadError)
-  const [openingAiRecordId, setOpeningAiRecordId] = useState<string | null>(null)
+  const queryClient = useQueryClient()
   const [pulling, setPulling] = useState(false)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
+  const [detailRecord, setDetailRecord] = useState<FeishuDeviationReportRecordItem | null>(null)
+  const [editRecord, setEditRecord] = useState<FeishuDeviationReportRecordItem | null>(null)
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>(defaultColumnWidths)
-  const resizingRef = useRef<{
-    columnKey: string
-    startX: number
-    startWidth: number
-  } | null>(null)
 
-  const loadData = useCallback(async () => {
-    setLoading(true)
-    try {
-      setLoadError(null)
-      const result = await fetchFeishuDeviationReportRecords({ page: 1, page_size: 50 })
-      setItems(result.items)
-    } catch (error) {
-      const nextError = error instanceof Error ? error.message : '加载报告记录失败'
-      setLoadError(nextError)
-      setItems([])
-      message.error(nextError)
-    } finally {
-      setLoading(false)
-    }
-  }, [message])
+  const { data, isLoading: loading, error, refetch } = useQuery({
+    queryKey: ['quality-deviation-report', 'list', page, pageSize],
+    queryFn: () => fetchFeishuDeviationReportRecords({ page, page_size: pageSize }),
+  })
+
+  const items = data?.items ?? initialItems
+  const total = data?.total ?? items.length
+  const loadError = error
+    ? (error instanceof Error ? error.message : '加载报告记录失败')
+    : initialLoadError
+
+  // 读取飞书 App 设置（获取偏差报告新建表单链接）
+  const { data: appSettings } = useQuery({
+    queryKey: ['quality-feishu-settings', 'app'],
+    queryFn: fetchQualityFeishuAppSettings,
+  })
 
   useEffect(() => {
-    void loadData()
-  }, [loadData])
+    if (error) {
+      const nextError = error instanceof Error ? error.message : '加载报告记录失败'
+      message.error(nextError)
+    }
+  }, [error, message])
 
   useEffect(() => {
     try {
@@ -146,28 +279,22 @@ export function DeviationReportRecordPage({
     event.preventDefault()
     event.stopPropagation()
 
-    resizingRef.current = {
-      columnKey,
-      startX: event.clientX,
-      startWidth: columnWidths[columnKey] ?? defaultColumnWidths[columnKey] ?? 120,
-    }
+    const startX = event.clientX
+    const startWidth = columnWidths[columnKey] ?? defaultColumnWidths[columnKey] ?? 120
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
-      const current = resizingRef.current
-      if (!current) return
-      const delta = moveEvent.clientX - current.startX
+      const delta = moveEvent.clientX - startX
       const nextWidth = Math.max(
-        minColumnWidths[current.columnKey] ?? 80,
-        current.startWidth + delta,
+        minColumnWidths[columnKey] ?? 80,
+        startWidth + delta,
       )
       setColumnWidths((prev) => ({
         ...prev,
-        [current.columnKey]: nextWidth,
+        [columnKey]: nextWidth,
       }))
     }
 
     const handleMouseUp = () => {
-      resizingRef.current = null
       document.removeEventListener('mousemove', handleMouseMove)
       document.removeEventListener('mouseup', handleMouseUp)
     }
@@ -188,36 +315,55 @@ export function DeviationReportRecordPage({
       message.warning('当前飞书记录缺少 record_id，暂时无法进入 AI 工作台')
       return
     }
-
-    try {
-      setOpeningAiRecordId(recordId)
-      const ensured = await ensureDeviationFromReportRecord(recordId)
-      if (!ensured?.deviation_id) {
-        throw new Error('报告记录关联偏差失败，未返回偏差标识')
-      }
-      await loadData()
-      router.push(`/quality/deviations/${ensured.deviation_id}/ai`)
-    } catch (error) {
-      const nextError = error instanceof Error ? error.message : '打开 AI 工作台失败'
-      message.error(nextError)
-    } finally {
-      setOpeningAiRecordId(null)
-    }
+    // AI工作台基于报告记录，直接用报告记录的 record_id
+    router.push(`/quality/deviations/${recordId}/ai`)
   }
 
   const handlePullFromFeishu = useCallback(async () => {
     try {
       setPulling(true)
       const result = await pullQualityRecordsFromFeishu('deviation_report_record')
-      message.success(`从飞书拉取完成：成功 ${result?.synced ?? 0} 条，失败 ${result?.failed ?? 0} 条`)
-      await loadData()
+      message.success(formatQualitySyncSummary(result))
+      await queryClient.invalidateQueries({ queryKey: ['quality-deviation-report'] })
     } catch (error) {
       const nextError = error instanceof Error ? error.message : '从飞书拉取失败'
       message.error(nextError)
     } finally {
       setPulling(false)
     }
-  }, [loadData, message])
+  }, [queryClient, message])
+
+  // 新建偏差：跳转到飞书配置的新建表单链接
+  const handleCreateNew = useCallback(() => {
+    const url = (appSettings?.deviation_report_form_url || '').trim()
+    if (!url) {
+      message.warning('请在飞书设置中配置新建表单链接')
+      return
+    }
+    window.open(url, '_blank', 'noopener,noreferrer')
+  }, [appSettings, message])
+
+  const handleDeleteRecord = useCallback(
+    (record: FeishuDeviationReportRecordItem) => {
+      modal.confirm({
+        title: '删除确认',
+        content: `确定要删除偏差报告记录「${record.deviation_code || record.record_id || record.id}」吗？删除后不可恢复。`,
+        okText: '确认',
+        cancelText: '取消',
+        okButtonProps: { danger: true },
+        onOk: async () => {
+          try {
+            await deleteDeviationReportRecord(record.record_id || record.id)
+            message.success('删除成功')
+            await queryClient.invalidateQueries({ queryKey: ['quality-deviation-report'] })
+          } catch (error) {
+            message.error(error instanceof Error ? error.message : '删除失败')
+          }
+        },
+      })
+    },
+    [modal, message, queryClient],
+  )
 
   const baseColumns: ColumnsType<FeishuDeviationReportRecordItem> = [
     {
@@ -257,102 +403,45 @@ export function DeviationReportRecordPage({
     },
     {
       title: '报告人',
-      dataIndex: 'reporter_name',
-      key: 'reporter_name',
-      width: 120,
-      render: (value: string | null | undefined) => formatBaseText(value),
+      key: 'reporters',
+      width: 160,
+      render: (_: unknown, record: FeishuDeviationReportRecordItem) =>
+        renderPersons(record.reporters, record.reporter_name),
     },
     {
-      title: '部门负责人',
-      dataIndex: 'department_head',
-      key: 'department_head',
-      width: 140,
-      render: (value: string | null | undefined) => formatBaseText(value),
-    },
-    {
-      title: '部门负责人确认',
-      dataIndex: 'department_head_result',
-      key: 'department_head_result',
-      width: 140,
-      render: (value: string | null | undefined) => formatApprovalResult(value),
-    },
-    {
-      title: '部门负责人确认时间',
-      dataIndex: 'department_head_reviewed_at',
-      key: 'department_head_reviewed_at',
-      width: 180,
-      render: (value: string | null | undefined) => formatDateTime(value),
-    },
-    {
-      title: 'QA',
-      dataIndex: 'qa_name',
-      key: 'qa_name',
-      width: 120,
-      render: (value: string | null | undefined) => formatBaseText(value),
-    },
-    {
-      title: 'QA确认',
-      dataIndex: 'qa_result',
-      key: 'qa_result',
-      width: 120,
-      render: (value: string | null | undefined) => formatApprovalResult(value),
-    },
-    {
-      title: 'QA确认时间',
-      dataIndex: 'qa_reviewed_at',
-      key: 'qa_reviewed_at',
-      width: 180,
-      render: (value: string | null | undefined) => formatDateTime(value),
-    },
-    {
-      title: 'QA负责人',
-      dataIndex: 'qa_head_name',
-      key: 'qa_head_name',
-      width: 140,
-      render: (value: string | null | undefined) => formatBaseText(value),
-    },
-    {
-      title: 'QA负责人确认',
-      dataIndex: 'qa_head_result',
-      key: 'qa_head_result',
-      width: 140,
-      render: (value: string | null | undefined) => formatApprovalResult(value),
-    },
-    {
-      title: 'QA负责人确认时间',
-      dataIndex: 'qa_head_reviewed_at',
-      key: 'qa_head_reviewed_at',
-      width: 180,
-      render: (value: string | null | undefined) => formatDateTime(value),
-    },
-    {
-      title: '报告状态',
-      dataIndex: 'report_status',
-      key: 'report_status',
-      width: 140,
-      render: (value: string | null | undefined) => formatReportStatus(value),
+      title: '附件',
+      key: 'attachments',
+      width: 200,
+      render: (_: unknown, record: FeishuDeviationReportRecordItem) =>
+        renderAttachments(record.attachments),
     },
     {
       title: '操作',
       key: 'actions',
-      width: 180,
+      width: 220,
       fixed: 'right',
       render: (_value, record) => (
-        <Button
-          type="link"
-          style={{ padding: 0 }}
-          loading={openingAiRecordId === (record.record_id || record.id)}
-          onClick={() => void handleOpenAiWorkbench(record)}
-        >
-          进入 AI 工作台
-        </Button>
+        <Space size={4}>
+          <Button type="link" style={{ padding: 0 }} onClick={() => setDetailRecord(record)}>
+            详情
+          </Button>
+          <Button
+            type="link"
+            style={{ padding: 0 }}
+            onClick={() => setEditRecord(record)}
+          >
+            编辑
+          </Button>
+          <Button type="link" danger style={{ padding: 0 }} onClick={() => void handleDeleteRecord(record)}>
+            删除
+          </Button>
+        </Space>
       ),
     },
   ]
 
   const columns = useMemo(
     () =>
-      // eslint-disable-next-line react-hooks/refs
       buildResizableColumns(baseColumns, {
         widths: columnWidths,
         minWidths: minColumnWidths,
@@ -373,7 +462,7 @@ export function DeviationReportRecordPage({
         <Typography.Title level={3} style={{ margin: 0 }}>报告记录</Typography.Title>
       </div>
       <Space style={{ marginBottom: 16 }}>
-        <Link href="/quality/deviations/new"><Button type="primary">新建偏差</Button></Link>
+        <Button type="primary" onClick={() => void handleCreateNew()}>新建偏差</Button>
         <Button icon={<ReloadOutlined />} loading={pulling} onClick={() => void handlePullFromFeishu()}>
           从飞书拉取
         </Button>
@@ -386,7 +475,7 @@ export function DeviationReportRecordPage({
             type="error"
             showIcon
             action={(
-              <Button size="small" onClick={() => void loadData()}>
+              <Button size="small" onClick={() => void refetch()}>
                 重试加载
               </Button>
             )}
@@ -404,11 +493,92 @@ export function DeviationReportRecordPage({
             loading={loading}
             columns={columns}
             dataSource={items}
-            pagination={false}
+            pagination={{
+              current: page,
+              pageSize,
+              total,
+              showSizeChanger: true,
+              showTotal: (t) => `共 ${t} 条`,
+              onChange: (nextPage, nextPageSize) => {
+                setPage(nextPage)
+                setPageSize(nextPageSize)
+              },
+            }}
             scroll={{ x: tableScrollX }}
           />
         )}
       </Card>
+      <Drawer
+        title="报告记录详情"
+        open={!!detailRecord}
+        onClose={() => setDetailRecord(null)}
+        size="large"
+        extra={
+          detailRecord ? (
+            <Button type="primary" onClick={() => void handleOpenAiWorkbench(detailRecord)}>
+              进入 AI 工作台
+            </Button>
+          ) : null
+        }
+      >
+        {detailRecord ? (
+          <Descriptions column={1} bordered size="small">
+            <Descriptions.Item label="偏差编号">
+              {formatBaseText(detailRecord.deviation_code)}
+            </Descriptions.Item>
+            <Descriptions.Item label="报告时间">
+              {formatDateTime(detailRecord.report_time)}
+            </Descriptions.Item>
+            <Descriptions.Item label="偏差内容">
+              {formatBaseText(detailRecord.description)}
+            </Descriptions.Item>
+            <Descriptions.Item label="涉及产品名称/批号">
+              {formatBaseText(detailRecord.product_batch || detailRecord.product_name_batch)}
+            </Descriptions.Item>
+            <Descriptions.Item label="部门">
+              {formatBaseText(detailRecord.department)}
+            </Descriptions.Item>
+            <Descriptions.Item label="报告人">
+              {renderPersons(detailRecord.reporters, detailRecord.reporter_name)}
+            </Descriptions.Item>
+            <Descriptions.Item label="附件">
+              {renderAttachments(detailRecord.attachments)}
+            </Descriptions.Item>
+            <Descriptions.Item label="部门负责人">
+              <Space orientation="vertical" size={2}>
+                {renderPersons(detailRecord.department_heads, detailRecord.department_head)}
+                <span>确认结果：{formatBaseText(detailRecord.department_head_result)}</span>
+                <span>确认时间：{formatDateTime(detailRecord.department_head_reviewed_at)}</span>
+              </Space>
+            </Descriptions.Item>
+            <Descriptions.Item label="QA">
+              <Space orientation="vertical" size={2}>
+                {renderPersons(detailRecord.qas, detailRecord.qa_name)}
+                <span>确认结果：{formatBaseText(detailRecord.qa_result)}</span>
+                <span>确认时间：{formatDateTime(detailRecord.qa_reviewed_at)}</span>
+              </Space>
+            </Descriptions.Item>
+            <Descriptions.Item label="QA负责人">
+              <Space orientation="vertical" size={2}>
+                {renderPersons(detailRecord.qa_heads, detailRecord.qa_head_name)}
+                <span>确认结果：{formatBaseText(detailRecord.qa_head_result)}</span>
+                <span>确认时间：{formatDateTime(detailRecord.qa_head_reviewed_at)}</span>
+              </Space>
+            </Descriptions.Item>
+            <Descriptions.Item label="报告状态">
+              {formatReportStatus(detailRecord.report_status)}
+            </Descriptions.Item>
+          </Descriptions>
+        ) : null}
+      </Drawer>
+
+      {editRecord ? (
+        <EditDeviationRecordModal
+          record={editRecord}
+          onClose={() => setEditRecord(null)}
+          onSuccess={() => void queryClient.invalidateQueries({ queryKey: ['quality-deviation-report'] })}
+        />
+      ) : null}
     </div>
   )
 }

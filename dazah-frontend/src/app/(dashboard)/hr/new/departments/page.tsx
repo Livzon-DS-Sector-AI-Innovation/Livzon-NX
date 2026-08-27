@@ -1,8 +1,8 @@
-import { fetchNewDepartments } from '@/lib/api/hr'
+import { fetchNewDepartmentsServer } from '@/lib/api/server/hr'
 import { DepartmentClient } from '@/components/hr'
 
 export default async function NewDepartmentsPage() {
-  const res = await fetchNewDepartments({ page: 1, page_size: 100 })
+  const res = await fetchNewDepartmentsServer({ page: 1, page_size: 100 })
 
   return (
     <div className="space-y-4">

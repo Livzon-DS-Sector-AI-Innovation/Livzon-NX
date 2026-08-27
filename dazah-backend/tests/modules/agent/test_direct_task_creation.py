@@ -1,5 +1,6 @@
 from datetime import UTC, datetime, timedelta
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
+from typing import Any
 
 from app.modules.agent.agent_tools import (
     DirectAutomationActionInput,
@@ -11,6 +12,8 @@ from app.modules.agent.automation_runner import _resolve_references
 from app.modules.agent.service import AgentService
 from app.modules.agent.tool_registration import ensure_agent_tools_registered
 from app.modules.agent.tools import tool_registry
+
+SimpleNamespace: Any = _SimpleNamespace
 
 
 def _action() -> DirectAutomationActionInput:
@@ -33,7 +36,7 @@ def test_direct_automation_is_manual_and_has_no_schedule() -> None:
 
     assert request.triggers[0].trigger_type.value == "manual"
     assert request.triggers[0].schedule == {}
-    assert request.definition.steps[0].operation == "identity.deliver_feishu_message"
+    assert request.definition.steps[0].operation == "identity.deliver_feishu_message"  # type: ignore[union-attr]
 
 
 def test_direct_scheduled_task_forces_schedule_trigger() -> None:
@@ -109,7 +112,7 @@ def test_scheduled_data_delivery_keeps_requirement_and_runtime_query_result() ->
     assert request.definition.description == (
         "每月一日查询上月全部采购订单并将完整汇总发送给张三"
     )
-    delivery_input = request.definition.steps[1].input
+    delivery_input = request.definition.steps[1].input  # type: ignore[union-attr]
     assert "${steps.action_1}" in delivery_input["markdown"]
 
 

@@ -53,7 +53,7 @@ export function ResearchPage({ initialProjects, initialTotal }: ResearchPageProp
   }, [page, pageSize, stageFilter, statusFilter, keyword, setProjects, setTotal, setLoading])
 
   useEffect(() => {
-    loadData()
+    queueMicrotask(loadData)
   }, [loadData])
 
   return (

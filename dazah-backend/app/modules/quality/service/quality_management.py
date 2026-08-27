@@ -3,39 +3,36 @@
 import re
 import uuid
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.quality import repository
 from app.modules.quality.models import (
-    AttachmentReview,
     CAPA,
-    ChangeActionPlan,
+    AttachmentReview,
     ChangeControl,
     DepartmentContact,
     DepartmentWeeklyConfirmation,
     Deviation,
 )
-from app.modules.quality import repository
 from app.modules.quality.schemas import (
-    DepartmentContactOut,
-    DepartmentWeeklyConfirmationOut,
     AttachmentReviewOut,
-    CapaApprovalRequest,
     CapaDetail,
     CapaListItem,
     CapaStatistics,
     ChangeDetail,
     ChangeListItem,
     ChangeStatistics,
-    ConfirmProductionStatusRequest,
     CreateCapaRequest,
     CreateChangeRequest,
     CreateDepartmentContactRequest,
     CreateDeviationRequest,
+    DepartmentContactOut,
+    DepartmentWeeklyConfirmationOut,
     DeviationDetail,
     DeviationListItem,
     DeviationReportRecordListItem,
@@ -48,7 +45,6 @@ from app.modules.quality.schemas import (
     UpdateDeviationRequest,
 )
 from app.platform.identity.models import User
-
 
 MONTHLY_DEVIATION_CODE_PATTERN = re.compile(r"^PC-(\d{4})(\d{3})$")
 
@@ -199,7 +195,9 @@ async def _build_deviation_report_record_items_from_feishu(
     from app.modules.quality.service import quality_feishu_sync as feishu_sync_service
 
     runtime = await feishu_sync_service.feishu_sync._resolve_runtime(db)
-    report_entity = runtime.get_entity_config("deviation_report_record", direction="pull")
+    report_entity = runtime.get_entity_config(
+        "deviation_report_record", direction="pull"
+    )
     if not runtime.is_enabled() or not report_entity:
         return _build_page_result([], 0, page, page_size)
 
@@ -215,7 +213,9 @@ async def _build_deviation_report_record_items_from_feishu(
     get_record_modified_at = feishu_sync_service._get_record_modified_at
 
     deviation_codes = [
-        normalize_text(field_value(report_entity, record.get("fields") or {}, "偏差编号"))
+        normalize_text(
+            field_value(report_entity, record.get("fields") or {}, "偏差编号")
+        )
         for record in records
     ]
     linked_deviations = await repository.get_deviations_by_codes(
@@ -229,16 +229,16 @@ async def _build_deviation_report_record_items_from_feishu(
     for record in records:
         fields = record.get("fields") or {}
         deviation_code = normalize_text(field_value(report_entity, fields, "偏差编号"))
-        linked_deviation = (
-            deviation_map.get(deviation_code) if deviation_code else None
-        )
+        linked_deviation = deviation_map.get(deviation_code) if deviation_code else None
         item = DeviationReportRecordListItem(
             id=record.get("record_id", ""),
             deviation_id=linked_deviation.id if linked_deviation else None,
             deviation_code=deviation_code,
             report_time=parse_datetime(field_value(report_entity, fields, "报告时间")),
             description=normalize_text(field_value(report_entity, fields, "偏差内容")),
-            report_document=normalize_text(field_value(report_entity, fields, "偏差报告")),
+            report_document=normalize_text(
+                field_value(report_entity, fields, "偏差报告")
+            ),
             product_batch=normalize_text(
                 field_value(report_entity, fields, "涉及产品名称/批号")
             ),
@@ -260,9 +260,7 @@ async def _build_deviation_report_record_items_from_feishu(
             qa_reviewed_at=parse_datetime(
                 field_value(report_entity, fields, "QA确认时间")
             ),
-            qa_head_name=normalize_text(
-                field_value(report_entity, fields, "QA负责人")
-            ),
+            qa_head_name=normalize_text(field_value(report_entity, fields, "QA负责人")),
             qa_head_result=normalize_review_result(
                 field_value(report_entity, fields, "QA负责人确认")
             ),
@@ -285,9 +283,8 @@ async def _build_deviation_report_record_items_from_feishu(
 
     items.sort(
         key=lambda item: (
-            item.get("report_time") or datetime.min.replace(tzinfo=timezone.utc),
-            item.get("feishu_source_updated_at")
-            or datetime.min.replace(tzinfo=timezone.utc),
+            item.get("report_time") or datetime.min.replace(tzinfo=UTC),
+            item.get("feishu_source_updated_at") or datetime.min.replace(tzinfo=UTC),
         ),
         reverse=True,
     )
@@ -303,7 +300,9 @@ async def _get_deviation_report_record_from_feishu(
     from app.modules.quality.service import quality_feishu_sync as feishu_sync_service
 
     runtime = await feishu_sync_service.feishu_sync._resolve_runtime(db)
-    report_entity = runtime.get_entity_config("deviation_report_record", direction="pull")
+    report_entity = runtime.get_entity_config(
+        "deviation_report_record", direction="pull"
+    )
     if not runtime.is_enabled() or not report_entity:
         raise ValueError("报告记录飞书 Base 未启用")
 
@@ -322,7 +321,11 @@ async def ensure_deviation_from_report_record(
     db: AsyncSession,
     feishu_record_id: str,
 ) -> dict[str, Any]:
-    record, report_entity, feishu_sync_service = await _get_deviation_report_record_from_feishu(
+    (
+        record,
+        report_entity,
+        feishu_sync_service,
+    ) = await _get_deviation_report_record_from_feishu(
         db,
         feishu_record_id,
     )
@@ -338,7 +341,9 @@ async def ensure_deviation_from_report_record(
 
     description = normalize_text(field_value(report_entity, fields, "偏差内容"))
     report_content = normalize_text(field_value(report_entity, fields, "偏差报告"))
-    product_batch = normalize_text(field_value(report_entity, fields, "涉及产品名称/批号"))
+    product_batch = normalize_text(
+        field_value(report_entity, fields, "涉及产品名称/批号")
+    )
     department = normalize_text(field_value(report_entity, fields, "部门"))
     reporter_name = normalize_text(field_value(report_entity, fields, "报告人"))
     report_time = parse_datetime(field_value(report_entity, fields, "报告时间"))
@@ -347,7 +352,7 @@ async def ensure_deviation_from_report_record(
     result = await db.execute(
         select(Deviation).where(
             Deviation.feishu_base_record_id == feishu_record_id,
-            Deviation.is_deleted == False,
+            Deviation.is_deleted.is_(False),
         )
     )
     deviation = result.scalar_one_or_none()
@@ -436,7 +441,9 @@ async def _search_deviation_report_record_codes_from_feishu(
     from app.modules.quality.service import quality_feishu_sync as feishu_sync_service
 
     runtime = await feishu_sync_service.feishu_sync._resolve_runtime(db)
-    report_entity = runtime.get_entity_config("deviation_report_record", direction="pull")
+    report_entity = runtime.get_entity_config(
+        "deviation_report_record", direction="pull"
+    )
     if not runtime.is_enabled() or not report_entity:
         raise ValueError("无法从飞书报告记录表生成偏差编号")
 
@@ -477,6 +484,8 @@ async def _generate_monthly_deviation_code(
             continue
         max_sequence = max(max_sequence, int(sequence))
     return f"{prefix}{max_sequence + 1:03d}"
+
+
 async def _build_capa_list_items(
     db: AsyncSession, items: list[CAPA]
 ) -> list[dict[str, Any]]:
@@ -499,6 +508,7 @@ async def _build_capa_list_items(
         item_dict["linked_plan_tracks"] = track_refs_map.get(str(item.id), [])
         item_dicts.append(item_dict)
     return item_dicts
+
 
 # ============ Deviation Service ============
 async def get_deviation_list(
@@ -564,9 +574,11 @@ async def get_deviation_report_record_list(
     except Exception:
         pass
 
-    query = select(Deviation).where(Deviation.is_deleted == False)
-    count_query = select(func.count()).select_from(Deviation).where(
-        Deviation.is_deleted == False
+    query = select(Deviation).where(Deviation.is_deleted.is_(False))
+    count_query = (
+        select(func.count())
+        .select_from(Deviation)
+        .where(Deviation.is_deleted.is_(False))
     )
     total = (await db.execute(count_query)).scalar_one()
     rows = (
@@ -607,8 +619,15 @@ async def get_deviation_report_record_list(
     ]
     return _build_page_result(items, total, page, page_size)
 
-async def get_deviation_detail(db: AsyncSession, deviation_id: uuid.UUID) -> DeviationDetail:
-    result = await db.execute(select(Deviation).where(Deviation.id == deviation_id, Deviation.is_deleted == False))
+
+async def get_deviation_detail(
+    db: AsyncSession, deviation_id: uuid.UUID
+) -> DeviationDetail:
+    result = await db.execute(
+        select(Deviation).where(
+            Deviation.id == deviation_id, Deviation.is_deleted.is_(False)
+        )
+    )
     deviation = result.scalar_one_or_none()
     if not deviation:
         raise ValueError(f"Deviation {deviation_id} not found")
@@ -618,7 +637,7 @@ async def get_deviation_detail(db: AsyncSession, deviation_id: uuid.UUID) -> Dev
 async def get_related_capas_for_deviation(
     db: AsyncSession,
     deviation_id: uuid.UUID,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Return deduplicated CAPA list linked to a deviation.
 
     Uses repository.get_related_capas_for_deviation and removes duplicates by CAPA.id.
@@ -700,7 +719,7 @@ async def create_deviation(
     if not product_batch:
         raise ValueError("涉及产品名称/批号不能为空")
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     investigation_completed_at = _parse_optional_datetime(
         data.investigation_completed_at
     )
@@ -713,9 +732,7 @@ async def create_deviation(
         title=(data.title or description)[:255],
         department=department,
         discovery_date=(
-            datetime.fromisoformat(data.discovery_date)
-            if data.discovery_date
-            else now
+            datetime.fromisoformat(data.discovery_date) if data.discovery_date else now
         ),
         discovery_time=data.discovery_time,
         discovery_location=data.discovery_location,
@@ -728,7 +745,9 @@ async def create_deviation(
         batch_number=data.batch_number,
         handler=data.handler,
         needs_cross_dept_review=data.needs_cross_dept_review,
-        cross_dept_reviewers=[r.model_dump() for r in data.cross_dept_reviewers] if data.cross_dept_reviewers else [],
+        cross_dept_reviewers=[r.model_dump() for r in data.cross_dept_reviewers]
+        if data.cross_dept_reviewers
+        else [],
         reporter_id=None,
         discoverer=(
             reporter_contact.name
@@ -745,11 +764,9 @@ async def create_deviation(
     )
     db.add(deviation)
     try:
-
         await db.commit()
 
     except Exception:
-
         await db.rollback()
 
         raise
@@ -759,8 +776,18 @@ async def create_deviation(
     await feishu_sync_service.auto_sync_deviation_after_write(db, deviation.id)
     return {"id": str(deviation.id), "code": deviation.deviation_code}
 
-async def update_deviation(db: AsyncSession, deviation_id: uuid.UUID, data: UpdateDeviationRequest, user_id: str) -> dict[str, bool]:
-    result = await db.execute(select(Deviation).where(Deviation.id == deviation_id, Deviation.is_deleted == False))
+
+async def update_deviation(
+    db: AsyncSession,
+    deviation_id: uuid.UUID,
+    data: UpdateDeviationRequest,
+    user_id: str,
+) -> dict[str, bool]:
+    result = await db.execute(
+        select(Deviation).where(
+            Deviation.id == deviation_id, Deviation.is_deleted.is_(False)
+        )
+    )
     deviation = result.scalar_one_or_none()
     if not deviation:
         raise ValueError(f"Deviation {deviation_id} not found")
@@ -770,7 +797,13 @@ async def update_deviation(db: AsyncSession, deviation_id: uuid.UUID, data: Upda
     close_time = update_data.pop("close_time", None)
 
     for field, value in update_data.items():
-        if field in ["ai_analysis", "investigation_records", "review_opinions", "cross_dept_reviewers", "report_versions"]:
+        if field in [
+            "ai_analysis",
+            "investigation_records",
+            "review_opinions",
+            "cross_dept_reviewers",
+            "report_versions",
+        ]:
             setattr(deviation, field, value)
         elif field == "discovery_date" and value:
             setattr(deviation, field, datetime.fromisoformat(value))
@@ -779,29 +812,29 @@ async def update_deviation(db: AsyncSession, deviation_id: uuid.UUID, data: Upda
         else:
             setattr(deviation, field, value)
 
-    if "investigation_completed_at" in update_data and not update_data.get("investigation_completed_at"):
+    if "investigation_completed_at" in update_data and not update_data.get(
+        "investigation_completed_at"
+    ):
         deviation.investigation_completed_at = None
 
     if is_closed is not None:
         if is_closed:
             deviation.status = "closed"
-            deviation.status_updated_at = (
-                _parse_optional_datetime(close_time) or datetime.now(timezone.utc)
-            )
+            deviation.status_updated_at = _parse_optional_datetime(
+                close_time
+            ) or datetime.now(UTC)
         elif deviation.status == "closed":
             deviation.status = "draft"
-            deviation.status_updated_at = datetime.now(timezone.utc)
+            deviation.status_updated_at = datetime.now(UTC)
 
-    deviation.updated_at = datetime.now(timezone.utc)
+    deviation.updated_at = datetime.now(UTC)
     if data.status:
-        deviation.status_updated_at = datetime.now(timezone.utc)
+        deviation.status_updated_at = datetime.now(UTC)
 
     try:
-
         await db.commit()
 
     except Exception:
-
         await db.rollback()
 
         raise
@@ -810,26 +843,41 @@ async def update_deviation(db: AsyncSession, deviation_id: uuid.UUID, data: Upda
     await feishu_sync_service.auto_sync_deviation_after_write(db, deviation.id)
     return {"success": True}
 
-async def delete_deviation(db: AsyncSession, deviation_id: uuid.UUID) -> dict[str, bool]:
-    result = await db.execute(select(Deviation).where(Deviation.id == deviation_id, Deviation.is_deleted == False))
+
+async def delete_deviation(
+    db: AsyncSession, deviation_id: uuid.UUID
+) -> dict[str, bool]:
+    result = await db.execute(
+        select(Deviation).where(
+            Deviation.id == deviation_id, Deviation.is_deleted.is_(False)
+        )
+    )
     deviation = result.scalar_one_or_none()
     if not deviation:
         raise ValueError(f"Deviation {deviation_id} not found")
     deviation.is_deleted = True
-    deviation.updated_at = datetime.now(timezone.utc)
+    deviation.updated_at = datetime.now(UTC)
     try:
-
         await db.commit()
 
     except Exception:
-
         await db.rollback()
 
         raise
     return {"success": True}
 
-async def submit_investigation(db: AsyncSession, deviation_id: uuid.UUID, data: SubmitInvestigationRequest, user_id: str) -> dict[str, bool]:
-    result = await db.execute(select(Deviation).where(Deviation.id == deviation_id, Deviation.is_deleted == False))
+
+async def submit_investigation(
+    db: AsyncSession,
+    deviation_id: uuid.UUID,
+    data: SubmitInvestigationRequest,
+    user_id: str,
+) -> dict[str, bool]:
+    result = await db.execute(
+        select(Deviation).where(
+            Deviation.id == deviation_id, Deviation.is_deleted.is_(False)
+        )
+    )
     deviation = result.scalar_one_or_none()
     if not deviation:
         raise ValueError(f"Deviation {deviation_id} not found")
@@ -842,21 +890,26 @@ async def submit_investigation(db: AsyncSession, deviation_id: uuid.UUID, data: 
         deviation.investigation_records = data.investigation_records
 
     deviation.status = "pending_dept_head_review"
-    deviation.status_updated_at = datetime.now(timezone.utc)
-    deviation.updated_at = datetime.now(timezone.utc)
+    deviation.status_updated_at = datetime.now(UTC)
+    deviation.updated_at = datetime.now(UTC)
     try:
-
         await db.commit()
 
     except Exception:
-
         await db.rollback()
 
         raise
     return {"success": True}
 
-async def submit_review(db: AsyncSession, deviation_id: uuid.UUID, data: SubmitReviewRequest, user_id: str) -> dict[str, bool]:
-    result = await db.execute(select(Deviation).where(Deviation.id == deviation_id, Deviation.is_deleted == False))
+
+async def submit_review(
+    db: AsyncSession, deviation_id: uuid.UUID, data: SubmitReviewRequest, user_id: str
+) -> dict[str, bool]:
+    result = await db.execute(
+        select(Deviation).where(
+            Deviation.id == deviation_id, Deviation.is_deleted.is_(False)
+        )
+    )
     deviation = result.scalar_one_or_none()
     if not deviation:
         raise ValueError(f"Deviation {deviation_id} not found")
@@ -873,7 +926,7 @@ async def submit_review(db: AsyncSession, deviation_id: uuid.UUID, data: SubmitR
         "author": user_id,
         "step": data.step,
         "result": data.result,
-        "createTime": datetime.now(timezone.utc).isoformat(),
+        "createTime": datetime.now(UTC).isoformat(),
     }
     review_opinions.append(new_opinion)
 
@@ -881,14 +934,12 @@ async def submit_review(db: AsyncSession, deviation_id: uuid.UUID, data: SubmitR
         deviation.status = "returned"
         deviation.returned_step = data.step
         deviation.review_opinions = review_opinions
-        deviation.status_updated_at = datetime.now(timezone.utc)
-        deviation.updated_at = datetime.now(timezone.utc)
+        deviation.status_updated_at = datetime.now(UTC)
+        deviation.updated_at = datetime.now(UTC)
         try:
-
             await db.commit()
 
         except Exception:
-
             await db.rollback()
 
             raise
@@ -905,21 +956,26 @@ async def submit_review(db: AsyncSession, deviation_id: uuid.UUID, data: SubmitR
 
     deviation.status = next_status
     deviation.review_opinions = review_opinions
-    deviation.status_updated_at = datetime.now(timezone.utc)
-    deviation.updated_at = datetime.now(timezone.utc)
+    deviation.status_updated_at = datetime.now(UTC)
+    deviation.updated_at = datetime.now(UTC)
     try:
-
         await db.commit()
 
     except Exception:
-
         await db.rollback()
 
         raise
     return {"success": True}
 
-async def submit_final_code(db: AsyncSession, deviation_id: uuid.UUID, final_code: str, user_id: str) -> dict[str, bool]:
-    result = await db.execute(select(Deviation).where(Deviation.id == deviation_id, Deviation.is_deleted == False))
+
+async def submit_final_code(
+    db: AsyncSession, deviation_id: uuid.UUID, final_code: str, user_id: str
+) -> dict[str, bool]:
+    result = await db.execute(
+        select(Deviation).where(
+            Deviation.id == deviation_id, Deviation.is_deleted.is_(False)
+        )
+    )
     deviation = result.scalar_one_or_none()
     if not deviation:
         raise ValueError(f"Deviation {deviation_id} not found")
@@ -930,21 +986,26 @@ async def submit_final_code(db: AsyncSession, deviation_id: uuid.UUID, final_cod
 
     deviation.final_code = final_code.strip()
     deviation.status = "closed"
-    deviation.status_updated_at = datetime.now(timezone.utc)
-    deviation.updated_at = datetime.now(timezone.utc)
+    deviation.status_updated_at = datetime.now(UTC)
+    deviation.updated_at = datetime.now(UTC)
     try:
-
         await db.commit()
 
     except Exception:
-
         await db.rollback()
 
         raise
     return {"success": True}
 
-async def resubmit_deviation(db: AsyncSession, deviation_id: uuid.UUID, user_id: str) -> dict[str, bool]:
-    result = await db.execute(select(Deviation).where(Deviation.id == deviation_id, Deviation.is_deleted == False))
+
+async def resubmit_deviation(
+    db: AsyncSession, deviation_id: uuid.UUID, user_id: str
+) -> dict[str, bool]:
+    result = await db.execute(
+        select(Deviation).where(
+            Deviation.id == deviation_id, Deviation.is_deleted.is_(False)
+        )
+    )
     deviation = result.scalar_one_or_none()
     if not deviation:
         raise ValueError(f"Deviation {deviation_id} not found")
@@ -952,22 +1013,25 @@ async def resubmit_deviation(db: AsyncSession, deviation_id: uuid.UUID, user_id:
         raise ValueError("只有退回状态的偏差才能重新提交")
 
     returned_step = deviation.returned_step
-    target_status = STATUS_TO_PENDING.get(returned_step, "pending_investigation") if returned_step else "pending_investigation"
+    target_status = (
+        STATUS_TO_PENDING.get(returned_step, "pending_investigation")
+        if returned_step
+        else "pending_investigation"
+    )
 
     deviation.status = target_status
     deviation.returned_step = None
-    deviation.status_updated_at = datetime.now(timezone.utc)
-    deviation.updated_at = datetime.now(timezone.utc)
+    deviation.status_updated_at = datetime.now(UTC)
+    deviation.updated_at = datetime.now(UTC)
     try:
-
         await db.commit()
 
     except Exception:
-
         await db.rollback()
 
         raise
     return {"success": True}
+
 
 # ============ CAPA Service ============
 async def get_change_list(
@@ -1018,7 +1082,7 @@ async def get_change_list(
 async def get_change_detail(db: AsyncSession, change_id: uuid.UUID) -> ChangeDetail:
     result = await db.execute(
         select(ChangeControl).where(
-            ChangeControl.id == change_id, ChangeControl.is_deleted == False
+            ChangeControl.id == change_id, ChangeControl.is_deleted.is_(False)
         )
     )
     change = result.scalar_one_or_none()
@@ -1060,6 +1124,7 @@ async def create_change(
     # Sync to Feishu Bitable (best-effort, non-blocking)
     try:
         from app.modules.quality.service import quality_feishu_pages
+
         await quality_feishu_pages.sync_change_to_feishu(db, change)
     except Exception:
         pass
@@ -1072,7 +1137,7 @@ async def update_change(
 ) -> dict[str, bool]:
     result = await db.execute(
         select(ChangeControl).where(
-            ChangeControl.id == change_id, ChangeControl.is_deleted == False
+            ChangeControl.id == change_id, ChangeControl.is_deleted.is_(False)
         )
     )
     change = result.scalar_one_or_none()
@@ -1084,14 +1149,17 @@ async def update_change(
     if isinstance(next_change_code, str):
         next_change_code = next_change_code.strip()
         update_data["change_code"] = next_change_code
-        if next_change_code and await repository.quality_management.exists_by_change_code(
-            db, next_change_code, exclude_id=change.id
+        if (
+            next_change_code
+            and await repository.quality_management.exists_by_change_code(
+                db, next_change_code, exclude_id=change.id
+            )
         ):
             raise ValueError("变更控制号已存在")
     for field, value in update_data.items():
         setattr(change, field, value)
 
-    change.updated_at = datetime.now(timezone.utc)
+    change.updated_at = datetime.now(UTC)
 
     try:
         await db.commit()
@@ -1102,6 +1170,7 @@ async def update_change(
     # Sync to Feishu Bitable (best-effort, non-blocking)
     try:
         from app.modules.quality.service import quality_feishu_pages
+
         await quality_feishu_pages.sync_change_to_feishu(db, change)
     except Exception:
         pass
@@ -1112,7 +1181,7 @@ async def update_change(
 async def delete_change(db: AsyncSession, change_id: uuid.UUID) -> dict[str, bool]:
     result = await db.execute(
         select(ChangeControl).where(
-            ChangeControl.id == change_id, ChangeControl.is_deleted == False
+            ChangeControl.id == change_id, ChangeControl.is_deleted.is_(False)
         )
     )
     change = result.scalar_one_or_none()
@@ -1121,7 +1190,7 @@ async def delete_change(db: AsyncSession, change_id: uuid.UUID) -> dict[str, boo
 
     change_code = change.change_code
     change.is_deleted = True
-    change.updated_at = datetime.now(timezone.utc)
+    change.updated_at = datetime.now(UTC)
 
     try:
         await db.commit()
@@ -1132,6 +1201,7 @@ async def delete_change(db: AsyncSession, change_id: uuid.UUID) -> dict[str, boo
     # Delete from Feishu Bitable (best-effort, non-blocking)
     try:
         from app.modules.quality.service import quality_feishu_pages
+
         await quality_feishu_pages.delete_change_from_feishu(db, change_code)
     except Exception:
         pass
@@ -1198,16 +1268,22 @@ async def get_capa_list(
         page_size,
     )
 
+
 async def get_capa_detail(db: AsyncSession, capa_id: uuid.UUID) -> CapaDetail:
-    result = await db.execute(select(CAPA).where(CAPA.id == capa_id, CAPA.is_deleted == False))
+    result = await db.execute(
+        select(CAPA).where(CAPA.id == capa_id, CAPA.is_deleted.is_(False))
+    )
     capa = result.scalar_one_or_none()
     if not capa:
         raise ValueError(f"CAPA {capa_id} not found")
     return CapaDetail.model_validate(capa)
 
-async def create_capa(db: AsyncSession, data: CreateCapaRequest, user_id: str) -> dict[str, str]:
+
+async def create_capa(
+    db: AsyncSession, data: CreateCapaRequest, user_id: str
+) -> dict[str, str]:
     capa = CAPA(
-        capa_code=f"CAPA-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{uuid.uuid4().hex[:6]}",
+        capa_code=f"CAPA-{datetime.now(UTC).strftime('%Y%m%d')}-{uuid.uuid4().hex[:6]}",
         title=data.title,
         deviation_id=data.deviation_id,
         source=data.source,
@@ -1217,20 +1293,22 @@ async def create_capa(db: AsyncSession, data: CreateCapaRequest, user_id: str) -
         non_conformity_description=data.non_conformity_description,
         root_cause_analysis=data.root_cause_analysis,
         capa_content=data.capa_content,
-        capa_items=[item.model_dump() for item in data.capa_items] if data.capa_items else [],
+        capa_items=[item.model_dump() for item in data.capa_items]
+        if data.capa_items
+        else [],
         executors=data.executors,
-        expected_completion_date=datetime.fromisoformat(data.expected_completion_date) if data.expected_completion_date else None,
+        expected_completion_date=datetime.fromisoformat(data.expected_completion_date)
+        if data.expected_completion_date
+        else None,
         reporter=data.reporter,
         status="draft",
-        status_updated_at=datetime.now(timezone.utc),
+        status_updated_at=datetime.now(UTC),
     )
     db.add(capa)
     try:
-
         await db.commit()
 
     except Exception:
-
         await db.rollback()
 
         raise
@@ -1240,31 +1318,50 @@ async def create_capa(db: AsyncSession, data: CreateCapaRequest, user_id: str) -
     await feishu_sync_service.auto_sync_capa_after_write(db, capa.id)
     return {"id": str(capa.id), "code": capa.capa_code}
 
-async def update_capa(db: AsyncSession, capa_id: uuid.UUID, data: UpdateCapaRequest, user_id: str) -> dict[str, bool]:
-    result = await db.execute(select(CAPA).where(CAPA.id == capa_id, CAPA.is_deleted == False))
+
+async def update_capa(
+    db: AsyncSession, capa_id: uuid.UUID, data: UpdateCapaRequest, user_id: str
+) -> dict[str, bool]:
+    result = await db.execute(
+        select(CAPA).where(CAPA.id == capa_id, CAPA.is_deleted.is_(False))
+    )
     capa = result.scalar_one_or_none()
     if not capa:
         raise ValueError(f"CAPA {capa_id} not found")
 
     update_data = data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
-        if field in ["capa_items", "execution_tracks", "dept_head_confirmations", "report_versions"]:
+        if field in [
+            "capa_items",
+            "execution_tracks",
+            "dept_head_confirmations",
+            "report_versions",
+        ]:
             setattr(capa, field, value)
-        elif field in ["expected_completion_date", "evaluation_deadline", "evaluation_confirm_date", "closure_date", "qa_review_time", "q_head_approval_time"] and value:
+        elif (
+            field
+            in [
+                "expected_completion_date",
+                "evaluation_deadline",
+                "evaluation_confirm_date",
+                "closure_date",
+                "qa_review_time",
+                "q_head_approval_time",
+            ]
+            and value
+        ):
             setattr(capa, field, datetime.fromisoformat(value))
         else:
             setattr(capa, field, value)
 
-    capa.updated_at = datetime.now(timezone.utc)
+    capa.updated_at = datetime.now(UTC)
     if data.status:
-        capa.status_updated_at = datetime.now(timezone.utc)
+        capa.status_updated_at = datetime.now(UTC)
 
     try:
-
         await db.commit()
 
     except Exception:
-
         await db.rollback()
 
         raise
@@ -1273,23 +1370,25 @@ async def update_capa(db: AsyncSession, capa_id: uuid.UUID, data: UpdateCapaRequ
     await feishu_sync_service.auto_sync_capa_after_write(db, capa.id)
     return {"success": True}
 
+
 async def delete_capa(db: AsyncSession, capa_id: uuid.UUID) -> dict[str, bool]:
-    result = await db.execute(select(CAPA).where(CAPA.id == capa_id, CAPA.is_deleted == False))
+    result = await db.execute(
+        select(CAPA).where(CAPA.id == capa_id, CAPA.is_deleted.is_(False))
+    )
     capa = result.scalar_one_or_none()
     if not capa:
         raise ValueError(f"CAPA {capa_id} not found")
     capa.is_deleted = True
-    capa.updated_at = datetime.now(timezone.utc)
+    capa.updated_at = datetime.now(UTC)
     try:
-
         await db.commit()
 
     except Exception:
-
         await db.rollback()
 
         raise
     return {"success": True}
+
 
 # ============ Department Contact Service ============
 def _normalize_feishu_contact_value(value: Any) -> str | None:
@@ -1302,21 +1401,21 @@ def _normalize_feishu_contact_value(value: Any) -> str | None:
         return str(value)
     if isinstance(value, list):
         parts = [_normalize_feishu_contact_value(item) for item in value]
-        normalized = [part for part in parts if part]
-        return " / ".join(normalized) if normalized else None
+        list_normalized = [part for part in parts if part]
+        return " / ".join(list_normalized) if list_normalized else None
     if isinstance(value, dict):
         for key in ("text", "name", "email", "link", "value"):
             if key in value:
-                normalized = _normalize_feishu_contact_value(value[key])
-                if normalized:
-                    return normalized
+                dict_normalized = _normalize_feishu_contact_value(value[key])
+                if dict_normalized:
+                    return dict_normalized
         return None
     return str(value).strip() or None
 
 
 def _format_feishu_contact_datetime(value: Any) -> str:
     if isinstance(value, (int, float)):
-        return datetime.fromtimestamp(float(value) / 1000, tz=timezone.utc).isoformat()
+        return datetime.fromtimestamp(float(value) / 1000, tz=UTC).isoformat()
     return ""
 
 
@@ -1346,7 +1445,9 @@ def _serialize_feishu_department_contact(record: dict[str, Any]) -> dict[str, An
     return {
         "id": record.get("record_id", ""),
         "name": _normalize_feishu_contact_value(fields.get("姓名 (人员 )")),
-        "bitable_user_id": _normalize_feishu_contact_person_id(fields.get("姓名 (人员 )")),
+        "bitable_user_id": _normalize_feishu_contact_person_id(
+            fields.get("姓名 (人员 )")
+        ),
         "department": _normalize_feishu_contact_value(fields.get("部门")) or "",
         "enterprise_email": _normalize_feishu_contact_value(fields.get("企业邮箱")),
         "open_id": _normalize_feishu_contact_value(fields.get("Open ID")),
@@ -1368,9 +1469,15 @@ def _serialize_feishu_department_contact(record: dict[str, Any]) -> dict[str, An
     }
 
 
-async def get_department_contact_list(db: AsyncSession, page: int = 1, page_size: int = 20) -> dict[str, Any]:
-    query = select(DepartmentContact).where(DepartmentContact.is_deleted == False)
-    count_query = select(func.count()).select_from(DepartmentContact).where(DepartmentContact.is_deleted == False)
+async def get_department_contact_list(
+    db: AsyncSession, page: int = 1, page_size: int = 20
+) -> dict[str, Any]:
+    query = select(DepartmentContact).where(DepartmentContact.is_deleted.is_(False))
+    count_query = (
+        select(func.count())
+        .select_from(DepartmentContact)
+        .where(DepartmentContact.is_deleted.is_(False))
+    )
 
     total_result = await db.execute(count_query)
     total = total_result.scalar_one()
@@ -1395,15 +1502,19 @@ async def get_department_contact_list(db: AsyncSession, page: int = 1, page_size
 
 
 async def get_department_contact_list_from_feishu(
-    db: AsyncSession,
-    page: int = 1, page_size: int = 20
+    db: AsyncSession, page: int = 1, page_size: int = 20
 ) -> dict[str, Any]:
     from app.modules.quality.service import quality_feishu_sync as feishu_sync_service
     from app.platform.integrations.feishu.utils import build_bitable_client
 
     runtime = await feishu_sync_service.feishu_sync._resolve_runtime(db)
     entity = runtime.get_entity_config("department_contact", direction="pull")
-    if not runtime.is_enabled() or not entity or not entity.app_token or not entity.table_id:
+    if (
+        not runtime.is_enabled()
+        or not entity
+        or not entity.app_token
+        or not entity.table_id
+    ):
         raise ValueError("部门联系人飞书同步未启用或未完成配置")
 
     client = build_bitable_client(
@@ -1445,6 +1556,7 @@ async def get_department_contact_list_from_feishu(
         "page_size": page_size,
     }
 
+
 async def _ensure_department_contact_open_id_unique(
     db: AsyncSession,
     open_id: str | None,
@@ -1455,7 +1567,7 @@ async def _ensure_department_contact_open_id_unique(
         return
     conditions = [
         DepartmentContact.open_id == open_id,
-        DepartmentContact.is_deleted == False,
+        DepartmentContact.is_deleted.is_(False),
     ]
     if exclude_contact_id is not None:
         conditions.append(DepartmentContact.id != exclude_contact_id)
@@ -1493,7 +1605,7 @@ async def update_department_contact(
     result = await db.execute(
         select(DepartmentContact).where(
             DepartmentContact.id == contact_id,
-            DepartmentContact.is_deleted == False,
+            DepartmentContact.is_deleted.is_(False),
         )
     )
     contact = result.scalar_one_or_none()
@@ -1508,7 +1620,7 @@ async def update_department_contact(
     )
     for field, value in update_data.items():
         setattr(contact, field, value)
-    contact.updated_at = datetime.now(timezone.utc)
+    contact.updated_at = datetime.now(UTC)
     try:
         await db.commit()
     except Exception:
@@ -1516,23 +1628,29 @@ async def update_department_contact(
         raise
     return {"success": True}
 
-async def delete_department_contact(db: AsyncSession, contact_id: uuid.UUID) -> dict[str, bool]:
-    result = await db.execute(select(DepartmentContact).where(DepartmentContact.id == contact_id, DepartmentContact.is_deleted == False))
+
+async def delete_department_contact(
+    db: AsyncSession, contact_id: uuid.UUID
+) -> dict[str, bool]:
+    result = await db.execute(
+        select(DepartmentContact).where(
+            DepartmentContact.id == contact_id, DepartmentContact.is_deleted.is_(False)
+        )
+    )
     contact = result.scalar_one_or_none()
     if not contact:
         raise ValueError(f"DepartmentContact {contact_id} not found")
     contact.is_deleted = True
-    contact.updated_at = datetime.now(timezone.utc)
+    contact.updated_at = datetime.now(UTC)
     try:
-
         await db.commit()
 
     except Exception:
-
         await db.rollback()
 
         raise
     return {"success": True}
+
 
 # ============ Statistics ============
 async def get_deviation_statistics(db: AsyncSession) -> DeviationStatistics:
@@ -1550,7 +1668,7 @@ async def get_deviation_statistics(db: AsyncSession) -> DeviationStatistics:
 
     total = len(items)
     pending = sum(1 for item in items if item.get("status") != "closed")
-    closedCount = sum(1 for item in items if item.get("status") == "closed")
+    closed_count = sum(1 for item in items if item.get("status") == "closed")
 
     department_counts: dict[str, int] = {}
     status_counts: dict[str, int] = {}
@@ -1561,36 +1679,43 @@ async def get_deviation_statistics(db: AsyncSession) -> DeviationStatistics:
         # Status
         status = item.get("status") or "draft"
         status_counts[status] = status_counts.get(status, 0) + 1
-        
+
         # Level
         level = item.get("level") or "unknown"
         level_counts[level] = level_counts.get(level, 0) + 1
-        
+
         # Department
         dept = item.get("department") or "未知"
         department_counts[dept] = department_counts.get(dept, 0) + 1
-        
+
         # Root cause category
         rc = item.get("root_cause_category") or "unknown"
         root_cause_counts[rc] = root_cause_counts.get(rc, 0) + 1
 
-    department_distribution = [{"name": k, "count": v} for k, v in department_counts.items()]
+    department_distribution = [
+        {"name": k, "count": v} for k, v in department_counts.items()
+    ]
     status_distribution = [{"status": k, "count": v} for k, v in status_counts.items()]
     level_distribution = [{"level": k, "count": v} for k, v in level_counts.items()]
-    root_cause_distribution = [{"category": k, "count": v} for k, v in root_cause_counts.items()]
+    root_cause_distribution = [
+        {"category": k, "count": v} for k, v in root_cause_counts.items()
+    ]
 
-    step_breakdown = []
+    step_breakdown: list[dict[str, Any]] = []
 
     return DeviationStatistics(
         total=total,
         pending=pending,
-        closedCount=closedCount,
-        departmentDistribution=department_distribution,
-        statusDistribution=status_distribution,
-        levelDistribution=level_distribution,
-        rootCauseDistribution=root_cause_distribution,
-        stepBreakdown=step_breakdown,
+        closed_count=closed_count,
+        capa_total=0,
+        department_distribution=department_distribution,
+        status_distribution=status_distribution,
+        level_distribution=level_distribution,
+        root_cause_distribution=root_cause_distribution,
+        step_breakdown=step_breakdown,
+        monthly_trend=[],
     )
+
 
 async def get_capa_statistics(db: AsyncSession) -> CapaStatistics:
     from app.modules.quality.service import feishu_capa
@@ -1606,16 +1731,16 @@ async def get_capa_statistics(db: AsyncSession) -> CapaStatistics:
         items = []
 
     total = len(items)
-    closedCount = sum(1 for item in items if item.get("status") == "closed")
-    
+    closed_count = sum(1 for item in items if item.get("status") == "closed")
+
     # Simple overdue count for demonstration (would need proper date parsing)
     today_str = date.today().isoformat()
-    overdueCount = 0
+    overdue_count = 0
     for item in items:
         if item.get("status") not in ("closed", "cancelled"):
             exp_date = item.get("expected_completion_date")
             if exp_date and str(exp_date) < today_str:
-                overdueCount += 1
+                overdue_count += 1
 
     status_counts: dict[str, int] = {}
     source_counts: dict[str, int] = {}
@@ -1625,29 +1750,33 @@ async def get_capa_statistics(db: AsyncSession) -> CapaStatistics:
     for item in items:
         status = item.get("status") or "draft"
         status_counts[status] = status_counts.get(status, 0) + 1
-        
+
         source = item.get("source") or "未知"
         source_counts[source] = source_counts.get(source, 0) + 1
-        
+
         category = item.get("category") or "unknown"
         category_counts[category] = category_counts.get(category, 0) + 1
-        
+
         dept = item.get("department") or item.get("事件部门") or "未知"
         department_counts[dept] = department_counts.get(dept, 0) + 1
 
     status_distribution = [{"status": k, "count": v} for k, v in status_counts.items()]
     source_distribution = [{"source": k, "count": v} for k, v in source_counts.items()]
-    category_distribution = [{"category": k, "count": v} for k, v in category_counts.items()]
-    department_distribution = [{"name": k, "count": v} for k, v in department_counts.items()]
+    category_distribution = [
+        {"category": k, "count": v} for k, v in category_counts.items()
+    ]
+    department_distribution = [
+        {"name": k, "count": v} for k, v in department_counts.items()
+    ]
 
     return CapaStatistics(
         total=total,
-        closedCount=closedCount,
-        overdueCount=overdueCount,
-        statusDistribution=status_distribution,
-        sourceDistribution=source_distribution,
-        categoryDistribution=category_distribution,
-        departmentDistribution=department_distribution,
+        closed_count=closed_count,
+        overdue_count=overdue_count,
+        status_distribution=status_distribution,
+        source_distribution=source_distribution,
+        category_distribution=category_distribution,
+        department_distribution=department_distribution,
     )
 
 
@@ -1721,20 +1850,31 @@ async def get_change_statistics(db: AsyncSession) -> ChangeStatistics:
         return "pending"
 
     def _is_meaningful_dimension(value: str | None) -> bool:
-        return bool(value and value.strip() and value.strip().lower() not in {"unknown", "未知", "n/a", "null"})
+        return bool(
+            value
+            and value.strip()
+            and value.strip().lower() not in {"unknown", "未知", "n/a", "null"}
+        )
 
     try:
         runtime = await feishu_sync_service.feishu_sync._resolve_runtime(db)
         entity = runtime.get_entity_config("change_ledger", direction="pull")
-        if not runtime.is_enabled() or not entity or not entity.app_token or not entity.table_id:
-            items = []
+        if (
+            not runtime.is_enabled()
+            or not entity
+            or not entity.app_token
+            or not entity.table_id
+        ):
+            items: list[dict[str, Any]] = []
         else:
             client = build_bitable_client(
                 app_token=entity.app_token,
                 app_id=runtime.app_id,
                 app_secret=runtime.app_secret,
             )
-            records = await client.search_records(entity.table_id, automatic_fields=True, page_size=9999)
+            records = await client.search_records(
+                entity.table_id, automatic_fields=True, page_size=9999
+            )
             items = []
             normalize_text = feishu_sync_service._normalize_text
             for r in records:
@@ -1749,13 +1889,17 @@ async def get_change_statistics(db: AsyncSession) -> ChangeStatistics:
                     _get_change_field(entity, fields, "变更类型")
                 )
                 department = normalize_text(
-                    _get_change_field(entity, fields, "变更申请部门", "申请部门", "部门")
+                    _get_change_field(
+                        entity, fields, "变更申请部门", "申请部门", "部门"
+                    )
                 )
                 application_date = _parse_change_date(
                     _get_change_field(entity, fields, "变更申请日期", "申请日期")
                 )
                 planned_approval_date = _parse_change_date(
-                    _get_change_field(entity, fields, "变更计划批准日期", "计划批准日期")
+                    _get_change_field(
+                        entity, fields, "变更计划批准日期", "计划批准日期"
+                    )
                 )
                 execution_date = _parse_change_date(
                     _get_change_field(entity, fields, "变更正式执行日期", "执行日期")
@@ -1774,29 +1918,31 @@ async def get_change_statistics(db: AsyncSession) -> ChangeStatistics:
                         and compare_date > planned_approval_date
                     )
 
-                items.append({
-                    "status": _normalize_change_status(
-                        raw_status,
-                        execution_date=execution_date,
-                        closure_date=closure_date,
-                    ),
-                    "raw_status": raw_status,
-                    "level": level,
-                    "type": change_type,
-                    "department": department,
-                    "application_date": application_date,
-                    "planned_approval_date": planned_approval_date,
-                    "execution_date": execution_date,
-                    "closure_date": closure_date,
-                    "is_delayed": is_delayed,
-                })
+                items.append(
+                    {
+                        "status": _normalize_change_status(
+                            raw_status,
+                            execution_date=execution_date,
+                            closure_date=closure_date,
+                        ),
+                        "raw_status": raw_status,
+                        "level": level,
+                        "type": change_type,
+                        "department": department,
+                        "application_date": application_date,
+                        "planned_approval_date": planned_approval_date,
+                        "execution_date": execution_date,
+                        "closure_date": closure_date,
+                        "is_delayed": is_delayed,
+                    }
+                )
     except Exception:
         items = []
 
     total = len(items)
-    closedCount = sum(1 for item in items if item.get("status") == "closed")
-    delayCount = sum(1 for item in items if item.get("is_delayed"))
-    inProgressCount = sum(1 for item in items if item.get("status") == "in_progress")
+    closed_count = sum(1 for item in items if item.get("status") == "closed")
+    delay_count = sum(1 for item in items if item.get("is_delayed"))
+    in_progress_count = sum(1 for item in items if item.get("status") == "in_progress")
 
     status_counts: dict[str, int] = {}
     level_counts: dict[str, int] = {}
@@ -1804,42 +1950,48 @@ async def get_change_statistics(db: AsyncSession) -> ChangeStatistics:
     department_counts: dict[str, int] = {}
 
     for item in items:
-        status = item.get("status") or "draft"
+        status = str(item.get("status") or "draft")
         status_counts[status] = status_counts.get(status, 0) + 1
 
-        level = item.get("level")
-        if _is_meaningful_dimension(level):
+        raw_level = item.get("level")
+        level = str(raw_level) if raw_level is not None else None
+        if level is not None and _is_meaningful_dimension(level):
             level_counts[level] = level_counts.get(level, 0) + 1
 
-        ctype = item.get("type")
-        if _is_meaningful_dimension(ctype):
+        raw_type = item.get("type")
+        ctype = str(raw_type) if raw_type is not None else None
+        if ctype is not None and _is_meaningful_dimension(ctype):
             type_counts[ctype] = type_counts.get(ctype, 0) + 1
 
-        dept = item.get("department")
-        if _is_meaningful_dimension(dept):
+        raw_dept = item.get("department")
+        dept = str(raw_dept) if raw_dept is not None else None
+        if dept is not None and _is_meaningful_dimension(dept):
             department_counts[dept] = department_counts.get(dept, 0) + 1
 
     status_distribution = [{"status": k, "count": v} for k, v in status_counts.items()]
     level_distribution = [{"level": k, "count": v} for k, v in level_counts.items()]
     type_distribution = [{"type": k, "count": v} for k, v in type_counts.items()]
-    department_distribution = [{"name": k, "count": v} for k, v in department_counts.items()]
+    department_distribution = [
+        {"name": k, "count": v} for k, v in department_counts.items()
+    ]
 
-    action_plan_total = closedCount + inProgressCount
-    action_plan_overdue = delayCount
-    action_plan_confirmed = closedCount
+    action_plan_total = closed_count + in_progress_count
+    action_plan_overdue = delay_count
+    action_plan_confirmed = closed_count
 
     return ChangeStatistics(
         total=total,
-        closedCount=closedCount,
-        delayCount=delayCount,
-        statusDistribution=status_distribution,
-        levelDistribution=level_distribution,
-        typeDistribution=type_distribution,
-        departmentDistribution=department_distribution,
-        actionPlanTotal=action_plan_total,
-        actionPlanOverdue=action_plan_overdue,
-        actionPlanConfirmed=action_plan_confirmed,
+        closed_count=closed_count,
+        delay_count=delay_count,
+        status_distribution=status_distribution,
+        level_distribution=level_distribution,
+        type_distribution=type_distribution,
+        department_distribution=department_distribution,
+        action_plan_total=action_plan_total,
+        action_plan_overdue=action_plan_overdue,
+        action_plan_confirmed=action_plan_confirmed,
     )
+
 
 # ============ Attachment Reviews ============
 async def list_attachment_reviews(
@@ -1847,9 +1999,9 @@ async def list_attachment_reviews(
     deviation_id: uuid.UUID | None = None,
     capa_id: uuid.UUID | None = None,
     attachment_url: str | None = None,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """List attachment reviews with optional filters."""
-    query = select(AttachmentReview).where(AttachmentReview.is_deleted == False)
+    query = select(AttachmentReview).where(AttachmentReview.is_deleted.is_(False))
     if deviation_id:
         query = query.where(AttachmentReview.deviation_id == deviation_id)
     if capa_id:
@@ -1857,16 +2009,17 @@ async def list_attachment_reviews(
     if attachment_url:
         query = query.where(AttachmentReview.attachment_url == attachment_url)
     query = query.order_by(AttachmentReview.review_time.desc())
-    
+
     result = await db.execute(query)
     items = result.scalars().all()
     return [AttachmentReviewOut.model_validate(item).model_dump() for item in items]
 
+
 async def create_attachment_review(
     db: AsyncSession,
-    data,
+    data: Any,
     reviewer_id: str,
-) -> dict:
+) -> dict[str, Any]:
     """Create a new attachment review."""
     review = AttachmentReview(
         deviation_id=data.deviation_id,
@@ -1874,12 +2027,13 @@ async def create_attachment_review(
         attachment_url=data.attachment_url,
         content=data.content,
         reviewer_id=reviewer_id,
-        review_time=datetime.now(timezone.utc),
+        review_time=datetime.now(UTC),
     )
     db.add(review)
     await db.flush()
     await db.flush()
     return AttachmentReviewOut.model_validate(review).model_dump()
+
 
 async def delete_attachment_review(db: AsyncSession, review_id: uuid.UUID) -> None:
     """Soft-delete an attachment review."""
@@ -1892,7 +2046,10 @@ async def delete_attachment_review(db: AsyncSession, review_id: uuid.UUID) -> No
 
 # ============ NEW: Deviation Workflow Endpoints ============
 
-async def submit_for_review(db: AsyncSession, deviation_id: uuid.UUID, user_id: str) -> dict[str, bool]:
+
+async def submit_for_review(
+    db: AsyncSession, deviation_id: uuid.UUID, user_id: str
+) -> dict[str, bool]:
     """Submit deviation to start review workflow. draft → pending_ai_analysis."""
     deviation = await db.get(Deviation, deviation_id)
     if not deviation or deviation.is_deleted:
@@ -1901,31 +2058,36 @@ async def submit_for_review(db: AsyncSession, deviation_id: uuid.UUID, user_id: 
         raise ValueError(f"只有草稿状态的偏差可以提交，当前状态: {deviation.status}")
 
     deviation.status = "pending_ai_analysis"
-    deviation.status_updated_at = datetime.now(timezone.utc)
+    deviation.status_updated_at = datetime.now(UTC)
     deviation.updated_by = uuid.UUID(user_id) if user_id != "system" else None
     await db.flush()
 
     # Trigger AI analysis asynchronously
     import asyncio
+
     asyncio.create_task(_trigger_ai_analysis(deviation_id, user_id))
 
     return {"success": True}
 
 
-async def _trigger_ai_analysis(deviation_id: uuid.UUID, user_id: str):
+async def _trigger_ai_analysis(deviation_id: uuid.UUID, user_id: str) -> Any:
     """Async trigger AI analysis for a deviation."""
     from app.modules.quality.service.ai_analysis import analyze_deviation_async
+
     try:
         await analyze_deviation_async(deviation_id, user_id)
     except Exception as e:
         import logging
-        logging.getLogger(__name__).error(f"AI analysis failed for deviation {deviation_id}: {e}")
+
+        logging.getLogger(__name__).error(
+            f"AI analysis failed for deviation {deviation_id}: {e}"
+        )
 
 
 async def complete_ai_analysis(
     db: AsyncSession,
     deviation_id: uuid.UUID,
-    ai_analysis: dict | None,
+    ai_analysis: dict[str, Any] | None,
     user_id: str,
 ) -> dict[str, bool]:
     """Mark AI analysis complete and advance to pending_investigation."""
@@ -1933,12 +2095,14 @@ async def complete_ai_analysis(
     if not deviation or deviation.is_deleted:
         raise ValueError("偏差不存在")
     if deviation.status != "pending_ai_analysis":
-        raise ValueError(f"只有待AI分析状态的偏差才能完成AI分析，当前状态: {deviation.status}")
+        raise ValueError(
+            f"只有待AI分析状态的偏差才能完成AI分析，当前状态: {deviation.status}"
+        )
 
     if ai_analysis is not None:
         deviation.ai_analysis = ai_analysis
     deviation.status = "pending_investigation"
-    deviation.status_updated_at = datetime.now(timezone.utc)
+    deviation.status_updated_at = datetime.now(UTC)
     deviation.updated_by = uuid.UUID(user_id) if user_id != "system" else None
     await db.flush()
     return {"success": True}
@@ -1949,7 +2113,7 @@ async def batch_update_status(
     deviation_ids: list[uuid.UUID],
     target_status: str,
     user_id: str,
-) -> dict:
+) -> dict[str, Any]:
     """Batch update status for multiple deviations."""
     updated = 0
     failures = []
@@ -1962,14 +2126,18 @@ async def batch_update_status(
                 continue
 
             deviation.status = target_status
-            deviation.status_updated_at = datetime.now(timezone.utc)
+            deviation.status_updated_at = datetime.now(UTC)
             deviation.updated_by = uuid.UUID(user_id) if user_id != "system" else None
             updated += 1
         except Exception as e:
             failures.append({"id": str(did), "reason": str(e)})
 
     await db.flush()
-    return {"updated_count": updated, "failed_count": len(failures), "failures": failures}
+    return {
+        "updated_count": updated,
+        "failed_count": len(failures),
+        "failures": failures,
+    }
 
 
 async def get_department_confirmations(
@@ -1977,10 +2145,10 @@ async def get_department_confirmations(
     week_key: str | None = None,
     page: int = 1,
     page_size: int = 20,
-) -> dict:
+) -> dict[str, Any]:
     """List department weekly confirmations."""
     query = select(DepartmentWeeklyConfirmation).where(
-        DepartmentWeeklyConfirmation.is_deleted == False
+        DepartmentWeeklyConfirmation.is_deleted.is_(False)
     )
     if week_key:
         query = query.where(DepartmentWeeklyConfirmation.week_key == week_key)
@@ -1996,7 +2164,10 @@ async def get_department_confirmations(
     items = result.scalars().all()
 
     return {
-        "items": [DepartmentWeeklyConfirmationOut.model_validate(item).model_dump() for item in items],
+        "items": [
+            DepartmentWeeklyConfirmationOut.model_validate(item).model_dump()
+            for item in items
+        ],
         "total": total,
         "page": page,
         "page_size": page_size,
@@ -2005,19 +2176,19 @@ async def get_department_confirmations(
 
 async def confirm_production_status(
     db: AsyncSession,
-    data,
+    data: Any,
     user_id: str,
 ) -> dict[str, bool]:
     """Create or update a department weekly confirmation."""
     query = select(DepartmentWeeklyConfirmation).where(
         DepartmentWeeklyConfirmation.department == data.department,
         DepartmentWeeklyConfirmation.week_key == data.week_key,
-        DepartmentWeeklyConfirmation.is_deleted == False,
+        DepartmentWeeklyConfirmation.is_deleted.is_(False),
     )
     result = await db.execute(query)
     existing = result.scalar_one_or_none()
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if existing:
         existing.production_status = data.production_status
         existing.deviation_status = data.deviation_status
@@ -2044,7 +2215,7 @@ async def get_stopped_departments(db: AsyncSession, week_key: str) -> list[str]:
     query = select(DepartmentWeeklyConfirmation.department).where(
         DepartmentWeeklyConfirmation.week_key == week_key,
         DepartmentWeeklyConfirmation.production_status == "stopped",
-        DepartmentWeeklyConfirmation.is_deleted == False,
+        DepartmentWeeklyConfirmation.is_deleted.is_(False),
     )
     result = await db.execute(query)
     return [row[0] for row in result.all()]
@@ -2052,16 +2223,19 @@ async def get_stopped_departments(db: AsyncSession, week_key: str) -> list[str]:
 
 # ============ NEW: CAPA Workflow Endpoints ============
 
+
 async def get_capa_departments(db: AsyncSession) -> list[str]:
     """Get all departments from department contacts."""
     query = select(DepartmentContact.department).where(
-        DepartmentContact.is_deleted == False
+        DepartmentContact.is_deleted.is_(False)
     )
     result = await db.execute(query)
     return [row[0] for row in result.all()]
 
 
-async def auto_fill_from_deviation(db: AsyncSession, deviation_id: uuid.UUID) -> dict:
+async def auto_fill_from_deviation(
+    db: AsyncSession, deviation_id: uuid.UUID
+) -> dict[str, Any]:
     """Auto-fill CAPA form from deviation data."""
     deviation = await db.get(Deviation, deviation_id)
     if not deviation or deviation.is_deleted:
@@ -2069,14 +2243,18 @@ async def auto_fill_from_deviation(db: AsyncSession, deviation_id: uuid.UUID) ->
 
     # Extract from AI analysis
     ai_analysis = deviation.ai_analysis or {}
-    non_conformity = ai_analysis.get("structured_deviation_description", deviation.description or "")
+    non_conformity = ai_analysis.get(
+        "structured_deviation_description", deviation.description or ""
+    )
     root_cause = ai_analysis.get("preliminary_cause_analysis", "")
 
     # Extract from last investigation record
     investigation_records = deviation.investigation_records or []
     capa_content = ""
     if investigation_records:
-        last_record = investigation_records[-1] if isinstance(investigation_records, list) else {}
+        last_record = (
+            investigation_records[-1] if isinstance(investigation_records, list) else {}
+        )
         if isinstance(last_record, dict):
             non_conformity = last_record.get("nonconformityDescription", non_conformity)
             root_cause = last_record.get("rootCauseAnalysis", root_cause)
@@ -2084,7 +2262,7 @@ async def auto_fill_from_deviation(db: AsyncSession, deviation_id: uuid.UUID) ->
             proposals = last_record.get("capaProposals", [])
             if proposals:
                 capa_content = "\n".join(
-                    f"{i+1}. {p.get('summary', p.get('content', ''))}"
+                    f"{i + 1}. {p.get('summary', p.get('content', ''))}"
                     for i, p in enumerate(proposals)
                 )
 
@@ -2135,7 +2313,6 @@ async def complete_part(
 
     # Store completion in capa_items or a tracking field
     # For simplicity, update status when both parts are complete
-    items = capa.capa_items or []
     if part == "a":
         # Part A = problem description complete
         pass
@@ -2148,7 +2325,9 @@ async def complete_part(
     return {"success": True}
 
 
-async def submit_capa(db: AsyncSession, capa_id: uuid.UUID, user_id: str) -> dict[str, bool]:
+async def submit_capa(
+    db: AsyncSession, capa_id: uuid.UUID, user_id: str
+) -> dict[str, bool]:
     """Submit CAPA for QA approval."""
     capa = await db.get(CAPA, capa_id)
     if not capa or capa.is_deleted:
@@ -2157,7 +2336,7 @@ async def submit_capa(db: AsyncSession, capa_id: uuid.UUID, user_id: str) -> dic
         raise ValueError(f"只有草稿状态的CAPA可以提交，当前状态: {capa.status}")
 
     capa.status = "submitted"
-    capa.status_updated_at = datetime.now(timezone.utc)
+    capa.status_updated_at = datetime.now(UTC)
     capa.updated_by = uuid.UUID(user_id) if user_id != "system" else None
     await db.flush()
     return {"success": True}
@@ -2166,7 +2345,7 @@ async def submit_capa(db: AsyncSession, capa_id: uuid.UUID, user_id: str) -> dic
 async def confirm_dept_head(
     db: AsyncSession,
     capa_id: uuid.UUID,
-    data,
+    data: Any,
     user_id: str,
 ) -> dict[str, bool]:
     """Department head confirmation for CAPA."""
@@ -2175,7 +2354,7 @@ async def confirm_dept_head(
         raise ValueError("CAPA不存在")
 
     confirmations = capa.dept_head_confirmations or []
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     confirmation = {
         "department": data.department,
@@ -2199,21 +2378,19 @@ async def confirm_dept_head(
 
     # Check if all departments have approved
     all_approved = all(
-        isinstance(c, dict) and c.get("result") == "approved"
-        for c in confirmations
+        isinstance(c, dict) and c.get("result") == "approved" for c in confirmations
     )
     any_rejected = any(
-        isinstance(c, dict) and c.get("result") == "rejected"
-        for c in confirmations
+        isinstance(c, dict) and c.get("result") == "rejected" for c in confirmations
     )
 
     if all_approved and confirmations:
         capa.status = "pending_qa_approval"
-        capa.status_updated_at = datetime.now(timezone.utc)
+        capa.status_updated_at = datetime.now(UTC)
     elif any_rejected:
         capa.status = "returned"
         capa.returned_step = "dept_head_confirm"
-        capa.status_updated_at = datetime.now(timezone.utc)
+        capa.status_updated_at = datetime.now(UTC)
 
     capa.updated_by = uuid.UUID(user_id) if user_id != "system" else None
     await db.flush()
@@ -2223,7 +2400,7 @@ async def confirm_dept_head(
 async def approve_capa(
     db: AsyncSession,
     capa_id: uuid.UUID,
-    data,
+    data: Any,
     user_id: str,
 ) -> dict[str, bool]:
     """QA approval for CAPA."""
@@ -2231,7 +2408,7 @@ async def approve_capa(
     if not capa or capa.is_deleted:
         raise ValueError("CAPA不存在")
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     if data.step == "qa_review":
         capa.qa_reviewer_id = uuid.UUID(user_id) if user_id != "system" else None
@@ -2259,7 +2436,9 @@ async def approve_capa(
     return {"success": True}
 
 
-async def resubmit_capa(db: AsyncSession, capa_id: uuid.UUID, user_id: str) -> dict[str, bool]:
+async def resubmit_capa(
+    db: AsyncSession, capa_id: uuid.UUID, user_id: str
+) -> dict[str, bool]:
     """Resubmit CAPA after rejection."""
     capa = await db.get(CAPA, capa_id)
     if not capa or capa.is_deleted:
@@ -2269,7 +2448,7 @@ async def resubmit_capa(db: AsyncSession, capa_id: uuid.UUID, user_id: str) -> d
 
     capa.status = "draft"
     capa.returned_step = None
-    capa.status_updated_at = datetime.now(timezone.utc)
+    capa.status_updated_at = datetime.now(UTC)
     capa.updated_by = uuid.UUID(user_id) if user_id != "system" else None
     await db.flush()
     return {"success": True}
@@ -2278,7 +2457,7 @@ async def resubmit_capa(db: AsyncSession, capa_id: uuid.UUID, user_id: str) -> d
 async def add_execution_track(
     db: AsyncSession,
     capa_id: uuid.UUID,
-    data: dict,
+    data: dict[str, Any],
     user_id: str,
 ) -> dict[str, bool]:
     """Add an execution tracking record to CAPA."""
@@ -2322,16 +2501,20 @@ async def delete_execution_track(
     return {"success": True}
 
 
-async def confirm_execution(db: AsyncSession, capa_id: uuid.UUID, user_id: str) -> dict[str, bool]:
+async def confirm_execution(
+    db: AsyncSession, capa_id: uuid.UUID, user_id: str
+) -> dict[str, bool]:
     """Confirm CAPA execution is complete, advance to pending_evaluation."""
     capa = await db.get(CAPA, capa_id)
     if not capa or capa.is_deleted:
         raise ValueError("CAPA不存在")
     if capa.status != "executing":
-        raise ValueError(f"只有执行中状态的CAPA可以确认执行完成，当前状态: {capa.status}")
+        raise ValueError(
+            f"只有执行中状态的CAPA可以确认执行完成，当前状态: {capa.status}"
+        )
 
     capa.status = "pending_evaluation"
-    capa.status_updated_at = datetime.now(timezone.utc)
+    capa.status_updated_at = datetime.now(UTC)
     capa.updated_by = uuid.UUID(user_id) if user_id != "system" else None
     await db.flush()
     return {"success": True}
@@ -2340,7 +2523,7 @@ async def confirm_execution(db: AsyncSession, capa_id: uuid.UUID, user_id: str) 
 async def submit_evaluation(
     db: AsyncSession,
     capa_id: uuid.UUID,
-    data,
+    data: Any,
     user_id: str,
 ) -> dict[str, bool]:
     """Submit effectiveness evaluation and close CAPA."""
@@ -2348,15 +2531,27 @@ async def submit_evaluation(
     if not capa or capa.is_deleted:
         raise ValueError("CAPA不存在")
     if capa.status != "pending_evaluation":
-        raise ValueError(f"只有待效果评价状态的CAPA可以提交评价，当前状态: {capa.status}")
+        raise ValueError(
+            f"只有待效果评价状态的CAPA可以提交评价，当前状态: {capa.status}"
+        )
 
     capa.evaluation_target = data.evaluation_target
     capa.evaluation_result = data.evaluation_result
-    capa.evaluation_confirmer_id = uuid.UUID(data.evaluation_confirmer) if data.evaluation_confirmer else None
-    capa.evaluation_confirm_date = datetime.fromisoformat(data.evaluation_confirm_date.replace("Z", "+00:00")) if data.evaluation_confirm_date else None
-    capa.closure_date = datetime.fromisoformat(data.closure_date.replace("Z", "+00:00")) if data.closure_date else None
+    capa.evaluation_confirmer_id = (
+        uuid.UUID(data.evaluation_confirmer) if data.evaluation_confirmer else None
+    )
+    capa.evaluation_confirm_date = (
+        datetime.fromisoformat(data.evaluation_confirm_date.replace("Z", "+00:00"))
+        if data.evaluation_confirm_date
+        else None
+    )
+    capa.closure_date = (
+        datetime.fromisoformat(data.closure_date.replace("Z", "+00:00"))
+        if data.closure_date
+        else None
+    )
     capa.status = "closed"
-    capa.status_updated_at = datetime.now(timezone.utc)
+    capa.status_updated_at = datetime.now(UTC)
     capa.updated_by = uuid.UUID(user_id) if user_id != "system" else None
     await db.flush()
     return {"success": True}

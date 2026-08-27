@@ -2,19 +2,29 @@
 
 import csv
 import re
+from collections.abc import Sequence
 from datetime import UTC, date, datetime
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from hashlib import sha256
 from io import BytesIO, StringIO
 from pathlib import Path
+from typing import Any
 from uuid import UUID, uuid4
 
-import xlrd
-from openpyxl import Workbook, load_workbook
-from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
-from openpyxl.utils import get_column_letter
-from openpyxl.worksheet.page import PageMargins
-from openpyxl.worksheet.properties import PageSetupProperties
+import xlrd  # type: ignore[import-untyped]
+from openpyxl import Workbook, load_workbook  # type: ignore[import-untyped]
+from openpyxl.styles import (  # type: ignore[import-untyped]
+    Alignment,
+    Border,
+    Font,
+    PatternFill,
+    Side,
+)
+from openpyxl.utils import get_column_letter  # type: ignore[import-untyped]
+from openpyxl.worksheet.page import PageMargins  # type: ignore[import-untyped]
+from openpyxl.worksheet.properties import (  # type: ignore[import-untyped]
+    PageSetupProperties,
+)
 from pydantic import ValidationError
 from pypdf import PdfReader
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -527,9 +537,7 @@ async def import_purchase_request_table_file(
             continue
         if not rows:
             continue
-        duplicate_key = sha256(
-            file_bytes + f"|{sheet_name}".encode()
-        ).hexdigest()
+        duplicate_key = sha256(file_bytes + f"|{sheet_name}".encode()).hexdigest()
         existing = await PurchaseRequestRepository(db).find_by_import_duplicate_key(
             duplicate_key
         )
@@ -812,9 +820,8 @@ def _build_import_item(
         )
 
     item_uses_material_fields = (
-        (item_category.value if item_category is not None else category_value)
-        in MATERIAL_FIELD_PURCHASE_CATEGORY_VALUES
-    )
+        item_category.value if item_category is not None else category_value
+    ) in MATERIAL_FIELD_PURCHASE_CATEGORY_VALUES
     product_name = _get_import_field(raw_data, "product_name")
     material_code = _get_import_field(raw_data, "material_code")
     material_description = _get_import_field(raw_data, "material_description")
@@ -937,9 +944,11 @@ async def list_suppliers(
         page=page,
         page_size=page_size,
     )
-    return [
-        SupplierResponse.model_validate(supplier) for supplier in suppliers
-    ], total, columns
+    return (
+        [SupplierResponse.model_validate(supplier) for supplier in suppliers],
+        total,
+        columns,
+    )
 
 
 async def create_purchase_request(
@@ -1228,7 +1237,6 @@ def _store_contract_file(
     file_path = directory / safe_filename
     file_path.write_bytes(content)
     return str(file_path)
-
 
 
 async def submit_purchase_request(
@@ -1689,7 +1697,7 @@ def _get_purchase_order_export_column_widths(
 
 
 def _apply_purchase_order_sheet_setup(
-    worksheet,
+    worksheet: Any,
     column_widths: dict[str, float],
 ) -> None:
     for column_letter, width in column_widths.items():
@@ -1710,7 +1718,7 @@ def _apply_purchase_order_sheet_setup(
 
 
 def _write_merged_title(
-    worksheet,
+    worksheet: Any,
     row_index: int,
     value: str,
     column_count: int,
@@ -1728,7 +1736,7 @@ def _write_merged_title(
 
 
 def _write_department_row(
-    worksheet,
+    worksheet: Any,
     row_index: int,
     department: str,
     column_count: int,
@@ -1749,7 +1757,7 @@ def _write_department_row(
 
 
 def _write_purchase_order_header_row(
-    worksheet,
+    worksheet: Any,
     row_index: int,
     headers: list[str],
 ) -> None:
@@ -1766,7 +1774,7 @@ def _write_purchase_order_header_row(
 
 
 def _write_purchase_order_detail_row(
-    worksheet,
+    worksheet: Any,
     row_index: int,
     index: int,
     line: PurchaseOrderLineResponse,
@@ -1787,9 +1795,7 @@ def _write_purchase_order_detail_row(
         )
         cell.border = _purchase_order_border()
     text_columns = (
-        (2, 3, 4, 5, 6, 11)
-        if material_field_mode is False
-        else (2, 3, 4, 5, 6, 7, 12)
+        (2, 3, 4, 5, 6, 11) if material_field_mode is False else (2, 3, 4, 5, 6, 7, 12)
     )
     for column_index in text_columns:
         worksheet.cell(row_index, column_index).alignment = Alignment(
@@ -1802,7 +1808,7 @@ def _write_purchase_order_detail_row(
 
 
 def _write_purchase_order_total_row(
-    worksheet,
+    worksheet: Any,
     row_index: int,
     label: str,
     total_formula: str,
@@ -1824,7 +1830,7 @@ def _write_purchase_order_total_row(
     worksheet.cell(row_index, amount_column).number_format = "0.00"
 
 
-def _write_signature_row(worksheet, row_index: int, column_count: int) -> None:
+def _write_signature_row(worksheet: Any, row_index: int, column_count: int) -> None:
     worksheet.merge_cells(
         start_row=row_index,
         start_column=1,
@@ -2038,7 +2044,7 @@ def _parse_purchase_request_csv_sheet(
 
 
 def _extract_import_request_department(
-    table_rows: list[tuple[object, ...] | list[object]],
+    table_rows: Sequence[Sequence[object]],
 ) -> str:
     """从表头前的标题行中提取“申请部门/申购部门：xxx”的申购部门。"""
     header_index = _find_header_row_index(table_rows)
@@ -2068,7 +2074,7 @@ def _decode_table_text(file_bytes: bytes) -> str:
 
 
 def _build_supplier_rows(
-    table_rows: list[tuple[object, ...] | list[object]],
+    table_rows: Sequence[Sequence[object]],
     sheet_name: str,
 ) -> tuple[list[str], list[tuple[int, dict[str, object]]], str]:
     header_index = _find_header_row_index(table_rows)
@@ -2110,9 +2116,7 @@ def _is_import_non_item_row(raw_data: dict[str, object]) -> bool:
     且内容为签字栏关键词；或仅序号/行号列有值（如只有“序号 1”的占位行）。
     """
     non_empty = [
-        (column, value)
-        for column, value in raw_data.items()
-        if value not in ("", None)
+        (column, value) for column, value in raw_data.items() if value not in ("", None)
     ]
     if not non_empty:
         return True
@@ -2132,7 +2136,7 @@ def _is_import_non_item_row(raw_data: dict[str, object]) -> bool:
 
 
 def _find_header_row_index(
-    table_rows: list[tuple[object, ...] | list[object]],
+    table_rows: Sequence[Sequence[object]],
 ) -> int | None:
     for index, row in enumerate(table_rows):
         non_empty_count = sum(1 for value in row if _format_cell_string(value))
@@ -2312,7 +2316,7 @@ def _extract_seller_name(lines: list[str]) -> str | None:
             line,
         )
         if len(names) >= 2:
-            return names[1].strip()
+            return str(names[1].strip())
 
         seller_name = _extract_seller_name_before_marker(line)
         if seller_name:
@@ -2400,6 +2404,7 @@ def _parse_line_item(line: str) -> InvoiceLineItem | None:
     tax_rate = _extract_tax_rate(parts[tax_rate_index])
     numeric_text = " ".join(pre_tax_parts[numeric_start:])
     dense_quantity = _extract_dense_quantity(numeric_text, tax_amount, tax_rate)
+    quantity: Decimal | None
     if dense_quantity is not None:
         quantity = dense_quantity
     else:

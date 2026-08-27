@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date
+from typing import Any
 
 import pytest
 from sqlalchemy import text
@@ -16,7 +17,7 @@ from app.modules.quality.repository.quality_management import (
 
 
 @pytest.fixture(autouse=True)
-async def _prepare_change_action_plan_tables(db_session: AsyncSession):
+async def _prepare_change_action_plan_tables(db_session: AsyncSession) -> Any:
     await db_session.execute(text("CREATE SCHEMA IF NOT EXISTS quality"))
     await db_session.execute(
         text(
@@ -84,7 +85,8 @@ async def _prepare_change_action_plan_tables(db_session: AsyncSession):
             """
             ALTER TABLE quality.quality_change_action_plans
             ADD COLUMN IF NOT EXISTS reminder_enabled BOOLEAN NOT NULL DEFAULT TRUE,
-            ADD COLUMN IF NOT EXISTS reminder_status VARCHAR(20) NOT NULL DEFAULT 'pending',
+            ADD COLUMN IF NOT EXISTS reminder_status VARCHAR(20) NOT NULL DEFAULT
+            'pending',
             ADD COLUMN IF NOT EXISTS last_reminded_at TIMESTAMPTZ NULL,
             ADD COLUMN IF NOT EXISTS reminder_confirmed_at TIMESTAMPTZ NULL,
             ADD COLUMN IF NOT EXISTS reminder_confirmed_by VARCHAR(100) NULL,

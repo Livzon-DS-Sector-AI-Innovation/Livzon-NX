@@ -49,19 +49,19 @@ def _calc_cpk(
     """
     if not values:
         return 0.0
-    
+
     mean = sum(values) / len(values)
     std_dev = _calc_std_dev(values)
-    
+
     if std_dev == 0:
         return 0.0
-    
+
     # Auto-calculate limits from data when not provided
     usl = upper_limit if upper_limit is not None else max(values)
     lsl = lower_limit if lower_limit is not None else min(values)
-    
+
     cpk = min(usl - mean, mean - lsl) / (3 * std_dev)
-    
+
     return max(0.0, cpk) if math.isfinite(cpk) else 0.0
 
 
@@ -78,13 +78,19 @@ async def get_statistics(
     parameter = await repo.get_parameter_by_id(db, parameter_id)
     if not parameter:
         raise NotFoundException("参数", str(parameter_id))
-    
+
     # 获取批次（使用大 page_size 确保获取所有数据用于统计）
     batches, _ = await repo.get_batches(
-        db, product_id, parameter.parameter_type, batch_no, start_date, end_date,
-        page=1, page_size=100000
+        db,
+        product_id,
+        parameter.parameter_type,
+        batch_no,
+        start_date,
+        end_date,
+        page=1,
+        page_size=100000,
     )
-    
+
     if not batches:
         return CpvStatisticsResponse(
             total_batches=0,
@@ -97,24 +103,24 @@ async def get_statistics(
             lower_limit=parameter.lower_limit or 0.0,
             upper_limit=parameter.upper_limit or 0.0,
         )
-    
+
     # 获取参数值
     batch_ids = [b.id for b in batches]
     values = await repo.get_values_by_batch_ids(db, batch_ids)
-    
+
     # 筛选当前参数的值
     param_values = [v for v in values if v.parameter_id == parameter_id]
-    
+
     numeric_values = []
     abnormal_count = 0
-    
+
     for v in param_values:
         num_val = _to_float(v.actual_value)
         if num_val is not None:
             numeric_values.append(num_val)
             if v.is_abnormal:
                 abnormal_count += 1
-    
+
     if not numeric_values:
         return CpvStatisticsResponse(
             total_batches=len(batches),
@@ -127,17 +133,21 @@ async def get_statistics(
             lower_limit=parameter.lower_limit or 0.0,
             upper_limit=parameter.upper_limit or 0.0,
         )
-    
+
     min_value = min(numeric_values)
     max_value = max(numeric_values)
     avg_value = sum(numeric_values) / len(numeric_values)
     std_dev = _calc_std_dev(numeric_values)
     cpk_value = _calc_cpk(numeric_values, parameter.lower_limit, parameter.upper_limit)
-    
+
     # Use auto-calculated limits from data when parameter limits are not set
-    effective_lower = parameter.lower_limit if parameter.lower_limit is not None else min_value
-    effective_upper = parameter.upper_limit if parameter.upper_limit is not None else max_value
-    
+    effective_lower = (
+        parameter.lower_limit if parameter.lower_limit is not None else min_value
+    )
+    effective_upper = (
+        parameter.upper_limit if parameter.upper_limit is not None else max_value
+    )
+
     return CpvStatisticsResponse(
         total_batches=len(batches),
         min_value=min_value,
@@ -164,20 +174,26 @@ async def get_trend_data(
     parameter = await repo.get_parameter_by_id(db, parameter_id)
     if not parameter:
         raise NotFoundException("参数", str(parameter_id))
-    
+
     # 获取批次（使用大 page_size 确保获取所有数据用于统计）
     batches, _ = await repo.get_batches(
-        db, product_id, parameter.parameter_type, batch_no, start_date, end_date,
-        page=1, page_size=100000
+        db,
+        product_id,
+        parameter.parameter_type,
+        batch_no,
+        start_date,
+        end_date,
+        page=1,
+        page_size=100000,
     )
-    
+
     # 获取参数值
     batch_ids = [b.id for b in batches]
     values = await repo.get_values_by_batch_ids(db, batch_ids)
-    
+
     # 构建批次映射
     batch_map = {b.id: b for b in batches}
-    
+
     # Collect numeric values first to compute auto-limits
     all_numeric = []
     for v in values:
@@ -185,11 +201,19 @@ async def get_trend_data(
             num_val = _to_float(v.actual_value)
             if num_val is not None:
                 all_numeric.append(num_val)
-    
+
     # Auto-calculate limits from data when parameter limits are not set
-    effective_lower = parameter.lower_limit if parameter.lower_limit is not None else (min(all_numeric) if all_numeric else 0.0)
-    effective_upper = parameter.upper_limit if parameter.upper_limit is not None else (max(all_numeric) if all_numeric else 0.0)
-    
+    effective_lower = (
+        parameter.lower_limit
+        if parameter.lower_limit is not None
+        else (min(all_numeric) if all_numeric else 0.0)
+    )
+    effective_upper = (
+        parameter.upper_limit
+        if parameter.upper_limit is not None
+        else (max(all_numeric) if all_numeric else 0.0)
+    )
+
     # 构建趋势数据
     items = []
     for v in values:
@@ -208,10 +232,10 @@ async def get_trend_data(
                             is_abnormal=v.is_abnormal,
                         )
                     )
-    
+
     # 按生产日期排序
     items.sort(key=lambda x: (x.production_date, x.batch_no))
-    
+
     return CpvTrendResponse(
         parameter_name=parameter.name,
         parameter_unit=parameter.unit,

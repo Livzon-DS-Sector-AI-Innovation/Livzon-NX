@@ -1,6 +1,7 @@
 """CPV Import Task ORM model."""
 
 import uuid
+from typing import Any
 
 from sqlalchemy import JSON, Integer, String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
@@ -41,6 +42,6 @@ class CpvImportTask(BaseModel):
     failed_rows: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, comment="失败行数"
     )
-    error_details: Mapped[dict | None] = mapped_column(
+    error_details: Mapped[dict[str, Any] | None] = mapped_column(
         JSON, nullable=True, comment="错误详情"
     )

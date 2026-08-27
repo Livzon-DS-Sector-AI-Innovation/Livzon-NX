@@ -2,6 +2,7 @@
 
 import logging
 import uuid
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,7 +15,8 @@ from app.modules.safety.schemas import (
 
 logger = logging.getLogger(__name__)
 
-def create_ai_service(config_type: str = "text"):
+
+def create_ai_service(config_type: str = "text") -> Any:
     """返回统一 LLM 兼容适配器。
 
     旧调用方保留此函数名；实际模型配置统一由系统设置的
@@ -51,7 +53,9 @@ class ConfigService:
             skip, limit, module_code, is_enabled
         )
 
-    async def get_ai_workflow_config(self, config_id: uuid.UUID) -> AIWorkflowConfig | None:
+    async def get_ai_workflow_config(
+        self, config_id: uuid.UUID
+    ) -> AIWorkflowConfig | None:
         """获取 AI 工作流配置详情"""
         return await self.repo.get_ai_workflow_config_by_id(config_id)
 
@@ -61,7 +65,9 @@ class ConfigService:
         """按模块代码获取 AI 工作流配置"""
         return await self.repo.get_ai_workflow_config_by_module(module_code)
 
-    async def create_ai_workflow_config(self, data: AIWorkflowConfigCreate) -> AIWorkflowConfig:
+    async def create_ai_workflow_config(
+        self, data: AIWorkflowConfigCreate
+    ) -> AIWorkflowConfig:
         """创建 AI 工作流配置"""
         create_data = data.model_dump() if not isinstance(data, dict) else data
         return await self.repo.create_ai_workflow_config(create_data)

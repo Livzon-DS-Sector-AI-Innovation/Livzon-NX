@@ -1,6 +1,6 @@
 """FA 苯丙氨酸 - 批次血链表 API"""
-
 import logging
+from typing import Any
 
 from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -63,7 +63,7 @@ _DOWNSTREAM_SQL = """
 """
 
 
-async def _node_info(session, stg, bn):
+async def _node_info(session: Any, stg: Any, bn: Any) -> Any:
     """查询节点的详细信息：detail文本, yield_rate, quantity"""
     p = []
     yr = None
@@ -152,7 +152,7 @@ async def fa_lineage_trace(
     batch_no: str = Query(...),
     stage: str = Query(...),
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     if stage not in FA_STAGE_LABELS:
         raise HTTPException(
             400, f"无效工段: {stage}，可选: {list(FA_STAGE_LABELS.keys())}"
@@ -252,7 +252,7 @@ async def fa_lineage_trace(
             if r.downstream_batch
         ]
 
-    def mk_node(stg, bn, detail, y, q):
+    def mk_node(stg: Any, bn: Any, detail: Any, y: Any, q: Any) -> Any:
         ct_final = ", ".join(conn_map.get((bn, stg), []))
         return LineageNode(
             stage=stg,
@@ -266,7 +266,9 @@ async def fa_lineage_trace(
         )
 
     # --- aggregate ---
-    stage_nodes = {s: [] for s in FA_STAGE_LABELS}
+    stage_nodes: dict[str, list[LineageNode]] = {
+        s: [] for s in FA_STAGE_LABELS
+    }
     for layer in reversed(upstream_layers):
         for it in layer:
             stage_nodes[it["stage"]].append(

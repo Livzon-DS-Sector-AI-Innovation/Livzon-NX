@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
@@ -13,11 +14,11 @@ from app.modules.quality.service import quality_feishu_pages as service
 
 @pytest.mark.anyio
 async def test_list_report_records_adds_record_id_alias(
-    db_session,
+    db_session: Any,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        service.quality_management_service,
+        service.quality_management_service,  # type: ignore[attr-defined]
         "get_deviation_report_record_list",
         AsyncMock(
             return_value={
@@ -43,11 +44,11 @@ async def test_list_report_records_adds_record_id_alias(
 
 @pytest.mark.anyio
 async def test_create_investigation_push_record_posts_feishu_fields_only(
-    db_session,
+    db_session: Any,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        service.tracking_service,
+        service.tracking_service,  # type: ignore[attr-defined]
         "_resolve_selected_submitter_contact",
         AsyncMock(
             return_value={
@@ -59,11 +60,20 @@ async def test_create_investigation_push_record_posts_feishu_fields_only(
         ),
     )
     monkeypatch.setattr(
-        service.feishu_sync_service,
+        service.feishu_sync_service,  # type: ignore[attr-defined]
         "_resolve_contact_bitable_user_value",
-        AsyncMock(side_effect=[[{"id": "ou_submitter_001"}], [{"id": "ou_head_001"}], None, None]),
+        AsyncMock(
+            side_effect=[
+                [{"id": "ou_submitter_001"}],
+                [{"id": "ou_head_001"}],
+                None,
+                None,
+            ]
+        ),
     )
-    create_mock = AsyncMock(return_value={"record_id": "rec_push_001", "table_id": "tbl_push"})
+    create_mock: Any = AsyncMock(
+        return_value={"record_id": "rec_push_001", "table_id": "tbl_push"}
+    )
     monkeypatch.setattr(service, "_create_entity_record", create_mock)
     monkeypatch.setattr(
         service,
@@ -93,7 +103,10 @@ async def test_create_investigation_push_record_posts_feishu_fields_only(
     call = create_mock.await_args
     assert call.args[0] is db_session
     assert call.args[1] == "deviation_investigation_push_record"
-    assert call.kwargs["search_conditions"] == [("偏差编号", "PC-2607001"), ("第N次推送", "第1次")]
+    assert call.kwargs["search_conditions"] == [
+        ("偏差编号", "PC-2607001"),
+        ("第N次推送", "第1次"),
+    ]
     assert call.args[2]["偏差编号"] == "PC-2607001"
     assert call.args[2]["第N次推送"] == "第1次"
     assert call.args[2]["偏差调查报告"] == {
@@ -106,15 +119,17 @@ async def test_create_investigation_push_record_posts_feishu_fields_only(
 
 @pytest.mark.anyio
 async def test_create_deviation_ledger_record_generates_code_and_writes_feishu(
-    db_session,
+    db_session: Any,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        service.quality_management_service,
+        service.quality_management_service,  # type: ignore[attr-defined]
         "_generate_monthly_deviation_code",
         AsyncMock(return_value="PC-2607009"),
     )
-    create_mock = AsyncMock(return_value={"record_id": "rec_dev_001", "table_id": "tbl_dev"})
+    create_mock: Any = AsyncMock(
+        return_value={"record_id": "rec_dev_001", "table_id": "tbl_dev"}
+    )
     monkeypatch.setattr(service, "_create_entity_record", create_mock)
     monkeypatch.setattr(
         service,
@@ -153,16 +168,18 @@ async def test_create_deviation_ledger_record_generates_code_and_writes_feishu(
 
 @pytest.mark.anyio
 async def test_deviation_ledger_round_trip_reads_back_latest_feishu_fields(
-    db_session,
+    db_session: Any,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        service.quality_management_service,
+        service.quality_management_service,  # type: ignore[attr-defined]
         "_generate_monthly_deviation_code",
         AsyncMock(return_value="PC-2607010"),
     )
-    create_mock = AsyncMock(return_value={"record_id": "rec_dev_001", "table_id": "tbl_dev"})
-    get_mock = AsyncMock(
+    create_mock: Any = AsyncMock(
+        return_value={"record_id": "rec_dev_001", "table_id": "tbl_dev"}
+    )
+    get_mock: Any = AsyncMock(
         side_effect=[
             {
                 "id": "rec_dev_001",
@@ -197,7 +214,7 @@ async def test_deviation_ledger_round_trip_reads_back_latest_feishu_fields(
 
 @pytest.mark.anyio
 async def test_list_deviation_ledger_records_filters_by_record_ids(
-    db_session,
+    db_session: Any,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
@@ -246,17 +263,29 @@ async def test_report_records_api_returns_feishu_page_service_payload(
     client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    list_mock = AsyncMock(
+    list_mock: Any = AsyncMock(
         return_value={
-            "items": [{"id": "rec_report_001", "record_id": "rec_report_001", "deviation_code": "PC-2607001"}],
+            "items": [
+                {
+                    "id": "rec_report_001",
+                    "record_id": "rec_report_001",
+                    "deviation_code": "PC-2607001",
+                }
+            ],
             "total": 1,
             "page": 1,
             "page_size": 20,
         }
     )
-    monkeypatch.setattr(quality_api.quality_feishu_pages, "list_report_records", list_mock)
+    monkeypatch.setattr(
+        quality_api.quality_feishu_pages,  # type: ignore[attr-defined]
+        "list_report_records",
+        list_mock,
+    )
 
-    response = await client.get("/api/v1/quality/deviation-report-records?page=1&page_size=20")
+    response = await client.get(
+        "/api/v1/quality/deviation-report-records?page=1&page_size=20"
+    )
 
     assert response.status_code == 200
     payload = response.json()
@@ -270,9 +299,11 @@ async def test_investigation_push_create_api_posts_to_feishu_service(
     client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    create_mock = AsyncMock(return_value={"record_id": "rec_push_001", "id": "rec_push_001"})
+    create_mock: Any = AsyncMock(
+        return_value={"record_id": "rec_push_001", "id": "rec_push_001"}
+    )
     monkeypatch.setattr(
-        quality_api.quality_feishu_pages,
+        quality_api.quality_feishu_pages,  # type: ignore[attr-defined]
         "create_investigation_push_record",
         create_mock,
     )
@@ -292,35 +323,77 @@ async def test_deviation_ledger_api_roundtrip_delegates_to_feishu_page_service(
     client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    list_mock = AsyncMock(
+    list_mock: Any = AsyncMock(
         return_value={
-            "items": [{"id": "rec_dev_001", "record_id": "rec_dev_001", "deviation_code": "PC-2607001"}],
+            "items": [
+                {
+                    "id": "rec_dev_001",
+                    "record_id": "rec_dev_001",
+                    "deviation_code": "PC-2607001",
+                }
+            ],
             "total": 1,
             "page": 1,
             "page_size": 20,
         }
     )
-    get_mock = AsyncMock(
-        return_value={"id": "rec_dev_001", "record_id": "rec_dev_001", "deviation_code": "PC-2607001"}
+    get_mock: Any = AsyncMock(
+        return_value={
+            "id": "rec_dev_001",
+            "record_id": "rec_dev_001",
+            "deviation_code": "PC-2607001",
+        }
     )
-    create_mock = AsyncMock(
-        return_value={"id": "rec_dev_001", "record_id": "rec_dev_001", "deviation_code": "PC-2607001"}
+    create_mock: Any = AsyncMock(
+        return_value={
+            "id": "rec_dev_001",
+            "record_id": "rec_dev_001",
+            "deviation_code": "PC-2607001",
+        }
     )
-    update_mock = AsyncMock(
-        return_value={"id": "rec_dev_001", "record_id": "rec_dev_001", "deviation_code": "PC-2607001"}
+    update_mock: Any = AsyncMock(
+        return_value={
+            "id": "rec_dev_001",
+            "record_id": "rec_dev_001",
+            "deviation_code": "PC-2607001",
+        }
     )
-    delete_mock = AsyncMock(return_value=None)
-    monkeypatch.setattr(quality_api.quality_feishu_pages, "list_deviation_ledger_records", list_mock)
-    monkeypatch.setattr(quality_api.quality_feishu_pages, "get_deviation_ledger_record", get_mock)
-    monkeypatch.setattr(quality_api.quality_feishu_pages, "create_deviation_ledger_record", create_mock)
-    monkeypatch.setattr(quality_api.quality_feishu_pages, "update_deviation_ledger_record", update_mock)
-    monkeypatch.setattr(quality_api.quality_feishu_pages, "delete_deviation_ledger_record", delete_mock)
+    delete_mock: Any = AsyncMock(return_value=None)
+    monkeypatch.setattr(
+        quality_api.quality_feishu_pages,  # type: ignore[attr-defined]
+        "list_deviation_ledger_records",
+        list_mock,
+    )
+    monkeypatch.setattr(
+        quality_api.quality_feishu_pages,  # type: ignore[attr-defined]
+        "get_deviation_ledger_record",
+        get_mock,
+    )
+    monkeypatch.setattr(
+        quality_api.quality_feishu_pages,  # type: ignore[attr-defined]
+        "create_deviation_ledger_record",
+        create_mock,
+    )
+    monkeypatch.setattr(
+        quality_api.quality_feishu_pages,  # type: ignore[attr-defined]
+        "update_deviation_ledger_record",
+        update_mock,
+    )
+    monkeypatch.setattr(
+        quality_api.quality_feishu_pages,  # type: ignore[attr-defined]
+        "delete_deviation_ledger_record",
+        delete_mock,
+    )
 
-    list_response = await client.get("/api/v1/quality/deviation-ledger-records?page=1&page_size=20")
+    list_response = await client.get(
+        "/api/v1/quality/deviation-ledger-records?page=1&page_size=20"
+    )
     assert list_response.status_code == 200
     assert list_response.json()["data"][0]["record_id"] == "rec_dev_001"
 
-    detail_response = await client.get("/api/v1/quality/deviation-ledger-records/rec_dev_001")
+    detail_response = await client.get(
+        "/api/v1/quality/deviation-ledger-records/rec_dev_001"
+    )
     assert detail_response.status_code == 200
     assert detail_response.json()["data"]["record_id"] == "rec_dev_001"
 
@@ -338,7 +411,9 @@ async def test_deviation_ledger_api_roundtrip_delegates_to_feishu_page_service(
     assert update_response.status_code == 200
     assert update_response.json()["data"]["record_id"] == "rec_dev_001"
 
-    delete_response = await client.delete("/api/v1/quality/deviation-ledger-records/rec_dev_001")
+    delete_response = await client.delete(
+        "/api/v1/quality/deviation-ledger-records/rec_dev_001"
+    )
     assert delete_response.status_code == 200
     assert delete_response.json()["data"]["success"] is True
     delete_mock.assert_awaited_once()
@@ -349,7 +424,7 @@ async def test_deviation_ledger_export_api_streams_docx(
     client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    list_mock = AsyncMock(
+    list_mock: Any = AsyncMock(
         return_value={
             "items": [
                 {
@@ -373,7 +448,7 @@ async def test_deviation_ledger_export_api_streams_docx(
         }
     )
     monkeypatch.setattr(
-        quality_api.quality_feishu_pages,
+        quality_api.quality_feishu_pages,  # type: ignore[attr-defined]
         "list_deviation_ledger_records",
         list_mock,
     )
@@ -402,7 +477,7 @@ async def test_deviation_ledger_export_api_supports_selected_record_ids(
     client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    list_mock = AsyncMock(
+    list_mock: Any = AsyncMock(
         return_value={
             "items": [
                 {
@@ -418,7 +493,7 @@ async def test_deviation_ledger_export_api_supports_selected_record_ids(
         }
     )
     monkeypatch.setattr(
-        quality_api.quality_feishu_pages,
+        quality_api.quality_feishu_pages,  # type: ignore[attr-defined]
         "list_deviation_ledger_records",
         list_mock,
     )
@@ -438,7 +513,7 @@ async def test_deviation_ledger_single_export_api_streams_single_docx(
     client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    get_mock = AsyncMock(
+    get_mock: Any = AsyncMock(
         return_value={
             "record_id": "rec_dev_001",
             "deviation_code": "PC-2607001",
@@ -455,7 +530,7 @@ async def test_deviation_ledger_single_export_api_streams_single_docx(
         }
     )
     monkeypatch.setattr(
-        quality_api.quality_feishu_pages,
+        quality_api.quality_feishu_pages,  # type: ignore[attr-defined]
         "get_deviation_ledger_record",
         get_mock,
     )

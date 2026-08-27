@@ -94,9 +94,7 @@ def upgrade() -> None:
         sa.Column("external_user_id", sa.String(length=128), nullable=True),
         sa.Column("external_open_id", sa.String(length=128), nullable=True),
         sa.Column("external_union_id", sa.String(length=128), nullable=True),
-        sa.Column(
-            "local_user_id", postgresql.UUID(as_uuid=True), nullable=False
-        ),
+        sa.Column("local_user_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column(
             "status",
             sa.String(length=32),
@@ -229,9 +227,7 @@ def upgrade() -> None:
         sa.Column("metadata_hash", sa.String(length=64), nullable=False),
         *_base_columns(),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint(
-            "operation", name="uq_core_agent_tool_catalog_operation"
-        ),
+        sa.UniqueConstraint("operation", name="uq_core_agent_tool_catalog_operation"),
         schema="core",
         comment="Agent 工具目录运行时事实源",
     )
@@ -265,9 +261,7 @@ def downgrade() -> None:
         "feishu_card_actions",
         sa.Column("message_id", sa.String(length=128), nullable=True),
         sa.Column("card_id", sa.String(length=128), nullable=True),
-        sa.Column(
-            "local_user_id", postgresql.UUID(as_uuid=True), nullable=True
-        ),
+        sa.Column("local_user_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("recipient_open_id", sa.String(length=128), nullable=True),
         sa.Column(
             "business_ref",

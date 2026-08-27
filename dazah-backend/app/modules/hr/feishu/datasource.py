@@ -18,7 +18,7 @@ class BitableDataSource:
 
     Example:
         ds = BitableDataSource(
-            app_token="KHLsboPBGaah6Vs3EpgcpvzsnuH",
+            app_token="<从数据库配置读取>",
             table_id="tblrcSHfS5ivun7e",
         )
 
@@ -47,7 +47,7 @@ class BitableDataSource:
     async def create(self, fields: dict[str, Any]) -> str:
         """新增一行，返回 record_id。"""
         record = await self.client.create_record(self.table_id, fields)
-        rid = record.get("record_id", "")
+        rid = str(record.get("record_id", ""))
         logger.info("[BitableDS] created record %s in %s", rid, self.table_id)
         return rid
 
@@ -77,9 +77,7 @@ class BitableDataSource:
     async def get_by_field(self, field_name: str, value: str) -> dict[str, Any] | None:
         """根据单个字段精确查找一行。"""
         # 注意：field_name 是飞书字段名，如果包含特殊字符建议用 field_id
-        items = await self.query(
-            filter_str=f'CurrentValue.[{field_name}] = "{value}"'
-        )
+        items = await self.query(filter_str=f'CurrentValue.[{field_name}] = "{value}"')
         return items[0] if items else None
 
     # ─── 批量同步（本地 PostgreSQL ↔ 多维表格） ───
@@ -94,7 +92,7 @@ class BitableDataSource:
         """根据 key_field 查找，存在则更新，不存在则创建。"""
         existing = await self.get_by_field(key_field, key_value)
         if existing:
-            rid = existing["record_id"]
+            rid = str(existing["record_id"])
             await self.update(rid, fields)
             return rid
         else:
@@ -140,7 +138,9 @@ class BitableDataSource:
     # ─── 字段类型转换辅助 ───
 
     @staticmethod
-    def prepare_fields(raw: dict[str, Any], date_fields: set[str] | None = None) -> dict[str, Any]:
+    def prepare_fields(
+        raw: dict[str, Any], date_fields: set[str] | None = None
+    ) -> dict[str, Any]:
         """将 Python 原生类型转换为飞书多维表格接受的格式。
 
         自动处理：

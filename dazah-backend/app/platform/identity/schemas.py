@@ -42,7 +42,7 @@ class ExternalIdentityBindingOut(ExternalIdentityBindingCreate):
 
     @field_validator("source", mode="before")
     @classmethod
-    def normalize_legacy_source(cls, value: object) -> object:
+    def normalize_legacy_source(cls: Any, value: object) -> object:
         if value == "identity.users":
             return "directory_sync"
         return value
@@ -103,6 +103,8 @@ class UserResponse(BaseModel):
     tenant_key: str | None = None
     grant_version: int = 0
     module_codes: list[str] = Field(default_factory=list)
+    roles: list[str] = Field(default_factory=list)
+    permissions: list[str] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}
 
@@ -112,7 +114,7 @@ class UserManagementItem(UserResponse):
 
     @field_validator("last_login_at", mode="before")
     @classmethod
-    def datetime_to_str(cls, v: object) -> str | None:
+    def datetime_to_str(cls: Any, v: object) -> str | None:
         if v is None:
             return None
         if isinstance(v, datetime):
@@ -253,7 +255,7 @@ class DepartmentResponse(BaseModel):
 
     @field_validator("path", mode="before")
     @classmethod
-    def path_to_str(cls, v: object) -> str | None:
+    def path_to_str(cls: Any, v: object) -> str | None:
         if v is None:
             return None
         if isinstance(v, str):
@@ -306,7 +308,7 @@ class PersonnelItem(BaseModel):
 
     @field_validator("feishu_department_ids", mode="before")
     @classmethod
-    def parse_dept_ids(cls, v: object) -> list[str] | None:
+    def parse_dept_ids(cls: Any, v: object) -> list[str] | None:
         if v is None:
             return None
         if isinstance(v, list):
@@ -368,7 +370,7 @@ class FeishuConfigUpsert(BaseModel):
         mode="before",
     )
     @classmethod
-    def clean_text(cls, value: object) -> object:
+    def clean_text(cls: Any, value: object) -> object:
         if isinstance(value, str):
             cleaned = value.strip()
             return cleaned or None
@@ -406,7 +408,7 @@ class FeishuConfigResponse(BaseModel):
         mode="before",
     )
     @classmethod
-    def datetime_to_str(cls, value: object) -> str | None:
+    def datetime_to_str(cls: Any, value: object) -> str | None:
         if value is None:
             return None
         if isinstance(value, datetime):
@@ -455,3 +457,195 @@ class FeishuGatewayRestartApiResponse(BaseModel):
     code: int = 200
     message: str = "success"
     data: FeishuGatewayRestartResult
+
+
+# ── RBAC / system permission management ────────────────────────────
+
+
+class RoleResponse(BaseModel):
+    id: UUID
+    name: str
+    code: str
+    description: str | None = None
+    is_system: bool = False
+    permissions: list[str] = Field(default_factory=list)
+
+    model_config = {"from_attributes": True}
+
+
+class RoleCreateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    code: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_.:-]+$")
+    description: str | None = Field(default=None, max_length=255)
+
+
+class RoleUpdateRequest(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    description: str | None = Field(default=None, max_length=255)
+
+
+class RolePermissionsRequest(BaseModel):
+    permission_ids: list[UUID] = Field(default_factory=list, max_length=500)
+
+
+class PermissionResponse(BaseModel):
+    id: UUID
+    code: str
+    module: str
+    action: str
+    name: str
+    description: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class UserRolesResponse(BaseModel):
+    user: UserResponse
+    roles: list[RoleResponse] = Field(default_factory=list)
+
+
+class AssignUserRoleRequest(BaseModel):
+    role_ids: list[UUID] = Field(default_factory=list, max_length=200)
+
+
+class DeptRuleCreateRequest(BaseModel):
+    role_id: UUID
+    feishu_department_id: str | None = Field(default=None, max_length=64)
+    department_name: str | None = Field(default=None, max_length=200)
+
+    @model_validator(mode="after")
+    def require_department_selector(self) -> "DeptRuleCreateRequest":
+        if not self.feishu_department_id and not self.department_name:
+            raise ValueError("feishu_department_id 与 department_name 至少提供一个")
+        return self
+
+
+class DeptRuleResponse(BaseModel):
+    id: UUID
+    role_id: UUID
+    role_name: str | None = None
+    role_code: str | None = None
+    feishu_department_id: str | None = None
+    department_name: str | None = None
+
+
+class MenuCreateRequest(BaseModel):
+    key: str | None = Field(default=None, max_length=128)
+    parent_id: UUID | None = None
+    name: str = Field(min_length=1, max_length=100)
+    type: Literal["directory", "menu", "button"]
+    permission_code: str | None = Field(default=None, max_length=128)
+    route_path: str | None = Field(default=None, max_length=255)
+    component_path: str | None = Field(default=None, max_length=255)
+    icon: str | None = Field(default=None, max_length=64)
+    sort_order: int = Field(default=0, ge=0, le=1_000_000)
+    status: Literal["active", "disabled"] = "active"
+
+
+class MenuUpdateRequest(BaseModel):
+    key: str | None = Field(default=None, max_length=128)
+    parent_id: UUID | None = None
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    type: Literal["directory", "menu", "button"] | None = None
+    permission_code: str | None = Field(default=None, max_length=128)
+    route_path: str | None = Field(default=None, max_length=255)
+    component_path: str | None = Field(default=None, max_length=255)
+    icon: str | None = Field(default=None, max_length=64)
+    sort_order: int | None = Field(default=None, ge=0, le=1_000_000)
+    status: Literal["active", "disabled"] | None = None
+
+
+class MenuResponse(BaseModel):
+    id: UUID
+    key: str | None = None
+    parent_id: UUID | None = None
+    name: str
+    type: str
+    permission_code: str | None = None
+    route_path: str | None = None
+    component_path: str | None = None
+    icon: str | None = None
+    sort_order: int = 0
+    status: str = "active"
+
+    model_config = {"from_attributes": True}
+
+
+class RoleMenusRequest(BaseModel):
+    menu_ids: list[UUID] = Field(default_factory=list, max_length=500)
+
+
+class RoleMenusResponse(BaseModel):
+    role_id: UUID
+    menu_ids: list[UUID] = Field(default_factory=list)
+
+
+class DataScopeRuleCreateRequest(BaseModel):
+    role_id: UUID | None = None
+    user_id: UUID | None = None
+    scope_type: Literal["all", "departments"]
+    department_names: list[str] | None = None
+
+    @field_validator("department_names", mode="after")
+    @classmethod
+    def clean_department_names(cls: Any, value: list[str] | None) -> list[str] | None:
+        if value is None:
+            return None
+        names = [item.strip() for item in value if item and item.strip()]
+        return names or None
+
+    @model_validator(mode="after")
+    def validate_scope_target(self) -> "DataScopeRuleCreateRequest":
+        if (self.role_id is None) == (self.user_id is None):
+            raise ValueError("role_id 与 user_id 必须二选一")
+        if self.scope_type == "departments" and not self.department_names:
+            raise ValueError("scope_type=departments 时必须提供 department_names")
+        return self
+
+
+class DataScopeRuleUpdateRequest(BaseModel):
+    scope_type: Literal["all", "departments"] | None = None
+    department_names: list[str] | None = None
+
+    @field_validator("department_names", mode="after")
+    @classmethod
+    def clean_department_names(cls: Any, value: list[str] | None) -> list[str] | None:
+        if value is None:
+            return None
+        names = [item.strip() for item in value if item and item.strip()]
+        return names or None
+
+
+class DataScopeRuleResponse(BaseModel):
+    id: UUID
+    role_id: UUID | None = None
+    user_id: UUID | None = None
+    scope_type: str
+    department_names: list[str] = Field(default_factory=list)
+
+    @field_validator("department_names", mode="before")
+    @classmethod
+    def parse_department_names(cls: Any, value: object) -> list[str]:
+        if isinstance(value, list):
+            return [str(item) for item in value if item]
+        if isinstance(value, str):
+            try:
+                parsed = json.loads(value)
+            except (TypeError, json.JSONDecodeError):
+                return []
+            return [str(item) for item in parsed] if isinstance(parsed, list) else []
+        return []
+
+
+class PermissionSimulateRequest(BaseModel):
+    user_id: UUID
+    method: Literal["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"]
+    path: str = Field(min_length=1, max_length=500)
+    department: str | None = Field(default=None, max_length=200)
+
+    @field_validator("path")
+    @classmethod
+    def require_absolute_path(cls: Any, value: str) -> str:
+        if not value.strip().startswith("/"):
+            raise ValueError("path 必须以 / 开头")
+        return value.strip()

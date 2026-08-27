@@ -122,7 +122,7 @@ export interface CpvImportTask {
   total_rows: number
   success_rows: number
   failed_rows: number
-  error_details: any
+  error_details: unknown
   created_at: string
   created_by: string | null
 }

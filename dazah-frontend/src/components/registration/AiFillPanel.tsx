@@ -2,12 +2,12 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import {
-  App, Button, Tag, Select, Table, InputNumber, Input, Space, Alert,
-  Badge, Popconfirm, Empty, Spin, Card, Modal, Typography,
+  App, Button, Tag, Select, Input, Space, Alert,
+  Badge, Empty, Spin, Card, Modal, Typography,
 } from 'antd'
 import {
-  ThunderboltOutlined, CheckOutlined, EditOutlined,
-  ReloadOutlined, EyeOutlined, FileImageOutlined,
+  ThunderboltOutlined, CheckOutlined,
+  ReloadOutlined, FileImageOutlined,
 } from '@ant-design/icons'
 import type { ChapterAsset, AssetCategory } from '@/types/dossier-writer'
 import type { AIPreviewResult, AIFieldResult, PageSplitInfo } from '@/types/dossier-writer'

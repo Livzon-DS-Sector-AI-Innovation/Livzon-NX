@@ -64,7 +64,7 @@ export function ProcessOptimizationPage({ initialOptimizations, initialTotal }: 
   }, [page, pageSize])
 
   useEffect(() => {
-    loadOptimizations()
+    queueMicrotask(loadOptimizations)
   }, [loadOptimizations])
 
   // 加载已保存的工作流状态

@@ -1,6 +1,7 @@
 """Production Feishu config & sync API."""
 
 import logging
+from typing import Any
 from uuid import UUID
 
 logger = logging.getLogger(__name__)
@@ -48,7 +49,7 @@ class TableEnabledPayload(BaseModel):
 # ── 配置 ──
 
 
-def _config_to_dict(c: ProductionFeishuConfig) -> dict:
+def _config_to_dict(c: ProductionFeishuConfig) -> dict[str, Any]:
     return {
         "id": str(c.id),
         "name": c.name,
@@ -69,7 +70,7 @@ def _config_to_dict(c: ProductionFeishuConfig) -> dict:
 
 
 @router.get("/feishu-configs", summary="飞书配置列表")
-async def list_feishu_configs(session: AsyncSession = Depends(get_db)):
+async def list_feishu_configs(session: AsyncSession = Depends(get_db)) -> Any:
     result = await session.execute(
         select(ProductionFeishuConfig)
         .where(ProductionFeishuConfig.is_deleted.is_(False))
@@ -81,7 +82,7 @@ async def list_feishu_configs(session: AsyncSession = Depends(get_db)):
 @router.put("/feishu-configs", summary="创建或更新飞书配置")
 async def upsert_feishu_config(
     body: ProductionFeishuConfigUpsert, session: AsyncSession = Depends(get_db)
-):
+) -> Any:
     result = await session.execute(
         select(ProductionFeishuConfig)
         .where(
@@ -124,7 +125,8 @@ async def upsert_feishu_config(
     try:
         from app.modules.production.auto_sync_service import discover_and_save_mapping
 
-        result = await discover_and_save_mapping(config, session)
+        discovery_result = await discover_and_save_mapping(config, session)
+        _ = discovery_result
         await session.refresh(config)
     except Exception as e:
         logger.warning("自动发现字段失败: %s", e)
@@ -135,7 +137,7 @@ async def upsert_feishu_config(
 @router.post("/feishu-configs/test", summary="测试飞书连通性")
 async def test_feishu_config(
     body: ProductionFeishuConfigUpsert, session: AsyncSession = Depends(get_db)
-):
+) -> Any:
     steps = []
     is_spreadsheet = False  # 标记是否为电子表格模式
 
@@ -268,7 +270,7 @@ async def test_feishu_config(
 
 
 @router.get("/feishu/tables", summary="已发现的数据表")
-async def list_feishu_tables(session: AsyncSession = Depends(get_db)):
+async def list_feishu_tables(session: AsyncSession = Depends(get_db)) -> Any:
     result = await session.execute(
         select(ProductionFeishuConfig).where(
             ProductionFeishuConfig.is_active,
@@ -296,7 +298,7 @@ async def list_feishu_tables(session: AsyncSession = Depends(get_db)):
 
 
 @router.post("/feishu/tables/refresh", summary="刷新表目录")
-async def refresh_feishu_tables(session: AsyncSession = Depends(get_db)):
+async def refresh_feishu_tables(session: AsyncSession = Depends(get_db)) -> Any:
     result = await session.execute(
         select(ProductionFeishuConfig).where(
             ProductionFeishuConfig.is_active,
@@ -345,7 +347,7 @@ async def get_table_data(
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=50),
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     try:
         uid = UUID(table_id)
     except ValueError:
@@ -379,7 +381,9 @@ async def get_table_data(
 
 
 @router.get("/feishu/tables/{table_id}/fields", summary="获取数据表字段映射")
-async def get_table_fields(table_id: str, session: AsyncSession = Depends(get_db)):
+async def get_table_fields(
+    table_id: str, session: AsyncSession = Depends(get_db)
+) -> Any:
     try:
         uid = UUID(table_id)
     except ValueError:
@@ -397,7 +401,7 @@ async def get_table_fields(table_id: str, session: AsyncSession = Depends(get_db
 @router.patch("/feishu/tables/{table_id}/enabled", summary="启停数据表")
 async def toggle_feishu_table(
     table_id: str, body: TableEnabledPayload, session: AsyncSession = Depends(get_db)
-):
+) -> Any:
     try:
         uid = UUID(table_id)
     except ValueError:
@@ -426,7 +430,9 @@ async def toggle_feishu_table(
 
 
 @router.post("/feishu/tables/{table_id}/sync", summary="同步数据表")
-async def sync_feishu_table(table_id: str, session: AsyncSession = Depends(get_db)):
+async def sync_feishu_table(
+    table_id: str, session: AsyncSession = Depends(get_db)
+) -> Any:
     try:
         uid = UUID(table_id)
     except ValueError:
@@ -467,14 +473,14 @@ async def sync_feishu_table(table_id: str, session: AsyncSession = Depends(get_d
 
 
 @router.get("/feishu/ws/status", summary="飞书长连接状态")
-async def get_feishu_ws_status():
+async def get_feishu_ws_status() -> Any:
     from app.modules.production.ws_client import get_ws_status
 
     return success_response(await get_ws_status())
 
 
 @router.post("/feishu/ws/restart", summary="重启飞书长连接")
-async def restart_feishu_ws():
+async def restart_feishu_ws() -> Any:
     from app.modules.production.ws_client import restart_ws_from_db
 
     status = await restart_ws_from_db()

@@ -1,6 +1,6 @@
 """AI 客户端 — 使用 core.llm 统一客户端。"""
 
-from app.core.llm import llm_client, LLMProviderError
+from app.core.llm import LLMProviderError, llm_client
 
 
 class AIAnalysisError(Exception):
@@ -35,7 +35,7 @@ async def analyze_image(
     """
     # Combine system and user prompts for vision API
     combined_prompt = f"{system_prompt}\n\n{user_prompt}"
-    
+
     try:
         return await llm_client.chat_vision(
             text_prompt=combined_prompt,
@@ -43,7 +43,9 @@ async def analyze_image(
             temperature=temperature,
         )
     except LLMProviderError as e:
-        raise AIAnalysisError(f"AI API 返回错误 (HTTP {e.status_code}): {e.raw_response or ''}") from e
+        raise AIAnalysisError(
+            f"AI API 返回错误 (HTTP {e.status_code}): {e.raw_response or ''}"
+        ) from e
 
 
 async def parse_correction(
@@ -62,7 +64,7 @@ async def parse_correction(
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_prompt},
     ]
-    
+
     try:
         return await llm_client.chat(
             messages=messages,
@@ -70,4 +72,6 @@ async def parse_correction(
             temperature=temperature,
         )
     except LLMProviderError as e:
-        raise AIAnalysisError(f"AI API 返回错误 (HTTP {e.status_code}): {e.raw_response or ''}") from e
+        raise AIAnalysisError(
+            f"AI API 返回错误 (HTTP {e.status_code}): {e.raw_response or ''}"
+        ) from e

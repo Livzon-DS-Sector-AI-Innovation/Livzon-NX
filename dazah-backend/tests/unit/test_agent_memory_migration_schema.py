@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
+from typing import Any
 
 MIGRATION_PATH = (
     Path(__file__).parents[2]
@@ -11,7 +12,7 @@ MIGRATION_PATH = (
 )
 
 
-def _load_migration():
+def _load_migration() -> Any:
     spec = importlib.util.spec_from_file_location(
         "agent_memory_migration", MIGRATION_PATH
     )
@@ -26,7 +27,7 @@ def test_agent_memory_migration_extends_current_head() -> None:
     assert migration.down_revision == "c6d4e8f2a913"
 
 
-def test_agent_memory_migration_creates_governance_tables(monkeypatch) -> None:
+def test_agent_memory_migration_creates_governance_tables(monkeypatch: Any) -> None:
     migration = _load_migration()
     tables: list[str] = []
     monkeypatch.setattr(

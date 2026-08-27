@@ -796,7 +796,7 @@ def find_closest_lines(old_string: str, content: str, context_lines: int = 2, ma
     anchor = old_lines[0].strip()
     if not anchor:
         # Try second line if first is blank
-        candidates = [l.strip() for l in old_lines if l.strip()]
+        candidates = [old_line.strip() for old_line in old_lines if old_line.strip()]
         if not candidates:
             return ""
         anchor = candidates[0]

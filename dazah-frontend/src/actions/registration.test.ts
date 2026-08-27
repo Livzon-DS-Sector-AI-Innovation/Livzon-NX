@@ -5,6 +5,9 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }))
+vi.mock('next/headers', () => ({
+  cookies: vi.fn(async () => ({ get: vi.fn(() => undefined) })),
+}))
 
 import {
   deleteAuthorizationLetter,
@@ -14,7 +17,7 @@ import {
   generateReferenceStandard,
 } from './registration'
 
-const API_BASE = process.env.API_BASE_URL || 'http://localhost:8000'
+const API_BASE = process.env.API_BASE_URL || 'http://dazah-backend-app-1:8000'
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {

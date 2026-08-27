@@ -22,6 +22,7 @@
 
 import logging
 import re
+from typing import Any
 
 from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -66,7 +67,7 @@ class LineageNode(BaseModel):
     loss_kg: float | None = None  # 本段损耗（投入−产出折纯 kg；仅精制/干燥段）
     loss_rate: float | None = None  # 本段损耗率 %（loss/投入×100）
     loss_level: str = ""  # 损耗等级 green<5 / yellow<10 / red≥10
-    loss_breakdown: dict | None = None  # 损耗去向拆解：母液带走/回收粉/其他
+    loss_breakdown: dict[str, Any] | None = None  # 损耗去向拆解：母液带走/回收粉/其他
     #   {"mother_liquor_kg": float|None,  母液带走（可回收，产品随母液离开）
     #    "recovery_powder_kg": float|None, 回收粉（可回用）
     #    "other_kg": float|None}           其他损失 = 总损耗 − 母液 − 回收粉
@@ -154,7 +155,8 @@ _DIST_LABELS = {
     "fourth_refinement": "四次精制",
 }
 
-def fmt_val(v):
+
+def fmt_val(v: Any) -> Any:
     return float(v) if v is not None else 0.0
 
 
@@ -178,7 +180,7 @@ def _f1_to_dr(bn: str) -> str:
     return b
 
 
-async def _feed_pure_from_upstream(session, feed_batch_no: str) -> float:
+async def _feed_pure_from_upstream(session: Any, feed_batch_no: str) -> float:
     """投料批号的折纯量（kg）——三次/四次精制表 feed_pure_kg 常为空，
     顺链取上游产出折纯补全：
       DR-F1-x → dr_first_refinement.feed_pure_kg（一次精制无产出字段，用投料折纯）
@@ -223,7 +225,7 @@ async def _feed_pure_from_upstream(session, feed_batch_no: str) -> float:
 
 
 async def _loss_breakdown_from(
-    session, stage: str, batch_no: str
+    session: Any, stage: str, batch_no: str
 ) -> tuple[float, float]:
     """该精制批的损耗去向（kg）：(母液带走, 回收粉) —— 表存字段聚合。
       dr_first/second/third_refinement 有 mother_liquor_product_kg（母液带走产品量）
@@ -291,7 +293,7 @@ def _detect_stage(batch_no: str) -> str | None:
     return None  # DR-26026 / DR-26026-1 歧义，DB 探测
 
 
-async def _stage_exists(session, stage: str, batch_no: str) -> bool:
+async def _stage_exists(session: Any, stage: str, batch_no: str) -> bool:
     table, col = _MAIN_TABLES[stage]
     r = (
         await session.execute(
@@ -304,7 +306,7 @@ async def _stage_exists(session, stage: str, batch_no: str) -> bool:
     return r is not None
 
 
-async def _resolve(session, stage: str, batch_no: str):
+async def _resolve(session: Any, stage: str, batch_no: str) -> Any:
     """解析批号归属工段：stage 明确优先，否则前缀/全表探测"""
     b = batch_no.strip()
     if stage and stage in DR_STAGE_LABELS and await _stage_exists(session, stage, b):
@@ -341,7 +343,7 @@ def _feed_stage(feed_batch_no: str) -> str:
 # ── 节点 detail（收率×100，DR 存小数） ─────────────────
 
 
-async def _node_info(session, stage: str, batch_no: str):
+async def _node_info(session: Any, stage: str, batch_no: str) -> Any:
     """返回 (detail, yield_pct, quantity)"""
     b = batch_no.strip()
     if stage == "extraction":
@@ -358,8 +360,8 @@ async def _node_info(session, stage: str, batch_no: str):
             return "", None, None
         qty = sum(fmt_val(r.total_qty) for r in rows)
         yr = next(
-            (fmt_val(r.single_batch_yield) * 100 for r in rows if
-        r.single_batch_yield), None
+            (fmt_val(r.single_batch_yield) * 100 for r in rows if r.single_batch_yield),
+            None,
         )
         d = f"合计 {qty:.2f}kg" if qty else ""
         if yr is not None:
@@ -381,13 +383,19 @@ async def _node_info(session, stage: str, batch_no: str):
             return "", None, None
         qty = sum(fmt_val(r.product_qty_kg) for r in rows)
         cy = next(
-            (fmt_val(r.chromatography_yield) * 100 for r in rows if
-        r.chromatography_yield),
+            (
+                fmt_val(r.chromatography_yield) * 100
+                for r in rows
+                if r.chromatography_yield
+            ),
             None,
         )
         cry = next(
-            (fmt_val(r.crystallization_yield) * 100 for r in rows if
-        r.crystallization_yield),
+            (
+                fmt_val(r.crystallization_yield) * 100
+                for r in rows
+                if r.crystallization_yield
+            ),
             None,
         )
         parts = []
@@ -474,7 +482,7 @@ async def _node_info(session, stage: str, batch_no: str):
 # ── 断链检测 ──────────────────────────────────────────
 
 
-async def _broken_reason(session, stage: str, batch_no: str) -> str | None:
+async def _broken_reason(session: Any, stage: str, batch_no: str) -> str | None:
     """节点在自身工段表无记录（无源头的投料/回收粉标签）→ 断链原因"""
     b = batch_no.strip()
     if stage == "recovery":
@@ -506,7 +514,7 @@ async def _broken_reason(session, stage: str, batch_no: str) -> str | None:
 # ── 上下游关联 ────────────────────────────────────────
 
 
-async def _upstream(session, stage: str, batch_no: str):
+async def _upstream(session: Any, stage: str, batch_no: str) -> Any:
     """谁生产了 B。返回 [(upstage, upbatch, feed_pure_kg)]"""
     b = batch_no.strip()
     if stage == "extraction":
@@ -594,7 +602,7 @@ async def _upstream(session, stage: str, batch_no: str):
     return []
 
 
-def _to_feeds(up_rows) -> list[FeedItem]:
+def _to_feeds(up_rows: Any) -> list[FeedItem]:
     """把 _upstream 返回的 [(upstage, upbatch, feed_pure_kg)] 转成投入明细。
     qty 只有二次/三次/四次精制有（折纯量）；层析/一次精制投料无量 →
         0（仅作多投料源标注）"""
@@ -611,7 +619,7 @@ def _to_feeds(up_rows) -> list[FeedItem]:
     return out
 
 
-async def _downstream(session, stage: str, batch_no: str):
+async def _downstream(session: Any, stage: str, batch_no: str) -> Any:
     """B 被谁使用。返回 [(downstage, downbatch, qty)]"""
     b = batch_no.strip()
     if stage == "fermentation":
@@ -675,7 +683,9 @@ async def _downstream(session, stage: str, batch_no: str):
     return []
 
 
-async def _siblings(session, stage: str, batch_no: str, hint_fbatch: str = ""):
+async def _siblings(
+    session: Any, stage: str, batch_no: str, hint_fbatch: str = ""
+) -> Any:
     """与 batch_no 同源（共享最近共同上游）的兄弟批。
 
     返回 (group_key, members)：
@@ -722,7 +732,7 @@ async def _siblings(session, stage: str, batch_no: str, hint_fbatch: str = ""):
                 fids = [hid.id]
         fid = fids[0]
         # 组内全部萃取（含自身）
-        members: set[str] = set()
+        extraction_members: set[str] = set()
         for fid in fids:
             rows = (
                 await session.execute(
@@ -736,8 +746,8 @@ async def _siblings(session, stage: str, batch_no: str, hint_fbatch: str = ""):
                     {"fid": fid},
                 )
             ).fetchall()
-            members.update(r.extraction_batch_no for r in rows)
-        if len(members) <= 1:
+            extraction_members.update(r.extraction_batch_no for r in rows)
+        if len(extraction_members) <= 1:
             return None, []
         # group_key = 共同发酵批号
         frow = (
@@ -750,7 +760,7 @@ async def _siblings(session, stage: str, batch_no: str, hint_fbatch: str = ""):
             )
         ).fetchone()
         gk = frow.batch_no if frow else "同源发酵批"
-        return gk, [("extraction", x) for x in sorted(members)]
+        return gk, [("extraction", x) for x in sorted(extraction_members)]
 
     if stage == "chromatography":
         # 层析 B 吃的各萃取 → 每个萃取的所有层析（含自身）
@@ -769,7 +779,7 @@ async def _siblings(session, stage: str, batch_no: str, hint_fbatch: str = ""):
         ]
         if not exs:
             return None, []
-        members: set[str] = set()
+        chromatography_members: set[str] = set()
         for e in exs:
             rows = (
                 await session.execute(
@@ -781,11 +791,11 @@ async def _siblings(session, stage: str, batch_no: str, hint_fbatch: str = ""):
                     {"e": e},
                 )
             ).fetchall()
-            members.update(r.chromatography_batch_no for r in rows)
-        if len(members) <= 1:
+            chromatography_members.update(r.chromatography_batch_no for r in rows)
+        if len(chromatography_members) <= 1:
             return None, []
         gk = "、".join(sorted(exs))
-        return gk, [("chromatography", x) for x in sorted(members)]
+        return gk, [("chromatography", x) for x in sorted(chromatography_members)]
 
     if stage == "first_refinement":
         # 一次 B 的层析父级 → 该层析产出的所有湿粉(F1)（含自身）。
@@ -806,7 +816,7 @@ async def _siblings(session, stage: str, batch_no: str, hint_fbatch: str = ""):
         ]
         if not cs:
             return None, []
-        members: set[str] = set()
+        wet_powder_members: set[str] = set()
         for c in cs:
             rows = (
                 await session.execute(
@@ -818,11 +828,11 @@ async def _siblings(session, stage: str, batch_no: str, hint_fbatch: str = ""):
                     {"c": c},
                 )
             ).fetchall()
-            members.update(_to_f1(r.wet_powder_batch_no) for r in rows)
-        if len(members) <= 1:
+            wet_powder_members.update(_to_f1(r.wet_powder_batch_no) for r in rows)
+        if len(wet_powder_members) <= 1:
             return None, []
         gk = "、".join(sorted(cs))
-        return gk, [("first_refinement", x) for x in sorted(members)]
+        return gk, [("first_refinement", x) for x in sorted(wet_powder_members)]
 
     return None, []
 
@@ -838,17 +848,17 @@ async def dr_lineage_trace(
         description="工段：fermentation/extraction/chromatography/first_refinement/second_refinement/third_refinement/fourth_refinement",
     ),
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     if not batch_no or not batch_no.strip() or batch_no.strip() == "-":
         raise HTTPException(404, "DR 批次号不能为空")
     real_stage, real_batch = await _resolve(session, stage, batch_no)
     if real_stage is None:
         raise HTTPException(404, f"DR 批次未找到: {batch_no}")
 
-    broken_links: list[dict] = []
+    broken_links: list[dict[str, Any]] = []
     broken_seen: set[str] = set()
 
-    def _note_broken(st, bn, reason):
+    def _note_broken(st: Any, bn: Any, reason: Any) -> Any:
         key = f"{st}|{bn}"
         if key not in broken_seen:
             broken_seen.add(key)
@@ -867,17 +877,19 @@ async def dr_lineage_trace(
     #   ① 主链向上：target → 一次 → 层析 → 萃取 → 发酵，每层展开全部生产者（层析吃多萃取全列、跨发酵批全列），不查生产者的下游  # noqa: E501
     #   ② 主链向下：target → 三次 → 四次，每层展开全部使用者
     #   ③ 下游节点（三次/四次）的投料行全显示：DR-F2-241013、四次母液回收粉等跨批投料以断链节点列出，但不递归展开其上下游  # noqa: E501
-    nodes: dict[str, dict] = {
+    nodes: dict[str, dict[str, Any]] = {
         s: {} for s in DR_STAGE_LABELS
     }  # stage -> {batch_no: meta}
-    recovery_nodes: dict[str, dict] = {}
+    recovery_nodes: dict[str, dict[str, Any]] = {}
 
-    def _add_recovery(bn):
+    def _add_recovery(bn: Any) -> Any:
         reason = "回收粉/母液标签，无独立台账"
         _note_broken("recovery", bn, reason)
         recovery_nodes[bn] = {"broken_reason": reason}
 
-    async def _add_node(st, bn, is_sibling=False, sib_group=""):
+    async def _add_node(
+        st: Any, bn: Any, is_sibling: Any = False, sib_group: Any = ""
+    ) -> Any:
         if st == "recovery":
             _add_recovery(bn)
             return
@@ -912,7 +924,7 @@ async def dr_lineage_trace(
 
     seen = {(real_stage, real_batch)}
     # 各节点投入明细（混批全部兄弟批 + 折纯量），组装时填进 LineageNode.feeds
-    feeds_map: dict[tuple, list[FeedItem]] = {}
+    feeds_map: dict[tuple[Any, ...], list[FeedItem]] = {}
 
     # ① 主链向上：只展开生产者，不查其下游
     queue_up = [(real_stage, real_batch)]
@@ -964,7 +976,7 @@ async def dr_lineage_trace(
                 queue_down.append((ds, dbn))
 
     # ── 连接关系（connects_to：每个节点 → 其下游批次）──
-    conn_map: dict[tuple, list] = {}
+    conn_map: dict[tuple[Any, ...], list[Any]] = {}
     for cs, cb in seen:
         for ds, dbn, _ in await _downstream(session, cs, cb):
             if (ds, dbn) in seen:
@@ -1000,7 +1012,7 @@ async def dr_lineage_trace(
             ):
                 ml, rp = await _loss_breakdown_from(session, s, bn)
                 recorded = (ml > 0) or (rp > 0)
-                bd = {
+                bd: dict[str, float | bool | None] = {
                     "mother_liquor_kg": None,
                     "recovery_powder_kg": None,
                     "other_kg": None,
@@ -1087,7 +1099,7 @@ async def dr_lineage_trace(
 
 
 @router.get("/dr/lineage/yield-distribution", summary="DR 收率分布（按工段箱线统计）")
-async def dr_yield_distribution(session: AsyncSession = Depends(get_db)):
+async def dr_yield_distribution(session: AsyncSession = Depends(get_db)) -> Any:
     rows = (
         await session.execute(
             text("""
@@ -1158,7 +1170,7 @@ async def dr_yield_distribution(session: AsyncSession = Depends(get_db)):
 @router.get(
     "/dr/lineage/material-reuse", summary="DR 物料复用（被多个下游批复用的投料）"
 )
-async def dr_material_reuse(session: AsyncSession = Depends(get_db)):
+async def dr_material_reuse(session: AsyncSession = Depends(get_db)) -> Any:
     rows = (
         await session.execute(
             text("""
@@ -1213,7 +1225,7 @@ async def dr_material_reuse(session: AsyncSession = Depends(get_db)):
 
 
 @router.get("/dr/lineage/coverage", summary="DR 覆盖完整性与断链清单")
-async def dr_coverage(session: AsyncSession = Depends(get_db)):
+async def dr_coverage(session: AsyncSession = Depends(get_db)) -> Any:
     # 各工段产出批数
     segs = []
     for s, (table, col) in _MAIN_TABLES.items():
@@ -1246,7 +1258,9 @@ async def dr_coverage(session: AsyncSession = Depends(get_db)):
             segs.append(CoverageItem(segment=DR_STAGE_LABELS[s], count=n))
 
     # 断链清单
-    async def _missing(src_table, src_col, tgt_table, tgt_col, prefix=None):
+    async def _missing(
+        src_table: Any, src_col: Any, tgt_table: Any, tgt_col: Any, prefix: Any = None
+    ) -> Any:
         """源表投料批号在目标表查不到（可带前缀过滤）"""
         prefix_sql = f"AND {src_col} LIKE :pre" if prefix else ""
         rows = (
@@ -1359,7 +1373,7 @@ class FunnelResult(BaseModel):
     notes: list[str] = []  # 全局说明（断链/口径）
 
 
-async def _wet_powder_roots(session, stage: str, batch_no: str) -> set[str]:
+async def _wet_powder_roots(session: Any, stage: str, batch_no: str) -> set[str]:
     """从目标批号向上定位"层析湿粉"起点批号集合。
     若目标在层析之前（发酵/萃取），向下展开找层析；否则向上回溯到层析。
     层析湿粉折纯是全程损耗的可比口径起点（萃取液为另一口径不参与）。"""
@@ -1401,7 +1415,7 @@ async def _wet_powder_roots(session, stage: str, batch_no: str) -> set[str]:
     return roots
 
 
-async def _chain_layers(session, roots: set[str]) -> dict[str, set[str]]:
+async def _chain_layers(session: Any, roots: set[str]) -> dict[str, set[str]]:
     """从层析起点向下展开各工段批号集合（层析→F1→F2→F3→GB）"""
     layers: dict[str, set[str]] = {"chromatography": set(roots)}
     queue = [("chromatography", b) for b in roots]
@@ -1423,7 +1437,7 @@ async def _chain_layers(session, roots: set[str]) -> dict[str, set[str]]:
     return layers
 
 
-async def _layer_output(session, stage: str, batches: set[str]) -> float:
+async def _layer_output(session: Any, stage: str, batches: set[str]) -> float:
     """该工段批号集合的产出量（折纯/干粉 kg）。层析=湿粉折纯；F1=投料折纯(无独立产出)；
     F2/F3=产出折纯；F4=干粉。"""
     if not batches:
@@ -1452,7 +1466,7 @@ async def _layer_output(session, stage: str, batches: set[str]) -> float:
     return float(r)
 
 
-async def _layer_input(session, stage: str, batches: set[str]) -> float:
+async def _layer_input(session: Any, stage: str, batches: set[str]) -> float:
     """该工段批号集合的投入折纯 kg——二次/三次/四次精制为混批节点，
     用 _upstream 展开全部兄弟投料（含跨批 + feed_pure
         链补），避免单批起点漏掉兄弟批。"""
@@ -1476,7 +1490,7 @@ async def dr_loss_funnel(
         description="工段：fermentation/extraction/chromatography/first_refinement/second_refinement/third_refinement/fourth_refinement",
     ),
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     if not batch_no or not batch_no.strip() or batch_no.strip() == "-":
         raise HTTPException(404, "DR 批次号不能为空")
     real_stage, real_batch = await _resolve(session, stage, batch_no)
@@ -1553,7 +1567,7 @@ async def dr_loss_funnel(
     if layers:
         start = layers[0].output_pure
         end = layers[-1].output_pure
-        if start and start > 0:
+        if start is not None and start > 0 and end is not None:
             overall_yield = round(end / start * 100, 1)
             overall_loss = round(start - end, 2)
         if len(layers) < len(stage_order):
@@ -1610,7 +1624,7 @@ class LossStatsResult(BaseModel):
 @router.get(
     "/dr/lineage/loss-stats", summary="DR 损耗统计（按工段×月平均收率 + 未闭合投料）"
 )
-async def dr_loss_stats(session: AsyncSession = Depends(get_db)):
+async def dr_loss_stats(session: AsyncSession = Depends(get_db)) -> Any:
     # 各精制工段按年月聚合收率（存小数×100）
     rows = (
         await session.execute(

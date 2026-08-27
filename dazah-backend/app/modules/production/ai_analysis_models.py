@@ -1,6 +1,6 @@
 """AI 分析结果存储模型"""
-
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import Boolean, DateTime, Index, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
@@ -27,13 +27,13 @@ class AiAnalysis(BaseModel):
     include_siblings: Mapped[bool] = mapped_column(
         Boolean, default=False, comment="是否含同级批次"
     )
-    trace_snapshot: Mapped[dict | None] = mapped_column(
+    trace_snapshot: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB, nullable=True, comment="追溯数据快照"
     )
-    dist_snapshot: Mapped[dict | None] = mapped_column(
+    dist_snapshot: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB, nullable=True, comment="收率分布快照"
     )
-    anomalies: Mapped[list | None] = mapped_column(
+    anomalies: Mapped[list[Any] | None] = mapped_column(
         JSONB, nullable=True, comment="后端计算的异常标记"
     )
     llm_prompt: Mapped[str | None] = mapped_column(
@@ -45,10 +45,10 @@ class AiAnalysis(BaseModel):
     summary: Mapped[str | None] = mapped_column(
         String(500), nullable=True, comment="一句话摘要"
     )
-    causes: Mapped[list | None] = mapped_column(
+    causes: Mapped[list[Any] | None] = mapped_column(
         JSONB, nullable=True, comment="原因分析"
     )
-    suggestions: Mapped[list | None] = mapped_column(
+    suggestions: Mapped[list[Any] | None] = mapped_column(
         JSONB, nullable=True, comment="优化建议"
     )
     severity: Mapped[str | None] = mapped_column(
@@ -57,13 +57,15 @@ class AiAnalysis(BaseModel):
     model_used: Mapped[str | None] = mapped_column(
         String(50), nullable=True, comment="LLM模型名"
     )
-    reference_cases: Mapped[list | None] = mapped_column(
+    reference_cases: Mapped[list[Any] | None] = mapped_column(
         JSONB, nullable=True, comment="引用的历史案例ID"
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
     )
-    created_by: Mapped[str | None] = mapped_column(
+    # The legacy AI table stores a display label in this inherited column;
+    # keep the override while the historical schema is retained.
+    created_by: Mapped[str | None] = mapped_column(  # type: ignore[assignment]
         String(100), nullable=True, comment="操作人"
     )
     # 多轮对话扩展字段（可空，兼容历史数据）

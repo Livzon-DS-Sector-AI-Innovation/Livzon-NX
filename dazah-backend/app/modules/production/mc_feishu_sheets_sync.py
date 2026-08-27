@@ -48,7 +48,7 @@ MONTH_PATTERN = re.compile(r"^\d{2}月份$")
 FORMULA_ERROR = re.compile(r"^#\w+[!?]?$")  # #REF!, #N/A, #VALUE! 等
 
 
-async def _get_mc_spreadsheet_config(session: AsyncSession) -> dict:
+async def _get_mc_spreadsheet_config(session: AsyncSession) -> dict[str, Any]:
     """从数据库读取 MC 飞书电子表格配置，返回 {spreadsheet_token, app_id, app_secret}"""
     result = await session.execute(
         select(ProductionFeishuConfig)
@@ -264,7 +264,7 @@ def _is_skip_row(row: list[str]) -> bool:
 
 async def _sync_crude(
     session: AsyncSession, spreadsheet_token: str, app_id: str, app_secret: str
-) -> dict:
+) -> dict[str, Any]:
     """同步粗提工段数据（按模板：I列有钠化批号=新子罐，空=多步追加）"""
     from app.modules.production.mc_crude_extract_models import (
         FermentationLiquid,
@@ -296,9 +296,11 @@ async def _sync_crude(
     cur_st_id = ""  # 当前子罐数据库 ID（创建后填入）
     cur_sodium_seq = 0  # 当前子罐的钠化步骤序号
     cur_acid_seq = 0  # 当前子罐的酸化步骤序号
-    pending_st2_data: dict = {}  # 子罐2 待写入的发酵液数据 {volume, potency, pq}
+    pending_st2_data: dict[
+        str, Any
+    ] = {}  # 子罐2 待写入的发酵液数据 {volume, potency, pq}
 
-    async def _ensure_fl_and_rb(fl_b: str, rb_b: str, d: str):
+    async def _ensure_fl_and_rb(fl_b: str, rb_b: str, d: str) -> Any:
         """确保发酵液和提炼批次已创建"""
         nonlocal cur_fl_batch, cur_rb_batch, cur_date_str
         cur_fl_batch = fl_b
@@ -307,7 +309,8 @@ async def _sync_crude(
 
         # 发酵液
         flq = select(FermentationLiquid).where(
-            FermentationLiquid.batch_no == fl_b, FermentationLiquid.is_deleted.is_(False)  # noqa: E501
+            FermentationLiquid.batch_no == fl_b,
+            FermentationLiquid.is_deleted.is_(False),  # noqa: E501
         )
         if not (await session.execute(flq)).scalar_one_or_none():
             produce_date = _safe_date(d)
@@ -328,7 +331,8 @@ async def _sync_crude(
         )
         if not (await session.execute(rbq)).scalar_one_or_none():
             fnq = select(RefiningBatch).where(
-                RefiningBatch.fermentation_no == fl_b, RefiningBatch.is_deleted.is_(False)  # noqa: E501
+                RefiningBatch.fermentation_no == fl_b,
+                RefiningBatch.is_deleted.is_(False),  # noqa: E501
             )
             if not (await session.execute(fnq)).scalar_one_or_none():
                 produce_date = _safe_date(d)
@@ -344,7 +348,7 @@ async def _sync_crude(
                 await session.flush()
                 stats["created_rb"] += 1
 
-    async def _ensure_st_and_write_data(tank_no: int):
+    async def _ensure_st_and_write_data(tank_no: int) -> Any:
         """创建子罐记录并写入第一组钠化/酸化/粗品"""
         nonlocal \
             cur_st_batch, \
@@ -420,7 +424,7 @@ async def _sync_crude(
         # 写入第一组酸化
         await _add_acid_step()
 
-    async def _add_sodium_step():
+    async def _add_sodium_step() -> Any:
         """为当前子罐追加一条钠化步骤"""
         nonlocal cur_sodium_seq
         na_bv = _safe_float(_get_col(row, 9))  # J
@@ -450,7 +454,7 @@ async def _sync_crude(
         await session.flush()
         stats["created_sodium"] += 1
 
-    async def _add_acid_step():
+    async def _add_acid_step() -> Any:
         """为当前子罐追加一条酸化步骤"""
         nonlocal cur_acid_seq
         ac_fv = _safe_float(_get_col(row, 16))  # Q
@@ -573,7 +577,7 @@ async def _sync_crude(
 
 async def _sync_extraction(
     session: AsyncSession, spreadsheet_token: str, app_id: str, app_secret: str
-) -> dict:
+) -> dict[str, Any]:
     """同步提取工段数据"""
     from app.modules.production.mc_extraction_models import (
         ExtractionInput,
@@ -748,7 +752,7 @@ async def _sync_extraction(
 
 async def _sync_refinement(
     session: AsyncSession, spreadsheet_token: str, app_id: str, app_secret: str
-) -> dict:
+) -> dict[str, Any]:
     """同步二次精制工段数据"""
     from app.modules.production.mc_refinement_models import (
         McRefinementInput,
@@ -916,7 +920,7 @@ async def _sync_refinement(
 
 async def _sync_blending(
     session: AsyncSession, spreadsheet_token: str, app_id: str, app_secret: str
-) -> dict:
+) -> dict[str, Any]:
     """同步混粉杂质计算工段数据"""
     from app.modules.production.mc_blend_models import BlendingInput, BlendingRecord
 
@@ -1083,7 +1087,7 @@ async def _sync_blending(
 
 async def _sync_qc(
     session: AsyncSession, spreadsheet_token: str, app_id: str, app_secret: str
-) -> dict:
+) -> dict[str, Any]:
     """同步混粉入库工段数据"""
     from app.modules.production.mc_qc_ba_models import QcInspection, QcInspectionInput
 
@@ -1203,7 +1207,7 @@ async def _sync_qc(
 
 async def _sync_ba(
     session: AsyncSession, spreadsheet_token: str, app_id: str, app_secret: str
-) -> dict:
+) -> dict[str, Any]:
     """同步丁酯台账数据（交叉表格式：行=设备, 列=日期）"""
     from app.modules.production.mc_qc_ba_models import ButylAcetateRecord
 
@@ -1304,7 +1308,7 @@ MODULE_LABELS = {
 }
 
 
-async def run_mc_sync(modules: list[str], session: AsyncSession) -> dict:
+async def run_mc_sync(modules: list[str], session: AsyncSession) -> dict[str, Any]:
     """执行指定模块的飞书数据同步
 
     Args:
@@ -1321,7 +1325,7 @@ async def run_mc_sync(modules: list[str], session: AsyncSession) -> dict:
     app_secret = cfg["app_secret"]
     logger.info("[MC同步] 使用电子表格: %s", spreadsheet_token)
 
-    results = {}
+    results: dict[str, dict[str, Any]] = {}
     for mod in modules:
         handler = SYNC_HANDLERS.get(mod)
         if not handler:
@@ -1471,7 +1475,7 @@ async def _sync_lineage(session: AsyncSession) -> int:
     for sql in segments:
         result = await session.execute(text(sql))
         # rowcount 在 INSERT ... ON CONFLICT DO NOTHING 时只计实际插入的行
-        total += result.rowcount or 0
+        total += int(getattr(result, "rowcount", 0) or 0)
 
     if total > 0:
         logger.info(f"血链表更新: +{total} 条关联")
@@ -1484,7 +1488,7 @@ _mc_sync_scheduler: Any = None
 MC_SYNC_MODULES = ["crude", "extraction", "refinement", "blending", "qc", "ba"]
 
 
-async def _mc_scheduled_sync_job():
+async def _mc_scheduled_sync_job() -> Any:
     """定时同步任务：每 10 分钟从飞书同步 MC 数据"""
     logger.info("⏰ [MC飞书同步] 定时任务触发")
     try:
@@ -1512,11 +1516,15 @@ async def _mc_scheduled_sync_job():
         logger.exception("[MC飞书同步] 定时任务异常")
 
 
-def start_mc_sync_scheduler():
+def start_mc_sync_scheduler() -> Any:
     """启动 MC 飞书同步定时任务（每 10 分钟）"""
     global _mc_sync_scheduler
-    from apscheduler.schedulers.asyncio import AsyncIOScheduler
-    from apscheduler.triggers.interval import IntervalTrigger
+    from apscheduler.schedulers.asyncio import (  # type: ignore[import-untyped]
+        AsyncIOScheduler,
+    )
+    from apscheduler.triggers.interval import (  # type: ignore[import-untyped]
+        IntervalTrigger,
+    )
 
     if _mc_sync_scheduler is not None:
         return
@@ -1533,7 +1541,7 @@ def start_mc_sync_scheduler():
     logger.info("[MC飞书同步] 定时任务已启动，间隔 10 分钟")
 
 
-def stop_mc_sync_scheduler():
+def stop_mc_sync_scheduler() -> Any:
     """停止 MC 飞书同步定时任务"""
     global _mc_sync_scheduler
     if _mc_sync_scheduler:

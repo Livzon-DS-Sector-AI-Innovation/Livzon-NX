@@ -1,0 +1,1 @@
+"""Authenticated object-storage proxy."""

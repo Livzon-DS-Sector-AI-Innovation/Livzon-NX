@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -14,7 +15,9 @@ from app.modules.production import mc_lineage_api as api
 _MISSING = object()
 
 
-def make_fetch_result(fetchone=_MISSING, fetchall=_MISSING, scalar=_MISSING):
+def make_fetch_result(
+    fetchone: Any = _MISSING, fetchall: Any = _MISSING, scalar: Any = _MISSING
+) -> Any:
     r = MagicMock()
     if fetchone is not _MISSING:
         r.fetchone.return_value = fetchone
@@ -25,23 +28,23 @@ def make_fetch_result(fetchone=_MISSING, fetchall=_MISSING, scalar=_MISSING):
     return r
 
 
-def make_iter_result(rows):
+def make_iter_result(rows: Any) -> Any:
     r = MagicMock()
     r.__iter__.return_value = iter(rows)
     return r
 
 
-def make_session(execute_results):
+def make_session(execute_results: Any) -> Any:
     s = AsyncMock()
     s.execute.side_effect = execute_results
     return s
 
 
-def make_smart_session(router):
+def make_smart_session(router: Any) -> Any:
     """按 SQL 文本路由 execute 返回，避免查询顺序计数脆弱。"""
     s = AsyncMock()
 
-    async def _execute(sql, params=None):
+    async def _execute(sql: Any, params: Any = None) -> Any:
         return router(str(sql), params)
 
     s.execute.side_effect = _execute
@@ -49,9 +52,13 @@ def make_smart_session(router):
 
 
 def trace_router(
-    upstream_rows, downstream_rows, conn_rows, yield_val=90.0, qty_val=100.0
-):
-    def _route(sql, params):
+    upstream_rows: Any,
+    downstream_rows: Any,
+    conn_rows: Any,
+    yield_val: Any = 90.0,
+    qty_val: Any = 100.0,
+) -> Any:
+    def _route(sql: Any, params: Any) -> Any:
         if "upstream_batch = :b AND" in sql:  # conn_map 查询
             return make_fetch_result(fetchall=conn_rows)
         if "downstream_batch = :batch" in sql:  # _SIBLING_SQL（查上游）
@@ -70,19 +77,19 @@ def trace_router(
 # ═══════════ 纯辅助 ═══════════
 
 
-def test_fmt_val():
+def test_fmt_val() -> Any:
     assert api.fmt_val(None) == 0.0
     assert api.fmt_val(88.5) == 88.5
 
 
-def test_normalize_batch():
+def test_normalize_batch() -> Any:
     assert api._normalize_batch("MC-1") == "MC-1"
     assert api._normalize_batch("MC-1 (FIS)") == "MC-1"
     assert api._normalize_batch("MC-1（Fis）") == "MC-1"
     assert api._normalize_batch("  MC-2  ") == "MC-2"
 
 
-def test_fmt_detail():
+def test_fmt_detail() -> Any:
     assert api._fmt_detail({"y": 90.0, "q": 100}) == "yr90.0%, 100kg"
     assert api._fmt_detail({"yield_rate": 85.5, "quantity": 0}) == "yr85.5%"
     assert api._fmt_detail({"y": None, "q": None}) == ""
@@ -92,7 +99,7 @@ def test_fmt_detail():
 # ═══════════ _resolve_batch ═══════════
 
 
-def test_resolve_batch_branches():
+def test_resolve_batch_branches() -> Any:
     import asyncio
 
     s = make_session([make_fetch_result(fetchone=SimpleNamespace(batch_no="MC-1"))])
@@ -126,7 +133,7 @@ def test_resolve_batch_branches():
 # ═══════════ lineage_trace ═══════════
 
 
-def test_lineage_trace_simple_path():
+def test_lineage_trace_simple_path() -> Any:
     import asyncio
 
     s = make_smart_session(trace_router([], [], []))
@@ -143,7 +150,7 @@ def test_lineage_trace_simple_path():
     assert node["detail"] == "yr90.0%, 100kg"
 
 
-def test_lineage_trace_invalid_stage_400():
+def test_lineage_trace_invalid_stage_400() -> Any:
     import asyncio
 
     with pytest.raises(HTTPException) as exc:
@@ -153,7 +160,7 @@ def test_lineage_trace_invalid_stage_400():
     assert exc.value.status_code == 400
 
 
-def test_lineage_trace_not_found_404():
+def test_lineage_trace_not_found_404() -> Any:
     import asyncio
 
     s = make_session([make_fetch_result(fetchone=None)])
@@ -162,7 +169,7 @@ def test_lineage_trace_not_found_404():
     assert exc.value.status_code == 404
 
 
-def test_lineage_trace_with_upstream_and_downstream():
+def test_lineage_trace_with_upstream_and_downstream() -> Any:
     import asyncio
 
     s = make_smart_session(
@@ -201,7 +208,7 @@ def test_lineage_trace_with_upstream_and_downstream():
     assert data["cumulative_yield"] == 72.7
 
 
-def test_lineage_trace_with_sibling_expansion():
+def test_lineage_trace_with_sibling_expansion() -> Any:
     import asyncio
 
     sibling_rows = [
@@ -229,7 +236,7 @@ def test_lineage_trace_with_sibling_expansion():
         )
     ]
 
-    def _sibling_router(sql, params):
+    def _sibling_router(sql: Any, params: Any) -> Any:
         if "upstream_batch = :b AND" in sql:  # conn_map
             return make_fetch_result(fetchall=[])
         if "downstream_batch = :batch" in sql:  # _SIBLING_SQL
@@ -260,7 +267,7 @@ def test_lineage_trace_with_sibling_expansion():
 # ═══════════ 统计端点 ═══════════
 
 
-def test_lineage_yield_distribution():
+def test_lineage_yield_distribution() -> Any:
     import asyncio
 
     s = make_session(
@@ -304,7 +311,7 @@ def test_lineage_yield_distribution():
     assert data[1]["below_80"] == 2
 
 
-def test_lineage_material_reuse():
+def test_lineage_material_reuse() -> Any:
     import asyncio
 
     s = make_session(
@@ -327,7 +334,7 @@ def test_lineage_material_reuse():
     assert data[0]["used_by"] == "B1, B2"
 
 
-def test_lineage_coverage():
+def test_lineage_coverage() -> Any:
     import asyncio
 
     s = make_session(
@@ -345,7 +352,7 @@ def test_lineage_coverage():
     assert data["extraction_coverage_pct"] == 80.0
 
 
-def test_lineage_coverage_empty_total():
+def test_lineage_coverage_empty_total() -> Any:
     import asyncio
 
     s = make_session(

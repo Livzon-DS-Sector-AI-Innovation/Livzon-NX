@@ -1,16 +1,15 @@
 """FA 酸化过滤 — 飞书同步脚本（独立运行）"""
-
 import asyncio
 import logging
 import os
 import re
 from pathlib import Path
+from typing import Any
 
 import httpx
 from dotenv import load_dotenv
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 logger = logging.getLogger(__name__)
@@ -60,13 +59,13 @@ PCT_COLS = {
     "平衡率",
 }
 
-_token = None
+_access_token: str | None = None
 
 
 async def _token() -> str:
-    global _token
-    if _token:
-        return _token
+    global _access_token
+    if _access_token:
+        return _access_token
     app_id = os.getenv("FEISHU_APP_ID")
     app_secret = os.getenv("FEISHU_APP_SECRET")
     async with httpx.AsyncClient(base_url=BASE_URL, timeout=30) as c:
@@ -75,11 +74,11 @@ async def _token() -> str:
             json={"app_id": app_id, "app_secret": app_secret},
         )
         r.raise_for_status()
-        _token = str(r.json()["tenant_access_token"])
-        return _token
+        _access_token = str(r.json()["tenant_access_token"])
+        return _access_token
 
 
-async def _read() -> list[list]:
+async def _read() -> list[list[Any]]:
     t = await _token()
     async with httpx.AsyncClient(base_url=BASE_URL, timeout=60) as c:
         r = await c.get(
@@ -95,7 +94,7 @@ async def _read() -> list[list]:
     return [[str(c) if c is not None else "" for c in row] for row in vals]
 
 
-def _g(row, i):
+def _g(row: Any, i: Any) -> Any:
     return str(row[i]).strip() if i < len(row) else ""
 
 
@@ -131,11 +130,14 @@ def _p(v: str) -> str:
         return f"'{v}'"
 
 
-async def run(session: AsyncSession):
+async def run(session: AsyncSession) -> Any:
     rows = await _read()
     logger.info(f"Read {len(rows)} rows from feishu")
 
-    records, cur_date, cur_batch, in_data = [], None, None, False
+    records: list[dict[str, Any]] = []
+    cur_date: str | None = None
+    cur_batch: str | None = None
+    in_data = False
     for row in rows:
         c0, c1 = _g(row, 0), _g(row, 1)
         if not in_data:
@@ -155,7 +157,7 @@ async def run(session: AsyncSession):
         if c1 and re.match(r"FA-EX\d+$", c1):
             cur_batch = c1
 
-        rec = {}
+        rec: dict[str, Any] = {}
         for name, idx in COLS:
             v = _g(row, idx)
             if name in PCT_COLS:
@@ -194,7 +196,7 @@ async def run(session: AsyncSession):
     return {"total_rows": len(records), "batches": batches}
 
 
-async def main():
+async def main() -> Any:
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
     )
@@ -202,7 +204,7 @@ async def main():
         "DATABASE_URL", "postgresql+asyncpg://postgres:postgres@db:5432/dazah"
     )
     engine = create_async_engine(db_url)
-    async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    async_session = async_sessionmaker(engine, expire_on_commit=False)
     async with async_session() as s:
         r = await run(s)
         print(f"\n[DONE] {r}")

@@ -34,11 +34,11 @@ export default function TeamClient({ departmentId, departmentName }: TeamClientP
       setTeams(res.data)
       setTotal(res.meta?.total || 0)
     } catch (err) {
-      message.error(err.message || '加载数据失败')
+      message.error((err instanceof Error ? err.message : '') || '加载数据失败')
     } finally {
       setLoading(false)
     }
-  }, [departmentId, searchKeyword, page, pageSize])
+  }, [departmentId, searchKeyword, page, pageSize, message])
 
   const handlePageChange = (newPage: number, newPageSize: number) => {
     setPage(newPage)
@@ -65,12 +65,12 @@ export default function TeamClient({ departmentId, departmentName }: TeamClientP
       message.success('删除成功')
       loadData()
     } catch (err) {
-      message.error(err.message || '删除失败')
+      message.error((err instanceof Error ? err.message : '') || '删除失败')
     }
   }
 
   useEffect(() => {
-    loadData()
+    queueMicrotask(loadData)
   }, [loadData])
 
   const columns = [

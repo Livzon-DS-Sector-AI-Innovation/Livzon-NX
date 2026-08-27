@@ -624,13 +624,6 @@ class MaterialSourceConfigResponse(BaseModel):
         None,
         description="最近成功同步观察到的飞书最大修改时间",
     )
-    sync_phase: str = Field("idle", description="同步阶段")
-    sync_persisted_count: int = Field(0, description="本次同步已持久化记录数")
-    sync_heartbeat_at: datetime | None = Field(None, description="同步最近心跳时间")
-    last_successful_modified_time: int | None = Field(
-        None,
-        description="最近成功同步观察到的飞书最大修改时间",
-    )
     updated_at: datetime | None = Field(None, description="配置更新时间")
 
 

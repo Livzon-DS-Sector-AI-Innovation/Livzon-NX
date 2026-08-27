@@ -4,9 +4,10 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 from io import BytesIO
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
-from openpyxl import Workbook
+from openpyxl import Workbook  # type: ignore[import-untyped]
 
 from app.modules.procurement import service as procurement_service
 from app.modules.procurement.schemas import PurchaseRequestCategory
@@ -19,7 +20,7 @@ FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
 
 @pytest.fixture(autouse=True)
-def fake_purchase_request_repository(monkeypatch):
+def fake_purchase_request_repository(monkeypatch: Any) -> Any:
     FakePurchaseRequestRepository.reset()
     monkeypatch.setattr(
         procurement_service,
@@ -89,7 +90,7 @@ async def test_import_xlsx_multi_sheet_creates_one_draft_per_sheet() -> None:
             (
                 "五金材料",
                 [
-                    HARDWARE_HEADERS,
+                    HARDWARE_HEADERS,  # type: ignore[list-item]
                     _hardware_row(),
                     _hardware_row(material_code="HW-002"),
                 ],
@@ -97,7 +98,7 @@ async def test_import_xlsx_multi_sheet_creates_one_draft_per_sheet() -> None:
             (
                 "电气",
                 [
-                    HARDWARE_HEADERS,
+                    HARDWARE_HEADERS,  # type: ignore[list-item]
                     [
                         "设备动力部",
                         "2026/08/14",
@@ -119,7 +120,7 @@ async def test_import_xlsx_multi_sheet_creates_one_draft_per_sheet() -> None:
     )
 
     result = await procurement_service.import_purchase_request_table_file(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         file_bytes,
         file_name="采购申请.xlsx",
     )
@@ -164,13 +165,13 @@ async def test_import_category_column_wins_over_sheet_name() -> None:
         [
             (
                 "Sheet1",
-                [HARDWARE_HEADERS, _hardware_row()],
+                [HARDWARE_HEADERS, _hardware_row()],  # type: ignore[list-item]
             )
         ]
     )
 
     result = await procurement_service.import_purchase_request_table_file(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         file_bytes,
         file_name="申请.xlsx",
     )
@@ -186,7 +187,7 @@ async def test_import_mixed_category_column_reports_sheet_error() -> None:
             (
                 "Sheet1",
                 [
-                    HARDWARE_HEADERS,
+                    HARDWARE_HEADERS,  # type: ignore[list-item]
                     _hardware_row(),
                     [
                         "102一车间",
@@ -209,7 +210,7 @@ async def test_import_mixed_category_column_reports_sheet_error() -> None:
     )
 
     result = await procurement_service.import_purchase_request_table_file(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         file_bytes,
         file_name="申请.xlsx",
     )
@@ -231,13 +232,13 @@ async def test_import_infers_hardware_from_material_fields() -> None:
         [
             (
                 "Sheet1",
-                [headers, row],
+                [headers, row],  # type: ignore[list-item]
             )
         ]
     )
 
     result = await procurement_service.import_purchase_request_table_file(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         file_bytes,
         file_name="申请.xlsx",
     )
@@ -266,7 +267,7 @@ async def test_import_infers_office_from_product_name() -> None:
             (
                 "Sheet1",
                 [
-                    headers,
+                    headers,  # type: ignore[list-item]
                     ["行政部", "2026-08-14", "打印纸", "A4", 5, "箱", 20, ""],
                 ],
             )
@@ -274,7 +275,7 @@ async def test_import_infers_office_from_product_name() -> None:
     )
 
     result = await procurement_service.import_purchase_request_table_file(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         file_bytes,
         file_name="申请.xlsx",
     )
@@ -304,7 +305,7 @@ async def test_import_infers_category_from_uniform_item_category_column() -> Non
             (
                 "Sheet1",
                 [
-                    headers,
+                    headers,  # type: ignore[list-item]
                     [
                         "行政部",
                         "2026-08-14",
@@ -333,7 +334,7 @@ async def test_import_infers_category_from_uniform_item_category_column() -> Non
     )
 
     result = await procurement_service.import_purchase_request_table_file(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         file_bytes,
         file_name="申请.xlsx",
     )
@@ -354,7 +355,7 @@ async def test_import_sheet_without_recognizable_fields_reports_error() -> None:
             (
                 "Sheet1",
                 [
-                    headers,
+                    headers,  # type: ignore[list-item]
                     ["102一车间", 10, "个", 5],
                 ],
             )
@@ -362,7 +363,7 @@ async def test_import_sheet_without_recognizable_fields_reports_error() -> None:
     )
 
     result = await procurement_service.import_purchase_request_table_file(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         file_bytes,
         file_name="申请.xlsx",
     )
@@ -381,7 +382,7 @@ async def test_import_any_row_error_blocks_whole_sheet() -> None:
             (
                 "五金材料",
                 [
-                    HARDWARE_HEADERS,
+                    HARDWARE_HEADERS,  # type: ignore[list-item]
                     _hardware_row(),
                     _hardware_row(material_code="", material_description="缺编码行"),
                     _hardware_row(quantity="abc", material_code="HW-003"),
@@ -393,7 +394,7 @@ async def test_import_any_row_error_blocks_whole_sheet() -> None:
     )
 
     result = await procurement_service.import_purchase_request_table_file(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         file_bytes,
         file_name="申请.xlsx",
     )
@@ -428,7 +429,7 @@ async def test_import_urgent_sheet_with_item_category_per_row() -> None:
             (
                 "加急单",
                 [
-                    urgent_headers,
+                    urgent_headers,  # type: ignore[list-item]
                     [
                         "采购部",
                         "2026-08-14",
@@ -471,7 +472,7 @@ async def test_import_urgent_sheet_with_item_category_per_row() -> None:
     )
 
     result = await procurement_service.import_purchase_request_table_file(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         file_bytes,
         file_name="加急申请.xlsx",
     )
@@ -492,7 +493,7 @@ async def test_import_normal_sheet_item_category_mismatch_blocks_whole_sheet() -
             (
                 "Sheet1",
                 [
-                    headers,
+                    headers,  # type: ignore[list-item]
                     _hardware_row() + ["办公用品"],
                     _hardware_row(material_code="HW-002") + [""],
                 ],
@@ -501,7 +502,7 @@ async def test_import_normal_sheet_item_category_mismatch_blocks_whole_sheet() -
     )
 
     result = await procurement_service.import_purchase_request_table_file(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         file_bytes,
         file_name="申请.xlsx",
     )
@@ -525,7 +526,7 @@ async def test_import_csv_supports_utf8_and_gb18030() -> None:
         file_bytes = csv_text.encode(encoding)
 
         result = await procurement_service.import_purchase_request_table_file(
-            FakeDb(),
+            cast(Any, FakeDb)(),
             file_bytes,
             file_name="办公用品.csv",
         )
@@ -544,7 +545,7 @@ async def test_import_xls_sheet_with_date_cells() -> None:
     file_bytes = fixture_path.read_bytes()
 
     result = await procurement_service.import_purchase_request_table_file(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         file_bytes,
         file_name="采购申请.xls",
     )
@@ -575,7 +576,7 @@ async def test_import_number_parsing_currency_and_thousands() -> None:
             (
                 "Sheet1",
                 [
-                    HARDWARE_HEADERS,
+                    HARDWARE_HEADERS,  # type: ignore[list-item]
                     _hardware_row(quantity="1,200", unit_price="¥50.5"),
                     _hardware_row(quantity=3, unit_price=""),
                 ],
@@ -584,7 +585,7 @@ async def test_import_number_parsing_currency_and_thousands() -> None:
     )
 
     result = await procurement_service.import_purchase_request_table_file(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         file_bytes,
         file_name="申请.xlsx",
     )
@@ -610,13 +611,13 @@ async def test_import_sheet_name_contains_category_keyword() -> None:
         [
             (
                 "霉酚酸电气",
-                [headers, row],
+                [headers, row],  # type: ignore[list-item]
             )
         ]
     )
 
     result = await procurement_service.import_purchase_request_table_file(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         file_bytes,
         file_name="申请.xlsx",
     )
@@ -646,7 +647,7 @@ async def test_import_real_world_sheet_with_category_column_no_department() -> N
             (
                 "MC原辅料",
                 [
-                    headers,
+                    headers,  # type: ignore[list-item]
                     [
                         "原辅料",
                         "2026-08-14",
@@ -675,7 +676,7 @@ async def test_import_real_world_sheet_with_category_column_no_department() -> N
     )
 
     result = await procurement_service.import_purchase_request_table_file(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         file_bytes,
         file_name="采购申请.xlsx",
     )
@@ -701,13 +702,13 @@ async def test_import_missing_department_falls_back_to_sheet_name_prefix() -> No
         [
             (
                 "霉酚酸五金",
-                [headers, row],
+                [headers, row],  # type: ignore[list-item]
             )
         ]
     )
 
     result = await procurement_service.import_purchase_request_table_file(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         file_bytes,
         file_name="申请.xlsx",
     )
@@ -732,13 +733,13 @@ async def test_import_missing_department_without_keyword_uses_placeholder() -> N
         [
             (
                 "五金材料",
-                [headers, row],
+                [headers, row],  # type: ignore[list-item]
             )
         ]
     )
 
     result = await procurement_service.import_purchase_request_table_file(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         file_bytes,
         file_name="申请.xlsx",
     )
@@ -749,12 +750,9 @@ async def test_import_missing_department_without_keyword_uses_placeholder() -> N
 
 @pytest.mark.anyio
 async def test_import_csv_missing_department_uses_file_stem() -> None:
-    csv_text = (
-        "采购类型,商品名称,规格,数量,单位,单价\n"
-        "办公用品,打印纸,A4,5,箱,20\n"
-    )
+    csv_text = "采购类型,商品名称,规格,数量,单位,单价\n办公用品,打印纸,A4,5,箱,20\n"
     result = await procurement_service.import_purchase_request_table_file(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         csv_text.encode("utf-8-sig"),
         file_name="霉酚酸办公采购.csv",
     )
@@ -776,13 +774,13 @@ async def test_import_request_date_defaults_to_today() -> None:
         [
             (
                 "五金材料",
-                [headers, row],
+                [headers, row],  # type: ignore[list-item]
             )
         ]
     )
 
     result = await procurement_service.import_purchase_request_table_file(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         file_bytes,
         file_name="申请.xlsx",
     )
@@ -805,7 +803,7 @@ async def test_import_skips_blank_sheets_and_reports_header_only_sheet() -> None
     workbook.save(output)
 
     result = await procurement_service.import_purchase_request_table_file(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         output.getvalue(),
         file_name="申请.xlsx",
     )
@@ -821,14 +819,14 @@ async def test_import_skips_blank_sheets_and_reports_header_only_sheet() -> None
 async def test_import_rejects_empty_file_and_unsupported_extension() -> None:
     with pytest.raises(ValueError, match="上传文件为空"):
         await procurement_service.import_purchase_request_table_file(
-            FakeDb(),
+            cast(Any, FakeDb)(),
             b"",
             file_name="申请.xlsx",
         )
 
     with pytest.raises(ValueError, match="暂不支持该文件类型"):
         await procurement_service.import_purchase_request_table_file(
-            FakeDb(),
+            cast(Any, FakeDb)(),
             b"abc",
             file_name="申请.docx",
         )
@@ -861,7 +859,7 @@ async def test_import_xlsx_date_cell_for_request_date() -> None:
     workbook.save(output)
 
     result = await procurement_service.import_purchase_request_table_file(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         output.getvalue(),
         file_name="申请.xlsx",
     )
@@ -874,13 +872,13 @@ async def test_import_xlsx_date_cell_for_request_date() -> None:
 async def test_import_sheet_failure_does_not_block_other_sheets() -> None:
     file_bytes = _build_xlsx(
         [
-            ("五金材料", [HARDWARE_HEADERS, _hardware_row()]),
+            ("五金材料", [HARDWARE_HEADERS, _hardware_row()]),  # type: ignore[list-item]
             ("Sheet1", [["只有一列", "数据"]]),
         ]
     )
 
     result = await procurement_service.import_purchase_request_table_file(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         file_bytes,
         file_name="申请.xlsx",
     )
@@ -964,10 +962,9 @@ _DR_PACKAGING_HEADERS = [
     "备注",
 ]
 _OFFICE_HEADERS = _HARDWARE_HEADERS
-_SIGNATURE_ROW = (
-    ["副总经理： 主管领导： 设备动力部： 部门负责人： 五金库： 统计人："]
-    + [None] * 11
-)
+_SIGNATURE_ROW = [
+    "副总经理： 主管领导： 设备动力部： 部门负责人： 五金库： 统计人："
+] + [None] * 11
 
 
 @pytest.mark.anyio
@@ -978,10 +975,10 @@ async def test_import_workshop_title_rows_not_mistaken_for_headers() -> None:
             (
                 "霉酚酸五金",
                 [
-                    _TITLE_ROW_WITH_AVERAGE,
+                    _TITLE_ROW_WITH_AVERAGE,  # type: ignore[list-item]
                     [" 2026年9月（五金）正常申购单"],
                     [" 申请部门:201二车间(霉酚酸)"],
-                    _HARDWARE_HEADERS,
+                    _HARDWARE_HEADERS,  # type: ignore[list-item]
                     [
                         1,
                         51040070,
@@ -1025,16 +1022,16 @@ async def test_import_workshop_title_rows_not_mistaken_for_headers() -> None:
                         None,
                         None,
                     ],
-                    _SIGNATURE_ROW,
+                    _SIGNATURE_ROW,  # type: ignore[list-item]
                 ],
             ),
             (
                 "霉酚酸电气",
                 [
-                    _TITLE_ROW_WITH_AVERAGE,
+                    _TITLE_ROW_WITH_AVERAGE,  # type: ignore[list-item]
                     [" 2026年9月（电气）申购单"],
                     [" 申请部门:201二车间(霉酚酸)"],
-                    _ELECTRICAL_HEADERS,
+                    _ELECTRICAL_HEADERS,  # type: ignore[list-item]
                     [
                         1,
                         51132617,
@@ -1063,14 +1060,14 @@ async def test_import_workshop_title_rows_not_mistaken_for_headers() -> None:
                         None,
                         None,
                     ],
-                    _SIGNATURE_ROW,
+                    _SIGNATURE_ROW,  # type: ignore[list-item]
                 ],
             ),
         ]
     )
 
     result = await procurement_service.import_purchase_request_table_file(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         file_bytes,
         file_name="2026.9月201二车间计划(1).xlsx",
     )
@@ -1107,10 +1104,10 @@ async def test_import_raw_material_and_packaging_workshop_headers() -> None:
             (
                 "MC原辅料",
                 [
-                    _TITLE_ROW,
+                    _TITLE_ROW,  # type: ignore[list-item]
                     ["2026年9月份 原辅料申购单"],
                     ["申购部门：201二车间（霉酚酸）"],
-                    _RAW_MATERIAL_HEADERS,
+                    _RAW_MATERIAL_HEADERS,  # type: ignore[list-item]
                     [
                         1,
                         12002413,
@@ -1152,10 +1149,10 @@ async def test_import_raw_material_and_packaging_workshop_headers() -> None:
             (
                 "MC包材",
                 [
-                    _TITLE_ROW,
+                    _TITLE_ROW,  # type: ignore[list-item]
                     ["2026年9月份 霉酚酸包材 申购单"],
                     ["申请部门：201二车间"],
-                    _PACKAGING_HEADERS,
+                    _PACKAGING_HEADERS,  # type: ignore[list-item]
                     [
                         1,
                         60071312,
@@ -1189,10 +1186,10 @@ async def test_import_raw_material_and_packaging_workshop_headers() -> None:
             (
                 "DR包材",
                 [
-                    _TITLE_ROW,
+                    _TITLE_ROW,  # type: ignore[list-item]
                     ["2026年9月份 多拉包材 申购单"],
                     ["申请部门：201二车间"],
-                    _DR_PACKAGING_HEADERS,
+                    _DR_PACKAGING_HEADERS,  # type: ignore[list-item]
                     [
                         1,
                         60071379,
@@ -1213,7 +1210,7 @@ async def test_import_raw_material_and_packaging_workshop_headers() -> None:
     )
 
     result = await procurement_service.import_purchase_request_table_file(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         file_bytes,
         file_name="2026.9月201二车间计划(1).xlsx",
     )
@@ -1228,7 +1225,6 @@ async def test_import_raw_material_and_packaging_workshop_headers() -> None:
     assert raw_summary.items_count == 2
 
 
-
 @pytest.mark.anyio
 async def test_import_office_sheet_uses_material_description_column() -> None:
     """其他商品表头用“物料描述”代替“商品名称”，数量/单价别名同样适用。"""
@@ -1240,7 +1236,7 @@ async def test_import_office_sheet_uses_material_description_column() -> None:
                     ["上报时请备注上报人，以便核对信息"],
                     ["2026年其它申购单"],
                     ["   申请部门:201-2车间"],
-                    _OFFICE_HEADERS,
+                    _OFFICE_HEADERS,  # type: ignore[list-item]
                     [
                         1,
                         "",
@@ -1303,7 +1299,7 @@ async def test_import_office_sheet_uses_material_description_column() -> None:
     )
 
     result = await procurement_service.import_purchase_request_table_file(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         file_bytes,
         file_name="2026.9月201二车间计划(1).xlsx",
     )
@@ -1331,10 +1327,10 @@ async def test_import_workshop_sheets_without_data_report_sheet_error() -> None:
             (
                 "霉酚酸五金",
                 [
-                    _TITLE_ROW_WITH_AVERAGE,
+                    _TITLE_ROW_WITH_AVERAGE,  # type: ignore[list-item]
                     [" 2026年9月（五金）正常申购单"],
                     [" 申请部门:201二车间(霉酚酸)"],
-                    _HARDWARE_HEADERS,
+                    _HARDWARE_HEADERS,  # type: ignore[list-item]
                     [
                         1,
                         51040070,
@@ -1354,10 +1350,10 @@ async def test_import_workshop_sheets_without_data_report_sheet_error() -> None:
             (
                 "MC化玻",
                 [
-                    _TITLE_ROW_WITH_AVERAGE,
+                    _TITLE_ROW_WITH_AVERAGE,  # type: ignore[list-item]
                     ["2026年9月（化玻试剂）申购单"],
                     ["  申请部门:201二车间（霉酚酸）"],
-                    _ELECTRICAL_HEADERS,
+                    _ELECTRICAL_HEADERS,  # type: ignore[list-item]
                     [
                         1,
                         None,
@@ -1386,16 +1382,16 @@ async def test_import_workshop_sheets_without_data_report_sheet_error() -> None:
                         None,
                         None,
                     ],
-                    _SIGNATURE_ROW,
+                    _SIGNATURE_ROW,  # type: ignore[list-item]
                 ],
             ),
             (
                 "DR消防",
                 [
-                    _TITLE_ROW,
+                    _TITLE_ROW,  # type: ignore[list-item]
                     ["2026年9月（消防）正常申购单"],
                     ["申请部门:201二车间(多拉)"],
-                    _HARDWARE_HEADERS,
+                    _HARDWARE_HEADERS,  # type: ignore[list-item]
                     [
                         1,
                         None,
@@ -1444,7 +1440,7 @@ async def test_import_workshop_sheets_without_data_report_sheet_error() -> None:
     )
 
     result = await procurement_service.import_purchase_request_table_file(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         file_bytes,
         file_name="2026.9月201二车间计划(1).xlsx",
     )
@@ -1452,9 +1448,7 @@ async def test_import_workshop_sheets_without_data_report_sheet_error() -> None:
     assert len(result.imported_requests) == 1
     assert result.imported_requests[0].sheet_name == "霉酚酸五金"
     assert {error.sheet_name for error in result.failed_rows} == {"MC化玻", "DR消防"}
-    assert all(
-        "没有可导入的数据行" in error.message for error in result.failed_rows
-    )
+    assert all("没有可导入的数据行" in error.message for error in result.failed_rows)
 
 
 @pytest.mark.anyio
@@ -1465,10 +1459,10 @@ async def test_import_department_from_title_row() -> None:
             (
                 "霉酚酸五金",
                 [
-                    _TITLE_ROW_WITH_AVERAGE,
+                    _TITLE_ROW_WITH_AVERAGE,  # type: ignore[list-item]
                     [" 2026年9月（五金）正常申购单"],
                     [" 申请部门:201二车间(霉酚酸)"],
-                    _HARDWARE_HEADERS,
+                    _HARDWARE_HEADERS,  # type: ignore[list-item]
                     [
                         1,
                         51040070,
@@ -1488,10 +1482,10 @@ async def test_import_department_from_title_row() -> None:
             (
                 "MC原辅料",
                 [
-                    _TITLE_ROW,
+                    _TITLE_ROW,  # type: ignore[list-item]
                     ["2026年9月份 原辅料申购单"],
                     ["申购部门：201二车间（霉酚酸）"],
-                    _RAW_MATERIAL_HEADERS,
+                    _RAW_MATERIAL_HEADERS,  # type: ignore[list-item]
                     [
                         1,
                         12002413,
@@ -1509,10 +1503,10 @@ async def test_import_department_from_title_row() -> None:
             (
                 "多拉化玻",
                 [
-                    _TITLE_ROW_WITH_AVERAGE,
+                    _TITLE_ROW_WITH_AVERAGE,  # type: ignore[list-item]
                     ["2026年9月（化玻试剂）申购单"],
                     ["申请部门:201二车间（多拉菌素）"],
-                    _ELECTRICAL_HEADERS,
+                    _ELECTRICAL_HEADERS,  # type: ignore[list-item]
                     [
                         1,
                         80005889,
@@ -1533,7 +1527,7 @@ async def test_import_department_from_title_row() -> None:
     )
 
     result = await procurement_service.import_purchase_request_table_file(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         file_bytes,
         file_name="2026.9月201二车间计划(1).xlsx",
     )
@@ -1553,10 +1547,10 @@ async def test_import_column_department_wins_over_title_row() -> None:
             (
                 "霉酚酸五金",
                 [
-                    _TITLE_ROW_WITH_AVERAGE,
+                    _TITLE_ROW_WITH_AVERAGE,  # type: ignore[list-item]
                     [" 2026年9月（五金）正常申购单"],
                     [" 申请部门:201二车间(霉酚酸)"],
-                    HARDWARE_HEADERS,
+                    HARDWARE_HEADERS,  # type: ignore[list-item]
                     _hardware_row(department="102一车间"),
                 ],
             )
@@ -1564,7 +1558,7 @@ async def test_import_column_department_wins_over_title_row() -> None:
     )
 
     result = await procurement_service.import_purchase_request_table_file(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         file_bytes,
         file_name="2026.9月201二车间计划(1).xlsx",
     )
@@ -1572,7 +1566,6 @@ async def test_import_column_department_wins_over_title_row() -> None:
     assert result.failed_rows == []
     assert len(result.imported_requests) == 1
     assert result.imported_requests[0].request_department == "102一车间"
-
 
 
 @pytest.mark.anyio
@@ -1583,10 +1576,10 @@ async def test_import_validates_total_amount_against_quantity_price() -> None:
             (
                 "霉酚酸五金",
                 [
-                    _TITLE_ROW_WITH_AVERAGE,
+                    _TITLE_ROW_WITH_AVERAGE,  # type: ignore[list-item]
                     [" 2026年9月（五金）正常申购单"],
                     [" 申请部门:201二车间(霉酚酸)"],
-                    _HARDWARE_HEADERS,
+                    _HARDWARE_HEADERS,  # type: ignore[list-item]
                     [
                         1,
                         51040070,
@@ -1635,7 +1628,7 @@ async def test_import_validates_total_amount_against_quantity_price() -> None:
     )
 
     result = await procurement_service.import_purchase_request_table_file(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         file_bytes,
         file_name="2026.9月201二车间计划(1).xlsx",
     )
@@ -1659,7 +1652,7 @@ async def test_import_skips_total_amount_check_without_unit_price() -> None:
             (
                 "五金材料",
                 [
-                    headers,
+                    headers,  # type: ignore[list-item]
                     [1, "HW-001", "不锈钢螺栓", 200, "个", 1000],
                 ],
             )
@@ -1667,7 +1660,7 @@ async def test_import_skips_total_amount_check_without_unit_price() -> None:
     )
 
     result = await procurement_service.import_purchase_request_table_file(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         file_bytes,
         file_name="申请.xlsx",
     )
@@ -1685,10 +1678,10 @@ async def test_import_electrical_total_amount_header_with_parentheses() -> None:
             (
                 "霉酚酸电气",
                 [
-                    _TITLE_ROW_WITH_AVERAGE,
+                    _TITLE_ROW_WITH_AVERAGE,  # type: ignore[list-item]
                     [" 2026年9月（电气）申购单"],
                     [" 申请部门:201二车间(霉酚酸)"],
-                    _ELECTRICAL_HEADERS,
+                    _ELECTRICAL_HEADERS,  # type: ignore[list-item]
                     [
                         1,
                         51132617,
@@ -1723,7 +1716,7 @@ async def test_import_electrical_total_amount_header_with_parentheses() -> None:
     )
 
     result = await procurement_service.import_purchase_request_table_file(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         file_bytes,
         file_name="2026.9月201二车间计划(1).xlsx",
     )
@@ -1736,7 +1729,6 @@ async def test_import_electrical_total_amount_header_with_parentheses() -> None:
     assert "预估总价（400）与数量×单价（300）不一致" in error.message
 
 
-
 @pytest.mark.anyio
 async def test_import_same_file_twice_skips_duplicate_sheets() -> None:
     """同一文件（内容哈希相同）重复导入时整张工作表跳过，不生成重复草稿。"""
@@ -1745,10 +1737,10 @@ async def test_import_same_file_twice_skips_duplicate_sheets() -> None:
             (
                 "霉酚酸五金",
                 [
-                    _TITLE_ROW_WITH_AVERAGE,
+                    _TITLE_ROW_WITH_AVERAGE,  # type: ignore[list-item]
                     [" 2026年9月（五金）正常申购单"],
                     [" 申请部门:201二车间(霉酚酸)"],
-                    _HARDWARE_HEADERS,
+                    _HARDWARE_HEADERS,  # type: ignore[list-item]
                     [
                         1,
                         51040070,
@@ -1768,10 +1760,10 @@ async def test_import_same_file_twice_skips_duplicate_sheets() -> None:
             (
                 "MC原辅料",
                 [
-                    _TITLE_ROW,
+                    _TITLE_ROW,  # type: ignore[list-item]
                     ["2026年9月份 原辅料申购单"],
                     ["申购部门：201二车间（霉酚酸）"],
-                    _RAW_MATERIAL_HEADERS,
+                    _RAW_MATERIAL_HEADERS,  # type: ignore[list-item]
                     [
                         1,
                         12002413,
@@ -1790,7 +1782,7 @@ async def test_import_same_file_twice_skips_duplicate_sheets() -> None:
     )
 
     first = await procurement_service.import_purchase_request_table_file(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         file_bytes,
         file_name="2026.9月201二车间计划(1).xlsx",
     )
@@ -1798,7 +1790,7 @@ async def test_import_same_file_twice_skips_duplicate_sheets() -> None:
     assert first.failed_rows == []
 
     second = await procurement_service.import_purchase_request_table_file(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         file_bytes,
         file_name="2026.9月201二车间计划(1).xlsx",
     )
@@ -1813,16 +1805,17 @@ async def test_import_same_file_twice_skips_duplicate_sheets() -> None:
 @pytest.mark.anyio
 async def test_import_modified_file_allows_reimport() -> None:
     """修正表格内容（哈希变化）后可重新导入，对应“修改后重新提交”场景。"""
+
     def build(quantity: int) -> bytes:
         return _build_xlsx(
             [
                 (
                     "霉酚酸五金",
                     [
-                        _TITLE_ROW_WITH_AVERAGE,
+                        _TITLE_ROW_WITH_AVERAGE,  # type: ignore[list-item]
                         [" 2026年9月（五金）正常申购单"],
                         [" 申请部门:201二车间(霉酚酸)"],
-                        _HARDWARE_HEADERS,
+                        _HARDWARE_HEADERS,  # type: ignore[list-item]
                         [
                             1,
                             51040070,
@@ -1843,14 +1836,14 @@ async def test_import_modified_file_allows_reimport() -> None:
         )
 
     first = await procurement_service.import_purchase_request_table_file(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         build(4),
         file_name="2026.9月201二车间计划(1).xlsx",
     )
     assert len(first.imported_requests) == 1
 
     second = await procurement_service.import_purchase_request_table_file(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         build(8),
         file_name="2026.9月201二车间计划(1).xlsx",
     )
@@ -1867,10 +1860,10 @@ async def test_import_same_file_after_soft_delete_allows_reimport() -> None:
             (
                 "霉酚酸五金",
                 [
-                    _TITLE_ROW_WITH_AVERAGE,
+                    _TITLE_ROW_WITH_AVERAGE,  # type: ignore[list-item]
                     [" 2026年9月（五金）正常申购单"],
                     [" 申请部门:201二车间(霉酚酸)"],
-                    _HARDWARE_HEADERS,
+                    _HARDWARE_HEADERS,  # type: ignore[list-item]
                     [
                         1,
                         51040070,
@@ -1891,7 +1884,7 @@ async def test_import_same_file_after_soft_delete_allows_reimport() -> None:
     )
 
     first = await procurement_service.import_purchase_request_table_file(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         file_bytes,
         file_name="申请.xlsx",
     )
@@ -1902,7 +1895,7 @@ async def test_import_same_file_after_soft_delete_allows_reimport() -> None:
     deleted_request.is_deleted = True
 
     second = await procurement_service.import_purchase_request_table_file(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         file_bytes,
         file_name="申请.xlsx",
     )

@@ -34,12 +34,9 @@ async def get_reference_substance_by_id(
     db: AsyncSession, substance_id: uuid.UUID
 ) -> ReferenceSubstance | None:
     """根据ID获取对照品记录"""
-    query = (
-        select(ReferenceSubstance)
-        .where(
-            ReferenceSubstance.id == substance_id,
-            ReferenceSubstance.is_deleted == False,  # noqa: E712
-        )
+    query = select(ReferenceSubstance).where(
+        ReferenceSubstance.id == substance_id,
+        ReferenceSubstance.is_deleted == False,  # noqa: E712
     )
     result = await db.execute(query)
     return result.scalar_one_or_none()
@@ -61,9 +58,7 @@ async def update_reference_substance(
     return substance
 
 
-async def delete_reference_substance(
-    db: AsyncSession, substance_id: uuid.UUID
-) -> bool:
+async def delete_reference_substance(db: AsyncSession, substance_id: uuid.UUID) -> bool:
     """软删除对照品记录"""
     substance = await get_reference_substance_by_id(db, substance_id)
     if not substance:

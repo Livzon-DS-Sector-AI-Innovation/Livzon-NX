@@ -115,4 +115,6 @@ def require_module_view(module_code: str) -> Callable[..., Awaitable[User]]:
 
 
 RequiredUser = Annotated[User, Depends(require_current_user)]
+# Backwards-compatible name used by the migrated warehouse endpoints.
+RequireUser = RequiredUser
 AdminUser = Annotated[User, Depends(require_admin)]

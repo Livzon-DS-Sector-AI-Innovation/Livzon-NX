@@ -1,5 +1,6 @@
 import uuid
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
+from typing import Any
 
 import pytest
 from fastapi import HTTPException, status
@@ -11,6 +12,8 @@ from app.modules.agent.models import AgentToolCatalog
 from app.modules.agent.schemas import AgentToolExecuteRequest, AgentToolSearchRequest
 from app.modules.agent.tools import ToolExecutor, tool_registry
 from app.platform.identity.models import User
+
+SimpleNamespace: Any = _SimpleNamespace
 
 
 def _user(*, status_value: str = "active") -> User:
@@ -47,7 +50,7 @@ def _request(
 
 class ConfigurableAccessScope:
     def __init__(
-        self,
+        self: Any,
         *,
         denied: set[str] | None = None,
         error_status: int | None = None,
@@ -55,7 +58,9 @@ class ConfigurableAccessScope:
         self.denied = denied or set()
         self.error_status = error_status
 
-    async def require_tool_access(self, db, *, tool_name: str, **kwargs):
+    async def require_tool_access(
+        self: Any, db: Any, *, tool_name: str, **kwargs: Any
+    ) -> Any:
         if self.error_status is not None:
             raise HTTPException(self.error_status, "scope unavailable")
         if tool_name in self.denied:
@@ -67,22 +72,22 @@ class ConfigurableAccessScope:
 async def test_access_scope_selects_workflow_tool_allowlist() -> None:
     service = AgentAccessScopeService()
 
-    async def current_scope(db, *, user):
+    async def current_scope(db: Any, *, user: Any) -> Any:
         return SimpleNamespace(
             tool_names=[],
             workflow_tool_names=["quality.list_deviations"],
         )
 
-    service.get_current_scope = current_scope
+    service.get_current_scope = current_scope  # type: ignore[assignment, method-assign]
     snapshot = await service.require_tool_access(
-        None,
+        None,  # type: ignore[arg-type]
         user=SimpleNamespace(),
         tool_name="quality.list_deviations",
         module="quality",
         for_workflow=True,
     )
 
-    assert snapshot.workflow_tool_names == ["quality.list_deviations"]
+    assert snapshot.workflow_tool_names == ["quality.list_deviations"]  # type: ignore[union-attr]
 
 
 @pytest.mark.anyio
@@ -117,9 +122,7 @@ async def test_synchronize_creates_updates_and_disables_stale_rows(
     assert any(entry.operation == "removed.tool" for entry in entries)
     assert all(entry.version for entry in entries)
     assert all(
-        entry.output_schema
-        for entry in entries
-        if entry.operation != "removed.tool"
+        entry.output_schema for entry in entries if entry.operation != "removed.tool"
     )
 
 
@@ -232,29 +235,38 @@ async def test_search_filters_module_query_scope_and_limit(
     specs = tool_registry.list()
     searchable = next(spec for spec in specs if spec.module is None)
 
-    service.access_scope = ConfigurableAccessScope()
+    service.access_scope = ConfigurableAccessScope()  # type: ignore[assignment]
     limited = await service.search(
         db_session,
         _request(user.id, query=searchable.name, limit=1),
     )
     assert [entry.operation for entry in limited] == [searchable.name]
 
-    assert await service.search(
-        db_session,
-        _request(user.id, module="does-not-exist"),
-    ) == []
-    assert await service.search(
-        db_session,
-        _request(user.id, query="does-not-match-any-tool"),
-    ) == []
+    assert (
+        await service.search(
+            db_session,
+            _request(user.id, module="does-not-exist"),
+        )
+        == []
+    )
+    assert (
+        await service.search(
+            db_session,
+            _request(user.id, query="does-not-match-any-tool"),
+        )
+        == []
+    )
 
-    service.access_scope = ConfigurableAccessScope(denied={searchable.name})
-    assert await service.search(
-        db_session,
-        _request(user.id, query=searchable.name),
-    ) == []
+    service.access_scope = ConfigurableAccessScope(denied={searchable.name})  # type: ignore[assignment]
+    assert (
+        await service.search(
+            db_session,
+            _request(user.id, query=searchable.name),
+        )
+        == []
+    )
 
-    service.access_scope = ConfigurableAccessScope(
+    service.access_scope = ConfigurableAccessScope(  # type: ignore[assignment]
         error_status=status.HTTP_500_INTERNAL_SERVER_ERROR
     )
     with pytest.raises(HTTPException) as exc:
@@ -271,7 +283,7 @@ async def test_describe_validates_status_user_and_access(
     db_session.add_all([active, inactive])
     await db_session.flush()
     service = ToolCatalogService()
-    service.access_scope = ConfigurableAccessScope()
+    service.access_scope = ConfigurableAccessScope()  # type: ignore[assignment]
     await service.synchronize(db_session)
     operation = tool_registry.list()[0].name
 

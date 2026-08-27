@@ -2,6 +2,7 @@
 
 import logging
 from datetime import date, datetime
+from typing import Any
 
 from fastapi import Depends, Query
 from sqlalchemy import text
@@ -38,7 +39,7 @@ async def get_mc_dashboard(
         description="车间编号",
     ),
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
 
     if month is None:
         now = datetime.now()
@@ -62,11 +63,14 @@ async def get_mc_dashboard(
     blend_yy = str(year)[2:]  # "26"
     blend_mm = f"{mon:02d}"  # "07"
 
-    result: dict = {"_month": month}
+    result: dict[str, Any] = {"_month": month}
 
     # ── 辅助：按日期字段过滤计数 ──
     async def _count_month(
-        table: str, date_col: str, extra_where: str = "", params: dict | None = None
+        table: str,
+        date_col: str,
+        extra_where: str = "",
+        params: dict[str, Any] | None = None,
     ) -> int:
         where = f"{date_col} >= :start AND {date_col} < :end AND is_deleted = false"
         if extra_where:
@@ -83,7 +87,9 @@ async def get_mc_dashboard(
             return 0
 
     # ── 辅助：混合批号按月过滤（MC-260101 格式） ──
-    async def _count_blending(extra_where: str = "", params: dict | None = None) -> int:
+    async def _count_blending(
+        extra_where: str = "", params: dict[str, Any] | None = None
+    ) -> int:
         """从 batch_no 第4-5位解析年份、第6-7位解析月份"""
         where = (
             "SUBSTRING(batch_no FROM 4 FOR 2) = :yy AND "
@@ -243,7 +249,9 @@ async def get_mc_dashboard(
     result["flow"] = flow
 
     # ── 7. 近12个月产量趋势（按月混粉总重量） ──
-    monthly_trend = [{"month": m, "output_kg": 0} for m in range(1, 13)]
+    monthly_trend: list[dict[str, int | float]] = [
+        {"month": m, "output_kg": 0} for m in range(1, 13)
+    ]
     try:
         r = await session.execute(
             text("""SELECT SUBSTRING(batch_no FROM 6 FOR 2)::int AS m,
@@ -316,8 +324,10 @@ async def get_mc_dashboard(
                        WHERE is_deleted = false AND is_check = true
                        ORDER BY check_date DESC LIMIT 1"""),
             )
-            row = r.scalar()
-            result["ba_stock_kg"] = round(float(row * 1000) if row else 0, 1)
+            stock_consumption = r.scalar()
+            result["ba_stock_kg"] = round(
+                float(stock_consumption * 1000) if stock_consumption else 0, 1
+            )
             result["ba_batches"] = (
                 await session.execute(
                     text(

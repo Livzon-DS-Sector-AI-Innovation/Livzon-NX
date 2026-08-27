@@ -1,6 +1,6 @@
 """批次进度总览 API — 查询13个工艺步骤的数据完成情况"""
-
 from datetime import date
+from typing import Any
 
 from fastapi import Depends, Query
 from sqlalchemy import text
@@ -51,7 +51,7 @@ async def batch_progress(
     s: str | None = Query(None, alias="batch_no"),
     workshop: str = Query("203"),
     session: AsyncSession = Depends(get_db),
-):
+) -> Any:
     """一次查询13张表，返回批次进度矩阵 + 概览统计 + 卡点分析"""
     # ── 1. 批次进度矩阵 ──
     unions = " UNION ALL ".join(
@@ -72,7 +72,7 @@ async def batch_progress(
 
     step_keys = [key for key, _, _ in STEP_LABELS]
 
-    batches = [
+    batches: list[dict[str, Any]] = [
         {
             "batch_no": bn,
             "steps": {sk: (sk in steps) for sk in step_keys},
@@ -104,7 +104,7 @@ async def batch_progress(
     monthly_output = round(float(pack_row[1]), 1) if pack_row and pack_row[1] else 0
 
     # ── 4. 卡点分析：上游有数据、当前步骤无数据 ──
-    bottlenecks: list[dict] = []
+    bottlenecks: list[dict[str, Any]] = []
     for i in range(1, len(step_keys)):
         prev_key = step_keys[i - 1]
         curr_key = step_keys[i]
@@ -130,12 +130,12 @@ async def batch_progress(
             )
 
     # ── 5. 最近完工 ──
-    recent_completed = [
+    recent_completed: list[dict[str, Any]] = [
         {"batch_no": b["batch_no"], "completed": b["completed"], "total": b["total"]}
         for b in batches
         if b["steps"].get("pack")
     ]
-    recent_completed.sort(key=lambda x: x["batch_no"], reverse=True)
+    recent_completed.sort(key=lambda x: str(x["batch_no"]), reverse=True)
     recent_completed = recent_completed[:10]
 
     return success_response(

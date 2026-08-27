@@ -2,13 +2,16 @@
 
 覆盖 27 个 *_sync.py 模块的主路径：空数据、有效记录创建、已有记录更新、缺关键字段跳过。
 """
+
 from __future__ import annotations
 
 import importlib
 from types import SimpleNamespace
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 
 SYNC_MODULES = [
     "broth_receive_sync",
@@ -63,12 +66,13 @@ FUNC_NAMES = {
 }
 
 
-def _session(existing=None) -> AsyncMock:
+def _session(existing: Any = None) -> AsyncMock:
     """返回 mock session：execute 的 fetchone 为同步方法（真实 Result.fetchone 非 async）。"""  # noqa: E501
     session = AsyncMock()
     result = AsyncMock()
     result.fetchone = SimpleNamespace  # placeholder replaced below
     from unittest.mock import MagicMock
+
     result.fetchone = MagicMock(return_value=existing)
     session.execute.return_value = result
     return session
@@ -85,19 +89,19 @@ def _config() -> SimpleNamespace:
     )
 
 
-def _batch_no_field(module) -> str:
+def _batch_no_field(module: Any) -> str:
     """模块的业务键字段：优先 batch_no，否则按各模块跳过条件回退。"""
     mapping = getattr(module, "FIELD_MAPPING", None) or {}
     for key, value in mapping.items():
         if value == "batch_no":
-            return key
+            return str(key)
     for key, value in mapping.items():
         if value in ("received_batch", "membrane_no", "equipment_no"):
-            return key
+            return str(key)
     return next(iter(mapping)) if mapping else "批次号"
 
 
-def _load_module(module_name: str):
+def _load_module(module_name: str) -> Any:
     module = importlib.import_module(f"app.modules.production.{module_name}")
     func = getattr(module, FUNC_NAMES[module_name], None)
     client = getattr(module, "ProductionFeishuClient", None)
@@ -113,7 +117,8 @@ async def test_sync_empty_records(module_name: str) -> None:
     session = _session()
     with patch.object(module, "decrypt_secret", return_value="secret"):
         with patch.object(
-            module.ProductionFeishuClient, "list_records",
+            module.ProductionFeishuClient,
+            "list_records",
             new=AsyncMock(return_value={"items": []}),
         ):
             result = await func(_config(), session)
@@ -129,8 +134,13 @@ async def test_sync_creates_records(module_name: str) -> None:
     batch_key = _batch_no_field(module)
     with patch.object(module, "decrypt_secret", return_value="secret"):
         with patch.object(
-            module.ProductionFeishuClient, "list_records",
-            new=AsyncMock(return_value={"items": [{"record_id": "r1", "fields": {batch_key: "B001"}}]}),  # noqa: E501
+            module.ProductionFeishuClient,
+            "list_records",
+            new=AsyncMock(
+                return_value={
+                    "items": [{"record_id": "r1", "fields": {batch_key: "B001"}}]
+                }
+            ),  # noqa: E501
         ):
             result = await func(_config(), session)
     assert isinstance(result, dict)
@@ -146,8 +156,13 @@ async def test_sync_updates_existing_records(module_name: str) -> None:
     batch_key = _batch_no_field(module)
     with patch.object(module, "decrypt_secret", return_value="secret"):
         with patch.object(
-            module.ProductionFeishuClient, "list_records",
-            new=AsyncMock(return_value={"items": [{"record_id": "r1", "fields": {batch_key: "B001"}}]}),  # noqa: E501
+            module.ProductionFeishuClient,
+            "list_records",
+            new=AsyncMock(
+                return_value={
+                    "items": [{"record_id": "r1", "fields": {batch_key: "B001"}}]
+                }
+            ),  # noqa: E501
         ):
             result = await func(_config(), session)
     assert isinstance(result, dict)
@@ -160,8 +175,11 @@ async def test_sync_skips_records_without_batch_no(module_name: str) -> None:
     session = _session()
     with patch.object(module, "decrypt_secret", return_value="secret"):
         with patch.object(
-            module.ProductionFeishuClient, "list_records",
-            new=AsyncMock(return_value={"items": [{"record_id": "r1", "fields": {"备注": "x"}}]}),  # noqa: E501
+            module.ProductionFeishuClient,
+            "list_records",
+            new=AsyncMock(
+                return_value={"items": [{"record_id": "r1", "fields": {"备注": "x"}}]}
+            ),  # noqa: E501
         ):
             result = await func(_config(), session)
     assert isinstance(result, dict)
@@ -205,7 +223,9 @@ async def test_dr_sync_empty_rows_skipped(module_name: str) -> None:
     session = _session()
     with patch.object(module, "decrypt_secret", return_value="secret"):
         with patch.object(module, "_get_token", new=AsyncMock(return_value="token")):
-            with patch.object(module, "_read_sheet", new=AsyncMock(return_value=[["", ""]])):  # noqa: E501
+            with patch.object(
+                module, "_read_sheet", new=AsyncMock(return_value=[["", ""]])
+            ):  # noqa: E501
                 result = await func(_config(), session)
     assert isinstance(result, dict)
 
@@ -239,11 +259,13 @@ async def test_sync_filters_non_dict_items(module_name: str) -> None:
     session = _session()
     with patch.object(module, "decrypt_secret", return_value="secret"):
         with patch.object(
-            module.ProductionFeishuClient, "list_records",
+            module.ProductionFeishuClient,
+            "list_records",
             new=AsyncMock(return_value={"items": [None, "text", 42]}),
         ):
             result = await func(_config(), session)
     assert isinstance(result, dict)
+
 
 # ═══════════ mc_feishu_sheets_sync 服务主路径（db+network 走 mock） ═══════════
 
@@ -251,62 +273,50 @@ async def test_sync_filters_non_dict_items(module_name: str) -> None:
 class _FakeResult:
     """模拟 sqlalchemy Result：scalars().first() 与 fetchone() 同步。"""
 
-    def __init__(self, first=None, fetchone_val=None):
-        self._first = first
-        self._fetchone_val = fetchone_val
+    def __init__(self, session: Any) -> None:
+        self._session = session
 
-    def scalars(self):
+    def scalars(self) -> Any:
         return self
 
-    def first(self):
-        return self._first
+    def first(self) -> Any:
+        return self._session.existing
 
-    def fetchone(self):
-        return self._fetchone_val
+    def fetchone(self) -> Any:
+        return self._session.fetchone_val
+
+    def all(self) -> Any:
+        # run_dr_sync 用 result.scalars().all()
+        return self._session.existing or []
 
 
 class _FakeSession:
     """模拟 AsyncSession：execute 返回可 scalars().first() / fetchone() 的 Result。"""
 
-    def __init__(self, config=None, existing=None, fetchone_val=None):
+    def __init__(
+        self, config: Any = None, existing: Any = None, fetchone_val: Any = None
+    ) -> None:
         self.config = config
         self.existing = existing
         self.fetchone_val = fetchone_val
-        self.executed = []
+        self.executed: list[Any] = []
 
-    async def execute(self, stmt, *args, **kwargs):
+    async def execute(self, stmt: Any, *args: Any, **kwargs: Any) -> Any:
         self.executed.append(stmt)
         return _FakeResult(self)
 
-    async def commit(self):
+    async def commit(self) -> Any:
         pass
 
-    async def rollback(self):
+    async def rollback(self) -> Any:
         pass
-
-
-class _FakeResult:
-    def __init__(self, session):
-        self._session = session
-
-    def scalars(self):
-        return self
-
-    def first(self):
-        return self._session.existing
-
-    def fetchone(self):
-        return self._session.fetchone_val
-
-    def all(self):
-        # run_dr_sync 用 result.scalars().all()
-        return self._session.existing or []
 
 
 @pytest.mark.anyio
-async def test_mc_sync_unknown_module_reports_error():
+async def test_mc_sync_unknown_module_reports_error() -> Any:
     """未知模块返回错误而不抛异常。"""
     from app.modules.production import mc_feishu_sheets_sync as sync
+
     # 提供有效配置对象，使 run_mc_sync 能拿到 cfg
     cfg_obj = SimpleNamespace(
         bitable_app_token="sptoken",
@@ -321,30 +331,40 @@ async def test_mc_sync_unknown_module_reports_error():
             new=AsyncMock(return_value={}),
         ):
             with patch.object(sync, "_sync_lineage", new=AsyncMock(return_value=0)):
-                result = await sync.run_mc_sync(["not_a_module"], session)
+                result = await sync.run_mc_sync(
+                    ["not_a_module"], cast(AsyncSession, session)
+                )
     assert result["not_a_module"]["error"]
 
+
 @pytest.mark.anyio
-async def test_mc_sync_config_missing_secret_ok():
+async def test_mc_sync_config_missing_secret_ok() -> Any:
     from app.modules.production import mc_feishu_sheets_sync as sync
+
     session = _FakeSession(existing=None)
     with patch.object(sync, "decrypt_secret", return_value="secret"):
-        with patch.object(sync, "_get_mc_spreadsheet_config", new=AsyncMock(
-            return_value={
-                "spreadsheet_token": "t", "app_id": "a", "app_secret": "s",
-            }
-        )):
+        with patch.object(
+            sync,
+            "_get_mc_spreadsheet_config",
+            new=AsyncMock(
+                return_value={
+                    "spreadsheet_token": "t",
+                    "app_id": "a",
+                    "app_secret": "s",
+                }
+            ),
+        ):
             with patch(
                 "app.modules.production.mc_yield_anomaly_detector.run_anomaly_detection",
                 new=AsyncMock(return_value={}),
             ):
                 with patch.object(sync, "_sync_lineage", new=AsyncMock(return_value=0)):
-                    result = await sync.run_mc_sync([], session)
+                    result = await sync.run_mc_sync([], cast(AsyncSession, session))
     assert isinstance(result, dict)
 
 
 @pytest.mark.anyio
-async def test_mc_get_tenant_token_and_read_sheet_range():
+async def test_mc_get_tenant_token_and_read_sheet_range() -> Any:
     """用 httpx.MockTransport 覆盖 _get_tenant_token 与 _read_sheet_range 的分支。"""
     import httpx
 
@@ -367,49 +387,56 @@ async def test_mc_get_tenant_token_and_read_sheet_range():
 
     from app.modules.production import mc_feishu_sheets_sync as syncmod
 
-    def fake_async_client(*, base_url=None, timeout=30):
+    def fake_async_client(*, base_url: Any = None, timeout: Any = 30) -> Any:
         return real_async_client(
             transport=transport, timeout=timeout, base_url=base_url
         )
 
-    with patch.object(syncmod.httpx, "AsyncClient", fake_async_client):
+    with patch.object(getattr(syncmod, "httpx"), "AsyncClient", fake_async_client):
         token = await syncmod._get_tenant_token("app-1", "secret-1")
         assert token == "tok-1"
         assert await syncmod._get_tenant_token("app-1", "secret-1") == "tok-1"
-        rows = await syncmod._read_sheet_range("sheet1", "A1:C3", "spt", "app-1", "secret-1")  # noqa: E501
+        rows = await syncmod._read_sheet_range(
+            "sheet1", "A1:C3", "spt", "app-1", "secret-1"
+        )  # noqa: E501
         assert rows[0] == ["1", "2", ""]
         assert rows[1] == ["a", "b", "c"]
 
 
 @pytest.mark.anyio
-async def test_dr_run_sync_no_config_returns_error():
+async def test_dr_run_sync_no_config_returns_error() -> Any:
     """DR 同步无配置时返回 error 而非异常。"""
     from app.modules.production import dr_feishu_sync as drsync
+
     session = _FakeSession(existing=[])
-    result = await drsync.run_dr_sync(session)
+    result = await drsync.run_dr_sync(cast(AsyncSession, session))
     assert "error" in result
 
 
 @pytest.mark.anyio
-async def test_dr_run_sync_with_configs_runs_rollback_on_error():
+async def test_dr_run_sync_with_configs_runs_rollback_on_error() -> Any:
     """DR 同步遍历配置，某个 target 失败时记录 error 并回滚。"""
     from app.modules.production import dr_feishu_sync as dr
+
     # existing 为两个配置（scalars().all() 由 _FakeResult 序列化）
     cfg1 = SimpleNamespace(id="c1", sync_target="production_plan")
     cfg2 = SimpleNamespace(id="c2", sync_target="dr_plan")
 
     class _ResultAll:
-        def scalars(self):
+        def scalars(self) -> Any:
             return self
-        def all(self):
+
+        def all(self) -> Any:
             return [cfg1, cfg2]
 
     class _SessionAll:
-        def __init__(self):
+        def __init__(self) -> None:
             self.rolled = 0
-        async def execute(self, stmt, *a, **k):
+
+        async def execute(self, stmt: Any, *a: Any, **k: Any) -> Any:
             return _ResultAll()
-        async def rollback(self):
+
+        async def rollback(self) -> Any:
             self.rolled += 1
 
     session_all = _SessionAll()
@@ -417,7 +444,7 @@ async def test_dr_run_sync_with_configs_runs_rollback_on_error():
         "app.modules.production.production_plan_service.sync_config_by_target",
         new=AsyncMock(side_effect=RuntimeError("boom")),
     ):
-        result = await dr.run_dr_sync(session_all)
+        result = await dr.run_dr_sync(cast(AsyncSession, session_all))
     assert result[cfg1.sync_target]["error"]
     assert session_all.rolled == 2
 
@@ -427,7 +454,7 @@ async def test_dr_run_sync_with_configs_runs_rollback_on_error():
 _MM_UNSET = object()
 
 
-def _result_with(fetchone=_MM_UNSET, fetchall=_MM_UNSET):
+def _result_with(fetchone: Any = _MM_UNSET, fetchall: Any = _MM_UNSET) -> Any:
     r = MagicMock()
     if fetchone is not _MM_UNSET:
         r.fetchone.return_value = fetchone
@@ -436,13 +463,13 @@ def _result_with(fetchone=_MM_UNSET, fetchall=_MM_UNSET):
     return r
 
 
-def _result_fetchone(v):
+def _result_fetchone(v: Any) -> Any:
     r = MagicMock()
     r.fetchone.return_value = v
     return r
 
 
-def _result_fetchall(v):
+def _result_fetchall(v: Any) -> Any:
     r = MagicMock()
     if isinstance(v, list):
         r.fetchall.return_value = v
@@ -452,14 +479,16 @@ def _result_fetchall(v):
 
 
 @pytest.mark.anyio
-async def test_dr_lineage_resolve_prefers_explicit_stage():
+async def test_dr_lineage_resolve_prefers_explicit_stage() -> Any:
     drlineage = importlib.import_module("app.modules.production.dr_lineage_api")
     session = AsyncMock()
-    async def _exec(sql, params=None):
+
+    async def _exec(sql: Any, params: Any = None) -> Any:
         s = str(sql)
         if "SELECT 1 FROM production.dr_extractions" in s:
             return _result_fetchone(True)
         return _result_fetchone(True)
+
     session.execute.side_effect = _exec
     stg, bn = await drlineage._resolve(session, "extraction", "DR-26026-1")
     assert stg == "extraction"
@@ -467,45 +496,56 @@ async def test_dr_lineage_resolve_prefers_explicit_stage():
 
 
 @pytest.mark.anyio
-async def test_dr_lineage_resolve_falls_back_to_probe():
+async def test_dr_lineage_resolve_falls_back_to_probe() -> Any:
     drlineage = importlib.import_module("app.modules.production.dr_lineage_api")
     session = AsyncMock()
-    async def branch(sql, *q):
+
+    async def branch(sql: Any, *q: Any) -> Any:
         s = str(sql)
         if "SELECT 1 FROM production.dr_first_refinement" in s:
             return _result_fetchone(True)
         return _result_fetchone(None)
+
     session.execute.side_effect = branch
     stg, bn = await drlineage._resolve(session, "", "DR-F1-24019")
     assert stg == "first_refinement"
 
 
 @pytest.mark.anyio
-async def test_dr_lineage_upstream_downstream_branches():
+async def test_dr_lineage_upstream_downstream_branches() -> Any:
     drlineage = importlib.import_module("app.modules.production.dr_lineage_api")
     session = AsyncMock()
-    async def branch(sql, *q, **k):
+
+    async def branch(sql: Any, *q: Any, **k: Any) -> Any:
         s = str(sql)
         if "dr_extractions e" in s and "fermentation_batch_id" in s:
             return _result_fetchone(SimpleNamespace(fermentation_batch_id="fb1"))
         if "SELECT batch_no FROM production.dr_fermentation_batches" in s:
             return _result_fetchone(SimpleNamespace(batch_no="DR-26026"))
-        if "DISTINCT extraction_batch_no FROM production.dr_chromatography_crystal" in s:  # noqa: E501
+        if (
+            "DISTINCT extraction_batch_no FROM production.dr_chromatography_crystal"
+            in s
+        ):  # noqa: E501
             return _result_fetchall(SimpleNamespace(extraction_batch_no="DR-E1"))
         if "DISTINCT chromatography_batch_no" in s and "wet_powder_batch_no" in s:  # noqa: E501
             return _result_fetchall(SimpleNamespace(chromatography_batch_no="DR-C1"))
         if "DISTINCT wet_powder_batch_no" in s:
             return _result_fetchall(SimpleNamespace(wet_powder_batch_no="DR-24019-1"))
         if "SELECT feed_batch_no, feed_pure_kg" in s:
-            return _result_fetchall([
-                SimpleNamespace(feed_batch_no="DR-F1-1 + DR-F1-2", feed_pure_kg=0.0),
-                SimpleNamespace(feed_batch_no="DR-H1", feed_pure_kg=0.0),
-            ])  # noqa: E501
+            return _result_fetchall(
+                [
+                    SimpleNamespace(
+                        feed_batch_no="DR-F1-1 + DR-F1-2", feed_pure_kg=0.0
+                    ),
+                    SimpleNamespace(feed_batch_no="DR-H1", feed_pure_kg=0.0),
+                ]
+            )  # noqa: E501
         if "SELECT DISTINCT extraction_batch_no FROM production.dr_extractions" in s:
             return _result_fetchall(SimpleNamespace(extraction_batch_no="DR-260-1"))
         if s.startswith("SELECT DISTINCT refinement_batch_no"):
             return _result_fetchall(SimpleNamespace(refinement_batch_no="DR-F2-1"))
         return _result_fetchall([])
+
     session.execute.side_effect = branch
 
     up = await drlineage._upstream(session, "extraction", "DR-26026-1")
@@ -523,11 +563,39 @@ async def test_dr_lineage_upstream_downstream_branches():
 
 
 @pytest.mark.anyio
-async def test_fa_feishu_sync_fermentation_parse_and_upsert():
+async def test_fa_feishu_sync_fermentation_parse_and_upsert() -> Any:
     fafsync = importlib.import_module("app.modules.production.fa_feishu_sync")
     rows = [
-        ["2026-03-05", "FA-EX1", "", "10", "100", "500", "600", "80", "1.2", "20", "0.39", "5", "0.5"],  # noqa: E501
-        ["2026-03-05", "FA-EX1", "FA-EX1C", "5", "90", "300", "", "", "", "", "", "", ""],  # noqa: E501
+        [
+            "2026-03-05",
+            "FA-EX1",
+            "",
+            "10",
+            "100",
+            "500",
+            "600",
+            "80",
+            "1.2",
+            "20",
+            "0.39",
+            "5",
+            "0.5",
+        ],  # noqa: E501
+        [
+            "2026-03-05",
+            "FA-EX1",
+            "FA-EX1C",
+            "5",
+            "90",
+            "300",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+        ],  # noqa: E501
         ["2026.03.06", "FA-EX2", "", "8", "", "", "400", "", "", "", "", "", "", ""],
         ["03月份", "", "", "", "", "", "", "", "", "", "", "", ""],
         ["", "FA-EX3", "", "", "", "", "", "", "", "", "", "", ""],
@@ -538,6 +606,7 @@ async def test_fa_feishu_sync_fermentation_parse_and_upsert():
     result.rowcount = 2
     session.execute.return_value = result
     from unittest.mock import patch as _patch
+
     with _patch.object(fafsync, "_read_sheet", new=AsyncMock(return_value=rows)):
         out = await fafsync.sync_fermentation(session, "token", "app", "sec")
     assert out["batches"] >= 1
@@ -548,15 +617,107 @@ async def test_fa_feishu_sync_fermentation_parse_and_upsert():
 
 
 @pytest.mark.anyio
-async def test_mc_sync_extraction_full_path():
+async def test_mc_sync_extraction_full_path() -> Any:
     """覆盖 _sync_extraction 的创建/更新主表与投入明细、跳过行。"""
     from app.modules.production import mc_feishu_sheets_sync as sync
 
     rows = [
-        ["2026-03-01", "MC-101", "MC-C1", "5", "90", "100", "80", "90", "85", "800", "2.0", "86", "10", "5", "90", "2", "50", "0.9", "1.0", "500", "2", "0.88"],  # noqa: E501
-        ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],  # noqa: E501
-        ["03月份", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],  # noqa: E501
-        ["2026-03-02", "MC-0102", "MC-B", "10", "88", "90", "7", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],  # noqa: E501
+        [
+            "2026-03-01",
+            "MC-101",
+            "MC-C1",
+            "5",
+            "90",
+            "100",
+            "80",
+            "90",
+            "85",
+            "800",
+            "2.0",
+            "86",
+            "10",
+            "5",
+            "90",
+            "2",
+            "50",
+            "0.9",
+            "1.0",
+            "500",
+            "2",
+            "0.88",
+        ],  # noqa: E501
+        [
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+        ],  # noqa: E501
+        [
+            "03月份",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+        ],  # noqa: E501
+        [
+            "2026-03-02",
+            "MC-0102",
+            "MC-B",
+            "10",
+            "88",
+            "90",
+            "7",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+        ],  # noqa: E501
     ]
     session = AsyncMock()
     result = MagicMock()
@@ -572,8 +733,9 @@ async def test_mc_sync_extraction_full_path():
 
 
 @pytest.mark.anyio
-async def test_mc_sync_scheduler_defaults():
+async def test_mc_sync_scheduler_defaults() -> Any:
     from app.modules.production import mc_feishu_sheets_sync as sync_module
+
     sync_module._mc_sync_scheduler = None
     sync_module.start_mc_sync_scheduler()
     sync_module.start_mc_sync_scheduler()  # 二次调用不进
@@ -583,15 +745,81 @@ async def test_mc_sync_scheduler_defaults():
 
 
 @pytest.mark.anyio
-async def test_mc_sync_refinement_and_ba():
+async def test_mc_sync_refinement_and_ba() -> Any:
     """覆盖 _sync_refinement 创建/更新 + _sync_ba 交叉表解析。"""
     from app.modules.production import mc_feishu_sheets_sync as sync
 
     # refinement: 有批次行 + 投入行 + 跳过行
     ref_rows = [
-        ["2026-03-01", "MC-F2-101", "MC-F1-501", "30", "30", "5", "90", "25", "20", "180", "T1", "1.2", "C1", "10", "8", "120", "0.9", "0.88", "300", "2.0", "1.5"],  # noqa: E501
-        ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],  # noqa: E501
-        ["2026-03-02", "MC-F2-0102", "", "5", "5", "1", "85", "4", "3", "90", "T2", "0.8", "C2", "2", "1.5", "60", "0.95", "0.9", "150", "1.0", "0.8"],  # noqa: E501
+        [
+            "2026-03-01",
+            "MC-F2-101",
+            "MC-F1-501",
+            "30",
+            "30",
+            "5",
+            "90",
+            "25",
+            "20",
+            "180",
+            "T1",
+            "1.2",
+            "C1",
+            "10",
+            "8",
+            "120",
+            "0.9",
+            "0.88",
+            "300",
+            "2.0",
+            "1.5",
+        ],  # noqa: E501
+        [
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+        ],  # noqa: E501
+        [
+            "2026-03-02",
+            "MC-F2-0102",
+            "",
+            "5",
+            "5",
+            "1",
+            "85",
+            "4",
+            "3",
+            "90",
+            "T2",
+            "0.8",
+            "C2",
+            "2",
+            "1.5",
+            "60",
+            "0.95",
+            "0.9",
+            "150",
+            "1.0",
+            "0.8",
+        ],  # noqa: E501
     ]
     session = AsyncMock()
     result = MagicMock()
@@ -627,7 +855,7 @@ async def test_mc_sync_refinement_and_ba():
 
 
 @pytest.mark.anyio
-async def test_run_dr_sync_no_config():
+async def test_run_dr_sync_no_config() -> Any:
     """run_dr_sync: 无配置 → 返回 error。"""
     from unittest.mock import AsyncMock, MagicMock
 
@@ -642,7 +870,7 @@ async def test_run_dr_sync_no_config():
 
 
 @pytest.mark.anyio
-async def test_run_dr_sync_with_config():
+async def test_run_dr_sync_with_config() -> Any:
     """run_dr_sync: 有配置 → 调用 sync_config_by_target（注入）。"""
     from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -663,7 +891,7 @@ async def test_run_dr_sync_with_config():
 
 
 @pytest.mark.anyio
-async def test_dr_sync_scheduler_start_stop():
+async def test_dr_sync_scheduler_start_stop() -> Any:
     """启动/停止 DR 飞书同步定时任务。"""
     from app.modules.production import dr_feishu_sync as drsync
 
@@ -678,7 +906,7 @@ async def test_dr_sync_scheduler_start_stop():
 
 
 @pytest.mark.parametrize("module_name", DR_SYNC_MODULES)
-def test_dr_refinement_sync_pure_functions(module_name: str):
+def test_dr_refinement_sync_pure_functions(module_name: str) -> Any:
     """覆盖 _g/_f/_is_empty 纯函数的各类输入。"""
     module = importlib.import_module(f"app.modules.production.{module_name}")
     c = getattr(module, "COL", {})
@@ -703,7 +931,7 @@ def test_dr_refinement_sync_pure_functions(module_name: str):
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("module_name", DR_SYNC_MODULES)
-async def test_dr_refinement_sync_with_data(module_name: str):
+async def test_dr_refinement_sync_with_data(module_name: str) -> Any:
     """带数据同步：命中 DELETE + INSERT 主路径。"""
     module = importlib.import_module(f"app.modules.production.{module_name}")
     func = getattr(module, DR_FUNCS[module_name])

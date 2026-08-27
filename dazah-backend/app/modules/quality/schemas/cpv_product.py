@@ -14,7 +14,9 @@ class CpvProductCreate(BaseModel):
 
     name: str = Field(..., min_length=1, max_length=200, description="产品名称")
     specification: str | None = Field(default=None, max_length=200, description="规格")
-    process_version: str | None = Field(default=None, max_length=50, description="工艺版本")
+    process_version: str | None = Field(
+        default=None, max_length=50, description="工艺版本"
+    )
     status: ProductStatus = Field(default="active", description="状态")
     description: str | None = Field(default=None, description="备注描述")
 
@@ -22,9 +24,13 @@ class CpvProductCreate(BaseModel):
 class CpvProductUpdate(BaseModel):
     """更新产品请求"""
 
-    name: str | None = Field(default=None, min_length=1, max_length=200, description="产品名称")
+    name: str | None = Field(
+        default=None, min_length=1, max_length=200, description="产品名称"
+    )
     specification: str | None = Field(default=None, max_length=200, description="规格")
-    process_version: str | None = Field(default=None, max_length=50, description="工艺版本")
+    process_version: str | None = Field(
+        default=None, max_length=50, description="工艺版本"
+    )
     status: ProductStatus | None = Field(default=None, description="状态")
     description: str | None = Field(default=None, description="备注描述")
 

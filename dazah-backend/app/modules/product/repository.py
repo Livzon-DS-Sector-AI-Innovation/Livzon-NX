@@ -1,5 +1,6 @@
 """Product data access layer."""
 
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -96,7 +97,7 @@ class ProductRepository:
         result = await self.session.execute(base_query)
         return list(result.scalars().all()), total
 
-    async def upsert_by_feishu_record(self, data: dict) -> None:
+    async def upsert_by_feishu_record(self, data: dict[str, Any]) -> None:
         """Upsert a product by feishu_record_id."""
         record_id = data.get("feishu_record_id")
         if not record_id:

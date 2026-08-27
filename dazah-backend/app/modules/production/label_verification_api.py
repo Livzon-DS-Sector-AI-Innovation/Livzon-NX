@@ -1,8 +1,10 @@
 import logging
 from datetime import date
+from typing import Any
 from uuid import UUID
 
 from fastapi import Depends, Query, UploadFile
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -40,7 +42,7 @@ async def list_label_verifications(
     end_date: date | None = Query(None, description="复核日期截止"),
     page_params: PageParams = Depends(),
     service: LabelVerificationService = Depends(get_label_verification_service),
-):
+) -> Any:
     verifications, total = await service.list_verifications(
         batch_number=batch_number,
         product_name=product_name,
@@ -63,7 +65,7 @@ async def list_label_verifications(
 async def create_label_verification(
     payload: LabelVerificationCreate,
     service: LabelVerificationService = Depends(get_label_verification_service),
-):
+) -> Any:
     verification = await service.create_verification(payload)
     return success_response(
         data=verification.model_dump(mode="json"),
@@ -75,7 +77,7 @@ async def create_label_verification(
 @router.get("/label-verifications/statistics", summary="标签复核统计")
 async def get_label_verification_statistics(
     service: LabelVerificationService = Depends(get_label_verification_service),
-):
+) -> Any:
     stats = await service.get_statistics()
     return success_response(data=stats.model_dump(mode="json"))
 
@@ -87,7 +89,7 @@ async def get_label_verification_statistics(
 async def get_verifications_by_batch(
     batch_number: str,
     service: LabelVerificationService = Depends(get_label_verification_service),
-):
+) -> Any:
     verifications = await service.get_by_batch_number(batch_number)
     data = [v.model_dump(mode="json") for v in verifications]
     return success_response(data=data)
@@ -100,7 +102,7 @@ async def get_verifications_by_batch(
 async def get_label_verification(
     verification_id: UUID,
     service: LabelVerificationService = Depends(get_label_verification_service),
-):
+) -> Any:
     verification = await service.get_verification(verification_id)
     return success_response(
         data=verification.model_dump(mode="json"),
@@ -115,7 +117,7 @@ async def update_label_verification(
     verification_id: UUID,
     payload: LabelVerificationUpdate,
     service: LabelVerificationService = Depends(get_label_verification_service),
-):
+) -> Any:
     verification = await service.update_verification(verification_id, payload)
     return success_response(
         data=verification.model_dump(mode="json"),
@@ -130,7 +132,7 @@ async def update_label_verification(
 async def delete_label_verification(
     verification_id: UUID,
     service: LabelVerificationService = Depends(get_label_verification_service),
-):
+) -> Any:
     await service.delete_verification(verification_id)
     return success_response(message="标签复核记录删除成功")
 
@@ -142,7 +144,7 @@ async def delete_label_verification(
 async def upload_label_verification_video(
     file: UploadFile,
     service: LabelVerificationService = Depends(get_label_verification_service),
-):
+) -> Any:
     """上传视频文件，返回文件 key 和文件名"""
     import os
     from datetime import datetime
@@ -181,7 +183,7 @@ async def analyze_label_verification_video(
     file_key: str,
     fps: float = 1.0,
     service: LabelVerificationService = Depends(get_label_verification_service),
-):
+) -> Any:
     """分析视频中的标签信息，返回 AI 识别结果"""
     import os
 
@@ -272,9 +274,6 @@ async def analyze_label_verification_video(
 # ─── 自动对比接口 ───
 
 
-from pydantic import BaseModel, Field  # noqa: E402
-
-
 class AutoCompareRequest(BaseModel):
     """自动对比请求体"""
 
@@ -298,7 +297,7 @@ class AutoCompareRequest(BaseModel):
 async def auto_compare_video(
     payload: AutoCompareRequest,
     service: LabelVerificationService = Depends(get_label_verification_service),
-):
+) -> Any:
     """
     自动分析视频中的标签信息，与表单数据逐项对比，返回 8 项核对结论。
     如果识别不全，会自动降低帧率重新分析。

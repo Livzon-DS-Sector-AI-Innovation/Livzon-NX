@@ -6,15 +6,15 @@ from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.deps import CurrentUser
 from app.core.response import paginated_response, success_response
-from app.modules.quality import service
+from app.core.upload_security import read_upload_secure
 from app.modules.quality.schemas import (
     CpvImportConfirmRequest,
-    CpvImportPreviewResponse,
-    CpvImportTaskResponse,
 )
+from app.modules.quality.service import cpv_import as service
 
 router = APIRouter()
 
@@ -28,18 +28,20 @@ async def preview_import(
     db: AsyncSession = Depends(get_db),
 ) -> JSONResponse:
     """上传Excel文件并预览导入数据"""
-    if not file.filename or not file.filename.endswith((".xlsx", ".xls")):
-        return JSONResponse(
-            status_code=400,
-            content={"code": 400, "message": "请上传 Excel 文件 (.xlsx, .xls)"},
+    try:
+        _, file_content = await read_upload_secure(
+            file,
+            max_bytes=get_settings().MAX_UPLOAD_SIZE_MB * 1024 * 1024,
+            allowed_extensions={".xlsx", ".xls"},
+            what="CPV 导入文件",
         )
-    
-    file_content = await file.read()
-    
+    except Exception as exc:
+        return JSONResponse(status_code=400, content={"code": 400, "message": str(exc)})
+
     preview = await service.preview_import(
         db, file_content, product_id, data_type, import_mode
     )
-    
+
     return success_response(data=preview.model_dump())
 
 
@@ -55,22 +57,27 @@ async def confirm_import(
     current_user: CurrentUser = None,
 ) -> JSONResponse:
     """确认导入Excel数据"""
-    file_content = await file.read()
-    
+    _, file_content = await read_upload_secure(
+        file,
+        max_bytes=get_settings().MAX_UPLOAD_SIZE_MB * 1024 * 1024,
+        allowed_extensions={".xlsx", ".xls"},
+        what="CPV 导入文件",
+    )
+
     current_user_id = None
     if current_user:
         current_user_id = current_user.id
-    
+
     request = CpvImportConfirmRequest(
         product_id=product_id,
         data_type=data_type,
         import_mode=import_mode,
         file_name=file_name,
-        skip_errors=skip_errors
+        skip_errors=skip_errors,
     )
-    
+
     task = await service.confirm_import(db, file_content, request, current_user_id)
-    
+
     return success_response(data=task.model_dump())
 
 

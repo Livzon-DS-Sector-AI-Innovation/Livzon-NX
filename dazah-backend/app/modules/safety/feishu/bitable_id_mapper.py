@@ -6,12 +6,13 @@
 映射数据源：app/modules/safety/feishu/bitable_open_ids.json
 刷新方式：重新运行 scripts/tmp/sync_all_bitable_by_userid.py
 """
+
 from __future__ import annotations
 
 import json
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -19,10 +20,10 @@ logger = logging.getLogger(__name__)
 _MAPPING_PATH = Path(__file__).parent / "bitable_open_ids.json"
 
 # ── 内存缓存 ──────────────────────────────────────────────
-_data: dict[str, dict] | None = None  # lazy load
+_data: dict[str, dict[str, str]] | None = None  # lazy load
 
 
-def _load() -> dict[str, dict]:
+def _load() -> dict[str, dict[str, str]]:
     """延迟加载映射数据，构建 {user_id: {name, bitable_open_id, email}} 索引。"""
     global _data
     if _data is not None:
@@ -30,15 +31,24 @@ def _load() -> dict[str, dict]:
 
     _data = {}
     try:
-        raw = json.loads(_MAPPING_PATH.read_text(encoding="utf-8"))
+        raw: Any = json.loads(_MAPPING_PATH.read_text(encoding="utf-8"))
+        if not isinstance(raw, list):
+            raw = []
         for entry in raw:
+            if not isinstance(entry, dict):
+                continue
             uid = (entry.get("user_id") or "").strip()
             bitable_oid = (entry.get("bitable_open_id") or "").strip()
-            if uid and bitable_oid:
+            if (
+                isinstance(uid, str)
+                and isinstance(bitable_oid, str)
+                and uid
+                and bitable_oid
+            ):
                 _data[uid] = {
-                    "name": entry.get("name", ""),
+                    "name": str(entry.get("name", "")),
                     "bitable_open_id": bitable_oid,
-                    "email": entry.get("email") or "",
+                    "email": str(entry.get("email") or ""),
                 }
         logger.info("BitableIdMapper 已加载 %d 条映射（%d 有效）", len(raw), len(_data))
     except Exception:
@@ -58,10 +68,10 @@ def _reload() -> None:
 
 
 def get_bitable_open_id(
-    user_id: Optional[str] = None,
-    name: Optional[str] = None,
-    fallback_to_identity: Optional[str] = None,
-) -> Optional[str]:
+    user_id: str | None = None,
+    name: str | None = None,
+    fallback_to_identity: str | None = None,
+) -> str | None:
     """通过 user_id 或 name 查找 Bitable open_id。
 
     查找顺序：
@@ -78,30 +88,34 @@ def get_bitable_open_id(
     if user_id:
         entry = mapping.get(user_id.strip())
         if entry:
-            return entry["bitable_open_id"]
+            value = entry.get("bitable_open_id")
+            return value if isinstance(value, str) else None
 
     # 策略 2：name 精确匹配
     if name:
         for uid, entry in mapping.items():
             if entry["name"] == name.strip():
-                return entry["bitable_open_id"]
+                value = entry.get("bitable_open_id")
+                return value if isinstance(value, str) else None
 
     # 策略 3：回退
     if fallback_to_identity:
         logger.debug(
             "Bitable open_id 未找到(user_id=%s name=%s)，使用 identity open_id 回退",
-            user_id, name,
+            user_id,
+            name,
         )
         return fallback_to_identity
 
     logger.warning(
         "Bitable open_id 未找到且无回退值: user_id=%s name=%s",
-        user_id, name,
+        user_id,
+        name,
     )
     return None
 
 
-def get_user_id_by_bitable_open_id(bitable_open_id: str) -> Optional[str]:
+def get_user_id_by_bitable_open_id(bitable_open_id: str) -> str | None:
     """反向查找：安全应用 open_id → employee user_id。
 
     用于 _resolve_person 中，Bitable person 字段的 open_id 是安全应用命名空间，
@@ -118,10 +132,10 @@ def get_user_id_by_bitable_open_id(bitable_open_id: str) -> Optional[str]:
 
 
 def get_bitable_person_value(
-    user_id: Optional[str] = None,
-    name: Optional[str] = None,
-    fallback_to_identity: Optional[str] = None,
-) -> Optional[list[dict]]:
+    user_id: str | None = None,
+    name: str | None = None,
+    fallback_to_identity: str | None = None,
+) -> list[dict[str, str]] | None:
     """构造 Bitable person 字段写入值。
 
     Returns:

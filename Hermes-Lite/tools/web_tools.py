@@ -10,11 +10,11 @@ No plugin system dependency. Self-contained ~200 lines.
 import json
 import logging
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import httpx
 
-from tools.registry import registry, tool_error
+from tools.registry import registry
 
 logger = logging.getLogger(__name__)
 

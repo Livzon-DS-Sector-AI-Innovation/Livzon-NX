@@ -1,7 +1,8 @@
 """Unit tests for Feishu datasource success and failure isolation."""
 
 from datetime import date
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
@@ -14,6 +15,8 @@ from app.platform.integrations.feishu.employee_datasource import (
     _extract_number,
     _extract_text,
 )
+
+SimpleNamespace: Any = _SimpleNamespace
 
 
 def _datasource() -> BitableDataSource:
@@ -35,8 +38,8 @@ def _employee_datasource() -> EmployeeBitableDataSource:
 @pytest.mark.asyncio
 async def test_generic_datasource_crud_and_lookup() -> None:
     datasource = _datasource()
-    datasource.client.create_record.return_value = {"record_id": "created"}
-    datasource.client.search_records.side_effect = [
+    datasource.client.create_record.return_value = {"record_id": "created"}  # type: ignore[attr-defined]
+    datasource.client.search_records.side_effect = [  # type: ignore[attr-defined]
         [{"record_id": "found"}],
         [],
     ]
@@ -49,17 +52,17 @@ async def test_generic_datasource_crud_and_lookup() -> None:
     ]
     assert await datasource.get_by_field("工号", "E1") is None
 
-    datasource.client.update_record.assert_awaited_once_with(
+    datasource.client.update_record.assert_awaited_once_with(  # type: ignore[attr-defined]
         "table",
         "record",
         {"name": "B"},
     )
-    datasource.client.delete_record.assert_awaited_once_with("table", "record")
+    datasource.client.delete_record.assert_awaited_once_with("table", "record")  # type: ignore[attr-defined]
 
 
 @pytest.mark.asyncio
 async def test_generic_datasource_upsert_uses_update_and_create_paths(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     datasource = _datasource()
     monkeypatch.setattr(
@@ -70,21 +73,27 @@ async def test_generic_datasource_upsert_uses_update_and_create_paths(
     monkeypatch.setattr(datasource, "update", AsyncMock())
     monkeypatch.setattr(datasource, "create", AsyncMock(return_value="created"))
 
-    assert await datasource.upsert_by_key(
-        key_field="工号",
-        key_value="E1",
-        fields={"姓名": "张三"},
-    ) == "existing"
-    assert await datasource.upsert_by_key(
-        key_field="工号",
-        key_value="E2",
-        fields={"姓名": "李四"},
-    ) == "created"
+    assert (
+        await datasource.upsert_by_key(
+            key_field="工号",
+            key_value="E1",
+            fields={"姓名": "张三"},
+        )
+        == "existing"
+    )
+    assert (
+        await datasource.upsert_by_key(
+            key_field="工号",
+            key_value="E2",
+            fields={"姓名": "李四"},
+        )
+        == "created"
+    )
 
 
 @pytest.mark.asyncio
 async def test_generic_datasource_bulk_upsert_skips_empty_keys_and_classifies(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     datasource = _datasource()
     monkeypatch.setattr(
@@ -152,10 +161,10 @@ async def test_employee_datasource_rejects_disabled_search() -> None:
 
 @pytest.mark.asyncio
 async def test_employee_datasource_query_filters_and_find_failures(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     datasource = _employee_datasource()
-    search = AsyncMock(
+    search: Any = AsyncMock(
         side_effect=[
             [{"record_id": "one", "fields": {"姓名": "张三"}}],
             [],
@@ -179,23 +188,26 @@ async def test_employee_datasource_query_filters_and_find_failures(
 
 
 @pytest.mark.asyncio
-async def test_employee_datasource_crud_and_upsert_paths(monkeypatch) -> None:
+async def test_employee_datasource_crud_and_upsert_paths(monkeypatch: Any) -> None:
     datasource = _employee_datasource()
-    datasource.client.create_record.return_value = {"record_id": "created"}
+    datasource.client.create_record.return_value = {"record_id": "created"}  # type: ignore[attr-defined]
 
-    assert await datasource.create(
-        {
-            "工号": "E1",
-            "进厂时间": "2026-01-01",
-            "年龄": 30,
-            "空值": None,
-        }
-    ) == "created"
+    assert (
+        await datasource.create(
+            {
+                "工号": "E1",
+                "进厂时间": "2026-01-01",
+                "年龄": 30,
+                "空值": None,
+            }
+        )
+        == "created"
+    )
     await datasource.update("record", {"姓名": "张三"})
     await datasource.update("record", {"年龄": 30})
     await datasource.delete("record")
 
-    existing = SimpleNamespace(record_id="existing")
+    existing: Any = SimpleNamespace(record_id="existing")
     monkeypatch.setattr(
         datasource,
         "find_by_employee_number",
@@ -211,11 +223,11 @@ async def test_employee_datasource_crud_and_upsert_paths(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_employee_bulk_sync_contains_each_record_failure(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     datasource = _employee_datasource()
 
-    async def upsert(data):
+    async def upsert(data: Any) -> Any:
         if data["工号"] == "bad":
             raise RuntimeError("Feishu unavailable")
         return data["工号"]

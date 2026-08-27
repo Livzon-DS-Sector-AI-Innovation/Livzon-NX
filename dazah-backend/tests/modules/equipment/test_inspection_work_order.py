@@ -1,7 +1,7 @@
 """Tests for inspection anomaly auto work-order creation and close-task gating."""
 
 import uuid
-from datetime import date
+from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -26,12 +26,11 @@ from app.modules.equipment.service.inspection import (
 )
 from app.platform.identity.models import Department, User
 
-
 # ═══════════ Fixtures ═══════════════════════════════════════
 
 
 @pytest.fixture(autouse=True)
-def _mock_notifications():
+def _mock_notifications() -> Any:
     """Mock all Feishu notification calls so tests don't hit external APIs."""
     with (
         patch(
@@ -142,8 +141,8 @@ async def inspection_task(
     inspector: User,
     equipment_with_dept: Equipment,
     template_with_items: InspectionTemplate,
-):
-    from datetime import datetime, UTC
+) -> Any:
+    from datetime import UTC, datetime
 
     task = await create_task(
         db_session,
@@ -164,10 +163,10 @@ async def inspection_task(
 
 async def test_submit_with_anomaly_creates_work_order(
     db_session: AsyncSession,
-    inspection_task,
+    inspection_task: Any,
     equipment_with_dept: Equipment,
     template_with_items: InspectionTemplate,
-):
+) -> Any:
     """提交含异常结果的检查记录应自动创建工单。"""
     items = await _get_template_items(db_session, template_with_items.id)
 
@@ -209,10 +208,10 @@ async def test_submit_with_anomaly_creates_work_order(
 
 async def test_submit_all_normal_no_work_order(
     db_session: AsyncSession,
-    inspection_task,
+    inspection_task: Any,
     equipment_with_dept: Equipment,
     template_with_items: InspectionTemplate,
-):
+) -> Any:
     """全部正常的检查结果不应创建工单。"""
     items = await _get_template_items(db_session, template_with_items.id)
 
@@ -237,10 +236,10 @@ async def test_submit_all_normal_no_work_order(
 
 async def test_duplicate_work_order_not_created(
     db_session: AsyncSession,
-    inspection_task,
+    inspection_task: Any,
     equipment_with_dept: Equipment,
     template_with_items: InspectionTemplate,
-):
+) -> Any:
     """重复提交异常结果不应创建重复工单。"""
     items = await _get_template_items(db_session, template_with_items.id)
 
@@ -273,10 +272,10 @@ async def test_duplicate_work_order_not_created(
 
 async def test_close_blocked_by_pending_work_order(
     db_session: AsyncSession,
-    inspection_task,
+    inspection_task: Any,
     equipment_with_dept: Equipment,
     template_with_items: InspectionTemplate,
-):
+) -> Any:
     """存在未处理工单时关闭巡检任务应抛出 AppException。"""
     items = await _get_template_items(db_session, template_with_items.id)
 
@@ -303,10 +302,10 @@ async def test_close_blocked_by_pending_work_order(
 
 async def test_close_succeeds_after_work_order_closed(
     db_session: AsyncSession,
-    inspection_task,
+    inspection_task: Any,
     equipment_with_dept: Equipment,
     template_with_items: InspectionTemplate,
-):
+) -> Any:
     """所有关联工单关闭后，巡检任务可以正常关闭。"""
     items = await _get_template_items(db_session, template_with_items.id)
 
@@ -340,7 +339,7 @@ async def test_work_order_no_responsible_person(
     db_session: AsyncSession,
     inspector: User,
     template_with_items: InspectionTemplate,
-):
+) -> Any:
     """设备没有归属部门时，工单仍应创建但责任人为 None。"""
     # 创建无部门的设备
     location = Location(name="二车间", code=f"WS-{uuid.uuid4().hex[:6]}")
@@ -357,7 +356,7 @@ async def test_work_order_no_responsible_person(
     db_session.add(eq_no_dept)
     await db_session.flush()
 
-    from datetime import datetime, UTC
+    from datetime import UTC, datetime
 
     # 创建任务并启动
     task = await create_task(
@@ -380,9 +379,7 @@ async def test_work_order_no_responsible_person(
     await submit_equipment_check(db_session, task.id, eq_no_dept.id, records)
 
     # 工单应创建，但责任人为 None
-    pending = await get_pending_work_orders_by_inspection_task(
-        db_session, task.id
-    )
+    pending = await get_pending_work_orders_by_inspection_task(db_session, task.id)
     assert len(pending) == 1
     wo = pending[0]
     assert wo.responsible_person_id is None

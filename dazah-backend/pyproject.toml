@@ -40,6 +40,7 @@ dependencies = [
     "pdfplumber>=0.11.0",
     "pypdf>=3.0.0",
     "minio>=7.2.0",
+    "pymupdf>=1.28.2",
 ]
 
 [project.optional-dependencies]

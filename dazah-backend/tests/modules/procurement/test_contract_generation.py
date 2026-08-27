@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 from io import BytesIO
+from typing import Any
 
 import pytest
 from docx import Document
@@ -142,7 +143,7 @@ def _payload(category: ContractCategory) -> ContractGenerateRequest:
     )
 
 
-def _is_red_run(run) -> bool:
+def _is_red_run(run: Any) -> bool:
     rpr = run._element.rPr
     if rpr is None:
         return False
@@ -161,30 +162,30 @@ def _is_red_run(run) -> bool:
     return value in {"FF0000", "C00000"}
 
 
-def _red_groups(doc: Document) -> list[str]:
-    groups = []
-    paragraphs = list(doc.paragraphs)
-    for table in doc.tables:
+def _red_groups(doc: Document) -> list[str]:  # type: ignore[valid-type]
+    groups: list[Any] = []
+    paragraphs = list(doc.paragraphs)  # type: ignore[attr-defined]
+    for table in doc.tables:  # type: ignore[attr-defined]
         for row in table.rows:
             for cell in row.cells:
                 paragraphs.extend(cell.paragraphs)
 
     for paragraph in paragraphs:
-        current = []
+        current: list[Any] = []
         for run in paragraph.runs:
             if _is_red_run(run):
                 current.append(run.text)
             elif current:
                 groups.append("".join(current))
-                current = []
+                current: list[Any] = []  # type: ignore[no-redef]
         if current:
             groups.append("".join(current))
     return [group for group in groups if group.strip()]
 
 
-def _all_text(doc: Document) -> str:
-    chunks = [paragraph.text for paragraph in doc.paragraphs]
-    for table in doc.tables:
+def _all_text(doc: Document) -> str:  # type: ignore[valid-type]
+    chunks = [paragraph.text for paragraph in doc.paragraphs]  # type: ignore[attr-defined]
+    for table in doc.tables:  # type: ignore[attr-defined]
         for row in table.rows:
             chunks.append("\t".join(cell.text for cell in row.cells))
     return "\n".join(chunks)

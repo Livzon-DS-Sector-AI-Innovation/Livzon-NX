@@ -2367,20 +2367,20 @@ export interface FeishuChat {
 // Legacy hazard revision types (stubs for backward compatibility)
 export interface HazardRevisionRecord {
   id: string
-  [key: string]: any
+  [key: string]: unknown
 }
 
 export interface HazardRevisionRecordFormData {
-  [key: string]: any
+  [key: string]: unknown
 }
 
 export interface HazardRevisionArchive {
   id: string
-  [key: string]: any
+  [key: string]: unknown
 }
 
 export interface HazardRevisionArchiveFormData {
-  [key: string]: any
+  [key: string]: unknown
 }
 
 export const IDENTIFICATION_TYPE_OPTIONS = [

@@ -1,5 +1,5 @@
 """班组交接确认 service."""
-
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,7 +8,7 @@ from app.modules.production.shift_handover_repository import ShiftHandoverReposi
 
 
 class ShiftHandoverService:
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession) -> None:
         self.repo = ShiftHandoverRepository(session)
 
     async def list_records(
@@ -19,7 +19,7 @@ class ShiftHandoverService:
         workshop: str | None = None,
         date_from: str | None = None,
         date_to: str | None = None,
-    ):
+    ) -> Any:
         return await self.repo.list(
             page=page,
             page_size=page_size,
@@ -29,27 +29,27 @@ class ShiftHandoverService:
             date_to=date_to,
         )
 
-    async def get_record(self, record_id: UUID):
+    async def get_record(self, record_id: UUID) -> Any:
         return await self.repo.get_by_id(record_id)
 
-    async def create_record(self, data: dict):
+    async def create_record(self, data: dict[str, Any]) -> Any:
         return await self.repo.create(data)
 
-    async def update_record(self, record_id: UUID, data: dict):
+    async def update_record(self, record_id: UUID, data: dict[str, Any]) -> Any:
         record = await self.repo.update(record_id, data)
         if not record:
             raise ValueError(f"Shift handover {record_id} not found")
         return record
 
-    async def delete_record(self, record_id: UUID):
+    async def delete_record(self, record_id: UUID) -> Any:
         if not await self.repo.delete(record_id):
             raise ValueError(f"Shift handover {record_id} not found")
 
-    async def confirm_record(self, record_id: UUID):
+    async def confirm_record(self, record_id: UUID) -> Any:
         record = await self.repo.confirm(record_id)
         if not record:
             raise ValueError(f"Shift handover {record_id} not found")
         return record
 
-    async def get_distinct_positions(self):
+    async def get_distinct_positions(self) -> Any:
         return await self.repo.get_distinct_positions()

@@ -92,6 +92,36 @@ def _is_image_rejection(text: str) -> bool:
     return any(marker in normalized for marker in markers)
 
 
+async def probe_api_base_url(
+    *,
+    api_base_url: str,
+    api_key: str,
+    timeout_seconds: int,
+    transport: httpx.AsyncBaseTransport | None = None,
+) -> None:
+    """Verify that an OpenAI-compatible API base URL and credential work."""
+    url = api_base_url.rstrip("/") + "/models"
+    timeout = httpx.Timeout(min(timeout_seconds, 30))
+    async with httpx.AsyncClient(timeout=timeout, transport=transport) as client:
+        try:
+            response = await client.get(
+                url,
+                headers={"Authorization": f"Bearer {api_key}"},
+            )
+        except httpx.HTTPError as exc:
+            raise LLMConfigError(f"URL 连通性测试失败：{type(exc).__name__}") from exc
+
+    if response.is_success:
+        return
+    if response.status_code in {401, 403}:
+        raise LLMConfigError("URL 可访问，但认证失败，请检查 API 密钥")
+    if response.status_code == 404:
+        raise LLMConfigError(
+            "未找到模型列表接口，请检查 API 基础 URL 是否包含正确版本路径"
+        )
+    raise LLMConfigError(f"URL 连通性测试失败（HTTP {response.status_code}）")
+
+
 async def detect_model_capabilities(
     *,
     api_base_url: str,
@@ -139,8 +169,7 @@ async def detect_model_capabilities(
                                 {
                                     "type": "text",
                                     "text": (
-                                        "这是一张纯色测试图片，"
-                                        "请只回复你看到的主色。"
+                                        "这是一张纯色测试图片，请只回复你看到的主色。"
                                     ),
                                 },
                                 {

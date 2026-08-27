@@ -2,6 +2,7 @@
 
 import json
 import logging
+from typing import Any, cast
 
 from app.core.config import get_settings
 from app.core.redis import cache_get, cache_set
@@ -15,8 +16,8 @@ CONTACT_PAGE_SIZE = 50
 async def _get_feishu_client(
     app_id: str | None = None,
     app_secret: str | None = None,
-):
-    import lark_oapi as lark
+) -> Any:
+    import lark_oapi as lark  # type: ignore[import-untyped]
 
     resolved_app_id = app_id or settings.FEISHU_APP_ID
     resolved_app_secret = app_secret or settings.FEISHU_APP_SECRET
@@ -31,7 +32,7 @@ async def _get_feishu_client(
 
 
 async def _get_tenant_token(
-    client,
+    client: Any,
     *,
     app_id: str | None = None,
     app_secret: str | None = None,
@@ -39,7 +40,7 @@ async def _get_tenant_token(
 ) -> str:
     import json as _json
 
-    from lark_oapi.api.auth.v3 import (
+    from lark_oapi.api.auth.v3 import (  # type: ignore[import-untyped]
         InternalTenantAccessTokenRequest,
         InternalTenantAccessTokenRequestBody,
     )
@@ -66,14 +67,17 @@ async def _get_tenant_token(
         )
     if resp.raw and resp.raw.content:
         data = _json.loads(resp.raw.content.decode("utf-8"))
-        return data.get("tenant_access_token", "")
+        token = data.get("tenant_access_token", "")
+        if isinstance(token, str) and token:
+            return token
+        raise RuntimeError("Empty tenant token response")
     raise RuntimeError("Empty tenant token response")
 
 
 # ── Department helpers ──────────────────────────────────────────────
 
 
-def _department_to_dict(item, parent_department_id: str = "") -> dict:
+def _department_to_dict(item: Any, parent_department_id: str = "") -> dict[str, Any]:
     oid = item.open_department_id or item.department_id or ""
     name = item.name or oid
     order_val = item.order or 0
@@ -99,7 +103,7 @@ async def get_contact_scope(
     app_id: str | None = None,
     app_secret: str | None = None,
     tenant_access_token: str | None = None,
-) -> dict:
+) -> dict[str, Any]:
     """读取当前应用被授权的通讯录范围，用于诊断授权范围问题。"""
     client = await _get_feishu_client(app_id, app_secret)
     token = await _get_tenant_token(
@@ -109,7 +113,9 @@ async def get_contact_scope(
         tenant_access_token=tenant_access_token,
     )
 
-    from lark_oapi.api.contact.v3 import ListScopeRequest
+    from lark_oapi.api.contact.v3 import (  # type: ignore[import-untyped]
+        ListScopeRequest,
+    )
 
     department_ids: list[str] = []
     user_ids: list[str] = []
@@ -154,7 +160,7 @@ async def get_all_departments(
     app_id: str | None = None,
     app_secret: str | None = None,
     tenant_access_token: str | None = None,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """BFS 递归获取全公司所有部门（含名称），包括叶子节点。
 
     返回扁平列表。
@@ -169,7 +175,7 @@ async def get_all_departments(
 
     from lark_oapi.api.contact.v3 import ChildrenDepartmentRequest
 
-    all_depts: list[dict] = []
+    all_depts: list[dict[str, Any]] = []
     root_id = root_department_id or "0"
     visited: set[str] = {root_id}
     page_token = ""
@@ -219,12 +225,12 @@ async def get_department_members(
     app_id: str | None = None,
     app_secret: str | None = None,
     tenant_access_token: str | None = None,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """获取部门成员列表，优先读 Redis"""
     cache_key = f"feishu:{app_id or 'default'}:dept:{dept_id}:members"
     cached = await cache_get(cache_key)
     if cached:
-        return json.loads(cached)
+        return cast(list[dict[str, Any]], json.loads(cached))
 
     client = await _get_feishu_client(app_id, app_secret)
     token = await _get_tenant_token(
@@ -236,7 +242,7 @@ async def get_department_members(
 
     from lark_oapi.api.contact.v3 import ListUserRequest
 
-    all_members = []
+    all_members: list[dict[str, Any]] = []
     page_token = ""
     while True:
         req = (
@@ -258,12 +264,14 @@ async def get_department_members(
             data = json.loads(raw.decode("utf-8")).get("data", {})
             items = data.get("items", [])
             for item in items:
-                all_members.append({
-                    "user_id": item.get("user_id", ""),
-                    "name": item.get("name", ""),
-                    "employee_no": item.get("employee_no", ""),
-                    "department_id": dept_id,
-                })
+                all_members.append(
+                    {
+                        "user_id": item.get("user_id", ""),
+                        "name": item.get("name", ""),
+                        "employee_no": item.get("employee_no", ""),
+                        "department_id": dept_id,
+                    }
+                )
             if not data.get("has_more"):
                 break
             page_token = data.get("page_token", "")
@@ -280,7 +288,7 @@ async def get_department_detail(
     app_id: str | None = None,
     app_secret: str | None = None,
     tenant_access_token: str | None = None,
-) -> dict | None:
+) -> dict[str, Any] | None:
     """获取单个部门的名称和组织标识。"""
     client = await _get_feishu_client(app_id, app_secret)
     token = await _get_tenant_token(
@@ -308,9 +316,7 @@ async def get_department_detail(
     raw = resp.raw.content if resp.raw else None
     if not raw:
         return None
-    department = (
-        json.loads(raw.decode("utf-8")).get("data", {}).get("department", {})
-    )
+    department = json.loads(raw.decode("utf-8")).get("data", {}).get("department", {})
     name = str(department.get("name") or "").strip()
     if not name:
         return None
@@ -327,12 +333,12 @@ async def get_department_leader(
     app_id: str | None = None,
     app_secret: str | None = None,
     tenant_access_token: str | None = None,
-) -> dict | None:
+) -> dict[str, Any] | None:
     """获取部门主管"""
     cache_key = f"feishu:dept:{dept_id}:leader"
     cached = await cache_get(cache_key)
     if cached:
-        return json.loads(cached)
+        return cast(dict[str, Any], json.loads(cached))
 
     client = await _get_feishu_client(app_id, app_secret)
     token = await _get_tenant_token(
@@ -382,7 +388,7 @@ async def get_all_users(
     app_id: str | None = None,
     app_secret: str | None = None,
     tenant_access_token: str | None = None,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """获取所有可见用户（全公司范围，分页）。
 
     每个元素包含 user_id, open_id, name, employee_no, email, mobile,
@@ -398,7 +404,7 @@ async def get_all_users(
 
     from lark_oapi.api.contact.v3 import ListUserRequest
 
-    all_users: list[dict] = []
+    all_users: list[dict[str, Any]] = []
     page_token = ""
     while True:
         req = (
@@ -414,16 +420,18 @@ async def get_all_users(
         if raw:
             data = json.loads(raw.decode("utf-8")).get("data", {})
             for u in data.get("items", []):
-                all_users.append({
-                    "user_id": u.get("user_id", ""),
-                    "open_id": u.get("open_id", ""),
-                    "name": u.get("name", ""),
-                    "employee_no": u.get("employee_no", ""),
-                    "email": u.get("email", ""),
-                    "mobile": u.get("mobile", ""),
-                    "job_title": u.get("job_title", ""),
-                    "department_ids": u.get("department_ids", []),
-                })
+                all_users.append(
+                    {
+                        "user_id": u.get("user_id", ""),
+                        "open_id": u.get("open_id", ""),
+                        "name": u.get("name", ""),
+                        "employee_no": u.get("employee_no", ""),
+                        "email": u.get("email", ""),
+                        "mobile": u.get("mobile", ""),
+                        "job_title": u.get("job_title", ""),
+                        "department_ids": u.get("department_ids", []),
+                    }
+                )
             if not data.get("has_more"):
                 break
             page_token = data.get("page_token", "")
@@ -440,7 +448,7 @@ async def find_users_by_department(
     app_id: str | None = None,
     app_secret: str | None = None,
     tenant_access_token: str | None = None,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """按部门获取所有用户详情（含 department_ids、position、job_title 等）。
 
     每个元素包含：
@@ -457,7 +465,7 @@ async def find_users_by_department(
 
     from lark_oapi.api.contact.v3 import FindByDepartmentUserRequest
 
-    all_users: list[dict] = []
+    all_users: list[dict[str, Any]] = []
     page_token = ""
     while True:
         req = (
@@ -479,47 +487,50 @@ async def find_users_by_department(
 
         if resp.data and resp.data.items:
             for u in resp.data.items:
-                positions: list[dict] = []
+                positions: list[dict[str, Any]] = []
                 if u.positions:
                     for p in u.positions:
-                        positions.append({
-                            "position_code": p.position_code,
-                            "position_name": p.position_name,
-                            "department_id": p.department_id,
-                            "is_major": p.is_major,
-                        })
+                        positions.append(
+                            {
+                                "position_code": p.position_code,
+                                "position_name": p.position_name,
+                                "department_id": p.department_id,
+                                "is_major": p.is_major,
+                            }
+                        )
 
-                department_path: list[dict] = []
+                department_path: list[dict[str, Any]] = []
                 if u.department_path:
                     for dp in u.department_path:
                         dept_name = ""
                         if dp.department_name:
                             dept_name = dp.department_name.name or ""
-                        dept_id_val = (
-                            str(dp.department_id)
-                            if dp.department_id else ""
+                        dept_id_val = str(dp.department_id) if dp.department_id else ""
+                        department_path.append(
+                            {
+                                "department_id": dept_id_val,
+                                "department_name": dept_name,
+                            }
                         )
-                        department_path.append({
-                            "department_id": dept_id_val,
-                            "department_name": dept_name,
-                        })
 
-                all_users.append({
-                    "user_id": u.user_id or "",
-                    "open_id": u.open_id or "",
-                    "name": u.name or "",
-                    "en_name": u.en_name or "",
-                    "email": u.email or "",
-                    "mobile": u.mobile or "",
-                    "employee_no": u.employee_no or "",
-                    "job_title": u.job_title or "",
-                    "department_ids": u.department_ids or [],
-                    "positions": positions,
-                    "department_path": department_path,
-                    "avatar_key": u.avatar_key or "",
-                    "join_time": u.join_time or 0,
-                    "is_frozen": u.is_frozen if u.is_frozen is not None else False,
-                })
+                all_users.append(
+                    {
+                        "user_id": u.user_id or "",
+                        "open_id": u.open_id or "",
+                        "name": u.name or "",
+                        "en_name": u.en_name or "",
+                        "email": u.email or "",
+                        "mobile": u.mobile or "",
+                        "employee_no": u.employee_no or "",
+                        "job_title": u.job_title or "",
+                        "department_ids": u.department_ids or [],
+                        "positions": positions,
+                        "department_path": department_path,
+                        "avatar_key": u.avatar_key or "",
+                        "join_time": u.join_time or 0,
+                        "is_frozen": u.is_frozen if u.is_frozen is not None else False,
+                    }
+                )
 
             if not resp.data.has_more:
                 break
@@ -528,7 +539,9 @@ async def find_users_by_department(
             break
 
     logger.info(
-        "Fetched %d users from department %s", len(all_users), department_id,
+        "Fetched %d users from department %s",
+        len(all_users),
+        department_id,
     )
     return all_users
 
@@ -540,7 +553,7 @@ async def get_user_detail(
     app_id: str | None = None,
     app_secret: str | None = None,
     tenant_access_token: str | None = None,
-) -> dict | None:
+) -> dict[str, Any] | None:
     """获取单个用户详细信息。
 
     返回包含 department_ids, positions, department_path 等完整字段。
@@ -555,43 +568,46 @@ async def get_user_detail(
 
     from lark_oapi.api.contact.v3 import GetUserRequest
 
-    req = (
-        GetUserRequest.builder()
-        .user_id_type(user_id_type)
-        .user_id(user_id)
-        .build()
-    )
+    req = GetUserRequest.builder().user_id_type(user_id_type).user_id(user_id).build()
     req.headers["Authorization"] = f"Bearer {token}"
     resp = await client.contact.v3.user.aget(req)
     if not resp.success():
         logger.error(
             "Failed to get user %s: code=%s, msg=%s",
-            user_id, resp.code, resp.msg,
+            user_id,
+            resp.code,
+            resp.msg,
         )
         return None
 
     if resp.data and resp.data.user:
         u = resp.data.user
-        positions: list[dict] = []
+        positions: list[dict[str, Any]] = []
         if u.positions:
             for p in u.positions:
-                positions.append({
-                    "position_code": p.position_code,
-                    "position_name": p.position_name,
-                    "department_id": p.department_id,
-                    "is_major": p.is_major,
-                })
+                positions.append(
+                    {
+                        "position_code": p.position_code,
+                        "position_name": p.position_name,
+                        "department_id": p.department_id,
+                        "is_major": p.is_major,
+                    }
+                )
 
-        department_path: list[dict] = []
+        department_path: list[dict[str, Any]] = []
         if u.department_path:
             for dp in u.department_path:
                 dept_name = ""
                 if dp.department_name:
                     dept_name = dp.department_name.name or ""
-                department_path.append({
-                    "department_id": str(dp.department_id) if dp.department_id else "",
-                    "department_name": dept_name,
-                })
+                department_path.append(
+                    {
+                        "department_id": str(dp.department_id)
+                        if dp.department_id
+                        else "",
+                        "department_name": dept_name,
+                    }
+                )
 
         return {
             "user_id": u.user_id or "",

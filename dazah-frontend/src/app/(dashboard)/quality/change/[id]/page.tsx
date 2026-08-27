@@ -1,5 +1,9 @@
-import { ChangeDetail } from '@/components/quality'
+import { ChangeDetail, QualityQueryProvider } from '@/components/quality'
 
 export default function QualityChangeDetailPage() {
-  return <ChangeDetail />
+  return (
+    <QualityQueryProvider>
+      <ChangeDetail />
+    </QualityQueryProvider>
+  )
 }

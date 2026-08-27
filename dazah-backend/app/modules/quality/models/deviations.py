@@ -2,8 +2,9 @@
 
 import uuid
 from datetime import datetime
+from typing import Any
 
-from sqlalchemy import JSON, Boolean, DateTime, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, DateTime, String, Text
 from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -12,13 +13,7 @@ from app.shared.base_model import BaseModel
 
 class Deviation(BaseModel):
     __tablename__ = "deviations"
-    __table_args__ = (
-        UniqueConstraint(
-            "feishu_base_record_id",
-            name="uq_quality_deviations_feishu_base_record_id",
-        ),
-        {"schema": "quality"},
-    )
+    __table_args__ = {"schema": "quality"}
 
     deviation_code: Mapped[str] = mapped_column(
         String(255), nullable=False, unique=True
@@ -42,10 +37,10 @@ class Deviation(BaseModel):
     discoverer: Mapped[str | None] = mapped_column(String(255), nullable=True)
     level: Mapped[str | None] = mapped_column(String(50), nullable=True)
     root_cause_category: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    ai_analysis: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    investigation_records: Mapped[list | None] = mapped_column(JSON, nullable=True)
-    review_opinions: Mapped[list | None] = mapped_column(JSON, nullable=True)
-    attachments: Mapped[list | None] = mapped_column(ARRAY(Text), nullable=True)
+    ai_analysis: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    investigation_records: Mapped[list[Any] | None] = mapped_column(JSON, nullable=True)
+    review_opinions: Mapped[list[Any] | None] = mapped_column(JSON, nullable=True)
+    attachments: Mapped[list[Any] | None] = mapped_column(ARRAY(Text), nullable=True)
     final_code: Mapped[str | None] = mapped_column(String(255), nullable=True)
     returned_step: Mapped[str | None] = mapped_column(String(50), nullable=True)
     status_updated_at: Mapped[datetime | None] = mapped_column(
@@ -54,16 +49,19 @@ class Deviation(BaseModel):
     needs_cross_dept_review: Mapped[bool | None] = mapped_column(
         Boolean, nullable=True, default=True, server_default="true"
     )
-    cross_dept_reviewers: Mapped[list | None] = mapped_column(
+    cross_dept_reviewers: Mapped[list[Any] | None] = mapped_column(
         JSON, nullable=True, default=list
     )
     affected_items: Mapped[str | None] = mapped_column(Text, nullable=True)
     batch_number: Mapped[str | None] = mapped_column(Text, nullable=True)
     report_content: Mapped[str | None] = mapped_column(Text, nullable=True)
-    report_versions: Mapped[list | None] = mapped_column(
+    report_versions: Mapped[list[Any] | None] = mapped_column(
         JSON, nullable=True, default=list
     )
     has_occurred_before: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    previous_occurrence_code: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="曾发生偏差编号（偏差是否曾发生=是时填写）"
+    )
     material_disposition: Mapped[str | None] = mapped_column(Text, nullable=True)
     corrective_actions: Mapped[str | None] = mapped_column(Text, nullable=True)
     root_cause_analysis: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -72,7 +70,7 @@ class Deviation(BaseModel):
     )
     feishu_base_table_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     feishu_base_record_id: Mapped[str | None] = mapped_column(
-        String(100), nullable=True
+        String(100), nullable=True, unique=True
     )
     feishu_sync_status: Mapped[str] = mapped_column(
         String(20), nullable=False, default="pending", server_default="pending"
@@ -86,4 +84,10 @@ class Deviation(BaseModel):
     )
     feishu_source_updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
+    )
+    deleted_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True, comment="删除操作人"
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="删除时间"
     )

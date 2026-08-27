@@ -208,7 +208,7 @@ class AgentInteractionService:
         page: int,
         page_size: int,
     ) -> InteractionRequestPage:
-        filters = [AgentInteractionRequest.is_deleted.is_(False)]
+        filters: list[Any] = [AgentInteractionRequest.is_deleted.is_(False)]
         if user.role != "admin":
             filters.append(AgentInteractionRequest.recipient_user_id == user.id)
         total = await db.scalar(
@@ -530,10 +530,10 @@ def _has_complete_record(payload: Any, required_fields: list[str]) -> bool:
         if not isinstance(record, dict):
             continue
         fields = (
-            record.get("fields")
-            if isinstance(record.get("fields"), dict)
-            else record
+            record.get("fields") if isinstance(record.get("fields"), dict) else record
         )
+        if not isinstance(fields, dict):
+            continue
         if all(
             fields.get(key) is not None
             and fields.get(key) != ""

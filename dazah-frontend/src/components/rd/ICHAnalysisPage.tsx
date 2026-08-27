@@ -169,7 +169,7 @@ export function ICHAnalysisPage() {
   }, [])
 
   useEffect(() => {
-    loadHistory()
+    queueMicrotask(loadHistory)
   }, [loadHistory])
 
   // Upload + analyze
@@ -186,7 +186,7 @@ export function ICHAnalysisPage() {
 
       if (!res.ok) {
         const error = await res.json().catch(() => ({ message: '分析失败' }))
-        throw new Error(error.message || '分析失败')
+        throw new Error((error instanceof Error ? error.message : '') || '分析失败')
       }
 
       const data = await res.json()

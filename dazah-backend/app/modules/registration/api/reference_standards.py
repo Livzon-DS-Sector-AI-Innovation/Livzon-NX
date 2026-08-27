@@ -1,14 +1,17 @@
 """对照物质说明表 API 路由"""
 
+from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Form, Query, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.exceptions import NotFoundException
 from app.core.response import paginated_response, success_response
+from app.core.upload_security import read_upload_secure
 from app.modules.registration.service import ReferenceStandardService
 from app.shared.schemas import PageParams
 
@@ -22,14 +25,19 @@ def get_service(session: AsyncSession = Depends(get_db)) -> ReferenceStandardSer
 @router.post("/parse-coa", summary="解析COA文件提取信息")
 async def parse_coa_file(
     coa: UploadFile,
-):
+) -> Any:
     """解析COA PDF文件，自动提取关键信息"""
-    coa_data = await coa.read()
-    
+    _, coa_data = await read_upload_secure(
+        coa,
+        max_bytes=get_settings().MAX_UPLOAD_SIZE_MB * 1024 * 1024,
+        allowed_extensions={".pdf"},
+        what="COA文件",
+    )
+
     from app.modules.registration.reference_standard_generator import parse_coa
-    
+
     result = parse_coa(coa_data)
-    
+
     return success_response(
         data=result,
         message="COA解析成功",
@@ -54,9 +62,13 @@ async def generate_reference_standard(
     storage_condition: str | None = Form(None, description="贮存条件"),
     remarks: str | None = Form(None, description="备注"),
     service: ReferenceStandardService = Depends(get_service),
-):
-    coa_data = await coa.read()
-    coa_file_name = coa.filename or "COA.pdf"
+) -> Any:
+    coa_file_name, coa_data = await read_upload_secure(
+        coa,
+        max_bytes=get_settings().MAX_UPLOAD_SIZE_MB * 1024 * 1024,
+        allowed_extensions={".pdf"},
+        what="COA文件",
+    )
 
     record = await service.generate_document(
         coa_data=coa_data,
@@ -88,7 +100,7 @@ async def list_reference_standards(
     drug_name: str | None = Query(None, description="药品名称搜索"),
     page_params: PageParams = Depends(),
     service: ReferenceStandardService = Depends(get_service),
-):
+) -> Any:
     records, total = await service.list_records(
         drug_name=drug_name,
         page=page_params.page,
@@ -107,7 +119,7 @@ async def list_reference_standards(
 async def get_reference_standard(
     record_id: UUID,
     service: ReferenceStandardService = Depends(get_service),
-):
+) -> Any:
     record = await service.get_record(record_id)
     return success_response(data=record.model_dump(mode="json"))
 
@@ -116,7 +128,7 @@ async def get_reference_standard(
 async def download_reference_standard(
     record_id: UUID,
     service: ReferenceStandardService = Depends(get_service),
-):
+) -> Any:
     record_model = await service.repo.get_by_id(record_id)
     if not record_model:
         raise NotFoundException("对照物质说明表记录", str(record_id))
@@ -136,6 +148,6 @@ async def download_reference_standard(
 async def delete_reference_standard(
     record_id: UUID,
     service: ReferenceStandardService = Depends(get_service),
-):
+) -> Any:
     await service.delete_record(record_id)
     return success_response(message="对照物质说明表记录删除成功")

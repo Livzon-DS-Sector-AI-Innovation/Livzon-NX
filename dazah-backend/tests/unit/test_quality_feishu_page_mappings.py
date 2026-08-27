@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, Mock
 
 import pytest
 
 from app.modules.quality.service import quality_feishu_pages as pages
 from app.modules.quality.service import quality_feishu_sync
+
+SimpleNamespace: Any = _SimpleNamespace
 
 
 def _entity() -> quality_feishu_sync.QualityFeishuEntityRuntimeConfig:
@@ -91,34 +94,31 @@ def test_page_helpers_cover_text_dates_aliases_and_validation_mapping() -> None:
     ]
     assert pages._split_related_capa_codes("") is None
     assert pages._normalize_closed_status("否") == "draft"
-    assert pages._serialize_report_record_alias(
-        {"feishu_base_record_id": "rec-1"}
-    )["record_id"] == "rec-1"
-    assert pages._serialize_investigation_record_alias({"id": "local-1"})[
-        "record_id"
-    ] == "local-1"
+    assert (
+        pages._serialize_report_record_alias({"feishu_base_record_id": "rec-1"})[
+            "record_id"
+        ]
+        == "rec-1"
+    )
+    assert (
+        pages._serialize_investigation_record_alias({"id": "local-1"})["record_id"]
+        == "local-1"
+    )
 
     assert (
         pages._entity_code_for_validation_type("process_validation")
         == "validation_process"
     )
-    assert (
-        pages._entity_code_for_validation_type("unknown")
-        == "validation_master_plan"
-    )
-    assert pages._translate_validation_type_f2c("工艺验证") == (
-        "process_validation"
-    )
+    assert pages._entity_code_for_validation_type("unknown") == "validation_master_plan"
+    assert pages._translate_validation_type_f2c("工艺验证") == ("process_validation")
     assert pages._translate_validation_type_f2c("未知") == "other_validation"
-    assert pages._translate_validation_type_c2f("cleaning_validation") == (
-        "清洁验证"
-    )
+    assert pages._translate_validation_type_c2f("cleaning_validation") == ("清洁验证")
     assert pages._translate_validation_type_c2f("custom") == "custom"
 
     assert pages._parse_feishu_text_field(" text ") == "text"
-    assert pages._parse_feishu_text_field(
-        [{"text": "A"}, " B ", {"text": ""}]
-    ) == "A / B"
+    assert (
+        pages._parse_feishu_text_field([{"text": "A"}, " B ", {"text": ""}]) == "A / B"
+    )
     assert pages._parse_feishu_text_field({"text": " C "}) == "C"
     assert pages._parse_feishu_text_field(None) is None
     assert pages._parse_validation_month_or_date("2026.07") == date(
@@ -222,8 +222,8 @@ def test_resolve_bitable_users_prefers_bitable_id_then_open_id() -> None:
 async def test_entity_record_helpers_and_change_sync_paths(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    db = object()
-    upsert = AsyncMock(
+    db: Any = object()
+    upsert: Any = AsyncMock(
         side_effect=[
             ("rec-created", "tbl-quality"),
             ("rec-updated", "tbl-quality"),
@@ -252,7 +252,7 @@ async def test_entity_record_helpers_and_change_sync_paths(
     }
     assert updated["record_id"] == "rec-updated"
 
-    change = SimpleNamespace(
+    change: Any = SimpleNamespace(
         serial_number="1",
         change_code="BG-001",
         applicant_department="质量部",
@@ -268,18 +268,16 @@ async def test_entity_record_helpers_and_change_sync_paths(
     assert fields["变更控制号"] == "BG-001"
     assert fields["变更关闭日期"] is not None
 
-    find = AsyncMock(return_value=None)
-    create_record = AsyncMock(return_value={"record_id": "rec-new"})
-    update_record = AsyncMock(return_value={"record_id": "rec-existing"})
-    delete_record = AsyncMock()
+    find: Any = AsyncMock(return_value=None)
+    create_record: Any = AsyncMock(return_value={"record_id": "rec-new"})
+    update_record: Any = AsyncMock(return_value={"record_id": "rec-existing"})
+    delete_record: Any = AsyncMock()
     monkeypatch.setattr(pages, "_find_change_feishu_record_id", find)
     monkeypatch.setattr(pages, "_create_entity_record", create_record)
     monkeypatch.setattr(pages, "_update_entity_record", update_record)
     monkeypatch.setattr(pages, "_delete_entity_record", delete_record)
 
-    assert await pages.sync_change_to_feishu(db, change) == {
-        "record_id": "rec-new"
-    }
+    assert await pages.sync_change_to_feishu(db, change) == {"record_id": "rec-new"}
     find.return_value = "rec-existing"
     assert await pages.sync_change_to_feishu(db, change) == {
         "record_id": "rec-existing"
@@ -299,12 +297,12 @@ async def test_entity_record_helpers_and_change_sync_paths(
 async def test_pull_changes_handles_updates_creates_invalid_and_failures(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    existing = SimpleNamespace(change_code="BG-001")
+    existing: Any = SimpleNamespace(change_code="BG-001")
     results = [
         SimpleNamespace(scalar_one_or_none=lambda: existing),
         SimpleNamespace(scalar_one_or_none=lambda: None),
     ]
-    db = SimpleNamespace(
+    db: Any = SimpleNamespace(
         execute=AsyncMock(side_effect=results),
         add=Mock(),
         commit=AsyncMock(side_effect=[None, RuntimeError("commit failed")]),

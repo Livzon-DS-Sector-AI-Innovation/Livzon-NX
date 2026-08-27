@@ -2,6 +2,7 @@
 
 import logging
 from datetime import date, datetime
+from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -36,11 +37,11 @@ FIELD_MAPPING = {
     "备注": "remarks",
 }
 NUMBER_FIELDS = {"incoming_titer", "incoming_moisture", "barrel_count", "total_yield"}
-DATE_FIELDS = {}
+DATE_FIELDS: set[str] = set()
 TABLE = "pack"
 
 
-def _ext(fv):
+def _ext(fv: Any) -> Any:
     if fv is None:
         return None
     if isinstance(fv, str):
@@ -56,7 +57,7 @@ def _ext(fv):
     return str(fv).strip() or None
 
 
-def _num(fv):
+def _num(fv: Any) -> Any:
     if isinstance(fv, (int, float)):
         return float(fv)
     t = _ext(fv)
@@ -68,7 +69,7 @@ def _num(fv):
         return None
 
 
-def _pd(v):
+def _pd(v: Any) -> Any:
     if v is None:
         return None
     if isinstance(v, (int, float)) and 0 < v < 1e15:
@@ -81,7 +82,9 @@ def _pd(v):
     return v
 
 
-async def sync_pack(config: ProductionFeishuConfig, session: AsyncSession) -> dict:
+async def sync_pack(
+    config: ProductionFeishuConfig, session: AsyncSession
+) -> dict[str, Any]:
     app_secret = decrypt_secret(config.encrypted_app_secret)
     client = ProductionFeishuClient(config.app_id, app_secret, config.bitable_app_token)
     records_data = await client.list_records(config.table_id, page_size=500)
@@ -89,13 +92,13 @@ async def sync_pack(config: ProductionFeishuConfig, session: AsyncSession) -> di
 
     feishu_ids = set()
     created, updated = 0, 0
-    matched_fields: set = set()
+    matched_fields: set[Any] = set()
 
     for item in items:
         rid = item.get("record_id", "")
         feishu_ids.add(rid)
         fields = item.get("fields", {})
-        mapped: dict = {"feishu_record_id": rid}
+        mapped: dict[str, Any] = {"feishu_record_id": rid}
         for fn, db_col in FIELD_MAPPING.items():
             raw = fields.get(fn)
             if raw is None:

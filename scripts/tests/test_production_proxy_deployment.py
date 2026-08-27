@@ -1,13 +1,10 @@
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_nginx_uses_dynamic_docker_dns_for_application_upstreams() -> None:
-    config = (ROOT / "deploy/nginx.default.conf.template").read_text(
-        encoding="utf-8"
-    )
+    config = (ROOT / "deploy/nginx.default.conf.template").read_text(encoding="utf-8")
 
     assert "resolver 127.0.0.11 valid=5s ipv6=off;" in config
     assert "zone app_upstream 64k;" in config
@@ -21,9 +18,7 @@ def test_nginx_uses_dynamic_docker_dns_for_application_upstreams() -> None:
 
 
 def test_deploy_recreates_nginx_and_runs_proxy_smoke_checks() -> None:
-    script = (ROOT / "scripts/deploy-production-remote.sh").read_text(
-        encoding="utf-8"
-    )
+    script = (ROOT / "scripts/deploy-production-remote.sh").read_text(encoding="utf-8")
 
     assert "recreate_nginx()" in script
     assert "--no-deps --force-recreate nginx" in script

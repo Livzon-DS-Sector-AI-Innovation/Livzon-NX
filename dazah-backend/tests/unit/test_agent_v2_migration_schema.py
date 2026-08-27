@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
+from typing import Any
 
 from sqlalchemy import Boolean
 
@@ -25,7 +26,7 @@ ALIGNMENT_MIGRATION_PATH = (
 )
 
 
-def _load_migration(path: Path = MIGRATION_PATH):
+def _load_migration(path: Path = MIGRATION_PATH) -> Any:
     spec = importlib.util.spec_from_file_location("agent_v2_migration", path)
     assert spec is not None
     assert spec.loader is not None
@@ -48,7 +49,7 @@ def test_agent_governance_migration_extends_v2_head() -> None:
 
 
 def test_admin_enabled_belongs_to_tool_catalog_only(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     migration = _load_migration()
     created_tables: dict[str, list[object]] = {}
@@ -71,11 +72,11 @@ def test_admin_enabled_belongs_to_tool_catalog_only(
         if hasattr(item, "name")
     }
     catalog_columns = {
-        item.name: item
+        item.name: item  # type: ignore[attr-defined]
         for item in created_tables["agent_tool_catalog"]
         if hasattr(item, "type")
     }
 
     assert "admin_enabled" not in binding_names
     assert isinstance(catalog_columns["admin_enabled"].type, Boolean)
-    assert catalog_columns["admin_enabled"].nullable is False
+    assert catalog_columns["admin_enabled"].nullable is False  # type: ignore[attr-defined]

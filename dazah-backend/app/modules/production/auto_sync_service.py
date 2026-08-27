@@ -1,8 +1,8 @@
 """Auto-discover Feishu fields and sync generically — no manual field mapping needed."""
-
 import logging
 import re
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -34,7 +34,7 @@ def _safe_col_name(name: str) -> str:
 
 async def discover_and_save_mapping(
     config: ProductionFeishuConfig, session: AsyncSession
-) -> dict:
+) -> dict[str, Any]:
     """Discover fields from Feishu and save the mapping to config."""
     app_secret = decrypt_secret(config.encrypted_app_secret)
     client = ProductionFeishuClient(config.app_id, app_secret, config.bitable_app_token)
@@ -88,7 +88,7 @@ async def discover_and_save_mapping(
     return {"table": table_name, "fields": len(cols), "mapping": mapping}
 
 
-def _extract_value(val, ftype: int):
+def _extract_value(val: Any, ftype: int) -> Any:
     """Extract typed value from Feishu field."""
     if val is None:
         return None
@@ -124,7 +124,7 @@ def _extract_value(val, ftype: int):
 
 async def auto_sync_config(
     config: ProductionFeishuConfig, session: AsyncSession
-) -> dict:
+) -> dict[str, Any]:
     """Generic auto-sync: discover fields, create table, upsert data."""
     if not config.field_mapping:
         await discover_and_save_mapping(config, session)

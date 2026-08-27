@@ -2,13 +2,14 @@
 
 import logging
 import math
+from typing import Any
 
 from app.modules.research.models import PilotWorkflow
 
 logger = logging.getLogger(__name__)
 
 # 常见设备类型的几何参数
-EQUIPMENT_PROFILES = {
+EQUIPMENT_PROFILES: dict[str, dict[str, Any]] = {
     "反应釜": {"h_d_ratio": 1.2, "agitator_type": "锚式", "heat_transfer_coeff": 300},
     "结晶釜": {"h_d_ratio": 1.5, "agitator_type": "桨式", "heat_transfer_coeff": 250},
     "高压釜": {"h_d_ratio": 1.0, "agitator_type": "涡轮式", "heat_transfer_coeff": 350},
@@ -16,7 +17,7 @@ EQUIPMENT_PROFILES = {
 }
 
 
-def _calc_geometry(volume_l: float, h_d_ratio: float) -> dict:
+def _calc_geometry(volume_l: float, h_d_ratio: float) -> dict[str, float]:
     """计算设备几何参数"""
     volume_m3 = volume_l / 1000.0
     # V = π/4 * D^2 * (H_D_ratio * D) = π/4 * H_D_ratio * D^3
@@ -40,7 +41,7 @@ def _assess_heat_transfer(
     lab_volume_l: float,
     pilot_volume_l: float,
     heat_transfer_coeff: float,
-) -> dict:
+) -> dict[str, Any]:
     """评估传热能力变化"""
     # 小试设备（假设 H/D = 1.0）
     lab_geo = _calc_geometry(lab_volume_l, 1.0)
@@ -76,7 +77,7 @@ def _assess_mixing(
     scale_up_ratio: float,
     pilot_volume_l: float,
     agitator_type: str,
-) -> dict:
+) -> dict[str, Any]:
     """评估混合效果"""
     # 简化搅拌功率估算（按体积放大）
     # 经验法则：P/V ∝ N^3 * D^2，恒 P/V 时 N ∝ D^(-2/3)
@@ -117,7 +118,7 @@ def _assess_mixing(
 def _assess_equipment_fit(
     pilot_volume_l: float,
     equipment_type: str,
-) -> dict:
+) -> dict[str, Any]:
     """评估设备适配性"""
     profile = EQUIPMENT_PROFILES.get(equipment_type, EQUIPMENT_PROFILES["默认"])
     geo = _calc_geometry(pilot_volume_l, profile["h_d_ratio"])
@@ -151,9 +152,9 @@ def _assess_equipment_fit(
 
 
 async def execute_scale_up_calc(
-    step_input: dict,
+    step_input: dict[str, Any],
     workflow: PilotWorkflow,
-) -> dict:
+) -> dict[str, Any]:
     """执行工程计算与放大评估"""
     scale_up_ratio = workflow.scale_up_ratio
     equipment_type = workflow.equipment_type

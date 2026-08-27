@@ -9,8 +9,8 @@ import asyncio
 import json
 import logging
 
-import lark_oapi as lark
-from lark_oapi.api.im.v1 import P2ImMessageReceiveV1
+import lark_oapi as lark  # type: ignore[import-untyped]
+from lark_oapi.api.im.v1 import P2ImMessageReceiveV1  # type: ignore[import-untyped]
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +54,11 @@ def _on_message_receive(data: P2ImMessageReceiveV1) -> None:
     logger.info(
         "设备机器人收到消息: type=%s, user_id=%s, open_id=%s, "
         "chat_type=%s, message_id=%s",
-        msg_type, user_id, open_id, chat_type, message_id,
+        msg_type,
+        user_id,
+        open_id,
+        chat_type,
+        message_id,
     )
 
     if _main_loop is None:

@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -19,11 +20,11 @@ class OhHealthExamBase(BaseModel):
     scheduled_date: datetime | None = Field(None, description="计划体检日期")
     exam_date: datetime | None = Field(None, description="实际体检日期")
     report_date: datetime | None = Field(None, description="报告日期")
-    hazard_factors: list | None = Field(None, description="关联的危害因素列表")
+    hazard_factors: list[Any] | None = Field(None, description="关联的危害因素列表")
     overall_conclusion: str | None = Field(None, description="综合体检结论")
-    exam_items: list | None = Field(None, description="体检项目结果")
-    abnormality_records: list | None = Field(None, description="异常处置记录")
-    attachments: list | None = Field(None, description="附件列表")
+    exam_items: list[Any] | None = Field(None, description="体检项目结果")
+    abnormality_records: list[Any] | None = Field(None, description="异常处置记录")
+    attachments: list[Any] | None = Field(None, description="附件列表")
     notes: str | None = Field(None, description="备注")
 
 
@@ -46,11 +47,11 @@ class OhHealthExamUpdate(BaseModel):
     scheduled_date: datetime | None = Field(None, description="计划体检日期")
     exam_date: datetime | None = Field(None, description="实际体检日期")
     report_date: datetime | None = Field(None, description="报告日期")
-    hazard_factors: list | None = Field(None, description="关联的危害因素列表")
+    hazard_factors: list[Any] | None = Field(None, description="关联的危害因素列表")
     overall_conclusion: str | None = Field(None, description="综合体检结论")
-    exam_items: list | None = Field(None, description="体检项目结果")
-    abnormality_records: list | None = Field(None, description="异常处置记录")
-    attachments: list | None = Field(None, description="附件列表")
+    exam_items: list[Any] | None = Field(None, description="体检项目结果")
+    abnormality_records: list[Any] | None = Field(None, description="异常处置记录")
+    attachments: list[Any] | None = Field(None, description="附件列表")
     notes: str | None = Field(None, description="备注")
 
 
@@ -74,5 +75,3 @@ class SetExamConclusionRequest(BaseModel):
 
     conclusion: str = Field(..., description="体检结论")
     remarks: str | None = Field(None, description="备注")
-
-

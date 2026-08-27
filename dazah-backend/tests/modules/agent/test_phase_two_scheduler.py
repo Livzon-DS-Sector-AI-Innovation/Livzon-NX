@@ -4,6 +4,7 @@ import asyncio
 import uuid
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import pytest
 from sqlalchemy import delete, select
@@ -79,8 +80,8 @@ def _draft_payload(
     missed_trigger_policy: str = "run_once",
     concurrency_policy: str = "forbid",
     include_quality_tool: bool = False,
-) -> dict:
-    steps = []
+) -> dict[str, Any]:
+    steps: list[Any] = []
     if include_quality_tool:
         steps.append(
             {
@@ -115,7 +116,7 @@ async def _create_enabled(
     missed_trigger_policy: str = "run_once",
     concurrency_policy: str = "forbid",
     include_quality_tool: bool = False,
-):
+) -> Any:
     service = AgentAutomationService()
     draft = await service.create_draft(
         db_session,

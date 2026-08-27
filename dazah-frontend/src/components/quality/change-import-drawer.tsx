@@ -81,7 +81,7 @@ export function ChangeImportDrawer({ isOpen, onClose, onSuccess }: ChangeImportD
       formData.append("file", file)
       setPreview(await previewChangeImport(formData))
     } catch (err) {
-      setErrorMsg(err.message || "预览失败")
+      setErrorMsg((err instanceof Error ? err.message : '') || "预览失败")
     } finally {
       setPreviewing(false)
     }
@@ -111,7 +111,7 @@ export function ChangeImportDrawer({ isOpen, onClose, onSuccess }: ChangeImportD
         onSuccess()
       }, 1500)
     } catch (err) {
-      setErrorMsg(err.message || "导入失败")
+      setErrorMsg((err instanceof Error ? err.message : '') || "导入失败")
     } finally {
       setImporting(false)
     }
@@ -130,7 +130,7 @@ export function ChangeImportDrawer({ isOpen, onClose, onSuccess }: ChangeImportD
       a.click()
       URL.revokeObjectURL(url)
     } catch (err) {
-      setErrorMsg(err.message || "下载模板失败")
+      setErrorMsg((err instanceof Error ? err.message : '') || "下载模板失败")
     }
   }
 

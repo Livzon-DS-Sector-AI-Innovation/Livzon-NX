@@ -63,6 +63,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from datetime import date
 from pathlib import Path
+from typing import Any
 
 from .config import (
     HAZARD_COLUMN_MAPPING,
@@ -107,8 +108,9 @@ __all__ = [
 # 顶层便捷函数
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 async def fill_and_export(
-    data: list[dict],
+    data: list[dict[str, Any]],
     template_path: str | Path,
     output_dir: str | Path | None = None,
     *,
@@ -156,7 +158,7 @@ async def fill_and_export(
 
 
 def fill_template(
-    data: list[dict],
+    data: list[dict[str, Any]],
     template_path: str | Path,
     output_path: str | Path,
     *,
@@ -169,9 +171,7 @@ def fill_template(
     Path — 生成的 .xlsx 文件路径。
     """
     cfg = config or HAZARD_TEMPLATE_CONFIG
-    return ExcelTemplateFiller(cfg).fill_and_save(
-        template_path, data, output_path
-    )
+    return ExcelTemplateFiller(cfg).fill_and_save(template_path, data, output_path)
 
 
 def inspect_template(
@@ -190,22 +190,23 @@ def inspect_template(
 
 
 def quick_export(
-    data: list[dict],
+    data: list[dict[str, Any]],
     template: str | Path,
     output: str | Path,
     *,
     column_mapping: dict[str, str] | None = None,
-    title_resolver: Callable[[list[dict]], str] | None = None,
+    title_resolver: Callable[[list[dict[str, Any]]], str] | None = None,
     risk_label_column: str = "",
     sequence_column: int = 1,
     page_setup: PageSetup | None = None,
     soffice_path: str | Path | None = None,
-    **config_overrides,
+    **config_overrides: Any,
 ) -> Path:
     """零配置快速导出：自动检测模板结构 → 填充数据 → 导出 PDF。
 
     无需手动创建 ``TemplateConfig``，只需提供模板、数据和输出路径。
-    如需更精细的控制，使用 ``TemplateInspector.build_config()`` + ``fill_and_export()``。
+    如需更精细的控制，使用 ``TemplateInspector.build_config()`` +
+    ``fill_and_export()``。
 
     Parameters
     ----------
@@ -279,4 +280,3 @@ def quick_export(
     # 仅 xlsx
     filler = ExcelTemplateFiller(config)
     return filler.fill_and_save(template, data, output_path)
-

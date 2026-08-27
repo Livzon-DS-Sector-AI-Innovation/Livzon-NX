@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import io
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from docx import Document
 
@@ -19,9 +19,7 @@ def test_generate_deviation_ledger_export_docx_uses_template_layout() -> None:
                 "has_occurred_before": True,
                 "root_cause_analysis": "空调机组波动",
                 "level": "major",
-                "investigation_completed_at": datetime(
-                    2026, 7, 4, 10, 30, tzinfo=timezone.utc
-                ),
+                "investigation_completed_at": datetime(2026, 7, 4, 10, 30, tzinfo=UTC),
                 "corrective_actions": "复核空调系统参数",
                 "material_disposition": "隔离待评估",
                 "status": "closed",

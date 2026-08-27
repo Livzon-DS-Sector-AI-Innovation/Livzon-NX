@@ -1,21 +1,26 @@
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
+from typing import Any
 
 import pytest
 
 from app.platform.identity import public_api
 
+SimpleNamespace: Any = _SimpleNamespace
+
 
 class _FakeRepository:
-    def __init__(self, config) -> None:
+    def __init__(self: Any, config: Any) -> None:
         self.config = config
 
-    async def get_active(self, _db):
+    async def get_active(self: Any, _db: Any) -> Any:
         return self.config
 
 
 @pytest.mark.anyio
-async def test_platform_feishu_credentials_prefer_active_database_config(monkeypatch):
-    config = SimpleNamespace(
+async def test_platform_feishu_credentials_prefer_active_database_config(
+    monkeypatch: Any,
+) -> Any:
+    config: Any = SimpleNamespace(
         app_id="db-app-id",
         encrypted_app_secret="encrypted-secret",
     )
@@ -34,7 +39,7 @@ async def test_platform_feishu_credentials_prefer_active_database_config(monkeyp
         ),
     )
 
-    credentials = await public_api.get_platform_feishu_app_credentials(None)
+    credentials = await public_api.get_platform_feishu_app_credentials(None)  # type: ignore[arg-type]
 
     assert credentials is not None
     assert credentials.app_id == "db-app-id"
@@ -42,7 +47,9 @@ async def test_platform_feishu_credentials_prefer_active_database_config(monkeyp
 
 
 @pytest.mark.anyio
-async def test_platform_feishu_credentials_fall_back_to_environment(monkeypatch):
+async def test_platform_feishu_credentials_fall_back_to_environment(
+    monkeypatch: Any,
+) -> Any:
     monkeypatch.setattr(
         public_api,
         "FeishuConfigRepository",
@@ -57,7 +64,7 @@ async def test_platform_feishu_credentials_fall_back_to_environment(monkeypatch)
         ),
     )
 
-    credentials = await public_api.get_platform_feishu_app_credentials(None)
+    credentials = await public_api.get_platform_feishu_app_credentials(None)  # type: ignore[arg-type]
 
     assert credentials is not None
     assert credentials.app_id == "env-app-id"
@@ -65,7 +72,9 @@ async def test_platform_feishu_credentials_fall_back_to_environment(monkeypatch)
 
 
 @pytest.mark.anyio
-async def test_platform_feishu_credentials_return_none_when_unconfigured(monkeypatch):
+async def test_platform_feishu_credentials_return_none_when_unconfigured(
+    monkeypatch: Any,
+) -> Any:
     monkeypatch.setattr(
         public_api,
         "FeishuConfigRepository",
@@ -77,4 +86,4 @@ async def test_platform_feishu_credentials_return_none_when_unconfigured(monkeyp
         lambda: SimpleNamespace(FEISHU_APP_ID="", FEISHU_APP_SECRET=""),
     )
 
-    assert await public_api.get_platform_feishu_app_credentials(None) is None
+    assert await public_api.get_platform_feishu_app_credentials(None) is None  # type: ignore[arg-type]

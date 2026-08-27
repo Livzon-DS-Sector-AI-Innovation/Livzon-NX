@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -157,7 +157,7 @@ async def sync_feishu_table(
     context: ToolContext, data: WarehouseFeishuSyncInput
 ) -> dict[str, Any]:
     result = await _warehouse_service(context).sync_feishu_table(data.table_id)
-    return result.model_dump(mode="json")
+    return cast(dict[str, Any], result.model_dump(mode="json"))
 
 
 @agent_tool(

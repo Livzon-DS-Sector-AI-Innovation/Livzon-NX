@@ -5,8 +5,8 @@ import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundException
-from app.modules.registration import repository as repo
 from app.modules.registration.models.drug import Holiday
+from app.modules.registration.repository import holiday as repo
 from app.modules.registration.schemas.holiday import HolidayCreate
 
 

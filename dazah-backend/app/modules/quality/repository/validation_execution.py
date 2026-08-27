@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import uuid
 from datetime import date
+from typing import Any
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
 
+from app.core.exceptions import AppException
 from app.modules.quality.models.validation_execution_record import (
     CleaningValidationRecord,
     EquipmentQualificationRecord,
@@ -44,11 +46,11 @@ def _parse_date(value: str | None) -> date | None:
 def get_execution_model(validation_type: str) -> ExecutionModel:
     model = EXECUTION_MODEL_MAP.get(validation_type)
     if model is None:
-        raise ValueError(f"Unsupported validation type: {validation_type}")
+        raise AppException(message=f"Unsupported validation type: {validation_type}")
     return model
 
 
-def _build_execution_payload(master: ValidationRecord) -> dict:
+def _build_execution_payload(master: ValidationRecord) -> dict[str, Any]:
     return {
         "id": master.id,
         "master_validation_id": master.id,
@@ -83,7 +85,7 @@ async def get_execution_record(
     result = await db.execute(
         select(model).where(
             model.id == record_id,
-            model.is_deleted == False,
+            model.is_deleted.is_(False),
         )
     )
     return result.scalar_one_or_none()
@@ -98,7 +100,7 @@ async def get_execution_record_by_master_id(
     result = await db.execute(
         select(model).where(
             model.master_validation_id == master_validation_id,
-            model.is_deleted == False,
+            model.is_deleted.is_(False),
         )
     )
     return result.scalar_one_or_none()
@@ -123,8 +125,9 @@ async def upsert_execution_record_from_master(
         for field, value in payload.items():
             setattr(record, field, value)
     await db.flush()
-    await db.flush()
-    return record
+    # upsert 后 select re-fetch（规范：禁止 db.refresh()）
+    result = await db.execute(select(model).where(model.id == record.id))
+    return result.scalar_one()
 
 
 async def delete_execution_records_except(
@@ -139,7 +142,7 @@ async def delete_execution_records_except(
         result = await db.execute(
             select(model).where(
                 model.master_validation_id == master_validation_id,
-                model.is_deleted == False,
+                model.is_deleted.is_(False),
             )
         )
         record = result.scalar_one_or_none()
@@ -159,14 +162,15 @@ async def update_execution_record(
     db: AsyncSession,
     validation_type: str,
     record: ValidationExecutionRecordBase,
-    data: dict,
+    data: dict[str, Any],
 ) -> ValidationExecutionRecordBase:
-    get_execution_model(validation_type)
+    model = get_execution_model(validation_type)
     for field, value in data.items():
         setattr(record, field, value)
     await db.flush()
-    await db.flush()
-    return record
+    # UPDATE 后必须 select re-fetch（规范：禁止 db.refresh()）
+    result = await db.execute(select(model).where(model.id == record.id))
+    return result.scalar_one()
 
 
 async def list_execution_records(
@@ -186,8 +190,8 @@ async def list_execution_records(
         select(model, ValidationRecord)
         .join(ValidationRecord, ValidationRecord.id == model.master_validation_id)
         .where(
-            model.is_deleted == False,
-            ValidationRecord.is_deleted == False,
+            model.is_deleted.is_(False),
+            ValidationRecord.is_deleted.is_(False),
         )
     )
     count_query = (
@@ -195,8 +199,8 @@ async def list_execution_records(
         .select_from(model)
         .join(ValidationRecord, ValidationRecord.id == model.master_validation_id)
         .where(
-            model.is_deleted == False,
-            ValidationRecord.is_deleted == False,
+            model.is_deleted.is_(False),
+            ValidationRecord.is_deleted.is_(False),
         )
     )
 
@@ -227,17 +231,21 @@ async def list_execution_records(
         query = query.where(condition)
         count_query = count_query.where(condition)
 
-    query = query.order_by(
-        _coalesce_datetime(model.updated_at, ValidationRecord.updated_at).desc()
-    ).offset((page - 1) * page_size).limit(page_size)
+    query = (
+        query.order_by(
+            _coalesce_datetime(model.updated_at, ValidationRecord.updated_at).desc()
+        )
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
 
     total = (await db.execute(count_query)).scalar_one()
     rows = (await db.execute(query)).all()
-    return rows, total
+    return [(row[0], row[1]) for row in rows], total
 
 
 def _coalesce_datetime(
-    primary: InstrumentedAttribute,
-    fallback: InstrumentedAttribute,
-):
+    primary: InstrumentedAttribute[Any],
+    fallback: InstrumentedAttribute[Any],
+) -> Any:
     return func.coalesce(primary, fallback)

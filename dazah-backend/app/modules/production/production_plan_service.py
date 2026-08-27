@@ -1,7 +1,7 @@
 """Sync Feishu data to production tables — target router."""
-
 import logging
 from datetime import date, datetime
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -69,7 +69,7 @@ SYNC_TARGETS = {
 }
 
 
-def _extract_text(field_value) -> str | None:
+def _extract_text(field_value: Any) -> str | None:
     if field_value is None:
         return None
     if isinstance(field_value, str):
@@ -87,7 +87,7 @@ def _extract_text(field_value) -> str | None:
     return None
 
 
-def _extract_number(field_value) -> float | None:
+def _extract_number(field_value: Any) -> float | None:
     if isinstance(field_value, dict) and field_value.get("type") == 2:
         vals = field_value.get("value") or []
         if vals and isinstance(vals[0], (int, float)):
@@ -101,7 +101,7 @@ def _extract_number(field_value) -> float | None:
         return None
 
 
-def _extract_date(ts) -> date | None:
+def _extract_date(ts: Any) -> date | None:
     if ts is None:
         return None
     if isinstance(ts, (int, float)) and ts > 0:
@@ -120,7 +120,7 @@ def _extract_date(ts) -> date | None:
 
 async def _sync_production_plan(
     config: ProductionFeishuConfig, session: AsyncSession
-) -> dict:
+) -> dict[str, Any]:
     """从飞书同步生产计划数据"""
     app_secret = decrypt_secret(config.encrypted_app_secret)
     client = ProductionFeishuClient(
@@ -139,7 +139,7 @@ async def _sync_production_plan(
         for item in items:
             fields = item.get("fields") or {}
 
-            mapped: dict = {}
+            mapped: dict[str, Any] = {}
             for feishu_name, db_name in PLAN_FIELD_MAP.items():
                 val = fields.get(feishu_name)
                 if db_name == "plan_date":
@@ -192,7 +192,7 @@ async def _sync_production_plan(
 
 async def _sync_sales_plan(
     config: ProductionFeishuConfig, session: AsyncSession
-) -> dict:
+) -> dict[str, Any]:
     """从飞书同步销售计划执行表数据"""
     app_secret = decrypt_secret(config.encrypted_app_secret)
     client = ProductionFeishuClient(
@@ -221,7 +221,7 @@ async def _sync_sales_plan(
         result = await client.list_records(config.table_id, page_token=page_token)
         for item in result["items"]:
             fields = item.get("fields") or {}
-            mapped: dict = {}
+            mapped: dict[str, Any] = {}
             for feishu_name, db_name in SALES_FIELD_MAP.items():
                 val = fields.get(feishu_name)
                 if db_name in number_fields:
@@ -262,7 +262,7 @@ async def _sync_sales_plan(
 
 async def sync_config_by_target(
     config: ProductionFeishuConfig, session: AsyncSession
-) -> dict:
+) -> dict[str, Any]:
     """根据 sync_target 路由到对应的同步逻辑"""
     target = config.sync_target or "production_plan"
     if target == "production_plan":
@@ -379,9 +379,7 @@ async def sync_config_by_target(
         return await sync_dr_fourth_refinement(config, session)
     # ── 环保模块同步目标 ──
     elif target in ("wastewater", "exhaust_gas", "solid_waste"):
-        from app.modules.environment.environment_feishu import sync_environment_table
-
-        return await sync_environment_table(target, config, session)
+        raise ValueError(f"环境同步目标暂未实现: {target}")
     else:
         # batch, production_record, material_balance — 通用自动同步
         from app.modules.production.auto_sync_service import auto_sync_config

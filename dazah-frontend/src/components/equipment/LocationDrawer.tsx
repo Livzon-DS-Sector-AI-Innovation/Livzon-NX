@@ -51,7 +51,7 @@ export function LocationDrawer({ onRefresh }: { onRefresh?: () => void }) {
       onRefresh?.()
     } catch (err) {
       // Ant Design validation errors have an errorFields property
-      if (err?.errorFields) return
+      if ((typeof err === 'object' && err !== null && 'errorFields' in err)) return
       message.error('操作失败')
     } finally {
       setSubmitting(false)

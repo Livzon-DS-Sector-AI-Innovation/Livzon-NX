@@ -2,7 +2,7 @@
 
 import uuid
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -23,7 +23,7 @@ class CpvImportPreviewResponse(BaseModel):
 
     total_rows: int
     valid_rows: int
-    error_rows: list[dict]  # [{row_number, error_message, row_data}]
+    error_rows: list[dict[str, Any]]  # [{row_number, error_message, row_data}]
     matched_parameters: list[str]  # 匹配到的参数名称
     unmatched_columns: list[str]  # 未匹配的列名
 
@@ -50,7 +50,7 @@ class CpvImportTaskResponse(BaseModel):
     total_rows: int
     success_rows: int
     failed_rows: int
-    error_details: dict | None
+    error_details: dict[str, Any] | None
     created_at: datetime
     created_by: uuid.UUID | None
 

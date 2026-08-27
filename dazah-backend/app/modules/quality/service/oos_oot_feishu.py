@@ -29,13 +29,11 @@ async def sync_oos_oot_record_to_feishu(
         "事件标题": record.title,
         "责任部门": record.department or "",
         "产品名称": record.product_name or "",
-        "批号": record.batch_no or "",
+        "批号": record.batch_number or "",
         "检验项目": record.test_item or "",
         "标准规定": record.specification or "",
         "检验结果": record.test_result or "",
-        "发现日期": record.discovered_date.isoformat()
-        if record.discovered_date
-        else "",
+        "发现日期": record.discovery_date.isoformat() if record.discovery_date else "",
         "事件描述": record.description or "",
         "调查结论": record.investigation_result or "",
         "纠正预防措施": record.corrective_actions or "",

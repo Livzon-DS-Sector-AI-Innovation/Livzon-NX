@@ -31,6 +31,7 @@ else:
 
 # ── Converter class ────────────────────────────────────────────────────────
 
+
 class ExcelToPdfConverter:
     """Convert a filled .xlsx file to .pdf.
 
@@ -40,9 +41,7 @@ class ExcelToPdfConverter:
 
     def __init__(self, soffice_path: str | Path | None = None) -> None:
         """*soffice_path* overrides auto-detection."""
-        self._soffice: Path | None = (
-            Path(soffice_path) if soffice_path else None
-        )
+        self._soffice: Path | None = Path(soffice_path) if soffice_path else None
 
     # ── Public API ──────────────────────────────────────────────────────
 
@@ -99,10 +98,17 @@ class ExcelToPdfConverter:
         try:
             subprocess.run(
                 [
-                    str(soffice), "--headless", "--convert-to", "pdf",
-                    "--outdir", str(dst.parent), str(src),
+                    str(soffice),
+                    "--headless",
+                    "--convert-to",
+                    "pdf",
+                    "--outdir",
+                    str(dst.parent),
+                    str(src),
                 ],
-                capture_output=True, text=True, timeout=120,
+                capture_output=True,
+                text=True,
+                timeout=120,
                 # Prevent LibreOffice from inheriting a lock on the input
                 env={**os.environ, "SAL_USE_VCLPLUGIN": "gen"},
             )
@@ -131,20 +137,22 @@ class ExcelToPdfConverter:
     def _try_excel_com(src: Path, dst: Path) -> bool:
         """Fallback: Excel COM Automation (Windows, Excel 2007+)."""
         ps_script = (
-            f'$excel = New-Object -ComObject Excel.Application; '
-            f'$excel.Visible = $false; '
-            f'$excel.DisplayAlerts = $false; '
+            f"$excel = New-Object -ComObject Excel.Application; "
+            f"$excel.Visible = $false; "
+            f"$excel.DisplayAlerts = $false; "
             f'$wb = $excel.Workbooks.Open("{src}"); '
             f'$wb.ExportAsFixedFormat(0, "{dst}"); '
-            f'$wb.Close($false); '
-            f'$excel.Quit(); '
-            f'[Runtime.InteropServices.Marshal]::ReleaseComObject($wb); '
-            f'[Runtime.InteropServices.Marshal]::ReleaseComObject($excel); '
+            f"$wb.Close($false); "
+            f"$excel.Quit(); "
+            f"[Runtime.InteropServices.Marshal]::ReleaseComObject($wb); "
+            f"[Runtime.InteropServices.Marshal]::ReleaseComObject($excel); "
         )
         try:
             subprocess.run(
                 ["powershell", "-NoProfile", "-Command", ps_script],
-                capture_output=True, text=True, timeout=120,
+                capture_output=True,
+                text=True,
+                timeout=120,
             )
         except Exception:
             return False
@@ -152,6 +160,7 @@ class ExcelToPdfConverter:
 
 
 # ── Convenience ────────────────────────────────────────────────────────────
+
 
 def convert_xlsx_to_pdf(
     xlsx_path: str | Path,

@@ -1,10 +1,13 @@
 from datetime import UTC, datetime
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
 
 from app.modules.safety.feishu import bitable_handler as handler
+
+SimpleNamespace: Any = _SimpleNamespace
 
 
 def test_person_select_attachment_and_time_value_extractors() -> None:
@@ -21,9 +24,12 @@ def test_person_select_attachment_and_time_value_extractors() -> None:
         }
     ) == {"name": "张三", "id": "u_1", "email": "zhang@example.com"}
     assert handler._extract_person_info({"users": []})["name"] == ""
-    assert handler._extract_person_info(
-        [{"id": "ou_1", "name": "李四", "email": "li@example.com"}]
-    )["id"] == "ou_1"
+    assert (
+        handler._extract_person_info(
+            [{"id": "ou_1", "name": "李四", "email": "li@example.com"}]
+        )["id"]
+        == "ou_1"
+    )
     assert handler._extract_person_info("王五")["name"] == "王五"
     assert handler._extract_person_info([42])["name"] == "42"
     assert handler._is_open_id_like("ou_abc") is True
@@ -36,9 +42,10 @@ def test_person_select_attachment_and_time_value_extractors() -> None:
         [{"file_token": "f1", "name": "a.jpg"}, "ignored"]
     ) == [{"file_token": "f1", "name": "a.jpg"}]
     assert handler._extract_attachments("bad") == []
-    assert handler._extract_rich_text(
-        [{"type": "text", "text": "阀门"}, "泄漏"]
-    ) == "阀门泄漏"
+    assert (
+        handler._extract_rich_text([{"type": "text", "text": "阀门"}, "泄漏"])
+        == "阀门泄漏"
+    )
     assert handler._extract_rich_text(7) == "7"
 
     moment = datetime(2026, 7, 27, tzinfo=UTC)
@@ -89,7 +96,7 @@ def test_bitable_fields_map_to_valid_hazard_values() -> None:
     assert mapped["rectification_photos"] is None
 
 
-def test_hazard_model_maps_back_to_bitable_with_field_types(monkeypatch) -> None:
+def test_hazard_model_maps_back_to_bitable_with_field_types(monkeypatch: Any) -> None:
     monkeypatch.setattr(
         handler,
         "_field_type_cache",
@@ -100,7 +107,7 @@ def test_hazard_model_maps_back_to_bitable_with_field_types(monkeypatch) -> None
         },
     )
     moment = datetime(2026, 7, 27, tzinfo=UTC)
-    hazard = SimpleNamespace(
+    hazard: Any = SimpleNamespace(
         hazard_no="HZ-001",
         discovered_at=moment,
         discovered_by_name="张三",
@@ -148,11 +155,11 @@ def test_hazard_model_maps_back_to_bitable_with_field_types(monkeypatch) -> None
     ],
 )
 def test_rectification_status_derivation(
-    level_one,
-    level_two,
-    level_three,
-    hazard_level,
-    expected,
+    level_one: Any,
+    level_two: Any,
+    level_three: Any,
+    hazard_level: Any,
+    expected: Any,
 ) -> None:
     assert (
         handler._compute_rectification_status(
@@ -165,7 +172,9 @@ def test_rectification_status_derivation(
     )
 
 
-def test_action_values_resolve_field_names_json_and_option_ids(monkeypatch) -> None:
+def test_action_values_resolve_field_names_json_and_option_ids(
+    monkeypatch: Any,
+) -> None:
     monkeypatch.setattr(
         handler,
         "_option_map_cache",
@@ -202,12 +211,14 @@ def test_action_values_resolve_field_names_json_and_option_ids(monkeypatch) -> N
 
 
 @pytest.mark.anyio
-async def test_person_resolution_uses_identity_then_safe_fallbacks(monkeypatch) -> None:
+async def test_person_resolution_uses_identity_then_safe_fallbacks(
+    monkeypatch: Any,
+) -> None:
     class FakeResolver:
-        def __init__(self, session):
+        def __init__(self: Any, session: Any) -> None:
             pass
 
-        async def _find_user_by_user_id(self, user_id):
+        async def _find_user_by_user_id(self: Any, user_id: Any) -> Any:
             if user_id == "u_known":
                 return SimpleNamespace(
                     id="db-id",
@@ -216,10 +227,10 @@ async def test_person_resolution_uses_identity_then_safe_fallbacks(monkeypatch) 
                 )
             return None
 
-        async def _find_user_by_email(self, email):
+        async def _find_user_by_email(self: Any, email: Any) -> Any:
             return None
 
-        async def _find_user_by_name(self, name):
+        async def _find_user_by_name(self: Any, name: Any) -> Any:
             return None
 
     from app.modules.safety.feishu import identity_resolver
@@ -248,9 +259,9 @@ async def test_person_resolution_uses_identity_then_safe_fallbacks(monkeypatch) 
 
 @pytest.mark.anyio
 async def test_event_deduplication_and_field_fallback_are_resilient(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
-    redis = SimpleNamespace(set=AsyncMock(return_value=True))
+    redis: Any = SimpleNamespace(set=AsyncMock(return_value=True))
     monkeypatch.setattr(handler, "redis_client", redis)
     assert await handler._is_duplicate("changed", "rec1") is False
     redis.set.return_value = False
@@ -258,7 +269,9 @@ async def test_event_deduplication_and_field_fallback_are_resilient(
     redis.set.side_effect = RuntimeError("redis unavailable")
     assert await handler._is_duplicate("changed", "rec1") is False
 
-    bitable = SimpleNamespace(get_record=AsyncMock(return_value={"隐患描述": "API值"}))
+    bitable: Any = SimpleNamespace(
+        get_record=AsyncMock(return_value={"隐患描述": "API值"})
+    )
     assert await handler._get_fields_fallback(
         bitable,
         "rec1",

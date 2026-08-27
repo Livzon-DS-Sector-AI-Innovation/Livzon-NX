@@ -41,18 +41,10 @@ router.include_router(equipment_router)
 router.include_router(spare_parts_router, prefix="/spare-parts")
 
 # 维护模块路由
-router.include_router(
-    failure_codes_router, prefix="/maintenance/failure-codes"
-)
-router.include_router(
-    work_orders_router, prefix="/maintenance/work-orders"
-)
-router.include_router(
-    calibration_router, prefix="/maintenance/calibration"
-)
-router.include_router(
-    maintenance_plans_router, prefix="/maintenance/plans"
-)
+router.include_router(failure_codes_router, prefix="/maintenance/failure-codes")
+router.include_router(work_orders_router, prefix="/maintenance/work-orders")
+router.include_router(calibration_router, prefix="/maintenance/calibration")
+router.include_router(maintenance_plans_router, prefix="/maintenance/plans")
 router.include_router(
     inspection_templates_router,
     prefix="/maintenance/inspection-templates",

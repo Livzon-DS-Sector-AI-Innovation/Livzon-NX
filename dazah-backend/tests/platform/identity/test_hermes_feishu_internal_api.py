@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import hmac
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
+from typing import Any, cast
 from uuid import uuid4
 
 import pytest
@@ -15,38 +16,40 @@ from app.platform.identity.repository import (
     ExternalIdentityConflictError,
 )
 
+SimpleNamespace: Any = _SimpleNamespace
+
 
 class FakeIdentityDb:
-    def __init__(self, user) -> None:
+    def __init__(self: Any, user: Any) -> None:
         self.user = user
         self.flush_count = 0
 
-    async def get(self, model, key):
+    async def get(self: Any, model: Any, key: Any) -> Any:
         return self.user if key == self.user.id else None
 
-    async def flush(self) -> None:
+    async def flush(self: Any) -> None:
         self.flush_count += 1
 
 
 class _BindingScalarResult:
-    def __init__(self, bindings) -> None:
+    def __init__(self: Any, bindings: Any) -> None:
         self.bindings = bindings
 
-    def scalars(self):
+    def scalars(self: Any) -> Any:
         return self
 
-    def unique(self):
+    def unique(self: Any) -> Any:
         return self
 
-    def all(self):
+    def all(self: Any) -> Any:
         return self.bindings
 
 
 class _BindingResolveDb:
-    def __init__(self, bindings) -> None:
+    def __init__(self: Any, bindings: Any) -> None:
         self.bindings = bindings
 
-    async def execute(self, statement):
+    async def execute(self: Any, statement: Any) -> Any:
         return _BindingScalarResult(self.bindings)
 
 
@@ -59,7 +62,7 @@ def test_internal_token_is_required() -> None:
 
 def test_internal_token_accepts_exact_bearer() -> None:
     settings = Settings(HERMES_INTERNAL_TOKEN="internal-test-token")
-    assert _require_internal("Bearer internal-test-token", settings) is None
+    assert _require_internal("Bearer internal-test-token", settings) is None  # type: ignore[func-returns-value]
 
 
 def test_internal_token_comparison_has_no_prefix_match() -> None:
@@ -73,42 +76,42 @@ def test_internal_token_comparison_has_no_prefix_match() -> None:
 async def test_resolved_subject_uses_local_user_tenant(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    user = SimpleNamespace(
+    user: Any = SimpleNamespace(
         id=uuid4(),
         name="测试用户",
         tenant_key="local-tenant",
         is_deleted=False,
         status="active",
     )
-    binding = SimpleNamespace(
+    binding: Any = SimpleNamespace(
         id=uuid4(),
         local_user_id=user.id,
         tenant_id="gateway-alias",
         last_seen_at=None,
     )
-    config = SimpleNamespace(
+    config: Any = SimpleNamespace(
         app_id="cli_test",
         allowed_group_chat_ids=[],
     )
 
-    async def fake_get_active(self, db):
+    async def fake_get_active(self: Any, db: Any) -> Any:
         return config
 
-    async def fake_resolve(self, db, **kwargs):
+    async def fake_resolve(self: Any, db: Any, **kwargs: Any) -> Any:
         assert kwargs["tenant_id"] == "gateway-alias"
         return binding
 
     monkeypatch.setattr(
-        hermes_api.FeishuConfigRepository,
+        hermes_api.FeishuConfigRepository,  # type: ignore[attr-defined]
         "get_active",
         fake_get_active,
     )
     monkeypatch.setattr(
-        hermes_api.ExternalIdentityBindingRepository,
+        hermes_api.ExternalIdentityBindingRepository,  # type: ignore[attr-defined]
         "resolve",
         fake_resolve,
     )
-    db = FakeIdentityDb(user)
+    db: Any = cast(Any, FakeIdentityDb)(user)
     payload = hermes_api.ExternalIdentityResolveRequest(
         tenant_id="gateway-alias",
         app_fingerprint="cli_test",
@@ -129,19 +132,21 @@ async def test_resolved_subject_uses_local_user_tenant(
 async def test_identity_resolution_rejects_non_active_app_before_binding_lookup(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    config = SimpleNamespace(app_id="app-a", allowed_group_chat_ids=[])
+    config: Any = SimpleNamespace(app_id="app-a", allowed_group_chat_ids=[])
 
-    async def fake_get_active(self, db):
+    async def fake_get_active(self: Any, db: Any) -> Any:
         return config
 
-    async def unexpected_resolve(self, db, **kwargs):
+    async def unexpected_resolve(self: Any, db: Any, **kwargs: Any) -> Any:
         raise AssertionError("binding lookup must not run for another app")
 
     monkeypatch.setattr(
-        hermes_api.FeishuConfigRepository, "get_active", fake_get_active
+        hermes_api.FeishuConfigRepository,  # type: ignore[attr-defined]
+        "get_active",
+        fake_get_active,
     )
     monkeypatch.setattr(
-        hermes_api.ExternalIdentityBindingRepository,
+        hermes_api.ExternalIdentityBindingRepository,  # type: ignore[attr-defined]
         "resolve",
         unexpected_resolve,
     )
@@ -153,7 +158,7 @@ async def test_identity_resolution_rejects_non_active_app_before_binding_lookup(
                 app_fingerprint="app-b",
                 external_open_id="ou-shared",
             ),
-            FakeIdentityDb(SimpleNamespace(id=uuid4())),
+            cast(Any, FakeIdentityDb)(SimpleNamespace(id=uuid4())),
             Settings(LIVZON_FEISHU_ALLOWED_GROUPS=""),
         )
 
@@ -164,20 +169,24 @@ async def test_identity_resolution_rejects_non_active_app_before_binding_lookup(
 async def test_identity_resolution_rejects_cross_tenant_identifier_reuse(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    config = SimpleNamespace(app_id="app-a", allowed_group_chat_ids=[])
+    config: Any = SimpleNamespace(app_id="app-a", allowed_group_chat_ids=[])
 
-    async def fake_get_active(self, db):
+    async def fake_get_active(self: Any, db: Any) -> Any:
         return config
 
-    async def fake_resolve(self, db, **kwargs):
+    async def fake_resolve(self: Any, db: Any, **kwargs: Any) -> Any:
         assert kwargs["tenant_id"] == "tenant-b"
         return None
 
     monkeypatch.setattr(
-        hermes_api.FeishuConfigRepository, "get_active", fake_get_active
+        hermes_api.FeishuConfigRepository,  # type: ignore[attr-defined]
+        "get_active",
+        fake_get_active,
     )
     monkeypatch.setattr(
-        hermes_api.ExternalIdentityBindingRepository, "resolve", fake_resolve
+        hermes_api.ExternalIdentityBindingRepository,  # type: ignore[attr-defined]
+        "resolve",
+        fake_resolve,
     )
 
     with pytest.raises(HTTPException) as exc:
@@ -187,7 +196,7 @@ async def test_identity_resolution_rejects_cross_tenant_identifier_reuse(
                 app_fingerprint="app-a",
                 external_union_id="on-from-tenant-a",
             ),
-            FakeIdentityDb(SimpleNamespace(id=uuid4())),
+            cast(Any, FakeIdentityDb)(SimpleNamespace(id=uuid4())),
             Settings(LIVZON_FEISHU_ALLOWED_GROUPS=""),
         )
 
@@ -198,19 +207,23 @@ async def test_identity_resolution_rejects_cross_tenant_identifier_reuse(
 async def test_identity_resolution_fails_closed_on_conflicting_identifiers(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    config = SimpleNamespace(app_id="app-a", allowed_group_chat_ids=[])
+    config: Any = SimpleNamespace(app_id="app-a", allowed_group_chat_ids=[])
 
-    async def fake_get_active(self, db):
+    async def fake_get_active(self: Any, db: Any) -> Any:
         return config
 
-    async def fake_resolve(self, db, **kwargs):
+    async def fake_resolve(self: Any, db: Any, **kwargs: Any) -> Any:
         raise ExternalIdentityConflictError("conflict")
 
     monkeypatch.setattr(
-        hermes_api.FeishuConfigRepository, "get_active", fake_get_active
+        hermes_api.FeishuConfigRepository,  # type: ignore[attr-defined]
+        "get_active",
+        fake_get_active,
     )
     monkeypatch.setattr(
-        hermes_api.ExternalIdentityBindingRepository, "resolve", fake_resolve
+        hermes_api.ExternalIdentityBindingRepository,  # type: ignore[attr-defined]
+        "resolve",
+        fake_resolve,
     )
 
     with pytest.raises(HTTPException) as exc:
@@ -221,7 +234,7 @@ async def test_identity_resolution_fails_closed_on_conflicting_identifiers(
                 external_open_id="ou-user-a",
                 external_union_id="on-user-b",
             ),
-            FakeIdentityDb(SimpleNamespace(id=uuid4())),
+            cast(Any, FakeIdentityDb)(SimpleNamespace(id=uuid4())),
             Settings(LIVZON_FEISHU_ALLOWED_GROUPS=""),
         )
 
@@ -231,7 +244,7 @@ async def test_identity_resolution_fails_closed_on_conflicting_identifiers(
 
 @pytest.mark.anyio
 async def test_binding_repository_rejects_mixed_identifiers_on_one_candidate() -> None:
-    binding = SimpleNamespace(
+    binding: Any = SimpleNamespace(
         external_user_id="user-a",
         external_open_id="open-a",
         external_union_id="union-a",
@@ -239,7 +252,7 @@ async def test_binding_repository_rejects_mixed_identifiers_on_one_candidate() -
 
     with pytest.raises(ExternalIdentityConflictError):
         await ExternalIdentityBindingRepository().resolve(
-            _BindingResolveDb([binding]),
+            _BindingResolveDb([binding]),  # type: ignore[arg-type]
             tenant_id="tenant-a",
             platform="feishu",
             app_fingerprint="app-a",
@@ -250,8 +263,9 @@ async def test_binding_repository_rejects_mixed_identifiers_on_one_candidate() -
 
 
 @pytest.mark.anyio
-async def test_binding_repository_rejects_identifiers_matching_multiple_bindings(
-) -> None:
+async def test_binding_repository_rejects_identifiers_matching_multiple_bindings() -> (
+    None
+):
     bindings = [
         SimpleNamespace(
             external_user_id="user-a",
@@ -267,7 +281,7 @@ async def test_binding_repository_rejects_identifiers_matching_multiple_bindings
 
     with pytest.raises(ExternalIdentityConflictError):
         await ExternalIdentityBindingRepository().resolve(
-            _BindingResolveDb(bindings),
+            _BindingResolveDb(bindings),  # type: ignore[arg-type]
             tenant_id="tenant-a",
             platform="feishu",
             app_fingerprint="app-a",

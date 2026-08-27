@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import AsyncIterator
 from datetime import date
+from typing import Any
 
 import pytest
 from httpx import AsyncClient
@@ -14,7 +16,7 @@ from app.modules.quality.models.change_control import ChangeControl
 @pytest.fixture(autouse=True)
 async def _clean_change_action_plans(
     db_session: AsyncSession,
-) -> None:
+) -> AsyncIterator[Any]:
     await db_session.execute(text("CREATE SCHEMA IF NOT EXISTS quality"))
     await db_session.execute(
         text(
@@ -82,7 +84,8 @@ async def _clean_change_action_plans(
             """
             ALTER TABLE quality.quality_change_action_plans
             ADD COLUMN IF NOT EXISTS reminder_enabled BOOLEAN NOT NULL DEFAULT TRUE,
-            ADD COLUMN IF NOT EXISTS reminder_status VARCHAR(20) NOT NULL DEFAULT 'pending',
+            ADD COLUMN IF NOT EXISTS reminder_status VARCHAR(20) NOT NULL DEFAULT
+            'pending',
             ADD COLUMN IF NOT EXISTS last_reminded_at TIMESTAMPTZ NULL,
             ADD COLUMN IF NOT EXISTS reminder_confirmed_at TIMESTAMPTZ NULL,
             ADD COLUMN IF NOT EXISTS reminder_confirmed_by VARCHAR(100) NULL,
@@ -90,15 +93,13 @@ async def _clean_change_action_plans(
             """
         )
     )
-    await db_session.execute(
-        text("DELETE FROM quality.quality_change_action_plans")
-    )
-    await db_session.execute(ChangeControl.__table__.delete())
+    await db_session.execute(text("DELETE FROM quality.quality_change_action_plans"))
+    await db_session.execute(ChangeControl.__table__.delete())  # type: ignore[attr-defined]
     await db_session.commit()
     yield
     await db_session.execute(text("DELETE FROM quality.quality_change_action_plans"))
     await db_session.execute(
-        ChangeControl.__table__.delete()
+        ChangeControl.__table__.delete()  # type: ignore[attr-defined]
     )
     await db_session.commit()
 
@@ -109,7 +110,9 @@ async def test_change_action_plan_api_roundtrip(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _fake_upsert(self, db, plan, *, include_users=True):  # noqa: ANN001
+    async def _fake_upsert(
+        self: Any, db: Any, plan: Any, *, include_users: Any = True
+    ) -> Any:  # noqa: ANN001
         return f"rec_{plan.id.hex[:8]}"
 
     monkeypatch.setattr(
@@ -170,7 +173,9 @@ async def test_change_action_plan_sync_failure_marks_failed(
     client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _raise(self, db, plan, *, include_users=True):  # noqa: ANN001
+    async def _raise(
+        self: Any, db: Any, plan: Any, *, include_users: Any = True
+    ) -> Any:  # noqa: ANN001
         raise RuntimeError("feishu unavailable")
 
     monkeypatch.setattr(
@@ -198,7 +203,7 @@ async def test_change_action_plan_sync_retries_without_user_fields(
 ) -> None:
     calls: list[bool] = []
 
-    async def _fake_upsert(db, plan, *, include_users=True):  # noqa: ANN001
+    async def _fake_upsert(db: Any, plan: Any, *, include_users: Any = True) -> Any:  # noqa: ANN001
         calls.append(include_users)
         if include_users:
             raise RuntimeError(
@@ -233,7 +238,7 @@ async def test_change_action_plan_person_options_search_returns_open_ids(
     client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _fake_get_all_users():  # noqa: ANN001
+    async def _fake_get_all_users() -> Any:  # noqa: ANN001
         return [
             {
                 "name": "张起智",
@@ -281,7 +286,7 @@ async def test_change_action_plan_update_rejects_person_field_edits_for_existing
     client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _fake_upsert(plan, include_users=True):  # noqa: ANN001
+    async def _fake_upsert(plan: Any, include_users: Any = True) -> Any:  # noqa: ANN001
         return "rec_existing_plan"
 
     monkeypatch.setattr(
@@ -315,7 +320,7 @@ async def test_change_action_plan_update_allows_non_person_fields(
     client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _fake_upsert(plan, include_users=True):  # noqa: ANN001
+    async def _fake_upsert(plan: Any, include_users: Any = True) -> Any:  # noqa: ANN001
         return "rec_non_person_update"
 
     monkeypatch.setattr(
@@ -350,10 +355,10 @@ async def test_sync_from_feishu_overwrites_owner_fields_for_existing_plan(
     client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _fake_upsert(_db, plan, include_users=True):  # noqa: ANN001
+    async def _fake_upsert(_db: Any, plan: Any, include_users: Any = True) -> Any:  # noqa: ANN001
         return "rec_sync_back_001"
 
-    async def _fake_search_records(_db, change_code=None):  # noqa: ANN001
+    async def _fake_search_records(_db: Any, change_code: Any = None) -> Any:  # noqa: ANN001
         return [
             {
                 "record_id": "rec_sync_back_001",
@@ -389,7 +394,9 @@ async def test_sync_from_feishu_overwrites_owner_fields_for_existing_plan(
     )
     assert create_response.status_code == 200
 
-    sync_response = await client.post("/api/v1/quality/change-action-plans/sync-from-feishu")
+    sync_response = await client.post(
+        "/api/v1/quality/change-action-plans/sync-from-feishu"
+    )
     assert sync_response.status_code == 200
     assert sync_response.json()["data"]["synced"] == 1
 
@@ -410,10 +417,10 @@ async def test_change_action_plan_reminder_api_flow(
     client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _fake_send(plan):  # noqa: ANN001
+    async def _fake_send(plan: Any) -> Any:  # noqa: ANN001
         return "om_reminder_001"
 
-    async def _fake_patch(plan):  # noqa: ANN001
+    async def _fake_patch(plan: Any) -> Any:  # noqa: ANN001
         return None
 
     monkeypatch.setattr(

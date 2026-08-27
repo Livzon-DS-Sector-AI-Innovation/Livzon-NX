@@ -33,6 +33,8 @@ import json
 import logging
 from typing import Any, Dict, List, Optional, Union
 
+from tools.registry import registry, tool_error
+
 # Sources that are excluded from session browsing/searching by default.
 # Third-party integrations tag their sessions with HERMES_SESSION_SOURCE=tool
 # so they don't clutter the user's session history.
@@ -760,8 +762,6 @@ SESSION_SEARCH_SCHEMA = {
 
 
 # --- Registry ---
-from tools.registry import registry, tool_error
-
 registry.register(
     name="session_search",
     toolset="session_search",

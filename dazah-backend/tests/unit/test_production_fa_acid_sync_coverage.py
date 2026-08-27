@@ -12,6 +12,7 @@ from __future__ import annotations
 import ast
 import importlib
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
@@ -19,12 +20,14 @@ import pytest
 
 
 @pytest.mark.anyio
-async def test_fa_acid_read_ok():
+async def test_fa_acid_read_ok() -> Any:
     mod = importlib.import_module("app.modules.production.fa_acid_sync")
     real = httpx.AsyncClient
 
-    sheet_transport = httpx.MockTransport(
-        lambda req: httpx.Response(
+    def handler(req: httpx.Request) -> httpx.Response:
+        if req.url.path.endswith("/auth/v3/tenant_access_token/internal"):
+            return httpx.Response(200, json={"tenant_access_token": "tok-read"})
+        return httpx.Response(
             200,
             json={
                 "code": 0,
@@ -32,9 +35,10 @@ async def test_fa_acid_read_ok():
                 "data": {"valueRange": {"values": [[1, None], ["a", "b"]]}},
             },
         )
-    )
 
-    def fake_sheet(*, base_url=None, timeout=60, **kw):
+    sheet_transport = httpx.MockTransport(handler)
+
+    def fake_sheet(*, base_url: Any=None, timeout: Any=60, **kw: Any) -> Any:
         return real(transport=sheet_transport, timeout=timeout, base_url=base_url)
 
     with patch.object(mod.httpx, "AsyncClient", fake_sheet):
@@ -43,15 +47,18 @@ async def test_fa_acid_read_ok():
 
 
 @pytest.mark.anyio
-async def test_fa_acid_read_api_error():
+async def test_fa_acid_read_api_error() -> Any:
     mod = importlib.import_module("app.modules.production.fa_acid_sync")
     real = httpx.AsyncClient
 
-    err_transport = httpx.MockTransport(
-        lambda req: httpx.Response(200, json={"code": 40003, "msg": "expired"})
-    )
+    def error_handler(req: httpx.Request) -> httpx.Response:
+        if req.url.path.endswith("/auth/v3/tenant_access_token/internal"):
+            return httpx.Response(200, json={"tenant_access_token": "tok-error"})
+        return httpx.Response(200, json={"code": 40003, "msg": "expired"})
 
-    def fake_err(*, base_url=None, timeout=60, **kw):
+    err_transport = httpx.MockTransport(error_handler)
+
+    def fake_err(*, base_url: Any=None, timeout: Any=60, **kw: Any) -> Any:
         return real(transport=err_transport, timeout=timeout, base_url=base_url)
 
     with patch.object(mod.httpx, "AsyncClient", fake_err):
@@ -60,7 +67,7 @@ async def test_fa_acid_read_api_error():
 
 
 @pytest.mark.anyio
-async def test_fa_acid_run_with_data():
+async def test_fa_acid_run_with_data() -> Any:
     mod = importlib.import_module("app.modules.production.fa_acid_sync")
     rows_input = [
         ["", "FA-EX0", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],  # noqa: E501 数据前空行（非 in_data）→ 跳过
@@ -88,7 +95,7 @@ async def test_fa_acid_run_with_data():
 
 
 @pytest.mark.anyio
-async def test_fa_acid_token_fetch_cache_and_error():
+async def test_fa_acid_token_fetch_cache_and_error() -> Any:
     mod = importlib.import_module("app.modules.production.fa_acid_sync")
     fn = mod._token  # 先保存函数对象（模块级 `_token` 是函数）
     real = httpx.AsyncClient
@@ -97,21 +104,21 @@ async def test_fa_acid_token_fetch_cache_and_error():
     )
     err_transport = httpx.MockTransport(lambda req: httpx.Response(500, text="boom"))
 
-    def fake_ok(*, base_url=None, timeout=30, **kw):
+    def fake_ok(*, base_url: Any=None, timeout: Any=30, **kw: Any) -> Any:
         return real(transport=token_transport, timeout=timeout, base_url=base_url)
 
-    def fake_err(*, base_url=None, timeout=30, **kw):
+    def fake_err(*, base_url: Any=None, timeout: Any=30, **kw: Any) -> Any:
         return real(transport=err_transport, timeout=timeout, base_url=base_url)
 
     # 无缓存：发 HTTP 拿 token（覆盖返回后的缓存写入体）
-    fn.__globals__["_token"] = None
+    setattr(mod, "_access_token", None)
     with patch.object(mod.httpx, "AsyncClient", fake_ok), patch.object(
         mod.os, "getenv", side_effect=["app-id", "app-secret"]
     ):
         assert await fn() == "tok-ax"
 
     # 命中缓存：不再发 HTTP
-    fn.__globals__["_token"] = "cached-tok"
+    setattr(mod, "_access_token", "cached-tok")
     with patch.object(
         mod.httpx, "AsyncClient", new=MagicMock(side_effect=AssertionError("no HTTP"))
     ):
@@ -119,9 +126,9 @@ async def test_fa_acid_token_fetch_cache_and_error():
 
     # HTTP 非 2xx：raise_for_status 抛 HTTPStatusError
     err_handler = httpx.MockTransport(lambda req: httpx.Response(500, text="boom"))
-    fn.__globals__["_token"] = None
+    setattr(mod, "_access_token", None)
 
-    def fake_http_err(*, base_url=None, timeout=30, **kw):
+    def fake_http_err(*, base_url: Any=None, timeout: Any=30, **kw: Any) -> Any:
         return real(transport=err_handler, timeout=timeout, base_url=base_url)
 
     with patch.object(mod.httpx, "AsyncClient", fake_http_err), patch.object(
@@ -131,7 +138,7 @@ async def test_fa_acid_token_fetch_cache_and_error():
             await fn()
 
 
-def test_fa_acid_pure_helpers():
+def test_fa_acid_pure_helpers() -> Any:
     mod = importlib.import_module("app.modules.production.fa_acid_sync")
     assert mod._g(["a", " b "], 1) == "b"
     assert mod._g([], 0) == ""
@@ -150,7 +157,7 @@ def test_fa_acid_pure_helpers():
     assert mod._n("85.5") == "85.5"
 
 
-def _exec_main_block(mod):
+def _exec_main_block(mod: Any) -> Any:
     """Exec 模块底部 `if __name__ == '__main__':` 块，覆盖 __main__ 行."""
     path = mod.__file__
     with open(path, encoding="utf-8") as fh:
@@ -172,7 +179,7 @@ def _exec_main_block(mod):
             ns = dict(mod.__dict__)
             ns["__name__"] = "__main__"
 
-            def _noop_main():
+            def _noop_main() -> Any:
                 return None
 
             ns["main"] = _noop_main
@@ -182,16 +189,16 @@ def _exec_main_block(mod):
 
 
 @pytest.mark.anyio
-async def test_fa_acid_main_entry_and_main_block():
+async def test_fa_acid_main_entry_and_main_block() -> Any:
     mod = importlib.import_module("app.modules.production.fa_acid_sync")
     session = AsyncMock()
     run_mock = AsyncMock(return_value={"total_rows": 2, "batches": 1})
 
     class _Ctx:
-        async def __aenter__(self):
+        async def __aenter__(self) -> Any:
             return session
 
-        async def __aexit__(self, *args):
+        async def __aexit__(self, *args: Any) -> Any:
             return False
 
     engine = MagicMock()
@@ -199,7 +206,7 @@ async def test_fa_acid_main_entry_and_main_block():
 
     with (
         patch.object(mod, "create_async_engine", return_value=engine),
-        patch.object(mod, "sessionmaker", return_value=lambda: _Ctx()),
+        patch.object(mod, "async_sessionmaker", return_value=lambda: _Ctx()),
         patch.object(mod.os, "getenv", return_value="postgresql+asyncpg://"),
     ):
         with (
