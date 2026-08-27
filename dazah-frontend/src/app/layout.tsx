@@ -13,7 +13,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN" className="h-full" suppressHydrationWarning>
-      <body className="h-full antialiased" style={{ fontFamily: "'Inter', -apple-system, system-ui, 'Segoe UI', Helvetica, sans-serif" }}>
+      <body className="h-full antialiased">
         {children}
       </body>
     </html>

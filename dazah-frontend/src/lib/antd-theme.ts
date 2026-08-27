@@ -49,8 +49,8 @@ export const antdTheme: ThemeConfig = {
     colorBorder: '#e5e3df',
     colorBorderSecondary: '#ede9e4',
 
-    // 字体 - Notion Sans (基于 Inter)
-    fontFamily: "'Notion Sans', 'Inter', -apple-system, system-ui, 'Segoe UI', Helvetica, sans-serif",
+    // 字体 - 柔和圆润的中文无衬线字体栈，与全局 --font-ui 保持一致
+    fontFamily: 'var(--font-ui)',
 
     // 圆角 - 符合 DESIGN.md
     borderRadius: 8,        // rounded.md

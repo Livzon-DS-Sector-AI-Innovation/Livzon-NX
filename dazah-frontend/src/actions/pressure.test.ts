@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { CreateOcrRecordRequest } from '@/types/pressure'
 
 const mocks = vi.hoisted(() => ({
   getAuthHeaders: vi.fn().mockResolvedValue({
@@ -131,7 +132,8 @@ describe('pressure actions', () => {
       expect.objectContaining({ method: 'POST' }),
     )
 
-    await expect(submitOcrRecords({} as any)).resolves.toMatchObject({ code: 200 })
+    const ocrRequest: CreateOcrRecordRequest = { records: [], image_url: '' }
+    await expect(submitOcrRecords(ocrRequest)).resolves.toMatchObject({ code: 200 })
     expect(fetchMock).toHaveBeenLastCalledWith(
       `${API_BASE}/api/v1/production/pressure/records/ocr`,
       expect.objectContaining({ method: 'POST' }),

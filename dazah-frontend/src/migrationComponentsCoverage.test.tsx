@@ -166,7 +166,7 @@ vi.mock('@/components/registration', () => ({
   buildDonutOption: () => ({}),
 }))
 vi.mock('echarts-for-react', () => ({ default: ({ option }: { option?: unknown }) => createElement('pre', null, JSON.stringify(option ?? {})) }))
-vi.mock('echarts', () => ({ graphic: { LinearGradient: class LinearGradient { constructor(..._args: unknown[]) {} } } }))
+vi.mock('echarts', () => ({ graphic: { LinearGradient: class LinearGradient {} } }))
 vi.mock('./components/quality/DocumentEntryAttachmentModal', () => ({
   default: () => createElement('div', null, '附件管理'),
   DocumentAttachmentPreviewModal: () => createElement('div', null, '附件预览'),
@@ -201,7 +201,7 @@ vi.mock('@ant-design/icons', async () =>
 
 vi.mock('antd', async () => {
   const React = await import('react')
-  const { Children, cloneElement, createContext, forwardRef, isValidElement, useContext, useMemo, useRef, useState } = React
+  const { Children, cloneElement, createContext, forwardRef, isValidElement, useMemo, useRef } = React
   const FormContext = createContext<Record<string, unknown> | null>(null)
   const Wrapper = ({ children, ...props }: { children?: ReactNode } & Record<string, unknown>) =>
     createElement('div', props, children)
@@ -452,7 +452,6 @@ import { DeptRoleMapper } from './components/system/DeptRoleMapper'
 import { MenuManager } from './components/system/MenuManager'
 import { PermissionVerification } from './components/system/PermissionVerification'
 
-const empty = [] as never[]
 const notificationSettings = {
   is_enabled: false, recent_days: 7, recipient_open_id: null, recipient_name: null,
   recipient_department: null, schedule_time: '09:00', pending_count: 0,
