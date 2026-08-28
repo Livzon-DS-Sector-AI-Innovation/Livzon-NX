@@ -47,9 +47,12 @@ Node.js Corepack, using the `pnpm@10.33.0` version declared by the project.
 The launcher runs the native Alembic migration before starting the Backend,
 automatically maps Compose service URLs to localhost, and uses Next.js
 Turbopack by default. Use `-FrontendWebpack` if the Webpack development
-command is needed. Press `Ctrl+C` to stop the three native processes; the four
-infrastructure containers remain running. Stop those containers explicitly
-when the development environment is no longer needed:
+command is needed. Before starting Frontend, it stops a leftover Next.js
+process for this project and clears the generated `.next/dev` route cache; it
+also probes a protected page route before reporting Frontend as ready. Press
+`Ctrl+C` to stop the three native processes; the four infrastructure
+containers remain running. Stop those containers explicitly when the
+development environment is no longer needed:
 
 ```powershell
 docker compose --env-file .env.local -f compose.dev.yml stop db redis minio edbo-service

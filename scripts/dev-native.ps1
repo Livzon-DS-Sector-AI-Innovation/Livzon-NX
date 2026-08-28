@@ -224,14 +224,83 @@ function Test-TcpPort {
 }
 
 function Test-HttpEndpoint {
-  param([Parameter(Mandatory)][string]$Url)
+  param(
+    [Parameter(Mandatory)][string]$Url,
+    [int]$TimeoutSec = 3
+  )
 
   try {
-    $Response = Invoke-WebRequest -UseBasicParsing -Uri $Url -TimeoutSec 3 -ErrorAction Stop
+    $Response = Invoke-WebRequest -UseBasicParsing -Uri $Url -TimeoutSec $TimeoutSec -ErrorAction Stop
     return $Response.StatusCode -ge 200 -and $Response.StatusCode -lt 300
   }
   catch {
     return $false
+  }
+}
+
+function Get-FrontendNextProcess {
+  param([Parameter(Mandatory)][string]$ProjectDirectory)
+
+  $ProjectPattern = [regex]::Escape($ProjectDirectory.TrimEnd('\'))
+  $Processes = @(Get-CimInstance -ClassName Win32_Process -Filter "Name = 'node.exe'")
+  foreach ($Process in $Processes) {
+    if ([string]::IsNullOrWhiteSpace($Process.CommandLine)) {
+      continue
+    }
+
+    $IsProjectProcess = $Process.CommandLine -match "(?i)$ProjectPattern"
+    $IsNextProcess = $Process.CommandLine -match '(?i)(next.*dist[\\/](bin|server)|start-server\.js)'
+    if ($IsProjectProcess -and $IsNextProcess) {
+      $Process
+    }
+  }
+}
+
+function Stop-ExistingFrontendNextProcess {
+  param([Parameter(Mandatory)][string]$ProjectDirectory)
+
+  $Processes = @(Get-FrontendNextProcess -ProjectDirectory $ProjectDirectory)
+  if ($Processes.Count -eq 0) {
+    return
+  }
+
+  $ProcessIds = @($Processes | ForEach-Object { [int]$_.ProcessId })
+  $RootProcesses = @($Processes | Where-Object {
+      $ProcessIds -notcontains [int]$_.ParentProcessId
+    })
+  if ($RootProcesses.Count -eq 0) {
+    $RootProcesses = @($Processes | Select-Object -First 1)
+  }
+
+  foreach ($Process in $RootProcesses) {
+    Write-Host "停止残留的 Frontend Next.js 进程（PID $($Process.ProcessId)）..."
+    & taskkill.exe /PID $Process.ProcessId /T /F *> $null
+  }
+
+  $Deadline = (Get-Date).AddSeconds(10)
+  while ((Get-Date) -lt $Deadline) {
+    if (@(Get-FrontendNextProcess -ProjectDirectory $ProjectDirectory).Count -eq 0) {
+      return
+    }
+    Start-Sleep -Milliseconds 200
+  }
+
+  throw "无法停止 Frontend 的残留 Next.js 进程；请先关闭占用该项目的开发服务器。"
+}
+
+function Reset-FrontendDevelopmentState {
+  param([Parameter(Mandatory)][string]$ProjectDirectory)
+
+  # Next.js keeps the development route graph under .next/dev. A server that
+  # survived an interrupted launcher run can retain a stale graph and return
+  # the built-in 404 page for valid App Router pages. Stop only Next processes
+  # belonging to this frontend before removing that generated cache.
+  Stop-ExistingFrontendNextProcess -ProjectDirectory $ProjectDirectory
+
+  $DevDirectory = Join-Path $ProjectDirectory ".next\dev"
+  if (Test-Path -LiteralPath $DevDirectory) {
+    Write-Host "清理 Frontend Next.js 开发缓存..."
+    Remove-Item -LiteralPath $DevDirectory -Recurse -Force -ErrorAction Stop
   }
 }
 
@@ -269,6 +338,7 @@ function Wait-UntilReady {
 
 function Assert-NativeProcessesAlive {
   foreach ($Entry in @($script:NativeProcesses)) {
+    $Entry.Process.Refresh()
     if ($Entry.Process.HasExited) {
       throw "$($Entry.Name) exited unexpectedly with code $($Entry.Process.ExitCode)."
     }
@@ -556,6 +626,8 @@ $ComposeUpArguments += @("db", "redis", "minio", "edbo-service")
   }
   $FrontendCommandArguments += @("--hostname", $FrontendBindHost, "--port", "$FrontendPort")
 
+  Reset-FrontendDevelopmentState -ProjectDirectory $FrontendDir
+
   $FrontendProcess = Start-NativeProcess `
     -Name "Frontend" `
     -FilePath $PnpmCommand `
@@ -563,7 +635,9 @@ $ComposeUpArguments += @("db", "redis", "minio", "edbo-service")
     -WorkingDirectory $FrontendDir
 
   Wait-UntilReady -Name "Frontend" -TimeoutSeconds 180 -Probe {
-    Test-TcpPort -HostName (Convert-BindHostToProbeHost $FrontendBindHost) -Port $FrontendPort
+    Test-HttpEndpoint `
+      -Url "http://$(Convert-BindHostToProbeHost $FrontendBindHost):$FrontendPort/production/batches" `
+      -TimeoutSec 30
   }
 
   Write-Host ""
