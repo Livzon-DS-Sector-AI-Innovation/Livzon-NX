@@ -6,7 +6,7 @@ services:
     image: hermes-lite:dev
     container_name: hermes-lite
     env_file:
-      - .env
+      - ../.env.local
     environment:
       HERMES_HOME: /data/hermes
       DAZAH_API_BASE_URL: http://app:8000/api/v1

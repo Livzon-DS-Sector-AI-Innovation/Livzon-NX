@@ -52,8 +52,9 @@ from typing import List, Dict, Any, Optional
 logger = logging.getLogger(__name__)
 
 # ── Hermes-Lite: self-contained home directory ───────────────────────────
-# Override HERMES_HOME to the project directory so ALL paths (.env,
-# sessions, skills, memory, logs, config) are project-local.
+# Override HERMES_HOME to the project directory for local runtime state
+# (sessions, skills, memory, logs, and config). Environment variables are
+# loaded separately from the workspace root by hermes_cli.config.
 # This MUST happen before hermes_constants is imported, because
 # get_hermes_home() caches the value at first call.
 _PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -121,21 +122,17 @@ from hermes_cli._stubs import (  # noqa: E402  # must follow HERMES_HOME bootstr
     get_provider_stale_timeout,
 )
 
-# ── Load .env from project directory only ────────────────────────────────
-# Hermes-Lite is a standalone engine — .env lives next to run_agent.py,
-# not in the global ~/.hermes/ directory.
-_project_env = Path(_PROJECT_DIR) / '.env'
-if _project_env.exists():
-    try:
-        from dotenv import load_dotenv
-        load_dotenv(_project_env, override=False)
-        logger.info("Loaded .env from %s", _project_env)
-    except ImportError:
-        logger.warning("python-dotenv not installed — .env not loaded. pip install python-dotenv")
-    except Exception as exc:
-        logger.warning("Failed to load .env from %s: %s", _project_env, exc)
+# ── Load the single root workspace environment file ─────────────────────
+# Development uses the workspace .env.local; production uses the workspace
+# .env. HERMES_HOME remains runtime state only and never supplies variables.
+from hermes_cli.config import get_env_path, load_env  # noqa: E402
+
+_workspace_env = get_env_path()
+load_env()
+if _workspace_env.exists():
+    logger.info("Loaded workspace environment from %s", _workspace_env)
 else:
-    logger.info("No .env found at %s — using system environment variables.", _project_env)
+    logger.info("No workspace environment found at %s — using system environment variables.", _workspace_env)
 
 
 # Import our tool system

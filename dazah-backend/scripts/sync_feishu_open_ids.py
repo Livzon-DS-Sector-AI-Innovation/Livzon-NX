@@ -7,9 +7,9 @@ from typing import Any
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from dotenv import load_dotenv
+from app.core.config import load_workspace_env
 
-load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
+load_workspace_env()
 
 async def main() -> Any:
     from sqlalchemy import text

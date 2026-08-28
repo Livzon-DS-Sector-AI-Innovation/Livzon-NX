@@ -42,10 +42,17 @@ RUN groupadd --system app \
        --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pytorch-wheels/cpu
 
 COPY dazah-backend/edbo_service/requirements.txt ./requirements.txt
-RUN pip install --no-cache-dir \
+# EDBO remains on Python 3.9 for its legacy torch stack; 0.0.30 requires
+# Python 3.10+, so the dev image uses the last compatible multipart release.
+RUN grep -v '^python-multipart==' requirements.txt > /tmp/edbo-requirements.txt \
+    && pip install --no-cache-dir \
     -i https://pypi.tuna.tsinghua.edu.cn/simple \
     --trusted-host pypi.tuna.tsinghua.edu.cn \
-    -r requirements.txt
+    -r /tmp/edbo-requirements.txt \
+    && pip install --no-cache-dir \
+    -i https://pypi.tuna.tsinghua.edu.cn/simple \
+    --trusted-host pypi.tuna.tsinghua.edu.cn \
+    python-multipart==0.0.20
 
 COPY dazah-backend/edboplus-main /tmp/edboplus-main
 RUN pip install --no-cache-dir \

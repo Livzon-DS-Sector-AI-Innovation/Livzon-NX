@@ -2,6 +2,7 @@ import os
 import shutil
 import tempfile
 from pathlib import Path
+from typing import Optional
 
 import pandas as pd
 from edbo.plus import EDBOplus
@@ -14,8 +15,8 @@ app = FastAPI(title="EDBO+ Optimization Service")
 class OptimizeResponse(BaseModel):
     csv_data: str
     row_count: int
-    prediction_data: str | None = None
-    prediction_filename: str | None = None
+    prediction_data: Optional[str] = None  # noqa: UP045 - EDBO runs on Python 3.9
+    prediction_filename: Optional[str] = None  # noqa: UP045 - EDBO runs on Python 3.9
 
 
 @app.post("/optimize", response_model=OptimizeResponse)

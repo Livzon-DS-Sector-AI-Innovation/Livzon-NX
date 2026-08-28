@@ -98,7 +98,7 @@ services:
       target: backend
     image: dazah/backend:dev
     env_file:
-      - ${DAZAH_ENV_FILE:-.env.local}
+      - .env.local
     environment:
       APP_ENV: development
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://postgres:postgres@db:5432/dazah}
@@ -145,7 +145,7 @@ services:
     image: dazah/backend:dev
     restart: unless-stopped
     env_file:
-      - ${DAZAH_ENV_FILE:-.env.local}
+      - .env.local
     environment:
       APP_ENV: development
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://postgres:postgres@db:5432/dazah}

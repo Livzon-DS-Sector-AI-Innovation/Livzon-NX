@@ -10,17 +10,16 @@ import asyncio
 import logging
 import os
 import re
-from pathlib import Path
 from typing import Any
 
 import httpx
-from dotenv import load_dotenv
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-# 加载 .env（仅用于独立运行时 DATABASE_URL）
-env_path = Path(__file__).resolve().parents[1] / ".env"
-load_dotenv(env_path)
+from app.core.config import load_workspace_env
+
+# 独立运行入口也使用根目录环境文件。
+load_workspace_env()
 
 logger = logging.getLogger(__name__)
 

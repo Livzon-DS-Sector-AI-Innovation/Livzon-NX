@@ -3,21 +3,37 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
+from dotenv import load_dotenv
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent  # dazah-backend/
+_WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
+_LOADED_ENV_FILE: Path | None = None
+
+
+def get_env_file() -> Path:
+    """Return the single workspace-level environment file for this process."""
+    app_env = os.getenv("APP_ENV", "development").strip().lower()
+    filename = ".env" if app_env == "production" else ".env.local"
+    return _WORKSPACE_ROOT / filename
+
+
+def load_workspace_env() -> Path:
+    """Load the selected root environment file without overriding shell values."""
+    global _LOADED_ENV_FILE
+
+    env_file = get_env_file()
+    if _LOADED_ENV_FILE != env_file:
+        load_dotenv(env_file, override=False)
+        _LOADED_ENV_FILE = env_file
+    return env_file
 
 
 def _get_env_file() -> str:
-    """根据 APP_ENV 选择 .env 文件；缺省环境文件不存在时回退到 .env。"""
-    app_env = os.getenv("APP_ENV", "development")
-    env_path = _PROJECT_ROOT / f".env.{app_env}"
-    if not env_path.exists():
-        env_path = _PROJECT_ROOT / ".env"
-    env_file = str(env_path)
-    print(f"Loading environment variables from: {env_file}")
-    return env_file
+    env_file = load_workspace_env()
+    env_path = str(env_file)
+    print(f"Loading environment variables from: {env_path}")
+    return env_path
 
 
 class Settings(BaseSettings):

@@ -32,7 +32,7 @@ AI 位置定位（确定填充到模板的哪个位置）
 
 ### 2. 配置环境变量
 
-编辑 `dazah-backend/.env` 文件，填入你的 API Key：
+编辑工作区根目录的 `.env.local` 文件（生产环境使用 `.env`），填入你的 API Key：
 
 ```env
 # LLM Configuration (DeepSeek)
@@ -197,7 +197,7 @@ Content-Type: application/json
 **现象**：调用 AI 预览接口返回 "LLM 服务未配置"
 
 **解决**：
-1. 检查 `.env` 文件中的 `LLM_API_KEY` 是否已填写真实值
+1. 检查根目录 `.env.local`（生产环境为 `.env`）中的 `LLM_API_KEY` 是否已填写真实值
 2. 确认后端服务已重启（环境变量需要重启后生效）
 
 ### 问题 2：AI 提取结果不准确
@@ -228,7 +228,7 @@ Content-Type: application/json
 - **通义千问**（阿里云）
 - **本地部署**（Ollama + Qwen/Llama）
 
-只需修改 `.env` 中的 `LLM_BASE_URL` 和 `LLM_API_KEY` 即可切换。
+只需修改根目录 `.env.local`（生产环境为 `.env`）中的 `LLM_BASE_URL` 和 `LLM_API_KEY` 即可切换。
 
 ## 下一步
 

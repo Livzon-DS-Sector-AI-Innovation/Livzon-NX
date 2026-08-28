@@ -6,22 +6,17 @@
 
 import logging
 import os
-from pathlib import Path
 from typing import Any
 
 import httpx
-from dotenv import load_dotenv
 
+from app.core.config import load_workspace_env
 from app.modules.safety.feishu.client import get_safety_tenant_token
 
 logger = logging.getLogger(__name__)
 
-# 安全模块独立读取 .env 中的 Bitable 配置（不经过全局 config.py）
-_env_dir = Path(__file__).resolve().parent.parent.parent.parent.parent
-_app_env = os.getenv("APP_ENV", "development")
-_env_path = _env_dir / f".env.{_app_env}"
-if _env_path.exists():
-    load_dotenv(_env_path)
+# 安全模块配置仍由统一的根目录环境文件提供。
+load_workspace_env()
 
 SAFETY_BITABLE_APP_TOKEN = os.getenv("SAFETY_FEISHU_BITABLE_APP_TOKEN", "")
 SAFETY_BITABLE_HAZARD_TABLE_ID = os.getenv("SAFETY_FEISHU_BITABLE_HAZARD_TABLE_ID", "")

@@ -109,7 +109,7 @@ services:
     image: dazah/backend:${DAZAH_VERSION:?set DAZAH_VERSION in .env}
     pull_policy: never
     env_file:
-      - ${DAZAH_ENV_FILE:-.env}
+      - .env
     environment:
       APP_ENV: production
       DEBUG: "false"
@@ -147,7 +147,7 @@ services:
     pull_policy: never
     restart: unless-stopped
     env_file:
-      - ${DAZAH_ENV_FILE:-.env}
+      - .env
     environment:
       APP_ENV: production
       DEBUG: "false"

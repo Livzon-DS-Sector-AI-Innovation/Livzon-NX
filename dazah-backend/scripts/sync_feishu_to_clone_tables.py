@@ -15,12 +15,12 @@ import sys
 from datetime import UTC, date, datetime
 from typing import Any
 
-# Load .env before importing app modules
-from dotenv import load_dotenv
-
-load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
-
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+# Load the selected root environment before importing app modules.
+from app.core.config import load_workspace_env
+
+load_workspace_env()
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")

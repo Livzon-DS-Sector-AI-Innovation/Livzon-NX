@@ -28,9 +28,11 @@ uv sync
 # 2. Install Playwright (required for regulatory tracker crawler)
 playwright install chromium
 
-# 3. Configure environment
-cp .env.example .env
-# Edit .env with your database and Redis credentials
+# 3. Configure the workspace environment (run from the workspace root)
+cd ..
+cp .env.local.example .env.local
+# Edit the root .env.local with your database and Redis credentials
+cd dazah-backend
 
 # 4. Database migrations
 alembic upgrade head
@@ -119,33 +121,32 @@ alembic downgrade -1
 ## Docker Deployment
 
 ```bash
-# Start database and Redis
-docker compose --profile db up -d
+# Run the canonical development stack from the workspace root
+cd ..
+docker compose --env-file .env.local -f compose.dev.yml up -d --build
 
 # Run migrations
-docker compose run --rm app uv run alembic upgrade head
+docker compose --env-file .env.local -f compose.dev.yml run --rm app uv run alembic upgrade head
 
 # Seed data
-docker compose run --rm app uv run python scripts/seed_regulatory_tracker.py
-docker compose run --rm app uv run python scripts/seed_regulatory_documents.py
+docker compose --env-file .env.local -f compose.dev.yml run --rm app uv run python scripts/seed_regulatory_tracker.py
+docker compose --env-file .env.local -f compose.dev.yml run --rm app uv run python scripts/seed_regulatory_documents.py
 
 # Install Playwright in container
-docker compose run --rm app uv run playwright install chromium
-
-# Start application
-docker compose --profile app up -d
+docker compose --env-file .env.local -f compose.dev.yml run --rm app uv run playwright install chromium
 ```
 
 ## Environment Variables
 
-Key variables in `.env`:
+Key variables in the workspace root `.env.local` (development) or `.env`
+(production):
 
-- `APP_DATABASE_URL` — PostgreSQL connection string
-- `APP_REDIS_URL` — Redis connection string
+- `DATABASE_URL` — PostgreSQL connection string
+- `REDIS_URL` — Redis connection string
 - `SECRET_KEY` — JWT secret (change in production)
 - `API_BASE_URL` — Backend URL for frontend server-side requests
 
-See `.env.example` for the full list.
+See the root `.env.local.example` and `.env.example` templates for the full list.
 
 ### Feishu Module Boundaries and Utilities
 
