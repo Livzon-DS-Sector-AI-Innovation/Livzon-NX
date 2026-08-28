@@ -1,22 +1,11 @@
 """Warehouse ORM models live here."""
 
+from __future__ import annotations
+
 from datetime import datetime
 from typing import Any
-from uuid import UUID
 
-from sqlalchemy import (
-    Boolean,
-    DateTime,
-    Float,
-    Index,
-    Integer,
-    String,
-    Text,
-    UniqueConstraint,
-    Uuid,
-    func,
-    text,
-)
+from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -92,7 +81,10 @@ class PackagingMaterialInventory(BaseModel):
     __tablename__ = "packaging_material_inventories"
     __table_args__ = (
         Index("ix_warehouse_packaging_materials_code", "code"),
-        Index("ix_warehouse_packaging_materials_product_line", "product_line"),
+        Index(
+            "ix_warehouse_packaging_materials_product_line",
+            "product_line",
+        ),
         Index(
             "ix_warehouse_packaging_materials_import_key",
             "import_key",
@@ -204,178 +196,49 @@ class ProductInventory(BaseModel):
     )
 
 
-class WarehouseFeishuConfig(BaseModel):
-    __tablename__ = "feishu_configs"
+class MaterialPageSnapshot(BaseModel):
+    __tablename__ = "material_page_snapshots"
     __table_args__ = (
-        Index("ix_warehouse_feishu_configs_is_active", "is_active"),
+        Index("ix_warehouse_material_page_snapshots_page_key", "page_key", unique=True),
+        Index("ix_warehouse_material_page_snapshots_table_id", "table_id"),
         {"schema": "warehouse"},
     )
 
-    config_name: Mapped[str] = mapped_column(
-        String(128),
-        nullable=False,
-        default="仓储飞书配置",
-        comment="配置名称",
+    page_key: Mapped[str] = mapped_column(
+        String(64), nullable=False, comment="页面唯一键"
     )
-    app_id: Mapped[str] = mapped_column(
-        String(128), nullable=False, comment="飞书应用 App ID"
+    page_title: Mapped[str] = mapped_column(
+        String(255), nullable=False, comment="页面标题"
     )
-    encrypted_app_secret: Mapped[str] = mapped_column(
-        String(1024), nullable=False, comment="加密后的飞书应用 App Secret"
+    table_name: Mapped[str] = mapped_column(
+        String(255), nullable=False, comment="来源表名"
     )
-    is_active: Mapped[bool] = mapped_column(
-        Boolean,
-        nullable=False,
-        default=True,
-        server_default="true",
-        comment="是否启用",
+    table_id: Mapped[str] = mapped_column(
+        String(64), nullable=False, comment="飞书 table_id"
     )
-    remark: Mapped[str | None] = mapped_column(Text, nullable=True, comment="备注")
-    timezone: Mapped[str] = mapped_column(
+    source: Mapped[str] = mapped_column(
         String(64),
         nullable=False,
-        default="Asia/Shanghai",
-        server_default="Asia/Shanghai",
+        default="feishu_bitable",
+        server_default="feishu_bitable",
+        comment="快照来源",
     )
-    daily_sync_time: Mapped[str] = mapped_column(
-        String(5), nullable=False, default="02:00", server_default="02:00"
-    )
-
-
-class WarehouseFeishuSourceRoot(BaseModel):
-    """A Wiki or Base entry owned by the warehouse module."""
-
-    __tablename__ = "feishu_source_roots"
-    __table_args__ = (
-        UniqueConstraint(
-            "config_id", "root_token", "is_deleted", name="uq_warehouse_feishu_root"
-        ),
-        Index("ix_warehouse_feishu_roots_active", "config_id", "is_active"),
-        {"schema": "warehouse"},
-    )
-
-    config_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
-    source_type: Mapped[str] = mapped_column(
-        String(16), nullable=False, comment="base/wiki"
-    )
-    source_url: Mapped[str] = mapped_column(Text, nullable=False)
-    root_token: Mapped[str] = mapped_column(String(256), nullable=False)
-    is_active: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=True, server_default="true"
-    )
-    discovery_status: Mapped[str] = mapped_column(
-        String(32), nullable=False, default="pending", server_default="pending"
-    )
-    discovery_error: Mapped[str | None] = mapped_column(Text, nullable=True)
-    last_discovered_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-
-
-class WarehouseFeishuTable(BaseModel):
-    __tablename__ = "feishu_tables"
-    __table_args__ = (
-        Index(
-            "uq_warehouse_feishu_tables_root_app_token_table_id",
-            "source_root_id",
-            "app_token",
-            "table_id",
-            unique=True,
-        ),
-        Index("ix_warehouse_feishu_tables_root", "source_root_id"),
-        Index("ix_warehouse_feishu_tables_app_token", "app_token"),
-        {"schema": "warehouse"},
-    )
-
-    business_domain: Mapped[str] = mapped_column(
-        String(64), nullable=False, comment="飞书资源命名空间"
-    )
-    app_token: Mapped[str] = mapped_column(
-        String(128), nullable=False, comment="飞书多维表格 app_token"
-    )
-    table_id: Mapped[str] = mapped_column(
-        String(128), nullable=False, comment="飞书多维表格 table_id"
-    )
-    name: Mapped[str] = mapped_column(String(255), nullable=False, comment="数据表名称")
-    revision: Mapped[int | None] = mapped_column(
-        Integer, nullable=True, comment="飞书表 revision"
-    )
-    last_discovered_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
+    columns: Mapped[list[dict[str, str]]] = mapped_column(
+        JSONB,
         nullable=False,
-        default=datetime.utcnow,
-        server_default=func.now(),
-        comment="最近发现时间",
+        default=list,
+        server_default="[]",
+        comment="列结构快照",
     )
-    last_event_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True, comment="最近事件时间"
+    total_rows: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+        comment="同步行数",
     )
-    field_count: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0, server_default="0", comment="字段数量"
-    )
-    record_count: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0, server_default="0", comment="记录数量"
-    )
-    last_synced_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True, comment="最近同步时间"
-    )
-    sync_status: Mapped[str | None] = mapped_column(
-        String(32), nullable=True, comment="同步状态"
-    )
-    sync_error: Mapped[str | None] = mapped_column(
-        Text, nullable=True, comment="最近同步错误"
-    )
-    source_root_id: Mapped[UUID | None] = mapped_column(
-        Uuid(as_uuid=True), nullable=True
-    )
-    source_path: Mapped[list[dict[str, str]]] = mapped_column(
-        JSONB, nullable=False, default=list, server_default=text("'[]'::jsonb")
-    )
-    schema_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    active_mirror_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
-
-
-class WarehouseFeishuField(BaseModel):
-    __tablename__ = "feishu_fields"
-    __table_args__ = (
-        Index(
-            "uq_warehouse_feishu_fields_domain_table_field",
-            "business_domain",
-            "app_token",
-            "table_id",
-            "field_id",
-            unique=True,
-        ),
-        Index(
-            "ix_warehouse_feishu_fields_table",
-            "business_domain",
-            "app_token",
-            "table_id",
-        ),
-        {"schema": "warehouse"},
-    )
-
-    business_domain: Mapped[str] = mapped_column(
-        String(64), nullable=False, comment="飞书资源命名空间"
-    )
-    app_token: Mapped[str] = mapped_column(
-        String(128), nullable=False, comment="飞书多维表格 app_token"
-    )
-    table_id: Mapped[str] = mapped_column(
-        String(128), nullable=False, comment="飞书多维表格 table_id"
-    )
-    field_id: Mapped[str] = mapped_column(
-        String(128), nullable=False, comment="飞书字段 ID"
-    )
-    field_name: Mapped[str] = mapped_column(
-        String(255), nullable=False, comment="飞书字段名称"
-    )
-    field_type: Mapped[int | None] = mapped_column(
-        Integer, nullable=True, comment="飞书字段类型"
-    )
-    property: Mapped[dict[str, Any] | None] = mapped_column(
-        JSONB, nullable=True, comment="飞书字段属性"
+    last_error: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="最近一次同步错误"
     )
     last_synced_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -384,57 +247,53 @@ class WarehouseFeishuField(BaseModel):
         server_default=func.now(),
         comment="最近同步时间",
     )
-    display_order: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0, server_default="0"
-    )
 
 
-class WarehouseFeishuRecord(BaseModel):
-    __tablename__ = "feishu_records"
+class MaterialPageRow(BaseModel):
+    __tablename__ = "material_page_rows"
     __table_args__ = (
+        Index("ix_warehouse_material_page_rows_page_id", "page_snapshot_id"),
         Index(
-            "uq_warehouse_feishu_records_domain_table_record",
-            "business_domain",
-            "app_token",
-            "table_id",
-            "record_id",
-            unique=True,
+            "ix_warehouse_material_page_rows_source_record_id",
+            "source_record_id",
         ),
         Index(
-            "ix_warehouse_feishu_records_table",
-            "business_domain",
-            "app_token",
-            "table_id",
+            "ix_warehouse_material_page_rows_page_record",
+            "page_snapshot_id",
+            "source_record_id",
+            unique=True,
         ),
         {"schema": "warehouse"},
     )
 
-    business_domain: Mapped[str] = mapped_column(
-        String(64), nullable=False, comment="飞书资源命名空间"
+    page_snapshot_id: Mapped[Any] = mapped_column(
+        ForeignKey("warehouse.material_page_snapshots.id"),
+        nullable=False,
+        comment="所属页面快照 ID",
     )
-    app_token: Mapped[str] = mapped_column(
-        String(128), nullable=False, comment="飞书多维表格 app_token"
+    source_record_id: Mapped[str] = mapped_column(
+        String(64), nullable=False, comment="飞书记录 ID"
     )
-    table_id: Mapped[str] = mapped_column(
-        String(128), nullable=False, comment="飞书多维表格 table_id"
+    row_order: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+        comment="行序号",
     )
-    record_id: Mapped[str] = mapped_column(
-        String(128), nullable=False, comment="飞书记录 ID"
-    )
-    fields: Mapped[dict[str, Any]] = mapped_column(
-        JSONB, nullable=False, default=dict, comment="飞书原始字段 JSON"
-    )
-    normalized_fields: Mapped[dict[str, Any]] = mapped_column(
-        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    cells: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+        server_default="{}",
+        comment="行内容快照",
     )
     search_text: Mapped[str] = mapped_column(
-        Text, nullable=False, default="", server_default="", comment="检索文本"
-    )
-    feishu_created_time: Mapped[int | None] = mapped_column(
-        Integer, nullable=True, comment="飞书创建时间"
-    )
-    feishu_last_modified_time: Mapped[int | None] = mapped_column(
-        Integer, nullable=True, comment="飞书最近修改时间"
+        Text,
+        nullable=False,
+        default="",
+        server_default="",
+        comment="关键字检索串",
     )
     last_synced_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -443,194 +302,46 @@ class WarehouseFeishuRecord(BaseModel):
         server_default=func.now(),
         comment="最近同步时间",
     )
-    source_revision: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    mirror_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    is_source_deleted: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False, server_default="false"
+
+
+class WarehousePageFeishuConfig(BaseModel):
+    """页面飞书多维表格配置（支持动态切换数据源）"""
+
+    __tablename__ = "warehouse_page_feishu_configs"
+    __table_args__ = {
+        "schema": "warehouse",
+    }
+
+    page_key: Mapped[str] = mapped_column(
+        String(50), primary_key=True, comment="页面唯一键"
+    )
+    app_token: Mapped[str] = mapped_column(
+        String(100), nullable=False, comment="飞书多维表格 app_token"
+    )
+    table_id: Mapped[str] = mapped_column(
+        String(50), nullable=False, comment="飞书多维表格 table_id"
+    )
+    table_name: Mapped[str] = mapped_column(
+        String(100), nullable=False, comment="飞书多维表格名称"
+    )
+    view_id: Mapped[str | None] = mapped_column(
+        String(50), nullable=True, comment="飞书多维表格视图 ID（可选）"
     )
 
 
-class WarehouseFeishuRecordSnapshot(BaseModel):
-    __tablename__ = "feishu_record_snapshots"
-    __table_args__ = (
-        UniqueConstraint(
-            "table_pk",
-            "mirror_version",
-            "record_id",
-            name="uq_warehouse_record_snapshot",
-        ),
-        Index("ix_warehouse_record_snapshots_table", "table_pk", "captured_at"),
-        {"schema": "warehouse"},
-    )
-
-    table_pk: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
-    mirror_version: Mapped[str] = mapped_column(String(64), nullable=False)
-    record_id: Mapped[str] = mapped_column(String(128), nullable=False)
-    fields: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
-    record_hash: Mapped[str] = mapped_column(String(64), nullable=False)
-    captured_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
-
-
-class WarehouseFeishuPageBinding(BaseModel):
-    __tablename__ = "feishu_page_bindings"
-    __table_args__ = (
-        UniqueConstraint(
-            "page_key", "table_pk", "is_deleted", name="uq_warehouse_page_table_binding"
-        ),
-        Index("ix_warehouse_page_bindings_page", "page_key", "is_enabled"),
-        {"schema": "warehouse"},
-    )
-
-    page_key: Mapped[str] = mapped_column(String(128), nullable=False)
-    table_pk: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
-    tab_label: Mapped[str] = mapped_column(String(255), nullable=False)
-    display_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    visible_field_ids: Mapped[list[str]] = mapped_column(
-        JSONB, nullable=False, default=list, server_default=text("'[]'::jsonb")
-    )
-    default_sort: Mapped[list[dict[str, str]]] = mapped_column(
-        JSONB, nullable=False, default=list, server_default=text("'[]'::jsonb")
-    )
-    history_mode: Mapped[str] = mapped_column(
-        String(32),
-        nullable=False,
-        default="current_mirror",
-        server_default="current_mirror",
-    )
-    status: Mapped[str] = mapped_column(
-        String(16), nullable=False, default="published", server_default="published"
-    )
-    is_enabled: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=True, server_default="true"
-    )
-
-
-class WarehouseFeishuSyncRun(BaseModel):
-    __tablename__ = "feishu_data_sync_runs"
-    __table_args__ = (
-        Index("ix_warehouse_data_sync_runs_table", "table_pk", "started_at"),
-        {"schema": "warehouse"},
-    )
-
-    table_pk: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
-    trigger_type: Mapped[str] = mapped_column(String(32), nullable=False)
-    mirror_version: Mapped[str] = mapped_column(String(64), nullable=False)
-    start_revision: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    end_revision: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    status: Mapped[str] = mapped_column(String(32), nullable=False, default="running")
-    received_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    unique_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    expected_total: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    started_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
-    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    error_message: Mapped[str | None] = mapped_column(Text)
-
-
-class WarehouseFeishuAnalysisProfile(BaseModel):
-    __tablename__ = "feishu_analysis_profiles"
-    __table_args__ = (
-        Index("ix_warehouse_analysis_profiles_active", "is_active", "auto_run"),
-        {"schema": "warehouse"},
-    )
-
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
-    resource_ids: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
-    analysis_goal: Mapped[str] = mapped_column(Text, nullable=False)
-    input_field_ids: Mapped[list[str]] = mapped_column(
-        JSONB, nullable=False, default=list
-    )
-    time_field_id: Mapped[str | None] = mapped_column(String(128))
-    metric_field_ids: Mapped[list[str]] = mapped_column(
-        JSONB, nullable=False, default=list
-    )
-    dimension_field_ids: Mapped[list[str]] = mapped_column(
-        JSONB, nullable=False, default=list
-    )
-    quality_rules: Mapped[dict[str, Any]] = mapped_column(
-        JSONB, nullable=False, default=dict
-    )
-    output_schema: Mapped[dict[str, Any]] = mapped_column(
-        JSONB, nullable=False, default=dict
-    )
-    max_raw_rows: Mapped[int] = mapped_column(Integer, nullable=False, default=100)
-    auto_run: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    allow_sensitive_fields: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False
-    )
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    published_prompt_version_id: Mapped[UUID | None] = mapped_column(
-        Uuid(as_uuid=True), nullable=True
-    )
-
-
-class WarehouseFeishuPromptVersion(BaseModel):
-    __tablename__ = "feishu_prompt_versions"
-    __table_args__ = (
-        UniqueConstraint("profile_id", "version", name="uq_warehouse_prompt_version"),
-        {"schema": "warehouse"},
-    )
-
-    profile_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
-    version: Mapped[int] = mapped_column(Integer, nullable=False)
-    system_prompt: Mapped[str] = mapped_column(Text, nullable=False)
-    business_context: Mapped[str | None] = mapped_column(Text)
-    focus_points: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
-    status: Mapped[str] = mapped_column(String(16), nullable=False, default="draft")
-    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-
-
-class WarehouseFeishuAnalysisRun(BaseModel):
-    __tablename__ = "feishu_analysis_runs"
-    __table_args__ = (
-        Index("ix_warehouse_analysis_runs_profile", "profile_id", "started_at"),
-        {"schema": "warehouse"},
-    )
-
-    profile_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
-    prompt_version_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
-    trigger_type: Mapped[str] = mapped_column(String(32), nullable=False)
-    source_versions: Mapped[dict[str, str]] = mapped_column(
-        JSONB, nullable=False, default=dict
-    )
-    algorithm_version: Mapped[str] = mapped_column(
-        String(32), nullable=False, default="1"
-    )
-    status: Mapped[str] = mapped_column(String(32), nullable=False, default="running")
-    started_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
-    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    error_message: Mapped[str | None] = mapped_column(Text)
-
-
-class WarehouseFeishuAnalysisResult(BaseModel):
-    __tablename__ = "feishu_analysis_results"
-    __table_args__ = (
-        UniqueConstraint("run_id", name="uq_warehouse_analysis_result_run"),
-        {"schema": "warehouse"},
-    )
-
-    run_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
-    metrics: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
-    risks: Mapped[list[dict[str, Any]]] = mapped_column(
-        JSONB, nullable=False, default=list
-    )
-    trends: Mapped[list[dict[str, Any]]] = mapped_column(
-        JSONB, nullable=False, default=list
-    )
-    feasibility: Mapped[dict[str, Any]] = mapped_column(
-        JSONB, nullable=False, default=dict
-    )
-    recommendations: Mapped[list[dict[str, Any]]] = mapped_column(
-        JSONB, nullable=False, default=list
-    )
-    evidence: Mapped[list[dict[str, Any]]] = mapped_column(
-        JSONB, nullable=False, default=list
-    )
-    confidence: Mapped[float | None] = mapped_column(Float)
-    llm_output: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+# The migrated page mirror is the active implementation; these imports keep
+# the former Feishu ORM names and tables available for old Agent integrations.
+from app.modules.warehouse.legacy_models import (  # noqa: E402,F401
+    WarehouseFeishuAnalysisProfile,
+    WarehouseFeishuAnalysisResult,
+    WarehouseFeishuAnalysisRun,
+    WarehouseFeishuConfig,
+    WarehouseFeishuField,
+    WarehouseFeishuPageBinding,
+    WarehouseFeishuPromptVersion,
+    WarehouseFeishuRecord,
+    WarehouseFeishuRecordSnapshot,
+    WarehouseFeishuSourceRoot,
+    WarehouseFeishuSyncRun,
+    WarehouseFeishuTable,
+)

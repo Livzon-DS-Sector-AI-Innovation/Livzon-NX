@@ -61,7 +61,7 @@ export function QualityAiAttachmentList({
                 </Button>,
               ]}
             >
-              <Space direction="vertical" size={4} style={{ width: '100%' }}>
+              <Space orientation="vertical" size={4} style={{ width: '100%' }}>
                 <Space wrap>
                   <Typography.Text strong>{attachment.file_name}</Typography.Text>
                   <Tag color={attachment.parse_status === 'completed' ? 'green' : 'red'}>

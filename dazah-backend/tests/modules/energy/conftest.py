@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 
 @pytest.fixture
-def sample_device_config_data():
+def sample_device_config_data() -> Any:
     return {
         "platform_code": "zhiheng",
         "platform_device_code": "WD-001",

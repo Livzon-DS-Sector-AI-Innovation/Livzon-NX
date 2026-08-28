@@ -169,7 +169,7 @@ export function ICHAnalysisPage() {
   }, [])
 
   useEffect(() => {
-    loadHistory()
+    queueMicrotask(loadHistory)
   }, [loadHistory])
 
   // Upload + analyze
@@ -186,14 +186,14 @@ export function ICHAnalysisPage() {
 
       if (!res.ok) {
         const error = await res.json().catch(() => ({ message: '分析失败' }))
-        throw new Error(error.message || '分析失败')
+        throw new Error((error instanceof Error ? error.message : '') || '分析失败')
       }
 
       const data = await res.json()
       setResult({ id: data.data.id, q3c: data.data.q3c_result, q3d: data.data.q3d_result })
       message.success('ICH Q3C/Q3D 杂质识别完成，已保存')
       loadHistory(historyPage)
-    } catch (error: any) {
+    } catch (error) {
       message.error(error.message || '分析失败')
     } finally {
       setLoading(false)

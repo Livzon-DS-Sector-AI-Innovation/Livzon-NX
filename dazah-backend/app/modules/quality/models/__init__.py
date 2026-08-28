@@ -6,6 +6,7 @@ from app.modules.quality.models.capa import CAPA
 from app.modules.quality.models.capa_plan_track import CapaPlanTrack
 from app.modules.quality.models.change_action_plan import ChangeActionPlan
 from app.modules.quality.models.change_control import ChangeControl
+from app.modules.quality.models.complaint import ComplaintRecord
 from app.modules.quality.models.contacts import (
     DepartmentContact,
     DepartmentWeeklyConfirmation,
@@ -23,9 +24,13 @@ from app.modules.quality.models.deviation_investigation_push_record import (
     DeviationInvestigationPushRecord,
 )
 from app.modules.quality.models.deviations import Deviation
-from app.modules.quality.models.feishu_settings import (
-    QualityFeishuAppSettings,
-    QualityFeishuEntitySetting,
+from app.modules.quality.models.document_catalog import (
+    DocumentDepartment,
+    DocumentEntry,
+)
+from app.modules.quality.models.external_quality import (
+    ProductQualityStandardItem,
+    SupplierQualification,
 )
 from app.modules.quality.models.feishu_read_mirror import (
     QualityFeishuReadField,
@@ -35,27 +40,28 @@ from app.modules.quality.models.feishu_read_mirror import (
     QualityFeishuReadSourceRoot,
     QualityFeishuReadSyncRun,
 )
-from app.modules.quality.models.inspection import (
+from app.modules.quality.models.feishu_settings import (
+    QualityFeishuAppSettings,
+    QualityFeishuEntitySetting,
+)
+from app.modules.quality.models.finished_product_inspection import (
     FinishedProductInspection,
-    InspectionRecord,
-    LabInstrument,
-    LabItem,
+)
+from app.modules.quality.models.finished_trend_alert_notification import (
+    FinishedTrendAlertNotification,
+)
+from app.modules.quality.models.inspection import InspectionRecord
+from app.modules.quality.models.lab_instrument import LabInstrument
+from app.modules.quality.models.lab_item import LabItem
+from app.modules.quality.models.liquid_material_inspection import (
     LiquidMaterialInspection,
-    SolidMaterialInspection,
 )
-from app.modules.quality.models.external_quality import (
-    ComplaintRecord,
-    ProductQualityRecord,
-    ProductQualityStandardItem,
-    ReturnRecallRecord,
-    Supplier,
-    SupplierQualification,
-)
-from app.modules.quality.models.oos_oot import (
-    OosOotRecord,
-    OotLimitItem,
-    OotLimitProduct,
-)
+from app.modules.quality.models.oos_oot import OosOotRecord
+from app.modules.quality.models.oot_limit import OotLimitItem, OotLimitProduct
+from app.modules.quality.models.product_quality import ProductQualityRecord
+from app.modules.quality.models.return_recall import ReturnRecallRecord
+from app.modules.quality.models.solid_material_inspection import SolidMaterialInspection
+from app.modules.quality.models.supplier import Supplier
 from app.modules.quality.models.validation_execution_record import (
     CleaningValidationRecord,
     EquipmentQualificationRecord,
@@ -65,20 +71,12 @@ from app.modules.quality.models.validation_execution_record import (
 from app.modules.quality.models.validation_record import ValidationRecord
 
 __all__ = [
-    "CpvProduct",
-    "CpvParameter",
-    "CpvBatch",
-    "CpvValue",
-    "CpvImportTask",
     "Deviation",
     "CAPA",
+    "CapaPlanTrack",
     "QualityAiAnalysisLog",
-    "DeviationAiSession",
-    "DeviationAiSessionAttachment",
     "ChangeControl",
     "ChangeActionPlan",
-    "DeviationInvestigationPushRecord",
-    "CapaPlanTrack",
     "ValidationRecord",
     "EquipmentQualificationRecord",
     "ProcessValidationRecord",
@@ -87,27 +85,38 @@ __all__ = [
     "DepartmentContact",
     "DepartmentWeeklyConfirmation",
     "AttachmentReview",
+    "DeviationInvestigationPushRecord",
     "QualityFeishuAppSettings",
     "QualityFeishuEntitySetting",
+    "DeviationAiSession",
+    "DeviationAiSessionAttachment",
+    "OotLimitProduct",
+    "OotLimitItem",
+    "FinishedTrendAlertNotification",
+    "LiquidMaterialInspection",
+    "SolidMaterialInspection",
+    "FinishedProductInspection",
+    "LabInstrument",
+    "LabItem",
+    "InspectionRecord",
+    "ProductQualityRecord",
+    "Supplier",
+    "ReturnRecallRecord",
+    "ComplaintRecord",
+    "OosOotRecord",
+    "DocumentDepartment",
+    "DocumentEntry",
+    "CpvProduct",
+    "CpvParameter",
+    "CpvBatch",
+    "CpvValue",
+    "CpvImportTask",
+    "SupplierQualification",
+    "ProductQualityStandardItem",
     "QualityFeishuReadSourceRoot",
     "QualityFeishuReadResource",
     "QualityFeishuReadField",
     "QualityFeishuReadRecord",
     "QualityFeishuReadPageBinding",
     "QualityFeishuReadSyncRun",
-    "LabItem",
-    "LabInstrument",
-    "InspectionRecord",
-    "FinishedProductInspection",
-    "SolidMaterialInspection",
-    "LiquidMaterialInspection",
-    "OosOotRecord",
-    "OotLimitProduct",
-    "OotLimitItem",
-    "Supplier",
-    "SupplierQualification",
-    "ComplaintRecord",
-    "ReturnRecallRecord",
-    "ProductQualityRecord",
-    "ProductQualityStandardItem",
 ]

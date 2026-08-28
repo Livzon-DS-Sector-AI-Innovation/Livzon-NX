@@ -97,7 +97,7 @@ const categoryDescriptions: Record<PurchaseRequestCategory, string> = {
   office: '办公用品申购',
   'raw-auxiliary': '原辅料申购',
   'chemical-glass': '化玻申购',
-  electrical: '电器申购',
+  electrical: '电气申购',
   'advertising-printing': '广告/印刷申购',
   fire: '消防申购',
   packaging: '包材申购',
@@ -130,7 +130,7 @@ const approvalWorkflowSummaryCategories: Array<{
   category: PurchaseRequestCategory
 }> = [
   { label: '五金材料', category: 'hardware' },
-  { label: '电器', category: 'electrical' },
+  { label: '电气', category: 'electrical' },
   { label: '特防', category: 'labor-special' },
   { label: '加急单', category: 'urgent' },
   { label: '其他采购类型', category: 'office' },

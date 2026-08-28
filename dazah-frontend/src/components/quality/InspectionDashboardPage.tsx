@@ -23,10 +23,10 @@ import {
   fetchInspectionDashboard,
   fetchInspectionTrend,
   type InspectionDashboardResponse,
+  type InspectionDashboardLatestRecord,
 } from '@/lib/api/quality-inspection'
-import type { components } from '@/types/generated/schema'
 
-type LatestRecord = components['schemas']['InspectionDashboardLatestRecord']
+type LatestRecord = InspectionDashboardLatestRecord
 type TrendSelection = Pick<LatestRecord, 'resource_code' | 'subject' | 'inspection_item'>
 
 const TREND_RESOURCE_CODES = new Set([

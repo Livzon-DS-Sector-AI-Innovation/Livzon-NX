@@ -5,6 +5,7 @@ from pathlib import Path
 
 _CONFIG_CACHE = None
 _ENV_LOADED = False
+_ENV_VALUES = None
 
 def get_hermes_home():
     """Return the Hermes home directory as a Path object."""
@@ -22,8 +23,10 @@ def get_config_path() -> Path:
     return get_hermes_home() / "config.yaml"
 
 def get_env_path() -> Path:
-    """Return the .env path."""
-    return get_hermes_home() / ".env"
+    """Return the single root environment file for the active environment."""
+    app_env = os.environ.get("APP_ENV", "development").strip().lower()
+    filename = ".env" if app_env == "production" else ".env.local"
+    return Path(__file__).resolve().parents[2] / filename
 
 def load_config(**kwargs) -> dict:
     """Load and return config dict. Cached after first load."""
@@ -42,15 +45,24 @@ def load_config(**kwargs) -> dict:
     return _CONFIG_CACHE
 
 def load_env(*args, **kwargs):
-    """Load .env file. No-op in slim mode."""
-    global _ENV_LOADED
+    """Load and return values from the selected root environment file."""
+    global _ENV_LOADED, _ENV_VALUES
     if not _ENV_LOADED:
         try:
-            from dotenv import load_dotenv
-            load_dotenv(get_env_path(), override=False)
+            from dotenv import dotenv_values, load_dotenv
+
+            env_path = get_env_path()
+            values = dotenv_values(env_path)
+            _ENV_VALUES = {
+                key: value
+                for key, value in values.items()
+                if key and value is not None
+            }
+            load_dotenv(env_path, override=False)
         except Exception:
-            pass
+            _ENV_VALUES = {}
         _ENV_LOADED = True
+    return _ENV_VALUES or {}
 
 def read_raw_config(**kwargs) -> dict:
     """Read raw config without merging."""

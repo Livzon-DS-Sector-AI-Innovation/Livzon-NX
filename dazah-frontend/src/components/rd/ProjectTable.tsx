@@ -68,7 +68,7 @@ export function ProjectTable({ loading = false, onRefresh }: ProjectTableProps) 
           await deleteResearchProject(record.id)
           message.success('删除成功')
           onRefresh?.()
-        } catch (error: any) {
+        } catch (error) {
           message.error(error?.message || '删除失败')
         }
       }

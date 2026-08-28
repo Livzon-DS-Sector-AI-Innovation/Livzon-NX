@@ -64,7 +64,9 @@ class KnowledgeService:
         """删除知识库文章"""
         return await self.repo.delete_knowledge_article(article_id)
 
-    async def publish_article(self, article_id: uuid.UUID) -> SafetyKnowledgeArticle | None:
+    async def publish_article(
+        self, article_id: uuid.UUID
+    ) -> SafetyKnowledgeArticle | None:
         """发布文章（草稿→已发布）"""
         article = await self.repo.get_knowledge_article_by_id(article_id)
         if not article or article.status != "draft":
@@ -73,7 +75,9 @@ class KnowledgeService:
             article_id, {"status": "published"}
         )
 
-    async def archive_article(self, article_id: uuid.UUID) -> SafetyKnowledgeArticle | None:
+    async def archive_article(
+        self, article_id: uuid.UUID
+    ) -> SafetyKnowledgeArticle | None:
         """归档文章（已发布→已归档）"""
         article = await self.repo.get_knowledge_article_by_id(article_id)
         if not article or article.status != "published":
@@ -84,5 +88,3 @@ class KnowledgeService:
 
 
 # ==================== 风险作业报备 Services ====================
-
-

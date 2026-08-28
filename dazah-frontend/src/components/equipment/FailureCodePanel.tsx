@@ -34,7 +34,7 @@ export function FailureCodePanel({ onRefresh }: FailureCodePanelProps) {
           await deleteFailureCode(path, record.id)
           message.success('删除成功')
           onRefresh?.()
-        } catch (error: any) {
+        } catch (error) {
           message.error(error?.message || '删除失败')
         }
       },

@@ -15,13 +15,21 @@
 ## Quick Start
 
 ```bash
+# Run this once from the workspace root. Development uses .env.local;
+# production uses the root .env supplied to the production Compose stack.
+cd ..
+cp .env.local.example .env.local
+cd dazah-frontend
+
 # Install dependencies
 pnpm install
 
 # Start development server
-docker compose -f docker-compose.dev.yml up -d --build
+cd ..
+docker compose --env-file .env.local -f compose.dev.yml up -d --build
 
 # Or run directly
+cd dazah-frontend
 pnpm dev --port 3000
 ```
 
@@ -71,11 +79,13 @@ The frontend connects to `dazah-backend` (FastAPI):
 ## Development
 
 ```bash
+# Run from the workspace root.
+cd ..
 # Development with hot reload (recommended)
-docker compose -f docker-compose.dev.yml up -d --build
+docker compose --env-file .env.local -f compose.dev.yml up -d --build
 
 # Production build
-docker compose up -d --build
+docker compose --env-file .env -f compose.yml up -d --build
 ```
 
 **Important**: Always use `docker-compose.dev.yml` for daily development to get hot reload.
@@ -84,7 +94,9 @@ If file changes are still not reflected immediately in Docker Desktop/Windows,
 recreate the dev container so the polling watcher settings are applied:
 
 ```bash
-docker compose -f docker-compose.dev.yml up -d --force-recreate frontend
+# Run from the workspace root.
+cd ..
+docker compose --env-file .env.local -f compose.dev.yml up -d --force-recreate frontend
 ```
 
 When accessing the dev server through a LAN IP or custom host, add it to

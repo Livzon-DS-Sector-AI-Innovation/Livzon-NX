@@ -50,6 +50,12 @@ from types import SimpleNamespace
 from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
 from urllib.parse import urlparse, parse_qs, urlunparse
 
+from agent.credential_pool import load_pool
+from agent.portal_tags import nous_portal_tags as _nous_portal_tags
+from hermes_cli.config import get_hermes_home
+from hermes_constants import OPENROUTER_BASE_URL
+from utils import base_url_host_matches, base_url_hostname, normalize_proxy_env_vars
+
 # NOTE: `from openai import OpenAI` is deliberately NOT at module top — the
 # openai SDK pulls a large type tree (~240 ms cold, including responses/*,
 # graders/*). We expose `OpenAI` here as a thin proxy that imports the SDK on
@@ -98,11 +104,6 @@ class _OpenAIProxy:
 
 
 OpenAI = _OpenAIProxy()  # module-level name, resolves lazily on call/isinstance
-
-from agent.credential_pool import load_pool
-from hermes_cli.config import get_hermes_home
-from hermes_constants import OPENROUTER_BASE_URL
-from utils import base_url_host_matches, base_url_hostname, normalize_proxy_env_vars
 
 logger = logging.getLogger(__name__)
 
@@ -389,9 +390,6 @@ def build_nvidia_nim_headers(base_url: str | None) -> dict:
 # in lockstep with hermes_cli.__version__ across every Portal call site
 # (main loop, aux, compression, web_extract). Do not inline a literal here;
 # see agent/portal_tags.py for the rationale.
-from agent.portal_tags import nous_portal_tags as _nous_portal_tags
-
-
 def _nous_extra_body() -> dict:
     """Return a fresh Nous Portal ``extra_body`` dict.
 

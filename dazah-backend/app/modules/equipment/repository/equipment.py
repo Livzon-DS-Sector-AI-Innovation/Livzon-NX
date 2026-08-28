@@ -320,7 +320,10 @@ async def create_equipment(
     await db.flush()
 
     # eager re-fetch
-    return await _refetch_equipment(db, equipment.id)
+    refetched = await _refetch_equipment(db, equipment.id)
+    if refetched is None:
+        raise RuntimeError("设备创建后读取失败")
+    return refetched
 
 
 async def _refetch_equipment(
@@ -330,7 +333,9 @@ async def _refetch_equipment(
     result = await db.execute(
         select(Equipment)
         .options(
-            selectinload(Equipment.category_links).selectinload(EquipmentCategoryLink.category),
+            selectinload(Equipment.category_links).selectinload(
+                EquipmentCategoryLink.category
+            ),
             selectinload(Equipment.location),
         )
         .where(Equipment.id == equipment_id, Equipment.is_deleted == False)  # noqa: E712
@@ -346,7 +351,9 @@ async def get_equipment_by_id(
     result = await db.execute(
         select(Equipment)
         .options(
-            selectinload(Equipment.category_links).selectinload(EquipmentCategoryLink.category),
+            selectinload(Equipment.category_links).selectinload(
+                EquipmentCategoryLink.category
+            ),
             selectinload(Equipment.location),
         )
         .where(
@@ -385,7 +392,9 @@ async def get_equipments(
     query = (
         select(Equipment)
         .options(
-            selectinload(Equipment.category_links).selectinload(EquipmentCategoryLink.category),
+            selectinload(Equipment.category_links).selectinload(
+                EquipmentCategoryLink.category
+            ),
             selectinload(Equipment.location),
         )
         .where(Equipment.is_deleted == False)  # noqa: E712
@@ -480,7 +489,9 @@ async def update_equipment(
         # 创建新的关联（之前不存在的分类）
         for cid in cids:
             if cid not in existing_by_cid:
-                db.add(EquipmentCategoryLink(equipment_id=equipment_id, category_id=cid))
+                db.add(
+                    EquipmentCategoryLink(equipment_id=equipment_id, category_id=cid)
+                )
 
         await db.flush()
 
@@ -581,10 +592,15 @@ async def get_equipment_statistics(db: AsyncSession) -> dict[str, Any]:
 
     # 按分类统计（通过联结表）
     category_result = await db.execute(
-        select(EquipmentCategory.name, func.count(func.distinct(EquipmentCategoryLink.equipment_id)))
+        select(
+            EquipmentCategory.name,
+            func.count(func.distinct(EquipmentCategoryLink.equipment_id)),
+        )
         .select_from(EquipmentCategoryLink)
         .join(Equipment, Equipment.id == EquipmentCategoryLink.equipment_id)
-        .join(EquipmentCategory, EquipmentCategory.id == EquipmentCategoryLink.category_id)
+        .join(
+            EquipmentCategory, EquipmentCategory.id == EquipmentCategoryLink.category_id
+        )
         .where(
             Equipment.is_deleted == False,  # noqa: E712
             EquipmentCategoryLink.is_deleted == False,  # noqa: E712
@@ -676,7 +692,5 @@ async def get_department_leader_user_id(
 
 async def get_user_name_by_id(db: AsyncSession, user_id: uuid.UUID) -> str | None:
     """根据 User.id 获取用户姓名"""
-    result = await db.execute(
-        select(User.name).where(User.id == user_id)
-    )
+    result = await db.execute(select(User.name).where(User.id == user_id))
     return result.scalar_one_or_none()

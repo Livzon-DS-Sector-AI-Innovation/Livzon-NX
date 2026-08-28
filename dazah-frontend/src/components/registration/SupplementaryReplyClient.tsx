@@ -40,15 +40,15 @@ export default function SupplementaryReplyClient({
       })
       setReplies(res.data)
       setTotal(res.meta?.total || 0)
-    } catch (err: any) {
-      message.error(err.message || '加载数据失败')
+    } catch (err) {
+      message.error((err instanceof Error ? err.message : '') || '加载数据失败')
     } finally {
       setLoading(false)
     }
   }, [drugName, page, pageSize])
 
   useEffect(() => {
-    loadData()
+    queueMicrotask(loadData)
   }, [loadData])
 
   const handlePageChange = (newPage: number, newPageSize: number) => {
@@ -92,8 +92,8 @@ export default function SupplementaryReplyClient({
       } else {
         message.error(result.message)
       }
-    } catch (err: any) {
-      message.error(err.message || '生成失败')
+    } catch (err) {
+      message.error((err instanceof Error ? err.message : '') || '生成失败')
     } finally {
       setGenerating(false)
     }
@@ -104,8 +104,8 @@ export default function SupplementaryReplyClient({
       await deleteSupplementaryReplyAction(id)
       message.success('删除成功')
       loadData()
-    } catch (err: any) {
-      message.error(err.message || '删除失败')
+    } catch (err) {
+      message.error((err instanceof Error ? err.message : '') || '删除失败')
     }
   }
 

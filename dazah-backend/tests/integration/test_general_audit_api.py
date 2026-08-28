@@ -1,4 +1,5 @@
 import uuid
+from typing import Any
 
 import pytest
 
@@ -20,7 +21,7 @@ def _user(*, role: str) -> User:
 
 @pytest.mark.asyncio
 async def test_general_audit_logs_require_admin_and_exclude_conversations(
-    client,
+    client: Any,
 ) -> None:
     unauthenticated = await client.get(
         "/api/v1/audit/logs",

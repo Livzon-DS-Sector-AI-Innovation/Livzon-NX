@@ -7,6 +7,7 @@ import asyncio
 import json
 import logging
 import os
+from typing import Any
 from uuid import UUID
 
 import httpx
@@ -19,16 +20,18 @@ from app.modules.safety.feishu.client import (
 logger = logging.getLogger(__name__)
 
 
-def _json_dumps(obj) -> str:
+def _json_dumps(obj: Any) -> str:
     """JSON 序列化，自动将 UUID 转为字符串。"""
-    return json.dumps(obj, ensure_ascii=False, default=lambda o: str(o) if isinstance(o, UUID) else o)
+    return json.dumps(
+        obj, ensure_ascii=False, default=lambda o: str(o) if isinstance(o, UUID) else o
+    )
 
 
 async def send_user_card(
     open_id: str,
     title: str,
     content: str,
-    elements: list[dict] | None = None,
+    elements: list[dict[str, Any]] | None = None,
     id_type: str = "open_id",
 ) -> bool:
     """使用安全模块飞书应用发送卡片消息给单个用户（DM）。
@@ -48,12 +51,12 @@ async def send_user_card(
         client = await get_safety_feishu_client()
         token = await get_safety_tenant_token(client)
 
-        from lark_oapi.api.im.v1 import (
+        from lark_oapi.api.im.v1 import (  # type: ignore[import-untyped]
             CreateMessageRequest,
             CreateMessageRequestBody,
         )
 
-        card = {
+        card: dict[str, Any] = {
             "config": {"wide_screen_mode": True},
             "header": {
                 "title": {"tag": "plain_text", "content": title},
@@ -85,7 +88,9 @@ async def send_user_card(
         if not resp.success():
             logger.error(
                 "安全模块 send_user_card 失败: open_id=%s, code=%s, msg=%s",
-                open_id, resp.code, resp.msg,
+                open_id,
+                resp.code,
+                resp.msg,
             )
             return False
         logger.info("安全模块卡片已发送: open_id=%s, title=%s", open_id, title)
@@ -95,7 +100,7 @@ async def send_user_card(
         return False
 
 
-async def update_card(message_id: str, card: dict) -> bool:
+async def update_card(message_id: str, card: dict[str, Any]) -> bool:
     """更新已发送的卡片消息（PATCH）。
 
     Args:
@@ -120,11 +125,7 @@ async def update_card(message_id: str, card: dict) -> bool:
         req = (
             PatchMessageRequest.builder()
             .message_id(message_id)
-            .request_body(
-                PatchMessageRequestBody.builder()
-                .content(card_json)
-                .build()
-            )
+            .request_body(PatchMessageRequestBody.builder().content(card_json).build())
             .build()
         )
         req.headers["Authorization"] = f"Bearer {token}"
@@ -132,7 +133,9 @@ async def update_card(message_id: str, card: dict) -> bool:
         if not resp.success():
             logger.error(
                 "安全模块 update_card 失败: message_id=%s, code=%s, msg=%s",
-                message_id, resp.code, resp.msg,
+                message_id,
+                resp.code,
+                resp.msg,
             )
             return False
         logger.info("安全模块卡片已更新: message_id=%s", message_id)
@@ -146,7 +149,7 @@ async def send_group_card(
     chat_id: str,
     title: str,
     content: str,
-    elements: list[dict] | None = None,
+    elements: list[dict[str, Any]] | None = None,
     header_template: str = "orange",
 ) -> str | None:
     """使用安全模块飞书应用发送卡片消息到群聊。
@@ -170,7 +173,7 @@ async def send_group_card(
             CreateMessageRequestBody,
         )
 
-        card = {
+        card: dict[str, Any] = {
             "config": {"wide_screen_mode": True},
             "header": {
                 "title": {"tag": "plain_text", "content": title},
@@ -202,11 +205,15 @@ async def send_group_card(
         if not resp.success():
             logger.error(
                 "安全模块 send_group_card 失败: chat_id=%s, code=%s, msg=%s",
-                chat_id, resp.code, resp.msg,
+                chat_id,
+                resp.code,
+                resp.msg,
             )
             return None
         message_id = resp.data.message_id if resp.data else None
-        logger.info("安全模块群卡片已发送: chat_id=%s, message_id=%s", chat_id, message_id)
+        logger.info(
+            "安全模块群卡片已发送: chat_id=%s, message_id=%s", chat_id, message_id
+        )
         return message_id
     except Exception:
         logger.exception("安全模块 send_group_card 异常")
@@ -217,7 +224,7 @@ async def build_card(
     title: str,
     content: str,
     header_template: str = "orange",
-    elements: list[dict] | None = None,
+    elements: list[dict[str, Any]] | None = None,
 ) -> str:
     """构建飞书卡片 JSON 字符串。
 
@@ -230,7 +237,7 @@ async def build_card(
     Returns:
         飞书卡片 JSON 字符串
     """
-    card = {
+    card: dict[str, Any] = {
         "config": {"wide_screen_mode": True},
         "header": {
             "title": {"tag": "plain_text", "content": title},
@@ -275,8 +282,10 @@ async def upload_image_to_feishu(file_path: str) -> str | None:
                     data = resp.json()
                     if data.get("code") == 0:
                         image_key = data.get("data", {}).get("image_key", "")
-                        if image_key:
-                            logger.info("图片上传飞书成功: %s → %s", file_path, image_key)
+                        if isinstance(image_key, str) and image_key:
+                            logger.info(
+                                "图片上传飞书成功: %s → %s", file_path, image_key
+                            )
                             return image_key
                     logger.error("上传图片到飞书失败: %s", data)
                 else:

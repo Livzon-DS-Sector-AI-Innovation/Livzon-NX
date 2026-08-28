@@ -1,7 +1,8 @@
 """Failure and recovery tests for the reusable Feishu read mirror."""
 
 from datetime import UTC, datetime
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
@@ -12,10 +13,12 @@ from app.platform.integrations.feishu import read_mirror
 from app.platform.integrations.feishu.read_mirror import (
     ModuleFeishuReadMirrorService,
 )
-from app.platform.integrations.feishu.read_scheduler import PRODUCTION_MODELS
+from app.platform.integrations.feishu.read_scheduler import QUALITY_MODELS
+
+SimpleNamespace: Any = _SimpleNamespace
 
 
-def _session(**overrides):
+def _session(**overrides: Any) -> Any:
     values = {
         "execute": AsyncMock(),
         "scalar": AsyncMock(),
@@ -29,19 +32,21 @@ def _session(**overrides):
     return SimpleNamespace(**values)
 
 
-def _service(session=None, *, app_id="app", app_secret="secret"):
+def _service(
+    session: Any = None, *, app_id: Any = "app", app_secret: Any = "secret"
+) -> Any:
     return ModuleFeishuReadMirrorService(
         session or _session(),
-        module_code="production",
+        module_code="quality",
         app_id=app_id,
         app_secret=app_secret,
-        models=PRODUCTION_MODELS,
+        models=QUALITY_MODELS,
     )
 
 
 @pytest.mark.asyncio
 async def test_read_mirror_lists_roots_and_resources() -> None:
-    result = SimpleNamespace(
+    result: Any = SimpleNamespace(
         scalars=lambda: SimpleNamespace(all=lambda: ["one", "two"])
     )
     session = _session(execute=AsyncMock(return_value=result))
@@ -52,7 +57,7 @@ async def test_read_mirror_lists_roots_and_resources() -> None:
 
 @pytest.mark.asyncio
 async def test_create_root_rejects_invalid_and_duplicate_inputs(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     service = _service()
     with pytest.raises(AppException, match="wiki"):
@@ -77,7 +82,7 @@ async def test_create_root_rejects_invalid_and_duplicate_inputs(
         )
 
     monkeypatch.setattr(read_mirror, "parse_feishu_root_token", lambda *_args: "token")
-    existing = SimpleNamespace(is_deleted=False)
+    existing: Any = SimpleNamespace(is_deleted=False)
     service.session.scalar.return_value = existing
     with pytest.raises(AppException, match="已存在"):
         await service.create_root(
@@ -89,9 +94,9 @@ async def test_create_root_rejects_invalid_and_duplicate_inputs(
 
 
 @pytest.mark.asyncio
-async def test_create_root_restores_deleted_and_creates_new(monkeypatch) -> None:
+async def test_create_root_restores_deleted_and_creates_new(monkeypatch: Any) -> None:
     monkeypatch.setattr(read_mirror, "parse_feishu_root_token", lambda *_args: "token")
-    deleted = SimpleNamespace(
+    deleted: Any = SimpleNamespace(
         is_deleted=True,
         name="旧名",
         source_url="old",
@@ -100,7 +105,7 @@ async def test_create_root_restores_deleted_and_creates_new(monkeypatch) -> None
         discovery_error="old error",
     )
     session = _session(scalar=AsyncMock(side_effect=[deleted, None]))
-    added = []
+    added: list[Any] = []
     session.add = added.append
     service = _service(session)
 
@@ -126,8 +131,8 @@ async def test_create_root_restores_deleted_and_creates_new(monkeypatch) -> None
 
 
 @pytest.mark.asyncio
-async def test_delete_root_marks_it_inactive(monkeypatch) -> None:
-    root = SimpleNamespace(is_deleted=False, is_active=True)
+async def test_delete_root_marks_it_inactive(monkeypatch: Any) -> None:
+    root: Any = SimpleNamespace(is_deleted=False, is_active=True)
     service = _service()
     monkeypatch.setattr(service, "_root", AsyncMock(return_value=root))
     await service.delete_root(uuid4())
@@ -137,9 +142,9 @@ async def test_delete_root_marks_it_inactive(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_discover_root_handles_tables_and_skips_malformed_items(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
-    root = SimpleNamespace(
+    root: Any = SimpleNamespace(
         source_type="base",
         root_token="app-token",
         name="入口",
@@ -147,7 +152,7 @@ async def test_discover_root_handles_tables_and_skips_malformed_items(
         discovery_error="old",
         last_discovered_at=None,
     )
-    client = SimpleNamespace(
+    client: Any = SimpleNamespace(
         list_tables=AsyncMock(
             return_value=[
                 {"table_id": "table", "name": "数据表"},
@@ -158,7 +163,7 @@ async def test_discover_root_handles_tables_and_skips_malformed_items(
     service = _service()
     monkeypatch.setattr(service, "_root", AsyncMock(return_value=root))
     monkeypatch.setattr(service, "_client", lambda _token: client)
-    upsert = AsyncMock(return_value="resource")
+    upsert: Any = AsyncMock(return_value="resource")
     monkeypatch.setattr(service, "_upsert_resource", upsert)
 
     assert await service.discover_root(uuid4()) == ["resource"]
@@ -167,8 +172,8 @@ async def test_discover_root_handles_tables_and_skips_malformed_items(
 
 
 @pytest.mark.asyncio
-async def test_discover_root_records_sanitized_failure(monkeypatch) -> None:
-    root = SimpleNamespace(
+async def test_discover_root_records_sanitized_failure(monkeypatch: Any) -> None:
+    root: Any = SimpleNamespace(
         source_type="wiki",
         root_token="wiki",
         discovery_status="pending",
@@ -192,15 +197,15 @@ async def test_discover_root_records_sanitized_failure(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_sync_resource_lock_conflict_and_release(monkeypatch) -> None:
+async def test_sync_resource_lock_conflict_and_release(monkeypatch: Any) -> None:
     service = _service()
-    monkeypatch.setattr(read_mirror.redis_client, "set", AsyncMock(return_value=False))
+    monkeypatch.setattr(read_mirror.redis_client, "set", AsyncMock(return_value=False))  # type: ignore[attr-defined]
     with pytest.raises(AppException, match="正在同步"):
         await service.sync_resource(uuid4())
 
-    monkeypatch.setattr(read_mirror.redis_client, "set", AsyncMock(return_value=True))
-    release = AsyncMock()
-    monkeypatch.setattr(read_mirror.redis_client, "eval", release)
+    monkeypatch.setattr(read_mirror.redis_client, "set", AsyncMock(return_value=True))  # type: ignore[attr-defined]
+    release: Any = AsyncMock()
+    monkeypatch.setattr(read_mirror.redis_client, "eval", release)  # type: ignore[attr-defined]
     monkeypatch.setattr(
         service,
         "_sync_resource_locked",
@@ -213,9 +218,9 @@ async def test_sync_resource_lock_conflict_and_release(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_locked_sync_paginates_deduplicates_and_commits(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
-    resource = SimpleNamespace(
+    resource: Any = SimpleNamespace(
         id=uuid4(),
         app_token="app-token",
         table_id="table",
@@ -225,7 +230,7 @@ async def test_locked_sync_paginates_deduplicates_and_commits(
         active_mirror_version=None,
         last_complete_sync_at=None,
     )
-    client = SimpleNamespace(
+    client: Any = SimpleNamespace(
         list_fields=AsyncMock(
             return_value=[{"field_id": "field", "field_name": "名称"}]
         ),
@@ -258,7 +263,7 @@ async def test_locked_sync_paginates_deduplicates_and_commits(
             ]
         ),
     )
-    added = []
+    added: list[Any] = []
     session = _session()
     session.add = added.append
     service = _service(session)
@@ -267,11 +272,7 @@ async def test_locked_sync_paginates_deduplicates_and_commits(
     monkeypatch.setattr(
         service,
         "_replace_fields",
-        AsyncMock(
-            return_value=[
-                SimpleNamespace(field_id="field", field_name="名称")
-            ]
-        ),
+        AsyncMock(return_value=[SimpleNamespace(field_id="field", field_name="名称")]),
     )
 
     result = await service._sync_resource_locked(resource.id)
@@ -283,15 +284,15 @@ async def test_locked_sync_paginates_deduplicates_and_commits(
 
 
 @pytest.mark.asyncio
-async def test_locked_sync_records_incomplete_page_failure(monkeypatch) -> None:
-    resource = SimpleNamespace(
+async def test_locked_sync_records_incomplete_page_failure(monkeypatch: Any) -> None:
+    resource: Any = SimpleNamespace(
         id=uuid4(),
         app_token="app-token",
         table_id="table",
         sync_status="pending",
         sync_error=None,
     )
-    failed_run = SimpleNamespace(
+    failed_run: Any = SimpleNamespace(
         status="running",
         error_message=None,
         completed_at=None,
@@ -324,11 +325,11 @@ async def test_locked_sync_records_incomplete_page_failure(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_replace_bindings_updates_creates_and_rejects_duplicates(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     existing_resource_id = uuid4()
     new_resource_id = uuid4()
-    existing_binding = SimpleNamespace(
+    existing_binding: Any = SimpleNamespace(
         resource_id=existing_resource_id,
         is_enabled=True,
         tab_name="旧",
@@ -336,10 +337,10 @@ async def test_replace_bindings_updates_creates_and_rejects_duplicates(
         is_default=False,
         visible_field_ids=[],
     )
-    result = SimpleNamespace(
+    result: Any = SimpleNamespace(
         scalars=lambda: SimpleNamespace(all=lambda: [existing_binding])
     )
-    added = []
+    added: list[Any] = []
     session = _session(execute=AsyncMock(return_value=result))
     session.add = added.append
     service = _service(session)
@@ -390,13 +391,13 @@ async def test_replace_bindings_updates_creates_and_rejects_duplicates(
 
 
 @pytest.mark.asyncio
-async def test_page_data_and_empty_page_records(monkeypatch) -> None:
-    binding = SimpleNamespace(id=uuid4())
-    resource = SimpleNamespace(
+async def test_page_data_and_empty_page_records(monkeypatch: Any) -> None:
+    binding: Any = SimpleNamespace(id=uuid4())
+    resource: Any = SimpleNamespace(
         id=uuid4(),
         active_mirror_version=None,
     )
-    rows = SimpleNamespace(all=lambda: [(binding, resource)])
+    rows: Any = SimpleNamespace(all=lambda: [(binding, resource)])
     session = _session(execute=AsyncMock(return_value=rows))
     service = _service(session)
     monkeypatch.setattr(
@@ -404,9 +405,7 @@ async def test_page_data_and_empty_page_records(monkeypatch) -> None:
         "_binding_payload",
         AsyncMock(return_value={"id": str(binding.id)}),
     )
-    assert (await service.page_data("page"))["bindings"] == [
-        {"id": str(binding.id)}
-    ]
+    assert (await service.page_data("page"))["bindings"] == [{"id": str(binding.id)}]
 
     monkeypatch.setattr(
         service,
@@ -441,7 +440,7 @@ async def test_page_data_and_empty_page_records(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_replace_fields_updates_creates_and_soft_deletes() -> None:
-    retained = SimpleNamespace(
+    retained: Any = SimpleNamespace(
         field_id="keep",
         field_name="旧",
         field_type="1",
@@ -449,11 +448,11 @@ async def test_replace_fields_updates_creates_and_soft_deletes() -> None:
         sort_order=9,
         is_deleted=True,
     )
-    removed = SimpleNamespace(field_id="remove", is_deleted=False)
-    result = SimpleNamespace(
+    removed: Any = SimpleNamespace(field_id="remove", is_deleted=False)
+    result: Any = SimpleNamespace(
         scalars=lambda: SimpleNamespace(all=lambda: [retained, removed])
     )
-    added = []
+    added: list[Any] = []
     session = _session(execute=AsyncMock(return_value=result))
     session.add = added.append
     service = _service(session)
@@ -480,13 +479,13 @@ async def test_replace_fields_updates_creates_and_soft_deletes() -> None:
 
 @pytest.mark.asyncio
 async def test_upsert_resource_handles_create_and_update() -> None:
-    root = SimpleNamespace(id=uuid4())
-    existing = SimpleNamespace(
+    root: Any = SimpleNamespace(id=uuid4())
+    existing: Any = SimpleNamespace(
         source_root_id=None,
         title="旧名",
         source_path=[],
     )
-    added = []
+    added: list[Any] = []
     session = _session(scalar=AsyncMock(side_effect=[None, existing]))
     session.add = added.append
     service = _service(session)
@@ -512,7 +511,7 @@ async def test_upsert_resource_handles_create_and_update() -> None:
 
 
 @pytest.mark.asyncio
-async def test_lookup_and_download_reject_missing_resources(monkeypatch) -> None:
+async def test_lookup_and_download_reject_missing_resources(monkeypatch: Any) -> None:
     service = _service()
     service.session.scalar.return_value = None
     with pytest.raises(AppException, match="入口不存在"):
@@ -520,7 +519,7 @@ async def test_lookup_and_download_reject_missing_resources(monkeypatch) -> None
     with pytest.raises(AppException, match="资源不存在"):
         await service._resource(uuid4())
 
-    no_row = SimpleNamespace(first=lambda: None)
+    no_row: Any = SimpleNamespace(first=lambda: None)
     service.session.execute.return_value = no_row
     with pytest.raises(AppException, match="绑定不存在"):
         await service._bound_resource("page", uuid4())
@@ -544,15 +543,18 @@ def test_read_mirror_helpers_cover_nested_attachments_and_bad_values() -> None:
         "target",
     )
     assert not service._contains_attachment_token("target", "target")
-    assert service._field_payload(
-        SimpleNamespace(
-            field_id="field",
-            field_name="名称",
-            field_type="invalid",
-            property={},
-            sort_order=1,
-        )
-    )["type"] is None
+    assert (
+        service._field_payload(
+            SimpleNamespace(
+                field_id="field",
+                field_name="名称",
+                field_type="invalid",
+                property={},
+                sort_order=1,
+            )
+        )["type"]
+        is None
+    )
     assert service._timestamp(None) is None
     assert service._timestamp(1_767_225_600_000) == datetime(
         2026,

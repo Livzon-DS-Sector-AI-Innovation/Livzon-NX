@@ -1,6 +1,7 @@
 """Quality Feishu settings models."""
 
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import JSON, Boolean, DateTime, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
@@ -15,6 +16,14 @@ class QualityFeishuAppSettings(BaseModel):
     app_id: Mapped[str] = mapped_column(String(100), nullable=False)
     app_secret: Mapped[str] = mapped_column(Text, nullable=False)
     app_token: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    deviation_report_form_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    deviation_investigation_push_form_url: Mapped[str | None] = mapped_column(
+        Text, nullable=True
+    )
+    oos_oot_report_form_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    oos_oot_investigation_push_form_url: Mapped[str | None] = mapped_column(
+        Text, nullable=True
+    )
     is_enabled: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
@@ -57,7 +66,9 @@ class QualityFeishuEntitySetting(BaseModel):
         default=True,
         server_default="true",
     )
-    field_mappings: Mapped[list | None] = mapped_column(JSON, nullable=True, default=list)
+    field_mappings: Mapped[list[Any] | None] = mapped_column(
+        JSON, nullable=True, default=list
+    )
     sort_order: Mapped[int] = mapped_column(
         Integer,
         nullable=False,

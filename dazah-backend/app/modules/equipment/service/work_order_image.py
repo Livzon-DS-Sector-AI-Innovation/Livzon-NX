@@ -19,7 +19,8 @@ async def upload_images(
     work_order_id: uuid.UUID,
     files: list[UploadFile],
 ) -> list[WorkOrderImage]:
-    from app.core.storage import is_enabled as minio_enabled, upload_object
+    from app.core.storage import is_enabled as minio_enabled
+    from app.core.storage import upload_object
 
     settings = get_settings()
     wo = await repo.get_work_order_by_id(db, work_order_id)
@@ -67,12 +68,15 @@ async def upload_images(
                 f.write(content)
             stored_path = file_path
 
-        image = await repo.create_image(db, {
-            "work_order_id": work_order_id,
-            "file_name": file.filename or stored_name,
-            "file_path": stored_path,
-            "file_size": file_size,
-        })
+        image = await repo.create_image(
+            db,
+            {
+                "work_order_id": work_order_id,
+                "file_name": file.filename or stored_name,
+                "file_path": stored_path,
+                "file_size": file_size,
+            },
+        )
         images.append(image)
 
     return images
@@ -85,7 +89,8 @@ async def get_images(
 
 
 async def delete_image(db: AsyncSession, image_id: uuid.UUID) -> None:
-    from app.core.storage import delete_object, is_enabled as minio_enabled
+    from app.core.storage import delete_object
+    from app.core.storage import is_enabled as minio_enabled
 
     image = await repo.get_image_by_id(db, image_id)
     if not image:

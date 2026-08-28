@@ -13,7 +13,6 @@ from app.core.deps import CurrentUser
 from app.core.response import paginated_response, success_response
 from app.modules.quality.schemas.external_quality import (
     ComplaintListResponse,
-    ComplaintOut,
     ComplaintResponse,
     CompleteProductQualityRecordRequest,
     CompleteReturnRecallRequest,
@@ -32,7 +31,6 @@ from app.modules.quality.schemas.external_quality import (
     ProductQualityStandardItemResponse,
     RespondComplaintRequest,
     ReturnRecallListResponse,
-    ReturnRecallOut,
     ReturnRecallResponse,
     StartReturnRecallProcessingRequest,
     SupplierListResponse,
@@ -47,6 +45,12 @@ from app.modules.quality.schemas.external_quality import (
     UpdateReturnRecallRequest,
     UpdateSupplierQualificationRequest,
     UpdateSupplierRequest,
+)
+from app.modules.quality.schemas.external_quality import (
+    ExternalComplaintOut as ComplaintOut,
+)
+from app.modules.quality.schemas.external_quality import (
+    ExternalReturnRecallOut as ReturnRecallOut,
 )
 from app.modules.quality.service import external_quality as external_quality_service
 from app.modules.quality.service import external_quality_feishu

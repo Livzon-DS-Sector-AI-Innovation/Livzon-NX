@@ -1,11 +1,7 @@
-import { InspectionDashboardPage, InspectionQueryProvider } from '@/components/quality'
+import { InspectionDashboard } from '@/components/quality/inspection'
 
 export const dynamic = 'force-dynamic'
 
-export default function QualityInspectionPage() {
-  return (
-    <InspectionQueryProvider>
-      <InspectionDashboardPage />
-    </InspectionQueryProvider>
-  )
+export default function InspectionPage() {
+  return <InspectionDashboard />
 }

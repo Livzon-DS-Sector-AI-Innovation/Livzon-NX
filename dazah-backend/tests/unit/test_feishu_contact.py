@@ -1,15 +1,18 @@
 """Unit tests for Feishu contact mapping, pagination, and caching."""
 
 import json
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
 
 from app.platform.integrations.feishu import contact
 
+SimpleNamespace: Any = _SimpleNamespace
 
-def _raw_response(data: dict, *, success: bool = True):
+
+def _raw_response(data: dict[str, Any], *, success: bool = True) -> Any:
     return SimpleNamespace(
         success=lambda: success,
         code=0 if success else 1,
@@ -20,7 +23,7 @@ def _raw_response(data: dict, *, success: bool = True):
 
 
 def test_department_to_dict_normalizes_identifiers_and_order() -> None:
-    item = SimpleNamespace(
+    item: Any = SimpleNamespace(
         open_department_id="open-d1",
         department_id="raw-d1",
         name="生产部",
@@ -44,7 +47,7 @@ def test_department_to_dict_normalizes_identifiers_and_order() -> None:
 
 
 @pytest.mark.asyncio
-async def test_department_members_uses_cache(monkeypatch) -> None:
+async def test_department_members_uses_cache(monkeypatch: Any) -> None:
     cached = [{"user_id": "u1", "name": "张三"}]
     monkeypatch.setattr(
         contact,
@@ -55,21 +58,21 @@ async def test_department_members_uses_cache(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_contact_scope_collects_authorized_ids(monkeypatch) -> None:
-    data = SimpleNamespace(
+async def test_contact_scope_collects_authorized_ids(monkeypatch: Any) -> None:
+    data: Any = SimpleNamespace(
         department_ids=["d1"],
         user_ids=["u1"],
         group_ids=["g1"],
         has_more=False,
         page_token="",
     )
-    response = SimpleNamespace(
+    response: Any = SimpleNamespace(
         success=lambda: True,
         code=0,
         msg="",
         data=data,
     )
-    client = SimpleNamespace(
+    client: Any = SimpleNamespace(
         contact=SimpleNamespace(
             v3=SimpleNamespace(
                 scope=SimpleNamespace(alist=AsyncMock(return_value=response))
@@ -87,7 +90,7 @@ async def test_contact_scope_collects_authorized_ids(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_get_all_departments_deduplicates_and_normalizes_root(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     items = [
         SimpleNamespace(
@@ -109,17 +112,15 @@ async def test_get_all_departments_deduplicates_and_normalizes_root(
             parent_department_id="root",
         ),
     ]
-    data = SimpleNamespace(items=items, has_more=False, page_token="")
-    response = SimpleNamespace(
+    data: Any = SimpleNamespace(items=items, has_more=False, page_token="")
+    response: Any = SimpleNamespace(
         success=lambda: True,
         code=0,
         msg="",
         data=data,
     )
-    department_api = SimpleNamespace(
-        achildren=AsyncMock(return_value=response)
-    )
-    client = SimpleNamespace(
+    department_api: Any = SimpleNamespace(achildren=AsyncMock(return_value=response))
+    client: Any = SimpleNamespace(
         contact=SimpleNamespace(v3=SimpleNamespace(department=department_api))
     )
     monkeypatch.setattr(contact, "_get_feishu_client", AsyncMock(return_value=client))
@@ -132,7 +133,7 @@ async def test_get_all_departments_deduplicates_and_normalizes_root(
 
 
 @pytest.mark.asyncio
-async def test_department_members_fetches_pages_and_caches(monkeypatch) -> None:
+async def test_department_members_fetches_pages_and_caches(monkeypatch: Any) -> None:
     responses = [
         _raw_response(
             {
@@ -148,12 +149,12 @@ async def test_department_members_fetches_pages_and_caches(monkeypatch) -> None:
             }
         ),
     ]
-    user_api = SimpleNamespace(alist=AsyncMock(side_effect=responses))
-    client = SimpleNamespace(
+    user_api: Any = SimpleNamespace(alist=AsyncMock(side_effect=responses))
+    client: Any = SimpleNamespace(
         contact=SimpleNamespace(v3=SimpleNamespace(user=user_api))
     )
     monkeypatch.setattr(contact, "cache_get", AsyncMock(return_value=None))
-    cache_set = AsyncMock()
+    cache_set: Any = AsyncMock()
     monkeypatch.setattr(contact, "cache_set", cache_set)
     monkeypatch.setattr(contact, "_get_feishu_client", AsyncMock(return_value=client))
     monkeypatch.setattr(contact, "_get_tenant_token", AsyncMock(return_value="token"))
@@ -164,7 +165,7 @@ async def test_department_members_fetches_pages_and_caches(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_all_users_maps_raw_pages(monkeypatch) -> None:
+async def test_get_all_users_maps_raw_pages(monkeypatch: Any) -> None:
     response = _raw_response(
         {
             "items": [
@@ -178,9 +179,11 @@ async def test_get_all_users_maps_raw_pages(monkeypatch) -> None:
             "has_more": False,
         }
     )
-    client = SimpleNamespace(
+    client: Any = SimpleNamespace(
         contact=SimpleNamespace(
-            v3=SimpleNamespace(user=SimpleNamespace(alist=AsyncMock(return_value=response)))
+            v3=SimpleNamespace(
+                user=SimpleNamespace(alist=AsyncMock(return_value=response))
+            )
         )
     )
     monkeypatch.setattr(contact, "_get_feishu_client", AsyncMock(return_value=client))
@@ -201,14 +204,14 @@ async def test_get_all_users_maps_raw_pages(monkeypatch) -> None:
     ]
 
 
-def _user_object():
-    position = SimpleNamespace(
+def _user_object() -> Any:
+    position: Any = SimpleNamespace(
         position_code="P1",
         position_name="工程师",
         department_id="d1",
         is_major=True,
     )
-    department_path = SimpleNamespace(
+    department_path: Any = SimpleNamespace(
         department_id="d1",
         department_name=SimpleNamespace(name="生产部"),
     )
@@ -231,18 +234,20 @@ def _user_object():
 
 
 @pytest.mark.asyncio
-async def test_find_users_by_department_maps_nested_fields(monkeypatch) -> None:
-    data = SimpleNamespace(items=[_user_object()], has_more=False, page_token="")
-    response = SimpleNamespace(
+async def test_find_users_by_department_maps_nested_fields(monkeypatch: Any) -> None:
+    data: Any = SimpleNamespace(items=[_user_object()], has_more=False, page_token="")
+    response: Any = SimpleNamespace(
         success=lambda: True,
         code=0,
         msg="",
         data=data,
     )
-    client = SimpleNamespace(
+    client: Any = SimpleNamespace(
         contact=SimpleNamespace(
             v3=SimpleNamespace(
-                user=SimpleNamespace(afind_by_department=AsyncMock(return_value=response))
+                user=SimpleNamespace(
+                    afind_by_department=AsyncMock(return_value=response)
+                )
             )
         )
     )
@@ -256,15 +261,17 @@ async def test_find_users_by_department_maps_nested_fields(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_user_detail_maps_user_and_handles_api_failure(monkeypatch) -> None:
-    response = SimpleNamespace(
+async def test_get_user_detail_maps_user_and_handles_api_failure(
+    monkeypatch: Any,
+) -> None:
+    response: Any = SimpleNamespace(
         success=lambda: True,
         code=0,
         msg="",
         data=SimpleNamespace(user=_user_object()),
     )
-    user_api = SimpleNamespace(aget=AsyncMock(return_value=response))
-    client = SimpleNamespace(
+    user_api: Any = SimpleNamespace(aget=AsyncMock(return_value=response))
+    client: Any = SimpleNamespace(
         contact=SimpleNamespace(v3=SimpleNamespace(user=user_api))
     )
     monkeypatch.setattr(contact, "_get_feishu_client", AsyncMock(return_value=client))
@@ -280,7 +287,7 @@ async def test_get_user_detail_maps_user_and_handles_api_failure(monkeypatch) ->
 
 
 @pytest.mark.asyncio
-async def test_department_detail_and_leader_cache(monkeypatch) -> None:
+async def test_department_detail_and_leader_cache(monkeypatch: Any) -> None:
     detail_response = _raw_response(
         {
             "department": {
@@ -291,14 +298,14 @@ async def test_department_detail_and_leader_cache(monkeypatch) -> None:
             }
         }
     )
-    department_api = SimpleNamespace(aget=AsyncMock(return_value=detail_response))
-    client = SimpleNamespace(
+    department_api: Any = SimpleNamespace(aget=AsyncMock(return_value=detail_response))
+    client: Any = SimpleNamespace(
         contact=SimpleNamespace(v3=SimpleNamespace(department=department_api))
     )
     monkeypatch.setattr(contact, "_get_feishu_client", AsyncMock(return_value=client))
     monkeypatch.setattr(contact, "_get_tenant_token", AsyncMock(return_value="token"))
     monkeypatch.setattr(contact, "cache_get", AsyncMock(return_value=None))
-    cache_set = AsyncMock()
+    cache_set: Any = AsyncMock()
     monkeypatch.setattr(contact, "cache_set", cache_set)
 
     detail = await contact.get_department_detail("d1")
@@ -318,7 +325,7 @@ async def test_department_detail_and_leader_cache(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_membership_check(monkeypatch) -> None:
+async def test_membership_check(monkeypatch: Any) -> None:
     monkeypatch.setattr(
         contact,
         "get_department_members",

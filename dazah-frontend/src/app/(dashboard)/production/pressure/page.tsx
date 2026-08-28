@@ -77,6 +77,7 @@ export default function PressureDashboard() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/immutability
     loadData()
   }, [])
 

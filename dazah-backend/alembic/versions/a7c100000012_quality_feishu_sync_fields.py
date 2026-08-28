@@ -8,6 +8,7 @@ Create Date: 2026-07-03 17:40:00.000000
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+
 from alembic import op
 
 # revision identifiers, used by Alembic.
@@ -67,7 +68,8 @@ def _add_sync_columns(table_name: str) -> None:
     }
     constraint_name = f"uq_q_{table_name}_fbr"
     if (
-        "feishu_base_record_id" in {
+        "feishu_base_record_id"
+        in {
             column["name"]
             for column in inspector.get_columns(table_name, schema="quality")
         }
@@ -100,7 +102,9 @@ def downgrade() -> None:
     ):
         unique_constraints = {
             constraint["name"]
-            for constraint in inspector.get_unique_constraints(table_name, schema="quality")
+            for constraint in inspector.get_unique_constraints(
+                table_name, schema="quality"
+            )
             if constraint.get("name")
         }
         constraint_name = f"uq_q_{table_name}_fbr"
@@ -113,7 +117,8 @@ def downgrade() -> None:
             )
 
         existing_columns = {
-            column["name"] for column in inspector.get_columns(table_name, schema="quality")
+            column["name"]
+            for column in inspector.get_columns(table_name, schema="quality")
         }
         for column_name in (
             "feishu_synced_at",

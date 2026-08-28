@@ -4,11 +4,12 @@ CDE 国内药品技术指导原则 - 翻页测试
 测试分页功能，验证不同页的数据是否不同
 """
 
-import os
 import json
+import os
 import time
 from datetime import datetime
-from urllib.parse import urlparse, parse_qs
+from typing import Any
+from urllib.parse import parse_qs, urlparse
 
 os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "/tmp/playwright-browsers"
 
@@ -32,8 +33,9 @@ window.chrome = {runtime: {}};
 
 TARGET_URL = "https://www.cde.org.cn/zdyz/listpage/9cd8db3b7530c6fa0c86485e563f93c7"
 
-def main():
-    output = {
+
+def main() -> Any:
+    output: dict[str, Any] = {
         "timestamp": datetime.now().isoformat(),
         "target_url": TARGET_URL,
         "approach": "page-driven pagination test",
@@ -72,14 +74,18 @@ def main():
 
     context = browser.new_context(
         viewport={"width": 1920, "height": 1080},
-        user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        user_agent=(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        ),
         locale="zh-CN",
     )
     context.add_init_script(STEALTH_JS)
     page = context.new_page()
 
     # 监听所有 XHR/Fetch
-    def on_response(response):
+    def on_response(response: Any) -> Any:
         url = response.url
         if "cde.org.cn" not in url:
             return
@@ -107,7 +113,9 @@ def main():
         try:
             body = response.text()
             entry["response_length"] = len(body)
-            if body.strip().startswith("{") or "json" in response.headers.get("content-type", ""):
+            if body.strip().startswith("{") or "json" in response.headers.get(
+                "content-type", ""
+            ):
                 try:
                     jd = json.loads(body)
                     entry["is_json"] = True
@@ -122,7 +130,9 @@ def main():
                                     entry[f"field_{k}_len"] = len(v)
                                     # 记录第一条记录的标题用于对比
                                     if k == "records" and v and isinstance(v[0], dict):
-                                        entry["first_record_title"] = v[0].get("title", "")
+                                        entry["first_record_title"] = v[0].get(
+                                            "title", ""
+                                        )
                                 elif isinstance(v, (int, float)):
                                     entry[f"field_{k}"] = v
                                 elif isinstance(v, dict) and k == "data":
@@ -137,7 +147,9 @@ def main():
                                         records = v["records"]
                                         entry["field_records_len"] = len(records)
                                         if records and isinstance(records[0], dict):
-                                            entry["first_record_title"] = records[0].get("title", "")
+                                            entry["first_record_title"] = records[
+                                                0
+                                            ].get("title", "")
                 except json.JSONDecodeError:
                     entry["is_json"] = False
             else:
@@ -171,7 +183,7 @@ def main():
         time.sleep(2)
         title = page.title()
         content_len = len(page.content())
-        print(f"   [{(i+1)*2}s] title='{title[:50]}' content={content_len}")
+        print(f"   [{(i + 1) * 2}s] title='{title[:50]}' content={content_len}")
         if title and len(title.strip()) > 2:
             print(f"   ✅ WAF 通过! 标题: {title}")
             output["waf_passed"] = True
@@ -201,7 +213,7 @@ def main():
     print("\n[5] 查找分页元素...")
     pagination_info = page.evaluate("""() => {
         const results = [];
-        
+
         // 查找所有可能的分页元素
         const selectors = [
             '.pagination', '.pager', '[class*="paging"]', '[class*="page"]',
@@ -209,7 +221,7 @@ def main():
             'a[href*="page"]', 'button[class*="page"]',
             'li[class*="page"]', 'span[class*="page"]'
         ];
-        
+
         for (const sel of selectors) {
             try {
                 const els = document.querySelectorAll(sel);
@@ -225,17 +237,20 @@ def main():
                 });
             } catch(e) {}
         }
-        
+
         return results;
     }""")
-    
+
     print(f"   找到 {len(pagination_info)} 个分页相关元素")
     for info in pagination_info[:10]:
-        print(f"      [{info['selector']}] <{info['tag']}> '{info['text']}' visible={info['visible']}")
+        print(
+            f"      [{info['selector']}] <{info['tag']}> "
+            f"'{info['text']}' visible={info['visible']}"
+        )
 
     # 尝试翻页
     print("\n[6] 开始翻页测试...")
-    
+
     # 策略1: 点击"下一页"按钮
     next_btn_selectors = [
         'a:has-text("下一页")',
@@ -243,11 +258,11 @@ def main():
         'a:has-text(">>")',
         'a:has-text(">")',
         'button:has-text(">")',
-        '.next',
+        ".next",
         '[class*="next"]',
         'a[title="下一页"]',
     ]
-    
+
     clicked = False
     for sel in next_btn_selectors:
         try:
@@ -257,18 +272,18 @@ def main():
                 el.click()
                 clicked = True
                 break
-        except Exception as e:
+        except Exception:
             continue
-    
+
     if not clicked:
         # 策略2: 点击页码 2
         print("   尝试点击页码 2...")
         try:
             page.click('a:has-text("2"), button:has-text("2"), li:has-text("2")')
             clicked = True
-        except:
+        except Exception:
             pass
-    
+
     if not clicked:
         # 策略3: 使用 JavaScript 查找并点击
         print("   使用 JS 查找翻页按钮...")
@@ -277,7 +292,10 @@ def main():
             const allElements = document.querySelectorAll('a, button, li, span');
             for (const el of allElements) {
                 const text = el.textContent.trim();
-                if (text === '下一页' || text === '>' || text === '>>' || text === '2') {
+                if (
+                    text === '下一页' || text === '>' || text === '>>' ||
+                    text === '2'
+                ) {
                     if (el.offsetParent !== null) {
                         el.click();
                         return text;
@@ -288,31 +306,33 @@ def main():
         }""")
         if clicked:
             print(f"   JS 点击: {clicked}")
-    
+
     if clicked:
         print("   等待第 2 页数据加载...")
         page.wait_for_timeout(4000)
         page.screenshot(path="/tmp/cde_page2.png")
         print("   截图: /tmp/cde_page2.png")
-        
+
         # 记录翻页事件
         new_count = len(output["getDomesticGuideList_captured"])
         if new_count > initial_count:
-            output["pagination_events"].append({
-                "action": "click_next",
-                "from_page": 1,
-                "to_page": 2,
-                "new_responses": new_count - initial_count,
-                "timestamp": datetime.now().isoformat()
-            })
+            output["pagination_events"].append(
+                {
+                    "action": "click_next",
+                    "from_page": 1,
+                    "to_page": 2,
+                    "new_responses": new_count - initial_count,
+                    "timestamp": datetime.now().isoformat(),
+                }
+            )
             print(f"   ✅ 翻页成功! 新增 {new_count - initial_count} 个响应")
         else:
-            print(f"   ⚠️ 翻页后无新响应")
-    
+            print("   ⚠️ 翻页后无新响应")
+
     # 再翻一页到第 3 页
     print("\n[7] 翻到第 3 页...")
     before_page3 = len(output["getDomesticGuideList_captured"])
-    
+
     clicked = False
     for sel in next_btn_selectors:
         try:
@@ -321,40 +341,47 @@ def main():
                 el.click()
                 clicked = True
                 break
-        except:
+        except Exception:
             continue
-    
+
     if not clicked:
         try:
             page.click('a:has-text("3"), button:has-text("3"), li:has-text("3")')
             clicked = True
-        except:
+        except Exception:
             pass
-    
+
     if clicked:
         print("   等待第 3 页数据加载...")
         page.wait_for_timeout(4000)
         page.screenshot(path="/tmp/cde_page3.png")
         print("   截图: /tmp/cde_page3.png")
-        
+
         after_page3 = len(output["getDomesticGuideList_captured"])
         if after_page3 > before_page3:
-            output["pagination_events"].append({
-                "action": "click_next",
-                "from_page": 2,
-                "to_page": 3,
-                "new_responses": after_page3 - before_page3,
-                "timestamp": datetime.now().isoformat()
-            })
+            output["pagination_events"].append(
+                {
+                    "action": "click_next",
+                    "from_page": 2,
+                    "to_page": 3,
+                    "new_responses": after_page3 - before_page3,
+                    "timestamp": datetime.now().isoformat(),
+                }
+            )
             print(f"   ✅ 翻页成功! 新增 {after_page3 - before_page3} 个响应")
         else:
-            print(f"   ⚠️ 翻页后无新响应")
+            print("   ⚠️ 翻页后无新响应")
 
     # Cookie
     cookies = context.cookies()
     output["cookies"] = [
-        {"name": c["name"], "domain": c["domain"],
-         "expires_human": datetime.fromtimestamp(c["expires"]).isoformat() if c.get("expires", 0) > 0 else "Session"}
+        {
+            "name": c["name"],
+            "domain": c["domain"],
+            "expires_human": datetime.fromtimestamp(c["expires"]).isoformat()
+            if c.get("expires", 0) > 0
+            else "Session",
+        }
         for c in cookies
     ]
 
@@ -363,26 +390,29 @@ def main():
     _print_summary(output)
 
 
-def _save(output):
-    path = "/home/chenyingying/dazah/dazah-backend/scripts/regulatory_poc/cde_pagination_test.json"
+def _save(output: Any) -> Any:
+    path = (
+        "/home/chenyingying/dazah/dazah-backend/scripts/regulatory_poc/"
+        "cde_pagination_test.json"
+    )
     with open(path, "w", encoding="utf-8") as f:
         json.dump(output, f, ensure_ascii=False, indent=2)
     print(f"\n💾 已保存: {path}")
 
 
-def _cleanup(context, browser, pw, output):
+def _cleanup(context: Any, browser: Any, pw: Any, output: Any) -> Any:
     try:
         context.close()
         browser.close()
         pw.stop()
-    except:
+    except Exception:
         pass
 
 
-def _print_summary(output):
-    print(f"\n\n{'='*70}")
+def _print_summary(output: Any) -> Any:
+    print(f"\n\n{'=' * 70}")
     print("翻页测试报告")
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
     print(f"  WAF 通过: {'✅' if output['waf_passed'] else '❌'}")
     print(f"  页面标题: {output['page_title']}")
     print(f"  总 XHR/Fetch: {len(output['all_xhr_fetch'])}")
@@ -390,27 +420,30 @@ def _print_summary(output):
     print(f"  翻页事件: {len(output['pagination_events'])}")
 
     if output["getDomesticGuideList_captured"]:
-        print(f"\n  getDomesticGuideList 详情:")
+        print("\n  getDomesticGuideList 详情:")
         for i, cap in enumerate(output["getDomesticGuideList_captured"], 1):
             page_num = cap.get("field_current", "?")
             total = cap.get("field_total", "?")
             pages = cap.get("field_pages", "?")
             records = cap.get("field_records_len", 0)
             first_title = cap.get("first_record_title", "")[:60]
-            
+
             print(f"\n  [{i}] 第 {page_num} 页 (共 {pages} 页, {total} 条)")
             print(f"      记录数: {records}")
             print(f"      首条: {first_title}")
-            
+
             # 提取 MmEwMD 长度
             if "query_params" in cap and "MmEwMD" in cap["query_params"]:
                 mmewmd = cap["query_params"]["MmEwMD"][0]
                 print(f"      MmEwMD: {len(mmewmd)} 字符")
 
     if output["pagination_events"]:
-        print(f"\n  翻页事件记录:")
+        print("\n  翻页事件记录:")
         for event in output["pagination_events"]:
-            print(f"      {event['from_page']} → {event['to_page']} | 新增 {event['new_responses']} 个响应")
+            print(
+                f"      {event['from_page']} → {event['to_page']} | "
+                f"新增 {event['new_responses']} 个响应"
+            )
 
     # 验证数据是否不同
     if len(output["getDomesticGuideList_captured"]) >= 2:
@@ -418,11 +451,11 @@ def _print_summary(output):
         for cap in output["getDomesticGuideList_captured"]:
             if cap.get("first_record_title"):
                 titles.append(cap["first_record_title"])
-        
+
         if len(set(titles)) == len(titles):
-            print(f"\n  ✅ 数据验证: 各页首条记录不同，分页有效")
+            print("\n  ✅ 数据验证: 各页首条记录不同，分页有效")
         else:
-            print(f"\n  ⚠️ 数据验证: 存在重复的首条记录")
+            print("\n  ⚠️ 数据验证: 存在重复的首条记录")
 
     print(f"\n  Cookies ({len(output['cookies'])} 个):")
     for c in output["cookies"][:5]:

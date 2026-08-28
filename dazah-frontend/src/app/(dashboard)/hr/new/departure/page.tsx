@@ -1,8 +1,8 @@
-import { fetchNewDepartureRecords } from '@/lib/api/hr'
+import { fetchNewDepartureRecordsServer } from '@/lib/api/server/hr'
 import { DepartureClient } from '@/components/hr'
 
 export default async function NewDeparturePage() {
-  const res = await fetchNewDepartureRecords({ page: 1, page_size: 20 })
+  const res = await fetchNewDepartureRecordsServer({ page: 1, page_size: 20 })
 
   return (
     <div className="space-y-4">

@@ -1,7 +1,11 @@
-import { ExternalQualityManagementPage, ExternalQualityQueryProvider } from '@/components/quality'
+import { SupplierDashboardPage, QualityQueryProvider } from '@/components/quality'
 
 export const dynamic = 'force-dynamic'
 
-export default function QualitySuppliersPage() {
-  return <ExternalQualityQueryProvider><ExternalQualityManagementPage initialTab="suppliers" /></ExternalQualityQueryProvider>
+export default function SupplierPage() {
+  return (
+    <QualityQueryProvider>
+      <SupplierDashboardPage />
+    </QualityQueryProvider>
+  )
 }

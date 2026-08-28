@@ -127,6 +127,4 @@ class RouteEquipmentTemplate(BaseModel):
     route_equipment: Mapped[RouteLocationEquipment] = relationship(
         "RouteLocationEquipment", back_populates="templates_rel"
     )
-    template: Mapped[InspectionTemplate] = relationship(
-        "InspectionTemplate"
-    )
+    template: Mapped[InspectionTemplate] = relationship("InspectionTemplate")

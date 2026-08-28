@@ -4,6 +4,7 @@ import logging
 import os
 import uuid
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,11 +30,11 @@ class AttachmentService:
     UPLOAD_DIR = os.path.join("uploads", "safety", "ai-workflow")
     MD_SUBDIR = "md"
 
-    def __init__(self):
+    def __init__(self) -> None:
         os.makedirs(self.UPLOAD_DIR, exist_ok=True)
         os.makedirs(os.path.join(self.UPLOAD_DIR, self.MD_SUBDIR), exist_ok=True)
 
-    async def upload_attachment(self, file) -> dict:
+    async def upload_attachment(self, file: Any) -> dict[str, Any]:
         """上传附件并转换为 Markdown。
 
         流程：
@@ -51,7 +52,8 @@ class AttachmentService:
 
         if ext not in DocumentParser.SUPPORTED_EXTENSIONS:
             raise ValueError(
-                f"不支持的文件格式: {ext}，支持的格式: {', '.join(sorted(DocumentParser.SUPPORTED_EXTENSIONS))}"
+                f"不支持的文件格式: {ext}，支持的格式: "
+                f"{', '.join(sorted(DocumentParser.SUPPORTED_EXTENSIONS))}"
             )
 
         attachment_id = str(uuid.uuid4())
@@ -74,7 +76,9 @@ class AttachmentService:
             f.write(md_content)
 
         # 4. 构建预览 URL
-        preview_url = f"/api/v1/safety/ai-workflow-configs/attachments/{attachment_id}/preview"
+        preview_url = (
+            f"/api/v1/safety/ai-workflow-configs/attachments/{attachment_id}/preview"
+        )
 
         return {
             "id": attachment_id,
@@ -117,14 +121,16 @@ class AttachmentService:
         """获取附件原始文件的路径，供预览使用。"""
         import glob as glob_m
 
-        matches = list(glob_m.iglob(os.path.join(self.UPLOAD_DIR, f"{attachment_id}.*")))
+        matches = list(
+            glob_m.iglob(os.path.join(self.UPLOAD_DIR, f"{attachment_id}.*"))
+        )
         if matches:
             return matches[0]
         return None
 
     async def create_knowledge_attachments(
         self, knowledge_ids: list[str], db: AsyncSession
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """从知识库文章创建附件引用。
 
         流程：
@@ -134,7 +140,7 @@ class AttachmentService:
         """
 
         repo = SafetyRepository(db)
-        results: list[dict] = []
+        results: list[dict[str, Any]] = []
 
         for kid in knowledge_ids:
             try:
@@ -162,28 +168,33 @@ class AttachmentService:
             md_content = "\n".join(md_lines)
 
             # 保存 MD 文件
-            md_path = os.path.join(self.UPLOAD_DIR, self.MD_SUBDIR, f"{attachment_id}.md")
+            md_path = os.path.join(
+                self.UPLOAD_DIR, self.MD_SUBDIR, f"{attachment_id}.md"
+            )
             with open(md_path, "w", encoding="utf-8") as f:
                 f.write(md_content)
 
-            preview_url = f"/api/v1/safety/ai-workflow-configs/attachments/{attachment_id}/preview"
+            preview_url = (
+                "/api/v1/safety/ai-workflow-configs/attachments/"
+                f"{attachment_id}/preview"
+            )
 
-            results.append({
-                "id": attachment_id,
-                "type": "knowledge",
-                "name": article.title,
-                "url": preview_url,
-                "original_name": None,
-                "file_type": "md",
-                "file_size": len(md_content.encode("utf-8")),
-                "markdown_path": md_path,
-                "knowledge_id": kid,
-                "created_at": datetime.now().isoformat(),
-            })
+            results.append(
+                {
+                    "id": attachment_id,
+                    "type": "knowledge",
+                    "name": article.title,
+                    "url": preview_url,
+                    "original_name": None,
+                    "file_type": "md",
+                    "file_size": len(md_content.encode("utf-8")),
+                    "markdown_path": md_path,
+                    "knowledge_id": kid,
+                    "created_at": datetime.now().isoformat(),
+                }
+            )
 
         return results
 
 
 # ==================== 特殊作业管理 Service ====================
-
-

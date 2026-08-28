@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from fastapi import HTTPException, status
-from openpyxl import load_workbook
+from openpyxl import load_workbook  # type: ignore[import-untyped]
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.storage import delete_object, get_object, is_enabled, upload_object

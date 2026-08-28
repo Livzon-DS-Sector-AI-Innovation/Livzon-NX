@@ -95,7 +95,7 @@ export function MaintenancePlanDrawer({ equipments, onRefresh }: MaintenancePlan
       }
       closeMaintenancePlanDrawer()
       onRefresh?.()
-    } catch (error: any) {
+    } catch (error) {
       if (error?.message) message.error(error.message)
     }
   }

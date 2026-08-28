@@ -1,14 +1,19 @@
 """Work order repository functions."""
 
+from __future__ import annotations
+
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.modules.equipment.models import WorkOrder
+
+if TYPE_CHECKING:
+    from app.modules.equipment.models.spare_part import SparePartTransaction
 
 
 async def create_work_order(
@@ -165,7 +170,7 @@ async def get_work_order_statistics(db: AsyncSession) -> dict[str, Any]:
 async def create_material_consumption(
     db: AsyncSession,
     data: dict[str, Any],
-) -> "SparePartTransaction":  # noqa: F821
+) -> SparePartTransaction:
     """创建领料记录"""
     from app.modules.equipment.models.spare_part import SparePartTransaction
 
@@ -178,7 +183,7 @@ async def create_material_consumption(
 async def get_material_consumptions(
     db: AsyncSession,
     work_order_id: uuid.UUID,
-) -> list["SparePartTransaction"]:  # noqa: F821
+) -> list[SparePartTransaction]:
     """获取工单领料记录"""
     from app.modules.equipment.models.spare_part import SparePartTransaction
 

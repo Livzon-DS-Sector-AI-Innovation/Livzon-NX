@@ -2,7 +2,8 @@ import json
 import uuid
 from datetime import UTC, datetime, timedelta
 from io import BytesIO
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
+from typing import Any, cast
 
 import pytest
 from docx import Document
@@ -21,28 +22,30 @@ from app.modules.agent.service import (
 from app.modules.procurement.contract_generator import generate_contract
 from app.modules.procurement.schemas import ContractGenerateRequest
 
+SimpleNamespace: Any = _SimpleNamespace
+
 
 class AllowAllAccessScopeService:
-    async def require_tool_access(self, *args, **kwargs):
+    async def require_tool_access(self: Any, *args: Any, **kwargs: Any) -> Any:
         return None
 
 
 class FakeDb:
     committed = False
 
-    def __init__(self) -> None:
-        self.added = []
+    def __init__(self: Any) -> None:
+        self.added = []  # type: ignore[var-annotated]
 
-    async def commit(self) -> None:
+    async def commit(self: Any) -> None:
         self.committed = True
 
-    async def flush(self) -> None:
+    async def flush(self: Any) -> None:
         return None
 
-    async def scalar(self, _query):
+    async def scalar(self: Any, _query: Any) -> Any:
         return None
 
-    async def get(self, model, item_id):
+    async def get(self: Any, model: Any, item_id: Any) -> Any:
         return SimpleNamespace(
             id=item_id,
             role="admin",
@@ -51,7 +54,7 @@ class FakeDb:
             tenant_key="test",
         )
 
-    def add(self, item) -> None:
+    def add(self: Any, item: Any) -> None:
         self.added.append(item)
 
 
@@ -81,14 +84,14 @@ def test_basic_help_and_status_commands() -> None:
 @pytest.mark.anyio
 async def test_restart_command_archives_old_web_session_and_creates_new_one() -> None:
     user_id = uuid.uuid4()
-    old_session = SimpleNamespace(
+    old_session: Any = SimpleNamespace(
         id=uuid.uuid4(),
         user_id=user_id,
         status="active",
         context={"channel": "web"},
         updated_by=user_id,
     )
-    new_session = SimpleNamespace(
+    new_session: Any = SimpleNamespace(
         id=uuid.uuid4(),
         user_id=user_id,
         status="active",
@@ -99,24 +102,35 @@ async def test_restart_command_archives_old_web_session_and_creates_new_one() ->
     messages: list[SimpleNamespace] = []
 
     class ResetRepository:
-        async def get_session(self, _db, session_id):
+        async def get_session(self: Any, _db: Any, session_id: Any) -> Any:
             return old_session if session_id == old_session.id else None
 
-        async def archive_session(self, _db, *, session, user_id):
+        async def archive_session(
+            self: Any, _db: Any, *, session: Any, user_id: Any
+        ) -> Any:
             session.status = "archived"
             archived.append(session.id)
             return session
 
-        async def create_session(self, _db, *, user_id, context, title):
+        async def create_session(
+            self: Any, _db: Any, *, user_id: Any, context: Any, title: Any
+        ) -> Any:
             new_session.user_id = user_id
             new_session.context = context
             new_session.title = title
             return new_session
 
         async def add_message(
-            self, _db, *, session_id, role, content, metadata, user_id
-        ):
-            item = SimpleNamespace(
+            self: Any,
+            _db: Any,
+            *,
+            session_id: Any,
+            role: Any,
+            content: Any,
+            metadata: Any,
+            user_id: Any,
+        ) -> Any:
+            item: Any = SimpleNamespace(
                 id=uuid.uuid4(),
                 session_id=session_id,
                 role=role,
@@ -127,15 +141,15 @@ async def test_restart_command_archives_old_web_session_and_creates_new_one() ->
             messages.append(item)
             return item
 
-        async def list_messages(self, _db, *, session_id):
+        async def list_messages(self: Any, _db: Any, *, session_id: Any) -> Any:
             return [item for item in messages if item.session_id == session_id]
 
     service = AgentService(SimpleNamespace())
-    service.repo = ResetRepository()
-    current_user = SimpleNamespace(id=user_id)
+    service.repo = cast(Any, ResetRepository)()
+    current_user: Any = SimpleNamespace(id=user_id)
 
     session, history, _message = await service._prepare_chat_context(
-        object(),
+        object(),  # type: ignore[arg-type]
         request=AgentChatRequest(
             session_id=old_session.id,
             message="/restart",
@@ -151,34 +165,36 @@ async def test_restart_command_archives_old_web_session_and_creates_new_one() ->
 
 
 class FakeAgentRepository:
-    def __init__(self) -> None:
+    def __init__(self: Any) -> None:
         self.session = SimpleNamespace(
             id=uuid.uuid4(),
             user_id=None,
             context={},
             title=None,
         )
-        self.messages = []
-        self.tool_calls = []
-        self.confirmations = {}
+        self.messages = []  # type: ignore[var-annotated]
+        self.tool_calls = []  # type: ignore[var-annotated]
+        self.confirmations = {}  # type: ignore[var-annotated]
 
-    async def create_session(self, db, *, user_id, context, title):
+    async def create_session(
+        self: Any, db: Any, *, user_id: Any, context: Any, title: Any
+    ) -> Any:
         self.session.user_id = user_id
         self.session.context = context
         self.session.title = title
         return self.session
 
     async def add_message(
-        self,
-        db,
+        self: Any,
+        db: Any,
         *,
-        session_id,
-        role,
-        content,
-        metadata=None,
-        user_id=None,
-    ):
-        message = SimpleNamespace(
+        session_id: Any,
+        role: Any,
+        content: Any,
+        metadata: Any = None,
+        user_id: Any = None,
+    ) -> Any:
+        message: Any = SimpleNamespace(
             id=uuid.uuid4(),
             session_id=session_id,
             role=role,
@@ -190,21 +206,25 @@ class FakeAgentRepository:
         self.messages.append(message)
         return message
 
-    async def list_messages(self, db, *, session_id, limit=20):
+    async def list_messages(
+        self: Any, db: Any, *, session_id: Any, limit: Any = 20
+    ) -> Any:
         return self.messages[-limit:]
 
-    async def list_session_attachments(self, db, *, session_id, user_id, limit=50):
+    async def list_session_attachments(
+        self: Any, db: Any, *, session_id: Any, user_id: Any, limit: Any = 50
+    ) -> Any:
         return []
 
     async def create_tool_call(
-        self,
-        db,
+        self: Any,
+        db: Any,
         *,
-        session_id,
-        operation,
-        request_payload,
-    ):
-        call = SimpleNamespace(
+        session_id: Any,
+        operation: Any,
+        request_payload: Any,
+    ) -> Any:
+        call: Any = SimpleNamespace(
             session_id=session_id,
             operation=operation,
             request_payload=request_payload,
@@ -216,32 +236,32 @@ class FakeAgentRepository:
         return call
 
     async def finish_tool_call(
-        self,
-        db,
-        call,
+        self: Any,
+        db: Any,
+        call: Any,
         *,
-        status,
-        response_payload=None,
-        error_message=None,
-    ):
+        status: Any,
+        response_payload: Any = None,
+        error_message: Any = None,
+    ) -> Any:
         call.status = status
         call.response_payload = response_payload
         call.error_message = error_message
         return call
 
     async def create_confirmation(
-        self,
-        db,
+        self: Any,
+        db: Any,
         *,
-        session_id,
-        user_id,
-        operation,
-        summary,
-        risk_level,
-        request_payload,
-        expires_at,
-    ):
-        confirmation = SimpleNamespace(
+        session_id: Any,
+        user_id: Any,
+        operation: Any,
+        summary: Any,
+        risk_level: Any,
+        request_payload: Any,
+        expires_at: Any,
+    ) -> Any:
+        confirmation: Any = SimpleNamespace(
             id=uuid.uuid4(),
             session_id=session_id,
             user_id=user_id,
@@ -255,18 +275,20 @@ class FakeAgentRepository:
         self.confirmations[confirmation.id] = confirmation
         return confirmation
 
-    async def get_confirmation(self, db, confirmation_id):
+    async def get_confirmation(self: Any, db: Any, confirmation_id: Any) -> Any:
         return self.confirmations.get(confirmation_id)
 
-    async def get_confirmation_for_update(self, db, confirmation_id):
+    async def get_confirmation_for_update(
+        self: Any, db: Any, confirmation_id: Any
+    ) -> Any:
         return self.confirmations.get(confirmation_id)
 
-    async def mirror_external_confirmation(self, db, **values):
+    async def mirror_external_confirmation(self: Any, db: Any, **values: Any) -> Any:
         confirmation_id = values.pop("confirmation_id")
         existing = self.confirmations.get(confirmation_id)
         if existing is not None:
             return existing
-        confirmation = SimpleNamespace(
+        confirmation: Any = SimpleNamespace(
             id=confirmation_id,
             status="pending",
             **values,
@@ -275,31 +297,33 @@ class FakeAgentRepository:
         return confirmation
 
     async def finish_external_confirmation(
-        self,
-        db,
-        confirmation,
+        self: Any,
+        db: Any,
+        confirmation: Any,
         *,
-        status,
-        result_payload,
-        user_id,
-    ):
+        status: Any,
+        result_payload: Any,
+        user_id: Any,
+    ) -> Any:
         confirmation.status = status
         confirmation.result_payload = result_payload
         confirmation.updated_by = user_id
         return confirmation
 
-    async def expire_confirmation(self, db, confirmation, *, user_id):
+    async def expire_confirmation(
+        self: Any, db: Any, confirmation: Any, *, user_id: Any
+    ) -> Any:
         confirmation.status = "expired"
         confirmation.updated_by = user_id
         return confirmation
 
     async def list_pending_confirmations(
-        self,
-        db,
+        self: Any,
+        db: Any,
         *,
-        session_id=None,
-        user_id=None,
-    ):
+        session_id: Any = None,
+        user_id: Any = None,
+    ) -> Any:
         now = datetime.now(UTC)
         return [
             confirmation
@@ -312,17 +336,17 @@ class FakeAgentRepository:
 
 
 class PolicyOnlyAgentService(AgentService):
-    async def _call_hermes(self, **kwargs):
+    async def _call_hermes(self: Any, **kwargs: Any) -> Any:
         raise AssertionError("policy-blocked messages must not reach Hermes")
 
 
 @pytest.mark.anyio
 async def test_expired_confirmation_is_returned_as_terminal_state() -> None:
-    repo = FakeAgentRepository()
+    repo: Any = FakeAgentRepository()
     service = AgentService(settings=SimpleNamespace(), repo=repo)
-    user = SimpleNamespace(id=uuid.uuid4())
+    user: Any = SimpleNamespace(id=uuid.uuid4())
     confirmation = await repo.create_confirmation(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         session_id=repo.session.id,
         user_id=user.id,
         operation="identity.deliver_feishu_message",
@@ -333,7 +357,7 @@ async def test_expired_confirmation_is_returned_as_terminal_state() -> None:
     )
 
     resolved, result = await service.execute_confirmation(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         confirmation_id=confirmation.id,
         current_user=user,
     )
@@ -344,7 +368,7 @@ async def test_expired_confirmation_is_returned_as_terminal_state() -> None:
 
 
 class StreamingAgentService(AgentService):
-    async def _call_hermes_stream(self, **kwargs):
+    async def _call_hermes_stream(self: Any, **kwargs: Any) -> Any:
         trace_id = uuid.uuid4()
         run_id = uuid.uuid4()
         yield AgentBackendV2Event(
@@ -389,7 +413,7 @@ class StreamingAgentService(AgentService):
 
 
 class ErrorStreamingAgentService(AgentService):
-    async def _call_hermes_stream(self, **kwargs):
+    async def _call_hermes_stream(self: Any, **kwargs: Any) -> Any:
         trace_id = uuid.uuid4()
         run_id = uuid.uuid4()
         yield AgentBackendV2Event(
@@ -416,16 +440,16 @@ class ErrorStreamingAgentService(AgentService):
 
 
 class CrashingStreamingAgentService(AgentService):
-    async def _call_hermes_stream(self, **kwargs):
+    async def _call_hermes_stream(self: Any, **kwargs: Any) -> Any:
         raise ValueError("internal contract mismatch")
         yield  # pragma: no cover
 
 
-def parse_sse_events(frames: list[str]) -> list[tuple[str, dict]]:
-    events = []
+def parse_sse_events(frames: list[str]) -> list[tuple[str, dict[Any, Any]]]:
+    events: list[Any] = []
     for frame in frames:
         event = "message"
-        data_lines = []
+        data_lines: list[Any] = []
         for line in frame.strip().splitlines():
             if line.startswith("event:"):
                 event = line.removeprefix("event:").strip()
@@ -491,10 +515,10 @@ def test_assistant_metadata_exposes_structured_query_evidence() -> None:
 
 @pytest.mark.anyio
 async def test_chat_returns_policy_refusal_for_delegated_approval() -> None:
-    repo = FakeAgentRepository()
+    repo: Any = FakeAgentRepository()
     service = PolicyOnlyAgentService(settings=SimpleNamespace(), repo=repo)
-    user = SimpleNamespace(id=uuid.uuid4(), name="测试用户")
-    db = FakeDb()
+    user: Any = SimpleNamespace(id=uuid.uuid4(), name="测试用户")
+    db: Any = cast(Any, FakeDb)()
 
     response = await service.chat(
         db,
@@ -510,10 +534,10 @@ async def test_chat_returns_policy_refusal_for_delegated_approval() -> None:
 
 @pytest.mark.anyio
 async def test_stream_chat_emits_agent_backend_v2_events() -> None:
-    repo = FakeAgentRepository()
+    repo: Any = FakeAgentRepository()
     service = StreamingAgentService(settings=SimpleNamespace(), repo=repo)
-    user = SimpleNamespace(id=uuid.uuid4(), name="测试用户")
-    db = FakeDb()
+    user: Any = SimpleNamespace(id=uuid.uuid4(), name="测试用户")
+    db: Any = cast(Any, FakeDb)()
 
     stream = service.stream_chat(
         db,
@@ -545,10 +569,10 @@ async def test_stream_chat_emits_agent_backend_v2_events() -> None:
 
 @pytest.mark.anyio
 async def test_stream_chat_persists_partial_response_when_client_stops() -> None:
-    repo = FakeAgentRepository()
+    repo: Any = FakeAgentRepository()
     service = StreamingAgentService(settings=SimpleNamespace(), repo=repo)
-    user = SimpleNamespace(id=uuid.uuid4(), name="测试用户")
-    db = FakeDb()
+    user: Any = SimpleNamespace(id=uuid.uuid4(), name="测试用户")
+    db: Any = cast(Any, FakeDb)()
 
     stream = service.stream_chat(
         db,
@@ -557,7 +581,7 @@ async def test_stream_chat_persists_partial_response_when_client_stops() -> None
     )
     await anext(stream)  # accepted
     await anext(stream)  # first text delta
-    await stream.aclose()
+    await stream.aclose()  # type: ignore[attr-defined]
 
     assert [message.role for message in repo.messages] == ["user", "assistant"]
     assert repo.messages[-1].content == "你好，"
@@ -567,10 +591,10 @@ async def test_stream_chat_persists_partial_response_when_client_stops() -> None
 
 @pytest.mark.anyio
 async def test_stream_chat_error_does_not_store_assistant_message() -> None:
-    repo = FakeAgentRepository()
+    repo: Any = FakeAgentRepository()
     service = ErrorStreamingAgentService(settings=SimpleNamespace(), repo=repo)
-    user = SimpleNamespace(id=uuid.uuid4(), name="测试用户")
-    db = FakeDb()
+    user: Any = SimpleNamespace(id=uuid.uuid4(), name="测试用户")
+    db: Any = cast(Any, FakeDb)()
 
     frames = [
         frame
@@ -594,14 +618,14 @@ async def test_stream_chat_error_does_not_store_assistant_message() -> None:
 
 @pytest.mark.anyio
 async def test_stream_chat_pipeline_exception_emits_stable_error_event() -> None:
-    repo = FakeAgentRepository()
+    repo: Any = FakeAgentRepository()
     service = CrashingStreamingAgentService(settings=SimpleNamespace(), repo=repo)
-    user = SimpleNamespace(id=uuid.uuid4(), name="测试用户")
+    user: Any = SimpleNamespace(id=uuid.uuid4(), name="测试用户")
 
     frames = [
         frame
         async for frame in service.stream_chat(
-            FakeDb(),
+            cast(Any, FakeDb)(),
             request=AgentChatRequest(message="分析附件"),
             current_user=user,
         )
@@ -616,10 +640,10 @@ async def test_stream_chat_pipeline_exception_emits_stable_error_event() -> None
 
 @pytest.mark.anyio
 async def test_stream_chat_policy_refusal_returns_v2_finished_without_hermes() -> None:
-    repo = FakeAgentRepository()
+    repo: Any = FakeAgentRepository()
     service = PolicyOnlyAgentService(settings=SimpleNamespace(), repo=repo)
-    user = SimpleNamespace(id=uuid.uuid4(), name="测试用户")
-    db = FakeDb()
+    user: Any = SimpleNamespace(id=uuid.uuid4(), name="测试用户")
+    db: Any = cast(Any, FakeDb)()
 
     frames = [
         frame
@@ -641,7 +665,7 @@ async def test_stream_chat_policy_refusal_returns_v2_finished_without_hermes() -
 
 @pytest.mark.anyio
 async def test_high_risk_tool_execution_returns_policy_refusal() -> None:
-    repo = FakeAgentRepository()
+    repo: Any = FakeAgentRepository()
     service = AgentService(
         settings=SimpleNamespace(),
         repo=repo,
@@ -649,7 +673,7 @@ async def test_high_risk_tool_execution_returns_policy_refusal() -> None:
     )
 
     response = await service.execute_tool(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         request=AgentToolExecuteRequest(
             operation="procurement.approve_purchase_request",
             params={"request_id": str(uuid.uuid4())},
@@ -667,14 +691,14 @@ async def test_high_risk_tool_execution_returns_policy_refusal() -> None:
 
 @pytest.mark.anyio
 async def test_resolve_pending_confirmation_from_assistant_text_id() -> None:
-    repo = FakeAgentRepository()
+    repo: Any = FakeAgentRepository()
     service = AgentService(
         settings=SimpleNamespace(),
         repo=repo,
         access_scope_service=AllowAllAccessScopeService(),
     )
     confirmation = await repo.create_confirmation(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         session_id=repo.session.id,
         user_id=uuid.uuid4(),
         operation="identity.deliver_feishu_message",
@@ -685,7 +709,7 @@ async def test_resolve_pending_confirmation_from_assistant_text_id() -> None:
     )
 
     pending = await service._resolve_pending_confirmations(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         {
             "message": (
                 "已生成确认项，需要你确认后执行。\n"
@@ -701,10 +725,10 @@ async def test_resolve_pending_confirmation_from_assistant_text_id() -> None:
 
 @pytest.mark.anyio
 async def test_resolve_multiple_pending_confirmations_from_same_result() -> None:
-    repo = FakeAgentRepository()
+    repo: Any = FakeAgentRepository()
     service = AgentService(settings=SimpleNamespace(), repo=repo)
     first_confirmation = await repo.create_confirmation(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         session_id=repo.session.id,
         user_id=uuid.uuid4(),
         operation="identity.deliver_feishu_message",
@@ -714,7 +738,7 @@ async def test_resolve_multiple_pending_confirmations_from_same_result() -> None
         expires_at=datetime.now(UTC) + timedelta(minutes=5),
     )
     second_confirmation = await repo.create_confirmation(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         session_id=repo.session.id,
         user_id=uuid.uuid4(),
         operation="identity.deliver_feishu_message",
@@ -725,7 +749,7 @@ async def test_resolve_multiple_pending_confirmations_from_same_result() -> None
     )
 
     pending = await service._resolve_pending_confirmations(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         {
             "message": (
                 "已生成两个确认项。\n"
@@ -745,10 +769,10 @@ async def test_resolve_multiple_pending_confirmations_from_same_result() -> None
 
 @pytest.mark.anyio
 async def test_resolve_pending_confirmations_includes_session_pending() -> None:
-    repo = FakeAgentRepository()
+    repo: Any = FakeAgentRepository()
     service = AgentService(settings=SimpleNamespace(), repo=repo)
     first_confirmation = await repo.create_confirmation(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         session_id=repo.session.id,
         user_id=uuid.uuid4(),
         operation="identity.deliver_feishu_message",
@@ -758,7 +782,7 @@ async def test_resolve_pending_confirmations_includes_session_pending() -> None:
         expires_at=datetime.now(UTC) + timedelta(minutes=5),
     )
     second_confirmation = await repo.create_confirmation(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         session_id=repo.session.id,
         user_id=uuid.uuid4(),
         operation="identity.deliver_feishu_message",
@@ -769,7 +793,7 @@ async def test_resolve_pending_confirmations_includes_session_pending() -> None:
     )
 
     pending = await service._resolve_pending_confirmations(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         {
             "message": f"已生成最新确认项：{second_confirmation.id}",
             "pending_confirmations": [{"id": str(second_confirmation.id)}],
@@ -783,13 +807,13 @@ async def test_resolve_pending_confirmations_includes_session_pending() -> None:
 
 @pytest.mark.anyio
 async def test_feishu_native_confirmation_is_mirrored_without_cli_payload() -> None:
-    repo = FakeAgentRepository()
+    repo: Any = FakeAgentRepository()
     service = AgentService(settings=SimpleNamespace(), repo=repo)
     user_id = uuid.uuid4()
     confirmation_id = uuid.uuid4()
 
     pending = await service._resolve_pending_confirmations(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         {
             "pending_confirmations": [
                 {
@@ -823,13 +847,13 @@ async def test_feishu_native_confirmation_is_mirrored_without_cli_payload() -> N
 
 @pytest.mark.anyio
 async def test_execute_feishu_native_confirmation_uses_remote_result(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
-    repo = FakeAgentRepository()
+    repo: Any = FakeAgentRepository()
     service = AgentService(settings=SimpleNamespace(), repo=repo)
-    user = SimpleNamespace(id=uuid.uuid4())
+    user: Any = SimpleNamespace(id=uuid.uuid4())
     confirmation = await repo.create_confirmation(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         session_id=None,
         user_id=user.id,
         operation="base +record-delete",
@@ -842,12 +866,12 @@ async def test_execute_feishu_native_confirmation_uses_remote_result(
         expires_at=datetime.now(UTC) + timedelta(minutes=5),
     )
 
-    async def resolve_remote(*args, **kwargs):
+    async def resolve_remote(*args: Any, **kwargs: Any) -> Any:
         return {"ok": False, "status": "verification_failed"}
 
     monkeypatch.setattr(service, "_resolve_feishu_native_confirmation", resolve_remote)
     resolved, result = await service.execute_confirmation(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         confirmation_id=confirmation.id,
         current_user=user,
     )
@@ -870,16 +894,16 @@ def test_contract_generation_sample_request_is_normalized() -> None:
     )
 
     assert request.params == {}
-    assert request.body["category"] == "consumables"
-    assert request.body["title"] == "办公用品耗材采购合同"
-    assert request.body["contract_number"].startswith("AI-CONSUMABLES-")
-    assert request.body["items"][0]["name"] == "办公用品耗材"
-    assert request.body["items"][0]["department"] == "行政部"
+    assert request.body["category"] == "consumables"  # type: ignore[index]
+    assert request.body["title"] == "办公用品耗材采购合同"  # type: ignore[index]
+    assert request.body["contract_number"].startswith("AI-CONSUMABLES-")  # type: ignore[index]
+    assert request.body["items"][0]["name"] == "办公用品耗材"  # type: ignore[index]
+    assert request.body["items"][0]["department"] == "行政部"  # type: ignore[index]
 
 
 @pytest.mark.anyio
 async def test_agent_lists_all_contract_templates_with_fields() -> None:
-    repo = FakeAgentRepository()
+    repo: Any = FakeAgentRepository()
     service = AgentService(
         settings=SimpleNamespace(),
         repo=repo,
@@ -887,7 +911,7 @@ async def test_agent_lists_all_contract_templates_with_fields() -> None:
     )
 
     response = await service.execute_tool(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         request=AgentToolExecuteRequest(
             operation="procurement.list_contract_templates",
             subject=_subject(),
@@ -919,7 +943,7 @@ async def test_agent_lists_all_contract_templates_with_fields() -> None:
 
 @pytest.mark.anyio
 async def test_agent_get_contract_template_normalizes_chinese_category() -> None:
-    repo = FakeAgentRepository()
+    repo: Any = FakeAgentRepository()
     service = AgentService(
         settings=SimpleNamespace(),
         repo=repo,
@@ -927,7 +951,7 @@ async def test_agent_get_contract_template_normalizes_chinese_category() -> None
     )
 
     response = await service.execute_tool(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         request=AgentToolExecuteRequest(
             operation="procurement.get_contract_template",
             params={"category": "办公用品耗材"},
@@ -981,14 +1005,14 @@ def test_contract_generation_sample_matches_template_and_exports_docx() -> None:
 
 @pytest.mark.anyio
 async def test_contract_generation_without_items_returns_validation_error() -> None:
-    repo = FakeAgentRepository()
+    repo: Any = FakeAgentRepository()
     service = AgentService(
         settings=SimpleNamespace(AGENT_WRITE_CONFIRM_TTL_SECONDS=300),
         repo=repo,
     )
 
     response = await service.execute_tool(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         request=AgentToolExecuteRequest(
             operation="procurement.generate_contract",
             params={"category": "耗材"},

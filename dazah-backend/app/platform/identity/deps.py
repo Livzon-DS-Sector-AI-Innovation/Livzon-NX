@@ -76,18 +76,23 @@ async def require_admin(current_user: CurrentUser) -> User:
 
 
 def require_module_view(module_code: str) -> Callable[..., Awaitable[User]]:
-    """Create a dependency that fails closed unless the user can view a module.
+    """Create a dependency enforcing the configured module access policy.
 
-    Module grants are the authorization fact source.  This dependency is applied
-    when each business router is mounted so it also protects routes that predate
-    the identity subsystem and did not previously declare a user dependency.
+    In ``all`` mode any authenticated user can enter business modules. In
+    ``roles`` mode module grants remain the authorization fact source. This
+    dependency is applied when each business router is mounted so it also
+    protects routes that predate the identity subsystem and did not previously
+    declare a user dependency.
     """
 
     async def _require_module_view(
         current_user: CurrentUser,
         db: AsyncSession = Depends(get_db),
+        settings: Settings = Depends(get_settings),
     ) -> User:
         user = await require_current_user(current_user)
+        if settings.effective_module_access_mode == "all":
+            return user
         if user.role == "admin":
             return user
         result = await db.execute(
@@ -110,4 +115,6 @@ def require_module_view(module_code: str) -> Callable[..., Awaitable[User]]:
 
 
 RequiredUser = Annotated[User, Depends(require_current_user)]
+# Backwards-compatible name used by the migrated warehouse endpoints.
+RequireUser = RequiredUser
 AdminUser = Annotated[User, Depends(require_admin)]

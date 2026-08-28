@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
 
 from app.modules.equipment import mcp_tools
+
+SimpleNamespace: Any = _SimpleNamespace
 
 
 def _work_order(status: str = "待处理") -> SimpleNamespace:
@@ -27,9 +30,9 @@ def _work_order(status: str = "待处理") -> SimpleNamespace:
 
 
 def _inspection_task(status: str = "待执行") -> SimpleNamespace:
-    equipment = SimpleNamespace(is_deleted=False)
-    location = SimpleNamespace(equipments=[equipment])
-    route = SimpleNamespace(
+    equipment: Any = SimpleNamespace(is_deleted=False)
+    location: Any = SimpleNamespace(equipments=[equipment])
+    route: Any = SimpleNamespace(
         id=uuid.uuid4(),
         name="一车间路线",
         locations_rel=[location],
@@ -78,12 +81,12 @@ async def test_resolve_user_uuid_feishu_keyword_and_error_paths(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     user_id = uuid.uuid4()
-    active_user = SimpleNamespace(id=user_id, is_deleted=False, name="张三")
-    db = SimpleNamespace(get=AsyncMock(return_value=active_user))
+    active_user: Any = SimpleNamespace(id=user_id, is_deleted=False, name="张三")
+    db: Any = SimpleNamespace(get=AsyncMock(return_value=active_user))
 
     assert await mcp_tools.resolve_user(db, str(user_id)) is active_user
 
-    repo = SimpleNamespace(
+    repo: Any = SimpleNamespace(
         get_by_feishu_user_id=AsyncMock(return_value=active_user),
         list_all=AsyncMock(return_value=([], 0)),
     )
@@ -108,8 +111,8 @@ async def test_resolve_user_uuid_feishu_keyword_and_error_paths(
 async def test_query_and_work_order_tools(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    db = object()
-    user = SimpleNamespace(
+    db: Any = object()
+    user: Any = SimpleNamespace(
         id=uuid.uuid4(),
         name="张三",
         employee_no="E001",
@@ -119,7 +122,7 @@ async def test_query_and_work_order_tools(
         mobile=None,
         feishu_user_id="ou_001",
     )
-    repo = SimpleNamespace(list_all=AsyncMock(return_value=([user], 1)))
+    repo: Any = SimpleNamespace(list_all=AsyncMock(return_value=([user], 1)))
     monkeypatch.setattr(mcp_tools, "get_db", lambda: db)
     monkeypatch.setattr(mcp_tools, "UserRepository", lambda: repo)
 
@@ -152,18 +155,22 @@ async def test_query_and_work_order_tools(
     monkeypatch.setattr(
         mcp_tools,
         "start_work_order",
-        AsyncMock(return_value=SimpleNamespace(
-            work_order_no="WO-001",
-            status="执行中",
-        )),
+        AsyncMock(
+            return_value=SimpleNamespace(
+                work_order_no="WO-001",
+                status="执行中",
+            )
+        ),
     )
     monkeypatch.setattr(
         mcp_tools,
         "complete_work_order",
-        AsyncMock(return_value=SimpleNamespace(
-            work_order_no="WO-001",
-            status="待验收",
-        )),
+        AsyncMock(
+            return_value=SimpleNamespace(
+                work_order_no="WO-001",
+                status="待验收",
+            )
+        ),
     )
     started = await mcp_tools.operate_work_order(
         str(order.id),
@@ -197,8 +204,8 @@ async def test_query_and_work_order_tools(
 async def test_submit_inspection_validates_items_and_completion(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    db = object()
-    user = SimpleNamespace(id=uuid.uuid4())
+    db: Any = object()
+    user: Any = SimpleNamespace(id=uuid.uuid4())
     task = _inspection_task("执行中")
     task_after = _inspection_task("已完成")
     equipment_id = uuid.uuid4()
@@ -208,7 +215,7 @@ async def test_submit_inspection_validates_items_and_completion(
         "resolve_user",
         AsyncMock(return_value=user),
     )
-    get_task = AsyncMock(side_effect=[task, task_after])
+    get_task: Any = AsyncMock(side_effect=[task, task_after])
     monkeypatch.setattr(
         mcp_tools,
         "get_inspection_task_by_id",
@@ -219,7 +226,7 @@ async def test_submit_inspection_validates_items_and_completion(
         "_get_template_item_map",
         AsyncMock(return_value={"温度": str(uuid.uuid4())}),
     )
-    submit = AsyncMock(return_value=[object(), object()])
+    submit: Any = AsyncMock(return_value=[object(), object()])
     monkeypatch.setattr(mcp_tools, "submit_equipment_check", submit)
 
     result = await mcp_tools.submit_inspection(
@@ -269,8 +276,8 @@ async def test_submit_inspection_validates_items_and_completion(
 async def test_list_and_update_inspection_task_actions(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    db = object()
-    user = SimpleNamespace(id=uuid.uuid4())
+    db: Any = object()
+    user: Any = SimpleNamespace(id=uuid.uuid4())
     task = _inspection_task("待执行")
     monkeypatch.setattr(mcp_tools, "get_db", lambda: db)
     monkeypatch.setattr(
@@ -291,23 +298,17 @@ async def test_list_and_update_inspection_task_actions(
     monkeypatch.setattr(
         mcp_tools,
         "start_inspection_task",
-        AsyncMock(
-            return_value=SimpleNamespace(task_no="IT-001", status="执行中")
-        ),
+        AsyncMock(return_value=SimpleNamespace(task_no="IT-001", status="执行中")),
     )
     monkeypatch.setattr(
         mcp_tools,
         "complete_inspection_task",
-        AsyncMock(
-            return_value=SimpleNamespace(task_no="IT-001", status="已完成")
-        ),
+        AsyncMock(return_value=SimpleNamespace(task_no="IT-001", status="已完成")),
     )
     monkeypatch.setattr(
         mcp_tools,
         "close_inspection_task",
-        AsyncMock(
-            return_value=SimpleNamespace(task_no="IT-001", status="已关闭")
-        ),
+        AsyncMock(return_value=SimpleNamespace(task_no="IT-001", status="已关闭")),
     )
 
     tasks = await mcp_tools.list_inspection_tasks(

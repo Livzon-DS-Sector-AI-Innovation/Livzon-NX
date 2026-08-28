@@ -10,6 +10,7 @@ from app.modules.agent.automation_schema import (
     ConditionGroup,
     ConditionPredicate,
     TransformOperation,
+    ValueReference,
 )
 
 
@@ -45,18 +46,18 @@ def _evaluate_predicate(
 ) -> bool:
     actual = lookup_path(context, predicate.field)
     expected = predicate.value
-    if hasattr(expected, "ref"):
+    if isinstance(expected, ValueReference):
         expected = lookup_path(context, expected.ref)
     if isinstance(expected, list):
         expected = [
-            lookup_path(context, item.ref) if hasattr(item, "ref") else item
+            lookup_path(context, item.ref) if isinstance(item, ValueReference) else item
             for item in expected
         ]
     match predicate.op:
         case "eq":
-            return actual == expected
+            return bool(actual == expected)
         case "ne":
-            return actual != expected
+            return bool(actual != expected)
         case "gt":
             return _ordered(actual, expected, lambda left, right: left > right)
         case "gte":
@@ -147,9 +148,9 @@ def _filter_matches(item: Any, operation: TransformOperation) -> bool:
     expected = operation.value
     match operation.operator:
         case "eq":
-            return actual == expected
+            return bool(actual == expected)
         case "ne":
-            return actual != expected
+            return bool(actual != expected)
         case "gt":
             return _ordered(actual, expected, lambda left, right: left > right)
         case "gte":

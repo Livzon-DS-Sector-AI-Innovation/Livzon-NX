@@ -1,7 +1,8 @@
 import base64
 import uuid
 from datetime import UTC, datetime
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
+from typing import Any
 
 import pytest
 from fastapi import HTTPException
@@ -15,6 +16,8 @@ from app.modules.agent.schemas import (
     AgentTrustedSubject,
 )
 from app.modules.agent.service import AgentService
+
+SimpleNamespace: Any = _SimpleNamespace
 
 
 @pytest.mark.asyncio
@@ -154,7 +157,7 @@ def test_attachment_schema_enforces_per_file_limit() -> None:
 @pytest.mark.asyncio
 async def test_archive_session_refreshes_server_managed_fields() -> None:
     user_id = uuid.uuid4()
-    session = SimpleNamespace(
+    session: Any = SimpleNamespace(
         id=uuid.uuid4(),
         user_id=user_id,
         title="附件会话",
@@ -165,23 +168,25 @@ async def test_archive_session_refreshes_server_managed_fields() -> None:
     )
 
     class Repo:
-        async def get_session(self, db, session_id):
+        async def get_session(self: Any, db: Any, session_id: Any) -> Any:
             return session
 
-        async def archive_session(self, db, *, session, user_id):
+        async def archive_session(
+            self: Any, db: Any, *, session: Any, user_id: Any
+        ) -> Any:
             session.status = "archived"
             return session
 
     class Db:
         refreshed = False
 
-        async def refresh(self, item):
+        async def refresh(self: Any, item: Any) -> Any:
             assert item is session
             self.refreshed = True
 
     db = Db()
-    result = await AgentService(SimpleNamespace(), repo=Repo()).archive_session(
-        db,
+    result = await AgentService(SimpleNamespace(), repo=Repo()).archive_session(  # type: ignore[arg-type]
+        db,  # type: ignore[arg-type]
         session_id=session.id,
         current_user=SimpleNamespace(id=user_id),
     )

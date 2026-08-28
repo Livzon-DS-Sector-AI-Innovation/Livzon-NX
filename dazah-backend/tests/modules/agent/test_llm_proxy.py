@@ -1,3 +1,5 @@
+from typing import Any
+
 from app.modules.agent.llm_proxy import (
     body_without_thinking,
     build_provider_body,
@@ -28,7 +30,7 @@ def test_payload_has_images_detects_multimodal_message() -> None:
     )
 
 
-def test_build_provider_body_merges_extra_body_for_raw_http_forwarding():
+def test_build_provider_body_merges_extra_body_for_raw_http_forwarding() -> Any:
     body = build_provider_body(
         {
             "model": "dazah-active-text",
@@ -51,7 +53,7 @@ def test_build_provider_body_merges_extra_body_for_raw_http_forwarding():
     assert "extra_body" not in body
 
 
-def test_build_provider_body_disables_kimi_thinking_by_default():
+def test_build_provider_body_disables_kimi_thinking_by_default() -> Any:
     body = build_provider_body(
         {"messages": [{"role": "user", "content": "hello"}]},
         model_name="kimi-k2.5",
@@ -61,7 +63,7 @@ def test_build_provider_body_disables_kimi_thinking_by_default():
     assert body["thinking"] == {"type": "disabled"}
 
 
-def test_build_provider_body_preserves_explicit_kimi_thinking():
+def test_build_provider_body_preserves_explicit_kimi_thinking() -> Any:
     body = build_provider_body(
         {
             "messages": [{"role": "user", "content": "hello"}],
@@ -79,7 +81,7 @@ def test_build_provider_body_preserves_explicit_kimi_thinking():
     )
 
 
-def test_build_provider_body_preserves_explicit_reasoning_effort():
+def test_build_provider_body_preserves_explicit_reasoning_effort() -> Any:
     body = build_provider_body(
         {
             "messages": [{"role": "user", "content": "hello"}],
@@ -93,7 +95,7 @@ def test_build_provider_body_preserves_explicit_reasoning_effort():
     assert "thinking" not in body
 
 
-def test_build_provider_body_does_not_add_kimi_defaults_to_other_models():
+def test_build_provider_body_does_not_add_kimi_defaults_to_other_models() -> Any:
     body = build_provider_body(
         {"messages": [{"role": "user", "content": "hello"}]},
         model_name="deepseek-chat",
@@ -103,7 +105,7 @@ def test_build_provider_body_does_not_add_kimi_defaults_to_other_models():
     assert "thinking" not in body
 
 
-def test_build_provider_body_omits_config_temperature_when_zero():
+def test_build_provider_body_omits_config_temperature_when_zero() -> Any:
     body = build_provider_body(
         {"messages": [{"role": "user", "content": "hello"}]},
         model_name="local-model",
@@ -113,7 +115,9 @@ def test_build_provider_body_omits_config_temperature_when_zero():
     assert "temperature" not in body
 
 
-def test_build_provider_body_preserves_explicit_payload_temperature_when_config_zero():
+def test_provider_body_keeps_explicit_temperature_when_config_zero() -> (
+    Any
+):
     body = build_provider_body(
         {
             "messages": [{"role": "user", "content": "hello"}],
@@ -126,7 +130,7 @@ def test_build_provider_body_preserves_explicit_payload_temperature_when_config_
     assert body["temperature"] == 0.7
 
 
-def test_build_provider_body_strips_temperature_for_kimi_models():
+def test_build_provider_body_strips_temperature_for_kimi_models() -> Any:
     body = build_provider_body(
         {
             "messages": [{"role": "user", "content": "hello"}],
@@ -140,7 +144,9 @@ def test_build_provider_body_strips_temperature_for_kimi_models():
     assert body["thinking"] == {"type": "disabled"}
 
 
-def test_build_provider_body_strips_reasoning_effort_for_default_kimi_non_thinking():
+def test_provider_body_strips_kimi_reasoning_for_non_thinking() -> (
+    Any
+):
     body = build_provider_body(
         {
             "messages": [{"role": "user", "content": "hello"}],
@@ -154,7 +160,9 @@ def test_build_provider_body_strips_reasoning_effort_for_default_kimi_non_thinki
     assert body["thinking"] == {"type": "disabled"}
 
 
-def test_build_provider_body_preserves_explicit_kimi_thinking_with_reasoning_effort():
+def test_provider_body_keeps_kimi_reasoning_when_explicit() -> (
+    Any
+):
     body = build_provider_body(
         {
             "messages": [{"role": "user", "content": "hello"}],
@@ -169,7 +177,7 @@ def test_build_provider_body_preserves_explicit_kimi_thinking_with_reasoning_eff
     assert body["thinking"] == {"type": "enabled"}
 
 
-def test_should_retry_without_auto_thinking_for_auto_kimi_default():
+def test_should_retry_without_auto_thinking_for_auto_kimi_default() -> Any:
     payload = {"messages": [{"role": "user", "content": "hello"}]}
     body = build_provider_body(payload, model_name="kimi-k2.5", temperature=0.1)
 

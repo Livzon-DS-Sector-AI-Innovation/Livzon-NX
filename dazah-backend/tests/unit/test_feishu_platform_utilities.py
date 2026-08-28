@@ -1,7 +1,8 @@
 """Unit tests for shared Feishu field, event, Bitable, and sync helpers."""
 
 from datetime import UTC, date, datetime, timedelta
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
@@ -32,6 +33,8 @@ from app.platform.integrations.feishu.sync import (
     run_sync,
 )
 
+SimpleNamespace: Any = _SimpleNamespace
+
 
 @pytest.mark.parametrize(
     ("value", "expected"),
@@ -44,7 +47,7 @@ from app.platform.integrations.feishu.sync import (
         (None, ""),
     ],
 )
-def test_extract_text_variants(value, expected) -> None:
+def test_extract_text_variants(value: Any, expected: Any) -> None:
     assert extract_text(value) == expected
 
 
@@ -83,14 +86,14 @@ def test_millisecond_conversions() -> None:
 @pytest.mark.asyncio
 async def test_event_registration_and_dispatch_contain_handler_errors() -> None:
     event_type = "ci.event"
-    calls: list[dict] = []
+    calls: list[dict[Any, Any]] = []
 
     @event_client.on_event(event_type)
-    async def success(payload):
+    async def success(payload: Any) -> Any:
         calls.append(payload)
 
     @event_client.on_event(event_type)
-    async def failure(_payload):
+    async def failure(_payload: Any) -> Any:
         raise RuntimeError("handler failed")
 
     await event_client._dispatch_event(
@@ -104,23 +107,23 @@ async def test_event_registration_and_dispatch_contain_handler_errors() -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_ws_url_handles_success_and_failures(monkeypatch) -> None:
-    response = SimpleNamespace(
+async def test_get_ws_url_handles_success_and_failures(monkeypatch: Any) -> None:
+    response: Any = SimpleNamespace(
         status_code=200,
         json=lambda: {"code": 0, "data": {"URL": "wss://example"}},
     )
-    client = AsyncMock()
+    client: Any = AsyncMock()
     client.post.return_value = response
 
     class ClientContext:
-        async def __aenter__(self):
+        async def __aenter__(self: Any) -> Any:
             return client
 
-        async def __aexit__(self, *_args):
+        async def __aexit__(self: Any, *_args: Any) -> Any:
             return False
 
     monkeypatch.setattr(
-        event_client.httpx,
+        event_client.httpx,  # type: ignore[attr-defined]
         "AsyncClient",
         lambda **_kwargs: ClientContext(),
     )
@@ -163,9 +166,31 @@ async def test_bitable_client_crud_and_pagination() -> None:
     assert await client.list_fields("table") == [{"field_id": "1"}]
     assert await client.search_records(
         "table",
-        filter_str="filter",
+        filter_info={
+            "conjunction": "and",
+            "conditions": [
+                {
+                    "field_name": "物料编码",
+                    "operator": "contains",
+                    "value": ["MAT"],
+                }
+            ],
+        },
         automatic_fields=True,
+        view_id="view",
     ) == [{"record_id": "1"}]
+    assert client.client.request.call_args.kwargs["json"]["filter"] == {
+        "conjunction": "and",
+        "conditions": [
+            {
+                "field_name": "物料编码",
+                "operator": "contains",
+                "value": ["MAT"],
+            }
+        ],
+    }
+    assert client.client.request.call_args.kwargs["json"]["view_id"] == "view"
+    assert client.client.request.call_args.kwargs["params"] == {"page_size": 500}
     assert client._path("table", "/records").endswith("/table/records")
 
 
@@ -185,6 +210,94 @@ async def test_bitable_client_requires_configuration() -> None:
         await client.list_fields("")
     with pytest.raises(RuntimeError, match="table_id"):
         await client.search_records("")
+
+
+@pytest.mark.asyncio
+async def test_bitable_client_uses_legacy_endpoint_for_formula_filters() -> None:
+    client = BitableClient(app_token="app-token")
+    client.client = AsyncMock()
+    client.client.request.return_value = {"items": [{"record_id": "record"}]}
+
+    assert await client.search_records(
+        "table",
+        filter_str='CurrentValue.[物料编码].contains("MAT")',
+        view_id="view",
+        page_size=20,
+    ) == [{"record_id": "record"}]
+    client.client.request.assert_awaited_once_with(
+        "GET",
+        "/bitable/v1/apps/app-token/tables/table/records",
+        params={
+            "page_size": 20,
+            "filter": 'CurrentValue.[物料编码].contains("MAT")',
+            "view_id": "view",
+        },
+        timeout=None,
+    )
+
+
+@pytest.mark.asyncio
+async def test_bitable_search_page_accepts_override_timeout() -> None:
+    client = BitableClient(app_token="app-token")
+    client.client = AsyncMock()
+    client.client.request.return_value = {"items": [], "has_more": False}
+
+    await client.search_records_page(
+        "table",
+        view_id="view",
+        field_names=["物料编码"],
+        page_size=500,
+        page_token="current-page",
+        timeout=60.0,
+    )
+
+    client.client.request.assert_awaited_once_with(
+        "POST",
+        "/bitable/v1/apps/app-token/tables/table/records/search",
+        json={
+            "view_id": "view",
+            "field_names": ["物料编码"],
+        },
+        params={"page_size": 500, "page_token": "current-page"},
+        timeout=60.0,
+    )
+
+
+@pytest.mark.asyncio
+async def test_bitable_search_page_preserves_pagination_metadata() -> None:
+    client = BitableClient(app_token="app-token")
+    client.client = AsyncMock()
+    client.client.request.return_value = {
+        "items": [{"record_id": "record"}, "invalid"],
+        "has_more": True,
+        "page_token": "next-page",
+        "total": 600,
+    }
+
+    page = await client.search_records_page(
+        "table",
+        view_id="view",
+        field_names=["物料编码", "物料说明"],
+        page_size=500,
+        page_token="current-page",
+    )
+
+    assert page == {
+        "items": [{"record_id": "record"}],
+        "has_more": True,
+        "page_token": "next-page",
+        "total": 600,
+    }
+    client.client.request.assert_awaited_once_with(
+        "POST",
+        "/bitable/v1/apps/app-token/tables/table/records/search",
+        json={
+            "view_id": "view",
+            "field_names": ["物料编码", "物料说明"],
+        },
+        params={"page_size": 500, "page_token": "current-page"},
+        timeout=None,
+    )
 
 
 @pytest.mark.asyncio
@@ -307,9 +420,7 @@ async def test_feishu_bitable_sync_guards_and_failure_paths() -> None:
     with pytest.raises(RuntimeError, match="update failed"):
         await sync.sync_employee_updated({"employee_number": "E1"})
     with pytest.raises(RuntimeError, match="update failed"):
-        await sync.sync_offboarding_updated(
-            {"_feishu_record_id": "record"}
-        )
+        await sync.sync_offboarding_updated({"_feishu_record_id": "record"})
 
     sync.bitable.delete_record.side_effect = RuntimeError("delete failed")
     with pytest.raises(RuntimeError, match="delete failed"):
@@ -346,13 +457,13 @@ async def test_run_sync_counts_all_outcomes() -> None:
         {"record_id": "missing"},
         {"record_id": "error", "id": "error"},
     ]
-    post_process = AsyncMock()
+    post_process: Any = AsyncMock()
 
-    async def upsert(parsed):
+    async def upsert(parsed: Any) -> Any:
         if parsed["id"] == "error":
             raise RuntimeError("write failed")
 
-    async def get_existing(record_id):
+    async def get_existing(record_id: Any) -> Any:
         created_at = (
             datetime.now(UTC)
             if record_id == "created"
@@ -374,7 +485,7 @@ async def test_run_sync_counts_all_outcomes() -> None:
 
 @pytest.mark.asyncio
 async def test_run_sync_rejects_missing_identity_and_naive_creation_time() -> None:
-    existing = SimpleNamespace(created_at=datetime.now())
+    existing: Any = SimpleNamespace(created_at=datetime.now())
     stats = await run_sync(
         fetch_records=AsyncMock(
             return_value=[
@@ -412,9 +523,9 @@ def test_user_record_parsing_and_creation_heuristic() -> None:
 
 @pytest.mark.asyncio
 async def test_user_upsert_updates_existing_and_creates_missing(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
-    existing = SimpleNamespace(
+    existing: Any = SimpleNamespace(
         name="旧名",
         en_name="",
         employee_no=None,
@@ -431,19 +542,19 @@ async def test_user_upsert_updates_existing_and_creates_missing(
         SimpleNamespace(scalar_one_or_none=lambda: None),
         SimpleNamespace(scalar_one_or_none=lambda: existing),
     ]
-    session = SimpleNamespace(
+    session: Any = SimpleNamespace(
         execute=AsyncMock(side_effect=results),
         add=lambda value: added.append(value),
         commit=AsyncMock(),
     )
-    added = []
+    added: list[Any] = []
 
     class SessionContext:
-        async def __aenter__(self):
-            return session
+        async def __aenter__(self: Any) -> Any:
+            return session  # type: ignore[no-any-return]
 
-        async def __aexit__(self, *_args):
-            return False
+        async def __aexit__(self: Any, *_args: Any) -> Any:
+            return False  # type: ignore[return-value]
 
     monkeypatch.setattr(sync_module, "async_session_factory", SessionContext)
     parsed = {
@@ -470,8 +581,8 @@ async def test_user_upsert_updates_existing_and_creates_missing(
 
 
 @pytest.mark.asyncio
-async def test_sync_departments_updates_and_creates_records(monkeypatch) -> None:
-    existing = SimpleNamespace(
+async def test_sync_departments_updates_and_creates_records(monkeypatch: Any) -> None:
+    existing: Any = SimpleNamespace(
         created_at=datetime.now(UTC),
         name="旧部门",
         parent_feishu_department_id="",
@@ -480,25 +591,25 @@ async def test_sync_departments_updates_and_creates_records(monkeypatch) -> None
         status_is_deleted=False,
         order=0,
     )
-    persisted_new = SimpleNamespace(created_at=datetime.now(UTC))
+    persisted_new: Any = SimpleNamespace(created_at=datetime.now(UTC))
     results = [
         SimpleNamespace(scalar_one_or_none=lambda: existing),
         SimpleNamespace(scalar_one_or_none=lambda: existing),
         SimpleNamespace(scalar_one_or_none=lambda: None),
         SimpleNamespace(scalar_one_or_none=lambda: persisted_new),
     ]
-    added = []
-    session = SimpleNamespace(
+    added: list[Any] = []
+    session: Any = SimpleNamespace(
         execute=AsyncMock(side_effect=results),
         add=lambda value: added.append(value),
         commit=AsyncMock(),
     )
 
     class SessionContext:
-        async def __aenter__(self):
+        async def __aenter__(self: Any) -> Any:
             return session
 
-        async def __aexit__(self, *_args):
+        async def __aexit__(self: Any, *_args: Any) -> Any:
             return False
 
     monkeypatch.setattr(sync_module, "async_session_factory", SessionContext)
@@ -531,7 +642,7 @@ async def test_sync_departments_updates_and_creates_records(monkeypatch) -> None
 
 @pytest.mark.asyncio
 async def test_sync_members_reports_department_and_user_fetch_failures(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     monkeypatch.setattr(
         "app.platform.integrations.feishu.contact.get_all_departments",
@@ -542,7 +653,7 @@ async def test_sync_members_reports_department_and_user_fetch_failures(
         AsyncMock(side_effect=RuntimeError("user timeout")),
     )
 
-    async def invoke_fetch(**kwargs):
+    async def invoke_fetch(**kwargs: Any) -> Any:
         records = await kwargs["fetch_records"]()
         return {
             "created": 0,
@@ -559,11 +670,13 @@ async def test_sync_members_reports_department_and_user_fetch_failures(
 
 
 @pytest.mark.asyncio
-async def test_sync_members_orchestrates_departments_and_users(monkeypatch) -> None:
-    async def get_departments(**_kwargs):
+async def test_sync_members_orchestrates_departments_and_users(
+    monkeypatch: Any,
+) -> None:
+    async def get_departments(**_kwargs: Any) -> Any:
         return [{"department_id": "child", "name": "子部门"}]
 
-    async def get_users(department_id, **_kwargs):
+    async def get_users(department_id: Any, **_kwargs: Any) -> Any:
         if department_id == "root":
             return [{"open_id": "root-user"}]
         return [{"open_id": "child-user"}]
@@ -577,7 +690,7 @@ async def test_sync_members_orchestrates_departments_and_users(monkeypatch) -> N
         get_users,
     )
 
-    async def fake_run_sync(**kwargs):
+    async def fake_run_sync(**kwargs: Any) -> Any:
         raw = await kwargs["fetch_records"]()
         parsed = [kwargs["parse_record"](record) for record in raw]
         return {
@@ -596,9 +709,9 @@ async def test_sync_members_orchestrates_departments_and_users(monkeypatch) -> N
 
 @pytest.mark.asyncio
 async def test_sync_users_by_ids_deduplicates_and_ignores_fetch_errors(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
-    async def get_user(user_id, **_kwargs):
+    async def get_user(user_id: Any, **_kwargs: Any) -> Any:
         if user_id == "bad":
             raise RuntimeError("unavailable")
         return {"open_id": user_id}
@@ -608,7 +721,7 @@ async def test_sync_users_by_ids_deduplicates_and_ignores_fetch_errors(
         get_user,
     )
 
-    async def fake_run_sync(**kwargs):
+    async def fake_run_sync(**kwargs: Any) -> Any:
         records = await kwargs["fetch_records"]()
         return {
             "created": len(records),
@@ -623,8 +736,8 @@ async def test_sync_users_by_ids_deduplicates_and_ignores_fetch_errors(
 
 
 @pytest.mark.asyncio
-async def test_sync_departments_builds_expected_mapping(monkeypatch) -> None:
-    async def get_departments(**_kwargs):
+async def test_sync_departments_builds_expected_mapping(monkeypatch: Any) -> None:
+    async def get_departments(**_kwargs: Any) -> Any:
         return [
             {
                 "department_id": "d1",
@@ -638,9 +751,9 @@ async def test_sync_departments_builds_expected_mapping(monkeypatch) -> None:
         "app.platform.integrations.feishu.contact.get_all_departments",
         get_departments,
     )
-    captured: list[dict | None] = []
+    captured: list[dict[Any, Any] | None] = []
 
-    async def fake_run_sync(**kwargs):
+    async def fake_run_sync(**kwargs: Any) -> Any:
         records = await kwargs["fetch_records"]()
         captured.extend(kwargs["parse_record"](record) for record in records)
         return {"created": 1, "updated": 0, "failed": 1, "total": 2}
@@ -685,28 +798,31 @@ def test_feishu_reference_parsing_and_fallbacks() -> None:
 
 
 @pytest.mark.asyncio
-async def test_tenant_access_token_cache_and_http_failures(monkeypatch) -> None:
+async def test_tenant_access_token_cache_and_http_failures(monkeypatch: Any) -> None:
     with pytest.raises(RuntimeError, match="未配置"):
         await feishu_utils.get_tenant_access_token("", "")
 
     monkeypatch.setattr(feishu_utils, "cache_get", AsyncMock(return_value="cached"))
-    assert await feishu_utils.get_tenant_access_token(
-        "app",
-        "secret",
-        cache_key="key",
-    ) == "cached"
+    assert (
+        await feishu_utils.get_tenant_access_token(
+            "app",
+            "secret",
+            cache_key="key",
+        )
+        == "cached"
+    )
 
-    response = SimpleNamespace(
+    response: Any = SimpleNamespace(
         raise_for_status=lambda: None,
         json=lambda: {"code": 0, "tenant_access_token": "fresh"},
     )
-    client = SimpleNamespace(post=AsyncMock(return_value=response))
+    client: Any = SimpleNamespace(post=AsyncMock(return_value=response))
 
     class ClientContext:
-        async def __aenter__(self):
+        async def __aenter__(self: Any) -> Any:
             return client
 
-        async def __aexit__(self, *_args):
+        async def __aexit__(self: Any, *_args: Any) -> Any:
             return False
 
     monkeypatch.setattr(
@@ -720,15 +836,18 @@ async def test_tenant_access_token_cache_and_http_failures(monkeypatch) -> None:
         AsyncMock(side_effect=RuntimeError("Redis unavailable")),
     )
     monkeypatch.setattr(
-        feishu_utils.httpx,
+        feishu_utils.httpx,  # type: ignore[attr-defined]
         "AsyncClient",
         lambda **_kwargs: ClientContext(),
     )
-    assert await feishu_utils.get_tenant_access_token(
-        "app",
-        "secret",
-        cache_key="key",
-    ) == "fresh"
+    assert (
+        await feishu_utils.get_tenant_access_token(
+            "app",
+            "secret",
+            cache_key="key",
+        )
+        == "fresh"
+    )
 
     response.json = lambda: {"code": 1, "msg": "denied"}
     with pytest.raises(RuntimeError, match="denied"):
@@ -739,7 +858,7 @@ async def test_tenant_access_token_cache_and_http_failures(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_bitable_connectivity_reports_all_failure_modes(monkeypatch) -> None:
+async def test_bitable_connectivity_reports_all_failure_modes(monkeypatch: Any) -> None:
     missing_app = await feishu_utils.test_bitable_table_with_token(
         tenant_access_token="token",
         app_token="",
@@ -753,21 +872,21 @@ async def test_bitable_connectivity_reports_all_failure_modes(monkeypatch) -> No
     )
     assert missing_table.status == "error"
 
-    response = SimpleNamespace(
+    response: Any = SimpleNamespace(
         raise_for_status=lambda: None,
         json=lambda: {"code": 0},
     )
-    client = SimpleNamespace(get=AsyncMock(return_value=response))
+    client: Any = SimpleNamespace(get=AsyncMock(return_value=response))
 
     class ClientContext:
-        async def __aenter__(self):
+        async def __aenter__(self: Any) -> Any:
             return client
 
-        async def __aexit__(self, *_args):
+        async def __aexit__(self: Any, *_args: Any) -> Any:
             return False
 
     monkeypatch.setattr(
-        feishu_utils.httpx,
+        feishu_utils.httpx,  # type: ignore[attr-defined]
         "AsyncClient",
         lambda **_kwargs: ClientContext(),
     )
@@ -795,7 +914,7 @@ async def test_bitable_connectivity_reports_all_failure_modes(monkeypatch) -> No
 
 
 @pytest.mark.asyncio
-async def test_bitable_connectivity_contains_auth_failure(monkeypatch) -> None:
+async def test_bitable_connectivity_contains_auth_failure(monkeypatch: Any) -> None:
     monkeypatch.setattr(
         feishu_utils,
         "get_tenant_access_token",

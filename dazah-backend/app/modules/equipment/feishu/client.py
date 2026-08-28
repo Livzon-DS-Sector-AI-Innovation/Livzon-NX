@@ -3,7 +3,7 @@
 import json
 import logging
 
-import lark_oapi as lark
+import lark_oapi as lark  # type: ignore[import-untyped]
 
 from app.core.config import get_settings
 
@@ -25,7 +25,7 @@ async def get_equipment_feishu_client() -> lark.Client:
 
 async def get_equipment_tenant_token(client: lark.Client) -> str:
     """获取设备机器人的 tenant_access_token。"""
-    from lark_oapi.api.auth.v3 import (
+    from lark_oapi.api.auth.v3 import (  # type: ignore[import-untyped]
         InternalTenantAccessTokenRequest,
         InternalTenantAccessTokenRequestBody,
     )
@@ -48,6 +48,6 @@ async def get_equipment_tenant_token(client: lark.Client) -> str:
     if resp.raw and resp.raw.content:
         data = json.loads(resp.raw.content.decode("utf-8"))
         token = data.get("tenant_access_token", "")
-        if token:
+        if isinstance(token, str) and token:
             return token
     raise RuntimeError("设备机器人 token 响应为空")

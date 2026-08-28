@@ -63,8 +63,12 @@ async def get_projects(
     query = select(ResearchProject).where(
         ResearchProject.is_deleted == False,  # noqa: E712
     )
-    count_query = select(func.count()).select_from(ResearchProject).where(
-        ResearchProject.is_deleted == False,  # noqa: E712
+    count_query = (
+        select(func.count())
+        .select_from(ResearchProject)
+        .where(
+            ResearchProject.is_deleted == False,  # noqa: E712
+        )
     )
 
     if stage:
@@ -83,19 +87,23 @@ async def get_projects(
         count_query = count_query.where(like_filter)
     if project_type is not None:
         if project_type == "":
-            query = query.where(ResearchProject.project_type == None)
-            count_query = count_query.where(ResearchProject.project_type == None)
+            query = query.where(ResearchProject.project_type.is_(None))
+            count_query = count_query.where(ResearchProject.project_type.is_(None))
         else:
             query = query.where(ResearchProject.project_type == project_type)
-            count_query = count_query.where(ResearchProject.project_type == project_type)
+            count_query = count_query.where(
+                ResearchProject.project_type == project_type
+            )
 
     total = (await db.execute(count_query)).scalar_one()
 
-    query = query.order_by(ResearchProject.updated_at.desc()).offset(
-        (page - 1) * page_size
-    ).limit(page_size)
+    query = (
+        query.order_by(ResearchProject.updated_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
     result = await db.execute(query)
-    return result.scalars().all(), total
+    return list(result.scalars().all()), total
 
 
 async def update_project(
@@ -114,15 +122,10 @@ async def delete_project(db: AsyncSession, project: ResearchProject) -> None:
     await db.flush()
 
 
-
-
 # ===== Pilot Workflow Repository =====
 
 
-
-async def create_workflow(
-    db: AsyncSession, data: dict[str, Any]
-) -> PilotWorkflow:
+async def create_workflow(db: AsyncSession, data: dict[str, Any]) -> PilotWorkflow:
     workflow = PilotWorkflow(**data)
     db.add(workflow)
     await db.flush()
@@ -151,8 +154,12 @@ async def get_workflows(
     query = select(PilotWorkflow).where(
         PilotWorkflow.is_deleted == False,  # noqa: E712
     )
-    count_query = select(func.count()).select_from(PilotWorkflow).where(
-        PilotWorkflow.is_deleted == False,  # noqa: E712
+    count_query = (
+        select(func.count())
+        .select_from(PilotWorkflow)
+        .where(
+            PilotWorkflow.is_deleted == False,  # noqa: E712
+        )
     )
 
     if status:
@@ -165,16 +172,16 @@ async def get_workflows(
 
     total = (await db.execute(count_query)).scalar_one()
 
-    query = query.order_by(PilotWorkflow.created_at.desc()).offset(
-        (page - 1) * page_size
-    ).limit(page_size)
+    query = (
+        query.order_by(PilotWorkflow.created_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
     result = await db.execute(query)
-    return result.scalars().all(), total
+    return list(result.scalars().all()), total
 
 
-async def delete_workflow(
-    db: AsyncSession, workflow: PilotWorkflow
-) -> None:
+async def delete_workflow(db: AsyncSession, workflow: PilotWorkflow) -> None:
     workflow.is_deleted = True
     await db.flush()
 

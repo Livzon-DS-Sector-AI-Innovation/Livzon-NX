@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date
+from typing import Any
 
 import pytest
 from httpx import AsyncClient
@@ -15,7 +16,7 @@ from tests.modules.quality.validation_migration import (
 
 
 @pytest.fixture(autouse=True)
-async def _clean_validation_records(db_session: AsyncSession):
+async def _clean_validation_records(db_session: AsyncSession) -> Any:
     await reset_validation_records_table(db_session)
     yield
     await reset_validation_records_table(db_session)
@@ -216,7 +217,7 @@ async def test_update_validation_execution_api_updates_child_row(
 async def test_batch_delete_validation_api_soft_deletes_rows(
     client: AsyncClient,
 ) -> None:
-    create_ids = []
+    create_ids: list[Any] = []
     for index in range(2):
         response = await client.post(
             "/api/v1/quality/validations",

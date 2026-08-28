@@ -4,31 +4,33 @@ import asyncio
 import os
 import sys
 import uuid
+from typing import Any
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from sqlalchemy import select
 
-# Import identity models first to resolve FK references
-from app.platform.identity.models import User  # noqa: F401
 from app.core.database import async_session_factory
 from app.modules.regulatory_tracker.models import DataChannel, DataSource
 
+# Import identity models first to resolve FK references
+from app.platform.identity.models import User  # noqa: F401
 
-async def seed_regulatory_tracker():
+
+async def seed_regulatory_tracker() -> Any:
     """Seed initial data for regulatory tracker."""
-    
+
     async with async_session_factory() as session:
         # Check if already seeded
         result = await session.execute(
             select(DataSource).where(DataSource.code == "CDE")
         )
         existing = result.scalar_one_or_none()
-        
+
         if existing:
             print("⚠️  CDE data source already exists, skipping seed")
             return
-        
+
         # Create CDE data source
         cde_source = DataSource(
             id=uuid.uuid4(),
@@ -39,9 +41,9 @@ async def seed_regulatory_tracker():
         )
         session.add(cde_source)
         await session.flush()
-        
+
         print(f"✅ Created data source: CDE (id={cde_source.id})")
-        
+
         # Create CDE domestic guideline channel
         cde_guideline_channel = DataChannel(
             id=uuid.uuid4(),
@@ -53,9 +55,12 @@ async def seed_regulatory_tracker():
             enabled=True,
         )
         session.add(cde_guideline_channel)
-        
-        print(f"✅ Created data channel: cde_domestic_guideline (id={cde_guideline_channel.id})")
-        
+
+        print(
+                f"✅ Created data channel: cde_domestic_guideline "
+                f"(id={cde_guideline_channel.id})"
+        )
+
         await session.commit()
         print("\n✅ Seed completed successfully")
         print(f"   Data Source ID: {cde_source.id}")

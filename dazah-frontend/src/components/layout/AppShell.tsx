@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense } from "react"
+import { Suspense, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { AgentFloatingEntry } from "@/components/agent/AgentFloatingEntry"
@@ -12,6 +12,7 @@ import {
 import { TopNav } from "./TopNav"
 import { Sidebar } from "./Sidebar"
 import type { User } from "@/types/user"
+import { useAuthStore } from "@/stores/auth"
 
 interface AppShellProps {
   children: React.ReactNode
@@ -19,6 +20,17 @@ interface AppShellProps {
 }
 
 export function AppShell({ children, user }: AppShellProps) {
+  const setUser = useAuthStore((state) => state.setUser)
+
+  useEffect(() => {
+    setUser({
+      id: user.id,
+      name: user.name,
+      roles: user.roles,
+      permissions: user.permissions,
+    })
+  }, [setUser, user])
+
   const pathname = usePathname()
   const moduleKey = pathname.split("/")[1]
   const currentModule = getModuleByKey(moduleKey)

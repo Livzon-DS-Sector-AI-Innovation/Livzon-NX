@@ -2,10 +2,10 @@
 
 import uuid
 from datetime import date
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import NotFoundException
 from app.modules.quality import repository as repo
 from app.modules.quality.models.cpv_batch import CpvBatch
 from app.modules.quality.schemas import CpvBatchWideResponse
@@ -41,32 +41,32 @@ async def get_batches_wide(
     batches, total = await get_batches(
         db, product_id, data_type, batch_no, start_date, end_date, page, page_size
     )
-    
+
     if not batches:
         return [], total
-    
+
     # 获取参数定义
     parameters = await repo.get_parameters(db, product_id, data_type)
     param_map = {p.id: p for p in parameters}
-    
+
     # 获取所有批次的参数值
     batch_ids = [b.id for b in batches]
     values = await repo.get_values_by_batch_ids(db, batch_ids)
-    
+
     # 按批次组织数据
-    values_by_batch: dict[uuid.UUID, list] = {}
+    values_by_batch: dict[uuid.UUID, list[Any]] = {}
     for v in values:
         if v.batch_id not in values_by_batch:
             values_by_batch[v.batch_id] = []
         values_by_batch[v.batch_id].append(v)
-    
+
     # 构建宽表响应
     result = []
     for batch in batches:
         batch_values = values_by_batch.get(batch.id, [])
         params_dict = {}
         has_abnormal = False
-        
+
         for v in batch_values:
             param = param_map.get(v.parameter_id)
             if param:
@@ -78,7 +78,7 @@ async def get_batches_wide(
                 }
                 if v.is_abnormal:
                     has_abnormal = True
-        
+
         result.append(
             CpvBatchWideResponse(
                 id=batch.id,
@@ -90,5 +90,5 @@ async def get_batches_wide(
                 has_abnormal=has_abnormal,
             )
         )
-    
+
     return result, total

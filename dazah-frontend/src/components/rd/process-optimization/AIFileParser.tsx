@@ -8,11 +8,31 @@ import { parseExperimentRecord, parseProcessParameters } from '@/actions/ai-pars
 
 const { Text } = Typography
 
+export interface ParsedBatchData {
+  batch_no?: string
+  scale_g?: number
+  scale_kg?: number
+  date?: string
+  operator?: string
+  equipment?: string
+  temperature?: string | number
+  time?: string | number
+  ratio?: string | number
+  other_parameters?: string
+  yield_pct?: number
+  purity_pct?: number
+  impurities_pct?: number
+  appearance?: string
+  observations?: string
+  conclusion?: string
+  comparison_notes?: string
+}
+
 interface AIFileParserProps {
   /** 解析类型 */
   parseType: 'lab_confirmation' | 'scale_up'
   /** 解析完成回调 */
-  onParseComplete: (data: any) => void
+  onParseComplete: (data: ParsedBatchData) => void
   /** 支持的文本内容解析（可选） */
   supportTextParse?: boolean
   /** 提示文本 */
@@ -38,7 +58,7 @@ export function AIFileParser({
       message.success('文件解析完成，已自动填充表单')
       onParseComplete(result)
       return false // 阻止自动上传
-    } catch (err: any) {
+    } catch (err) {
       message.error(err.message || '文件解析失败')
       return false
     } finally {
@@ -59,7 +79,7 @@ export function AIFileParser({
       onParseComplete(result)
       setTextContent('')
       setShowTextInput(false)
-    } catch (err: any) {
+    } catch (err) {
       message.error(err.message || '内容解析失败')
     } finally {
       setParsing(false)

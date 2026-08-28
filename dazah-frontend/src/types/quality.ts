@@ -1,3 +1,5 @@
+import type { components } from '@/types/generated/schema';
+
 // Quality management types (from shared/api.interface.ts)
 
 // ============ Deviation Types ============
@@ -92,7 +94,7 @@ export interface DeviationListItem {
   discovery_date: string | null;
   discovery_time?: string | null;
   status: DeviationStatus;
-  level: DeviationLevel | null;
+  level: DeviationLevel | string | null;
   root_cause_category: ReasonCategory | null;
   reporter_id: string | null;
   handler: string | null;
@@ -100,6 +102,7 @@ export interface DeviationListItem {
   affected_items: string | null;
   description: string | null;
   has_occurred_before: boolean | null;
+  previous_occurrence_code?: string | null;
   material_disposition: string | null;
   corrective_actions: string | null;
   root_cause_analysis: string | null;
@@ -150,6 +153,11 @@ export interface FeishuDeviationReportRecordItem extends FeishuPageRecordBase {
   qa_head_result?: string | null;
   qa_head_reviewed_at?: string | null;
   report_status?: string | null;
+  reporters?: Array<{ name?: string; avatar_url?: string; id?: string }> | null;
+  department_heads?: Array<{ name?: string; avatar_url?: string; id?: string }> | null;
+  qas?: Array<{ name?: string; avatar_url?: string; id?: string }> | null;
+  qa_heads?: Array<{ name?: string; avatar_url?: string; id?: string }> | null;
+  attachments?: Array<{ name?: string; url?: string; type?: string; size?: number }> | null;
   feishu_base_table_id?: string | null;
   feishu_base_record_id?: string | null;
   feishu_sync_status?: string | null;
@@ -171,7 +179,7 @@ export interface DeviationDetail {
   discovery_time: string | null;
   discovery_location: string | null;
   status: DeviationStatus;
-  level: DeviationLevel | null;
+  level: DeviationLevel | string | null;
   root_cause_category: ReasonCategory | null;
   description: string | null;
   immediate_actions: string | null;
@@ -187,6 +195,7 @@ export interface DeviationDetail {
   affected_items: string | null;
   batch_number: string | null;
   has_occurred_before?: boolean | null;
+  previous_occurrence_code?: string | null;
   material_disposition?: string | null;
   corrective_actions?: string | null;
   root_cause_analysis?: string | null;
@@ -444,13 +453,17 @@ export interface FeishuDeviationInvestigationPushRecordItem extends FeishuPageRe
   investigation_report_url: string | null;
   submitted_at: string | null;
   submitter: string | null;
+  submitters?: Array<{ name?: string; avatar_url?: string; id?: string }> | null;
   department_head: string | null;
+  department_heads?: Array<{ name?: string; avatar_url?: string; id?: string }> | null;
   department_head_result: string | null;
   department_head_reviewed_at: string | null;
   qa_name: string | null;
+  qas?: Array<{ name?: string; avatar_url?: string; id?: string }> | null;
   qa_result: string | null;
   qa_reviewed_at: string | null;
   qa_head_name: string | null;
+  qa_heads?: Array<{ name?: string; avatar_url?: string; id?: string }> | null;
   qa_head_result: string | null;
   qa_head_reviewed_at: string | null;
   feishu_base_table_id?: string | null;
@@ -622,12 +635,20 @@ export interface QualityFeishuAppSettingsDetail {
   last_test_status?: string | null;
   last_test_error?: string | null;
   last_tested_at?: string | null;
+  deviation_report_form_url?: string | null;
+  deviation_investigation_push_form_url?: string | null;
+  oos_oot_report_form_url?: string | null;
+  oos_oot_investigation_push_form_url?: string | null;
 }
 
 export interface UpdateQualityFeishuAppSettingsRequest {
   app_id: string;
   app_secret: string;
   is_enabled: boolean;
+  deviation_report_form_url?: string | null;
+  deviation_investigation_push_form_url?: string | null;
+  oos_oot_report_form_url?: string | null;
+  oos_oot_investigation_push_form_url?: string | null;
 }
 
 export interface QualityFeishuEntitySettingItem {
@@ -718,6 +739,7 @@ export type ValidationType =
   | 'other_validation';
 
 export interface CreateValidationRequest {
+  record_code?: string;
   title?: string;
   validation_type?: string;
   status?: string | null;
@@ -747,6 +769,11 @@ export interface ValidationListQuery {
   status?: string;
   department?: string;
   keyword?: string;
+  record_code?: string;
+  planned_end_date_from?: string;
+  planned_end_date_to?: string;
+  drafted_at_from?: string;
+  drafted_at_to?: string;
 }
 
 export type ValidationListItem = CreateValidationRequest & {
@@ -776,6 +803,7 @@ export type ValidationListItem = CreateValidationRequest & {
 export interface ValidationExecutionItem {
   id: string;
   master_validation_id: string;
+  validation_type?: string | null;
   title: string;
   status?: string | null;
   department?: string | null;
@@ -931,15 +959,16 @@ export interface DeviationAiSession {
 export interface DeviationAiWorkbenchRecord {
   id: string;
   deviation_code: string;
-  title: string;
+  title: string | null;
   department: string | null;
-  status: DeviationStatus;
+  status: DeviationStatus | string;
   discovery_date: string | null;
 }
 
 // ============ Dashboard Statistics ============
 export interface DeviationDashboardStats {
   total: number
+  capaTotal: number
   pending: number
   closedCount: number
   departmentDistribution: Array<{
@@ -964,6 +993,7 @@ export interface DeviationDashboardStats {
     roleLabel: string
     count: number
   }>
+  monthlyTrend: Array<{ month: string; count: number }>
 }
 
 export interface CapaDashboardStats {
@@ -1146,6 +1176,7 @@ export interface CreateDeviationRequest {
   needs_cross_dept_review?: boolean | null;
   cross_dept_reviewers?: CrossDeptReviewer[] | null;
   has_occurred_before?: boolean | null;
+  previous_occurrence_code?: string | null;
   material_disposition?: string | null;
   corrective_actions?: string | null;
   root_cause_analysis?: string | null;
@@ -1171,6 +1202,7 @@ export interface UpdateDeviationRequest {
   attachments?: string[] | null;
   final_code?: string | null;
   handler?: string | null;
+  previous_occurrence_code?: string | null;
   discoverer?: string | null;
   needs_cross_dept_review?: boolean | null;
   cross_dept_reviewers?: CrossDeptReviewer[] | null;
@@ -1321,3 +1353,290 @@ export interface AttachmentReview {
   created_at: string;
   updated_at: string;
 }
+
+// ============ Migrated quality module compatibility types ============
+export interface OosOotReportRecordItem {
+  record_id: string;
+  report_time: string | null;
+  content: string | null;
+  product_name: string | null;
+  batch_number: string | null;
+  report_department: string | null;
+  reporter: string | null;
+  department_head_confirmed: boolean | null;
+  qa_confirmed: boolean | null;
+  qa_head_confirmed: boolean | null;
+  reporters?: Array<{ name?: string; avatar_url?: string; id?: string }> | null;
+  department_heads?: Array<{ name?: string; avatar_url?: string; id?: string }> | null;
+  qas?: Array<{ name?: string; avatar_url?: string; id?: string }> | null;
+  qa_heads?: Array<{ name?: string; avatar_url?: string; id?: string }> | null;
+  attachments?: Array<{ name?: string; url?: string; type?: string; size?: number }> | null;
+  fermentation_head_confirmed?: boolean | null;
+  refinement_head_confirmed?: boolean | null;
+  [key: string]: unknown;
+}
+
+export interface OosOotInvestigationPushRecordItem {
+  record_id: string;
+  oos_oot_code: string;
+  push_round: string | null;
+  investigation_report_url: string | null;
+  submitted_at: string | null;
+  department: string | null;
+  submitter: string | null;
+  department_head: string | null;
+  department_head_result: string | null;
+  department_head_reviewed_at: string | null;
+  qa_result: string | null;
+  qa_reviewed_at: string | null;
+  qa_head_result: string | null;
+  qa_head_reviewed_at: string | null;
+  process_status: string | null;
+  need_resubmit: boolean | null;
+  department_head_direct: string | null;
+  submitters?: Array<{ name?: string; avatar_url?: string; id?: string }> | null;
+  department_heads?: Array<{ name?: string; avatar_url?: string; id?: string }> | null;
+  qas?: Array<{ name?: string; avatar_url?: string; id?: string }> | null;
+  qa_heads?: Array<{ name?: string; avatar_url?: string; id?: string }> | null;
+  [key: string]: unknown;
+}
+
+export interface ComplaintLedgerItem {
+  record_id: string;
+  serial_number: string | null;
+  complaint_number: string | null;
+  complaint_content: string | null;
+  cause_analysis: string | null;
+  reply_date: string | null;
+  closing_deadline: string | null;
+  complaint_level: string | null;
+  complaint_unit: string | null;
+  product_name: string | null;
+  quantity: string | null;
+  handling_result: string | null;
+  capa_result: string | null;
+  batch_number: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface ReturnApplicationItem {
+  record_id: string;
+  serial_number: string | null;
+  product_name: string | null;
+  return_total: string | null;
+  specification: string | null;
+  batch_number: string | null;
+  quantity: string | null;
+  production_date: string | null;
+  expiry_date: string | null;
+  batch_number1: string | null;
+  quantity1: string | null;
+  production_date1: string | null;
+  expiry_date1: string | null;
+  batch_number2: string | null;
+  quantity2: string | null;
+  production_date2: string | null;
+  expiry_date2: string | null;
+  remark: string | null;
+  return_unit_address: string | null;
+  return_reason: string | null;
+  applicant: string | null;
+  application_date: string | null;
+  qa_head_opinion: string | null;
+  qa_head: string | null;
+  qa_head_date: string | null;
+  quality_manager_suggestion: string | null;
+  quality_manager: string | null;
+  quality_manager_date: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface ReturnLedgerItem {
+  record_id: string;
+  serial_number: string | null;
+  product_name: string | null;
+  specification: string | null;
+  product_batch_number: string | null;
+  quantity: string | null;
+  return_unit_address: string | null;
+  return_date: string | null;
+  operator: string | null;
+  disposal_result: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface PackagingPhoto {
+  name: string;
+  url: string;
+  type: string;
+  size: number;
+}
+
+export interface ProductQualityStandardItem {
+  record_id: string;
+  serial_number: string | null;
+  customer_name: string | null;
+  quality_standard: string | null;
+  shipping_trend_url: string | null;
+  special_requirements: string | null;
+  packaging_requirements: string | null;
+  label_requirements: string | null;
+  packaging_photos: PackagingPhoto[];
+  pallet_requirements: string | null;
+  target_market: string | null;
+  registration_status: string | null;
+  other_notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProductQualityProduct {
+  code: string;
+  label: string;
+  entity_code: string;
+}
+
+export type CreateProductQualityStandardRequest = components['schemas']['ProductQualityStandardCreate'];
+export type UpdateProductQualityStandardRequest = components['schemas']['ProductQualityStandardUpdate'];
+
+export interface SupplierQualificationItem {
+  record_id: string;
+  supplier_name: string | null;
+  material_name: string | null;
+  material_type: string | null;
+  qualification_name: string | null;
+  qualification_file: string | null;
+  is_completed: boolean;
+  deadline: string | null;
+  responsible_person: string | null;
+  remark: string | null;
+  expiry_status: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type CreateSupplierQualificationRequest =
+  components['schemas']['app__modules__quality__schemas__supplier_qualification__CreateSupplierQualificationRequest'];
+export type UpdateSupplierQualificationRequest =
+  components['schemas']['app__modules__quality__schemas__supplier_qualification__UpdateSupplierQualificationRequest'];
+
+export interface SupplierDashboardStats {
+  total: number;
+  completed: number;
+  pending: number;
+  completion_rate: number;
+  expired_count: number;
+  due_30_count: number;
+  due_60_count: number;
+  due_90_count: number;
+  normal_count: number;
+  supplier_count: number;
+  material_type_compliance: Array<{ type: string; total: number; completed: number; pending: number; expired: number; compliance_rate: number }>;
+  qualification_compliance: Array<{ name: string; total: number; completed: number; pending: number; completion_rate: number }>;
+  supplier_risk_ranking: Array<{ name: string; total: number; completed: number; pending: number; expired: number; due30: number; risk_score: number }>;
+  expiry_timeline: Array<{ month: string; count: number }>;
+}
+
+export interface DocumentDepartmentItem {
+  id: string;
+  name: string;
+  sort_order: number;
+  document_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DocumentEntryItem {
+  id: string;
+  department_id: string;
+  seq_no: number | null;
+  name: string;
+  code: string | null;
+  effective_date: string | null;
+  effective_date_text: string | null;
+  source_file: string | null;
+  attachments?: DocumentEntryAttachment[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DocumentEntryAttachment {
+  file_name: string;
+  storage_key: string;
+  converted_md_key: string | null;
+  content_type: string | null;
+  file_size: number | null;
+  converted: boolean;
+  uploaded_at: string | null;
+  uploaded_by: string | null;
+}
+
+export interface UploadDocumentEntryAttachmentResult {
+  entry_id: string | null;
+  entry_name: string | null;
+  matched: boolean;
+  attachment: DocumentEntryAttachment;
+  message?: string | null;
+}
+
+export interface BatchImportAttachmentResultItem {
+  file_name: string;
+  matched: boolean;
+  match_type: 'code' | 'name' | 'llm' | 'none';
+  entry_id: string | null;
+  entry_name: string | null;
+  entry_code: string | null;
+}
+
+export interface BatchImportDocumentAttachmentsResult {
+  bound: number;
+  failed: number;
+  results: BatchImportAttachmentResultItem[];
+}
+
+export interface DocumentCatalogImportSheetResult {
+  sheet_name: string;
+  department_id: string;
+  imported_count: number;
+}
+
+export interface DocumentCatalogImportResult {
+  source_file: string;
+  department_count: number;
+  entry_count: number;
+  sheets: DocumentCatalogImportSheetResult[];
+}
+
+export type CreateDocumentDepartmentRequest = components['schemas']['CreateDocumentDepartmentRequest'];
+export type UpdateDocumentDepartmentRequest = components['schemas']['UpdateDocumentDepartmentRequest'];
+export type CreateDocumentEntryRequest = components['schemas']['CreateDocumentEntryRequest'];
+export type UpdateDocumentEntryRequest = components['schemas']['UpdateDocumentEntryRequest'];
+export type DocumentEntryResolveRequest = components['schemas']['DocumentEntryResolveRequest'];
+export type DocumentEntryResolveItem = components['schemas']['DocumentEntryResolveItem'];
+export type DocumentEntryResolveResult = components['schemas']['DocumentEntryResolveResult'];
+export type ResolveAttachmentContent = components['schemas']['ResolveAttachmentContent'];
+
+export type CreateOosOotRecordRequest = components['schemas']['CreateOosOotRequest'];
+export type CloseOosOotRecordRequest = components['schemas']['UpdateOosOotRequest'];
+export type OosOotRecordOut = components['schemas']['OosOotRecordOut'];
+export type OotLimitProductOut = components['schemas']['OotLimitProductOut'];
+export type OotLimitItemOut = components['schemas']['OotLimitItemOut'];
+export type CreateOotLimitProductRequest = components['schemas']['CreateOotLimitProductRequest'];
+export type UpdateOotLimitProductRequest = components['schemas']['UpdateOotLimitProductRequest'];
+export type CreateOotLimitItemRequest = components['schemas']['CreateOotLimitItemRequest'];
+export type UpdateOotLimitItemRequest = components['schemas']['UpdateOotLimitItemRequest'];
+
+export interface InspectionFeishuSyncResponse {
+  success: boolean;
+  message?: string | null;
+  record_id?: string | null;
+  table_id?: string | null;
+}
+
+export type OosOotFeishuSyncOut = InspectionFeishuSyncResponse;
+export interface OosOotRecordListResponse { data: OosOotRecordOut[]; meta?: { total?: number } }
+export interface OotLimitProductListResponse { data: OotLimitProductOut[]; meta?: { total?: number } }
+export interface OotLimitItemListResponse { data: OotLimitItemOut[]; meta?: { total?: number } }

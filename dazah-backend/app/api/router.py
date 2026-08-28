@@ -1,3 +1,5 @@
+from enum import Enum
+
 from fastapi import APIRouter, Depends
 
 from app.core.llm.api import router as llm_router
@@ -32,6 +34,8 @@ from app.platform.identity.api import (
 )
 from app.platform.identity.deps import require_module_view
 from app.platform.identity.hermes_api import router as hermes_feishu_router
+from app.platform.identity.rbac_api import rbac_router
+from app.platform.storage.api import router as storage_router
 from app.platform.system import router as system_router
 
 api_router = APIRouter()
@@ -40,6 +44,7 @@ api_router.include_router(dept_router, prefix="/identity", tags=["组织架构"]
 api_router.include_router(personnel_router, prefix="/identity", tags=["人员名单"])
 api_router.include_router(auth_router, prefix="/identity", tags=["认证"])
 api_router.include_router(user_router, prefix="/identity", tags=["用户信息"])
+api_router.include_router(rbac_router, prefix="/identity", tags=["权限管理"])
 api_router.include_router(sync_router, prefix="/identity", tags=["飞书同步"])
 api_router.include_router(
     feishu_config_router,
@@ -50,6 +55,7 @@ api_router.include_router(feishu_router, prefix="/identity", tags=["Livzon 助�
 api_router.include_router(hermes_feishu_router)
 api_router.include_router(system_router, prefix="/system", tags=["系统"])
 api_router.include_router(audit_router, prefix="/audit", tags=["审计日志"])
+api_router.include_router(storage_router)
 
 
 def include_business_router(
@@ -57,7 +63,7 @@ def include_business_router(
     *,
     module_code: str,
     prefix: str = "",
-    tags: list[str],
+    tags: list[str | Enum],
 ) -> None:
     """Mount a business router behind the grant fact-source access check."""
     api_router.include_router(

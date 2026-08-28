@@ -2,9 +2,9 @@
 
 "use client"
 
-import { useState, useEffect, useCallback } from 'react'
-import { App, Card, Button, Input, Space, Tag, List, Upload, Modal, Typography } from 'antd'
-import { SaveOutlined, EditOutlined, HistoryOutlined, ArrowLeftOutlined, EyeOutlined, FileTextOutlined, UploadOutlined } from '@ant-design/icons'
+import { useState, useCallback } from 'react'
+import { App, Card, Button, Input, Space, List, Typography } from 'antd'
+import { SaveOutlined, EditOutlined, HistoryOutlined, ArrowLeftOutlined, EyeOutlined, FileTextOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import type { ReportVersion, InvestigationRecord } from '@/types/quality'
 
@@ -38,7 +38,7 @@ function generateReportFromRecords(records: InvestigationRecord[]): string {
     }
     if (record.capaProposals && record.capaProposals.length > 0) {
       text += 'CAPA建议：\n'
-      record.capaProposals.forEach((p: any) => {
+      record.capaProposals.forEach((p) => {
         text += `  ${p.summary} — 执行人：${p.executor} — 预计完成日期：${p.expectedCompletionDate}\n`
       })
     }

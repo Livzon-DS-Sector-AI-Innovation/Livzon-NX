@@ -66,7 +66,7 @@ def test_web_channel_filter_coalesces_missing_context_to_web() -> None:
     statement = select(AgentSession.id).where(_session_channel_filter("web"))
     compiled = str(
         statement.compile(
-            dialect=postgresql.dialect(),
+            dialect=postgresql.dialect(),  # type: ignore[no-untyped-call]
             compile_kwargs={"literal_binds": True},
         )
     ).lower()

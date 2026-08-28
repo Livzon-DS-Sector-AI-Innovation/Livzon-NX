@@ -38,9 +38,7 @@ def test_audit_category_of_covers_general_audit_tabs() -> None:
         == "permissions"
     )
     assert (
-        audit_category_of(
-            _log(action="agent_tool_execute", resource_type="agent_tool")
-        )
+        audit_category_of(_log(action="agent_tool_execute", resource_type="agent_tool"))
         == "agent_tools"
     )
     assert (
@@ -80,9 +78,9 @@ def test_category_filters_compile_for_postgresql() -> None:
     statements = {
         category: str(
             select(AuditLog.id)
-            .where(_category_filter(category))
+            .where(_category_filter(category))  # type: ignore[arg-type]
             .compile(
-                dialect=postgresql.dialect(),
+                dialect=postgresql.dialect(),  # type: ignore[no-untyped-call]
                 compile_kwargs={"literal_binds": True},
             )
         ).lower()

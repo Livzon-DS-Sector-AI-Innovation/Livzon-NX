@@ -1,6 +1,5 @@
 """Attachment review Pydantic schemas."""
 
-
 import uuid
 from datetime import datetime
 
@@ -20,6 +19,7 @@ class AttachmentReviewOut(BaseModel):
     status: str
     created_at: datetime
     updated_at: datetime
+
 
 class CreateAttachmentReviewRequest(BaseModel):
     deviation_id: uuid.UUID | None = None

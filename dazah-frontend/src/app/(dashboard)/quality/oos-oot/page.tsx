@@ -1,11 +1,5 @@
-import { OosOotManagementPage, OosOotQueryProvider } from '@/components/quality'
+import { OosOotLandingContent } from '@/components/quality/OosOotLandingContent'
 
-export const dynamic = 'force-dynamic'
-
-export default function QualityOosOotPage() {
-  return (
-    <OosOotQueryProvider>
-      <OosOotManagementPage />
-    </OosOotQueryProvider>
-  )
+export default function OosOotLandingPage() {
+  return <OosOotLandingContent />
 }

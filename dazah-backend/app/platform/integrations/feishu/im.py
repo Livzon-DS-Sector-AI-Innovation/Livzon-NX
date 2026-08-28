@@ -442,7 +442,7 @@ class FeishuIM:
     def __init__(self, auth: FeishuAuth | None = None) -> None:
         self._auth = auth or FeishuAuth.default()
 
-    async def _batch_get_ids(self, payload: dict) -> dict[str, str]:
+    async def _batch_get_ids(self, payload: dict[str, Any]) -> dict[str, str]:
         """Internal helper to call batch_get_id and extract open_id mapping."""
         token = await self._auth.get_token()
         async with httpx.AsyncClient() as client:

@@ -208,7 +208,7 @@ def _is_open_id_like(s: str) -> bool:
 
 
 async def _resolve_person(
-    session,
+    session: Any,
     bt_value: Any,
     *,
     bt_field_label: str = "person",
@@ -342,7 +342,7 @@ def _extract_select_values(value: Any) -> str:
     return ""
 
 
-def _extract_attachments(value: Any) -> list[dict]:
+def _extract_attachments(value: Any) -> list[dict[str, Any]]:
     """从 Bitable attachment 字段提取附件列表。"""
     if isinstance(value, list):
         return [
@@ -560,7 +560,7 @@ async def _is_sync_ignored(record_id: str) -> bool:
     """检查是否应跳过此次 changed 事件。"""
     key = f"bitable:ignore:{record_id}"
     try:
-        return await redis_client.exists(key) > 0
+        return bool(await redis_client.exists(key))
     except Exception:
         return False
 
@@ -649,7 +649,9 @@ async def _download_and_save_attachments(
 
     # ── Step 3: 构建待下载附件列表 ──
     #    优先从 API 响应提取（含 url/tmp_url）；API 失败则回退到事件数据。
-    all_attachments: list[tuple[str, dict]] = []  # [(field_cn, att_dict), ...]
+    all_attachments: list[
+        tuple[str, dict[str, Any]]
+    ] = []  # [(field_cn, att_dict), ...]
 
     if api_fields:
         for field_cn in _att_fields:
@@ -984,8 +986,10 @@ async def _create_hazard_from_bitable(
         if item:
             try:
                 # AI 隐患识别（插件：含 few-shot prompt + 规则引擎 + 整改建议）
-                item = await service.run_hazard_ai_script(item.id, 1)
-                if item and not item.ai_error_message:
+                ai_item = await service.run_hazard_ai_script(item.id, 1)
+                if ai_item is not None:
+                    item = ai_item
+                if not item.ai_error_message:
                     hazard_type_label = HAZARD_TYPE_REVERSE.get(
                         item.hazard_type, item.hazard_type
                     )
@@ -1051,7 +1055,7 @@ async def _create_hazard_from_bitable(
         # 解决安全应用与全局应用 open_id 命名空间不一致的问题。
         from app.modules.safety.feishu.bitable_id_mapper import get_bitable_person_value
 
-        responsible_person_value: list[dict] | None = None
+        responsible_person_value: list[dict[str, str]] | None = None
         if _resolved_leader_user_id or _resolved_leader_open_id:
             # 自动判定：通过 user_id 查 Bitable open_id，identity open_id 作为 fallback
             responsible_person_value = get_bitable_person_value(
@@ -1762,7 +1766,7 @@ def _resolve_option_ids(
 
 
 def _convert_after_value_to_fields(
-    after_value: list[dict],
+    after_value: list[dict[str, Any]],
     field_map: dict[str, str],
 ) -> dict[str, Any]:
     """将飞书 action_list 的 after_value 转为字段名和值的映射。
@@ -1853,7 +1857,9 @@ def _match_target(file_token: str, table_id: str) -> bool:
 
 
 async def _get_fields_fallback(
-    bitable: SafetyBitableClient, record_id: str, event_fields: dict
+    bitable: SafetyBitableClient,
+    record_id: str,
+    event_fields: dict[str, Any],
 ) -> dict[str, Any]:
     """获取记录字段：优先用事件自带的 fields，缺失时调 API 拉取。"""
     if event_fields:
@@ -1965,9 +1971,9 @@ async def _handle_single_record_action(
         # 仅凭 file_token 难以下载。API 返回完整记录含可下载 URL，确保
         # 整改回复内容（纠正预防措施）和整改后图片（整改后图片）都能正确同步。
         api_fields = await bitable.get_record(record_id)
-        fields: dict[str, Any] = {}
+        update_fields: dict[str, Any] = {}
         if api_fields:
-            fields = api_fields
+            update_fields = api_fields
             logger.info(
                 "API 返回全量字段: record_id=%s keys=%s",
                 record_id,
@@ -1975,22 +1981,22 @@ async def _handle_single_record_action(
             )
         # 合并 event_fields（事件数据优先级更高，覆盖 API 返回的同名字段）
         if event_fields:
-            fields.update(event_fields)
+            update_fields.update(event_fields)
             logger.info(
                 "合并事件字段: record_id=%s event_keys=%s final_keys=%s",
                 record_id,
                 list(event_fields.keys()),
-                list(fields.keys())[:30],
+                list(update_fields.keys())[:30],
             )
-        if not fields:
+        if not update_fields:
             logger.warning("UPDATE 无可用字段: record_id=%s", record_id)
             return
 
-        await _update_hazard_from_bitable(record_id, hazard, fields)
+        await _update_hazard_from_bitable(record_id, hazard, update_fields)
 
 
 @on_event("drive.file.bitable_record_changed_v1")
-async def handle_bitable_record_changed(event: dict) -> None:
+async def handle_bitable_record_changed(event: dict[str, Any]) -> None:
     """处理多维表格记录变更事件。
 
     飞书实际 payload 结构（v2 action_list 格式）：
@@ -2101,7 +2107,7 @@ async def handle_bitable_record_changed(event: dict) -> None:
 
 
 @on_event("drive.file.bitable_field_changed_v1")
-async def handle_bitable_field_changed(event: dict) -> None:
+async def handle_bitable_field_changed(event: dict[str, Any]) -> None:
     """处理多维表格字段级变更事件（补充处理器）。
 
     当记录的部分字段被修改时触发，比 record_changed_v1 更细粒度。
@@ -2168,7 +2174,7 @@ _LEVEL_LABELS = {1: "一级（部门负责人）", 2: "二级（分管领导）"
 
 
 @on_event("card.action.trigger")
-async def handle_card_action(event: dict) -> dict | None:
+async def handle_card_action(event: dict[str, Any]) -> dict[str, Any] | None:
     """处理复核通知卡片中的「同意 / 驳回」按钮点击。
 
     收到按钮点击后：
@@ -2283,7 +2289,7 @@ async def handle_card_action(event: dict) -> dict | None:
 
 async def _patch_card_async(
     open_message_id: str,
-    card: dict,
+    card: dict[str, Any],
     hazard_no: str,
     level: int,
     button_state: str,

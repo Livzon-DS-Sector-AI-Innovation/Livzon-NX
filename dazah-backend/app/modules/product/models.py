@@ -19,9 +19,7 @@ class Product(BaseModel):
     )
 
     # 产品名称
-    name: Mapped[str] = mapped_column(
-        String(128), nullable=False, comment="产品名称"
-    )
+    name: Mapped[str] = mapped_column(String(128), nullable=False, comment="产品名称")
     # 产品代码
     major_category: Mapped[str | None] = mapped_column(
         String(32), nullable=True, comment="产品代码: SM, FSM"

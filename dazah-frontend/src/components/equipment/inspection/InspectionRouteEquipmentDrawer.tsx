@@ -341,7 +341,7 @@ export function InspectionRouteEquipmentDrawer({ equipments, locations, template
                             onChange={(v) => {
                               const e = equipments.find(ee => ee.id === v)
                               updEq(loc.key, eq.key, 'equipment_id', v)
-                              updEq(loc.key, eq.key, 'equipment_name', e?.name)
+                              updEq(loc.key, eq.key, 'equipment_name', (e instanceof Error ? e.name : ''))
                               updEq(loc.key, eq.key, 'equipment_no', e?.equipment_no)
                             }}
                             options={eqOptions}

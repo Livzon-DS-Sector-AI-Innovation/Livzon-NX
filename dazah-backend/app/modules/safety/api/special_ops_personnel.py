@@ -1,6 +1,7 @@
 """Safety API — special_ops_personnel endpoints."""
 
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -34,7 +35,7 @@ async def get_special_operation_personnel(
     keyword: str | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """获取特殊作业人员资质列表"""
     service = SpecialOperationService(db)
     skip = (page - 1) * page_size
@@ -56,7 +57,7 @@ async def create_special_operation_personnel(
     data: SpecialOperationPersonnelCreate,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """创建特殊作业人员资质"""
     service = SpecialOperationService(db)
     item = await service.create_personnel(data)
@@ -73,7 +74,7 @@ async def get_special_operation_personnel_detail(
     personnel_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """获取特殊作业人员资质详情"""
     service = SpecialOperationService(db)
     item = await service.get_personnel_by_id(personnel_id)
@@ -92,7 +93,7 @@ async def update_special_operation_personnel(
     data: SpecialOperationPersonnelUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """更新特殊作业人员资质"""
     service = SpecialOperationService(db)
     item = await service.update_personnel(personnel_id, data)
@@ -111,7 +112,7 @@ async def delete_special_operation_personnel(
     personnel_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """删除特殊作业人员资质"""
     service = SpecialOperationService(db)
     result = await service.delete_personnel(personnel_id)
@@ -119,5 +120,3 @@ async def delete_special_operation_personnel(
         return ApiResponse(code=404, message="人员资质不存在")
     await db.commit()
     return ApiResponse(message="删除成功")
-
-

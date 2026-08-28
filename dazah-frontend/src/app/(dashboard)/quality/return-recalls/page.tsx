@@ -1,7 +1,7 @@
-import { ExternalQualityManagementPage, ExternalQualityQueryProvider } from '@/components/quality'
+import { redirect } from 'next/navigation'
 
 export const dynamic = 'force-dynamic'
 
-export default function QualityReturnRecallsPage() {
-  return <ExternalQualityQueryProvider><ExternalQualityManagementPage initialTab="return-recalls" /></ExternalQualityQueryProvider>
+export default function Page() {
+  redirect('/quality/return-recalls/return-application')
 }

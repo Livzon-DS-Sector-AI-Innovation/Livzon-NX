@@ -74,7 +74,9 @@ class OhHazardMonitorService:
         await self._audit("create", "oh_hazard_monitor", resource_id=item.id)
         return item
 
-    async def update_monitor(self, monitor_id: uuid.UUID, data: Any) -> OhHazardMonitor | None:
+    async def update_monitor(
+        self, monitor_id: uuid.UUID, data: Any
+    ) -> OhHazardMonitor | None:
         """更新监测记录"""
         update_data = {k: v for k, v in data.model_dump().items() if v is not None}
         item = await self.repo.update_hazard_monitor(monitor_id, update_data)
@@ -100,7 +102,9 @@ class OhHazardMonitorService:
             monitor_id, {"status": "in_progress"}
         )
 
-    async def complete_monitoring(self, monitor_id: uuid.UUID) -> OhHazardMonitor | None:
+    async def complete_monitoring(
+        self, monitor_id: uuid.UUID
+    ) -> OhHazardMonitor | None:
         """完成监测（检测中→已完成），自动计算OEL合规状态并生成异常记录"""
         monitor = await self.repo.get_hazard_monitor_by_id(monitor_id)
         if not monitor or monitor.status != "in_progress":
@@ -109,7 +113,6 @@ class OhHazardMonitorService:
         # 自动计算合规状态
         results = list(monitor.detection_results or [])
         abnormality_records = list(monitor.abnormality_records or [])
-        has_exceeding = False
 
         for i, item in enumerate(results):
             value = item.get("detection_value")
@@ -118,20 +121,22 @@ class OhHazardMonitorService:
                 ratio = value / limit_val
                 if ratio > 1.0:
                     results[i]["compliance_status"] = "exceeding"
-                    has_exceeding = True
                     # 自动创建异常记录
-                    abnormality_records.append({
-                        "abnormality_desc": (
-                            f"{item.get('factor_name', '未知因素')} 检测值 {value} {item.get('unit', '')} "
-                            f"超过OEL限值 {limit_val} {item.get('unit', '')}"
-                        ),
-                        "corrective_action": "",
-                        "responsible_person": "",
-                        "deadline": "",
-                        "status": "open",
-                        "completed_at": "",
-                        "remarks": f"标准参考: {item.get('standard_ref', '')}",
-                    })
+                    abnormality_records.append(
+                        {
+                            "abnormality_desc": (
+                                f"{item.get('factor_name', '未知因素')} 检测值 {value} "
+                                f"{item.get('unit', '')} "
+                                f"超过OEL限值 {limit_val} {item.get('unit', '')}"
+                            ),
+                            "corrective_action": "",
+                            "responsible_person": "",
+                            "deadline": "",
+                            "status": "open",
+                            "completed_at": "",
+                            "remarks": f"标准参考: {item.get('standard_ref', '')}",
+                        }
+                    )
                 elif ratio >= 0.8:
                     results[i]["compliance_status"] = "marginal"
                 else:
@@ -167,7 +172,7 @@ class OhHazardMonitorService:
     # ── JSON 子记录操作 ──
 
     async def add_detection_result(
-        self, monitor_id: uuid.UUID, item: dict
+        self, monitor_id: uuid.UUID, item: dict[str, Any]
     ) -> OhHazardMonitor | None:
         """追加检测结果"""
         monitor = await self.repo.get_hazard_monitor_by_id(monitor_id)
@@ -180,7 +185,7 @@ class OhHazardMonitorService:
         )
 
     async def update_detection_result(
-        self, monitor_id: uuid.UUID, index: int, data: dict
+        self, monitor_id: uuid.UUID, index: int, data: dict[str, Any]
     ) -> OhHazardMonitor | None:
         """更新检测结果"""
         monitor = await self.repo.get_hazard_monitor_by_id(monitor_id)
@@ -210,7 +215,7 @@ class OhHazardMonitorService:
         )
 
     async def add_abnormality_record(
-        self, monitor_id: uuid.UUID, item: dict
+        self, monitor_id: uuid.UUID, item: dict[str, Any]
     ) -> OhHazardMonitor | None:
         """追加异常处置记录"""
         monitor = await self.repo.get_hazard_monitor_by_id(monitor_id)
@@ -241,5 +246,3 @@ class OhHazardMonitorService:
 
 
 # ==================== 职业健康体检 Service ====================
-
-

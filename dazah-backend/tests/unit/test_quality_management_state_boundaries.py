@@ -3,7 +3,8 @@ from __future__ import annotations
 import asyncio
 import uuid
 from datetime import datetime
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, Mock
 
 import pytest
@@ -20,12 +21,14 @@ from app.modules.quality.schemas import (
 from app.modules.quality.service import quality_feishu_pages, quality_feishu_sync
 from app.modules.quality.service import quality_management as service
 
+SimpleNamespace: Any = _SimpleNamespace
+
 
 class _ScalarResult:
-    def __init__(self, value: object) -> None:
+    def __init__(self: Any, value: object) -> None:
         self.value = value
 
-    def scalar_one_or_none(self) -> object:
+    def scalar_one_or_none(self: Any) -> object:
         return self.value
 
 
@@ -44,7 +47,7 @@ async def test_deviation_update_close_reopen_delete_and_rollback(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     deviation_id = uuid.uuid4()
-    deviation = SimpleNamespace(
+    deviation: Any = SimpleNamespace(
         id=deviation_id,
         status="draft",
         is_deleted=False,
@@ -52,7 +55,7 @@ async def test_deviation_update_close_reopen_delete_and_rollback(
         returned_step=None,
     )
     db = _db(deviation)
-    auto_sync = AsyncMock()
+    auto_sync: Any = AsyncMock()
     monkeypatch.setattr(
         quality_feishu_sync,
         "auto_sync_deviation_after_write",
@@ -75,9 +78,7 @@ async def test_deviation_update_close_reopen_delete_and_rollback(
     ) == {"success": True}
     assert deviation.status == "closed"
     assert deviation.ai_analysis == {"risk": "medium"}
-    assert deviation.investigation_completed_at.isoformat().startswith(
-        "2026-07-02"
-    )
+    assert deviation.investigation_completed_at.isoformat().startswith("2026-07-02")
     auto_sync.assert_awaited_once_with(db, deviation_id)
 
     reopened = UpdateDeviationRequest.model_construct(
@@ -88,9 +89,7 @@ async def test_deviation_update_close_reopen_delete_and_rollback(
     assert deviation.status == "draft"
     assert deviation.investigation_completed_at is None
 
-    assert await service.delete_deviation(db, deviation_id) == {
-        "success": True
-    }
+    assert await service.delete_deviation(db, deviation_id) == {"success": True}
     assert deviation.is_deleted is True
 
     db.commit.side_effect = RuntimeError("commit failed")
@@ -102,7 +101,7 @@ async def test_deviation_update_close_reopen_delete_and_rollback(
 @pytest.mark.anyio
 async def test_deviation_investigation_and_review_state_machine() -> None:
     deviation_id = uuid.uuid4()
-    deviation = SimpleNamespace(
+    deviation: Any = SimpleNamespace(
         id=deviation_id,
         status="pending_investigation",
         review_opinions=[],
@@ -186,7 +185,7 @@ async def test_deviation_investigation_and_review_state_machine() -> None:
 @pytest.mark.anyio
 async def test_deviation_state_machine_rejects_invalid_boundaries() -> None:
     deviation_id = uuid.uuid4()
-    deviation = SimpleNamespace(
+    deviation: Any = SimpleNamespace(
         id=deviation_id,
         status="draft",
         review_opinions=[],
@@ -234,12 +233,12 @@ async def test_change_create_update_delete_and_best_effort_feishu(
         AsyncMock(return_value="BG-2607001"),
     )
     monkeypatch.setattr(
-        service.repository.quality_management,
+        service.repository.quality_management,  # type: ignore[attr-defined]
         "exists_by_change_code",
         AsyncMock(return_value=False),
     )
-    sync = AsyncMock(side_effect=RuntimeError("feishu unavailable"))
-    delete_sync = AsyncMock(side_effect=RuntimeError("feishu unavailable"))
+    sync: Any = AsyncMock(side_effect=RuntimeError("feishu unavailable"))
+    delete_sync: Any = AsyncMock(side_effect=RuntimeError("feishu unavailable"))
     monkeypatch.setattr(quality_feishu_pages, "sync_change_to_feishu", sync)
     monkeypatch.setattr(
         quality_feishu_pages,
@@ -289,9 +288,9 @@ async def test_change_duplicate_and_code_sequence_boundaries(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     db = _db(None)
-    exists = AsyncMock(return_value=True)
+    exists: Any = AsyncMock(return_value=True)
     monkeypatch.setattr(
-        service.repository.quality_management,
+        service.repository.quality_management,  # type: ignore[attr-defined]
         "exists_by_change_code",
         exists,
     )
@@ -312,7 +311,7 @@ async def test_change_duplicate_and_code_sequence_boundaries(
         await service.create_change(db, create, "user")
 
     monkeypatch.setattr(
-        service.repository.quality_management,
+        service.repository.quality_management,  # type: ignore[attr-defined]
         "list_change_codes_by_prefix",
         AsyncMock(
             return_value=[
@@ -331,7 +330,7 @@ async def test_capa_create_update_delete_and_commit_rollback(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     db = _db(None)
-    auto_sync = AsyncMock()
+    auto_sync: Any = AsyncMock()
     monkeypatch.setattr(
         quality_feishu_sync,
         "auto_sync_capa_after_write",
@@ -362,7 +361,7 @@ async def test_capa_create_update_delete_and_commit_rollback(
     update = UpdateCapaRequest.model_construct(
         title="更换密封件并验证",
         expected_completion_date="2026-08-02T00:00:00+00:00",
-        capa_items=[{"action": "更换"}],
+        capa_items=[{"action": "更换"}],  # type: ignore[list-item]
         status="in_progress",
     )
     assert await service.update_capa(
@@ -388,7 +387,7 @@ async def test_deviation_workflow_batch_and_auto_fill(
 ) -> None:
     deviation_id = uuid.uuid4()
     user_id = uuid.uuid4()
-    deviation = SimpleNamespace(
+    deviation: Any = SimpleNamespace(
         id=deviation_id,
         is_deleted=False,
         status="draft",
@@ -410,14 +409,14 @@ async def test_deviation_workflow_batch_and_auto_fill(
         description="原始描述",
         title="压差偏差",
     )
-    db = SimpleNamespace(
+    db: Any = SimpleNamespace(
         get=AsyncMock(return_value=deviation),
         flush=AsyncMock(),
     )
 
-    created_coroutines = []
+    created_coroutines: list[Any] = []
 
-    def _capture_task(coro):
+    def _capture_task(coro: Any) -> Any:
         created_coroutines.append(coro)
         coro.close()
         return Mock()
@@ -453,7 +452,7 @@ async def test_deviation_workflow_batch_and_auto_fill(
     missing_id = uuid.uuid4()
     failing_id = uuid.uuid4()
 
-    async def _get(_model, item_id):
+    async def _get(_model: Any, item_id: Any) -> Any:
         if item_id == missing_id:
             return None
         if item_id == failing_id:
@@ -477,19 +476,19 @@ async def test_deviation_workflow_batch_and_auto_fill(
 
 @pytest.mark.anyio
 async def test_department_confirmation_create_update_and_queries() -> None:
-    existing = SimpleNamespace(
+    existing: Any = SimpleNamespace(
         production_status="running",
         deviation_status="none",
     )
-    scalar_result = SimpleNamespace(
+    scalar_result: Any = SimpleNamespace(
         scalar_one_or_none=lambda: existing,
     )
-    db = SimpleNamespace(
+    db: Any = SimpleNamespace(
         execute=AsyncMock(return_value=scalar_result),
         add=Mock(),
         flush=AsyncMock(),
     )
-    data = SimpleNamespace(
+    data: Any = SimpleNamespace(
         department="生产部",
         week_key="2026-W30",
         production_status="stopped",
@@ -525,7 +524,7 @@ async def test_capa_full_workflow_and_execution_tracks() -> None:
     capa_id = uuid.uuid4()
     deviation_id = uuid.uuid4()
     user_id = uuid.uuid4()
-    capa = SimpleNamespace(
+    capa: Any = SimpleNamespace(
         id=capa_id,
         is_deleted=False,
         status="draft",
@@ -536,20 +535,20 @@ async def test_capa_full_workflow_and_execution_tracks() -> None:
         dept_head_confirmations=[],
         execution_tracks=[],
     )
-    deviation = SimpleNamespace(
+    deviation: Any = SimpleNamespace(
         id=deviation_id,
         is_deleted=False,
         deviation_code="DEV-001",
     )
 
-    async def _get(model, item_id):
+    async def _get(model: Any, item_id: Any) -> Any:
         if item_id == capa_id:
             return capa
         if item_id == deviation_id:
             return deviation
         return None
 
-    db = SimpleNamespace(get=AsyncMock(side_effect=_get), flush=AsyncMock())
+    db: Any = SimpleNamespace(get=AsyncMock(side_effect=_get), flush=AsyncMock())
 
     assert await service.link_deviation(
         db,
@@ -569,7 +568,7 @@ async def test_capa_full_workflow_and_execution_tracks() -> None:
     ) == {"success": True}
     assert capa.status == "submitted"
 
-    approved = SimpleNamespace(
+    approved: Any = SimpleNamespace(
         department="生产部",
         dept_head_user_id="user-head",
         result="approved",
@@ -578,7 +577,7 @@ async def test_capa_full_workflow_and_execution_tracks() -> None:
     await service.confirm_dept_head(db, capa_id, approved, str(user_id))
     assert capa.status == "pending_qa_approval"
 
-    rejected = SimpleNamespace(
+    rejected: Any = SimpleNamespace(
         department="生产部",
         dept_head_user_id="user-head",
         result="rejected",
@@ -591,7 +590,7 @@ async def test_capa_full_workflow_and_execution_tracks() -> None:
     await service.resubmit_capa(db, capa_id, str(user_id))
     assert capa.status == "draft"
 
-    qa_approved = SimpleNamespace(
+    qa_approved: Any = SimpleNamespace(
         step="qa_review",
         result="approved",
         opinion="QA通过",
@@ -599,7 +598,7 @@ async def test_capa_full_workflow_and_execution_tracks() -> None:
     await service.approve_capa(db, capa_id, qa_approved, str(user_id))
     assert capa.status == "pending_q_head_approval"
 
-    head_approved = SimpleNamespace(
+    head_approved: Any = SimpleNamespace(
         step="q_head_approval",
         result="approved",
         opinion="质量负责人通过",
@@ -641,7 +640,7 @@ async def test_capa_full_workflow_and_execution_tracks() -> None:
     ) == {"success": True}
     assert capa.status == "pending_evaluation"
 
-    evaluation = SimpleNamespace(
+    evaluation: Any = SimpleNamespace(
         evaluation_target="确认措施有效",
         evaluation_result="effective",
         evaluation_confirmer=str(user_id),
@@ -661,13 +660,13 @@ async def test_capa_full_workflow_and_execution_tracks() -> None:
 @pytest.mark.anyio
 async def test_capa_workflow_rejects_missing_and_invalid_states() -> None:
     capa_id = uuid.uuid4()
-    capa = SimpleNamespace(
+    capa: Any = SimpleNamespace(
         id=capa_id,
         is_deleted=False,
         status="closed",
         returned_step=None,
     )
-    db = SimpleNamespace(get=AsyncMock(return_value=capa), flush=AsyncMock())
+    db: Any = SimpleNamespace(get=AsyncMock(return_value=capa), flush=AsyncMock())
 
     with pytest.raises(ValueError, match="草稿状态"):
         await service.submit_capa(db, capa_id, "system")

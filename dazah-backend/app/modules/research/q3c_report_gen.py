@@ -7,9 +7,10 @@ import json
 import re
 import sys
 from datetime import datetime
+from typing import Any
 
 
-def load_solvent_synonyms():
+def load_solvent_synonyms() -> dict[str, Any]:
     """Load solvent synonyms including Chinese names."""
     try:
         from app.modules.research.ich_service import DATA_DIR
@@ -17,13 +18,14 @@ def load_solvent_synonyms():
         synonyms_file = DATA_DIR / "solvent-synonyms.json"
         if synonyms_file.exists():
             with open(synonyms_file, encoding="utf-8") as f:
-                return json.load(f)
+                loaded = json.load(f)
+                return loaded if isinstance(loaded, dict) else {}
     except Exception:
         pass
     return {}
 
 
-def get_chinese_name(solvent_name, synonyms):
+def get_chinese_name(solvent_name: str, synonyms: dict[str, Any]) -> str:
     """Get Chinese name for a solvent if available."""
     # Normalize solvent name for lookup
     normalized = solvent_name.lower().strip()
@@ -31,15 +33,23 @@ def get_chinese_name(solvent_name, synonyms):
     # Check if this solvent has synonyms
     if normalized in synonyms:
         synonym_list = synonyms[normalized]
+        if not isinstance(synonym_list, list):
+            return solvent_name
         # Find Chinese name (contains Chinese characters)
         for synonym in synonym_list:
+            if not isinstance(synonym, str):
+                continue
             # Check if contains Chinese characters
             if any("\u4e00" <= char <= "\u9fff" for char in synonym):
                 return synonym
     return solvent_name  # Return original if no Chinese name found
 
 
-def generate_q3c_report(analysis, flag_class1=True, ich_data_source=""):
+def generate_q3c_report(
+    analysis: dict[str, Any],
+    flag_class1: bool = True,
+    ich_data_source: str = "",
+) -> str:
     """
     Generate Markdown report from analysis results.
 
@@ -58,7 +68,7 @@ def generate_q3c_report(analysis, flag_class1=True, ich_data_source=""):
     Returns:
         Markdown string (in Chinese)
     """
-    lines = []
+    lines: list[str] = []
 
     # Load solvent synonyms for Chinese names
     synonyms = load_solvent_synonyms()
@@ -70,8 +80,14 @@ def generate_q3c_report(analysis, flag_class1=True, ich_data_source=""):
     lines.append(f"**ICH 数据来源:** {ich_data_source or '预提取 ICH Q3C(R9) 数据'}")
     lines.append("")
 
-    all_solvents = analysis.get("all_solvents", {})
-    step_analysis = analysis.get("step_analysis", [])
+    all_solvents_value = analysis.get("all_solvents", {})
+    all_solvents: dict[str, dict[str, Any]] = (
+        all_solvents_value if isinstance(all_solvents_value, dict) else {}
+    )
+    step_analysis_value = analysis.get("step_analysis", [])
+    step_analysis: list[dict[str, Any]] = (
+        step_analysis_value if isinstance(step_analysis_value, list) else []
+    )
 
     # Count by class
     class_counts = {"class1": 0, "class2": 0, "class3": 0, "unknown": 0}
@@ -97,14 +113,14 @@ def generate_q3c_report(analysis, flag_class1=True, ich_data_source=""):
     lines.append("")
 
     # Build step title map from step_analysis
-    step_titles = {}
+    step_titles: dict[Any, str] = {}
     for step_info in step_analysis:
         step_num = step_info.get("step_number", "")
         step_title = step_info.get("step_title", "")
         step_titles[step_num] = step_title
 
     # Group solvents by step, deduplicate within each step
-    step_solvents = {}
+    step_solvents: dict[Any, list[dict[str, Any]]] = {}
     for solvent_name, data in all_solvents.items():
         solvent_english = data.get("canonical") or data.get("solvent") or solvent_name
         solvent_display = get_chinese_name(solvent_english, synonyms)
@@ -155,8 +171,8 @@ def generate_q3c_report(analysis, flag_class1=True, ich_data_source=""):
         final_step = step_analysis[-1].get("step_number")
 
     # Categorize solvents: Routine Release vs 10% Criteria
-    routine_release = []
-    dev_control_10pct = []
+    routine_release: list[dict[str, Any]] = []
+    dev_control_10pct: list[dict[str, Any]] = []
 
     for solvent_name, data in all_solvents.items():
         if data["class"] not in ["class2", "class3"]:
@@ -337,7 +353,7 @@ def generate_q3c_report(analysis, flag_class1=True, ich_data_source=""):
         lines.append("")
 
     # When to consult original documents
-    needs_consultation = []
+    needs_consultation: list[str] = []
     if class_counts["class1"] > 0:
         needs_consultation.append(
             "检出 Class 1 溶剂 (需要根据 ICH Q3C 第 3.1 节提供获益/风险评估依据)"
@@ -350,8 +366,8 @@ def generate_q3c_report(analysis, flag_class1=True, ich_data_source=""):
         lines.append("")
         lines.append("以下项目需要查阅原始监管文件:")
         lines.append("")
-        for item in needs_consultation:
-            lines.append(f"- {item}")
+        for recommendation in needs_consultation:
+            lines.append(f"- {recommendation}")
         lines.append("")
         lines.append("**参考文件:**")
         lines.append(
@@ -367,7 +383,7 @@ def generate_q3c_report(analysis, flag_class1=True, ich_data_source=""):
     return "\n".join(lines)
 
 
-def main():
+def main() -> None:
     import argparse
 
     parser = argparse.ArgumentParser(description="Generate ICH Q3C compliance report")

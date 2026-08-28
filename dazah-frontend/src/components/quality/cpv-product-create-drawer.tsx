@@ -65,8 +65,8 @@ export function CpvProductCreateDrawer({ isOpen, onClose, onSuccess }: CpvProduc
         handleClose()
         onSuccess()
       }, 1500)
-    } catch (err: any) {
-      setErrorMsg(err.message || "创建失败，请稍后重试")
+    } catch (err) {
+      setErrorMsg((err instanceof Error ? err.message : '') || "创建失败，请稍后重试")
     } finally {
       setSaving(false)
     }

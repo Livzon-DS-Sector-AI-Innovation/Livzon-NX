@@ -39,18 +39,12 @@ class SparePart(BaseModel):
         {"schema": "equipment"},
     )
 
-    code: Mapped[str] = mapped_column(
-        String(50), comment="备件编码"
-    )
-    name: Mapped[str] = mapped_column(
-        String(200), comment="备件名称"
-    )
+    code: Mapped[str] = mapped_column(String(50), comment="备件编码")
+    name: Mapped[str] = mapped_column(String(200), comment="备件名称")
     specification: Mapped[str | None] = mapped_column(
         String(200), nullable=True, comment="规格型号"
     )
-    unit: Mapped[str] = mapped_column(
-        String(20), comment="计量单位"
-    )
+    unit: Mapped[str] = mapped_column(String(20), comment="计量单位")
     category: Mapped[str | None] = mapped_column(
         String(50), nullable=True, comment="备件分类"
     )
@@ -103,9 +97,7 @@ class SparePartStock(BaseModel):
     """备件库存表"""
 
     __tablename__ = "spare_part_stocks"
-    __table_args__ = (
-        {"schema": "equipment"},
-    )
+    __table_args__ = ({"schema": "equipment"},)
 
     spare_part_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("equipment.spare_parts.id"),
@@ -152,12 +144,8 @@ class SparePartTransaction(BaseModel):
     transaction_type: Mapped[str] = mapped_column(
         String(20), comment="类型：入库/出库/盘点调整"
     )
-    quantity: Mapped[int] = mapped_column(
-        Integer, comment="数量（正=入库，负=出库）"
-    )
-    remark: Mapped[str | None] = mapped_column(
-        Text, nullable=True, comment="备注"
-    )
+    quantity: Mapped[int] = mapped_column(Integer, comment="数量（正=入库，负=出库）")
+    remark: Mapped[str | None] = mapped_column(Text, nullable=True, comment="备注")
 
     spare_part: Mapped[SparePart] = relationship("SparePart")
     work_order: Mapped[WorkOrder | None] = relationship("WorkOrder")

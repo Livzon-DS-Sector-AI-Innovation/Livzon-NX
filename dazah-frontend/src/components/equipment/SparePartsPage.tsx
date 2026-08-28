@@ -56,7 +56,7 @@ export function SparePartsPage({
   }, [sparePartKeyword, sparePartPage, sparePartPageSize, setSpareParts, setSparePartTotal, setSparePartLoading, setStockWarnings])
 
   useEffect(() => {
-    fetchData()
+    queueMicrotask(fetchData)
   }, [fetchData])
 
   return (

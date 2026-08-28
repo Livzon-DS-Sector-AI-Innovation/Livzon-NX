@@ -57,7 +57,9 @@ def upgrade() -> None:
             nullable=False,
             comment="文件 MIME 类型",
         ),
-        sa.Column("file_size", sa.Integer(), nullable=False, comment="文件大小（字节）"),
+        sa.Column(
+            "file_size", sa.Integer(), nullable=False, comment="文件大小（字节）"
+        ),
         sa.Column(
             "payload",
             postgresql.JSONB(astext_type=sa.Text()),

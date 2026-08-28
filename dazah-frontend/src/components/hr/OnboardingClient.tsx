@@ -52,12 +52,12 @@ export default function OnboardingClient({
         page_size: pageSize })
       setRecords(res.data)
       setTotal(res.meta?.total || 0)
-    } catch (err: any) {
-      message.error(err.message || '加载数据失败')
+    } catch (err) {
+      message.error((err instanceof Error ? err.message : '') || '加载数据失败')
     } finally {
       setLoading(false)
     }
-  }, [filterDepartment, filterPosition, filterIsEmployed, searchKeyword, page, pageSize, doFetch])
+  }, [filterDepartment, filterPosition, filterIsEmployed, searchKeyword, page, pageSize, doFetch, message])
 
   const handlePageChange = (newPage: number, newPageSize: number) => {
     setPage(newPage)
@@ -70,8 +70,8 @@ export default function OnboardingClient({
       const res = await syncOnboardingFromFeishu()
       message.success(res.message)
       loadData()
-    } catch (err: any) {
-      message.error(err.message || '同步失败')
+    } catch (err) {
+      message.error((err instanceof Error ? err.message : '') || '同步失败')
     } finally {
       setSyncing(false)
     }
@@ -83,8 +83,8 @@ export default function OnboardingClient({
   }
 
   useEffect(() => {
-    loadData()
-  }, [filterDepartment, filterPosition, filterIsEmployed, searchKeyword, page, pageSize])
+    queueMicrotask(loadData)
+  }, [filterDepartment, filterPosition, filterIsEmployed, searchKeyword, page, pageSize, loadData])
 
   const employedColorMap: Record<string, string> = {
     '是': 'success',

@@ -88,7 +88,7 @@ export function MaintenancePage({
     try {
       await updateClaimTimeoutConfig(claimTimeoutConfig)
       configMsg.success('超时配置保存成功')
-    } catch (error: any) {
+    } catch (error) {
       configMsg.error(error?.message || '保存配置失败')
     }
   }

@@ -1,12 +1,15 @@
 import uuid
 from datetime import UTC, datetime, timedelta
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
+from typing import Any
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.agent.service import AgentService
 from app.platform.identity.models import User
+
+SimpleNamespace: Any = _SimpleNamespace
 
 
 @pytest.mark.anyio

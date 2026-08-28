@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from app.modules.quality.service.change_action_plan import (
     find_due_change_action_plan_reminders,
     send_change_action_plan_reminder,
@@ -19,8 +21,8 @@ class ChangeActionPlanReminderGenerator(TaskGenerator):
         timezone="Asia/Shanghai",
     )
 
-    async def find_due(self, session):
+    async def find_due(self, session: Any) -> Any:
         return await find_due_change_action_plan_reminders(session)
 
-    async def execute_one(self, session, item) -> None:
+    async def execute_one(self, session: Any, item: Any) -> None:
         await send_change_action_plan_reminder(session, item)

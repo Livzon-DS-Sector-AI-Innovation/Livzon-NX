@@ -44,6 +44,22 @@ import { FeishuConfigPageHeader } from './FeishuConfigPageHeader'
 type Props = { moduleCode: FeishuModuleCode }
 type RootInput = { name: string; source_type: 'wiki' | 'base'; source_url: string }
 
+export type FeishuWriteActions = {
+  saveConfig: (values: FeishuConfigInput) => Promise<FeishuConfig>
+  testConfig: (values: FeishuConfigInput) => Promise<{
+    ok: boolean
+    steps: Array<{ name: string; status: string; message: string }>
+  }>
+  createRoot: (values: RootInput) => Promise<unknown>
+  deleteRoot: (rootId: string) => Promise<unknown>
+  discoverRoot: (rootId: string) => Promise<unknown>
+  syncResource: (resourceId: string) => Promise<unknown>
+  syncResources: (resourceIds: string[]) => Promise<unknown>
+  saveBindings: (pageKey: string, bindings: FeishuPageBinding[]) => Promise<unknown>
+}
+
+type PropsWithActions = Props & { writeActions?: FeishuWriteActions }
+
 const EMPTY_CONFIG: FeishuConfigInput = {
   config_name: '飞书数据源',
   app_id: '',
@@ -65,7 +81,7 @@ function sourcePathLabel(path: FeishuResource['source_path']) {
   return path.map((item) => item.title).filter(Boolean).join(' / ') || '-'
 }
 
-export function ModuleFeishuDataSourcePage({ moduleCode }: Props) {
+export function ModuleFeishuDataSourcePage({ moduleCode, writeActions }: PropsWithActions) {
   const { message } = App.useApp()
   const definition = useMemo(() => getFeishuModuleDefinition(moduleCode), [moduleCode])
   const [configForm] = Form.useForm<FeishuConfigInput>()
@@ -149,7 +165,9 @@ export function ModuleFeishuDataSourcePage({ moduleCode }: Props) {
     try {
       const values = await configForm.validateFields()
       setSaving(true)
-      const saved = await feishuDataSourceApi.saveConfig(moduleCode, { ...values, id: config?.id })
+      const saved = writeActions
+        ? await writeActions.saveConfig({ ...values, id: config?.id })
+        : await feishuDataSourceApi.saveConfig(moduleCode, { ...values, id: config?.id })
       setConfig(saved)
       configForm.setFieldValue('app_secret', '')
       await loadCatalog(saved)
@@ -165,7 +183,9 @@ export function ModuleFeishuDataSourcePage({ moduleCode }: Props) {
     try {
       const values = await configForm.validateFields()
       setTesting(true)
-      const result = await feishuDataSourceApi.testConfig(moduleCode, { ...values, id: config?.id })
+      const result = writeActions
+        ? await writeActions.testConfig({ ...values, id: config?.id })
+        : await feishuDataSourceApi.testConfig(moduleCode, { ...values, id: config?.id })
       const failed = result.steps?.filter((item) => item.status === 'error') || []
       if (result.ok === false || failed.length) message.error(failed.map((item) => item.message).join('；') || '连接测试失败')
       else message.success('App ID / Secret 连通性正常')
@@ -180,7 +200,8 @@ export function ModuleFeishuDataSourcePage({ moduleCode }: Props) {
     try {
       const values = await rootForm.validateFields()
       setBusyKey('new-root')
-      await feishuDataSourceApi.createRoot(moduleCode, values, config?.id)
+      if (writeActions) await writeActions.createRoot(values)
+      else await feishuDataSourceApi.createRoot(moduleCode, values, config?.id)
       rootForm.resetFields()
       setRootModalOpen(false)
       await loadCatalog(config)
@@ -195,7 +216,10 @@ export function ModuleFeishuDataSourcePage({ moduleCode }: Props) {
   const runRootAction = async (root: FeishuSourceRoot, action: 'discover' | 'delete') => {
     try {
       setBusyKey(`${action}:${root.id}`)
-      if (action === 'discover') await feishuDataSourceApi.discoverRoot(moduleCode, root.id)
+      if (action === 'discover') {
+        if (writeActions) await writeActions.discoverRoot(root.id)
+        else await feishuDataSourceApi.discoverRoot(moduleCode, root.id)
+      } else if (writeActions) await writeActions.deleteRoot(root.id)
       else await feishuDataSourceApi.deleteRoot(moduleCode, root.id)
       await loadCatalog(config)
       message.success(action === 'discover' ? '资源发现完成' : '入口已停用')
@@ -209,7 +233,8 @@ export function ModuleFeishuDataSourcePage({ moduleCode }: Props) {
   const syncResource = async (resource: FeishuResource) => {
     try {
       setBusyKey(`sync:${resource.id}`)
-      await feishuDataSourceApi.syncResource(moduleCode, resource.id)
+      if (writeActions) await writeActions.syncResource(resource.id)
+      else await feishuDataSourceApi.syncResource(moduleCode, resource.id)
       await loadCatalog(config)
       message.success('完整镜像同步成功')
     } catch (error) {
@@ -223,7 +248,8 @@ export function ModuleFeishuDataSourcePage({ moduleCode }: Props) {
     if (!selectedResourceIds.length) return
     try {
       setBusyKey('batch-sync')
-      await feishuDataSourceApi.syncResources(moduleCode, selectedResourceIds)
+      if (writeActions) await writeActions.syncResources(selectedResourceIds)
+      else await feishuDataSourceApi.syncResources(moduleCode, selectedResourceIds)
       await loadCatalog(config)
       message.success(`已完成 ${selectedResourceIds.length} 个资源的批量同步`)
     } catch (error) {
@@ -268,7 +294,8 @@ export function ModuleFeishuDataSourcePage({ moduleCode }: Props) {
     if (!pageKey) return
     try {
       setBusyKey('bindings')
-      await feishuDataSourceApi.saveBindings(moduleCode, pageKey, bindings)
+      if (writeActions) await writeActions.saveBindings(pageKey, bindings)
+      else await feishuDataSourceApi.saveBindings(moduleCode, pageKey, bindings)
       message.success('页面映射已发布')
     } catch (error) {
       message.error(error instanceof Error ? error.message : '发布映射失败')

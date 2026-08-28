@@ -30,10 +30,14 @@ async def generate(output_path: str | Path | None = None) -> str:
 
     async with async_session_factory() as session:
         # 查所有部门
-        stmt = select(Department).where(
-            Department.is_deleted == False,  # noqa: E712
-            Department.status_is_deleted == False,  # noqa: E712
-        ).order_by(Department.order, Department.name)
+        stmt = (
+            select(Department)
+            .where(
+                Department.is_deleted == False,  # noqa: E712
+                Department.status_is_deleted == False,  # noqa: E712
+            )
+            .order_by(Department.order, Department.name)
+        )
         result = await session.execute(stmt)
         depts = list(result.scalars().all())
 

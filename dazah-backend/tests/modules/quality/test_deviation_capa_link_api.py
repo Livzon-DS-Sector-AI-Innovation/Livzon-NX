@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from typing import Any
 
 import pytest
 from httpx import AsyncClient
@@ -11,13 +12,13 @@ from app.modules.quality.models.deviations import Deviation
 
 
 @pytest.fixture(autouse=True)
-async def _clean_tables(db_session: AsyncSession):
-    await db_session.execute(CAPA.__table__.delete())
-    await db_session.execute(Deviation.__table__.delete())
+async def _clean_tables(db_session: AsyncSession) -> Any:
+    await db_session.execute(CAPA.__table__.delete())  # type: ignore[attr-defined]
+    await db_session.execute(Deviation.__table__.delete())  # type: ignore[attr-defined]
     await db_session.commit()
     yield
-    await db_session.execute(CAPA.__table__.delete())
-    await db_session.execute(Deviation.__table__.delete())
+    await db_session.execute(CAPA.__table__.delete())  # type: ignore[attr-defined]
+    await db_session.execute(Deviation.__table__.delete())  # type: ignore[attr-defined]
     await db_session.commit()
 
 

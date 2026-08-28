@@ -8,7 +8,9 @@ from pydantic import BaseModel, Field
 
 class ReferenceSubstanceCreate(BaseModel):
     drug_name: str = Field(min_length=1, max_length=255, description="药品名称")
-    substance_name: str = Field(min_length=1, max_length=255, description="对照物质名称")
+    substance_name: str = Field(
+        min_length=1, max_length=255, description="对照物质名称"
+    )
     lot_number: str = Field(min_length=1, max_length=100, description="批号")
     manufacturer: str = Field(min_length=1, max_length=500, description="生产厂家")
     english_name: str | None = Field(None, max_length=255, description="英文名")

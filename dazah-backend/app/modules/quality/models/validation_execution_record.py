@@ -20,7 +20,9 @@ class ValidationExecutionRecordBase(BaseModel):
         index=True,
     )
     title: Mapped[str] = mapped_column(String(255), nullable=False)
-    product_codes: Mapped[list[str] | None] = mapped_column(ARRAY(String), nullable=True)
+    product_codes: Mapped[list[str] | None] = mapped_column(
+        ARRAY(String), nullable=True
+    )
     department: Mapped[str | None] = mapped_column(String(100), nullable=True)
     group_chat: Mapped[str | None] = mapped_column(String(255), nullable=True)
     participants: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -38,7 +40,10 @@ class ValidationExecutionRecordBase(BaseModel):
 class EquipmentQualificationRecord(ValidationExecutionRecordBase):
     __tablename__ = "equipment_qualification_records"
     __table_args__ = (
-        UniqueConstraint("master_validation_id", name="uq_equipment_qualification_master_validation_id"),
+        UniqueConstraint(
+            "master_validation_id",
+            name="uq_equipment_qualification_master_validation_id",
+        ),
         {"schema": "quality"},
     )
 
@@ -46,7 +51,9 @@ class EquipmentQualificationRecord(ValidationExecutionRecordBase):
 class ProcessValidationRecord(ValidationExecutionRecordBase):
     __tablename__ = "process_validation_records"
     __table_args__ = (
-        UniqueConstraint("master_validation_id", name="uq_process_validation_master_validation_id"),
+        UniqueConstraint(
+            "master_validation_id", name="uq_process_validation_master_validation_id"
+        ),
         {"schema": "quality"},
     )
 
@@ -54,7 +61,9 @@ class ProcessValidationRecord(ValidationExecutionRecordBase):
 class CleaningValidationRecord(ValidationExecutionRecordBase):
     __tablename__ = "cleaning_validation_records"
     __table_args__ = (
-        UniqueConstraint("master_validation_id", name="uq_cleaning_validation_master_validation_id"),
+        UniqueConstraint(
+            "master_validation_id", name="uq_cleaning_validation_master_validation_id"
+        ),
         {"schema": "quality"},
     )
 
@@ -62,6 +71,8 @@ class CleaningValidationRecord(ValidationExecutionRecordBase):
 class OtherValidationRecord(ValidationExecutionRecordBase):
     __tablename__ = "other_validation_records"
     __table_args__ = (
-        UniqueConstraint("master_validation_id", name="uq_other_validation_master_validation_id"),
+        UniqueConstraint(
+            "master_validation_id", name="uq_other_validation_master_validation_id"
+        ),
         {"schema": "quality"},
     )

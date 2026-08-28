@@ -233,7 +233,7 @@ export async function fetchAIAnalysis(
   // 从后端获取分析结果后，重新获取文档数据
   const docRes = await fetch(`/api/v1/regulatory-documents?page=1&pageSize=100`)
   const docJson = await docRes.json()
-  const updatedDoc = docJson.data.items.find((d: any) => d.id === doc.id)
+  const updatedDoc = docJson.data.items.find((d: { id: string }) => d.id === doc.id)
   
   if (!updatedDoc || !updatedDoc.aiSummary) {
     // 如果还没有分析结果，返回默认值
@@ -288,12 +288,12 @@ export async function fetchAIBatchAnalysis(
   // 重新获取文档列表以获取 AI 分析结果
   const docRes = await fetch(`/api/v1/regulatory-documents?page=1&pageSize=100`)
   const docJson = await docRes.json()
-  const updatedDocs = docJson.data.items
+  const updatedDocs: Array<{ id: string; title: string; aiRelevanceScore?: number; aiSummary?: string; aiKeyPoints?: string[]; aiAnalyzedAt?: string }> = docJson.data.items
   
   // 为每个文档构建分析结果
-  const analyses = updatedDocs.map((doc: any) => {
+  const analyses = updatedDocs.map((doc) => {
     const relevanceScore = doc.aiRelevanceScore || 0.5
-    const impactLevel = relevanceScore >= 0.7 ? 'high' : relevanceScore >= 0.4 ? 'medium' : relevanceScore >= 0.1 ? 'low' : 'none'
+    const impactLevel: 'high' | 'medium' | 'low' | 'none' = relevanceScore >= 0.7 ? 'high' : relevanceScore >= 0.4 ? 'medium' : relevanceScore >= 0.1 ? 'low' : 'none'
     const impactScore = Math.round(relevanceScore * 100)
     
     return {
@@ -309,16 +309,16 @@ export async function fetchAIBatchAnalysis(
       generatedAt: doc.aiAnalyzedAt || new Date().toISOString(),
     }
   })
-  const highImpact = analyses.filter((a: any) => a.impactLevel === 'high').length
-  const mediumImpact = analyses.filter((a: any) => a.impactLevel === 'medium').length
-  const lowImpact = analyses.filter((a: any) => a.impactLevel === 'low').length
-  const noneImpact = analyses.filter((a: any) => a.impactLevel === 'none').length
+  const highImpact = analyses.filter((a) => a.impactLevel === 'high').length
+  const mediumImpact = analyses.filter((a) => a.impactLevel === 'medium').length
+  const lowImpact = analyses.filter((a) => a.impactLevel === 'low').length
+  const noneImpact = analyses.filter((a) => a.impactLevel === 'none').length
 
   const topConcerns = analyses
-    .filter((a: any) => a.impactLevel === 'high' || a.impactLevel === 'medium')
-    .sort((a: any, b: any) => b.impactScore - a.impactScore)
+    .filter((a) => a.impactLevel === 'high' || a.impactLevel === 'medium')
+    .sort((a, b) => b.impactScore - a.impactScore)
     .slice(0, 5)
-    .map((a: any) => ({
+    .map((a) => ({
       title: a.documentTitle,
       documentId: a.documentId,
       impactLevel: a.impactLevel,

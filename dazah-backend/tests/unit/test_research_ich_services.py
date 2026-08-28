@@ -1,4 +1,5 @@
 from copy import deepcopy
+from typing import Any
 
 import pytest
 
@@ -30,7 +31,9 @@ def test_process_parsing_and_solvent_name_normalization() -> None:
     assert ich_service.remove_concentration_prefix("Absolute ethanol") == "ethanol"
 
 
-def test_q3d_rule_engine_and_markdown_report_cover_all_classes(monkeypatch) -> None:
+def test_q3d_rule_engine_and_markdown_report_cover_all_classes(
+    monkeypatch: Any,
+) -> None:
     sample_data = {
         "classes": {
             "Class 1": {
@@ -142,7 +145,7 @@ def test_q3d_rule_engine_and_markdown_report_cover_all_classes(monkeypatch) -> N
 
 @pytest.mark.anyio
 async def test_q3d_analysis_orchestrates_extraction_rules_and_report(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     monkeypatch.setattr(
         ich_service,
@@ -150,7 +153,7 @@ async def test_q3d_analysis_orchestrates_extraction_rules_and_report(
         lambda _: "步骤1：加入砷催化剂\n步骤2：过滤",
     )
 
-    async def fake_extract_elements(text: str) -> list[dict]:
+    async def fake_extract_elements(text: str) -> list[dict[Any, Any]]:
         assert "砷催化剂" in text
         return [{"symbol": "As", "source": "催化剂", "intentionally_added": True}]
 
@@ -225,7 +228,7 @@ def test_q3c_matching_classifies_known_unknown_and_step_aggregates() -> None:
 
 @pytest.mark.anyio
 async def test_q3c_analysis_orchestrates_llm_matching_and_reporting(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     monkeypatch.setattr(
         ich_service,
@@ -233,7 +236,7 @@ async def test_q3c_analysis_orchestrates_llm_matching_and_reporting(
         lambda _: "步骤1：使用 ethanol 反应\n步骤2：使用未知溶剂洗涤",
     )
 
-    async def fake_extract_solvents(steps: list[dict]) -> dict:
+    async def fake_extract_solvents(steps: list[dict[Any, Any]]) -> dict[str, Any]:
         assert len(steps) == 2
         return {
             "steps": [

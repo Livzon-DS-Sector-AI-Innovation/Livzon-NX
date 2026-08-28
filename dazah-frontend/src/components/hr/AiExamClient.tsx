@@ -76,8 +76,8 @@ export default function AiExamClient() {
         setTrueFalseQuestions(res.data.true_false_questions)
       }
       message.success('试卷题目生成成功')
-    } catch (err: any) {
-      message.error(err.message || '出题失败')
+    } catch (err) {
+      message.error((err instanceof Error ? err.message : '') || '出题失败')
     } finally {
       setGenerating(false)
     }
@@ -118,8 +118,8 @@ export default function AiExamClient() {
       document.body.removeChild(link)
       window.URL.revokeObjectURL(url)
       message.success('试卷导出成功')
-    } catch (err: any) {
-      message.error(err.message || '导出失败')
+    } catch (err) {
+      message.error((err instanceof Error ? err.message : '') || '导出失败')
     } finally {
       setExporting(false)
     }
@@ -200,7 +200,7 @@ export default function AiExamClient() {
 
       {/* ─── 文件上传区域 ─── */}
       <Card title="上传培训文件" className="shadow-sm">
-        <Space direction="vertical" size="middle" className="w-full">
+        <Space orientation="vertical" size="middle" className="w-full">
           <Upload
             fileList={fileList}
             onChange={handleUploadChange}

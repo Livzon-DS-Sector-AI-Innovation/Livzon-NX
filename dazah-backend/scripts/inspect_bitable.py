@@ -1,18 +1,19 @@
 """Inspect Feishu Bitable table schema and sample data."""
+
 import asyncio
 import os
 import sys
+from typing import Any
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from app.platform.integrations.feishu.client import FeishuClient
 
-
 APP_TOKEN = "RfEmb1WyzasCg4sn6tsc4LbWnjf"
 TABLE_ID = "tbllxa1JInvTuEoD"
 
 
-async def inspect_table():
+async def inspect_table() -> Any:
     client = FeishuClient()
 
     # 1. Fields
@@ -26,7 +27,10 @@ async def inspect_table():
     )
     fields = fields_data.get("items", [])
     for f in fields:
-        print(f"  - {f['field_name']:12s} | type={str(f['type']):12s} | id={f['field_id']}")
+        print(
+            f"  - {f['field_name']:12s} | type={str(f['type']):12s} | "
+            f"id={f['field_id']}"
+        )
 
     # 2. Sample records
     print()

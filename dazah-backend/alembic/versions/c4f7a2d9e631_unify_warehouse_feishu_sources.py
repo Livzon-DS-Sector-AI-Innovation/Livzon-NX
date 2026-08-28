@@ -149,12 +149,14 @@ def downgrade() -> None:
     )
     op.execute(
         "UPDATE warehouse.feishu_fields "
-        "SET business_domain = 'root_' || replace(substring(business_domain, 6), '-', '') "
+        "SET business_domain = 'root_' || replace(substring(business_domain, 6), "
+        "'-', '') "
         "WHERE business_domain LIKE 'root:%'"
     )
     op.execute(
         "UPDATE warehouse.feishu_records "
-        "SET business_domain = 'root_' || replace(substring(business_domain, 6), '-', '') "
+        "SET business_domain = 'root_' || replace(substring(business_domain, 6), "
+        "'-', '') "
         "WHERE business_domain LIKE 'root:%'"
     )
     op.execute(

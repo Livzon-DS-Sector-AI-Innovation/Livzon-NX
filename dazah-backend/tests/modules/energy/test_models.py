@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 
 from app.modules.energy.models import (
     EnergyFeishuConfig,
@@ -11,30 +12,28 @@ from app.modules.energy.models import (
 )
 
 
-def test_feishu_source_root_uses_active_only_unique_index():
+def test_feishu_source_root_uses_active_only_unique_index() -> Any:
     table = EnergyFeishuSourceRoot.__table__
     assert not any(
         constraint.name == "uq_energy_feishu_source_root"
-        for constraint in table.constraints
+        for constraint in table.constraints  # type: ignore[attr-defined]
     )
 
     index = next(
         item
-        for item in table.indexes
+        for item in table.indexes  # type: ignore[attr-defined]
         if item.name == "uq_energy_feishu_source_root_active"
     )
     assert index.unique
-    assert str(index.dialect_options["postgresql"]["where"]) == (
-        "is_deleted = false"
-    )
+    assert str(index.dialect_options["postgresql"]["where"]) == ("is_deleted = false")
 
 
-def test_energy_wiki_models_do_not_create_cross_schema_foreign_keys():
+def test_energy_wiki_models_do_not_create_cross_schema_foreign_keys() -> Any:
     assert not EnergyFeishuConfig.__table__.foreign_keys
     assert not EnergyMetricFact.__table__.foreign_keys
 
 
-def test_snapshot_rows_keep_raw_cells_and_fact_identity():
+def test_snapshot_rows_keep_raw_cells_and_fact_identity() -> Any:
     snapshot = EnergySheetSnapshot(
         sheet_id="00000000-0000-0000-0000-000000000001",
         sync_run_id="00000000-0000-0000-0000-000000000002",

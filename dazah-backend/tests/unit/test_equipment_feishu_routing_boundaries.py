@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
@@ -36,8 +37,8 @@ async def test_text_router_ignores_empty_and_handles_selection_lifecycle(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     mocks = _patch_commands(monkeypatch)
-    get_selection = AsyncMock(return_value=None)
-    clear_selection = AsyncMock()
+    get_selection: Any = AsyncMock(return_value=None)
+    clear_selection: Any = AsyncMock()
     monkeypatch.setattr(inspection_session, "get_selection", get_selection)
     monkeypatch.setattr(inspection_session, "clear_selection", clear_selection)
 
@@ -61,11 +62,11 @@ async def test_text_router_ignores_empty_and_handles_selection_lifecycle(
 
     get_selection.return_value = {"select_type": "inspection", "options": []}
     await inspection_feishu.process_feishu_text("ou_1", "not-a-number")
-    assert "有效数字" in mocks["_reply_text"].await_args.args[1]
+    assert "有效数字" in mocks["_reply_text"].await_args.args[1]  # type: ignore[union-attr]
 
     await inspection_feishu.process_feishu_text("ou_1", "取消")
     assert clear_selection.await_count == 3
-    assert "已取消选择" in mocks["_reply_text"].await_args.args[1]
+    assert "已取消选择" in mocks["_reply_text"].await_args.args[1]  # type: ignore[union-attr]
 
 
 @pytest.mark.anyio
@@ -79,8 +80,8 @@ async def test_text_router_covers_global_and_session_commands(
         AsyncMock(return_value=None),
     )
     monkeypatch.setattr(inspection_session, "clear_selection", AsyncMock())
-    get_session = AsyncMock(return_value=None)
-    clear_session = AsyncMock()
+    get_session: Any = AsyncMock(return_value=None)
+    clear_session: Any = AsyncMock()
     monkeypatch.setattr(inspection_feishu, "get_session", get_session)
     monkeypatch.setattr(inspection_feishu, "clear_session", clear_session)
 
@@ -91,7 +92,7 @@ async def test_text_router_covers_global_and_session_commands(
     mocks["_cmd_start"].assert_awaited_once_with("ou_1", "user_1")
 
     await inspection_feishu.process_feishu_text("ou_1", "退出")
-    assert "当前没有进行中的巡检任务" in mocks["_reply_text"].await_args.args[1]
+    assert "当前没有进行中的巡检任务" in mocks["_reply_text"].await_args.args[1]  # type: ignore[union-attr]
 
     get_session.return_value = {
         "state": SessionState.CONFIRMING,
@@ -109,7 +110,7 @@ async def test_text_router_covers_global_and_session_commands(
 
     await inspection_feishu.process_feishu_text("ou_1", "退出")
     clear_session.assert_awaited_once_with("ou_1")
-    assert "TASK-001" in mocks["_reply_text"].await_args.args[1]
+    assert "TASK-001" in mocks["_reply_text"].await_args.args[1]  # type: ignore[union-attr]
 
     get_session.return_value = {"state": SessionState.GUIDING}
     for text, expected in (
@@ -122,14 +123,14 @@ async def test_text_router_covers_global_and_session_commands(
         assert mocks[expected].await_count >= 1
 
     await inspection_feishu.process_feishu_text("ou_1", "提交")
-    assert "当前没有待确认" in mocks["_reply_text"].await_args.args[1]
+    assert "当前没有待确认" in mocks["_reply_text"].await_args.args[1]  # type: ignore[union-attr]
 
     get_session.return_value = {"state": "unknown"}
     await inspection_feishu.process_feishu_text("ou_1", "进度")
     assert mocks["_cmd_progress"].await_count >= 2
     await inspection_feishu.process_feishu_text("ou_1", "任意命令")
-    assert "当前状态不支持" in mocks["_reply_text"].await_args.args[1]
+    assert "当前状态不支持" in mocks["_reply_text"].await_args.args[1]  # type: ignore[union-attr]
 
     get_session.return_value = None
     await inspection_feishu.process_feishu_text("ou_1", "普通文本")
-    assert "当前没有活跃的巡检任务" in mocks["_reply_text"].await_args.args[1]
+    assert "当前没有活跃的巡检任务" in mocks["_reply_text"].await_args.args[1]  # type: ignore[union-attr]

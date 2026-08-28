@@ -2,6 +2,7 @@
 
 import json
 import logging
+from typing import Any
 
 from app.modules.research.llm_service import call_llm
 from app.modules.research.models import PilotWorkflow
@@ -10,8 +11,8 @@ logger = logging.getLogger(__name__)
 
 
 def _build_prompt(
-    param_result: dict,
-    scale_up_result: dict,
+    param_result: dict[str, Any],
+    scale_up_result: dict[str, Any],
     workflow: PilotWorkflow,
 ) -> str:
     """构建 EHS 评估的 LLM prompt"""
@@ -63,9 +64,9 @@ def _build_prompt(
 
 
 async def execute_ehs_assessment(
-    step_input: dict,
+    step_input: dict[str, Any],
     workflow: PilotWorkflow,
-) -> dict:
+) -> dict[str, Any]:
     """执行 EHS 与工艺安全评估"""
     # 从累积的 step_input 中提取前两步的结果
     param_result = step_input.get("param_extraction", {})
@@ -84,6 +85,8 @@ async def execute_ehs_assessment(
             result = json.loads(result)
         except json.JSONDecodeError:
             result = {"raw_text": result}
+    if not isinstance(result, dict):
+        result = {}
 
     return {
         "step": "ehs_assessment",

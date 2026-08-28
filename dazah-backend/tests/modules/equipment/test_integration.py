@@ -1,6 +1,7 @@
 """Equipment module integration tests: lifecycle, numbering, and filtering."""
 
 import uuid
+from typing import Any
 
 from httpx import AsyncClient
 
@@ -10,7 +11,7 @@ def _uid() -> str:
     return uuid.uuid4().hex[:6].upper()
 
 
-async def test_equipment_lifecycle(client: AsyncClient):
+async def test_equipment_lifecycle(client: AsyncClient) -> Any:
     """测试设备生命周期：创建分类 -> 创建位置 -> 创建设备 -> 更新设备 -> 删除设备"""
     uid = _uid()
     cat_code = f"RF-{uid}"
@@ -74,7 +75,7 @@ async def test_equipment_lifecycle(client: AsyncClient):
     assert detail_response.status_code == 404
 
 
-async def test_equipment_number_is_preserved(client: AsyncClient):
+async def test_equipment_number_is_preserved(client: AsyncClient) -> Any:
     """测试显式设备编号在批量创建时保持不变"""
     uid = _uid()
     cat_code = f"LXJ-{uid}"
@@ -111,7 +112,7 @@ async def test_equipment_number_is_preserved(client: AsyncClient):
         assert response.json()["data"]["equipment_no"] == f"EQ-{cat_code}-{i:04d}"
 
 
-async def test_equipment_filter(client: AsyncClient):
+async def test_equipment_filter(client: AsyncClient) -> Any:
     """测试设备筛选功能"""
     uid = _uid()
     cat_code = f"RF-{uid}"
@@ -176,7 +177,7 @@ async def test_equipment_filter(client: AsyncClient):
     assert "R-101" in data["data"][0]["name"]
 
 
-async def test_create_equipment_with_nonexistent_category(client: AsyncClient):
+async def test_create_equipment_with_nonexistent_category(client: AsyncClient) -> Any:
     """测试使用不存在的分类ID创建设备（应返回404）"""
     uid = _uid()
     loc_code = f"WS-{uid}"
@@ -203,7 +204,7 @@ async def test_create_equipment_with_nonexistent_category(client: AsyncClient):
     assert response.status_code == 404
 
 
-async def test_create_duplicate_category_code(client: AsyncClient):
+async def test_create_duplicate_category_code(client: AsyncClient) -> Any:
     """测试创建重复的分类代码（应返回409）"""
     uid = _uid()
     cat_code = f"DUP-{uid}"
@@ -223,7 +224,7 @@ async def test_create_duplicate_category_code(client: AsyncClient):
     assert response2.status_code == 409
 
 
-async def test_get_nonexistent_equipment(client: AsyncClient):
+async def test_get_nonexistent_equipment(client: AsyncClient) -> Any:
     """测试获取不存在的设备（应返回404）"""
     fake_equipment_id = "00000000-0000-0000-0000-000000000000"
     response = await client.get(f"/api/v1/equipment/equipments/{fake_equipment_id}")

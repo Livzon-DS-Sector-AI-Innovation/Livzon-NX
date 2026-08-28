@@ -275,7 +275,7 @@ export function PurchaseApprovalClient({
             render: (_: unknown, item: NonNullable<PurchaseRequestResponse['items']>[number]) => item.material_description || item.product_name,
           },
           {
-            title: '规则型号/规格型号',
+            title: '规格型号',
             key: 'rule_model_compatibility',
             width: 170,
             render: (_: unknown, item: NonNullable<PurchaseRequestResponse['items']>[number]) => item.rule_model || item.specification,
@@ -285,7 +285,7 @@ export function PurchaseApprovalClient({
         ? [
             { title: '物料编码', dataIndex: 'material_code', key: 'material_code', width: 150 },
             { title: '物料说明', dataIndex: 'material_description', key: 'material_description', width: 180 },
-            { title: '规则型号', dataIndex: 'rule_model', key: 'rule_model', width: 150 },
+            { title: '规格型号', dataIndex: 'rule_model', key: 'rule_model', width: 150 },
           ]
         : [
             { title: '商品名称', dataIndex: 'product_name', key: 'product_name', width: 160 },

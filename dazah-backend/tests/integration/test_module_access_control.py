@@ -1,9 +1,12 @@
 import uuid
+from types import SimpleNamespace as _SimpleNamespace
+from typing import Any
 
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.database import get_db
 from app.main import app
 from app.modules.agent.access_scope import AgentAccessScopeService
@@ -15,18 +18,25 @@ from app.platform.identity.permissions import (
 )
 from app.shared.module_registry import MODULES_BY_CODE
 
+SimpleNamespace: Any = _SimpleNamespace
+
 
 @pytest.mark.anyio
-async def test_business_module_routes_require_an_active_view_grant(
+async def test_business_module_routes_are_open_to_authenticated_users_in_all_mode(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    """Router-level guards must enforce grants outside of Livzon Agent flows."""
-    async def override_db():
+    """Development all-mode exposes module routes without changing admin APIs."""
+
+    async def override_db() -> Any:
         yield db_session
 
     original_db_override = app.dependency_overrides.get(get_db)
+    original_settings_override = app.dependency_overrides.get(get_settings)
     app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[get_settings] = lambda: SimpleNamespace(
+        effective_module_access_mode="all"
+    )
 
     try:
         unauthenticated = await client.get("/api/v1/warehouse/")
@@ -46,39 +56,29 @@ async def test_business_module_routes_require_an_active_view_grant(
             return user
 
         app.dependency_overrides[get_current_user] = override_current_user
-        denied = await client.get("/api/v1/warehouse/")
-        assert denied.status_code == 403
-        assert denied.json()["message"] == "未获授权访问模块：warehouse"
-
-        db_session.add(
-            UserModuleGrant(
-                user_id=user.id,
-                module_code="warehouse",
-                permissions=["module.view"],
-                data_scope={},
-                grant_version=1,
-                granted_by=user.id,
-                status="active",
-            )
-        )
-        await db_session.flush()
-
-        granted = await client.get("/api/v1/warehouse/")
-        assert granted.status_code == 200
-        assert granted.json()["code"] == "warehouse"
+        allowed = await client.get("/api/v1/warehouse/")
+        assert allowed.status_code == 200
+        assert allowed.json()["code"] == "warehouse"
 
         other_module = await client.get("/api/v1/production/")
-        assert other_module.status_code == 403
+        assert other_module.status_code == 200
+
+        admin_endpoint = await client.get("/api/v1/identity/users")
+        assert admin_endpoint.status_code == 403
     finally:
         app.dependency_overrides.pop(get_current_user, None)
         if original_db_override is None:
             app.dependency_overrides.pop(get_db, None)
         else:
             app.dependency_overrides[get_db] = original_db_override
+        if original_settings_override is None:
+            app.dependency_overrides.pop(get_settings, None)
+        else:
+            app.dependency_overrides[get_settings] = original_settings_override
 
 
 @pytest.mark.anyio
-async def test_current_user_exposes_only_viewable_module_codes(
+async def test_current_user_exposes_all_module_codes_in_all_mode(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
@@ -115,25 +115,40 @@ async def test_current_user_exposes_only_viewable_module_codes(
     )
     await db_session.flush()
 
-    async def override_db():
+    async def override_db() -> Any:
         yield db_session
 
     async def override_current_user() -> User:
         return user
 
     original_db_override = app.dependency_overrides.get(get_db)
+    original_settings_override = app.dependency_overrides.get(get_settings)
     app.dependency_overrides[get_db] = override_db
     app.dependency_overrides[get_current_user] = override_current_user
+    app.dependency_overrides[get_settings] = lambda: SimpleNamespace(
+        effective_module_access_mode="all"
+    )
     try:
         response = await client.get("/api/v1/identity/me")
         assert response.status_code == 200
-        assert response.json()["data"]["module_codes"] == ["warehouse"]
+        assert response.json()["data"]["module_codes"] == sorted(MODULES_BY_CODE)
+
+        app.dependency_overrides[get_settings] = lambda: SimpleNamespace(
+            effective_module_access_mode="roles"
+        )
+        role_mode_response = await client.get("/api/v1/identity/me")
+        assert role_mode_response.status_code == 200
+        assert role_mode_response.json()["data"]["module_codes"] == ["warehouse"]
     finally:
         app.dependency_overrides.pop(get_current_user, None)
         if original_db_override is None:
             app.dependency_overrides.pop(get_db, None)
         else:
             app.dependency_overrides[get_db] = original_db_override
+        if original_settings_override is None:
+            app.dependency_overrides.pop(get_settings, None)
+        else:
+            app.dependency_overrides[get_settings] = original_settings_override
 
 
 @pytest.mark.anyio
@@ -151,7 +166,7 @@ async def test_admin_has_implicit_all_module_and_livzon_access(
     db_session.add(admin)
     await db_session.flush()
 
-    async def override_db():
+    async def override_db() -> Any:
         yield db_session
 
     async def override_current_user() -> User:

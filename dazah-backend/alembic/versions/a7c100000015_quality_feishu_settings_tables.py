@@ -8,8 +8,9 @@ Create Date: 2026-07-03 23:40:00.000000
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "a7c100000015"
@@ -127,7 +128,9 @@ def upgrade() -> None:
             nullable=False,
             server_default=sa.text("false"),
         ),
-        sa.UniqueConstraint("entity_code", name="uq_quality_feishu_entity_settings_code"),
+        sa.UniqueConstraint(
+            "entity_code", name="uq_quality_feishu_entity_settings_code"
+        ),
         schema=SCHEMA_NAME,
     )
 

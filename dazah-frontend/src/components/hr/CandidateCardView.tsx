@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { Card, Tag, Pagination, Spin, Empty, Popconfirm, Button } from 'antd'
 import { UserOutlined, DeleteOutlined } from '@ant-design/icons'
 import { Candidate } from '@/types/hr'
+import { storeCandidateListContext } from './candidateHelpers'
 
 interface CandidateCardViewProps {
   candidates: Candidate[]
@@ -27,25 +28,23 @@ export default function CandidateCardView({
   const router = useRouter()
 
   const handleCardClick = (id: string) => {
-    const ids = candidates.map((c) => c.id)
-    const currentIndex = ids.indexOf(id)
-    sessionStorage.setItem(
-      'candidate_list_context',
-      JSON.stringify({ ids, currentIndex })
-    )
+    storeCandidateListContext(candidates, id)
     router.push(`/hr/recruitment/${id}`)
   }
 
-  const recommendationColors: Record<string, string> = {
-    '强烈推荐': 'green',
-    '推荐': 'blue',
-    '待定': 'orange',
-    '不推荐': 'red',
+  const fitLevelColors: Record<string, string> = {
+    '非常满足': 'purple',
+    '高': 'green',
+    '中': 'orange',
+    '低': 'red',
   }
 
-  const syncStatusMap: Record<string, { text: string; color: string }> = {
-    synced: { text: '已同步', color: 'success' },
-    failed: { text: '同步失败', color: 'error' },
+  const interviewStatusColors: Record<string, string> = {
+    '待安排': 'default',
+    '已安排': 'processing',
+    '已完成': 'blue',
+    '通过': 'green',
+    '未通过': 'red',
   }
 
   if (loading) {
@@ -77,41 +76,47 @@ export default function CandidateCardView({
               </div>
               <div>
                 <div className="font-medium text-base">{candidate.name}</div>
-                <div className="text-sm text-gray-500">{candidate.position}</div>
+                <div className="text-sm text-gray-500">{candidate.job_position}</div>
               </div>
             </div>
             <div className="space-y-1 text-sm">
               <div className="flex justify-between">
-                <span className="text-gray-500">性别</span>
-                <span>{candidate.gender || '-'}</span>
+                <span className="text-gray-500">联系方式</span>
+                <span className="truncate max-w-[140px]">{candidate.contact || candidate.phone || '-'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">邮箱</span>
+                <span className="truncate max-w-[140px]">{candidate.email || '-'}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-500">学历</span>
                 <span>{candidate.education || '-'}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500">学校</span>
-                <span className="truncate max-w-[120px]" title={candidate.school}>
-                  {candidate.school || '-'}
-                </span>
+                <span className="text-gray-500">工作年限</span>
+                <span>{candidate.work_years != null ? `${candidate.work_years}年` : '-'}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500">专业</span>
-                <span className="truncate max-w-[120px]" title={candidate.major}>
-                  {candidate.major || '-'}
-                </span>
+                <span className="text-gray-500">技能匹配度</span>
+                <span className="font-medium text-blue-600">{candidate.match_rate != null ? `${candidate.match_rate}%` : '-'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">简历评分</span>
+                <span className="font-medium text-blue-600">{candidate.resume_score != null ? `${candidate.resume_score}分` : '-'}</span>
               </div>
             </div>
             <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between">
               <div className="flex gap-2">
-                {candidate.recommendation_level && (
-                  <Tag color={recommendationColors[candidate.recommendation_level] || 'default'}>
-                    {candidate.recommendation_level}
+                {candidate.fit_level && (
+                  <Tag color={fitLevelColors[candidate.fit_level] || 'default'}>
+                    符合度: {candidate.fit_level}
                   </Tag>
                 )}
-                <Tag color={candidate.feishu_sync_status ? syncStatusMap[candidate.feishu_sync_status]?.color || 'default' : 'default'}>
-                  {candidate.feishu_sync_status ? syncStatusMap[candidate.feishu_sync_status]?.text || candidate.feishu_sync_status : '未同步'}
-                </Tag>
+                {candidate.interview_status && (
+                  <Tag color={interviewStatusColors[candidate.interview_status] || 'default'}>
+                    {candidate.interview_status}
+                  </Tag>
+                )}
               </div>
               <Popconfirm
                 title="确认删除"

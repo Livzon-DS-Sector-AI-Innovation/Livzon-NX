@@ -5,8 +5,8 @@ export const dynamic = 'force-dynamic'
 
 export default async function ValidationAuditPage() {
   const res = await fetchTasksServer({ page: 1, page_size: 20 })
-  const items = res?.data?.items || res?.data || []
-  const total = res?.meta?.total || res?.data?.total || 0
+  const items = res?.data.items ?? []
+  const total = res?.meta?.total ?? res?.data.total ?? 0
 
   return (
     <ValidationAuditListClient

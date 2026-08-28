@@ -98,8 +98,8 @@ export default function TurnoverAnalysisPanel() {
       await new Promise((r) => setTimeout(r, 1500))
 
       setStage('streaming')
-    } catch (err: any) {
-      setErrorMsg(err.message || '分析失败，请稍后重试')
+    } catch (err) {
+      setErrorMsg((err instanceof Error ? err.message : '') || '分析失败，请稍后重试')
       setStage('error')
     }
   }, [])

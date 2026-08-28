@@ -18,7 +18,9 @@ class SpecialOperationPermitBase(BaseModel):
 
     permit_no: str = Field(..., max_length=64, description="作业票编号")
     operation_type: OperationType = Field(..., description="作业类型")
-    operation_level: OperationLevel = Field(OperationLevel.GRADE2, description="作业级别")
+    operation_level: OperationLevel = Field(
+        OperationLevel.GRADE2, description="作业级别"
+    )
     location: str | None = Field(None, max_length=255, description="作业地点")
     equipment_tag: str | None = Field(None, max_length=100, description="设备位号")
     work_description: str | None = Field(None, description="作业内容描述")
@@ -27,7 +29,9 @@ class SpecialOperationPermitBase(BaseModel):
     actual_start_time: datetime | None = Field(None, description="实际开始时间")
     actual_end_time: datetime | None = Field(None, description="实际结束时间")
     applicant_name: str | None = Field(None, max_length=100, description="申请人姓名")
-    work_leader_name: str | None = Field(None, max_length=100, description="作业负责人姓名")
+    work_leader_name: str | None = Field(
+        None, max_length=100, description="作业负责人姓名"
+    )
     operator_names: str | None = Field(None, description="作业人员姓名")
     guardian_name: str | None = Field(None, max_length=100, description="监护人姓名")
     approver_name: str | None = Field(None, max_length=100, description="审批人姓名")
@@ -41,6 +45,7 @@ class SpecialOperationPermitBase(BaseModel):
 
 class SpecialOperationPermitCreate(SpecialOperationPermitBase):
     """创建作业票"""
+
     pass
 
 
@@ -58,7 +63,9 @@ class SpecialOperationPermitUpdate(BaseModel):
     actual_start_time: datetime | None = Field(None, description="实际开始时间")
     actual_end_time: datetime | None = Field(None, description="实际结束时间")
     applicant_name: str | None = Field(None, max_length=100, description="申请人姓名")
-    work_leader_name: str | None = Field(None, max_length=100, description="作业负责人姓名")
+    work_leader_name: str | None = Field(
+        None, max_length=100, description="作业负责人姓名"
+    )
     operator_names: str | None = Field(None, description="作业人员姓名")
     guardian_name: str | None = Field(None, max_length=100, description="监护人姓名")
     approver_name: str | None = Field(None, max_length=100, description="审批人姓名")
@@ -89,5 +96,3 @@ class SpecialOperationPermitResponse(SpecialOperationPermitBase):
 
     class Config:
         from_attributes = True
-
-

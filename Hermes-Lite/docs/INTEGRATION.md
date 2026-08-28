@@ -26,18 +26,23 @@ Hermes-Lite Agent Core
 ## Installation
 
 ```bash
+# From the workspace root; development uses only the root .env.local.
+cp .env.local.example .env.local
+cd Hermes-Lite
 pip install -r requirements.txt
-cp .env.example .env
 ```
 
-For standalone development, fill the provider API key values in `.env`. For
+For standalone development, fill the required service values in the root
+`.env.local`. For
 Dazah central-agent deployment, do not store real model-provider API keys in
-Hermes-Lite; use the Dazah LLM proxy token described below.
+Hermes-Lite; use the Dazah LLM proxy token described below. Production reads
+the root `.env` file.
 
 ## Configuration
 
 - `config.yaml` contains the default provider and runtime settings.
-- `.env` contains secrets and deployment-specific API keys.
+- The workspace root `.env.local` contains development values and the root
+  `.env` contains production values.
 - Runtime state such as sessions, memories, and caches should stay local and is
   ignored by git.
 
@@ -61,7 +66,7 @@ Hermes-Lite services.dazah_agent_service:/v2/agent/runs
         +-- Tool execute: Dazah /api/v1/agent/tools/execute
 ```
 
-Required Hermes-Lite `.env` values:
+Required Hermes-Lite values in the selected root environment file:
 
 ```bash
 HERMES_AGENT_TOKEN=change-me
@@ -82,14 +87,15 @@ Run the adapter with Docker:
 
 ```bash
 docker build -t hermes-lite:prod .
-docker run --rm -p 8100:8100 --env-file .env hermes-lite:prod
+docker run --rm -p 8100:8100 --env-file ../.env hermes-lite:prod
 ```
 
 For local Dazah development, after the Dazah backend compose stack has created
 the `dazah-backend_default` network, run:
 
 ```bash
-docker compose -f docker-compose.dev.yml up -d --build
+cd ..
+docker compose --env-file .env.local -f Hermes-Lite/docker-compose.dev.yml up -d --build
 ```
 
 The development compose file mounts the repository into `/app` and starts
@@ -144,7 +150,8 @@ deployment needs them.
 
 ## Operational Notes
 
-- Keep `.env`, memory files, and local runtime state out of version control.
+- Keep the root environment files, memory files, and local runtime state out of
+  version control.
 - Enable administrator-only tools explicitly instead of adding them to the
   default `agent` toolset.
 - Treat browser, terminal, file mutation, code execution, process, cron, and

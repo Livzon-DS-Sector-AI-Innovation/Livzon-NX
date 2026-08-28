@@ -2,6 +2,7 @@
 
 import json
 import logging
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -10,7 +11,7 @@ async def send_user_card(
     open_id: str,
     title: str,
     content: str,
-    elements: list[dict] | None = None,
+    elements: list[dict[str, Any]] | None = None,
     receive_id_type: str = "user_id",
 ) -> bool:
     """使用设备机器人发送卡片消息给单个用户（DM）。
@@ -26,7 +27,9 @@ async def send_user_card(
         True 表示发送成功，False 表示失败
     """
     logger.info(
-        "设备机器人 send_user_card: %s=%s", receive_id_type, open_id,
+        "设备机器人 send_user_card: %s=%s",
+        receive_id_type,
+        open_id,
     )
     try:
         from app.modules.equipment.feishu.client import (
@@ -37,12 +40,12 @@ async def send_user_card(
         client = await get_equipment_feishu_client()
         token = await get_equipment_tenant_token(client)
 
-        from lark_oapi.api.im.v1 import (
+        from lark_oapi.api.im.v1 import (  # type: ignore[import-untyped]
             CreateMessageRequest,
             CreateMessageRequestBody,
         )
 
-        card = {
+        card: dict[str, Any] = {
             "config": {"wide_screen_mode": True},
             "header": {
                 "title": {"tag": "plain_text", "content": title},
@@ -74,7 +77,9 @@ async def send_user_card(
         if not resp.success():
             logger.error(
                 "设备机器人 send_user_card 失败: user_id=%s, code=%s, msg=%s",
-                open_id, resp.code, resp.msg,
+                open_id,
+                resp.code,
+                resp.msg,
             )
             return False
         logger.info("设备机器人卡片已发送: user_id=%s, title=%s", open_id, title)
@@ -82,6 +87,8 @@ async def send_user_card(
     except Exception as e:
         logger.error(
             "设备机器人 send_user_card 异常: user_id=%s, %s: %s",
-            open_id, type(e).__name__, e,
+            open_id,
+            type(e).__name__,
+            e,
         )
         return False

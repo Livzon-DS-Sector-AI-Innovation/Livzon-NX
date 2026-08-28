@@ -1,5 +1,6 @@
 from datetime import UTC, datetime
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
+from typing import Any, cast
 from uuid import uuid4
 
 import pytest
@@ -9,31 +10,33 @@ from app.platform.identity import service
 from app.platform.identity.models import FeishuConfig
 from app.platform.identity.schemas import ExternalIdentityBindingOut, FeishuConfigUpsert
 
+SimpleNamespace: Any = _SimpleNamespace
+
 
 class FakeDb:
-    def __init__(self) -> None:
+    def __init__(self: Any) -> None:
         self.flush_count = 0
         self.refresh_count = 0
 
-    async def flush(self) -> None:
+    async def flush(self: Any) -> None:
         self.flush_count += 1
 
-    async def refresh(self, instance) -> None:
+    async def refresh(self: Any, instance: Any) -> None:
         self.refresh_count += 1
 
 
 class FakeFeishuConfigRepo:
-    def __init__(self, config: FeishuConfig | None = None) -> None:
+    def __init__(self: Any, config: FeishuConfig | None = None) -> None:
         self.config = config
         self.saved: FeishuConfig | None = None
 
-    async def get_latest(self, db) -> FeishuConfig | None:
-        return self.config
+    async def get_latest(self: Any, db: Any) -> FeishuConfig | None:
+        return self.config  # type: ignore[no-any-return]
 
-    async def get_active(self, db) -> FeishuConfig | None:
+    async def get_active(self: Any, db: Any) -> FeishuConfig | None:
         return self.config if self.config and self.config.is_active else None
 
-    async def save(self, db, config: FeishuConfig) -> FeishuConfig:
+    async def save(self: Any, db: Any, config: FeishuConfig) -> FeishuConfig:
         self.saved = config
         self.config = config
         await db.flush()
@@ -41,7 +44,7 @@ class FakeFeishuConfigRepo:
 
 
 class FakeHttpResponse:
-    def __init__(self, status_code: int) -> None:
+    def __init__(self: Any, status_code: int) -> None:
         self.status_code = status_code
         self.is_success = 200 <= status_code < 300
 
@@ -49,16 +52,16 @@ class FakeHttpResponse:
 class FakeHttpClient:
     status_code = 200
 
-    def __init__(self, **kwargs) -> None:
+    def __init__(self: Any, **kwargs: Any) -> None:
         pass
 
-    async def __aenter__(self):
+    async def __aenter__(self: Any) -> Any:
         return self
 
-    async def __aexit__(self, exc_type, exc, tb) -> None:
+    async def __aexit__(self: Any, exc_type: Any, exc: Any, tb: Any) -> None:
         return None
 
-    async def put(self, *args, **kwargs) -> FakeHttpResponse:
+    async def put(self: Any, *args: Any, **kwargs: Any) -> FakeHttpResponse:
         return FakeHttpResponse(self.status_code)
 
 
@@ -83,8 +86,10 @@ def test_external_identity_binding_out_normalizes_migrated_source() -> None:
 
 
 @pytest.mark.anyio
-async def test_save_livzon_feishu_config_preserves_existing_secret(monkeypatch) -> None:
-    async def ignore_hermes_credential_push(**kwargs) -> None:
+async def test_save_livzon_feishu_config_preserves_existing_secret(
+    monkeypatch: Any,
+) -> None:
+    async def ignore_hermes_credential_push(**kwargs: Any) -> None:
         return None
 
     monkeypatch.setattr(
@@ -105,7 +110,7 @@ async def test_save_livzon_feishu_config_preserves_existing_secret(monkeypatch) 
     )
 
     response = await service.save_livzon_feishu_config(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         FeishuConfigUpsert(
             config_name="Livzon 助手飞书设置",
             app_id="new-app",
@@ -123,7 +128,7 @@ async def test_save_livzon_feishu_config_preserves_existing_secret(monkeypatch) 
 
 @pytest.mark.anyio
 async def test_save_livzon_feishu_config_reports_secret_encryption_error(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     config = FeishuConfig(
         config_name="Livzon 助手飞书设置",
@@ -144,7 +149,7 @@ async def test_save_livzon_feishu_config_reports_secret_encryption_error(
 
     with pytest.raises(HTTPException) as exc_info:
         await service.save_livzon_feishu_config(
-            FakeDb(),
+            cast(Any, FakeDb)(),
             FeishuConfigUpsert(
                 config_name="Livzon 助手飞书设置",
                 app_id="new-app",
@@ -161,7 +166,7 @@ async def test_save_livzon_feishu_config_reports_secret_encryption_error(
 
 @pytest.mark.anyio
 async def test_push_livzon_credentials_reports_hermes_version_conflict(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     monkeypatch.setattr(
         service,
@@ -172,7 +177,7 @@ async def test_push_livzon_credentials_reports_hermes_version_conflict(
         ),
     )
     FakeHttpClient.status_code = 409
-    monkeypatch.setattr(service.httpx, "AsyncClient", FakeHttpClient)
+    monkeypatch.setattr(service.httpx, "AsyncClient", FakeHttpClient)  # type: ignore[attr-defined]
 
     with pytest.raises(HTTPException) as exc_info:
         await service._push_livzon_credentials_to_hermes(
@@ -189,13 +194,13 @@ async def test_push_livzon_credentials_reports_hermes_version_conflict(
 
 @pytest.mark.anyio
 async def test_restart_livzon_feishu_gateway_waits_for_connected_result(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     class Response:
         status_code = 200
         is_success = True
 
-        def json(self):
+        def json(self: Any) -> Any:
             return {
                 "status": "connected",
                 "message": "Hermes 飞书 Gateway 已重新建立连接",
@@ -206,16 +211,16 @@ async def test_restart_livzon_feishu_gateway_waits_for_connected_result(
             }
 
     class Client:
-        def __init__(self, *, timeout):
+        def __init__(self: Any, *, timeout: Any) -> None:
             assert timeout == 70
 
-        async def __aenter__(self):
+        async def __aenter__(self: Any) -> Any:
             return self
 
-        async def __aexit__(self, *_args):
+        async def __aexit__(self: Any, *_args: Any) -> Any:
             return None
 
-        async def post(self, url, *, headers):
+        async def post(self: Any, url: Any, *, headers: Any) -> Any:
             assert url == "http://hermes/internal/feishu/gateway/restart"
             assert headers["Authorization"] == "Bearer test-token"
             return Response()
@@ -228,7 +233,7 @@ async def test_restart_livzon_feishu_gateway_waits_for_connected_result(
             HERMES_INTERNAL_TOKEN="test-token",
         ),
     )
-    monkeypatch.setattr(service.httpx, "AsyncClient", Client)
+    monkeypatch.setattr(service.httpx, "AsyncClient", Client)  # type: ignore[attr-defined]
 
     result = await service.restart_livzon_feishu_gateway()
 
@@ -238,26 +243,26 @@ async def test_restart_livzon_feishu_gateway_waits_for_connected_result(
 
 @pytest.mark.anyio
 async def test_restart_livzon_feishu_gateway_preserves_runtime_conflict(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     class Response:
         status_code = 409
         is_success = False
 
-        def json(self):
+        def json(self: Any) -> Any:
             return {"detail": "飞书 Gateway 当前未启用"}
 
     class Client:
-        def __init__(self, *, timeout):
+        def __init__(self: Any, *, timeout: Any) -> None:
             pass
 
-        async def __aenter__(self):
+        async def __aenter__(self: Any) -> Any:
             return self
 
-        async def __aexit__(self, *_args):
+        async def __aexit__(self: Any, *_args: Any) -> Any:
             return None
 
-        async def post(self, url, *, headers):
+        async def post(self: Any, url: Any, *, headers: Any) -> Any:
             return Response()
 
     monkeypatch.setattr(
@@ -268,7 +273,7 @@ async def test_restart_livzon_feishu_gateway_preserves_runtime_conflict(
             HERMES_INTERNAL_TOKEN="test-token",
         ),
     )
-    monkeypatch.setattr(service.httpx, "AsyncClient", Client)
+    monkeypatch.setattr(service.httpx, "AsyncClient", Client)  # type: ignore[attr-defined]
 
     with pytest.raises(HTTPException) as exc_info:
         await service.restart_livzon_feishu_gateway()
@@ -279,23 +284,23 @@ async def test_restart_livzon_feishu_gateway_preserves_runtime_conflict(
 
 @pytest.mark.anyio
 async def test_restart_livzon_feishu_gateway_explains_old_hermes_version(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     class Response:
         status_code = 404
         is_success = False
 
     class Client:
-        def __init__(self, *, timeout):
+        def __init__(self: Any, *, timeout: Any) -> None:
             pass
 
-        async def __aenter__(self):
+        async def __aenter__(self: Any) -> Any:
             return self
 
-        async def __aexit__(self, *_args):
+        async def __aexit__(self: Any, *_args: Any) -> Any:
             return None
 
-        async def post(self, url, *, headers):
+        async def post(self: Any, url: Any, *, headers: Any) -> Any:
             return Response()
 
     monkeypatch.setattr(
@@ -306,7 +311,7 @@ async def test_restart_livzon_feishu_gateway_explains_old_hermes_version(
             HERMES_INTERNAL_TOKEN="test-token",
         ),
     )
-    monkeypatch.setattr(service.httpx, "AsyncClient", Client)
+    monkeypatch.setattr(service.httpx, "AsyncClient", Client)  # type: ignore[attr-defined]
 
     with pytest.raises(HTTPException) as exc_info:
         await service.restart_livzon_feishu_gateway()
@@ -317,7 +322,7 @@ async def test_restart_livzon_feishu_gateway_explains_old_hermes_version(
 
 @pytest.mark.anyio
 async def test_diagnose_livzon_feishu_config_reports_missing_credentials(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     monkeypatch.setattr(
         service,
@@ -335,7 +340,7 @@ async def test_diagnose_livzon_feishu_config_reports_missing_credentials(
         ),
     )
 
-    result = await service.diagnose_livzon_feishu_config(FakeDb())
+    result = await service.diagnose_livzon_feishu_config(cast(Any, FakeDb)())
 
     assert result.status == "error"
     assert result.steps[0].name == "应用凭证"
@@ -343,7 +348,7 @@ async def test_diagnose_livzon_feishu_config_reports_missing_credentials(
 
 @pytest.mark.anyio
 async def test_diagnose_livzon_feishu_config_reports_secret_decryption_error(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     config = FeishuConfig(
         config_name="Livzon 助手飞书设置",
@@ -365,7 +370,7 @@ async def test_diagnose_livzon_feishu_config_reports_secret_decryption_error(
     monkeypatch.setattr(service, "decrypt_secret", fail_decrypt)
 
     with pytest.raises(HTTPException) as exc_info:
-        await service.diagnose_livzon_feishu_config(FakeDb())
+        await service.diagnose_livzon_feishu_config(cast(Any, FakeDb)())
 
     assert exc_info.value.status_code == 500
     assert "ENCRYPTION_KEY" in str(exc_info.value.detail)
@@ -373,7 +378,7 @@ async def test_diagnose_livzon_feishu_config_reports_secret_decryption_error(
 
 @pytest.mark.anyio
 async def test_diagnose_livzon_feishu_config_warns_for_missing_user_fields(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     import app.platform.integrations.feishu.contact as contact
     import app.platform.integrations.feishu.utils as utils
@@ -392,20 +397,20 @@ async def test_diagnose_livzon_feishu_config_warns_for_missing_user_fields(
         FakeFeishuConfigRepo(config),
     )
 
-    async def fake_token(*args, **kwargs) -> str:
+    async def fake_token(*args: Any, **kwargs: Any) -> str:
         return "tenant-token"
 
-    async def fake_departments(*args, **kwargs) -> list[dict]:
+    async def fake_departments(*args: Any, **kwargs: Any) -> list[dict[Any, Any]]:
         return [{"department_id": "od_member", "name": "生产部"}]
 
-    async def fake_scope(*args, **kwargs) -> dict:
+    async def fake_scope(*args: Any, **kwargs: Any) -> dict[str, Any]:
         return {
             "department_ids": ["od_member"],
             "user_ids": [],
             "group_ids": [],
         }
 
-    async def fake_users(*args, **kwargs) -> list[dict]:
+    async def fake_users(*args: Any, **kwargs: Any) -> list[dict[Any, Any]]:
         return [{"user_id": "u1", "name": "张三"}]
 
     monkeypatch.setattr(utils, "get_tenant_access_token", fake_token)
@@ -413,7 +418,7 @@ async def test_diagnose_livzon_feishu_config_warns_for_missing_user_fields(
     monkeypatch.setattr(contact, "get_all_departments", fake_departments)
     monkeypatch.setattr(contact, "find_users_by_department", fake_users)
 
-    result = await service.diagnose_livzon_feishu_config(FakeDb())
+    result = await service.diagnose_livzon_feishu_config(cast(Any, FakeDb)())
 
     assert result.status == "warning"
     assert result.department_count == 1
@@ -424,7 +429,7 @@ async def test_diagnose_livzon_feishu_config_warns_for_missing_user_fields(
 
 @pytest.mark.anyio
 async def test_diagnose_uses_authorized_department_instead_of_inaccessible_root(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     import app.platform.integrations.feishu.contact as contact
     import app.platform.integrations.feishu.utils as utils
@@ -443,36 +448,40 @@ async def test_diagnose_uses_authorized_department_instead_of_inaccessible_root(
         FakeFeishuConfigRepo(config),
     )
 
-    async def fake_token(*args, **kwargs) -> str:
+    async def fake_token(*args: Any, **kwargs: Any) -> str:
         return "tenant-token"
 
-    async def fake_scope(*args, **kwargs) -> dict:
+    async def fake_scope(*args: Any, **kwargs: Any) -> dict[str, Any]:
         return {
             "department_ids": ["od_authorized"],
             "user_ids": [],
             "group_ids": [],
         }
 
-    async def fake_departments(*, root_department_id, **kwargs) -> list[dict]:
+    async def fake_departments(
+        *, root_department_id: Any, **kwargs: Any
+    ) -> list[dict[Any, Any]]:
         assert root_department_id == "od_authorized"
         return []
 
-    async def fake_users(department_id, **kwargs) -> list[dict]:
+    async def fake_users(department_id: Any, **kwargs: Any) -> list[dict[Any, Any]]:
         assert department_id == "od_authorized"
-        return [{
-            "user_id": "u1",
-            "name": "张三",
-            "department_ids": ["od_authorized"],
-            "mobile": "masked",
-            "email": "masked@example.invalid",
-        }]
+        return [
+            {
+                "user_id": "u1",
+                "name": "张三",
+                "department_ids": ["od_authorized"],
+                "mobile": "masked",
+                "email": "masked@example.invalid",
+            }
+        ]
 
     monkeypatch.setattr(utils, "get_tenant_access_token", fake_token)
     monkeypatch.setattr(contact, "get_contact_scope", fake_scope)
     monkeypatch.setattr(contact, "get_all_departments", fake_departments)
     monkeypatch.setattr(contact, "find_users_by_department", fake_users)
 
-    result = await service.diagnose_livzon_feishu_config(FakeDb())
+    result = await service.diagnose_livzon_feishu_config(cast(Any, FakeDb)())
 
     assert result.status == "warning"
     assert next(step for step in result.steps if step.name == "部门列表").status == "ok"

@@ -143,11 +143,14 @@ async def test_versioned_event_envelope_is_idempotent_and_queues_event_trigger(
     assert run_rows[0].correlation_id == correlation_id
     assert run_rows[0].idempotency_key == f"event:{first.id}:{trigger.id}"
     assert run_rows[0].input_summary["trigger"]["warehouse_code"] == "WH-01"
-    assert len(
-        await AgentDomainEventService().list_for_user(
-            db_session, user=owner, correlation_id=correlation_id
+    assert (
+        len(
+            await AgentDomainEventService().list_for_user(
+                db_session, user=owner, correlation_id=correlation_id
+            )
         )
-    ) == 1
+        == 1
+    )
 
     version.capability_versions = {"warehouse.list_raw_materials": "0.1"}
     impacts = await AgentAutomationService().list_capability_impacts(
@@ -193,7 +196,7 @@ async def test_versioned_event_envelope_is_idempotent_and_queues_event_trigger(
     )
     assert received
     assert not timed_out
-    assert outputs["wait_arrival"]["subject_id"] == resumed.subject_id
+    assert outputs["wait_arrival"]["subject_id"] == resumed.subject_id  # type: ignore[index]
 
     manual_step = ManualTaskStep.model_validate(
         {"key": "confirm_inbound", "type": "manual_task", "title": "确认仓储入库"}

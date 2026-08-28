@@ -248,7 +248,10 @@ async def update_equipment(
         await get_location_by_id(db, data.location_id)
 
     update_data = data.model_dump(exclude_unset=True)
-    return await repo.update_equipment(db, equipment_id, update_data)
+    updated = await repo.update_equipment(db, equipment_id, update_data)
+    if updated is None:
+        raise NotFoundException("设备", str(equipment_id))
+    return updated
 
 
 async def delete_equipment(

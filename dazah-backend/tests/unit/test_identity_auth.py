@@ -1,5 +1,6 @@
 from datetime import UTC, datetime, timedelta
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
+from typing import Any, cast
 from uuid import uuid4
 
 import pytest
@@ -13,9 +14,11 @@ from app.platform.identity import deps
 from app.platform.identity.models import FeishuUserToken
 from app.platform.identity.service import generate_state_token
 
+SimpleNamespace: Any = _SimpleNamespace
+
 
 def make_request(authorization: str | None = None) -> Request:
-    headers = []
+    headers: list[Any] = []
     if authorization:
         headers.append((b"authorization", authorization.encode("utf-8")))
     return Request({"type": "http", "headers": headers})
@@ -35,7 +38,7 @@ def make_settings() -> SimpleNamespace:
     )
 
 
-async def fake_get_db():
+async def fake_get_db() -> Any:
     yield object()
 
 
@@ -84,11 +87,44 @@ def test_production_accepts_a_configured_sso_administrator() -> None:
     settings.check()
 
 
+def test_module_access_mode_defaults_to_all() -> None:
+    development = Settings.model_construct(
+        APP_ENV="development",
+        MODULE_ACCESS_MODE=None,
+    )
+    production = Settings.model_construct(
+        APP_ENV="production",
+        MODULE_ACCESS_MODE=None,
+    )
+    test = Settings.model_construct(
+        APP_ENV="test",
+        MODULE_ACCESS_MODE=None,
+    )
+
+    assert development.effective_module_access_mode == "all"
+    assert production.effective_module_access_mode == "all"
+    assert test.effective_module_access_mode == "all"
+
+
+def test_module_access_mode_accepts_explicit_override() -> None:
+    development = Settings.model_construct(
+        APP_ENV="development",
+        MODULE_ACCESS_MODE="roles",
+    )
+    production = Settings.model_construct(
+        APP_ENV="production",
+        MODULE_ACCESS_MODE="all",
+    )
+
+    assert development.effective_module_access_mode == "roles"
+    assert production.effective_module_access_mode == "all"
+
+
 @pytest.mark.anyio
 async def test_current_user_is_none_without_token() -> None:
     user = await deps.get_current_user(
         make_request(),
-        db=object(),
+        db=object(),  # type: ignore[arg-type]
         settings=make_settings(),
         auth_token=None,
     )
@@ -100,7 +136,7 @@ async def test_current_user_is_none_without_token() -> None:
 async def test_current_user_is_none_for_invalid_token() -> None:
     user = await deps.get_current_user(
         make_request("Bearer not-a-valid-jwt"),
-        db=object(),
+        db=object(),  # type: ignore[arg-type]
         settings=make_settings(),
         auth_token=None,
     )
@@ -119,7 +155,7 @@ async def test_me_endpoint_requires_login() -> None:
         app.dependency_overrides.pop(get_db, None)
 
     assert response.status_code == 401
-    assert response.json()["message"] == "Login required"
+    assert response.json()["message"] == "未登录或登录已过期"
 
 
 @pytest.mark.anyio
@@ -161,7 +197,10 @@ async def test_feishu_callback_rejects_invalid_state() -> None:
         app.dependency_overrides.pop(get_db, None)
 
     assert response.status_code == 302
-    assert response.headers["location"] == "http://localhost:3000/login?error=invalid_state"
+    assert (
+        response.headers["location"]
+        == "http://localhost:3000/login?error=invalid_state"
+    )
 
 
 @pytest.mark.anyio
@@ -181,13 +220,16 @@ async def test_feishu_callback_rejects_missing_state_cookie() -> None:
         app.dependency_overrides.pop(get_db, None)
 
     assert response.status_code == 302
-    assert response.headers["location"] == "http://localhost:3000/login?error=invalid_state"
+    assert (
+        response.headers["location"]
+        == "http://localhost:3000/login?error=invalid_state"
+    )
 
 
 @pytest.mark.anyio
-async def test_feishu_callback_success_redirects_token(monkeypatch) -> None:
-    async def fake_handle_oauth_callback(db, code):
-        user = SimpleNamespace(id=uuid4(), name="飞书用户")
+async def test_feishu_callback_success_redirects_token(monkeypatch: Any) -> None:
+    async def fake_handle_oauth_callback(db: Any, code: Any) -> Any:
+        user: Any = SimpleNamespace(id=uuid4(), name="飞书用户")
         return user, "jwt-token"
 
     from app.platform.identity import service
@@ -216,9 +258,11 @@ async def test_feishu_callback_success_redirects_token(monkeypatch) -> None:
 
 
 @pytest.mark.anyio
-async def test_local_login_still_returns_token(monkeypatch) -> None:
-    async def fake_authenticate_local_user(db, *, username, password):
-        user = SimpleNamespace(
+async def test_local_login_still_returns_token(monkeypatch: Any) -> None:
+    async def fake_authenticate_local_user(
+        db: Any, *, username: Any, password: Any
+    ) -> Any:
+        user: Any = SimpleNamespace(
             id=uuid4(),
             name="本地管理员",
             username=username,
@@ -271,8 +315,8 @@ async def test_local_login_still_returns_token(monkeypatch) -> None:
 
 
 @pytest.mark.anyio
-async def test_local_login_is_rejected_when_disabled(monkeypatch) -> None:
-    async def unexpected_authenticate(*args, **kwargs):
+async def test_local_login_is_rejected_when_disabled(monkeypatch: Any) -> None:
+    async def unexpected_authenticate(*args: Any, **kwargs: Any) -> Any:
         pytest.fail("disabled local login must not verify credentials")
 
     from app.platform.identity import service
@@ -303,8 +347,10 @@ async def test_local_login_is_rejected_when_disabled(monkeypatch) -> None:
 
 
 @pytest.mark.anyio
-async def test_admin_only_local_login_rejects_regular_user(monkeypatch) -> None:
-    async def fake_authenticate_local_user(db, *, username, password):
+async def test_admin_only_local_login_rejects_regular_user(monkeypatch: Any) -> None:
+    async def fake_authenticate_local_user(
+        db: Any, *, username: Any, password: Any
+    ) -> Any:
         return SimpleNamespace(role="user"), "local-token"
 
     from app.platform.identity import service
@@ -335,31 +381,33 @@ async def test_admin_only_local_login_rejects_regular_user(monkeypatch) -> None:
 
 
 @pytest.mark.anyio
-async def test_oauth_callback_saves_encrypted_feishu_user_tokens(monkeypatch) -> None:
+async def test_oauth_callback_saves_encrypted_feishu_user_tokens(
+    monkeypatch: Any,
+) -> None:
     user_id = uuid4()
 
     class FakeDb:
-        def __init__(self) -> None:
+        def __init__(self: Any) -> None:
             self.commits = 0
             self.flushes = 0
 
-        async def flush(self) -> None:
+        async def flush(self: Any) -> None:
             self.flushes += 1
 
-        async def commit(self) -> None:
+        async def commit(self: Any) -> None:
             self.commits += 1
 
     class FakeUserRepo:
-        def __init__(self) -> None:
-            self.created_kwargs: dict | None = None
+        def __init__(self: Any) -> None:
+            self.created_kwargs: dict[Any, Any] | None = None
 
-        async def get_by_feishu_open_id(self, db, open_id):
+        async def get_by_feishu_open_id(self: Any, db: Any, open_id: Any) -> Any:
             return None
 
-        async def get_by_feishu_user_id(self, db, user_id):
+        async def get_by_feishu_user_id(self: Any, db: Any, user_id: Any) -> Any:
             return None
 
-        async def create(self, db, **kwargs):
+        async def create(self: Any, db: Any, **kwargs: Any) -> Any:
             self.created_kwargs = kwargs
             return SimpleNamespace(
                 id=user_id,
@@ -374,20 +422,22 @@ async def test_oauth_callback_saves_encrypted_feishu_user_tokens(monkeypatch) ->
             )
 
     class FakeTokenRepo:
-        def __init__(self) -> None:
+        def __init__(self: Any) -> None:
             self.saved: FeishuUserToken | None = None
 
-        async def get_by_user_and_app(self, db, *, local_user_id, app_id):
+        async def get_by_user_and_app(
+            self: Any, db: Any, *, local_user_id: Any, app_id: Any
+        ) -> Any:
             return None
 
-        async def save(self, db, token):
+        async def save(self: Any, db: Any, token: Any) -> Any:
             self.saved = token
             return token
 
     class FakeOAuth:
         app_id = "cli_test"
 
-        async def exchange_code(self, code):
+        async def exchange_code(self: Any, code: Any) -> Any:
             return {
                 "access_token": "user-token",
                 "refresh_token": "refresh-token",
@@ -397,7 +447,7 @@ async def test_oauth_callback_saves_encrypted_feishu_user_tokens(monkeypatch) ->
                 "token_type": "Bearer",
             }
 
-        async def get_user_info(self, user_access_token):
+        async def get_user_info(self: Any, user_access_token: Any) -> Any:
             return {
                 "name": "飞书用户",
                 "open_id": "ou_test",
@@ -406,15 +456,15 @@ async def test_oauth_callback_saves_encrypted_feishu_user_tokens(monkeypatch) ->
                 "tenant_key": "tenant_test",
             }
 
-    fake_user_repo = FakeUserRepo()
-    fake_token_repo = FakeTokenRepo()
+    fake_user_repo: Any = FakeUserRepo()
+    fake_token_repo: Any = FakeTokenRepo()
     from app.platform.identity import service
 
     monkeypatch.setattr(service, "_repo", fake_user_repo)
     monkeypatch.setattr(service, "_feishu_user_token_repo", fake_token_repo)
-    monkeypatch.setattr(service.FeishuOAuthClient, "from_settings", lambda: FakeOAuth())
+    monkeypatch.setattr(service.FeishuOAuthClient, "from_settings", lambda: FakeOAuth())  # type: ignore[attr-defined]
 
-    async def fake_directory_profile(*args, **kwargs):
+    async def fake_directory_profile(*args: Any, **kwargs: Any) -> Any:
         return {
             "name": "飞书用户",
             "employee_no": "E001",
@@ -444,7 +494,7 @@ async def test_oauth_callback_saves_encrypted_feishu_user_tokens(monkeypatch) ->
         ),
     )
 
-    db = FakeDb()
+    db: Any = cast(Any, FakeDb)()
     user, jwt_token = await service.handle_oauth_callback(db, "auth-code")
 
     assert user.id == user_id
@@ -467,7 +517,7 @@ async def test_oauth_callback_saves_encrypted_feishu_user_tokens(monkeypatch) ->
 
 @pytest.mark.anyio
 async def test_get_valid_feishu_user_access_token_refreshes_and_replaces_tokens(
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     user_id = uuid4()
     now = datetime.now(UTC)
@@ -481,14 +531,14 @@ async def test_get_valid_feishu_user_access_token_refreshes_and_replaces_tokens(
     )
 
     class FakeDb:
-        def __init__(self) -> None:
+        def __init__(self: Any) -> None:
             self.flushes = 0
 
-        async def flush(self) -> None:
+        async def flush(self: Any) -> None:
             self.flushes += 1
 
     class FakeUserRepo:
-        async def get_by_id(self, db, user_id):
+        async def get_by_id(self: Any, db: Any, user_id: Any) -> Any:
             return SimpleNamespace(
                 id=user_id,
                 name="飞书用户",
@@ -500,11 +550,13 @@ async def test_get_valid_feishu_user_access_token_refreshes_and_replaces_tokens(
             )
 
     class FakeTokenRepo:
-        async def get_by_user_and_app(self, db, *, local_user_id, app_id):
+        async def get_by_user_and_app(
+            self: Any, db: Any, *, local_user_id: Any, app_id: Any
+        ) -> Any:
             return stored
 
     class FakeOAuth:
-        async def refresh_access_token(self, refresh_token):
+        async def refresh_access_token(self: Any, refresh_token: Any) -> Any:
             assert refresh_token == "old-refresh"
             return {
                 "access_token": "new-token",
@@ -517,7 +569,7 @@ async def test_get_valid_feishu_user_access_token_refreshes_and_replaces_tokens(
 
     monkeypatch.setattr(service, "_repo", FakeUserRepo())
     monkeypatch.setattr(service, "_feishu_user_token_repo", FakeTokenRepo())
-    monkeypatch.setattr(service.FeishuOAuthClient, "from_settings", lambda: FakeOAuth())
+    monkeypatch.setattr(service.FeishuOAuthClient, "from_settings", lambda: FakeOAuth())  # type: ignore[attr-defined]
     monkeypatch.setattr(
         service,
         "get_settings",
@@ -530,7 +582,9 @@ async def test_get_valid_feishu_user_access_token_refreshes_and_replaces_tokens(
     )
     monkeypatch.setattr(service, "encrypt_secret", lambda value: f"enc:{value}")
 
-    token = await service.get_valid_feishu_user_access_token(FakeDb(), user_id=user_id)
+    token = await service.get_valid_feishu_user_access_token(
+        cast(Any, FakeDb)(), user_id=user_id
+    )
 
     assert token == "new-token"
     assert stored.encrypted_user_access_token == "enc:new-token"

@@ -23,6 +23,7 @@ desktop.ini
 !/docs/
 /docs/*
 !/docs/module-development-ci.md
+!/docs/module-migration-audit.md
 !/docs/dazah-enterprise-agent-gateway-tool-registry-implementation-plan-2026-07-30.md
 !/docs/hermes-memory-governance.md
 !/docs/tasks/
@@ -32,11 +33,15 @@ desktop.ini
 !/docs/runbooks/
 /docs/runbooks/*
 !/docs/runbooks/hermes-native-feishu-gateway-phase0-runbook.md
+!/docs/runbooks/production-offline-deployment.md
 !/scripts/
 /scripts/*
 !/scripts/ci.sh
 !/scripts/check-branch-policy.sh
 !/scripts/dev.ps1
+!/scripts/dev-native.ps1
+!/scripts/deploy-production.ps1
+!/scripts/deploy-production-remote.sh
 !/scripts/check-coverage-floor.py
 !/scripts/check-diff-coverage.py
 !/scripts/check-agent-v2-residuals.py
@@ -47,6 +52,7 @@ desktop.ini
 /scripts/tests/*
 !/scripts/tests/test_check_agent_instruction_bridges.py
 !/scripts/tests/test_check_test_impact.py
+!/scripts/tests/test_production_proxy_deployment.py
 !/scripts/wait-for-database.sh
 
 # Python
@@ -87,13 +93,21 @@ desktop.ini
 **/*.tmp
 **/*.temp
 
+# Deployment artifacts
+/release/
+/.deploy-tmp/
+/.deploy-cache/
+
 # Local environment and logs
 **/.env
 **/.env.*
-!**/.env.example
-!**/.env.local.example
+!/.env.example
+!/.env.local.example
 *.log
 *.pid
+
+# Native hybrid development runtime data
+/.dev-data/
 
 # Runtime data
 dazah-backend/uploads/
@@ -104,3 +118,7 @@ Hermes-Lite/sessions/
 Hermes-Lite/memory/
 Hermes-Lite/memories/
 Hermes-Lite/cache/
+
+# Local tooling directories
+**/.zcode/
+**/.dsh-install/

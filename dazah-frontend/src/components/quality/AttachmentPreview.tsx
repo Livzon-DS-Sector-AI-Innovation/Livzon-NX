@@ -82,7 +82,7 @@ export function AttachmentPreview({
     return () => {
       cancelled = true
     }
-  }, [open, attachment, deviationId, capaId])
+  }, [open, attachment, deviationId, capaId, message])
 
   const handleSubmitReview = async () => {
     if (!newComment.trim() || !attachment?.downloadUrl) return

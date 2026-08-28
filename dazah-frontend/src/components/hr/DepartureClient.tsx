@@ -47,12 +47,12 @@ export default function DepartureClient({
         page_size: pageSize })
       setRecords(res.data)
       setTotal(res.meta?.total || 0)
-    } catch (err: any) {
-      message.error(err.message || '加载数据失败')
+    } catch (err) {
+      message.error((err instanceof Error ? err.message : '') || '加载数据失败')
     } finally {
       setLoading(false)
     }
-  }, [filterDepartment, filterOffboardingType, searchKeyword, page, pageSize, doFetch])
+  }, [filterDepartment, filterOffboardingType, searchKeyword, page, pageSize, doFetch, message])
 
   const handlePageChange = (newPage: number, newPageSize: number) => {
     setPage(newPage)
@@ -65,16 +65,16 @@ export default function DepartureClient({
       const res = await syncDepartureFromFeishu()
       message.success(res.message)
       loadData()
-    } catch (err: any) {
-      message.error(err.message || '同步失败')
+    } catch (err) {
+      message.error((err instanceof Error ? err.message : '') || '同步失败')
     } finally {
       setSyncing(false)
     }
   }
 
   useEffect(() => {
-    loadData()
-  }, [filterDepartment, filterOffboardingType, searchKeyword, page, pageSize])
+    queueMicrotask(loadData)
+  }, [filterDepartment, filterOffboardingType, searchKeyword, page, pageSize, loadData])
 
   const offboardingTypeColorMap: Record<string, string> = {
     '辞职': 'default',

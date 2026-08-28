@@ -15,9 +15,7 @@ def _clean_text(value: str | None) -> str | None:
 
 
 def _strip_text(value: str | None) -> str | None:
-    if isinstance(value, str):
-        return value.strip()
-    return value
+    return value.strip() if isinstance(value, str) else value
 
 
 class RawMaterialResponse(BaseModel):
@@ -97,46 +95,89 @@ class ProductInventoryResponse(BaseModel):
     updated_at: datetime | None = None
 
 
-class RawMaterialListResponse(BaseModel):
-    code: int = 200
-    message: str = "success"
-    data: list[RawMaterialResponse]
-    meta: dict[str, int] | None = None
+class WarehouseFeishuColumn(BaseModel):
+    key: str
+    title: str
+    field_type: int | None = None
+    readonly: bool = False
+    view_only: bool = False
+    editable: bool = False
 
 
-class PackagingMaterialListResponse(BaseModel):
-    code: int = 200
-    message: str = "success"
-    data: list[PackagingMaterialResponse]
-    meta: dict[str, int] | None = None
+class WarehouseFeishuMaterialPageResponse(BaseModel):
+    page_key: str
+    page_title: str
+    table_name: str
+    columns: list[WarehouseFeishuColumn]
+    rows: list[dict[str, object | None]]
+    total: int
+    page: int
+    page_size: int
+    last_sync_time: datetime
+    source: str
+    base_name: str = ""
+    stats: dict[str, Any] = {}
 
 
-class ProductInventoryListResponse(BaseModel):
-    code: int = 200
-    message: str = "success"
-    data: list[ProductInventoryResponse]
-    meta: dict[str, int] | None = None
+class WarehouseRecordFieldValue(BaseModel):
+    field_name: str
+    field_type: int | None = None
+    readonly: bool = False
+    view_only: bool = False
+    editable: bool = False
+    options: list[dict[str, Any]] | None = None
+    value: Any = None
+
+
+class WarehouseRecordDetailResponse(BaseModel):
+    record_id: str
+    fields: list[WarehouseRecordFieldValue]
+
+
+class WarehouseUpdateRecordRequest(BaseModel):
+    fields: dict[str, Any]
+
+
+class WarehouseDashboardData(BaseModel):
+    """仓储仪表盘响应（按 group 返回对应组数据）。"""
+
+    data: dict[str, Any]
+
+
+class WarehousePageFeishuConfig(BaseModel):
+    """页面飞书多维表格配置（支持动态切换数据源）"""
+
+    page_key: str
+    app_token: str
+    table_id: str
+    table_name: str
+    view_id: str | None = None
 
 
 class WarehouseFeishuConfigBase(BaseModel):
+    """Compatibility contract for the existing warehouse Feishu integration."""
+
     config_name: str = Field(default="仓储飞书配置", max_length=128)
     app_id: str = Field(..., max_length=128)
     is_active: bool = True
     timezone: str = Field(default="Asia/Shanghai", max_length=64)
-    daily_sync_time: str = Field(default="02:00", pattern=r"^(?:[01]\d|2[0-3]):[0-5]\d$")
+    daily_sync_time: str = Field(
+        default="02:00", pattern=r"^(?:[01]\d|2[0-3]):[0-5]\d$"
+    )
     remark: str | None = None
 
     @field_validator("config_name", "app_id", mode="before")
     @classmethod
-    def normalize_required_text(cls, value: str | None) -> str | None:
+    def normalize_required_text(cls: Any, value: str | None) -> str | None:
         return _strip_text(value)
+
 
 class WarehouseFeishuConfigUpsert(WarehouseFeishuConfigBase):
     app_secret: str | None = Field(default=None, max_length=500)
 
     @field_validator("app_secret", mode="before")
     @classmethod
-    def normalize_app_secret(cls, value: str | None) -> str | None:
+    def normalize_app_secret(cls: Any, value: str | None) -> str | None:
         return _clean_text(value)
 
 
@@ -150,13 +191,15 @@ class WarehouseFeishuConfigResponse(WarehouseFeishuConfigBase):
     updated_at: datetime | None = None
 
 
-class WarehouseFeishuConfigApiResponse(BaseModel):
-    code: int = 200
-    message: str = "success"
-    data: WarehouseFeishuConfigResponse
-    meta: dict[str, int] | None = None
+class WarehouseFeishuConnectivityStep(BaseModel):
+    name: str
+    status: str
+    message: str
 
 
+# Compatibility DTOs for the current Agent and WebSocket integrations. The
+# migrated page service does not use these directly, but existing Agent tools
+# and legacy clients still import them and must not regress.
 class WarehouseFeishuTableResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -178,13 +221,6 @@ class WarehouseFeishuTableResponse(BaseModel):
     active_mirror_version: str | None = None
 
 
-class WarehouseFeishuTableListApiResponse(BaseModel):
-    code: int = 200
-    message: str = "success"
-    data: list[WarehouseFeishuTableResponse]
-    meta: dict[str, int] | None = None
-
-
 class WarehouseFeishuFieldResponse(BaseModel):
     field_id: str
     field_name: str
@@ -199,6 +235,58 @@ class WarehouseFeishuRawRecordResponse(BaseModel):
     created_time: int | None = None
     last_modified_time: int | None = None
     normalized_fields: dict[str, Any] = Field(default_factory=dict)
+
+
+class WarehouseFeishuRawRecordData(BaseModel):
+    table: WarehouseFeishuTableResponse | None = None
+    fields: list[WarehouseFeishuFieldResponse]
+    records: list[WarehouseFeishuRawRecordResponse]
+    page: int = 1
+    page_size: int = 50
+    total: int | None = None
+
+
+class WarehouseFeishuTableSyncResult(BaseModel):
+    table: WarehouseFeishuTableResponse
+    field_count: int
+    record_count: int
+
+
+class WarehouseFeishuWsStatus(BaseModel):
+    """WebSocket lifecycle state retained for the current Agent integration."""
+
+    enabled: bool = False
+    connected: bool = False
+    app_id: str | None = None
+    app_tokens: dict[str, str] = Field(default_factory=dict)
+    last_started_at: datetime | None = None
+    last_error: str | None = None
+
+
+# Former Feishu directory/page/analysis contracts.  The migrated material-page
+# service keeps these DTOs so old Agent tools and the warehouse settings UI can
+# continue to use the same paths.
+
+
+class WarehouseFeishuConfigApiResponse(BaseModel):
+    code: int = 200
+    message: str = "success"
+    data: WarehouseFeishuConfigResponse
+    meta: dict[str, int] | None = None
+
+
+class WarehouseFeishuTableListApiResponse(BaseModel):
+    code: int = 200
+    message: str = "success"
+    data: list[WarehouseFeishuTableResponse]
+    meta: dict[str, int] | None = None
+
+
+class WarehouseFeishuTableSyncApiResponse(BaseModel):
+    code: int = 200
+    message: str = "success"
+    data: WarehouseFeishuTableSyncResult
+    meta: dict[str, int] | None = None
 
 
 class WarehouseFeishuSourceRootInput(BaseModel):
@@ -314,7 +402,9 @@ class WarehouseFieldValuesApiResponse(BaseModel):
     data: WarehouseFieldValuesResponse
 
 
-WarehouseAnalyticsMetric = Literal["count", "count_distinct", "sum", "avg", "min", "max"]
+WarehouseAnalyticsMetric = Literal[
+    "count", "count_distinct", "sum", "avg", "min", "max"
+]
 WarehouseAnalyticsPeriod = Literal["none", "day", "week", "month"]
 
 
@@ -372,6 +462,12 @@ class WarehouseAnalysisProfileResponse(BaseModel):
     prompt_version: int
 
 
+class WarehouseAnalysisProfileApiResponse(BaseModel):
+    code: int = 200
+    message: str = "success"
+    data: WarehouseAnalysisProfileResponse
+
+
 class WarehousePromptVersionInput(BaseModel):
     system_prompt: str = Field(..., min_length=1, max_length=20000)
     business_context: str | None = Field(default=None, max_length=10000)
@@ -412,54 +508,10 @@ class WarehouseAnalysisRunResponse(BaseModel):
     result: dict[str, Any] | None = None
 
 
-class WarehouseAnalysisProfileApiResponse(BaseModel):
-    code: int = 200
-    message: str = "success"
-    data: WarehouseAnalysisProfileResponse
-
-
 class WarehouseAnalysisRunApiResponse(BaseModel):
     code: int = 200
     message: str = "success"
     data: WarehouseAnalysisRunResponse
-
-
-class WarehouseFeishuRawRecordData(BaseModel):
-    table: WarehouseFeishuTableResponse | None = None
-    fields: list[WarehouseFeishuFieldResponse]
-    records: list[WarehouseFeishuRawRecordResponse]
-    page: int = 1
-    page_size: int = 50
-    total: int | None = None
-
-
-class WarehouseFeishuRawRecordApiResponse(BaseModel):
-    code: int = 200
-    message: str = "success"
-    data: WarehouseFeishuRawRecordData
-    meta: dict[str, int] | None = None
-
-
-class WarehouseFeishuWsStatus(BaseModel):
-    enabled: bool
-    connected: bool
-    app_id: str | None = None
-    app_tokens: dict[str, str] = Field(default_factory=dict)
-    last_started_at: datetime | None = None
-    last_error: str | None = None
-
-
-class WarehouseFeishuTableSyncResult(BaseModel):
-    table: WarehouseFeishuTableResponse
-    field_count: int
-    record_count: int
-
-
-class WarehouseFeishuTableSyncApiResponse(BaseModel):
-    code: int = 200
-    message: str = "success"
-    data: WarehouseFeishuTableSyncResult
-    meta: dict[str, int] | None = None
 
 
 class WarehouseFeishuWsStatusApiResponse(BaseModel):
@@ -467,12 +519,6 @@ class WarehouseFeishuWsStatusApiResponse(BaseModel):
     message: str = "success"
     data: WarehouseFeishuWsStatus
     meta: dict[str, int] | None = None
-
-
-class WarehouseFeishuConnectivityStep(BaseModel):
-    name: str
-    status: str
-    message: str
 
 
 class WarehouseFeishuConnectivityResult(BaseModel):

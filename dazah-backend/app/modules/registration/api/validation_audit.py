@@ -1,17 +1,19 @@
 """Validation Audit API endpoints."""
 
 import logging
+from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.response import error_response, success_response
+from app.core.upload_security import MAX_UPLOAD_FILES, read_upload_secure
 from app.modules.registration.schemas.validation_audit import (
     ValidationAuditFileListItem,
-    ValidationAuditFileResponse,
     ValidationAuditIssueResponse,
     ValidationAuditReportResponse,
     ValidationAuditTaskCreate,
@@ -33,7 +35,7 @@ router = APIRouter()
 async def create_task(
     data: ValidationAuditTaskCreate,
     db: AsyncSession = Depends(get_db),
-):
+) -> Any:
     service = ValidationAuditService(db)
     task = await service.create_task(data)
     return success_response(
@@ -50,7 +52,7 @@ async def list_tasks(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
-):
+) -> Any:
     service = ValidationAuditService(db)
     items, total = await service.list_tasks(
         product_name=product_name,
@@ -73,7 +75,7 @@ async def list_tasks(
 async def get_task(
     task_id: UUID,
     db: AsyncSession = Depends(get_db),
-):
+) -> Any:
     service = ValidationAuditService(db)
     task = await service.get_task(task_id)
     if not task:
@@ -89,7 +91,7 @@ async def update_task(
     task_id: UUID,
     data: ValidationAuditTaskUpdate,
     db: AsyncSession = Depends(get_db),
-):
+) -> Any:
     service = ValidationAuditService(db)
     task = await service.get_task(task_id)
     if not task:
@@ -105,7 +107,7 @@ async def update_task(
 async def delete_task(
     task_id: UUID,
     db: AsyncSession = Depends(get_db),
-):
+) -> Any:
     service = ValidationAuditService(db)
     task = await service.get_task(task_id)
     if not task:
@@ -123,41 +125,45 @@ async def upload_files(
     files: list[UploadFile] = File(...),
     file_type: str = Form(...),
     db: AsyncSession = Depends(get_db),
-):
+) -> Any:
     """上传审核文件。file_type: protocol / report / attachment"""
     service = ValidationAuditService(db)
     task = await service.get_task(task_id)
     if not task:
         return error_response(message="任务不存在", status_code=404)
+    if len(files) > MAX_UPLOAD_FILES:
+        return error_response(
+            message=f"单次最多上传 {MAX_UPLOAD_FILES} 个文件", status_code=400
+        )
 
     results = []
     for upload_file in files:
-        filename = upload_file.filename or "unknown"
-        ext = filename.lower().rsplit(".", 1)[-1] if "." in filename else ""
-        if ext not in ("docx", "pdf"):
-            results.append({
-                "filename": filename,
-                "status": "failed",
-                "error": "仅支持 .docx 和 .pdf 格式",
-            })
-            continue
-
         try:
-            content = await upload_file.read()
+            filename, content = await read_upload_secure(
+                upload_file,
+                max_bytes=get_settings().MAX_UPLOAD_SIZE_MB * 1024 * 1024,
+                allowed_extensions={".docx", ".pdf"},
+                what="验证审核文件",
+            )
             saved = await service.save_uploaded_file(task, filename, content, file_type)
-            results.append({
-                "file_id": str(saved.id),
-                "filename": saved.original_filename,
-                "file_size": saved.file_size,
-                "status": "success",
-            })
+            results.append(
+                {
+                    "file_id": str(saved.id),
+                    "filename": saved.original_filename,
+                    "file_size": saved.file_size,
+                    "status": "success",
+                }
+            )
         except Exception as e:
+            filename = upload_file.filename or "unknown"
             logger.exception("文件上传失败: %s", filename)
-            results.append({
-                "filename": filename,
-                "status": "failed",
-                "error": str(e),
-            })
+            results.append(
+                {
+                    "filename": filename,
+                    "status": "failed",
+                    "error": str(e),
+                }
+            )
 
     return success_response(data=results, message="上传完成")
 
@@ -166,7 +172,7 @@ async def upload_files(
 async def list_files(
     task_id: UUID,
     db: AsyncSession = Depends(get_db),
-):
+) -> Any:
     service = ValidationAuditService(db)
     task = await service.get_task(task_id)
     if not task:
@@ -185,7 +191,7 @@ async def list_files(
 async def parse_files(
     task_id: UUID,
     db: AsyncSession = Depends(get_db),
-):
+) -> Any:
     service = ValidationAuditService(db)
     task = await service.get_task(task_id)
     if not task:
@@ -207,7 +213,7 @@ async def parse_files(
 async def run_audit(
     task_id: UUID,
     db: AsyncSession = Depends(get_db),
-):
+) -> Any:
     service = ValidationAuditService(db)
     task = await service.get_task(task_id)
     if not task:
@@ -236,7 +242,7 @@ async def list_issues(
     task_id: UUID,
     issue_type: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
-):
+) -> Any:
     service = ValidationAuditService(db)
     task = await service.get_task(task_id)
     if not task:
@@ -252,7 +258,7 @@ async def list_issues(
 async def get_report(
     task_id: UUID,
     db: AsyncSession = Depends(get_db),
-):
+) -> Any:
     service = ValidationAuditService(db)
     task = await service.get_task(task_id)
     if not task:
@@ -270,7 +276,7 @@ async def get_report(
 async def export_report(
     task_id: UUID,
     db: AsyncSession = Depends(get_db),
-):
+) -> Any:
     service = ValidationAuditService(db)
     task = await service.get_task(task_id)
     if not task:
@@ -280,6 +286,7 @@ async def export_report(
         return error_response(message="报告尚未生成", status_code=404)
 
     import os
+
     if not os.path.exists(report_path):
         return error_response(message="报告文件不存在", status_code=404)
 

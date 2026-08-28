@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date
+from typing import Any
 
 import pytest
 from sqlalchemy import text
@@ -20,7 +21,7 @@ from app.modules.quality.repository.quality_management import (
 
 
 @pytest.fixture(autouse=True)
-async def _prepare_change_controls_table(db_session: AsyncSession):
+async def _prepare_change_controls_table(db_session: AsyncSession) -> Any:
     await db_session.execute(text("CREATE SCHEMA IF NOT EXISTS quality"))
     await db_session.execute(
         text(

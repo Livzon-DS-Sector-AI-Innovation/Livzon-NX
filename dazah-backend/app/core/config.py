@@ -3,21 +3,37 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
+from dotenv import load_dotenv
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent  # dazah-backend/
+_WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
+_LOADED_ENV_FILE: Path | None = None
+
+
+def get_env_file() -> Path:
+    """Return the single workspace-level environment file for this process."""
+    app_env = os.getenv("APP_ENV", "development").strip().lower()
+    filename = ".env" if app_env == "production" else ".env.local"
+    return _WORKSPACE_ROOT / filename
+
+
+def load_workspace_env() -> Path:
+    """Load the selected root environment file without overriding shell values."""
+    global _LOADED_ENV_FILE
+
+    env_file = get_env_file()
+    if _LOADED_ENV_FILE != env_file:
+        load_dotenv(env_file, override=False)
+        _LOADED_ENV_FILE = env_file
+    return env_file
 
 
 def _get_env_file() -> str:
-    """根据 APP_ENV 选择 .env 文件；缺省环境文件不存在时回退到 .env。"""
-    app_env = os.getenv("APP_ENV", "development")
-    env_path = _PROJECT_ROOT / f".env.{app_env}"
-    if not env_path.exists():
-        env_path = _PROJECT_ROOT / ".env"
-    env_file = str(env_path)
-    print(f"Loading environment variables from: {env_file}")
-    return env_file
+    env_file = load_workspace_env()
+    env_path = str(env_file)
+    print(f"Loading environment variables from: {env_path}")
+    return env_path
 
 
 class Settings(BaseSettings):
@@ -32,6 +48,7 @@ class Settings(BaseSettings):
     APP_NAME: str = "dazah-backend"
     APP_ENV: str = "development"
     DEBUG: bool = False
+    DEV_BYPASS_AUTH: bool = False
 
     @field_validator("DEBUG", mode="before")
     @classmethod
@@ -66,6 +83,8 @@ class Settings(BaseSettings):
         "contact:contact.base:readonly contact:user.base:readonly offline_access"
     )
     FRONTEND_URL: str = ""
+    BACKEND_PUBLIC_URL: str = ""
+    FEISHU_WS_ENABLED: bool = True
 
     # Feishu 设备部
     FEISHU_EQUIPMENT_DEPT_ID: str = ""
@@ -112,6 +131,11 @@ class Settings(BaseSettings):
     # Use admin_only only for a time-boxed production recovery window.
     LOCAL_LOGIN_MODE: Literal["disabled", "admin_only", "enabled"] | None = None
 
+    # All authenticated users can access business modules in the current
+    # development and production deployment. Set this to ``roles`` only when
+    # grant-based module access is explicitly required.
+    MODULE_ACCESS_MODE: Literal["roles", "all"] | None = None
+
     # Local auth bootstrap (development or emergency administrator accounts)
     BOOTSTRAP_ADMIN_USERNAME: str = ""
     BOOTSTRAP_ADMIN_PASSWORD: str = ""
@@ -132,6 +156,16 @@ class Settings(BaseSettings):
     FEISHU_BITABLE_ONBOARDING_TABLE_ID: str = ""
     FEISHU_BITABLE_DEPARTURE_TABLE_ID: str = ""
     FEISHU_BITABLE_APPROVAL_TABLE_ID: str = ""
+    FEISHU_BITABLE_CONTRACT_MANAGEMENT_TABLE_ID: str = ""
+    FEISHU_BITABLE_POSITION_TRANSFER_TABLE_ID: str = ""
+
+    # HR Feishu member synchronization. These are optional and intentionally
+    # empty by default; deployments opt in through their environment.
+    HR_FEISHU_MEMBER_ROOT_DEPT_ID: str = ""
+    HR_FEISHU_MEMBER_EXTRA_ROOT_DEPT_IDS: str = ""
+    HR_FEISHU_MEMBER_EMPLOYEE_NO_PREFIX: str = "112"
+    HR_FEISHU_MEMBER_SYNC_INTERVAL_HOURS: int = 12
+    HR_OFFBOARDING_REMINDER_OPEN_ID: str = ""
 
     # Feishu Bitable — 产品模块
     FEISHU_BITABLE_PRODUCT_APP_TOKEN: str = ""
@@ -139,7 +173,9 @@ class Settings(BaseSettings):
 
     # Feishu Bitable — 质量模块环境兜底。质量模块仍以模块内配置表为主；
     # 这些字段仅用于兼容既有部署和初始化预填。
-    QUALITY_FEISHU_APP_TOKEN: str = "NLQlbJFsjaY37Vs65gyc6VdtnXf"
+    QUALITY_FEISHU_APP_TOKEN: str = ""
+    QUALITY_SOLID_BASE_TOKEN: str = ""
+    QUALITY_LIQUID_BASE_TOKEN: str = ""
     QUALITY_FEISHU_DEVIATION_REPORT_TABLE_ID: str = ""
     QUALITY_FEISHU_DEVIATION_INVESTIGATION_PUSH_TABLE_ID: str = ""
     QUALITY_FEISHU_DEVIATION_TABLE_ID: str = ""
@@ -176,6 +212,20 @@ class Settings(BaseSettings):
 
     # Storage
     STORAGE_ROOT: str = "./storage"
+
+    # Registration local workbooks/templates. Business attachments remain in
+    # the deployment storage and are never copied from the migration source.
+    REGISTRATION_AUTHORIZATION_SOURCE_DIR: str = "./data/registration/授权书"
+    REGISTRATION_WORKBOOK_DIR: str = "./data/registration"
+    REGISTRATION_PROJECT_LEDGER_WORKBOOK_NAME: str = "1. 注册台账.xlsx"
+    REGISTRATION_DECLARATION_PROGRESS_WORKBOOK_NAME: str = (
+        "宁夏-注册项目信息统计表-2026.06.25.xlsx"
+    )
+    REGISTRATION_CERTIFICATE_WORKBOOK_NAME: str = "2. 药政证书台账.xlsx"
+
+    # Feishu event verification is optional for local deployments.
+    FEISHU_EVENT_ENCRYPT_KEY: str = ""
+    FEISHU_EVENT_VERIFICATION_TOKEN: str = ""
 
     # LLM (AI 解析配置)
     LLM_API_KEY: str | None = None
@@ -225,6 +275,12 @@ class Settings(BaseSettings):
         if self.LOCAL_LOGIN_MODE is not None:
             return self.LOCAL_LOGIN_MODE
         return "disabled" if self.is_production else "enabled"
+
+    @property
+    def effective_module_access_mode(self) -> Literal["roles", "all"]:
+        if self.MODULE_ACCESS_MODE is not None:
+            return self.MODULE_ACCESS_MODE
+        return "all"
 
     def check(self) -> None:
         """启动时校验关键配置，避免漏配导致运行时异常。"""

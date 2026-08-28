@@ -110,11 +110,11 @@ export default function WorkflowListPanel() {
   }
 
   useEffect(() => {
-    loadStats()
+    queueMicrotask(loadStats)
   }, [])
 
   useEffect(() => {
-    loadData()
+    queueMicrotask(loadData)
   }, [queryParams])
 
   const handleSearch = () => {

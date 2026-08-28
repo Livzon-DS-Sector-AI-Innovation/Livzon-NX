@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from datetime import date
+from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
@@ -37,13 +39,15 @@ _MODELS = (
 
 
 @pytest.fixture(autouse=True)
-async def _clean_external_quality_records(db_session: AsyncSession) -> None:
+async def _clean_external_quality_records(
+    db_session: AsyncSession,
+) -> AsyncIterator[Any]:
     for model in _MODELS:
-        await db_session.execute(model.__table__.delete())
+        await db_session.execute(model.__table__.delete())  # type: ignore[attr-defined]
     await db_session.commit()
     yield
     for model in _MODELS:
-        await db_session.execute(model.__table__.delete())
+        await db_session.execute(model.__table__.delete())  # type: ignore[attr-defined]
     await db_session.commit()
 
 
@@ -231,12 +235,12 @@ async def test_external_quality_entities_are_push_only_and_supplier_can_be_pushe
         },
     )
     monkeypatch.setattr(
-        external_quality_feishu.feishu_sync,
+        external_quality_feishu.feishu_sync,  # type: ignore[attr-defined]
         "_resolve_runtime",
         AsyncMock(return_value=runtime),
     )
-    upsert = AsyncMock(return_value=("rec_supplier_001", "tbl_test"))
-    monkeypatch.setattr(external_quality_feishu.feishu_sync, "_upsert_record", upsert)
+    upsert: Any = AsyncMock(return_value=("rec_supplier_001", "tbl_test"))
+    monkeypatch.setattr(external_quality_feishu.feishu_sync, "_upsert_record", upsert)  # type: ignore[attr-defined]
 
     pushed = await client.post(
         f"/api/v1/quality/suppliers/{supplier_id}/sync-to-feishu"

@@ -8,6 +8,7 @@ Create Date: 2026-07-03 21:25:00.000000
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+
 from alembic import op
 
 # revision identifiers, used by Alembic.
@@ -24,13 +25,18 @@ SCHEMA_NAME = "quality"
 def _get_existing_columns() -> set[str]:
     bind = op.get_bind()
     inspector = sa.inspect(bind)
-    return {column["name"] for column in inspector.get_columns(TABLE_NAME, schema=SCHEMA_NAME)}
+    return {
+        column["name"]
+        for column in inspector.get_columns(TABLE_NAME, schema=SCHEMA_NAME)
+    }
 
 
 def _get_existing_indexes() -> set[str]:
     bind = op.get_bind()
     inspector = sa.inspect(bind)
-    return {index["name"] for index in inspector.get_indexes(TABLE_NAME, schema=SCHEMA_NAME)}
+    return {
+        index["name"] for index in inspector.get_indexes(TABLE_NAME, schema=SCHEMA_NAME)
+    }
 
 
 def _get_existing_unique_constraints() -> set[str]:
@@ -38,7 +44,9 @@ def _get_existing_unique_constraints() -> set[str]:
     inspector = sa.inspect(bind)
     return {
         constraint["name"]
-        for constraint in inspector.get_unique_constraints(TABLE_NAME, schema=SCHEMA_NAME)
+        for constraint in inspector.get_unique_constraints(
+            TABLE_NAME, schema=SCHEMA_NAME
+        )
         if constraint.get("name")
     }
 

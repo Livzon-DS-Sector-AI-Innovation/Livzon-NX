@@ -1,40 +1,50 @@
 """Deviation Pydantic schemas."""
 
-
 import uuid
 from datetime import datetime
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class AiAnalysis(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     description: str | None = None
     reason: str | None = None
-    riskAssessment: str | None = None
-    capaSuggestion: str | None = None
+    risk_assessment: str | None = Field(default=None, alias="riskAssessment")
+    capa_suggestion: str | None = Field(default=None, alias="capaSuggestion")
 
 
 class InvestigationRecord(BaseModel):
-    nonconformityDescription: str | None = None
-    rootCauseAnalysis: str | None = None
-    riskAssessment: str | None = None
-    urgentMeasures: str | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+    nonconformity_description: str | None = Field(
+        default=None, alias="nonconformityDescription"
+    )
+    root_cause_analysis: str | None = Field(default=None, alias="rootCauseAnalysis")
+    risk_assessment: str | None = Field(default=None, alias="riskAssessment")
+    urgent_measures: str | None = Field(default=None, alias="urgentMeasures")
     content: str | None = None
     author: str = ""
     department: str | None = None
-    createTime: str = ""
+    create_time: str = Field(default="", alias="createTime")
     attachments: list[str] | None = None
-    isModified: bool = False
-    modifyTime: str | None = None
-    capaProposals: list[dict] | None = None
+    is_modified: bool = Field(default=False, alias="isModified")
+    modify_time: str | None = Field(default=None, alias="modifyTime")
+    capa_proposals: list[dict[str, Any]] | None = Field(
+        default=None, alias="capaProposals"
+    )
 
 
 class ReviewOpinion(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     content: str = ""
     author: str = ""
     step: str = ""
     result: str = "approved"
-    createTime: str = ""
+    create_time: str = Field(default="", alias="createTime")
 
 
 class CrossDeptReviewer(BaseModel):
@@ -66,6 +76,7 @@ class DeviationListItem(BaseModel):
     affected_items: str | None = None
     description: str | None = None
     has_occurred_before: bool | None = None
+    previous_occurrence_code: str | None = None
     material_disposition: str | None = None
     corrective_actions: str | None = None
     root_cause_analysis: str | None = None
@@ -83,6 +94,7 @@ class DeviationListItem(BaseModel):
     created_at: datetime
     status_updated_at: datetime | None = None
     returned_step: str | None = None
+
 
 class DeviationReportRecordListItem(BaseModel):
     id: str
@@ -104,6 +116,11 @@ class DeviationReportRecordListItem(BaseModel):
     qa_head_result: str | None = None
     qa_head_reviewed_at: datetime | None = None
     report_status: str | None = None
+    attachments: list[dict[str, Any]] | None = None
+    reporters: list[dict[str, Any]] | None = None
+    department_heads: list[dict[str, Any]] | None = None
+    qas: list[dict[str, Any]] | None = None
+    qa_heads: list[dict[str, Any]] | None = None
     feishu_base_table_id: str | None = None
     feishu_base_record_id: str | None = None
     feishu_sync_status: str | None = None
@@ -134,18 +151,24 @@ class DeviationDetail(BaseModel):
     reporter_id: uuid.UUID | None = None
     handler: str | None = None
     discoverer: str | None = None
-    ai_analysis: dict | None = None
-    investigation_records: list | None = None
-    review_opinions: list | None = None
+    ai_analysis: dict[str, Any] | None = None
+    investigation_records: list[Any] | None = None
+    review_opinions: list[Any] | None = None
     attachments: list[str] | None = None
     needs_cross_dept_review: bool | None = True
-    cross_dept_reviewers: list | None = None
+    cross_dept_reviewers: list[Any] | None = None
     affected_items: str | None = None
     batch_number: str | None = None
+    has_occurred_before: bool | None = None
+    previous_occurrence_code: str | None = None
+    material_disposition: str | None = None
+    corrective_actions: str | None = None
+    root_cause_analysis: str | None = None
+    investigation_completed_at: datetime | None = None
     returned_step: str | None = None
     status_updated_at: datetime | None = None
     report_content: str | None = None
-    report_versions: list | None = None
+    report_versions: list[Any] | None = None
     feishu_base_table_id: str | None = None
     feishu_base_record_id: str | None = None
     feishu_sync_status: str | None = "pending"
@@ -155,6 +178,7 @@ class DeviationDetail(BaseModel):
     feishu_source_updated_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
+
 
 class CreateDeviationRequest(BaseModel):
     title: str | None = None
@@ -174,6 +198,7 @@ class CreateDeviationRequest(BaseModel):
     needs_cross_dept_review: bool | None = True
     cross_dept_reviewers: list[CrossDeptReviewer] | None = None
     has_occurred_before: bool | None = None
+    previous_occurrence_code: str | None = None
     material_disposition: str | None = None
     corrective_actions: str | None = None
     root_cause_analysis: str | None = None
@@ -193,9 +218,9 @@ class UpdateDeviationRequest(BaseModel):
     root_cause_category: str | None = None
     description: str | None = None
     immediate_actions: str | None = None
-    ai_analysis: dict | None = None
-    investigation_records: list | None = None
-    review_opinions: list | None = None
+    ai_analysis: dict[str, Any] | None = None
+    investigation_records: list[Any] | None = None
+    review_opinions: list[Any] | None = None
     attachments: list[str] | None = None
     final_code: str | None = None
     handler: str | None = None
@@ -205,6 +230,7 @@ class UpdateDeviationRequest(BaseModel):
     affected_items: str | None = None
     batch_number: str | None = None
     has_occurred_before: bool | None = None
+    previous_occurrence_code: str | None = None
     material_disposition: str | None = None
     corrective_actions: str | None = None
     root_cause_analysis: str | None = None
@@ -213,7 +239,7 @@ class UpdateDeviationRequest(BaseModel):
     close_time: str | None = None
     returned_step: str | None = None
     report_content: str | None = None
-    report_versions: list | None = None
+    report_versions: list[Any] | None = None
 
 
 class SubmitReviewRequest(BaseModel):
@@ -226,16 +252,16 @@ class SubmitReviewRequest(BaseModel):
 
 class SubmitInvestigationRequest(BaseModel):
     description: str | None = None
-    investigation_records: list | None = None
+    investigation_records: list[Any] | None = None
     nonconformity_description: str | None = None
     root_cause_analysis: str | None = None
     risk_assessment: str | None = None
     urgent_measures: str | None = None
-    capa_proposals: list[dict] | None = None
+    capa_proposals: list[dict[str, Any]] | None = None
 
 
 class CompleteAiAnalysisRequest(BaseModel):
-    ai_analysis: dict | None = None
+    ai_analysis: dict[str, Any] | None = None
 
 
 class BatchUpdateStatusRequest(BaseModel):
@@ -248,5 +274,4 @@ class BatchUpdateStatusResponse(BaseModel):
 
     updated_count: int
     failed_count: int
-    failures: list[dict]
-
+    failures: list[dict[str, Any]]

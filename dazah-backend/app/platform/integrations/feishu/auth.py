@@ -38,7 +38,11 @@ class FeishuAuth:
             app_id == _settings.FEISHU_APP_ID
             and app_secret == _settings.FEISHU_APP_SECRET
         )
-        if uses_default_credentials and cls._token and time.time() < cls._expire_at - 60:
+        if (
+            uses_default_credentials
+            and cls._token
+            and time.time() < cls._expire_at - 60
+        ):
             return cls._token
 
         cache_key = (app_id, app_secret)
@@ -58,8 +62,12 @@ class FeishuAuth:
         if data.get("code") != 0:
             raise RuntimeError(f"Feishu auth failed: {data}")
 
-        token = data["tenant_access_token"]
-        expire_at = time.time() + data.get("expire", 7200)
+        token = data.get("tenant_access_token")
+        if not isinstance(token, str) or not token:
+            raise RuntimeError("Feishu auth response missing tenant_access_token")
+        expire = data.get("expire", 7200)
+        expire_seconds = expire if isinstance(expire, (int, float)) else 7200
+        expire_at = time.time() + expire_seconds
         if uses_default_credentials:
             cls._token = token
             cls._expire_at = expire_at

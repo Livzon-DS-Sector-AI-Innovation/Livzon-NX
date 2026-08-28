@@ -1,6 +1,7 @@
 """Equipment personnel repository."""
 
 import uuid
+from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +14,7 @@ from app.modules.equipment.models.personnel import (
 )
 
 # ── 角色 Repository ──
+
 
 async def create_role(db: AsyncSession, role: EquipmentRole) -> EquipmentRole:
     # 清理同 code 的已软删除记录，避免软删除后无法创建同编码角色
@@ -61,8 +63,12 @@ async def list_roles(
     stmt = select(EquipmentRole).where(
         EquipmentRole.is_deleted == False,  # noqa: E712
     )
-    count_stmt = select(func.count()).select_from(EquipmentRole).where(
-        EquipmentRole.is_deleted == False,  # noqa: E712
+    count_stmt = (
+        select(func.count())
+        .select_from(EquipmentRole)
+        .where(
+            EquipmentRole.is_deleted == False,  # noqa: E712
+        )
     )
 
     if scope is not None:
@@ -86,6 +92,7 @@ async def soft_delete_role(db: AsyncSession, role: EquipmentRole) -> None:
 
 
 # ── 人员 Repository ──
+
 
 async def get_personnel_by_user_id(
     db: AsyncSession, user_id: uuid.UUID
@@ -123,8 +130,12 @@ async def list_personnel(
     stmt = select(EquipmentPersonnel).where(
         EquipmentPersonnel.is_deleted == False,  # noqa: E712
     )
-    count_stmt = select(func.count()).select_from(EquipmentPersonnel).where(
-        EquipmentPersonnel.is_deleted == False,  # noqa: E712
+    count_stmt = (
+        select(func.count())
+        .select_from(EquipmentPersonnel)
+        .where(
+            EquipmentPersonnel.is_deleted == False,  # noqa: E712
+        )
     )
 
     if is_active is not None:
@@ -171,6 +182,7 @@ async def list_all_personnel_by_user_ids(
 
 
 # ── 人员角色关联 Repository ──
+
 
 async def add_personnel_roles(
     db: AsyncSession, personnel_id: uuid.UUID, role_ids: list[uuid.UUID]
@@ -233,10 +245,11 @@ async def soft_delete_personnel_roles(
 
 # ── 人员分类约束 Repository ──
 
+
 async def add_personnel_categories(
     db: AsyncSession,
     personnel_id: uuid.UUID,
-    items: list[dict],  # [{"role_id": ..., "category_id": ...}]
+    items: list[dict[str, Any]],  # [{"role_id": ..., "category_id": ...}]
 ) -> list[EquipmentPersonnelCategory]:
     records: list[EquipmentPersonnelCategory] = []
     for item in items:
@@ -306,11 +319,12 @@ async def soft_delete_personnel_categories(
 
 # ── 候选人查询 ──
 
+
 async def get_candidates(
     db: AsyncSession,
     role_ids: list[uuid.UUID],
     category_id: uuid.UUID | None = None,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """按角色查找可分配人员，支持设备分类过滤"""
     base = (
         select(
@@ -338,7 +352,7 @@ async def get_candidates(
     result = await db.execute(base)
     rows = result.all()
 
-    candidates: dict[uuid.UUID, dict] = {}
+    candidates: dict[uuid.UUID, dict[str, Any]] = {}
     for personnel, role in rows:
         pid = personnel.id
         if pid not in candidates:
@@ -372,17 +386,14 @@ async def get_candidates(
         )
         matched = {(r.personnel_id, r.role_id) for r in matched_result.scalars().all()}
 
-        filtered: dict[uuid.UUID, dict] = {}
+        filtered: dict[uuid.UUID, dict[str, Any]] = {}
         for pid, info in candidates.items():
             if pid not in constrained_ids:
                 # 无约束 → 入选
                 filtered[pid] = info
             else:
                 # 有约束 → 只保留匹配的角色
-                filtered_roles = [
-                    r for r in info["roles"]
-                    if (pid, r["id"]) in matched
-                ]
+                filtered_roles = [r for r in info["roles"] if (pid, r["id"]) in matched]
                 if filtered_roles:
                     info["roles"] = filtered_roles
                     filtered[pid] = info

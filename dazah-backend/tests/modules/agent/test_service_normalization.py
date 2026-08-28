@@ -1,7 +1,8 @@
 import json
 import uuid
 from datetime import UTC, datetime, timedelta
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
+from typing import Any
 
 import pytest
 from fastapi import HTTPException
@@ -11,6 +12,8 @@ from app.modules.procurement.agent_tools import (
     PurchaseRequestCreateInput,
     PurchaseRequestUpdateInput,
 )
+
+SimpleNamespace: Any = _SimpleNamespace
 
 
 @pytest.fixture
@@ -51,7 +54,7 @@ def test_payload_and_path_helpers(service: AgentService) -> None:
         ("attachment", None),
         ("attachment; filename=", None),
         ("attachment; filename=report.xlsx", "report.xlsx"),
-        ("attachment; filename=\"report.xlsx\"; size=1", "report.xlsx"),
+        ('attachment; filename="report.xlsx"; size=1', "report.xlsx"),
         ("attachment; filename*=UTF-8''%E6%8A%A5%E5%91%8A.xlsx", "报告.xlsx"),
     ],
 )
@@ -73,8 +76,8 @@ def test_download_filename(
 )
 def test_extract_items_source(
     service: AgentService,
-    source: dict,
-    expected: list,
+    source: dict[str, Any],
+    expected: list[Any],
 ) -> None:
     assert service._extract_items_source(source) == expected
 
@@ -383,9 +386,11 @@ def test_normalize_urgent_purchase_request_item_categories(
 
 
 def test_misc_normalizers_and_local_db_guard() -> None:
-    assert AgentService._normalize_string_list(
-        [" alpha ", "", "alpha", 2, None]
-    ) == ["alpha", "2", "None"]
+    assert AgentService._normalize_string_list([" alpha ", "", "alpha", 2, None]) == [
+        "alpha",
+        "2",
+        "None",
+    ]
     assert AgentService._normalize_string_list([]) == []
     assert AgentService._normalize_match_text(" A B ") == "ab"
     assert AgentService._is_sample_contract_request("demo contract")
@@ -399,16 +404,16 @@ def test_misc_normalizers_and_local_db_guard() -> None:
 def test_request_validation_reports_missing_and_invalid_business_fields(
     service: AgentService,
 ) -> None:
-    assert "合同分类" in service._tool_request_validation_error(
+    assert "合同分类" in service._tool_request_validation_error(  # type: ignore[operator]
         SimpleNamespace(operation="procurement.generate_contract", body={})
     )
-    assert "合同明细" in service._tool_request_validation_error(
+    assert "合同明细" in service._tool_request_validation_error(  # type: ignore[operator]
         SimpleNamespace(
             operation="procurement.generate_contract",
             body={"category": "hardware"},
         )
     )
-    assert "物品名称" in service._tool_request_validation_error(
+    assert "物品名称" in service._tool_request_validation_error(  # type: ignore[operator]
         SimpleNamespace(
             operation="procurement.generate_contract",
             body={"category": "hardware", "items": [{}]},
@@ -429,8 +434,8 @@ def test_request_validation_reports_missing_and_invalid_business_fields(
         )
         is None
     )
-    assert "必要字段" in service._workflow_request_validation_error({})
-    assert "格式不正确" in service._workflow_request_validation_error(
+    assert "必要字段" in service._workflow_request_validation_error({})  # type: ignore[operator]
+    assert "格式不正确" in service._workflow_request_validation_error(  # type: ignore[operator]
         {"name": 123, "steps": "invalid"}
     )
 
@@ -484,50 +489,50 @@ def test_extract_confirmation_ids_handles_all_supported_envelopes(
 async def test_resolve_user_and_pending_confirmations_filters_invalid_entries() -> None:
     now = datetime.now(UTC)
     session_user_id = uuid.uuid4()
-    pending = SimpleNamespace(
+    pending: Any = SimpleNamespace(
         id=uuid.uuid4(),
         status="pending",
         expires_at=now + timedelta(minutes=5),
     )
-    expired = SimpleNamespace(
+    expired: Any = SimpleNamespace(
         id=uuid.uuid4(),
         status="pending",
         expires_at=now - timedelta(minutes=5),
     )
-    completed = SimpleNamespace(
+    completed: Any = SimpleNamespace(
         id=uuid.uuid4(),
         status="completed",
         expires_at=now + timedelta(minutes=5),
     )
 
     class Repo:
-        async def get_session(self, db, session_id):
+        async def get_session(self: Any, db: Any, session_id: Any) -> Any:
             return SimpleNamespace(user_id=session_user_id)
 
-        async def list_pending_confirmations(self, db, **kwargs):
+        async def list_pending_confirmations(self: Any, db: Any, **kwargs: Any) -> Any:
             return [None, pending, pending, expired, completed]
 
-        async def get_confirmation(self, db, confirmation_id):
+        async def get_confirmation(self: Any, db: Any, confirmation_id: Any) -> Any:
             if confirmation_id == pending.id:
                 return pending
             return None
 
     service = AgentService(
         settings=SimpleNamespace(API_V1_PREFIX="/api/v1"),
-        repo=Repo(),
+        repo=Repo(),  # type: ignore[arg-type]
         access_scope_service=SimpleNamespace(),
     )
     assert (
-        await service._resolve_user_id(None, None, session_user_id) == session_user_id
+        await service._resolve_user_id(None, None, session_user_id) == session_user_id  # type: ignore[arg-type]
     )
     assert (
-        await service._resolve_user_id(None, uuid.uuid4(), "invalid")
+        await service._resolve_user_id(None, uuid.uuid4(), "invalid")  # type: ignore[arg-type]
         == session_user_id
     )
-    assert await service._resolve_user_id(None, None, None) is None
+    assert await service._resolve_user_id(None, None, None) is None  # type: ignore[arg-type]
 
     result = await service._resolve_pending_confirmations(
-        None,
+        None,  # type: ignore[arg-type]
         {"confirmation_id": str(pending.id), "invalid": "not-a-uuid"},
     )
     assert result == [pending]

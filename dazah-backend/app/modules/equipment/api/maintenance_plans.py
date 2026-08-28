@@ -39,12 +39,18 @@ async def list_maintenance_plans(
     db: AsyncSession = Depends(get_db),
 ) -> JSONResponse:
     plans, total = await service.get_maintenance_plans(
-        db, equipment_id=equipment_id, status=status,
-        keyword=keyword, page=page, page_size=page_size,
+        db,
+        equipment_id=equipment_id,
+        status=status,
+        keyword=keyword,
+        page=page,
+        page_size=page_size,
     )
     return paginated_response(
         data=[MaintenancePlanResponse.model_validate(p) for p in plans],
-        page=page, page_size=page_size, total=total,
+        page=page,
+        page_size=page_size,
+        total=total,
     )
 
 

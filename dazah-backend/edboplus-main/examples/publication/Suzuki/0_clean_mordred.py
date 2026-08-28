@@ -1,10 +1,7 @@
-
-
 import numpy as np
 import pandas as pd
 
-
-df_dft = pd.read_csv('data/dataset_B3.csv')
+df_dft = pd.read_csv("data/dataset_B3.csv")
 
 # # Remove correlated features.
 corr_matrix = df_dft.corr().abs()
@@ -23,9 +20,9 @@ for column in df_dft.columns.values:
 df_dft.drop(extra_columns_to_remove, axis=1, inplace=True)
 
 # Store SMILES.
-solvent_ohe = df_dft['solvent'].values
-base_ohe = df_dft['base'].values
-ligand_ohe = df_dft['ligand'].values
+solvent_ohe = df_dft["solvent"].values
+base_ohe = df_dft["base"].values
+ligand_ohe = df_dft["ligand"].values
 
 # Remove non numerical.
 df_edbo_numeric = df_dft.select_dtypes(include=np.number)
@@ -35,4 +32,4 @@ df_edbo_numeric.insert(1, "solvent", solvent_ohe, False)
 df_edbo_numeric.insert(1, "base", base_ohe, False)
 df_edbo_numeric.insert(1, "ligand", ligand_ohe, False)
 
-df_edbo_numeric.to_csv('./data/dataset_B3_Mordred_clean.csv', index=0)
+df_edbo_numeric.to_csv("./data/dataset_B3_Mordred_clean.csv", index=0)

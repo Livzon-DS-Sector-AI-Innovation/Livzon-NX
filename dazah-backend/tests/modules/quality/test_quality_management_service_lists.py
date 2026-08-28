@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from collections.abc import AsyncIterator
+from datetime import UTC, datetime
+from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
@@ -10,36 +12,39 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.llm.encryption import decrypt_api_key
+from app.modules.quality import repository
 from app.modules.quality.models.capa import CAPA
 from app.modules.quality.models.change_control import ChangeControl
-from app.modules.quality.models.deviations import Deviation
+from app.modules.quality.models.contacts import DepartmentContact
 from app.modules.quality.models.deviation_investigation_push_record import (
     DeviationInvestigationPushRecord,
 )
-from app.modules.quality.models.contacts import DepartmentContact
+from app.modules.quality.models.deviations import Deviation
 from app.modules.quality.schemas.capa import UpdateCapaRequest
 from app.modules.quality.schemas.deviations import CreateDeviationRequest
 from app.modules.quality.schemas.feishu_settings import (
     UpdateQualityFeishuAppSettingsRequest,
     UpdateQualityFeishuEntitySettingRequest,
 )
-from app.modules.quality import repository
-from app.modules.quality.service import quality_feishu_sync as feishu_sync_service
 from app.modules.quality.service import quality_feishu_pages
-from app.modules.quality.service import quality_feishu_settings as feishu_settings_service
+from app.modules.quality.service import (
+    quality_feishu_settings as feishu_settings_service,
+)
+from app.modules.quality.service import quality_feishu_sync as feishu_sync_service
 from app.modules.quality.service import quality_management as service
-from app.platform.integrations.feishu import bitable as feishu_bitable
 from app.platform.identity.models import User
+from app.platform.integrations.feishu import bitable as feishu_bitable
 
 
 @pytest.fixture(autouse=True)
-async def _ensure_quality_sync_columns(db_session: AsyncSession) -> None:
+async def _ensure_quality_sync_columns(db_session: AsyncSession) -> AsyncIterator[Any]:
     statements = [
         """
         ALTER TABLE quality.deviations
         ADD COLUMN IF NOT EXISTS feishu_base_table_id VARCHAR(100),
         ADD COLUMN IF NOT EXISTS feishu_base_record_id VARCHAR(100),
-        ADD COLUMN IF NOT EXISTS feishu_sync_status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        ADD COLUMN IF NOT EXISTS feishu_sync_status VARCHAR(20) NOT NULL DEFAULT
+        'pending',
         ADD COLUMN IF NOT EXISTS feishu_last_sync_error TEXT,
         ADD COLUMN IF NOT EXISTS feishu_last_sync_direction VARCHAR(20),
         ADD COLUMN IF NOT EXISTS feishu_synced_at TIMESTAMPTZ,
@@ -49,7 +54,8 @@ async def _ensure_quality_sync_columns(db_session: AsyncSession) -> None:
         ALTER TABLE quality.capas
         ADD COLUMN IF NOT EXISTS feishu_base_table_id VARCHAR(100),
         ADD COLUMN IF NOT EXISTS feishu_base_record_id VARCHAR(100),
-        ADD COLUMN IF NOT EXISTS feishu_sync_status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        ADD COLUMN IF NOT EXISTS feishu_sync_status VARCHAR(20) NOT NULL DEFAULT
+        'pending',
         ADD COLUMN IF NOT EXISTS feishu_last_sync_error TEXT,
         ADD COLUMN IF NOT EXISTS feishu_last_sync_direction VARCHAR(20),
         ADD COLUMN IF NOT EXISTS feishu_synced_at TIMESTAMPTZ,
@@ -59,7 +65,8 @@ async def _ensure_quality_sync_columns(db_session: AsyncSession) -> None:
         ALTER TABLE quality.capa_plan_tracks
         ADD COLUMN IF NOT EXISTS feishu_base_table_id VARCHAR(100),
         ADD COLUMN IF NOT EXISTS feishu_base_record_id VARCHAR(100),
-        ADD COLUMN IF NOT EXISTS feishu_sync_status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        ADD COLUMN IF NOT EXISTS feishu_sync_status VARCHAR(20) NOT NULL DEFAULT
+        'pending',
         ADD COLUMN IF NOT EXISTS feishu_last_sync_error TEXT,
         ADD COLUMN IF NOT EXISTS feishu_last_sync_direction VARCHAR(20),
         ADD COLUMN IF NOT EXISTS feishu_synced_at TIMESTAMPTZ,
@@ -69,7 +76,8 @@ async def _ensure_quality_sync_columns(db_session: AsyncSession) -> None:
         ALTER TABLE quality.deviation_investigation_push_records
         ADD COLUMN IF NOT EXISTS feishu_base_table_id VARCHAR(100),
         ADD COLUMN IF NOT EXISTS feishu_base_record_id VARCHAR(100),
-        ADD COLUMN IF NOT EXISTS feishu_sync_status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        ADD COLUMN IF NOT EXISTS feishu_sync_status VARCHAR(20) NOT NULL DEFAULT
+        'pending',
         ADD COLUMN IF NOT EXISTS feishu_last_sync_error TEXT,
         ADD COLUMN IF NOT EXISTS feishu_last_sync_direction VARCHAR(20),
         ADD COLUMN IF NOT EXISTS feishu_synced_at TIMESTAMPTZ,
@@ -78,17 +86,21 @@ async def _ensure_quality_sync_columns(db_session: AsyncSession) -> None:
     ]
     for statement in statements:
         await db_session.execute(text(statement))
-    await db_session.execute(DepartmentContact.__table__.delete())
-    await db_session.execute(text("DELETE FROM quality.deviation_investigation_push_records"))
+    await db_session.execute(DepartmentContact.__table__.delete())  # type: ignore[attr-defined]
+    await db_session.execute(
+        text("DELETE FROM quality.deviation_investigation_push_records")
+    )
     await db_session.execute(text("DELETE FROM quality.capa_plan_tracks"))
-    await db_session.execute(CAPA.__table__.delete())
-    await db_session.execute(Deviation.__table__.delete())
+    await db_session.execute(CAPA.__table__.delete())  # type: ignore[attr-defined]
+    await db_session.execute(Deviation.__table__.delete())  # type: ignore[attr-defined]
     await db_session.commit()
     yield
-    await db_session.execute(text("DELETE FROM quality.deviation_investigation_push_records"))
+    await db_session.execute(
+        text("DELETE FROM quality.deviation_investigation_push_records")
+    )
     await db_session.execute(text("DELETE FROM quality.capa_plan_tracks"))
-    await db_session.execute(CAPA.__table__.delete())
-    await db_session.execute(Deviation.__table__.delete())
+    await db_session.execute(CAPA.__table__.delete())  # type: ignore[attr-defined]
+    await db_session.execute(Deviation.__table__.delete())  # type: ignore[attr-defined]
     await db_session.commit()
 
 
@@ -97,7 +109,7 @@ async def test_generate_monthly_deviation_code_uses_feishu_first_code_when_month
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    now = datetime(2026, 7, 3, 9, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 7, 3, 9, 0, tzinfo=UTC)
 
     monkeypatch.setattr(
         service,
@@ -115,7 +127,7 @@ async def test_generate_monthly_deviation_code_uses_max_code_from_feishu(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    now = datetime(2026, 7, 3, 9, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 7, 3, 9, 0, tzinfo=UTC)
 
     monkeypatch.setattr(
         service,
@@ -140,7 +152,7 @@ async def test_generate_monthly_deviation_code_resets_each_month(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    now = datetime(2026, 8, 1, 8, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 8, 1, 8, 0, tzinfo=UTC)
 
     monkeypatch.setattr(
         service,
@@ -158,7 +170,7 @@ async def test_generate_monthly_deviation_code_fails_when_report_records_unavail
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    now = datetime(2026, 7, 3, 9, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 7, 3, 9, 0, tzinfo=UTC)
 
     monkeypatch.setattr(
         service,
@@ -175,7 +187,7 @@ async def test_get_deviation_list_delegates_filters_to_repository(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    now = datetime(2026, 7, 1, 8, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 7, 1, 8, 0, tzinfo=UTC)
     deviation = Deviation(
         id=uuid.uuid4(),
         deviation_code="DEV-20260701-0001",
@@ -192,10 +204,10 @@ async def test_get_deviation_list_delegates_filters_to_repository(
         created_at=now,
         updated_at=now,
     )
-    repo_mock = AsyncMock(return_value=([deviation], 1))
-    monkeypatch.setattr(service.repository, "get_deviations", repo_mock)
+    repo_mock: Any = AsyncMock(return_value=([deviation], 1))
+    monkeypatch.setattr(service.repository, "get_deviations", repo_mock)  # type: ignore[attr-defined]
     monkeypatch.setattr(
-        service.repository,
+        service.repository,  # type: ignore[attr-defined]
         "get_related_capas_for_deviation",
         AsyncMock(return_value=[linked_capa]),
     )
@@ -221,10 +233,10 @@ async def test_get_deviation_list_delegates_filters_to_repository(
     kwargs = repo_mock.await_args.kwargs
     assert kwargs["keyword"] == "100%_批"
     assert kwargs["investigation_completed_from"] == datetime(
-        2026, 7, 1, 0, 0, tzinfo=timezone.utc
+        2026, 7, 1, 0, 0, tzinfo=UTC
     )
     assert kwargs["investigation_completed_to"] == datetime(
-        2026, 7, 3, 0, 0, tzinfo=timezone.utc
+        2026, 7, 3, 0, 0, tzinfo=UTC
     )
     assert kwargs["page"] == 2
     assert kwargs["page_size"] == 5
@@ -241,7 +253,7 @@ async def test_get_change_list_builds_action_plan_counts(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    now = datetime(2026, 7, 1, 8, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 7, 1, 8, 0, tzinfo=UTC)
     change = ChangeControl(
         id=uuid.uuid4(),
         serial_number="1",
@@ -253,11 +265,11 @@ async def test_get_change_list_builds_action_plan_counts(
         created_at=now,
         updated_at=now,
     )
-    get_changes_mock = AsyncMock(return_value=([change], 1))
-    get_counts_mock = AsyncMock(return_value={str(change.id): 3})
-    monkeypatch.setattr(service.repository, "get_changes", get_changes_mock)
+    get_changes_mock: Any = AsyncMock(return_value=([change], 1))
+    get_counts_mock: Any = AsyncMock(return_value={str(change.id): 3})
+    monkeypatch.setattr(service.repository, "get_changes", get_changes_mock)  # type: ignore[attr-defined]
     monkeypatch.setattr(
-        service.repository,
+        service.repository,  # type: ignore[attr-defined]
         "get_change_action_plan_counts_by_change_ids",
         get_counts_mock,
     )
@@ -270,9 +282,10 @@ async def test_get_change_list_builds_action_plan_counts(
         page_size=10,
     )
 
-    assert get_changes_mock.await_args.kwargs["application_date_from"] == datetime(
-        2026, 7, 1, 0, 0
-    ).date()
+    assert (
+        get_changes_mock.await_args.kwargs["application_date_from"]
+        == datetime(2026, 7, 1, 0, 0).date()
+    )
     assert result["items"][0]["change_code"] == "BG-2026-001"
     assert result["items"][0]["action_plan_count"] == 3
 
@@ -282,7 +295,7 @@ async def test_get_capa_list_converts_datetime_range_before_query(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    now = datetime(2026, 7, 1, 8, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 7, 1, 8, 0, tzinfo=UTC)
     capa = CAPA(
         id=uuid.uuid4(),
         capa_code="CAPA-2026-001",
@@ -292,10 +305,10 @@ async def test_get_capa_list_converts_datetime_range_before_query(
         created_at=now,
         updated_at=now,
     )
-    repo_mock = AsyncMock(return_value=([capa], 1))
-    monkeypatch.setattr(service.repository, "get_capas", repo_mock)
+    repo_mock: Any = AsyncMock(return_value=([capa], 1))
+    monkeypatch.setattr(service.repository, "get_capas", repo_mock)  # type: ignore[attr-defined]
     monkeypatch.setattr(
-        service.repository,
+        service.repository,  # type: ignore[attr-defined]
         "get_capa_plan_tracks_by_capa_ids",
         AsyncMock(return_value=[]),
     )
@@ -310,12 +323,8 @@ async def test_get_capa_list_converts_datetime_range_before_query(
     )
 
     kwargs = repo_mock.await_args.kwargs
-    assert kwargs["closure_date_from"] == datetime(
-        2026, 7, 1, 0, 0, tzinfo=timezone.utc
-    )
-    assert kwargs["closure_date_to"] == datetime(
-        2026, 7, 3, 0, 0, tzinfo=timezone.utc
-    )
+    assert kwargs["closure_date_from"] == datetime(2026, 7, 1, 0, 0, tzinfo=UTC)
+    assert kwargs["closure_date_to"] == datetime(2026, 7, 3, 0, 0, tzinfo=UTC)
     assert result["items"][0]["capa_code"] == "CAPA-2026-001"
     assert result["items"][0]["deviation_id"] == capa.deviation_id
     assert result["items"][0]["linked_plan_tracks"] == []
@@ -326,7 +335,7 @@ async def test_get_deviation_report_record_list_reads_feishu_report_records(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    now = datetime(2026, 7, 1, 8, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 7, 1, 8, 0, tzinfo=UTC)
     linked_deviation = Deviation(
         id=uuid.uuid4(),
         deviation_code="DEV-20260701-0101",
@@ -343,7 +352,9 @@ async def test_get_deviation_report_record_list_reads_feishu_report_records(
         is_app_enabled=True,
         legacy_app_token=None,
         entities={
-            "deviation_report_record": feishu_sync_service.QualityFeishuEntityRuntimeConfig(
+            (
+                "deviation_report_record"
+            ): feishu_sync_service.QualityFeishuEntityRuntimeConfig(
                 app_token="bascn_report",
                 table_id="tbl_report_real",
                 is_enabled=True,
@@ -365,7 +376,7 @@ async def test_get_deviation_report_record_list_reads_feishu_report_records(
         table_id: str | None = None,
         *,
         filter_str: str | None = None,
-    ) -> list[dict]:
+    ) -> list[dict[Any, Any]]:
         assert entity_code == "deviation_report_record"
         assert table_id is None
         assert filter_str is None
@@ -375,7 +386,9 @@ async def test_get_deviation_report_record_list_reads_feishu_report_records(
                 "last_modified_time": int(now.timestamp() * 1000),
                 "fields": {
                     "偏差编号": "DEV-20260701-0101",
-                    "报告时间": int(datetime(2026, 7, 2, 10, 0, tzinfo=timezone.utc).timestamp() * 1000),
+                    "报告时间": int(
+                        datetime(2026, 7, 2, 10, 0, tzinfo=UTC).timestamp() * 1000
+                    ),
                     "偏差内容": "洁净区压差异常",
                     "偏差报告": "https://example.com/report-1.docx",
                     "涉及产品名称/批号": "原料A/B-001",
@@ -420,7 +433,9 @@ async def test_get_deviation_report_record_list_reads_feishu_report_records(
             },
         ]
 
-    monkeypatch.setattr(feishu_sync_service.feishu_sync, "search_records", fake_search_records)
+    monkeypatch.setattr(
+        feishu_sync_service.feishu_sync, "search_records", fake_search_records
+    )
 
     db_session.add(linked_deviation)
     await db_session.commit()
@@ -443,7 +458,7 @@ async def test_get_deviation_report_record_list_reads_feishu_report_records(
     assert first_item["qa_head_name"] == "QA负责人甲"
     assert first_item["qa_result"] == "rejected"
     assert first_item["report_status"] == "已完成"
-    assert first_item["report_time"] == datetime(2026, 7, 2, 10, 0, tzinfo=timezone.utc)
+    assert first_item["report_time"] == datetime(2026, 7, 2, 10, 0, tzinfo=UTC)
     assert first_item["feishu_base_table_id"] == "tbl_report_real"
     assert first_item["feishu_base_record_id"] == "rec_report_001"
 
@@ -468,7 +483,7 @@ async def test_get_deviation_report_record_list_reads_feishu_report_records(
 async def test_get_quality_sync_conflicts_returns_recent_conflicts(
     db_session: AsyncSession,
 ) -> None:
-    now = datetime(2026, 7, 3, 8, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 7, 3, 8, 0, tzinfo=UTC)
     deviation = Deviation(
         id=uuid.uuid4(),
         deviation_code="DEV-CONFLICT-001",
@@ -519,7 +534,7 @@ async def test_pull_quality_records_from_feishu_updates_push_record_snapshot(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    now = datetime(2026, 7, 3, 8, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 7, 3, 8, 0, tzinfo=UTC)
     deviation = Deviation(
         id=uuid.uuid4(),
         deviation_code="DEV-PULL-001",
@@ -546,7 +561,7 @@ async def test_pull_quality_records_from_feishu_updates_push_record_snapshot(
         table_id: str,
         *,
         filter_str: str | None = None,
-    ) -> list[dict]:
+    ) -> list[dict[Any, Any]]:
         if entity_code == "deviation_investigation_push_record":
             return [
                 {
@@ -599,7 +614,9 @@ async def test_pull_quality_records_from_feishu_updates_push_record_snapshot(
                 enable_pull_from_feishu=True,
                 field_mappings={},
             ),
-            "deviation_investigation_push_record": feishu_sync_service.QualityFeishuEntityRuntimeConfig(
+            (
+                "deviation_investigation_push_record"
+            ): feishu_sync_service.QualityFeishuEntityRuntimeConfig(
                 app_token="bascn_report",
                 table_id="tbl_push",
                 is_enabled=True,
@@ -642,11 +659,11 @@ async def test_pull_quality_records_from_feishu_updates_push_record_snapshot(
 
 
 @pytest.mark.anyio
-async def test_pull_quality_records_from_feishu_reuses_existing_deviation_when_create_hits_duplicate(
+async def test_pull_quality_records_reuses_deviation_on_duplicate(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    now = datetime(2026, 7, 3, 9, 30, tzinfo=timezone.utc)
+    now = datetime(2026, 7, 3, 9, 30, tzinfo=UTC)
     existing = Deviation(
         id=uuid.uuid4(),
         deviation_code="DEV-DUP-001",
@@ -688,7 +705,9 @@ async def test_pull_quality_records_from_feishu_reuses_existing_deviation_when_c
                 enable_pull_from_feishu=True,
                 field_mappings={},
             ),
-            "deviation_investigation_push_record": feishu_sync_service.QualityFeishuEntityRuntimeConfig(
+            (
+                "deviation_investigation_push_record"
+            ): feishu_sync_service.QualityFeishuEntityRuntimeConfig(
                 app_token="bascn_report",
                 table_id="tbl_push_dup",
                 is_enabled=True,
@@ -710,7 +729,7 @@ async def test_pull_quality_records_from_feishu_reuses_existing_deviation_when_c
         table_id: str,
         *,
         filter_str: str | None = None,
-    ) -> list[dict]:
+    ) -> list[dict[Any, Any]]:
         if entity_code == "deviation_ledger":
             return [
                 {
@@ -725,10 +744,14 @@ async def test_pull_quality_records_from_feishu_reuses_existing_deviation_when_c
             ]
         return []
 
-    create_deviation_mock = AsyncMock(
-        side_effect=IntegrityError("INSERT", {"deviation_code": "DEV-DUP-001"}, Exception("duplicate"))
+    create_deviation_mock: Any = AsyncMock(
+        side_effect=IntegrityError(
+            "INSERT", {"deviation_code": "DEV-DUP-001"}, Exception("duplicate")
+        )
     )
-    monkeypatch.setattr(feishu_sync_service.feishu_sync, "search_records", fake_search_records)
+    monkeypatch.setattr(
+        feishu_sync_service.feishu_sync, "search_records", fake_search_records
+    )
     monkeypatch.setattr(repository, "create_deviation", create_deviation_mock)
 
     result = await feishu_sync_service.pull_quality_records_from_feishu(db_session)
@@ -777,25 +800,28 @@ async def test_upsert_record_maps_push_fields_and_search_filter(
         AsyncMock(return_value=runtime),
     )
 
-    async def fake_list_fields(self, table_id: str) -> list[dict]:
+    async def fake_list_fields(self: Any, table_id: str) -> list[dict[Any, Any]]:
         assert table_id == "tbl_deviation_real"
         return [
             {"field_name": "偏差编码", "type": 1},
             {"field_name": "真实原因", "type": 1},
         ]
 
-    search_mock = AsyncMock(return_value=[])
+    search_mock: Any = AsyncMock(return_value=[])
     create_calls: list[tuple[str, dict[str, object]]] = []
 
-    async def fake_create_record(self, table_id: str, fields: dict) -> dict:
+    async def fake_create_record(
+        self: Any, table_id: str, fields: dict[str, Any]
+    ) -> dict[str, Any]:
         create_calls.append((table_id, fields))
         return {"record_id": "rec_mapped_deviation"}
 
     monkeypatch.setattr(feishu_bitable.BitableClient, "list_fields", fake_list_fields)
     monkeypatch.setattr(feishu_bitable.BitableClient, "search_records", search_mock)
-    monkeypatch.setattr(feishu_bitable.BitableClient, "create_record", fake_create_record)
+    monkeypatch.setattr(
+        feishu_bitable.BitableClient, "create_record", fake_create_record
+    )
 
-    entity = runtime.get_entity_config("deviation_ledger", direction="push")
     record_id, table_id = await feishu_sync_service.feishu_sync._upsert_record(
         db_session,
         "deviation_ledger",
@@ -807,7 +833,10 @@ async def test_upsert_record_maps_push_fields_and_search_filter(
 
     assert record_id == "rec_mapped_deviation"
     assert table_id == "tbl_deviation_real"
-    assert search_mock.await_args.kwargs["filter_str"] == 'CurrentValue.[偏差编码] = "DEV-MAP-001"'
+    assert (
+        search_mock.await_args.kwargs["filter_str"]
+        == 'CurrentValue.[偏差编码] = "DEV-MAP-001"'
+    )
     assert create_calls == [
         (
             "tbl_deviation_real",
@@ -821,7 +850,7 @@ async def test_pull_quality_records_from_feishu_reads_mapped_report_fields(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    now = datetime(2026, 7, 3, 9, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 7, 3, 9, 0, tzinfo=UTC)
     deviation = Deviation(
         id=uuid.uuid4(),
         deviation_code="DEV-PULL-MAP-001",
@@ -872,7 +901,9 @@ async def test_pull_quality_records_from_feishu_reads_mapped_report_fields(
                 enable_pull_from_feishu=True,
                 field_mappings={},
             ),
-            "deviation_investigation_push_record": feishu_sync_service.QualityFeishuEntityRuntimeConfig(
+            (
+                "deviation_investigation_push_record"
+            ): feishu_sync_service.QualityFeishuEntityRuntimeConfig(
                 app_token="bascn_report",
                 table_id="tbl_push_real",
                 is_enabled=True,
@@ -906,7 +937,7 @@ async def test_pull_quality_records_from_feishu_reads_mapped_report_fields(
         table_id: str,
         *,
         filter_str: str | None = None,
-    ) -> list[dict]:
+    ) -> list[dict[Any, Any]]:
         if entity_code == "deviation_investigation_push_record":
             return [
                 {
@@ -929,7 +960,9 @@ async def test_pull_quality_records_from_feishu_reads_mapped_report_fields(
             ]
         return []
 
-    monkeypatch.setattr(feishu_sync_service.feishu_sync, "search_records", fake_search_records)
+    monkeypatch.setattr(
+        feishu_sync_service.feishu_sync, "search_records", fake_search_records
+    )
 
     result = await feishu_sync_service.pull_quality_records_from_feishu(db_session)
 
@@ -957,14 +990,16 @@ async def test_pull_quality_records_from_feishu_supports_single_report_record_en
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    now = datetime(2026, 7, 3, 10, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 7, 3, 10, 0, tzinfo=UTC)
     runtime = feishu_sync_service.QualityFeishuRuntimeConfig(
         app_id="cli_app_id",
         app_secret="cli_secret",
         is_app_enabled=True,
         legacy_app_token=None,
         entities={
-            "deviation_report_record": feishu_sync_service.QualityFeishuEntityRuntimeConfig(
+            (
+                "deviation_report_record"
+            ): feishu_sync_service.QualityFeishuEntityRuntimeConfig(
                 app_token="bascn_report_record",
                 table_id="tbl_report_record",
                 is_enabled=True,
@@ -986,7 +1021,7 @@ async def test_pull_quality_records_from_feishu_supports_single_report_record_en
         table_id: str | None,
         *,
         filter_str: str | None = None,
-    ) -> list[dict]:
+    ) -> list[dict[Any, Any]]:
         assert entity_code == "deviation_report_record"
         assert table_id is None
         return [
@@ -1023,18 +1058,20 @@ async def test_pull_quality_records_from_feishu_supports_single_report_record_en
 
 
 @pytest.mark.anyio
-async def test_pull_quality_records_from_feishu_investigation_push_counts_remote_records_without_creating_local_data(
+async def test_pull_investigation_push_counts_remote_without_local_create(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    now = datetime(2026, 7, 3, 10, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 7, 3, 10, 0, tzinfo=UTC)
     runtime = feishu_sync_service.QualityFeishuRuntimeConfig(
         app_id="cli_app_id",
         app_secret="cli_secret",
         is_app_enabled=True,
         legacy_app_token=None,
         entities={
-            "deviation_investigation_push_record": feishu_sync_service.QualityFeishuEntityRuntimeConfig(
+            (
+                "deviation_investigation_push_record"
+            ): feishu_sync_service.QualityFeishuEntityRuntimeConfig(
                 app_token="bascn_push",
                 table_id="tbl_push_real",
                 is_enabled=True,
@@ -1056,7 +1093,7 @@ async def test_pull_quality_records_from_feishu_investigation_push_counts_remote
         table_id: str | None = None,
         *,
         filter_str: str | None = None,
-    ) -> list[dict]:
+    ) -> list[dict[Any, Any]]:
         if entity_code == "deviation_investigation_push_record":
             return [
                 {
@@ -1135,7 +1172,7 @@ async def test_pull_quality_records_from_feishu_rejects_unknown_entity_code(
 
 
 @pytest.mark.anyio
-async def test_list_quality_feishu_entity_settings_prefills_change_and_validation_sources(
+async def test_entity_settings_prefill_change_and_validation_sources(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1143,8 +1180,17 @@ async def test_list_quality_feishu_entity_settings_prefills_change_and_validatio
     await db_session.execute(text("DELETE FROM quality.quality_feishu_app_settings"))
     await db_session.commit()
 
-    monkeypatch.setattr(feishu_settings_service.settings, "FEISHU_APP_ID", "cli_app_seeded")
-    monkeypatch.setattr(feishu_settings_service.settings, "FEISHU_APP_SECRET", "cli_secret_seeded")
+    monkeypatch.setattr(
+        feishu_settings_service.settings, "FEISHU_APP_ID", "cli_app_seeded"
+    )
+    monkeypatch.setattr(
+        feishu_settings_service.settings, "FEISHU_APP_SECRET", "cli_secret_seeded"
+    )
+    monkeypatch.setattr(
+        feishu_settings_service.settings,
+        "QUALITY_FEISHU_APP_TOKEN",
+        "test-quality-app-token",
+    )
     monkeypatch.setattr(
         feishu_settings_service.settings,
         "QUALITY_FEISHU_DEVIATION_INVESTIGATION_PUSH_TABLE_ID",
@@ -1181,14 +1227,18 @@ async def test_list_quality_feishu_entity_settings_prefills_change_and_validatio
         "tblDq7JM4ibtL4MO",
     )
 
-    app_settings = await feishu_settings_service.get_quality_feishu_app_settings(db_session)
-    entity_items = await feishu_settings_service.list_quality_feishu_entity_settings(db_session)
+    app_settings = await feishu_settings_service.get_quality_feishu_app_settings(
+        db_session
+    )
+    entity_items = await feishu_settings_service.list_quality_feishu_entity_settings(
+        db_session
+    )
     entity_map = {item.entity_code: item for item in entity_items}
 
     assert app_settings.app_id == "cli_app_seeded"
 
     push_item = entity_map["deviation_investigation_push_record"]
-    assert push_item.app_token == "NLQlbJFsjaY37Vs65gyc6VdtnXf"
+    assert push_item.app_token == "test-quality-app-token"
     assert push_item.base_table_id == "tblizEvuhtSPFDni"
     assert push_item.base_table_name == "偏差调查推送记录"
     assert push_item.is_enabled is True
@@ -1203,7 +1253,10 @@ async def test_list_quality_feishu_entity_settings_prefills_change_and_validatio
     assert validation_item.app_token == "EZUib0hvTa7lnfsz9xScjFpAnvc"
     assert validation_item.base_table_id == "tblQeNmOWMCAaLrX"
     assert validation_item.base_table_name == "验证总表"
-    assert validation_item.source_note == "验证与确认共用同一张飞书源表，平台按验证类型截取到不同模块。"
+    assert (
+        validation_item.source_note
+        == "验证与确认共用同一张飞书源表，平台按验证类型截取到不同模块。"
+    )
     assert validation_item.is_enabled is True
 
     contact_item = entity_map["department_contact"]
@@ -1312,7 +1365,7 @@ async def test_update_quality_feishu_app_settings_keeps_secret_when_mask_submitt
 
 
 @pytest.mark.anyio
-async def test_list_quality_feishu_entity_settings_does_not_backfill_existing_db_bindings(
+async def test_entity_settings_preserve_existing_db_bindings(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1344,7 +1397,9 @@ async def test_list_quality_feishu_entity_settings_does_not_backfill_existing_db
         "tbl_env_change",
     )
 
-    entity_items = await feishu_settings_service.list_quality_feishu_entity_settings(db_session)
+    entity_items = await feishu_settings_service.list_quality_feishu_entity_settings(
+        db_session
+    )
     entity_map = {item.entity_code: item for item in entity_items}
     change_item = entity_map["change_ledger"]
 
@@ -1375,7 +1430,7 @@ async def test_list_quality_feishu_tables_uses_platform_bitable_client(
     )
 
     class FakeBitableClient:
-        async def list_tables(self, page_size: int = 100) -> list[dict]:
+        async def list_tables(self: Any, page_size: int = 100) -> list[dict[Any, Any]]:
             assert page_size == 100
             return [
                 {"table_id": "tbl_deviation", "name": "偏差台账"},
@@ -1430,7 +1485,7 @@ async def test_list_quality_feishu_tables_filters_by_base_table_id(
     )
 
     class FakeBitableClient:
-        async def list_tables(self, page_size: int = 100) -> list[dict]:
+        async def list_tables(self: Any, page_size: int = 100) -> list[dict[Any, Any]]:
             return [
                 {"table_id": "tbl_other", "name": "其他表"},
                 {"table_id": "tbl_target", "name": "目标表"},
@@ -1473,7 +1528,7 @@ async def test_list_quality_feishu_tables_wraps_feishu_errors(
     )
 
     class FailingBitableClient:
-        async def list_tables(self, page_size: int = 100) -> list[dict]:
+        async def list_tables(self: Any, page_size: int = 100) -> list[dict[Any, Any]]:
             raise RuntimeError("invalid app_token")
 
     def fake_build_bitable_client(
@@ -1532,7 +1587,7 @@ async def test_update_quality_feishu_entity_setting_refreshes_enabled_report_rec
     await db_session.execute(text("DELETE FROM quality.quality_feishu_app_settings"))
     await db_session.commit()
 
-    pull_mock = AsyncMock(
+    pull_mock: Any = AsyncMock(
         return_value={
             "entity_code": "deviation_report_record",
             "synced": 2,
@@ -1575,7 +1630,7 @@ async def test_update_quality_feishu_entity_setting_keeps_config_when_refresh_fa
     await db_session.execute(text("DELETE FROM quality.quality_feishu_app_settings"))
     await db_session.commit()
 
-    pull_mock = AsyncMock(
+    pull_mock: Any = AsyncMock(
         side_effect=ValueError("invalid basc_report_token tbl_report_token")
     )
     monkeypatch.setattr(
@@ -1634,7 +1689,7 @@ async def test_create_deviation_triggers_auto_feishu_sync(
         AsyncMock(return_value="PC-2607001"),
     )
 
-    auto_sync_mock = AsyncMock()
+    auto_sync_mock: Any = AsyncMock()
     monkeypatch.setattr(
         feishu_sync_service,
         "auto_sync_deviation_after_write",
@@ -1709,7 +1764,7 @@ async def test_create_deviation_accepts_reporter_from_feishu_contacts(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    auto_sync_mock = AsyncMock()
+    auto_sync_mock: Any = AsyncMock()
     monkeypatch.setattr(
         feishu_sync_service,
         "auto_sync_deviation_after_write",
@@ -1767,7 +1822,7 @@ async def test_create_deviation_accepts_ledger_only_fields_without_reporter_cont
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    auto_sync_mock = AsyncMock()
+    auto_sync_mock: Any = AsyncMock()
     monkeypatch.setattr(
         feishu_sync_service,
         "auto_sync_deviation_after_write",
@@ -1810,7 +1865,7 @@ async def test_create_deviation_accepts_ledger_only_fields_without_reporter_cont
     assert created_deviation.material_disposition == "隔离待判"
     assert created_deviation.status == "closed"
     assert created_deviation.status_updated_at == datetime(
-        2026, 7, 4, 9, 30, tzinfo=timezone.utc
+        2026, 7, 4, 9, 30, tzinfo=UTC
     )
     assert auto_sync_mock.await_count == 1
 
@@ -1883,12 +1938,12 @@ async def test_sync_deviation_report_record_to_feishu_uses_minimal_fields(
         reporter_id=current_user.id,
         discoverer="报告人甲",
         status="draft",
-        discovery_date=datetime(2026, 7, 3, 9, 0, tzinfo=timezone.utc),
+        discovery_date=datetime(2026, 7, 3, 9, 0, tzinfo=UTC),
     )
     db_session.add(deviation)
     await db_session.commit()
 
-    upsert_mock = AsyncMock(return_value=("rec_report_001", "tbl_report"))
+    upsert_mock: Any = AsyncMock(return_value=("rec_report_001", "tbl_report"))
     monkeypatch.setattr(feishu_sync_service.feishu_sync, "_upsert_record", upsert_mock)
     monkeypatch.setattr(
         feishu_sync_service,
@@ -1916,7 +1971,7 @@ async def test_sync_deviation_report_record_to_feishu_uses_minimal_fields(
     assert upsert_mock.await_args.args[1] == "deviation_report_record"
     assert upsert_mock.await_args.args[4] == {
         "偏差编号": "DEV-REPORT-001",
-        "报告时间": int(datetime(2026, 7, 3, 9, 0, tzinfo=timezone.utc).timestamp() * 1000),
+        "报告时间": int(datetime(2026, 7, 3, 9, 0, tzinfo=UTC).timestamp() * 1000),
         "偏差内容": "洁净区压差异常",
         "偏差报告": "",
         "涉及产品名称/批号": "原料A/批号B-001",
@@ -1950,12 +2005,12 @@ async def test_sync_deviation_report_record_to_feishu_uses_target_record_id(
         reporter_id=current_user.id,
         discoverer="报告人乙",
         status="draft",
-        discovery_date=datetime(2026, 7, 3, 10, 0, tzinfo=timezone.utc),
+        discovery_date=datetime(2026, 7, 3, 10, 0, tzinfo=UTC),
     )
     db_session.add(deviation)
     await db_session.commit()
 
-    upsert_mock = AsyncMock(return_value=("rec_report_target_001", "tbl_report"))
+    upsert_mock: Any = AsyncMock(return_value=("rec_report_target_001", "tbl_report"))
     monkeypatch.setattr(feishu_sync_service.feishu_sync, "_upsert_record", upsert_mock)
     monkeypatch.setattr(
         feishu_sync_service,
@@ -1989,7 +2044,7 @@ async def test_list_validation_records_from_feishu_applies_page_filters(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    now = datetime(2026, 7, 3, 8, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 7, 3, 8, 0, tzinfo=UTC)
     entity = feishu_sync_service.QualityFeishuEntityRuntimeConfig(
         app_token="basc_validation",
         table_id="tbl_validation",
@@ -2006,7 +2061,7 @@ async def test_list_validation_records_from_feishu_applies_page_filters(
         entities={"validation_process": entity},
     )
 
-    resolve_mock = AsyncMock(return_value=(runtime, entity))
+    resolve_mock: Any = AsyncMock(return_value=(runtime, entity))
     monkeypatch.setattr(
         quality_feishu_pages,
         "_resolve_runtime_entity",
@@ -2028,7 +2083,9 @@ async def test_list_validation_records_from_feishu_applies_page_filters(
                         "部门名称": "生产管理部",
                         "验证到期时间": "2026.07",
                         "方案编码": "PV-001",
-                        "起草时间": int(datetime(2026, 7, 1, tzinfo=timezone.utc).timestamp() * 1000),
+                        "起草时间": int(
+                            datetime(2026, 7, 1, tzinfo=UTC).timestamp() * 1000
+                        ),
                     },
                 },
                 {
@@ -2042,7 +2099,9 @@ async def test_list_validation_records_from_feishu_applies_page_filters(
                         "部门名称": "生产管理部",
                         "验证到期时间": "2026.05",
                         "方案编码": "PV-002",
-                        "起草时间": int(datetime(2026, 5, 1, tzinfo=timezone.utc).timestamp() * 1000),
+                        "起草时间": int(
+                            datetime(2026, 5, 1, tzinfo=UTC).timestamp() * 1000
+                        ),
                     },
                 },
                 {
@@ -2056,7 +2115,9 @@ async def test_list_validation_records_from_feishu_applies_page_filters(
                         "部门名称": "生产管理部",
                         "验证到期时间": "2026.07",
                         "方案编码": "CV-001",
-                        "起草时间": int(datetime(2026, 7, 1, tzinfo=timezone.utc).timestamp() * 1000),
+                        "起草时间": int(
+                            datetime(2026, 7, 1, tzinfo=UTC).timestamp() * 1000
+                        ),
                     },
                 },
             ]
@@ -2126,12 +2187,19 @@ async def test_sync_deviation_to_feishu_ignores_mismatched_record_id(
         "get_related_capas_for_deviation",
         AsyncMock(return_value=[]),
     )
-    upsert_mock = AsyncMock(return_value=("rec_deviation_001", "tbl_deviation_real"))
+    upsert_mock: Any = AsyncMock(
+        return_value=("rec_deviation_001", "tbl_deviation_real")
+    )
     monkeypatch.setattr(feishu_sync_service.feishu_sync, "_upsert_record", upsert_mock)
 
-    result = await feishu_sync_service.sync_deviation_to_feishu(db_session, deviation.id)
+    result = await feishu_sync_service.sync_deviation_to_feishu(
+        db_session, deviation.id
+    )
 
-    assert result == {"record_id": "rec_deviation_001", "table_id": "tbl_deviation_real"}
+    assert result == {
+        "record_id": "rec_deviation_001",
+        "table_id": "tbl_deviation_real",
+    }
     assert upsert_mock.await_count == 1
     assert upsert_mock.await_args.args[3] is None
 
@@ -2141,14 +2209,16 @@ async def test_ensure_deviation_from_report_record_creates_local_deviation(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    now = datetime(2026, 7, 3, 9, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 7, 3, 9, 0, tzinfo=UTC)
     runtime = feishu_sync_service.QualityFeishuRuntimeConfig(
         app_id="cli_app_id",
         app_secret="cli_secret",
         is_app_enabled=True,
         legacy_app_token=None,
         entities={
-            "deviation_report_record": feishu_sync_service.QualityFeishuEntityRuntimeConfig(
+            (
+                "deviation_report_record"
+            ): feishu_sync_service.QualityFeishuEntityRuntimeConfig(
                 app_token="bascn_report",
                 table_id="tbl_report_real",
                 is_enabled=True,
@@ -2170,7 +2240,7 @@ async def test_ensure_deviation_from_report_record_creates_local_deviation(
         table_id: str | None = None,
         *,
         filter_str: str | None = None,
-    ) -> list[dict]:
+    ) -> list[dict[Any, Any]]:
         assert entity_code == "deviation_report_record"
         return [
             {
@@ -2209,11 +2279,11 @@ async def test_ensure_deviation_from_report_record_creates_local_deviation(
 
 
 @pytest.mark.anyio
-async def test_sync_deviation_investigation_push_record_to_feishu_uses_actual_table_fields(
+async def test_sync_investigation_push_uses_actual_table_fields(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    now = datetime(2026, 7, 3, 9, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 7, 3, 9, 0, tzinfo=UTC)
     deviation = Deviation(
         id=uuid.uuid4(),
         deviation_code="DEV-PUSH-001",
@@ -2244,7 +2314,7 @@ async def test_sync_deviation_investigation_push_record_to_feishu_uses_actual_ta
     db_session.add_all([deviation, push_record])
     await db_session.commit()
 
-    upsert_mock = AsyncMock(return_value=("rec_push_001", "tbl_push"))
+    upsert_mock: Any = AsyncMock(return_value=("rec_push_001", "tbl_push"))
     monkeypatch.setattr(feishu_sync_service.feishu_sync, "_upsert_record", upsert_mock)
     monkeypatch.setattr(
         feishu_sync_service,
@@ -2270,9 +2340,11 @@ async def test_sync_deviation_investigation_push_record_to_feishu_uses_actual_ta
         ),
     )
 
-    result = await feishu_sync_service.sync_deviation_investigation_push_record_to_feishu(
-        db_session,
-        push_record.id,
+    result = (
+        await feishu_sync_service.sync_deviation_investigation_push_record_to_feishu(
+            db_session,
+            push_record.id,
+        )
     )
 
     assert result == {"record_id": "rec_push_001", "table_id": "tbl_push"}
@@ -2307,7 +2379,7 @@ async def test_update_capa_triggers_auto_feishu_sync(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    now = datetime(2026, 7, 3, 8, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 7, 3, 8, 0, tzinfo=UTC)
     capa = CAPA(
         id=uuid.uuid4(),
         capa_code="CAPA-AUTO-001",
@@ -2319,7 +2391,7 @@ async def test_update_capa_triggers_auto_feishu_sync(
     db_session.add(capa)
     await db_session.commit()
 
-    auto_sync_mock = AsyncMock()
+    auto_sync_mock: Any = AsyncMock()
     monkeypatch.setattr(
         feishu_sync_service,
         "auto_sync_capa_after_write",
@@ -2340,7 +2412,7 @@ async def test_update_capa_triggers_auto_feishu_sync(
 
 
 @pytest.mark.anyio
-async def test_get_change_statistics_prefers_ledger_fields_and_falls_back_to_legacy_fields(
+async def test_change_statistics_prefers_ledger_then_legacy_fields(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -2374,16 +2446,16 @@ async def test_get_change_statistics_prefers_ledger_fields_and_falls_back_to_leg
     )
 
     def _to_ms(year: int, month: int, day: int) -> int:
-        return int(datetime(year, month, day, tzinfo=timezone.utc).timestamp() * 1000)
+        return int(datetime(year, month, day, tzinfo=UTC).timestamp() * 1000)
 
     async def fake_search_records(
-        self,
+        self: Any,
         table_id: str,
         *,
         filter_str: str | None = None,
         page_size: int = 500,
         automatic_fields: bool = False,
-    ) -> list[dict]:
+    ) -> list[dict[Any, Any]]:
         assert table_id == "tbl_change_real"
         assert filter_str is None
         assert page_size == 9999
@@ -2430,30 +2502,32 @@ async def test_get_change_statistics_prefers_ledger_fields_and_falls_back_to_leg
             },
         ]
 
-    monkeypatch.setattr(feishu_bitable.BitableClient, "search_records", fake_search_records)
+    monkeypatch.setattr(
+        feishu_bitable.BitableClient, "search_records", fake_search_records
+    )
 
     result = await service.get_change_statistics(db_session)
 
     assert result.total == 4
-    assert result.closedCount == 1
-    assert result.delayCount == 3
-    assert result.actionPlanTotal == 2
-    assert result.actionPlanOverdue == 3
-    assert result.actionPlanConfirmed == 1
-    assert {item["status"]: item["count"] for item in result.statusDistribution} == {
+    assert result.closed_count == 1
+    assert result.delay_count == 3
+    assert result.action_plan_total == 2
+    assert result.action_plan_overdue == 3
+    assert result.action_plan_confirmed == 1
+    assert {item["status"]: item["count"] for item in result.status_distribution} == {
         "closed": 1,
         "in_progress": 1,
         "pending": 2,
     }
-    assert {item["level"]: item["count"] for item in result.levelDistribution} == {
+    assert {item["level"]: item["count"] for item in result.level_distribution} == {
         "一级": 1,
         "二级": 1,
         "三级": 1,
     }
-    assert {item["type"]: item["count"] for item in result.typeDistribution} == {
+    assert {item["type"]: item["count"] for item in result.type_distribution} == {
         "工艺": 1,
     }
-    assert {item["name"]: item["count"] for item in result.departmentDistribution} == {
+    assert {item["name"]: item["count"] for item in result.department_distribution} == {
         "质量部": 1,
         "生产部": 1,
         "工程部": 1,

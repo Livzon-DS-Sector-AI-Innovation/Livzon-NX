@@ -1,6 +1,7 @@
 """Safety API — checks endpoints."""
 
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,23 +31,27 @@ async def get_checks(
     department: str | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """获取安全检查列表"""
     service = SafetyService(db)
     skip = (page - 1) * page_size
-    items, total = await service.get_checks(skip, page_size, status, check_type, department)
+    items, total = await service.get_checks(
+        skip, page_size, status, check_type, department
+    )
     return ApiResponse(
         data=[SafetyCheckResponse.model_validate(c) for c in items],
         meta={"page": page, "page_size": page_size, "total": total},
     )
 
 
-@checks_router.get("/checks/{check_id}", response_model=ApiResponse, summary="获取安全检查详情")
+@checks_router.get(
+    "/checks/{check_id}", response_model=ApiResponse, summary="获取安全检查详情"
+)
 async def get_check(
     check_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """获取安全检查详情"""
     service = SafetyService(db)
     item = await service.get_check(check_id)
@@ -60,7 +65,7 @@ async def create_check(
     data: SafetyCheckCreate,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """创建安全检查"""
     service = SafetyService(db)
     item = await service.create_check(data)
@@ -68,13 +73,15 @@ async def create_check(
     return ApiResponse(data=SafetyCheckResponse.model_validate(item))
 
 
-@checks_router.put("/checks/{check_id}", response_model=ApiResponse, summary="更新安全检查")
+@checks_router.put(
+    "/checks/{check_id}", response_model=ApiResponse, summary="更新安全检查"
+)
 async def update_check(
     check_id: uuid.UUID,
     data: SafetyCheckUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """更新安全检查"""
     service = SafetyService(db)
     item = await service.update_check(check_id, data)
@@ -84,12 +91,14 @@ async def update_check(
     return ApiResponse(data=SafetyCheckResponse.model_validate(item))
 
 
-@checks_router.post("/checks/{check_id}/submit", response_model=ApiResponse, summary="提交安全检查")
+@checks_router.post(
+    "/checks/{check_id}/submit", response_model=ApiResponse, summary="提交安全检查"
+)
 async def submit_check(
     check_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """提交安全检查（草稿→已提交）"""
     service = SafetyService(db)
     item = await service.submit_check(check_id)
@@ -99,13 +108,15 @@ async def submit_check(
     return ApiResponse(data=SafetyCheckResponse.model_validate(item))
 
 
-@checks_router.post("/checks/{check_id}/review", response_model=ApiResponse, summary="审核安全检查")
+@checks_router.post(
+    "/checks/{check_id}/review", response_model=ApiResponse, summary="审核安全检查"
+)
 async def review_check(
     check_id: uuid.UUID,
     result: str = Query(..., description="审核结果: qualified/unqualified"),
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """审核安全检查"""
     service = SafetyService(db)
     item = await service.review_check(check_id, result)
@@ -115,13 +126,15 @@ async def review_check(
     return ApiResponse(data=SafetyCheckResponse.model_validate(item))
 
 
-@checks_router.post("/checks/{check_id}/confirm", response_model=ApiResponse, summary="确认检查")
+@checks_router.post(
+    "/checks/{check_id}/confirm", response_model=ApiResponse, summary="确认检查"
+)
 async def confirm_check(
     check_id: uuid.UUID,
     data: ConfirmCheckRequest,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """确认安全检查（role=inspector 检查人员确认 / role=safety_officer 安全办确认）"""
     service = SafetyService(db)
     item = await service.confirm_check(check_id, data.role)
@@ -131,12 +144,14 @@ async def confirm_check(
     return ApiResponse(data=SafetyCheckResponse.model_validate(item))
 
 
-@checks_router.delete("/checks/{check_id}", response_model=ApiResponse, summary="删除安全检查")
+@checks_router.delete(
+    "/checks/{check_id}", response_model=ApiResponse, summary="删除安全检查"
+)
 async def delete_check(
     check_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """删除安全检查"""
     service = SafetyService(db)
     result = await service.delete_check(check_id)
@@ -144,5 +159,3 @@ async def delete_check(
         return ApiResponse(code=404, message="检查记录不存在")
     await db.commit()
     return ApiResponse(message="删除成功")
-
-

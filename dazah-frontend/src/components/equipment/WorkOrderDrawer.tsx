@@ -96,7 +96,7 @@ export function WorkOrderDrawer({ equipments, symptoms, onRefresh }: WorkOrderDr
       }
       closeWorkOrderDrawer()
       onRefresh?.()
-    } catch (error: any) {
+    } catch (error) {
       if (error?.errorFields) return
       if (error?.message) message.error(error.message)
     }

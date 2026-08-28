@@ -36,12 +36,18 @@ async def maintenance_plan_loop() -> None:
         # 计算到下一个 00:05 CST 的等待秒数
         now = datetime.now(CST)
         next_run = (now + timedelta(days=1)).replace(
-            hour=0, minute=5, second=0, microsecond=0,
+            hour=0,
+            minute=5,
+            second=0,
+            microsecond=0,
         )
         # 如果当前时间还没过今天的 00:05，则设为今天
         if now.hour == 0 and now.minute < 5:
             next_run = now.replace(
-                hour=0, minute=5, second=0, microsecond=0,
+                hour=0,
+                minute=5,
+                second=0,
+                microsecond=0,
             )
         wait_seconds = (next_run - now).total_seconds()
 
@@ -74,9 +80,7 @@ async def maintenance_plan_loop() -> None:
                     generate_due_work_orders,
                 )
 
-                created_count, skipped_count = await generate_due_work_orders(
-                    db
-                )
+                created_count, skipped_count = await generate_due_work_orders(db)
                 await db.commit()
 
                 logger.info(
@@ -129,8 +133,10 @@ async def scan_timeout_work_orders() -> None:
 
             now = datetime.now(UTC)
             priority_map = {
-                "紧急": "emergency", "高": "high",
-                "中": "medium", "低": "low",
+                "紧急": "emergency",
+                "高": "high",
+                "中": "medium",
+                "低": "low",
             }
             for order in pending_orders:
                 attr = priority_map.get(order.priority, "medium")
@@ -138,15 +144,17 @@ async def scan_timeout_work_orders() -> None:
                 elapsed = (now - order.reported_at).total_seconds() / 60
                 if elapsed > timeout_minutes:
                     leader = await get_department_leader(dept_id)
-                    leader_name = (
-                        leader.get("name", "主管") if leader else "主管"
-                    )
+                    leader_name = leader.get("name", "主管") if leader else "主管"
                     await send_timeout_notification(
-                        order.work_order_no, "设备", leader_name,
+                        order.work_order_no,
+                        "设备",
+                        leader_name,
                     )
                     logger.info(
                         "Timeout WO %s (%.0f min > %d min)",
-                        order.work_order_no, elapsed, timeout_minutes,
+                        order.work_order_no,
+                        elapsed,
+                        timeout_minutes,
                     )
         except Exception:
             logger.exception("Timeout scan error")
@@ -164,7 +172,8 @@ async def timeout_scan_loop() -> None:
             logger.exception("Timeout scan error")
         try:
             await asyncio.wait_for(
-                stop_timeout_flag.wait(), timeout=60,
+                stop_timeout_flag.wait(),
+                timeout=60,
             )
         except TimeoutError:
             pass

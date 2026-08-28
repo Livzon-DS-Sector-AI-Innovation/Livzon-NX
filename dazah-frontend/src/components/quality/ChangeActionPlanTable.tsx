@@ -1,12 +1,12 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Button, Input, Select, Space, Table, Tag, Tooltip } from 'antd'
 import type { TableColumnsType } from 'antd'
-import { CloudDownloadOutlined, DeleteOutlined, EditOutlined, ReloadOutlined, SyncOutlined } from '@ant-design/icons'
+import { DeleteOutlined, EditOutlined, ReloadOutlined, SyncOutlined } from '@ant-design/icons'
 import type { ChangeActionPlanListItem } from '@/types/quality'
-import { ResizableHeaderCell } from './resizable-table-header'
+import { ResizableHeaderCell } from './ResizableTableHeader'
 
 interface ChangeActionPlanFilters {
   change_code: string
@@ -141,11 +141,6 @@ export function ChangeActionPlanTable({
   onDelete,
 }: ChangeActionPlanTableProps) {
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>(defaultColumnWidths)
-  const resizingRef = useRef<{
-    columnKey: string
-    startX: number
-    startWidth: number
-  } | null>(null)
 
   useEffect(() => {
     try {
@@ -166,28 +161,22 @@ export function ChangeActionPlanTable({
     event.preventDefault()
     event.stopPropagation()
 
-    resizingRef.current = {
-      columnKey,
-      startX: event.clientX,
-      startWidth: columnWidths[columnKey] ?? defaultColumnWidths[columnKey] ?? 120,
-    }
+    const startX = event.clientX
+    const startWidth = columnWidths[columnKey] ?? defaultColumnWidths[columnKey] ?? 120
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
-      const current = resizingRef.current
-      if (!current) return
-      const delta = moveEvent.clientX - current.startX
+      const delta = moveEvent.clientX - startX
       const nextWidth = Math.max(
-        minColumnWidths[current.columnKey] ?? 80,
-        current.startWidth + delta,
+        minColumnWidths[columnKey] ?? 80,
+        startWidth + delta,
       )
       setColumnWidths((prev) => ({
         ...prev,
-        [current.columnKey]: nextWidth,
+        [columnKey]: nextWidth,
       }))
     }
 
     const handleMouseUp = () => {
-      resizingRef.current = null
       document.removeEventListener('mousemove', handleMouseMove)
       document.removeEventListener('mouseup', handleMouseUp)
     }
@@ -219,7 +208,7 @@ export function ChangeActionPlanTable({
         ),
       },
       { title: '总负责人', dataIndex: 'owner_name', key: 'owner_name', width: defaultColumnWidths.owner_name, render: (value: string | null) => value || '-' },
-      { title: '部门负责人', dataIndex: 'director_name', key: 'director_name', width: defaultColumnWidths.director_name, render: (value: string | null) => value || '-' },
+      { title: '部门总监', dataIndex: 'director_name', key: 'director_name', width: defaultColumnWidths.director_name, render: (value: string | null) => value || '-' },
       { title: '项目截止时间', dataIndex: 'deadline_date', key: 'deadline_date', width: defaultColumnWidths.deadline_date, render: formatDate },
       { title: '状态', dataIndex: 'status', key: 'status', width: defaultColumnWidths.status, render: (value: string | null) => value || '-' },
       { title: '延期', dataIndex: 'delay_flag', key: 'delay_flag', width: defaultColumnWidths.delay_flag, render: (value: string | null) => value || '-' },
@@ -273,7 +262,6 @@ export function ChangeActionPlanTable({
             minWidth,
             resizable: canResize,
             onResizeStart: canResize
-              // eslint-disable-next-line react-hooks/refs
               ? (event: React.MouseEvent<HTMLDivElement>) => handleResizeStart(columnKey, event)
               : undefined,
           }),
@@ -324,8 +312,8 @@ export function ChangeActionPlanTable({
       </Space>
 
       <Space style={{ marginBottom: 12 }}>
-        <Button icon={<CloudDownloadOutlined />} onClick={onSyncAll}>
-          拉取飞书
+        <Button icon={<SyncOutlined />} onClick={onSyncAll}>
+          同步飞书
         </Button>
         <Button icon={<ReloadOutlined />} onClick={onRefresh}>
           刷新

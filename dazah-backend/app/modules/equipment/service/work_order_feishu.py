@@ -1,6 +1,7 @@
 """Work order Feishu bot service: query and complete work orders via chat."""
 
 import logging
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,9 +15,7 @@ from app.modules.equipment.service.work_order import complete_work_order
 logger = logging.getLogger(__name__)
 
 
-async def _find_user_by_user_id(
-    db: AsyncSession, user_id: str
-):
+async def _find_user_by_user_id(db: AsyncSession, user_id: str) -> Any:
     """根据飞书 user_id（租户级）查找系统用户。"""
     from app.platform.identity.models import User
 
@@ -57,21 +56,26 @@ async def list_user_work_orders(
         return
 
     lines = [f"**共 {len(work_orders)} 个未关闭工单**\n"]
-    options: list[dict] = []
+    options: list[dict[str, Any]] = []
     for i, wo in enumerate(work_orders, 1):
         eq_name = wo.equipment.name if wo.equipment else "未知设备"
-        status_icon = {"待处理": "⏳", "执行中": "🔄", "待验收": "✅"}.get(wo.status, "📋")
+        status_icon = {"待处理": "⏳", "执行中": "🔄", "待验收": "✅"}.get(
+            wo.status, "📋"
+        )
         lines.append(
-            f"**{i}.** {status_icon} {wo.work_order_no} | {wo.order_type} | {wo.status}\n"
+            f"**{i}.** {status_icon} {wo.work_order_no} | {wo.order_type} | "
+            f"{wo.status}\n"
             f"   设备: {eq_name}"
         )
-        options.append({
-            "index": i,
-            "work_order_no": wo.work_order_no,
-            "order_type": wo.order_type,
-            "status": wo.status,
-            "equipment_name": eq_name,
-        })
+        options.append(
+            {
+                "index": i,
+                "work_order_no": wo.work_order_no,
+                "order_type": wo.order_type,
+                "status": wo.status,
+                "equipment_name": eq_name,
+            }
+        )
 
     lines.append(
         "\n---\n"
@@ -81,6 +85,7 @@ async def list_user_work_orders(
 
     # 保存选择列表，支持后续数字索引完成
     from app.modules.equipment.service.inspection_session import save_selection
+
     await save_selection(open_id, select_type="work_order", options=options)
 
     await send_user_card(
@@ -166,9 +171,5 @@ async def complete_work_order_by_no(
         open_id=open_id,
         title="✅ 工单已完成",
         receive_id_type="open_id",
-        content=(
-            f"**{work_order_no}**\n"
-            f"设备: {eq_name}\n"
-            f"维修过程: {detail}"
-        ),
+        content=(f"**{work_order_no}**\n设备: {eq_name}\n维修过程: {detail}"),
     )

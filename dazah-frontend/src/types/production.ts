@@ -21,25 +21,11 @@ export enum BatchStatus {
   CANCELLED = 'cancelled',
 }
 
-export enum PlanStatus {
-  DRAFT = 'draft',
-  APPROVED = 'approved',
-  EXECUTING = 'executing',
-  COMPLETED = 'completed',
-}
-
 export enum ProcessSpecStatus {
   DRAFT = 'draft',
   APPROVED = 'approved',
   EFFECTIVE = 'effective',
   ARCHIVED = 'archived',
-}
-
-export enum TaskStatus {
-  PENDING = 'pending',
-  ASSIGNED = 'assigned',
-  IN_PROGRESS = 'in_progress',
-  COMPLETED = 'completed',
 }
 
 export enum OperationType {
@@ -59,25 +45,11 @@ export const BATCH_STATUS_OPTIONS = [
   { value: BatchStatus.CANCELLED, label: '已取消', color: 'error' },
 ]
 
-export const PLAN_STATUS_OPTIONS = [
-  { value: PlanStatus.DRAFT, label: '草稿', color: 'default' },
-  { value: PlanStatus.APPROVED, label: '已批准', color: 'blue' },
-  { value: PlanStatus.EXECUTING, label: '执行中', color: 'processing' },
-  { value: PlanStatus.COMPLETED, label: '已完成', color: 'success' },
-]
-
 export const PROCESS_SPEC_STATUS_OPTIONS = [
   { value: ProcessSpecStatus.DRAFT, label: '草稿', color: 'default' },
   { value: ProcessSpecStatus.APPROVED, label: '已批准', color: 'blue' },
   { value: ProcessSpecStatus.EFFECTIVE, label: '已生效', color: 'success' },
   { value: ProcessSpecStatus.ARCHIVED, label: '已归档', color: 'warning' },
-]
-
-export const TASK_STATUS_OPTIONS = [
-  { value: TaskStatus.PENDING, label: '待执行', color: 'default' },
-  { value: TaskStatus.ASSIGNED, label: '已分配', color: 'blue' },
-  { value: TaskStatus.IN_PROGRESS, label: '执行中', color: 'processing' },
-  { value: TaskStatus.COMPLETED, label: '已完成', color: 'success' },
 ]
 
 export const OPERATION_TYPE_OPTIONS = [
@@ -87,6 +59,20 @@ export const OPERATION_TYPE_OPTIONS = [
   { value: OperationType.EQUIPMENT_CHECK, label: '设备检查' },
   { value: OperationType.PARAMETER_RECORD, label: '参数记录' },
   { value: OperationType.PACKAGING, label: '包装' },
+]
+
+// ============ Fermentation Types ============
+
+export enum FermentationStatus {
+  IN_PROGRESS = 'in_progress',
+  COMPLETED = 'completed',
+  ABNORMAL = 'abnormal',
+}
+
+export const FERMENTATION_STATUS_OPTIONS = [
+  { value: FermentationStatus.IN_PROGRESS, label: '发酵中', color: 'processing' },
+  { value: FermentationStatus.COMPLETED, label: '已完成', color: 'success' },
+  { value: FermentationStatus.ABNORMAL, label: '异常', color: 'error' },
 ]
 
 // ============ Batch Types ============
@@ -154,48 +140,86 @@ export interface BatchMaterialFormData {
 
 export interface ProductionPlan {
   id: string
-  plan_no: string
-  plan_name?: string
-  plan_type?: string
-  plan_month?: string
-  status: PlanStatus
-  total_batches?: number
-  completed_batches?: number
-  notes?: string
-  created_at: string
-  updated_at: string
-}
-
-export interface PlanTask {
-  id: string
-  plan_id: string
-  product_code: string
-  product_name?: string
-  batch_qty?: number
-  assigned_to?: string
-  assigned_to_name?: string
-  due_date?: string
-  status: TaskStatus
-  notes?: string
+  workshop?: string | null
+  product_name: string
+  plan_date?: string | null
+  planned_yield?: number | null
+  unit?: string | null
+  actual_completion?: number | null
+  completion_rate?: number | null
+  safety_status?: string | null
+  quality_status?: string | null
+  remarks?: string | null
+  source?: string | null
   created_at: string
   updated_at: string
 }
 
 export interface ProductionPlanFormData {
-  plan_no: string
-  plan_name?: string
-  plan_type?: string
-  plan_month?: string
-  notes?: string
+  workshop?: string
+  product_name: string
+  plan_date?: string
+  planned_yield?: number
+  unit?: string | null
+  actual_completion?: number
+  completion_rate?: number
+  safety_status?: string
+  quality_status?: string
+  remarks?: string
 }
 
-export interface PlanTaskFormData {
-  product_code: string
-  product_name?: string
-  batch_qty?: number
-  assigned_to?: string
+export interface PlanTask {
+  id: string
+  plan_id?: string
+  task_name: string
+  assignee?: string
+  status?: string
+  start_date?: string
   due_date?: string
-  notes?: string
+  completed_at?: string
+  remarks?: string
+  created_at?: string
+  updated_at?: string
+}
+
+// ============ SalesPlanDetail Types ============
+
+export interface SalesPlanDetail {
+  id: string
+  product_name: string
+  unit?: string | null
+  last_month_delivered_uninvoiced?: number | null
+  current_year_delivered?: number | null
+  month_planned_delivery?: number | null
+  month_delivered_qty?: number | null
+  undelivered_qty?: number | null
+  month_planned_invoice?: number | null
+  invoiced_qty?: number | null
+  delivery_completion_rate?: number | null
+  last_month_end_inventory?: number | null
+  month_planned_capacity?: number | null
+  month_end_inventory?: number | null
+  remarks?: string | null
+  source?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface SalesPlanDetailFormData {
+  product_name: string
+  unit?: string
+  last_month_delivered_uninvoiced?: number
+  current_year_delivered?: number
+  month_planned_delivery?: number
+  month_delivered_qty?: number
+  undelivered_qty?: number
+  month_planned_invoice?: number
+  invoiced_qty?: number
+  delivery_completion_rate?: number
+  last_month_end_inventory?: number
+  month_planned_capacity?: number
+  month_end_inventory?: number
+  remarks?: string
 }
 
 // ============ ProcessSpec Types ============
@@ -329,81 +353,6 @@ export interface MaterialBalance {
   updated_at: string
 }
 
-// ============ Production Feishu Types ============
-
-export interface ProductionFeishuConfig {
-  id?: string | null
-  config_name: string
-  app_id: string
-  bitable_app_token: string
-  table_id?: string | null
-  is_active: boolean
-  remark?: string | null
-  app_secret_configured: boolean
-  app_secret_masked: string
-  created_at?: string | null
-  updated_at?: string | null
-}
-
-export interface ProductionFeishuConfigUpsert {
-  id?: string | null
-  config_name: string
-  app_id: string
-  app_secret?: string
-  bitable_app_token: string
-  table_id?: string | null
-  is_active: boolean
-  remark?: string | null
-}
-
-export interface ProductionFeishuConnectivityStep {
-  name: string
-  status: string
-  message: string
-}
-
-export interface ProductionFeishuConnectivityResult {
-  ok: boolean
-  steps: ProductionFeishuConnectivityStep[]
-}
-
-export interface ProductionFeishuFieldPreview {
-  field_id: string
-  field_name: string
-  type?: number | null
-  property?: Record<string, unknown> | null
-}
-
-export interface ProductionFeishuTableItem {
-  table_id: string
-  name: string
-  revision?: number | null
-}
-
-export interface ProductionFeishuTableList {
-  app_token: string
-  tables: ProductionFeishuTableItem[]
-  total?: number | null
-}
-
-export interface ProductionFeishuRecordPreview {
-  record_id: string
-  fields: Record<string, unknown>
-  created_time?: number | null
-  last_modified_time?: number | null
-}
-
-export interface ProductionFeishuTablePreview {
-  app_token: string
-  table_id: string
-  fields: ProductionFeishuFieldPreview[]
-  records: ProductionFeishuRecordPreview[]
-  page_size: number
-  has_more: boolean
-  page_token?: string | null
-  total?: number | null
-}
-
 // ============ Query Parameters ============
 
 export interface BatchQueryParams {
@@ -411,17 +360,15 @@ export interface BatchQueryParams {
   page_size?: number
   status?: BatchStatus
   product_code?: string
-  product_name?: string
   batch_no?: string
-  production_line?: string
   exclude_cancelled?: boolean
 }
 
 export interface PlanQueryParams {
   page?: number
   page_size?: number
-  status?: PlanStatus
-  plan_month?: string
+  product_name?: string
+  workshop?: string
 }
 
 export interface ProcessSpecQueryParams {
@@ -429,4 +376,54 @@ export interface ProcessSpecQueryParams {
   page_size?: number
   status?: ProcessSpecStatus
   product_code?: string
+}
+
+// ============ Fermentation Types ============
+
+export interface FermentationRecord {
+  id: string
+  batch_no: string
+  product_name: string
+  fermenter: string
+  entry_date: string
+  discharge_date?: string
+  cycle_1?: number
+  cycle_2?: number
+  cycle_3?: number
+  cycle_4?: number
+  cycle_5?: number
+  cycle_6?: number
+  tank_yield?: number
+  status: string
+  remarks?: string
+  attachment?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface FermentationFormData {
+  batch_no: string
+  product_name?: string
+  fermenter: string
+  entry_date: string
+  discharge_date?: string
+  cycle_1?: number
+  cycle_2?: number
+  cycle_3?: number
+  cycle_4?: number
+  cycle_5?: number
+  cycle_6?: number
+  tank_yield?: number
+  status?: string
+  remarks?: string
+  attachment?: string
+}
+
+export interface FermentationQueryParams {
+  page?: number
+  page_size?: number
+  product_name?: string
+  batch_no?: string
+  status?: string
+  fermenter?: string
 }

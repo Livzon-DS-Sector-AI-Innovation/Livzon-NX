@@ -51,8 +51,7 @@ ISSUE_TYPE_DEFINITIONS = {
         "溶液浓度计算错误、方法学参数与标准不符等直接影响合规性的问题。"
     ),
     "general": (
-        "一般问题：描述不够精确、格式不统一、部分内容遗漏但不影响"
-        "整体结论的问题。"
+        "一般问题：描述不够精确、格式不统一、部分内容遗漏但不影响整体结论的问题。"
     ),
     "suggestion": (
         "建议优化：可改进的表述、可补充的说明、排版优化等不影响"
@@ -62,7 +61,8 @@ ISSUE_TYPE_DEFINITIONS = {
 
 # ── 黄金标准提取 Prompt ──────────────────────────────────
 
-GOLDEN_STANDARD_SYSTEM = """你是一位制药行业分析方法验证合规审核专家，精通 ICH Q2(R2)、中国药典分析方法验证指导原则、GMP 数据完整性要求。
+GOLDEN_STANDARD_SYSTEM = """你是一位制药行业分析方法验证合规审核专家，精通
+ICH Q2(R2)、中国药典分析方法验证指导原则、GMP 数据完整性要求。
 
 你的任务是从验证文件中提取"黄金标准"——即文件中明确规定的接受标准和技术要求。
 
@@ -275,7 +275,8 @@ AUDIT_CROSS_SYSTEM = """你是一位制药行业分析方法验证合规审核�
 
 以 JSON 格式返回审核结果。"""
 
-AUDIT_CROSS_USER_TEMPLATE = """请同时审核以下《分析方法验证方案》和《分析方法验证报告》。
+AUDIT_CROSS_USER_TEMPLATE = """请同时审核以下《分析方法验证方案》和
+《分析方法验证报告》。
 
 品种名称：{product_name}
 方法名称：{method_name}
@@ -350,7 +351,8 @@ REPORT_GENERATION_SYSTEM = """你是一位制药行业分析方法验证合规�
 - 建议具体、可执行
 - 格式规范，便于阅读"""
 
-REPORT_GENERATION_USER_TEMPLATE = """请根据以下审核结果生成一份 Markdown 格式的审核报告。
+REPORT_GENERATION_USER_TEMPLATE = """请根据以下审核结果生成一份 Markdown
+格式的审核报告。
 
 基本信息：
 - 任务名称：{task_name}

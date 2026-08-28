@@ -1,6 +1,10 @@
 """Scheduled task card builder — template rendering and data aggregation."""
 
 import logging
+import re
+from collections.abc import Awaitable, Callable
+from datetime import date
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -8,7 +12,7 @@ logger = logging.getLogger(__name__)
 # Each entry defines a data key that can be selected in the UI.
 # The `fetcher` is a callable(repo) -> str | int that returns the aggregated value.
 
-DATA_SOURCE_DEFINITIONS: list[dict] = [
+DATA_SOURCE_DEFINITIONS: list[dict[str, Any]] = [
     {
         "key": "hazard_open_count",
         "label": "未关闭隐患数",
@@ -18,7 +22,10 @@ DATA_SOURCE_DEFINITIONS: list[dict] = [
     {
         "key": "hazard_open_details",
         "label": "未关闭隐患明细",
-        "description": "所有未关闭隐患的详细列表（编号、位置、等级、描述、责任部门、发现日期、整改状态、限期）",
+        "description": (
+            "所有未关闭隐患的详细列表（编号、位置、等级、描述、责任部门、发现日期、"
+            "整改状态、限期）"
+        ),
         "default_enabled": True,
     },
     {
@@ -90,16 +97,16 @@ DATA_SOURCE_DEFINITIONS: list[dict] = [
 ]
 
 
-async def fetch_data_sources(repo, enabled_keys: list[str]) -> dict[str, str]:
+async def fetch_data_sources(repo: Any, enabled_keys: list[str]) -> dict[str, str]:
     """Fetch all enabled data sources and return a dict of {key: formatted_value}."""
-    from datetime import date, timedelta
+    from datetime import timedelta
 
     today = date.today()
     week_start = today - timedelta(days=today.weekday())
     month_start = today.replace(day=1)
     year_start = today.replace(month=1, day=1)
 
-    fetchers = {
+    fetchers: dict[str, Callable[[], Awaitable[Any]]] = {
         "hazard_open_count": lambda: _count_pending_hazards(repo),
         "hazard_open_details": lambda: _fetch_open_hazards_details(repo),
         "hazard_total_count": lambda: _count_total_hazards(repo),
@@ -134,11 +141,11 @@ def get_data_source_label(key: str) -> str:
     """Get the display label for a data source key."""
     for ds in DATA_SOURCE_DEFINITIONS:
         if ds["key"] == key:
-            return ds["label"]
+            return str(ds["label"])
     return key
 
 
-def build_default_template(enabled_sources: list[dict]) -> str:
+def build_default_template(enabled_sources: list[dict[str, Any]]) -> str:
     """Auto-generate a default card template from enabled data sources."""
     lines = ["**📊 安全数据简报**", ""]
     for src in enabled_sources:
@@ -152,9 +159,8 @@ def build_default_template(enabled_sources: list[dict]) -> str:
 
 def render_template(template: str, variables: dict[str, str]) -> str:
     """Replace {{ key }} placeholders with actual values."""
-    import re
 
-    def replacer(match: re.Match) -> str:
+    def replacer(match: re.Match[str]) -> str:
         key = match.group(1).strip()
         return variables.get(key, f"{{{{{key}}}}}")
 
@@ -172,13 +178,18 @@ async def build_card_json(
     """
     from app.modules.safety.feishu.notification import build_card
 
-    return await build_card(title=title, content=rendered_markdown, header_template=header_color)
+    result = await build_card(
+        title=title, content=rendered_markdown, header_template=header_color
+    )
+    if not isinstance(result, str):
+        raise TypeError("飞书卡片构建结果不是字符串")
+    return result
 
 
 # ── Internal fetcher helpers ──
 
 
-async def _count_pending_hazards(repo) -> int:
+async def _count_pending_hazards(repo: Any) -> int:
     from sqlalchemy import func, select
 
     from app.modules.safety.models import HazardReport
@@ -187,7 +198,7 @@ async def _count_pending_hazards(repo) -> int:
         select(func.count())
         .select_from(HazardReport)
         .where(
-            HazardReport.is_deleted == False,
+            HazardReport.is_deleted.is_(False),
             HazardReport.status == "open",
         )
     )
@@ -195,7 +206,7 @@ async def _count_pending_hazards(repo) -> int:
     return result.scalar() or 0
 
 
-async def _fetch_open_hazards_details(repo) -> str:
+async def _fetch_open_hazards_details(repo: Any) -> str:
     """Query all open hazards and return a markdown-formatted detail list."""
     from sqlalchemy import select
 
@@ -204,7 +215,7 @@ async def _fetch_open_hazards_details(repo) -> str:
     query = (
         select(HazardReport)
         .where(
-            HazardReport.is_deleted == False,
+            HazardReport.is_deleted.is_(False),
             HazardReport.status == "open",
         )
         .order_by(HazardReport.hazard_level.desc(), HazardReport.discovered_at.desc())
@@ -215,8 +226,8 @@ async def _fetch_open_hazards_details(repo) -> str:
     if not hazards:
         return "✅ 当前无未关闭隐患"
 
-    LEVEL_MAP = {"general": "一般", "major": "较大", "critical": "重大"}
-    STATUS_MAP = {
+    level_map = {"general": "一般", "major": "较大", "critical": "重大"}
+    status_map = {
         "pending": "待整改",
         "in_progress": "整改中",
         "replied": "已回复",
@@ -225,7 +236,14 @@ async def _fetch_open_hazards_details(repo) -> str:
 
     lines: list[str] = []
     for i, h in enumerate(hazards, 1):
-        level = LEVEL_MAP.get(h.hazard_level, h.hazard_level or "—")
+        icon = (
+            "⚠️"
+            if h.hazard_level == "critical"
+            else "🔶"
+            if h.hazard_level == "major"
+            else "🔹"
+        )
+        level = level_map.get(h.hazard_level, h.hazard_level or "—")
         desc = h.description or "—"
         # 截断过长的描述
         if len(desc) > 60:
@@ -233,10 +251,11 @@ async def _fetch_open_hazards_details(repo) -> str:
         dept = h.department or "—"
         discovered = h.discovered_at.strftime("%Y-%m-%d") if h.discovered_at else "—"
         deadline = h.deadline.strftime("%Y-%m-%d") if h.deadline else "—"
-        status = STATUS_MAP.get(h.rectification_status, h.rectification_status or "—")
+        status = status_map.get(h.rectification_status, h.rectification_status or "—")
 
         lines.append(
-            f"**{i}. {h.hazard_no}** | {'⚠️' if h.hazard_level == 'critical' else '🔶' if h.hazard_level == 'major' else '🔹'} {level}\n"
+            f"**{i}. {h.hazard_no}** | "
+            f"{icon} {level}\n"
             f"描述：{desc}\n"
             f"责任：{dept} | 发现：{discovered} | 限期：{deadline} | {status}\n"
         )
@@ -244,7 +263,7 @@ async def _fetch_open_hazards_details(repo) -> str:
     return "\n".join(lines)
 
 
-async def _count_total_hazards(repo) -> int:
+async def _count_total_hazards(repo: Any) -> int:
     from sqlalchemy import func, select
 
     from app.modules.safety.models import HazardReport
@@ -252,13 +271,13 @@ async def _count_total_hazards(repo) -> int:
     query = (
         select(func.count())
         .select_from(HazardReport)
-        .where(HazardReport.is_deleted == False)
+        .where(HazardReport.is_deleted.is_(False))
     )
     result = await repo.session.execute(query)
     return result.scalar() or 0
 
 
-async def _count_checks_since(repo, since_date) -> int:
+async def _count_checks_since(repo: Any, since_date: date) -> int:
     from sqlalchemy import func, select
 
     from app.modules.safety.models import SafetyCheck
@@ -267,7 +286,7 @@ async def _count_checks_since(repo, since_date) -> int:
         select(func.count())
         .select_from(SafetyCheck)
         .where(
-            SafetyCheck.is_deleted == False,
+            SafetyCheck.is_deleted.is_(False),
             SafetyCheck.created_at >= since_date,
         )
     )
@@ -275,7 +294,7 @@ async def _count_checks_since(repo, since_date) -> int:
     return result.scalar() or 0
 
 
-async def _count_accidents_since(repo, since_date) -> int:
+async def _count_accidents_since(repo: Any, since_date: date) -> int:
     from sqlalchemy import func, select
 
     from app.modules.safety.models import Accident
@@ -284,7 +303,7 @@ async def _count_accidents_since(repo, since_date) -> int:
         select(func.count())
         .select_from(Accident)
         .where(
-            Accident.is_deleted == False,
+            Accident.is_deleted.is_(False),
             Accident.created_at >= since_date,
         )
     )
@@ -292,7 +311,7 @@ async def _count_accidents_since(repo, since_date) -> int:
     return result.scalar() or 0
 
 
-async def _count_due_trainings(repo) -> int:
+async def _count_due_trainings(repo: Any) -> int:
     from sqlalchemy import func, select
 
     from app.modules.safety.models import SafetyTraining
@@ -301,7 +320,7 @@ async def _count_due_trainings(repo) -> int:
         select(func.count())
         .select_from(SafetyTraining)
         .where(
-            SafetyTraining.is_deleted == False,
+            SafetyTraining.is_deleted.is_(False),
             SafetyTraining.status == "pending",
         )
     )
@@ -309,7 +328,7 @@ async def _count_due_trainings(repo) -> int:
     return result.scalar() or 0
 
 
-async def _count_trainings_since(repo, since_date) -> int:
+async def _count_trainings_since(repo: Any, since_date: date) -> int:
     from sqlalchemy import func, select
 
     from app.modules.safety.models import SafetyTraining
@@ -318,7 +337,7 @@ async def _count_trainings_since(repo, since_date) -> int:
         select(func.count())
         .select_from(SafetyTraining)
         .where(
-            SafetyTraining.is_deleted == False,
+            SafetyTraining.is_deleted.is_(False),
             SafetyTraining.created_at >= since_date,
         )
     )
@@ -326,7 +345,7 @@ async def _count_trainings_since(repo, since_date) -> int:
     return result.scalar() or 0
 
 
-async def _count_pending_ehs_changes(repo) -> int:
+async def _count_pending_ehs_changes(repo: Any) -> int:
     from sqlalchemy import func, select
 
     from app.modules.safety.models import EhsChange
@@ -335,7 +354,7 @@ async def _count_pending_ehs_changes(repo) -> int:
         select(func.count())
         .select_from(EhsChange)
         .where(
-            EhsChange.is_deleted == False,
+            EhsChange.is_deleted.is_(False),
             EhsChange.status == "pending_approval",
         )
     )
@@ -343,7 +362,7 @@ async def _count_pending_ehs_changes(repo) -> int:
     return result.scalar() or 0
 
 
-async def _count_active_special_ops(repo) -> int:
+async def _count_active_special_ops(repo: Any) -> int:
     from sqlalchemy import func, select
 
     from app.modules.safety.models import SpecialOperationPermit
@@ -352,7 +371,7 @@ async def _count_active_special_ops(repo) -> int:
         select(func.count())
         .select_from(SpecialOperationPermit)
         .where(
-            SpecialOperationPermit.is_deleted == False,
+            SpecialOperationPermit.is_deleted.is_(False),
             SpecialOperationPermit.status.in_(["pending", "in_progress"]),
         )
     )
@@ -360,7 +379,7 @@ async def _count_active_special_ops(repo) -> int:
     return result.scalar() or 0
 
 
-async def _count_active_contractors(repo) -> int:
+async def _count_active_contractors(repo: Any) -> int:
     from sqlalchemy import func, select
 
     from app.modules.safety.models import Contractor
@@ -369,7 +388,7 @@ async def _count_active_contractors(repo) -> int:
         select(func.count())
         .select_from(Contractor)
         .where(
-            Contractor.is_deleted == False,
+            Contractor.is_deleted.is_(False),
             Contractor.status == "active",
         )
     )
@@ -377,7 +396,7 @@ async def _count_active_contractors(repo) -> int:
     return result.scalar() or 0
 
 
-async def _count_due_oh_exams(repo) -> int:
+async def _count_due_oh_exams(repo: Any) -> int:
     from datetime import date
 
     from sqlalchemy import func, select
@@ -388,8 +407,8 @@ async def _count_due_oh_exams(repo) -> int:
         select(func.count())
         .select_from(OhHealthExam)
         .where(
-            OhHealthExam.is_deleted == False,
-            OhHealthExam.next_exam_date <= date.today(),
+            OhHealthExam.is_deleted.is_(False),
+            OhHealthExam.scheduled_date <= date.today(),
         )
     )
     result = await repo.session.execute(query)

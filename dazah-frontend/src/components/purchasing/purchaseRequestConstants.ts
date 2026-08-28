@@ -12,7 +12,7 @@ export const purchaseCategoryLabels: Record<PurchaseRequestCategory, string> = {
   office: '办公用品',
   'raw-auxiliary': '原辅料',
   'chemical-glass': '化玻',
-  electrical: '电器',
+  electrical: '电气',
   'advertising-printing': '广告/印刷',
   fire: '消防',
   packaging: '包材',
@@ -94,8 +94,12 @@ export const purchaseApprovalWorkflows: Record<
     'responsible_leader',
   ],
   urgent: [
+    'hardware_warehouse',
     'department_head',
     'responsible_leader',
+    'supervising_leader',
+    'finance_director',
+    'general_manager',
   ],
   computer: ['department_head', 'responsible_leader', 'supervising_leader'],
   office: ['department_head', 'responsible_leader', 'supervising_leader'],
@@ -203,4 +207,27 @@ export function calculateLineAmount(
     return 0
   }
   return Number((quantityValue * unitPriceValue).toFixed(2))
+}
+
+type PurchaseAmountItem = Pick<PurchaseRequestItemInput, 'quantity' | 'unit_price'>
+type PurchaseAmountGroup = {
+  items?: ReadonlyArray<PurchaseAmountItem | null | undefined> | null
+}
+
+export function calculateItemsTotal(
+  items: ReadonlyArray<PurchaseAmountItem | null | undefined> | null | undefined,
+) {
+  return (items ?? []).reduce(
+    (sum, item) => sum + calculateLineAmount(item?.quantity, item?.unit_price),
+    0,
+  )
+}
+
+export function calculateGroupsTotal(
+  groups: ReadonlyArray<PurchaseAmountGroup | null | undefined> | null | undefined,
+) {
+  return (groups ?? []).reduce(
+    (sum, group) => sum + calculateItemsTotal(group?.items),
+    0,
+  )
 }

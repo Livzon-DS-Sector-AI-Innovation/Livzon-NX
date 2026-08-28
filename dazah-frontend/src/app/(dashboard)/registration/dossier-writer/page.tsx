@@ -67,8 +67,8 @@ export default function DossierWriterListPage() {
       setCurrentDossier(dossier)
       setUploadModalOpen(true)
       loadDossiers()
-    } catch (err: any) {
-      const msg = err?.message || err?.detail || '创建失败'
+    } catch (err) {
+      const msg = (err instanceof Error ? err.message : '') || (typeof err === 'object' && err !== null && 'detail' in err && typeof err.detail === 'string' ? err.detail : '') || '创建失败'
       message.error(msg)
     } finally {
       setSubmitting(false)
@@ -93,8 +93,8 @@ export default function DossierWriterListPage() {
       
       setUploadModalOpen(false)
       loadDossiers()
-    } catch (err: any) {
-      const msg = err?.message || err?.detail || '上传失败'
+    } catch (err) {
+      const msg = (err instanceof Error ? err.message : '') || (typeof err === 'object' && err !== null && 'detail' in err && typeof err.detail === 'string' ? err.detail : '') || '上传失败'
       message.error(msg)
     }
   }
@@ -128,8 +128,8 @@ export default function DossierWriterListPage() {
         message.error(result.message || result.error || '解析失败')
       }
       loadDossiers()
-    } catch (err: any) {
-      const msg = err?.message || err?.detail || '解析失败'
+    } catch (err) {
+      const msg = (err instanceof Error ? err.message : '') || (typeof err === 'object' && err !== null && 'detail' in err && typeof err.detail === 'string' ? err.detail : '') || '解析失败'
       message.error(msg)
     } finally {
       setParsingId(null)
@@ -195,7 +195,7 @@ export default function DossierWriterListPage() {
       title: '操作',
       key: 'action',
       width: '15%',
-      render: (_: unknown, record: ProductDossier) => (
+      render: (_: any, record: ProductDossier) => (
         <Space>
           <Button
             type="link"

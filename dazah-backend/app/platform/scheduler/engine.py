@@ -91,7 +91,8 @@ class SchedulerEngine:
             sleep_for = max(0.0, self._tick_interval - elapsed)
             try:
                 await asyncio.wait_for(
-                    self._stop_flag.wait(), timeout=sleep_for,
+                    self._stop_flag.wait(),
+                    timeout=sleep_for,
                 )
             except TimeoutError:
                 pass  # normal — next tick
@@ -101,7 +102,9 @@ class SchedulerEngine:
     # ── static task execution ───────────────────────────────────
 
     async def _maybe_run_task(
-        self, task: TaskDefinition, settings: object,
+        self,
+        task: TaskDefinition,
+        settings: object,
     ) -> None:
         """Check if *task* is due and execute it."""
         if not task.enabled:
@@ -127,7 +130,8 @@ class SchedulerEngine:
         except TimeoutError:
             logger.error(
                 "Task '%s' timed out after %ds",
-                task.name, task.timeout_seconds,
+                task.name,
+                task.timeout_seconds,
             )
         except Exception:
             logger.exception("Task '%s' failed with exception", task.name)
@@ -135,7 +139,9 @@ class SchedulerEngine:
     # ── generator execution ─────────────────────────────────────
 
     async def _maybe_run_generator(
-        self, gen: TaskGenerator, settings: object,
+        self,
+        gen: TaskGenerator,
+        settings: object,
     ) -> None:
         """Check if *gen* is due, scan the DB, and process due items."""
         if not gen.enabled:
@@ -155,7 +161,8 @@ class SchedulerEngine:
         try:
             async with async_session_factory() as session:
                 items = await asyncio.wait_for(
-                    gen.find_due(session), timeout=gen.timeout_seconds,
+                    gen.find_due(session),
+                    timeout=gen.timeout_seconds,
                 )
                 for item in items:
                     if self._stop_flag.is_set():
@@ -168,24 +175,29 @@ class SchedulerEngine:
                     except TimeoutError:
                         logger.error(
                             "Generator '%s' item timed out after %ds",
-                            gen.name, gen.timeout_seconds,
+                            gen.name,
+                            gen.timeout_seconds,
                         )
                     except Exception:
                         logger.exception(
-                            "Generator '%s' item failed", gen.name,
+                            "Generator '%s' item failed",
+                            gen.name,
                         )
 
                 await session.commit()
                 logger.debug(
                     "Generator completed: %s (items=%d)",
-                    gen.name, len(items),
+                    gen.name,
+                    len(items),
                 )
         except TimeoutError:
             logger.error(
                 "Generator '%s' find_due timed out after %ds",
-                gen.name, gen.timeout_seconds,
+                gen.name,
+                gen.timeout_seconds,
             )
         except Exception:
             logger.exception(
-                "Generator '%s' failed with exception", gen.name,
+                "Generator '%s' failed with exception",
+                gen.name,
             )

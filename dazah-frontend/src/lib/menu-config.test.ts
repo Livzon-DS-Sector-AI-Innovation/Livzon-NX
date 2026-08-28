@@ -70,4 +70,28 @@ describe('procurement menu structure', () => {
       '/purchasing/approval/labor-special/safety-officer'
     )
   })
+
+  it('exposes procurement settings only as an admin menu item', () => {
+    const settings = moduleMenus
+      .find((menu) => menu.key === 'purchasing')
+      ?.children.find((item) => item.key === 'settings')
+
+    expect(settings).toMatchObject({
+      label: '采购设置',
+      path: '/purchasing/settings',
+      adminOnly: true,
+    })
+  })
+
+  it('exposes the material code library to procurement users', () => {
+    const materialLibrary = moduleMenus
+      .find((menu) => menu.key === 'purchasing')
+      ?.children.find((item) => item.key === 'material-library')
+
+    expect(materialLibrary).toMatchObject({
+      label: '物料编码库',
+      path: '/purchasing/material-library',
+    })
+    expect(materialLibrary?.adminOnly).toBeUndefined()
+  })
 })

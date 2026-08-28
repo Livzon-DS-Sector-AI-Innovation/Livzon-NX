@@ -1,39 +1,142 @@
 'use server'
 
-import { getServerApiBaseUrl } from '@/lib/server-api'
 import { revalidatePath } from 'next/cache'
-import { AuthorizationLetterCreateInput } from '@/types/registration'
+import { registrationProjectLedgerSheets } from '@/lib/registration-project-ledger'
+import {
+  serverApiPost,
+  serverApiPut,
+  serverApiPatch,
+  serverApiDelete,
+  serverApiPostFormData,
+  serverApiGet,
+} from '@/lib/api/server/registration'
+import {
+  AuthorizationFdaEntryInput,
+  AuthorizationFdaEntryUpdateInput,
+  AuthorizationLedgerMainCreateInput,
+  AuthorizationLedgerMainUpdateInput,
+  AuthorizationLedgerUpdateCreateInput,
+  AuthorizationLedgerUpdateUpdateInput,
+  AuthorizationLetterCreateInput,
+  AuthorizationLetter,
+  CertificateEntryInput,
+  CertificateWorkbookImportResult,
+  DeclarationProgressEntryInput,
+  DeclarationProgressWorkbookImportResult,
+  CertificateReminderSettingInput,
+  FeeEntryCreate,
+  FeeEntryUpdate,
+  InspectionContactCreate,
+  InspectionContactUpdate,
+  KnowledgeArticle,
+  KnowledgeArticleCreate,
+  KnowledgeArticleUpdate,
+  KnowledgeCategoryCreate,
+  KnowledgeCategoryUpdate,
+  KnowledgeCommentCreate,
+  KnowledgeCommentUpdate,
+  ProjectLedgerEntryInput,
+  ProjectLedgerWorkbookImportResult,
+  ProductInfo,
+  ReferenceStandardListItem,
+  SupplementaryReplyListItem,
+} from '@/types/registration'
 
-const API_BASE_URL = getServerApiBaseUrl()
+type PaginatedServerResult<T> = {
+  code: number
+  message: string
+  data: T[]
+  meta?: { page?: number; page_size?: number; total?: number }
+}
 
-async function actionFetch<T>(url: string, options?: RequestInit): Promise<T | null> {
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      // TODO: 添加认证头
-      // Authorization: `Bearer ${await getServerToken()}`,
-      ...options?.headers,
-    },
+function appendOptionalFormValues(formData: FormData, values: Record<string, unknown>) {
+  Object.entries(values).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') formData.append(key, String(value))
   })
-  if (!response.ok) {
-    const errorBody = await response.text().catch(() => '')
-    let errorMessage = `请求失败: ${response.status} ${response.statusText}`
-    try {
-      const errorJson = JSON.parse(errorBody)
-      if (errorJson.message) errorMessage = errorJson.message
-    } catch {}
-    throw new Error(errorMessage)
+}
+
+export async function fetchReferenceStandardsServer(params?: {
+  drug_name?: string
+  page?: number
+  page_size?: number
+}): Promise<PaginatedServerResult<ReferenceStandardListItem>> {
+  const search = new URLSearchParams()
+  if (params?.drug_name) search.set('drug_name', params.drug_name)
+  search.set('page', String(params?.page || 1))
+  search.set('page_size', String(params?.page_size || 20))
+  return serverApiGet<ReferenceStandardListItem[]>(`/api/v1/registration/reference-standards?${search}`)
+}
+
+export async function fetchAuthorizationLettersServer(params: {
+  page: number
+  page_size: number
+}): Promise<PaginatedServerResult<AuthorizationLetter>> {
+  const search = new URLSearchParams({
+    page: String(params.page),
+    page_size: String(params.page_size),
+  })
+  return serverApiGet<AuthorizationLetter[]>(
+    `/api/v1/registration/authorization-letters?${search}`,
+  )
+}
+
+export async function fetchProductsServer(): Promise<ProductInfo[]> {
+  const result = await serverApiGet<ProductInfo[]>(
+    '/api/v1/registration/authorization-letters/products',
+  )
+  return result.data
+}
+
+export async function generateReferenceStandard(formData: FormData, data: Record<string, unknown>) {
+  appendOptionalFormValues(formData, data)
+  try {
+    await serverApiPostFormData('/api/v1/registration/reference-standards/generate', formData)
+    revalidatePath('/registration/reference-standard')
+    return { success: true, message: '对照物质说明表生成成功' }
+  } catch (error) {
+    return { success: false, message: error instanceof Error ? error.message : '生成失败' }
   }
-  const text = await response.text()
-  if (!text) return null
-  const json = JSON.parse(text)
-  return json.data ?? json
+}
+
+export async function deleteReferenceStandardAction(id: string) {
+  const result = await serverApiDelete(`/api/v1/registration/reference-standards/${id}`)
+  revalidatePath('/registration/reference-standard')
+  return result
+}
+
+export async function fetchSupplementaryRepliesServer(params?: {
+  drug_name?: string
+  page?: number
+  page_size?: number
+}): Promise<PaginatedServerResult<SupplementaryReplyListItem>> {
+  const search = new URLSearchParams()
+  if (params?.drug_name) search.set('drug_name', params.drug_name)
+  search.set('page', String(params?.page || 1))
+  search.set('page_size', String(params?.page_size || 20))
+  return serverApiGet<SupplementaryReplyListItem[]>(`/api/v1/registration/supplementary-replies?${search}`)
+}
+
+export async function generateSupplementaryReply(formData: FormData, data: Record<string, unknown>) {
+  appendOptionalFormValues(formData, data)
+  try {
+    await serverApiPostFormData('/api/v1/registration/supplementary-replies/generate', formData)
+    revalidatePath('/registration/supplementary-reply')
+    return { success: true, message: '发补回复文档生成成功' }
+  } catch (error) {
+    return { success: false, message: error instanceof Error ? error.message : '生成失败' }
+  }
+}
+
+export async function deleteSupplementaryReplyAction(id: string) {
+  const result = await serverApiDelete(`/api/v1/registration/supplementary-replies/${id}`)
+  revalidatePath('/registration/supplementary-reply')
+  return result
 }
 
 export async function generateAuthorizationLetter(
   formData: FormData,
   data: AuthorizationLetterCreateInput
-): Promise<{ success: boolean; message: string; data?: any }> {
+): Promise<{ success: boolean; message: string; data?: { message?: string } | null }> {
   try {
     // 构建 multipart/form-data
     const submitData = new FormData()
@@ -51,27 +154,15 @@ export async function generateAuthorizationLetter(
       submitData.append('replacements', replacements as string)
     }
 
-    const response = await fetch(`${API_BASE_URL}/api/v1/registration/authorization-letters/generate`, {
-      method: 'POST',
-      body: submitData,
-    })
-
-    if (!response.ok) {
-      const errorBody = await response.text().catch(() => '')
-      let errorMessage = `请求失败: ${response.status} ${response.statusText}`
-      try {
-        const errorJson = JSON.parse(errorBody)
-        if (errorJson.message) errorMessage = errorJson.message
-      } catch {}
-      throw new Error(errorMessage)
-    }
-
-    const json = await response.json()
+    const result = await serverApiPostFormData<{ message?: string }>(
+      '/api/v1/registration/authorization-letters/generate',
+      submitData
+    )
     revalidatePath('/registration')
     return {
       success: true,
-      message: json.message || '授权书生成成功',
-      data: json.data,
+      message: result?.message || '授权书生成成功',
+      data: result,
     }
   } catch (error) {
     return {
@@ -82,188 +173,428 @@ export async function generateAuthorizationLetter(
 }
 
 export async function deleteAuthorizationLetter(id: string) {
-  const result = await actionFetch(`${API_BASE_URL}/api/v1/registration/authorization-letters/${id}`, {
-    method: 'DELETE',
-  })
+  const result = await serverApiDelete(`/api/v1/registration/authorization-letters/${id}`)
   revalidatePath('/registration')
   return result
 }
 
-export async function generateSupplementaryReply(
-  formData: FormData,
-  data: {
-    drug_name?: string
-    registration_number?: string
-    acceptance_number?: string
-    company_name?: string
-    remarks?: string
-  }
-): Promise<{ success: boolean; message: string; data?: any }> {
-  try {
-    const submitData = new FormData()
-    submitData.append('notice', formData.get('notice') as File)
-    
-    const template = formData.get('template')
-    if (template) {
-      submitData.append('template', template as File)
-    }
-    
-    if (data.drug_name) submitData.append('drug_name', data.drug_name)
-    if (data.registration_number) submitData.append('registration_number', data.registration_number)
-    if (data.acceptance_number) submitData.append('acceptance_number', data.acceptance_number)
-    if (data.company_name) submitData.append('company_name', data.company_name)
-    if (data.remarks) submitData.append('remarks', data.remarks)
-
-    const response = await fetch(`${API_BASE_URL}/api/v1/registration/supplementary-replies/generate`, {
-      method: 'POST',
-      body: submitData,
-    })
-
-    if (!response.ok) {
-      const errorBody = await response.text().catch(() => '')
-      let errorMessage = `请求失败: ${response.status} ${response.statusText}`
-      try {
-        const errorJson = JSON.parse(errorBody)
-        if (errorJson.message) errorMessage = errorJson.message
-      } catch {}
-      throw new Error(errorMessage)
-    }
-
-    const json = await response.json()
-    revalidatePath('/registration')
-    return {
-      success: true,
-      message: json.message || '发补回复文档生成成功',
-      data: json.data,
-    }
-  } catch (error) {
-    return {
-      success: false,
-      message: error instanceof Error ? error.message : '生成发补回复文档失败',
-    }
-  }
-}
-
-export async function deleteSupplementaryReplyAction(id: string) {
-  const result = await actionFetch(`${API_BASE_URL}/api/v1/registration/supplementary-replies/${id}`, {
-    method: 'DELETE',
-  })
-  revalidatePath('/registration')
+export async function createAuthorizationLedgerMain(data: AuthorizationLedgerMainCreateInput) {
+  const result = await serverApiPost('/api/v1/registration/authorization-letters/ledger/mains', data)
+  revalidatePath('/registration/authorization-letter')
   return result
 }
 
-export async function generateReferenceStandard(
-  formData: FormData,
-  data: {
-    drug_name: string
-    reference_substance_name?: string
-    batch_number?: string
-    manufacturer?: string
-    english_name?: string
-    molecular_formula?: string
-    molecular_weight?: string
-    cas_number?: string
-    content?: string
-    moisture?: string
-    rsd?: string
-    expiration_date?: string
-    storage_condition?: string
-    remarks?: string
-  }
-): Promise<{ success: boolean; message: string; data?: any }> {
-  try {
-    const submitData = new FormData()
-    submitData.append('coa', formData.get('coa') as File)
-    submitData.append('drug_name', data.drug_name)
-    
-    if (data.reference_substance_name) submitData.append('reference_substance_name', data.reference_substance_name)
-    if (data.batch_number) submitData.append('batch_number', data.batch_number)
-    if (data.manufacturer) submitData.append('manufacturer', data.manufacturer)
-    if (data.english_name) submitData.append('english_name', data.english_name)
-    if (data.molecular_formula) submitData.append('molecular_formula', data.molecular_formula)
-    if (data.molecular_weight) submitData.append('molecular_weight', data.molecular_weight)
-    if (data.cas_number) submitData.append('cas_number', data.cas_number)
-    if (data.content) submitData.append('content', data.content)
-    if (data.moisture) submitData.append('moisture', data.moisture)
-    if (data.rsd) submitData.append('rsd', data.rsd)
-    if (data.expiration_date) submitData.append('expiration_date', data.expiration_date)
-    if (data.storage_condition) submitData.append('storage_condition', data.storage_condition)
-    if (data.remarks) submitData.append('remarks', data.remarks)
-
-    const response = await fetch(`${API_BASE_URL}/api/v1/registration/reference-standards/generate`, {
-      method: 'POST',
-      body: submitData,
-    })
-
-    if (!response.ok) {
-      const errorBody = await response.text().catch(() => '')
-      let errorMessage = `请求失败: ${response.status} ${response.statusText}`
-      try {
-        const errorJson = JSON.parse(errorBody)
-        if (errorJson.message) errorMessage = errorJson.message
-      } catch {}
-      throw new Error(errorMessage)
-    }
-
-    const json = await response.json()
-    revalidatePath('/registration')
-    return {
-      success: true,
-      message: json.message || '对照物质说明表生成成功',
-      data: json.data,
-    }
-  } catch (error) {
-    return {
-      success: false,
-      message: error instanceof Error ? error.message : '生成对照物质说明表失败',
-    }
-  }
-}
-
-export async function deleteReferenceStandardAction(id: string) {
-  const result = await actionFetch(`${API_BASE_URL}/api/v1/registration/reference-standards/${id}`, {
-    method: 'DELETE',
-  })
-  revalidatePath('/registration')
-  return result
-}
-
-export async function fetchAuthorizationLettersServer(params: { page: number; page_size: number }) {
-  const searchParams = new URLSearchParams({
-    page: params.page.toString(),
-    page_size: params.page_size.toString(),
-  })
-  const result = await actionFetch<any>(
-    `${API_BASE_URL}/api/v1/registration/authorization-letters?${searchParams.toString()}`
+export async function createAuthorizationLedgerUpdate(
+  mainId: string,
+  data: AuthorizationLedgerUpdateCreateInput
+) {
+  const result = await serverApiPost(
+    `/api/v1/registration/authorization-letters/ledger/mains/${mainId}/updates`,
+    data
   )
+  revalidatePath('/registration/authorization-letter')
   return result
 }
 
-export async function fetchProductsServer() {
-  const result = await actionFetch<any>(
-    `${API_BASE_URL}/api/v1/registration/authorization-letters/products`
+export async function updateAuthorizationLedgerMain(
+  id: string,
+  data: AuthorizationLedgerMainUpdateInput
+) {
+  const result = await serverApiPatch(
+    `/api/v1/registration/authorization-letters/ledger/mains/${id}`,
+    data
   )
+  revalidatePath('/registration/authorization-letter')
   return result
 }
 
-export async function fetchReferenceStandardsServer(params: { page: number; page_size: number }) {
-  const searchParams = new URLSearchParams({
-    page: params.page.toString(),
-    page_size: params.page_size.toString(),
-  })
-  const result = await actionFetch<any>(
-    `${API_BASE_URL}/api/v1/registration/reference-standards?${searchParams.toString()}`
+export async function updateAuthorizationLedgerUpdate(
+  id: string,
+  data: AuthorizationLedgerUpdateUpdateInput
+) {
+  const result = await serverApiPatch(
+    `/api/v1/registration/authorization-letters/ledger/updates/${id}`,
+    data
   )
+  revalidatePath('/registration/authorization-letter')
   return result
 }
 
-export async function fetchSupplementaryRepliesServer(params: { page: number; page_size: number }) {
-  const searchParams = new URLSearchParams({
-    page: params.page.toString(),
-    page_size: params.page_size.toString(),
-  })
-  const result = await actionFetch<any>(
-    `${API_BASE_URL}/api/v1/registration/supplementary-replies?${searchParams.toString()}`
+export async function deleteAuthorizationLedgerMain(id: string) {
+  const result = await serverApiDelete(
+    `/api/v1/registration/authorization-letters/ledger/mains/${id}`
+  )
+  revalidatePath('/registration/authorization-letter')
+  return result
+}
+
+export async function deleteAuthorizationLedgerUpdate(id: string) {
+  const result = await serverApiDelete(
+    `/api/v1/registration/authorization-letters/ledger/updates/${id}`
+  )
+  revalidatePath('/registration/authorization-letter')
+  return result
+}
+
+export async function createAuthorizationFdaEntry(data: AuthorizationFdaEntryInput) {
+  const result = await serverApiPost('/api/v1/registration/authorization-letters/fda', data)
+  revalidatePath('/registration/authorization-letter')
+  return result
+}
+
+export async function updateAuthorizationFdaEntry(
+  id: string,
+  data: AuthorizationFdaEntryUpdateInput
+) {
+  const result = await serverApiPut(
+    `/api/v1/registration/authorization-letters/fda/${id}`,
+    data
+  )
+  revalidatePath('/registration/authorization-letter')
+  return result
+}
+
+export async function deleteAuthorizationFdaEntry(id: string) {
+  const result = await serverApiDelete(
+    `/api/v1/registration/authorization-letters/fda/${id}`
+  )
+  revalidatePath('/registration/authorization-letter')
+  return result
+}
+
+export async function createCertificateEntry(data: CertificateEntryInput) {
+  const result = await serverApiPost('/api/v1/registration/certificate-management/entries', data)
+  revalidatePath('/registration/certificate-management')
+  revalidatePath(`/registration/certificate-management/${data.sheet_key}`)
+  return result
+}
+
+export async function updateCertificateEntry(
+  id: string,
+  sheetKey: string,
+  data: Partial<CertificateEntryInput>
+) {
+  const result = await serverApiPut(
+    `/api/v1/registration/certificate-management/entries/${id}`,
+    data
+  )
+  revalidatePath('/registration/certificate-management')
+  revalidatePath(`/registration/certificate-management/${sheetKey}`)
+  return result
+}
+
+export async function deleteCertificateEntry(id: string, sheetKey: string) {
+  const result = await serverApiDelete(
+    `/api/v1/registration/certificate-management/entries/${id}`
+  )
+  revalidatePath('/registration/certificate-management')
+  revalidatePath(`/registration/certificate-management/${sheetKey}`)
+  return result
+}
+
+export async function updateCertificateReminderSettings(
+  data: CertificateReminderSettingInput
+) {
+  const result = await serverApiPut(
+    '/api/v1/registration/certificate-management/reminder-settings',
+    data
+  )
+  revalidatePath('/registration/certificate-management')
+  return result
+}
+
+export async function importCertificateWorkbook(formData: FormData) {
+  const result = await serverApiPostFormData<CertificateWorkbookImportResult>(
+    '/api/v1/registration/certificate-management/workbook/import',
+    formData
+  )
+  revalidatePath('/registration/certificate-management')
+  return result
+}
+
+export async function createProjectLedgerEntry(data: ProjectLedgerEntryInput) {
+  const result = await serverApiPost('/api/v1/registration/project-ledger/entries', data)
+  revalidatePath('/registration/project-ledger')
+  revalidatePath(`/registration/project-ledger/${data.sheet_key}`)
+  return result
+}
+
+export async function updateProjectLedgerEntry(
+  recordId: string,
+  data: ProjectLedgerEntryInput
+) {
+  const result = await serverApiPut(
+    `/api/v1/registration/project-ledger/entries/${recordId}`,
+    data
+  )
+  revalidatePath('/registration/project-ledger')
+  revalidatePath(`/registration/project-ledger/${data.sheet_key}`)
+  return result
+}
+
+export async function createProjectLedgerSubRecord(
+  recordId: string,
+  data: ProjectLedgerEntryInput
+) {
+  const result = await serverApiPost(
+    `/api/v1/registration/project-ledger/entries/${recordId}/sub-records`,
+    data
+  )
+  revalidatePath('/registration/project-ledger')
+  revalidatePath(`/registration/project-ledger/${data.sheet_key}`)
+  return result
+}
+
+export async function deleteProjectLedgerEntry(recordId: string, sheetKey: string) {
+  const result = await serverApiDelete(
+    `/api/v1/registration/project-ledger/entries/${recordId}`
+  )
+  revalidatePath('/registration/project-ledger')
+  revalidatePath(`/registration/project-ledger/${sheetKey}`)
+  return result
+}
+
+export async function importProjectLedgerWorkbook(formData: FormData) {
+  const result = await serverApiPostFormData<ProjectLedgerWorkbookImportResult>(
+    '/api/v1/registration/project-ledger/workbook/import',
+    formData
+  )
+  revalidatePath('/registration/project-ledger')
+  for (const sheet of registrationProjectLedgerSheets) {
+    revalidatePath(sheet.path)
+  }
+  return result
+}
+
+export async function createDeclarationProgressEntry(data: DeclarationProgressEntryInput) {
+  const result = await serverApiPost(
+    '/api/v1/registration/declaration-progress/entries',
+    data
+  )
+  revalidatePath('/registration/declaration-progress')
+  revalidatePath(`/registration/declaration-progress/${data.sheet_key}`)
+  return result
+}
+
+export async function updateDeclarationProgressEntry(
+  recordId: string,
+  data: DeclarationProgressEntryInput
+) {
+  const result = await serverApiPut(
+    `/api/v1/registration/declaration-progress/entries/${recordId}`,
+    data
+  )
+  revalidatePath('/registration/declaration-progress')
+  revalidatePath(`/registration/declaration-progress/${data.sheet_key}`)
+  return result
+}
+
+export async function createDeclarationProgressSubRecord(
+  recordId: string,
+  data: DeclarationProgressEntryInput
+) {
+  const result = await serverApiPost(
+    `/api/v1/registration/declaration-progress/entries/${recordId}/sub-records`,
+    data
+  )
+  revalidatePath('/registration/declaration-progress')
+  revalidatePath(`/registration/declaration-progress/${data.sheet_key}`)
+  return result
+}
+
+export async function deleteDeclarationProgressEntry(recordId: string, sheetKey: string) {
+  const result = await serverApiDelete(
+    `/api/v1/registration/declaration-progress/entries/${recordId}`
+  )
+  revalidatePath('/registration/declaration-progress')
+  revalidatePath(`/registration/declaration-progress/${sheetKey}`)
+  return result
+}
+
+export async function importDeclarationProgressWorkbook(formData: FormData) {
+  const result = await serverApiPostFormData<DeclarationProgressWorkbookImportResult>(
+    '/api/v1/registration/declaration-progress/workbook/import',
+    formData
+  )
+  revalidatePath('/registration/declaration-progress')
+  return result
+}
+
+// ── Fee actions ────────────────────────────────────────────────────────
+
+export async function createFeeEntry(data: FeeEntryCreate) {
+  const result = await serverApiPost(
+    '/api/v1/registration/fees/entries',
+    data
+  )
+  revalidatePath('/registration/fees')
+  revalidatePath('/registration/fees/ledger')
+  revalidatePath('/registration/fees/contacts')
+  return result
+}
+
+export async function updateFeeEntry(id: string, data: FeeEntryUpdate) {
+  const result = await serverApiPut(
+    `/api/v1/registration/fees/entries/${id}`,
+    data
+  )
+  revalidatePath('/registration/fees')
+  revalidatePath('/registration/fees/ledger')
+  return result
+}
+
+export async function deleteFeeEntry(id: string) {
+  const result = await serverApiDelete(
+    `/api/v1/registration/fees/entries/${id}`
+  )
+  revalidatePath('/registration/fees')
+  revalidatePath('/registration/fees/ledger')
+  return result
+}
+
+// ── Knowledge actions ──────────────────────────────────────────────────
+
+export async function createKnowledgeCategory(data: KnowledgeCategoryCreate) {
+  const result = await serverApiPost(
+    '/api/v1/registration/knowledge/categories',
+    data
+  )
+  revalidatePath('/registration/knowledge')
+  return result
+}
+
+export async function updateKnowledgeCategory(id: string, data: KnowledgeCategoryUpdate) {
+  const result = await serverApiPut(
+    `/api/v1/registration/knowledge/categories/${id}`,
+    data
+  )
+  revalidatePath('/registration/knowledge')
+  return result
+}
+
+export async function deleteKnowledgeCategory(id: string) {
+  const result = await serverApiDelete(
+    `/api/v1/registration/knowledge/categories/${id}`
+  )
+  revalidatePath('/registration/knowledge')
+  return result
+}
+
+export async function createKnowledgeArticle(data: KnowledgeArticleCreate): Promise<KnowledgeArticle | null> {
+  const result = await serverApiPost<KnowledgeArticle>(
+    '/api/v1/registration/knowledge/articles',
+    data
+  )
+  revalidatePath('/registration/knowledge')
+  return result
+}
+
+export async function updateKnowledgeArticle(id: string, data: KnowledgeArticleUpdate) {
+  const result = await serverApiPut(
+    `/api/v1/registration/knowledge/articles/${id}`,
+    data
+  )
+  revalidatePath('/registration/knowledge')
+  return result
+}
+
+export async function deleteKnowledgeArticle(id: string) {
+  const result = await serverApiDelete(
+    `/api/v1/registration/knowledge/articles/${id}`
+  )
+  revalidatePath('/registration/knowledge')
+  return result
+}
+
+// ── Inspection contact actions ─────────────────────────────────────────
+
+export async function createInspectionContact(data: InspectionContactCreate) {
+  const result = await serverApiPost(
+    '/api/v1/registration/fees/inspection-contacts',
+    data
+  )
+  revalidatePath('/registration/fees')
+  revalidatePath('/registration/fees/contacts')
+  return result
+}
+
+export async function updateInspectionContact(id: string, data: InspectionContactUpdate) {
+  const result = await serverApiPut(
+    `/api/v1/registration/fees/inspection-contacts/${id}`,
+    data
+  )
+  revalidatePath('/registration/fees')
+  revalidatePath('/registration/fees/contacts')
+  return result
+}
+
+export async function deleteInspectionContact(id: string) {
+  const result = await serverApiDelete(
+    `/api/v1/registration/fees/inspection-contacts/${id}`
+  )
+  revalidatePath('/registration/fees')
+  revalidatePath('/registration/fees/contacts')
+  return result
+}
+
+// ── Knowledge comment actions ──────────────────────────────────────────
+
+export async function createKnowledgeComment(articleId: string, data: KnowledgeCommentCreate) {
+  const result = await serverApiPost(
+    `/api/v1/registration/knowledge/articles/${articleId}/comments`,
+    data
+  )
+  revalidatePath(`/registration/knowledge/${articleId}`)
+  return result
+}
+
+export async function updateKnowledgeComment(id: string, data: KnowledgeCommentUpdate) {
+  const result = await serverApiPut(
+    `/api/v1/registration/knowledge/comments/${id}`,
+    data
+  )
+  revalidatePath('/registration/knowledge')
+  return result
+}
+
+export async function deleteKnowledgeComment(id: string, articleId: string) {
+  const result = await serverApiDelete(
+    `/api/v1/registration/knowledge/comments/${id}`
+  )
+  revalidatePath(`/registration/knowledge/${articleId}`)
+  return result
+}
+
+export async function generateAttachmentSummary(attachmentId: string, articleId: string) {
+  const result = await serverApiPost(
+    `/api/v1/registration/knowledge/attachments/${attachmentId}/summarize`,
+    {}
+  )
+  revalidatePath(`/registration/knowledge/${articleId}`)
+  return result
+}
+
+export async function uploadKnowledgeAttachment(articleId: string, formData: FormData) {
+  const result = await serverApiPostFormData(
+    `/api/v1/registration/knowledge/articles/${articleId}/attachments`,
+    formData
+  )
+  revalidatePath(`/registration/knowledge/${articleId}`)
+  return result
+}
+
+export async function deleteKnowledgeAttachment(attachmentId: string, articleId: string) {
+  const result = await serverApiDelete(
+    `/api/v1/registration/knowledge/attachments/${attachmentId}`
+  )
+  revalidatePath(`/registration/knowledge/${articleId}`)
+  return result
+}
+
+export async function extractArticleFromFile(formData: FormData) {
+  const result = await serverApiPostFormData(
+    '/api/v1/registration/knowledge/articles/extract',
+    formData
   )
   return result
 }

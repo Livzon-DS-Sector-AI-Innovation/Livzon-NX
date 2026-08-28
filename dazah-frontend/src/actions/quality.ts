@@ -27,6 +27,22 @@ import {
   UpdateFeishuDeviationLedgerRecordRequest,
   DepartmentContactListResponse,
   QualityAiAnalysisLog,
+  CreateSupplierQualificationRequest,
+  UpdateSupplierQualificationRequest,
+  CreateDocumentDepartmentRequest,
+  UpdateDocumentDepartmentRequest,
+  CreateDocumentEntryRequest,
+  UpdateDocumentEntryRequest,
+  DocumentCatalogImportResult,
+  UploadDocumentEntryAttachmentResult,
+  BatchImportDocumentAttachmentsResult,
+  DocumentEntryResolveItem,
+  DocumentEntryResolveRequest,
+  FeishuValidationPullResult,
+  InspectionFeishuSyncResponse,
+  CreateOosOotRecordRequest,
+  CloseOosOotRecordRequest,
+  OosOotFeishuSyncOut,
 } from '@/types/quality'
 import type { components } from '@/types/generated/schema'
 import type { LabelVerification } from '@/types/label-verification'
@@ -43,6 +59,10 @@ type ChangeActionPlanFormPayload = Partial<ChangeActionPlanCreatePayload> & Reco
 type QualityFeishuAppSettingsUpdatePayload = components['schemas']['UpdateQualityFeishuAppSettingsRequest']
 type QualityFeishuEntitySettingUpdatePayload = components['schemas']['UpdateQualityFeishuEntitySettingRequest']
 type ApplyDeviationAiSessionPayload = components['schemas']['ApplyDeviationAiSessionRequest']
+type ExternalComplaintOut = components['schemas']['ComplaintOut']
+type ExternalReturnRecallOut = components['schemas']['ReturnRecallOut']
+type ExternalSupplierQualificationCreate =
+  components['schemas']['app__modules__quality__schemas__external_quality__CreateSupplierQualificationRequest']
 
 type QueryValue = string | number | boolean | null | undefined
 type UntypedFeishuPayload = Record<string, unknown>
@@ -592,8 +612,8 @@ export async function testQualityFeishuEntitySetting(entityCode: string): Promis
 export async function syncInspectionRecordToFeishu(
   resourceCode: string,
   recordId: string,
-): Promise<components['schemas']['InspectionFeishuSyncResponse']> {
-  const result = await actionFetch<components['schemas']['InspectionFeishuSyncResponse']>(
+): Promise<InspectionFeishuSyncResponse> {
+  const result = await actionFetch<InspectionFeishuSyncResponse>(
     `${API_BASE_URL}/api/v1/quality/inspection-resources/${resourceCode}/${recordId}/sync-to-feishu`,
     { method: 'POST' },
   )
@@ -604,7 +624,7 @@ export async function syncInspectionRecordToFeishu(
 
 // ============ OOS/OOT Actions ============
 export async function createOosOotRecord(
-  data: components['schemas']['CreateOosOotRecordRequest'],
+  data: CreateOosOotRecordRequest,
 ): Promise<components['schemas']['OosOotRecordOut']> {
   const result = await actionFetch<components['schemas']['OosOotRecordOut']>(
     `${API_BASE_URL}/api/v1/quality/oos-oot/records`,
@@ -629,7 +649,7 @@ export async function startOosOotInvestigation(
 
 export async function closeOosOotRecord(
   recordId: string,
-  data: components['schemas']['CloseOosOotRecordRequest'],
+  data: CloseOosOotRecordRequest,
 ): Promise<components['schemas']['OosOotRecordOut']> {
   const result = await actionFetch<components['schemas']['OosOotRecordOut']>(
     `${API_BASE_URL}/api/v1/quality/oos-oot/records/${recordId}/close`,
@@ -642,8 +662,8 @@ export async function closeOosOotRecord(
 
 export async function syncOosOotRecordToFeishu(
   recordId: string,
-): Promise<components['schemas']['OosOotFeishuSyncOut']> {
-  const result = await actionFetch<components['schemas']['OosOotFeishuSyncOut']>(
+): Promise<OosOotFeishuSyncOut> {
+  const result = await actionFetch<OosOotFeishuSyncOut>(
     `${API_BASE_URL}/api/v1/quality/oos-oot/records/${recordId}/sync-to-feishu`,
     { method: 'POST' },
   )
@@ -655,8 +675,9 @@ export async function syncOosOotRecordToFeishu(
 export async function createOotLimitProduct(
   data: components['schemas']['CreateOotLimitProductRequest'],
 ): Promise<components['schemas']['OotLimitProductOut']> {
+  const isMigratedLedger = 'document_title' in data
   const result = await actionFetch<components['schemas']['OotLimitProductOut']>(
-    `${API_BASE_URL}/api/v1/quality/oos-oot/oot-limits/products`,
+    `${API_BASE_URL}/api/v1/quality/oos-oot/${isMigratedLedger ? 'oot-limit-products' : 'oot-limits/products'}`,
     { method: 'POST', body: JSON.stringify(data) },
   )
   if (!result) throw new Error('未收到 OOT 限度产品创建结果')
@@ -665,12 +686,16 @@ export async function createOotLimitProduct(
 }
 
 export async function createOotLimitItem(
-  productId: string,
-  data: components['schemas']['CreateOotLimitItemRequest'],
+  productIdOrData: string | components['schemas']['CreateOotLimitItemRequest'],
+  data?: Record<string, unknown>,
 ): Promise<components['schemas']['OotLimitItemOut']> {
+  const migratedPayload = typeof productIdOrData === 'object' ? productIdOrData : undefined
+  const path = migratedPayload
+    ? '/api/v1/quality/oos-oot/oot-limit-items'
+    : `/api/v1/quality/oos-oot/oot-limits/products/${productIdOrData}/items`
   const result = await actionFetch<components['schemas']['OotLimitItemOut']>(
-    `${API_BASE_URL}/api/v1/quality/oos-oot/oot-limits/products/${productId}/items`,
-    { method: 'POST', body: JSON.stringify(data) },
+    `${API_BASE_URL}${path}`,
+    { method: 'POST', body: JSON.stringify(migratedPayload ?? data) },
   )
   if (!result) throw new Error('未收到 OOT 限度项目创建结果')
   revalidatePath('/quality/oos-oot')
@@ -679,8 +704,8 @@ export async function createOotLimitItem(
 
 export async function syncOotLimitProductToFeishu(
   productId: string,
-): Promise<components['schemas']['OosOotFeishuSyncOut']> {
-  const result = await actionFetch<components['schemas']['OosOotFeishuSyncOut']>(
+): Promise<OosOotFeishuSyncOut> {
+  const result = await actionFetch<OosOotFeishuSyncOut>(
     `${API_BASE_URL}/api/v1/quality/oos-oot/oot-limits/products/${productId}/sync-to-feishu`,
     { method: 'POST' },
   )
@@ -704,7 +729,7 @@ export async function createQualitySupplier(
 
 export async function createQualitySupplierQualification(
   supplierId: string,
-  data: components['schemas']['CreateSupplierQualificationRequest'],
+  data: ExternalSupplierQualificationCreate,
 ): Promise<components['schemas']['SupplierQualificationOut']> {
   const result = await actionFetch<components['schemas']['SupplierQualificationOut']>(
     `${API_BASE_URL}/api/v1/quality/suppliers/${supplierId}/qualifications`,
@@ -717,8 +742,8 @@ export async function createQualitySupplierQualification(
 
 export async function createQualityComplaint(
   data: components['schemas']['CreateComplaintRequest'],
-): Promise<components['schemas']['ComplaintOut']> {
-  const result = await actionFetch<components['schemas']['ComplaintOut']>(
+): Promise<ExternalComplaintOut> {
+  const result = await actionFetch<ExternalComplaintOut>(
     `${API_BASE_URL}/api/v1/quality/complaints`,
     { method: 'POST', body: JSON.stringify(data) },
   )
@@ -729,8 +754,8 @@ export async function createQualityComplaint(
 
 export async function startQualityComplaintInvestigation(
   complaintId: string,
-): Promise<components['schemas']['ComplaintOut']> {
-  const result = await actionFetch<components['schemas']['ComplaintOut']>(
+): Promise<ExternalComplaintOut> {
+  const result = await actionFetch<ExternalComplaintOut>(
     `${API_BASE_URL}/api/v1/quality/complaints/${complaintId}/start-investigation`,
     { method: 'POST' },
   )
@@ -742,8 +767,8 @@ export async function startQualityComplaintInvestigation(
 export async function respondQualityComplaint(
   complaintId: string,
   data: components['schemas']['RespondComplaintRequest'],
-): Promise<components['schemas']['ComplaintOut']> {
-  const result = await actionFetch<components['schemas']['ComplaintOut']>(
+): Promise<ExternalComplaintOut> {
+  const result = await actionFetch<ExternalComplaintOut>(
     `${API_BASE_URL}/api/v1/quality/complaints/${complaintId}/respond`,
     { method: 'POST', body: JSON.stringify(data) },
   )
@@ -754,8 +779,8 @@ export async function respondQualityComplaint(
 
 export async function closeQualityComplaint(
   complaintId: string,
-): Promise<components['schemas']['ComplaintOut']> {
-  const result = await actionFetch<components['schemas']['ComplaintOut']>(
+): Promise<ExternalComplaintOut> {
+  const result = await actionFetch<ExternalComplaintOut>(
     `${API_BASE_URL}/api/v1/quality/complaints/${complaintId}/close`,
     { method: 'POST' },
   )
@@ -766,8 +791,8 @@ export async function closeQualityComplaint(
 
 export async function createQualityReturnRecall(
   data: components['schemas']['CreateReturnRecallRequest'],
-): Promise<components['schemas']['ReturnRecallOut']> {
-  const result = await actionFetch<components['schemas']['ReturnRecallOut']>(
+): Promise<ExternalReturnRecallOut> {
+  const result = await actionFetch<ExternalReturnRecallOut>(
     `${API_BASE_URL}/api/v1/quality/return-recalls`,
     { method: 'POST', body: JSON.stringify(data) },
   )
@@ -778,8 +803,8 @@ export async function createQualityReturnRecall(
 
 export async function startQualityReturnRecallAssessment(
   recordId: string,
-): Promise<components['schemas']['ReturnRecallOut']> {
-  const result = await actionFetch<components['schemas']['ReturnRecallOut']>(
+): Promise<ExternalReturnRecallOut> {
+  const result = await actionFetch<ExternalReturnRecallOut>(
     `${API_BASE_URL}/api/v1/quality/return-recalls/${recordId}/start-assessment`,
     { method: 'POST' },
   )
@@ -791,8 +816,8 @@ export async function startQualityReturnRecallAssessment(
 export async function startQualityReturnRecallProcessing(
   recordId: string,
   data: components['schemas']['StartReturnRecallProcessingRequest'],
-): Promise<components['schemas']['ReturnRecallOut']> {
-  const result = await actionFetch<components['schemas']['ReturnRecallOut']>(
+): Promise<ExternalReturnRecallOut> {
+  const result = await actionFetch<ExternalReturnRecallOut>(
     `${API_BASE_URL}/api/v1/quality/return-recalls/${recordId}/start-processing`,
     { method: 'POST', body: JSON.stringify(data) },
   )
@@ -804,8 +829,8 @@ export async function startQualityReturnRecallProcessing(
 export async function completeQualityReturnRecall(
   recordId: string,
   data: components['schemas']['CompleteReturnRecallRequest'],
-): Promise<components['schemas']['ReturnRecallOut']> {
-  const result = await actionFetch<components['schemas']['ReturnRecallOut']>(
+): Promise<ExternalReturnRecallOut> {
+  const result = await actionFetch<ExternalReturnRecallOut>(
     `${API_BASE_URL}/api/v1/quality/return-recalls/${recordId}/complete`,
     { method: 'POST', body: JSON.stringify(data) },
   )
@@ -815,7 +840,7 @@ export async function completeQualityReturnRecall(
 }
 
 export async function createQualityProductRecord(
-  data: components['schemas']['CreateProductQualityRecordRequest'],
+  data: Record<string, unknown>,
 ): Promise<components['schemas']['ProductQualityRecordOut']> {
   const result = await actionFetch<components['schemas']['ProductQualityRecordOut']>(
     `${API_BASE_URL}/api/v1/quality/product-quality`,
@@ -1138,4 +1163,249 @@ export async function applyQualityAiLog(id: string, fieldKeys: string[]) {
     method: 'POST',
     body: JSON.stringify({ field_keys: fieldKeys }),
   })
+}
+
+// ============ Migrated quality module Server Actions ============
+const OOS_OOT_PATHS = [
+  '/quality',
+  '/quality/oos-oot',
+  '/quality/oos-oot/report-records',
+  '/quality/oos-oot/investigation-push',
+  '/quality/oos-oot/oos-ledger',
+  '/quality/oos-oot/oot-ledger',
+  '/quality/oos-oot/oot-limits',
+  '/quality/oos-oot/product-departments',
+]
+const COMPLAINT_RETURN_PATHS = [
+  '/quality',
+  '/quality/complaints',
+  '/quality/complaints/ledger',
+  '/quality/return-recalls',
+  '/quality/return-recalls/return-application',
+  '/quality/return-recalls/return-ledger',
+]
+
+function revalidateQualityPaths(paths: string[]) {
+  paths.forEach((path) => revalidatePath(path))
+}
+
+async function mutateMigratedQuality<T>(
+  path: string,
+  method: 'POST' | 'PUT' | 'DELETE',
+  data: Record<string, unknown> | undefined,
+  revalidatePaths: string[]
+): Promise<T | null> {
+  const result = await actionFetch<T>(`${API_BASE_URL}${path}`, {
+    method,
+    ...(data ? { body: JSON.stringify(data) } : {}),
+  })
+  revalidateQualityPaths(revalidatePaths)
+  return result
+}
+
+export async function resolveDocumentEntryContent(names: string[]): Promise<DocumentEntryResolveItem[]> {
+  const result = await actionFetch<components['schemas']['DocumentEntryResolveResult']>(
+    `${API_BASE_URL}/api/v1/quality/document-entries/resolve-content`,
+    { method: 'POST', body: JSON.stringify({ names } satisfies DocumentEntryResolveRequest) }
+  )
+  return result?.results ?? []
+}
+
+export async function pullOosOotReportRecords() {
+  return mutateMigratedQuality('/api/v1/quality/oos-oot/report-records/pull', 'POST', undefined, OOS_OOT_PATHS)
+}
+export async function createOosOotReportRecord(data: Record<string, unknown>) {
+  return mutateMigratedQuality('/api/v1/quality/oos-oot/report-records', 'POST', data, OOS_OOT_PATHS)
+}
+export async function updateOosOotReportRecord(recordId: string, data: Record<string, unknown>) {
+  return mutateMigratedQuality(`/api/v1/quality/oos-oot/report-records/${recordId}`, 'PUT', data, OOS_OOT_PATHS)
+}
+export async function deleteOosOotReportRecord(recordId: string) {
+  return mutateMigratedQuality(`/api/v1/quality/oos-oot/report-records/${recordId}`, 'DELETE', undefined, OOS_OOT_PATHS)
+}
+export async function pullOosOotInvestigationPushRecords() {
+  return mutateMigratedQuality('/api/v1/quality/oos-oot/investigation-push-records/pull', 'POST', undefined, OOS_OOT_PATHS)
+}
+export async function createOosOotInvestigationPushRecord(data: Record<string, unknown>) {
+  return mutateMigratedQuality('/api/v1/quality/oos-oot/investigation-push-records', 'POST', data, OOS_OOT_PATHS)
+}
+export async function updateOosOotInvestigationPushRecord(recordId: string, data: Record<string, unknown>) {
+  return mutateMigratedQuality(`/api/v1/quality/oos-oot/investigation-push-records/${recordId}`, 'PUT', data, OOS_OOT_PATHS)
+}
+export async function deleteOosOotInvestigationPushRecord(recordId: string) {
+  return mutateMigratedQuality(`/api/v1/quality/oos-oot/investigation-push-records/${recordId}`, 'DELETE', undefined, OOS_OOT_PATHS)
+}
+
+export async function pullOosLedgerRecords() {
+  return mutateMigratedQuality('/api/v1/quality/oos-oot/oos-ledger/pull', 'POST', undefined, OOS_OOT_PATHS)
+}
+export async function createOosLedgerRecord(data: Record<string, unknown>) {
+  return mutateMigratedQuality('/api/v1/quality/oos-oot/oos-ledger', 'POST', data, OOS_OOT_PATHS)
+}
+export async function updateOosLedgerRecord(recordId: string, data: Record<string, unknown>) {
+  return mutateMigratedQuality(`/api/v1/quality/oos-oot/oos-ledger/${recordId}`, 'PUT', data, OOS_OOT_PATHS)
+}
+export async function deleteOosLedgerRecord(recordId: string) {
+  return mutateMigratedQuality(`/api/v1/quality/oos-oot/oos-ledger/${recordId}`, 'DELETE', undefined, OOS_OOT_PATHS)
+}
+export async function pullOotLedgerRecords() {
+  return mutateMigratedQuality('/api/v1/quality/oos-oot/oot-ledger/pull', 'POST', undefined, OOS_OOT_PATHS)
+}
+export async function createOotLedgerRecord(data: Record<string, unknown>) {
+  return mutateMigratedQuality('/api/v1/quality/oos-oot/oot-ledger', 'POST', data, OOS_OOT_PATHS)
+}
+export async function updateOotLedgerRecord(recordId: string, data: Record<string, unknown>) {
+  return mutateMigratedQuality(`/api/v1/quality/oos-oot/oot-ledger/${recordId}`, 'PUT', data, OOS_OOT_PATHS)
+}
+export async function deleteOotLedgerRecord(recordId: string) {
+  return mutateMigratedQuality(`/api/v1/quality/oos-oot/oot-ledger/${recordId}`, 'DELETE', undefined, OOS_OOT_PATHS)
+}
+export async function updateOotLimitProduct(productId: string, data: Record<string, unknown>) {
+  return mutateMigratedQuality(`/api/v1/quality/oos-oot/oot-limit-products/${productId}`, 'PUT', data, OOS_OOT_PATHS)
+}
+export async function deleteOotLimitProduct(productId: string) {
+  return mutateMigratedQuality(`/api/v1/quality/oos-oot/oot-limit-products/${productId}`, 'DELETE', undefined, OOS_OOT_PATHS)
+}
+export async function updateOotLimitItem(itemId: string, data: Record<string, unknown>) {
+  return mutateMigratedQuality(`/api/v1/quality/oos-oot/oot-limit-items/${itemId}`, 'PUT', data, OOS_OOT_PATHS)
+}
+export async function deleteOotLimitItem(itemId: string) {
+  return mutateMigratedQuality(`/api/v1/quality/oos-oot/oot-limit-items/${itemId}`, 'DELETE', undefined, OOS_OOT_PATHS)
+}
+export async function pullProductDepartmentRecords() {
+  return mutateMigratedQuality('/api/v1/quality/oos-oot/product-departments/pull', 'POST', undefined, OOS_OOT_PATHS)
+}
+export async function createProductDepartmentRecord(data: Record<string, unknown>) {
+  return mutateMigratedQuality('/api/v1/quality/oos-oot/product-departments', 'POST', data, OOS_OOT_PATHS)
+}
+export async function updateProductDepartmentRecord(recordId: string, data: Record<string, unknown>) {
+  return mutateMigratedQuality(`/api/v1/quality/oos-oot/product-departments/${recordId}`, 'PUT', data, OOS_OOT_PATHS)
+}
+export async function deleteProductDepartmentRecord(recordId: string) {
+  return mutateMigratedQuality(`/api/v1/quality/oos-oot/product-departments/${recordId}`, 'DELETE', undefined, OOS_OOT_PATHS)
+}
+
+export async function batchDeleteFeishuValidationsAction(recordIds: string[], validationType?: string) {
+  let deleted = 0
+  for (const recordId of recordIds) {
+    try {
+      await deleteFeishuValidationAction(recordId, validationType)
+      deleted += 1
+    } catch {
+      // Continue so a single stale Feishu record does not block the batch.
+    }
+  }
+  return { success: true, message: `已删除 ${deleted} 条记录` }
+}
+export async function pullFeishuValidationsAction(validationType?: string): Promise<FeishuValidationPullResult | null> {
+  const result = await pullFeishuValidations(validationType)
+  return result as FeishuValidationPullResult | null
+}
+
+export async function createComplaintLedgerRecord(data: Record<string, unknown>) {
+  return mutateMigratedQuality('/api/v1/quality/complaint-ledger', 'POST', data, COMPLAINT_RETURN_PATHS)
+}
+export async function updateComplaintLedgerRecord(recordId: string, data: Record<string, unknown>) {
+  return mutateMigratedQuality(`/api/v1/quality/complaint-ledger/${recordId}`, 'PUT', data, COMPLAINT_RETURN_PATHS)
+}
+export async function deleteComplaintLedgerRecord(recordId: string) {
+  return mutateMigratedQuality(`/api/v1/quality/complaint-ledger/${recordId}`, 'DELETE', undefined, COMPLAINT_RETURN_PATHS)
+}
+export async function pullComplaintLedgerRecords() {
+  return mutateMigratedQuality<{ synced: number; failed: number }>('/api/v1/quality/complaint-ledger/pull', 'POST', undefined, COMPLAINT_RETURN_PATHS)
+}
+export async function createReturnApplicationRecord(data: Record<string, unknown>) {
+  return mutateMigratedQuality('/api/v1/quality/return-application', 'POST', data, COMPLAINT_RETURN_PATHS)
+}
+export async function updateReturnApplicationRecord(recordId: string, data: Record<string, unknown>) {
+  return mutateMigratedQuality(`/api/v1/quality/return-application/${recordId}`, 'PUT', data, COMPLAINT_RETURN_PATHS)
+}
+export async function deleteReturnApplicationRecord(recordId: string) {
+  return mutateMigratedQuality(`/api/v1/quality/return-application/${recordId}`, 'DELETE', undefined, COMPLAINT_RETURN_PATHS)
+}
+export async function pullReturnApplicationRecords() {
+  return mutateMigratedQuality<{ synced: number; failed: number }>('/api/v1/quality/return-application/pull', 'POST', undefined, COMPLAINT_RETURN_PATHS)
+}
+export async function createReturnLedgerRecord(data: Record<string, unknown>) {
+  return mutateMigratedQuality('/api/v1/quality/return-ledger', 'POST', data, COMPLAINT_RETURN_PATHS)
+}
+export async function updateReturnLedgerRecord(recordId: string, data: Record<string, unknown>) {
+  return mutateMigratedQuality(`/api/v1/quality/return-ledger/${recordId}`, 'PUT', data, COMPLAINT_RETURN_PATHS)
+}
+export async function deleteReturnLedgerRecord(recordId: string) {
+  return mutateMigratedQuality(`/api/v1/quality/return-ledger/${recordId}`, 'DELETE', undefined, COMPLAINT_RETURN_PATHS)
+}
+export async function pullReturnLedgerRecords() {
+  return mutateMigratedQuality<{ synced: number; failed: number }>('/api/v1/quality/return-ledger/pull', 'POST', undefined, COMPLAINT_RETURN_PATHS)
+}
+
+export async function createProductQualityStandardAction(productCode: string, data: Record<string, unknown>) {
+  return mutateMigratedQuality(`/api/v1/quality/product-quality-standards/${productCode}`, 'POST', data, ['/quality', '/quality/product-quality'])
+}
+export async function updateProductQualityStandardAction(productCode: string, recordId: string, data: Record<string, unknown>) {
+  return mutateMigratedQuality(`/api/v1/quality/product-quality-standards/${productCode}/${recordId}`, 'PUT', data, ['/quality', '/quality/product-quality'])
+}
+export async function deleteProductQualityStandardAction(productCode: string, recordId: string) {
+  return mutateMigratedQuality(`/api/v1/quality/product-quality-standards/${productCode}/${recordId}`, 'DELETE', undefined, ['/quality', '/quality/product-quality'])
+}
+export async function pullProductQualityStandardsAction(productCode: string) {
+  return mutateMigratedQuality<{ synced: number; failed: number }>(`/api/v1/quality/product-quality-standards/${productCode}/pull`, 'POST', undefined, ['/quality', '/quality/product-quality'])
+}
+
+const SUPPLIER_PATHS = ['/quality/suppliers', '/quality/suppliers/qualification']
+export async function createSupplierQualification(data: CreateSupplierQualificationRequest) {
+  return mutateMigratedQuality('/api/v1/quality/supplier-qualification', 'POST', data as Record<string, unknown>, SUPPLIER_PATHS)
+}
+export async function updateSupplierQualification(recordId: string, data: UpdateSupplierQualificationRequest) {
+  return mutateMigratedQuality(`/api/v1/quality/supplier-qualification/${recordId}`, 'PUT', data as Record<string, unknown>, SUPPLIER_PATHS)
+}
+export async function deleteSupplierQualification(recordId: string) {
+  return mutateMigratedQuality(`/api/v1/quality/supplier-qualification/${recordId}`, 'DELETE', undefined, SUPPLIER_PATHS)
+}
+export async function pullSupplierQualifications() {
+  return mutateMigratedQuality<{ synced: number; failed: number }>('/api/v1/quality/supplier-qualification/pull', 'POST', undefined, SUPPLIER_PATHS)
+}
+
+const DOCUMENT_PATHS = ['/quality/documents']
+export async function createDocumentDepartment(data: CreateDocumentDepartmentRequest) {
+  return mutateMigratedQuality<{ id: string }>('/api/v1/quality/document-departments', 'POST', data as Record<string, unknown>, DOCUMENT_PATHS)
+}
+export async function updateDocumentDepartment(id: string, data: UpdateDocumentDepartmentRequest) {
+  return mutateMigratedQuality<{ id: string }>(`/api/v1/quality/document-departments/${id}`, 'PUT', data as Record<string, unknown>, DOCUMENT_PATHS)
+}
+export async function deleteDocumentDepartment(id: string) {
+  return mutateMigratedQuality(`/api/v1/quality/document-departments/${id}`, 'DELETE', undefined, DOCUMENT_PATHS)
+}
+export async function createDocumentEntry(data: CreateDocumentEntryRequest) {
+  return mutateMigratedQuality<{ id: string }>('/api/v1/quality/document-entries', 'POST', data as Record<string, unknown>, DOCUMENT_PATHS)
+}
+export async function updateDocumentEntry(id: string, data: UpdateDocumentEntryRequest) {
+  return mutateMigratedQuality<{ id: string }>(`/api/v1/quality/document-entries/${id}`, 'PUT', data as Record<string, unknown>, DOCUMENT_PATHS)
+}
+export async function deleteDocumentEntry(id: string) {
+  return mutateMigratedQuality(`/api/v1/quality/document-entries/${id}`, 'DELETE', undefined, DOCUMENT_PATHS)
+}
+export async function importDocumentCatalogExcel(formData: FormData): Promise<DocumentCatalogImportResult | null> {
+  const result = await actionFetchForm<DocumentCatalogImportResult>(`${API_BASE_URL}/api/v1/quality/document-catalog/import`, formData)
+  revalidateQualityPaths(DOCUMENT_PATHS)
+  return result
+}
+export async function batchImportDocumentAttachments(formData: FormData): Promise<BatchImportDocumentAttachmentsResult | null> {
+  const result = await actionFetchForm<BatchImportDocumentAttachmentsResult>(`${API_BASE_URL}/api/v1/quality/document-catalog/attachments/import`, formData)
+  revalidateQualityPaths(DOCUMENT_PATHS)
+  return result
+}
+export async function uploadDocumentEntryAttachment(entryId: string, formData: FormData): Promise<UploadDocumentEntryAttachmentResult | null> {
+  const result = await actionFetchForm<UploadDocumentEntryAttachmentResult>(`${API_BASE_URL}/api/v1/quality/document-entries/${entryId}/attachments`, formData)
+  revalidateQualityPaths(DOCUMENT_PATHS)
+  return result
+}
+export async function autoBindDocumentEntryAttachment(formData: FormData): Promise<UploadDocumentEntryAttachmentResult | null> {
+  const result = await actionFetchForm<UploadDocumentEntryAttachmentResult>(`${API_BASE_URL}/api/v1/quality/document-entries/attachments/auto-bind`, formData)
+  revalidateQualityPaths(DOCUMENT_PATHS)
+  return result
+}
+export async function deleteDocumentEntryAttachment(entryId: string, storageKey: string) {
+  const encodedKey = storageKey.split('/').map(encodeURIComponent).join('/')
+  return mutateMigratedQuality(`/api/v1/quality/document-entries/${entryId}/attachments/${encodedKey}`, 'DELETE', undefined, DOCUMENT_PATHS)
 }

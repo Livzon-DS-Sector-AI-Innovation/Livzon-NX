@@ -37,7 +37,6 @@ import copy
 import hashlib
 import json
 import logging
-logger = logging.getLogger(__name__)
 import os
 import re
 import sys
@@ -45,11 +44,17 @@ import tempfile
 import time
 import threading
 import uuid
+from datetime import datetime
+from pathlib import Path
+from types import SimpleNamespace
 from typing import List, Dict, Any, Optional
 
+logger = logging.getLogger(__name__)
+
 # ── Hermes-Lite: self-contained home directory ───────────────────────────
-# Override HERMES_HOME to the project directory so ALL paths (.env,
-# sessions, skills, memory, logs, config) are project-local.
+# Override HERMES_HOME to the project directory for local runtime state
+# (sessions, skills, memory, logs, and config). Environment variables are
+# loaded separately from the workspace root by hermes_cli.config.
 # This MUST happen before hermes_constants is imported, because
 # get_hermes_home() caches the value at first call.
 _PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -66,10 +71,7 @@ os.environ.setdefault("HERMES_HOME", _PROJECT_DIR)
 # It is imported there, not here, so that importing run_agent from a
 # daemon thread (e.g. curator's forked review agent) never fails with
 # ModuleNotFoundError on broken/partial installs where `fire` isn't present.
-from datetime import datetime
-from pathlib import Path
-
-from hermes_constants import get_hermes_home
+from hermes_constants import get_hermes_home  # noqa: E402  # must follow HERMES_HOME bootstrap
 
 # Compatibility for modules that still access ``run_agent._hermes_home``.
 # ``get_hermes_home()`` remains the source of truth; this mirrors the active
@@ -103,65 +105,61 @@ def _launch_cwd_for_session(source: str) -> Optional[str]:
 
 # OpenAI lazy proxy + safe stdio + proxy URL helpers — see agent/process_bootstrap.py.
 # `OpenAI` is re-exported here so `patch("run_agent.OpenAI", ...)` in tests works.
-# The other `# noqa: F401` re-exports below cover names accessed via
+# The other unused-import re-exports below cover names accessed via
 # `mock.patch("run_agent.<X>")`, `from run_agent import <X>` in production
 # siblings, or the `_ra().<X>` indirection in agent/system_prompt.py — none
 # of which ruff's in-module usage scan can see.
-from agent.process_bootstrap import (
+from agent.process_bootstrap import (  # noqa: E402  # must follow HERMES_HOME bootstrap
     OpenAI,  # noqa: F401  # re-exported for tests that mock.patch("run_agent.OpenAI")
     _SafeWriter,  # noqa: F401  # re-exported for tests that `from run_agent import _SafeWriter`
     _get_proxy_for_base_url,
 )
-from agent.iteration_budget import IterationBudget
+from agent.iteration_budget import IterationBudget  # noqa: E402  # must follow bootstrap
 
 
-from hermes_cli._stubs import (
+from hermes_cli._stubs import (  # noqa: E402  # must follow HERMES_HOME bootstrap
     get_provider_request_timeout,
     get_provider_stale_timeout,
 )
 
-# ── Load .env from project directory only ────────────────────────────────
-# Hermes-Lite is a standalone engine — .env lives next to run_agent.py,
-# not in the global ~/.hermes/ directory.
-_project_env = Path(_PROJECT_DIR) / '.env'
-if _project_env.exists():
-    try:
-        from dotenv import load_dotenv
-        load_dotenv(_project_env, override=False)
-        logger.info("Loaded .env from %s", _project_env)
-    except ImportError:
-        logger.warning("python-dotenv not installed — .env not loaded. pip install python-dotenv")
-    except Exception as exc:
-        logger.warning("Failed to load .env from %s: %s", _project_env, exc)
+# ── Load the single root workspace environment file ─────────────────────
+# Development uses the workspace .env.local; production uses the workspace
+# .env. HERMES_HOME remains runtime state only and never supplies variables.
+from hermes_cli.config import get_env_path, load_env  # noqa: E402
+
+_workspace_env = get_env_path()
+load_env()
+if _workspace_env.exists():
+    logger.info("Loaded workspace environment from %s", _workspace_env)
 else:
-    logger.info("No .env found at %s — using system environment variables.", _project_env)
+    logger.info("No workspace environment found at %s — using system environment variables.", _workspace_env)
 
 
 # Import our tool system
-from model_tools import (
+from model_tools import (  # noqa: E402  # must follow optional .env loading
     get_tool_definitions,  # noqa: F401  # re-exported for tests that mock.patch("run_agent.get_tool_definitions")
     get_toolset_for_tool,
     handle_function_call,  # noqa: F401  # re-exported for tests that mock.patch("run_agent.handle_function_call")
     check_toolset_requirements,  # noqa: F401  # re-exported for tests that mock.patch("run_agent.check_toolset_requirements")
 )
-from tools.terminal_tool import cleanup_vm
-from tools.interrupt import set_interrupt as _set_interrupt
-from tools.browser_tool import cleanup_browser
+from tools.terminal_tool import cleanup_vm  # noqa: E402  # must follow optional .env loading
+from tools.interrupt import set_interrupt as _set_interrupt  # noqa: E402
+from tools.browser_tool import cleanup_browser  # noqa: E402
 
 
 # Agent internals extracted to agent/ package for modularity
-from agent.memory_manager import sanitize_context
-from agent.error_classifier import FailoverReason
-from agent.redact import redact_sensitive_text
-from agent.model_metadata import (
+from agent.memory_manager import sanitize_context  # noqa: E402
+from agent.error_classifier import FailoverReason  # noqa: E402
+from agent.redact import redact_sensitive_text  # noqa: E402
+from agent.model_metadata import (  # noqa: E402
     estimate_request_tokens_rough,  # noqa: F401  # re-exported for tests that mock.patch("run_agent.estimate_request_tokens_rough")
     is_local_endpoint,
 )
-from agent._stubs import normalize_usage
+from agent._stubs import normalize_usage  # noqa: E402
 # Re-exported for tests that monkeypatch these symbols on run_agent.
-from agent.context_compressor import ContextCompressor  # noqa: F401
-from agent.retry_utils import jittered_backoff  # noqa: F401
-from agent.prompt_builder import (  # noqa: F401  # re-exported via _ra() / mock.patch("run_agent.<name>") / from run_agent import <name>
+from agent.context_compressor import ContextCompressor  # noqa: F401, E402
+from agent.retry_utils import jittered_backoff  # noqa: F401, E402
+from agent.prompt_builder import (  # noqa: F401, E402
     DEFAULT_AGENT_IDENTITY,
     build_skills_system_prompt,
     build_context_files_prompt,
@@ -169,8 +167,8 @@ from agent.prompt_builder import (  # noqa: F401  # re-exported via _ra() / mock
     build_nous_subscription_prompt,
     load_soul_md,
 )
-from agent.process_bootstrap import _get_proxy_from_env  # noqa: F401
-from agent.message_sanitization import (  # noqa: F401
+from agent.process_bootstrap import _get_proxy_from_env  # noqa: F401, E402
+from agent.message_sanitization import (  # noqa: F401, E402
     _SURROGATE_RE,
     _sanitize_surrogates,
     _sanitize_structure_surrogates,
@@ -183,26 +181,26 @@ from agent.message_sanitization import (  # noqa: F401
     _strip_images_from_messages,
     _sanitize_structure_non_ascii,
 )
-from agent._stubs import (
+from agent._stubs import (  # noqa: E402
     _derive_responses_function_call_id as _codex_derive_responses_function_call_id,
     _deterministic_call_id as _codex_deterministic_call_id,
     _split_responses_tool_id as _codex_split_responses_tool_id,
     _summarize_user_message_for_log,  # noqa: F401  # re-exported for tests
 )
-from agent.tool_guardrails import (
+from agent.tool_guardrails import (  # noqa: E402
     ToolGuardrailDecision,
     append_toolguard_guidance,
     toolguard_synthetic_result,
 )
-from agent.tool_result_classification import (
+from agent.tool_result_classification import (  # noqa: E402
     FILE_MUTATING_TOOL_NAMES as _FILE_MUTATING_TOOLS,
     file_mutation_result_landed,
 )
-from agent.trajectory import (
+from agent.trajectory import (  # noqa: E402
     convert_scratchpad_to_think,
     save_trajectory as _save_trajectory_to_file,
 )
-from agent.tool_dispatch_helpers import (
+from agent.tool_dispatch_helpers import (  # noqa: E402
     _should_parallelize_tool_batch,
     _is_destructive_command,  # noqa: F401  # re-exported for tests that access `run_agent._is_destructive_command`
     _extract_parallel_scope_path,  # noqa: F401  # re-exported for tests that `from run_agent import _extract_parallel_scope_path`
@@ -214,7 +212,12 @@ from agent.tool_dispatch_helpers import (
     _extract_error_preview,
     _trajectory_normalize_msg,  # noqa: F401  # re-exported for tests that `from run_agent import _trajectory_normalize_msg`
 )
-from utils import atomic_json_write, base_url_host_matches, base_url_hostname, is_truthy_value
+from utils import (  # noqa: E402
+    atomic_json_write,
+    base_url_host_matches,
+    base_url_hostname,
+    is_truthy_value,
+)
 
 
 
@@ -516,7 +519,7 @@ class AIAgent:
 
             self._session_db = SessionDB()
             return self._session_db
-        except Exception as exc:
+        except Exception:
             logger.debug("SessionDB unavailable for recall", exc_info=True)
             return None
 

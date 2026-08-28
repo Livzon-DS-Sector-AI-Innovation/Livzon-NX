@@ -2,7 +2,7 @@
 
 import uuid
 from datetime import date, datetime
-from typing import Literal, Optional
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -13,9 +13,13 @@ ResearchProjectStatus = Literal["进行中", "已暂停", "已完成", "已终�
 class ResearchProjectCreate(BaseModel):
     """创建研发项目请求"""
 
-    project_no: str | None = Field(default=None, max_length=50, description="项目编号（可选，不填则自动生成）")
+    project_no: str | None = Field(
+        default=None, max_length=50, description="项目编号（可选，不填则自动生成）"
+    )
     name: str = Field(..., min_length=1, max_length=200, description="项目名称")
-    project_type: str | None = Field(default=None, max_length=100, description="项目类型")
+    project_type: str | None = Field(
+        default=None, max_length=100, description="项目类型"
+    )
     stage: ResearchProjectStage = Field(default="立项", description="项目阶段")
     status: ResearchProjectStatus = Field(default="进行中", description="项目状态")
     leader: str | None = Field(default=None, max_length=100, description="项目负责人")
@@ -74,13 +78,15 @@ class EDBOOptimizeResponse(BaseModel):
 
     csv_data: str = Field(..., description="结果 CSV 文本")
     row_count: int = Field(..., description="结果行数")
-    prediction_data: Optional[str] = Field(None, description="预测文件 CSV 文本（可选）")
-    prediction_filename: Optional[str] = Field(None, description="预测文件名（可选）")
+    prediction_data: str | None = Field(None, description="预测文件 CSV 文本（可选）")
+    prediction_filename: str | None = Field(None, description="预测文件名（可选）")
 
 
 # ===== Pilot Workflow Schemas =====
 
-PilotWorkflowStatus = Literal["pending", "running", "waiting_approval", "completed", "failed"]
+PilotWorkflowStatus = Literal[
+    "pending", "running", "waiting_approval", "completed", "failed"
+]
 PilotWorkflowStepStatus = Literal[
     "pending", "running", "waiting_approval", "completed", "failed", "skipped"
 ]
@@ -96,7 +102,9 @@ class PilotWorkflowCreate(BaseModel):
         ..., min_length=1, max_length=100, description="设备类型"
     )
     equipment_volume: float = Field(..., gt=0, description="设备容积(L)")
-    input_context: dict | None = Field(default=None, description="额外上下文信息")
+    input_context: dict[str, Any] | None = Field(
+        default=None, description="额外上下文信息"
+    )
 
 
 class PilotWorkflowStepResponse(BaseModel):
@@ -108,8 +116,8 @@ class PilotWorkflowStepResponse(BaseModel):
     step_code: str
     step_name: str
     status: str
-    input_data: dict | None
-    output_data: dict | None
+    input_data: dict[str, Any] | None
+    output_data: dict[str, Any] | None
     error_message: str | None
     started_at: datetime | None
     completed_at: datetime | None
@@ -129,9 +137,9 @@ class PilotWorkflowResponse(BaseModel):
     equipment_type: str
     equipment_volume: float
     input_document_path: str | None
-    input_context: dict | None
+    input_context: dict[str, Any] | None
     status: str
-    final_report: dict | None
+    final_report: dict[str, Any] | None
     created_at: datetime
     updated_at: datetime
     created_by: uuid.UUID | None

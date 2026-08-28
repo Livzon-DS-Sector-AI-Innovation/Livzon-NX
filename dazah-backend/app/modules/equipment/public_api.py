@@ -36,7 +36,11 @@ async def get_equipments_by_category(
         resp = EquipmentResponse.model_validate(e)
         links = getattr(e, "category_links", []) or []
         resp.category_ids = [link.category_id for link in links if not link.is_deleted]
-        names = [link.category.name for link in links if not link.is_deleted and link.category]
+        names = [
+            link.category.name
+            for link in links
+            if not link.is_deleted and link.category
+        ]
         resp.category_names = "、".join(names) if names else None
         result.append(resp)
     return result
@@ -67,6 +71,7 @@ async def update_equipment_status(
 
 # ── 人员配置公共接口 ──
 
+
 async def get_personnel_by_id(
     db: AsyncSession,
     personnel_id: uuid.UUID,
@@ -75,6 +80,7 @@ async def get_personnel_by_id(
     from app.modules.equipment.service.personnel import (
         get_personnel_by_id as _get,
     )
+
     return await _get(db, personnel_id)
 
 
@@ -92,7 +98,10 @@ async def list_personnel(
             if role:
                 role_ids.append(role.id)
     result = await service.list_personnel(
-        db, role_ids=role_ids, is_active=is_active, page_size=500,
+        db,
+        role_ids=role_ids,
+        is_active=is_active,
+        page_size=500,
     )
     return result.items
 
@@ -106,6 +115,7 @@ async def get_candidates(
     from app.modules.equipment.service.personnel import (
         get_candidates as _get,
     )
+
     return await _get(db, role_codes, category_id=category_id)
 
 

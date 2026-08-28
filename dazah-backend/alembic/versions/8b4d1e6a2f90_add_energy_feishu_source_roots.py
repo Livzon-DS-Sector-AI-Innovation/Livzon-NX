@@ -8,6 +8,7 @@ Create Date: 2026-07-21 17:10:00
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision: str = "8b4d1e6a2f90"
@@ -25,12 +26,24 @@ def upgrade() -> None:
         sa.Column("source_url", sa.Text(), nullable=False),
         sa.Column("root_token", sa.String(256), nullable=False),
         sa.Column("is_active", sa.Boolean(), server_default="true", nullable=False),
-        sa.Column("discovery_status", sa.String(32), server_default="pending", nullable=False),
+        sa.Column(
+            "discovery_status", sa.String(32), server_default="pending", nullable=False
+        ),
         sa.Column("last_discovered_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("discovery_error", sa.Text(), nullable=True),
         sa.Column("id", sa.Uuid(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.Column("created_by", sa.Uuid(), nullable=True),
         sa.Column("updated_by", sa.Uuid(), nullable=True),
         sa.Column("is_deleted", sa.Boolean(), server_default="false", nullable=False),

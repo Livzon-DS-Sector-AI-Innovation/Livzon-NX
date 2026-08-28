@@ -1,4 +1,4 @@
-"""Daily schedulers for production and quality read-only Feishu mirrors."""
+"""Daily schedulers for quality read-only Feishu mirrors."""
 
 from datetime import UTC, datetime
 from typing import Any
@@ -33,14 +33,6 @@ from app.platform.integrations.feishu.read_mirror import (
 )
 from app.platform.scheduler import ScheduleConfig, ScheduleStrategy, TaskGenerator
 
-PRODUCTION_MODELS = ReadMirrorModels(
-    root=ProductionFeishuReadSourceRoot,
-    resource=ProductionFeishuReadResource,
-    field=ProductionFeishuReadField,
-    record=ProductionFeishuReadRecord,
-    binding=ProductionFeishuReadPageBinding,
-    sync_run=ProductionFeishuReadSyncRun,
-)
 QUALITY_MODELS = ReadMirrorModels(
     root=QualityFeishuReadSourceRoot,
     resource=QualityFeishuReadResource,
@@ -48,6 +40,15 @@ QUALITY_MODELS = ReadMirrorModels(
     record=QualityFeishuReadRecord,
     binding=QualityFeishuReadPageBinding,
     sync_run=QualityFeishuReadSyncRun,
+)
+
+PRODUCTION_MODELS = ReadMirrorModels(
+    root=ProductionFeishuReadSourceRoot,
+    resource=ProductionFeishuReadResource,
+    field=ProductionFeishuReadField,
+    record=ProductionFeishuReadRecord,
+    binding=ProductionFeishuReadPageBinding,
+    sync_run=ProductionFeishuReadSyncRun,
 )
 
 
@@ -78,6 +79,8 @@ class _DailyReadMirrorGenerator(TaskGenerator):
 
 
 class ProductionFeishuReadDailySyncGenerator(_DailyReadMirrorGenerator):
+    """Keep the production read-mirror scheduler compatible with old jobs."""
+
     name = "production.feishu_read_daily_sync"
     resource_model = ProductionFeishuReadResource
 

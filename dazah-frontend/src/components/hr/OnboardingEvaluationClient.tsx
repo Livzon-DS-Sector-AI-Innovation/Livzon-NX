@@ -16,8 +16,9 @@ import {
   PrinterOutlined,
   FileTextOutlined
 } from '@ant-design/icons'
-import dayjs from 'dayjs'
-import { generateOnboardingEvaluation } from '@/lib/api/hr'
+import { HR_DISPLAY_DATE_FORMAT } from '@/lib/dayjs-config'
+import { generateOnboardingEvaluation } from '@/actions/hr'
+import { downloadBytes } from '@/lib/download'
 
 export default function OnboardingEvaluationClient() {
   const { message } = App.useApp()
@@ -80,10 +81,11 @@ export default function OnboardingEvaluationClient() {
           ? values.approval_date.format('YYYY-MM-DD')
           : undefined
       }
-      await generateOnboardingEvaluation(payload)
+      const { bytes, filename } = await generateOnboardingEvaluation(payload)
+      downloadBytes(bytes, filename)
       message.success('员工上岗评估表已生成')
-    } catch (err: any) {
-      message.error(err.message || '生成失败')
+    } catch (err) {
+      message.error((err instanceof Error ? err.message : '') || '生成失败')
     } finally {
       setSubmitting(false)
     }
@@ -122,16 +124,16 @@ export default function OnboardingEvaluationClient() {
   const appDateValue = formValues?.approval_date
 
   const hireDateStr = hireDateValue
-    ? hireDateValue.format('YYYY-MM-DD')
+    ? hireDateValue.format(HR_DISPLAY_DATE_FORMAT)
     : ''
   const regDateStr = regDateValue
-    ? regDateValue.format('YYYY-MM-DD')
+    ? regDateValue.format(HR_DISPLAY_DATE_FORMAT)
     : ''
   const sigDateStr = sigDateValue
-    ? sigDateValue.format('YYYY年MM月DD日')
+    ? sigDateValue.format(HR_DISPLAY_DATE_FORMAT)
     : ''
   const appDateStr = appDateValue
-    ? appDateValue.format('YYYY-MM-DD')
+    ? appDateValue.format(HR_DISPLAY_DATE_FORMAT)
     : ''
 
   const hasBasicInfo = !!nameValue

@@ -5,6 +5,8 @@ module keeps old callers working while routing every request through the
 system LLM configuration in ``core.llm_configs``.
 """
 
+from typing import Any
+
 from app.core.llm import LLMOutputError, llm_client
 
 
@@ -26,7 +28,7 @@ class AIService:
 
     async def chat(
         self,
-        messages: list[dict],
+        messages: list[dict[str, Any]],
         response_format: str = "json_object",
         temperature: float = 0.1,
         max_tokens: int = 16384,
@@ -41,10 +43,10 @@ class AIService:
 
     async def chat_parsed(
         self,
-        messages: list[dict],
+        messages: list[dict[str, Any]],
         expected_keys: list[str],
         temperature: float = 0.1,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Chat + parse JSON response, validating expected keys exist."""
         return await llm_client.chat_json(
             messages=messages,
@@ -62,7 +64,12 @@ class AIService:
         """Send a multimodal chat request with images (vision-capable model).
 
         Uses OpenAI-compatible vision format:
-        messages = [{"role":"user", "content":[{"type":"text",...}, {"type":"image_url",...}]}]
+        messages = [
+            {
+                "role": "user",
+                "content": [{"type": "text", ...}, {"type": "image_url", ...}],
+            }
+        ]
         """
         return await llm_client.chat_vision(
             text_prompt=text_prompt,
@@ -77,7 +84,7 @@ class AIService:
         image_urls: list[str],
         expected_keys: list[str],
         temperature: float = 0.1,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Vision chat + parse JSON response, validating expected keys."""
         return await llm_client.chat_vision_json(
             text_prompt=text_prompt,
@@ -86,7 +93,7 @@ class AIService:
             temperature=temperature,
         )
 
-    async def health_check(self) -> dict:
+    async def health_check(self) -> dict[str, Any]:
         """Check connectivity by listing models (lightweight endpoint)."""
         return await llm_client.health_check()
 

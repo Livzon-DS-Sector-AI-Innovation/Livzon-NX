@@ -6,22 +6,17 @@
 
 import logging
 import os
-from pathlib import Path
 from typing import Any
 
 import httpx
-from dotenv import load_dotenv
 
+from app.core.config import load_workspace_env
 from app.modules.safety.feishu.client import get_safety_tenant_token
 
 logger = logging.getLogger(__name__)
 
-# 安全模块独立读取 .env 中的 Bitable 配置（不经过全局 config.py）
-_env_dir = Path(__file__).resolve().parent.parent.parent.parent.parent
-_app_env = os.getenv("APP_ENV", "development")
-_env_path = _env_dir / f".env.{_app_env}"
-if _env_path.exists():
-    load_dotenv(_env_path)
+# 安全模块配置仍由统一的根目录环境文件提供。
+load_workspace_env()
 
 SAFETY_BITABLE_APP_TOKEN = os.getenv("SAFETY_FEISHU_BITABLE_APP_TOKEN", "")
 SAFETY_BITABLE_HAZARD_TABLE_ID = os.getenv("SAFETY_FEISHU_BITABLE_HAZARD_TABLE_ID", "")
@@ -49,8 +44,11 @@ class SafetyBitableClient:
         return await get_safety_tenant_token()
 
     async def get_record(
-        self, record_id: str, table_id: str | None = None,
-        *, field_name_type: str = "name",
+        self,
+        record_id: str,
+        table_id: str | None = None,
+        *,
+        field_name_type: str = "name",
     ) -> dict[str, Any]:
         """获取单条记录。返回 fields dict。
 
@@ -69,15 +67,19 @@ class SafetyBitableClient:
             if data.get("code") != 0:
                 logger.error(
                     "Bitable get_record 失败: code=%s msg=%s record_id=%s",
-                    data.get("code"), data.get("msg"), record_id,
+                    data.get("code"),
+                    data.get("msg"),
+                    record_id,
                 )
                 return {}
             fields = data.get("data", {}).get("record", {}).get("fields", {})
             logger.debug(
                 "Bitable get_record 成功: record_id=%s fields=%d keys=%s",
-                record_id, len(fields), list(fields.keys())[:10],
+                record_id,
+                len(fields),
+                list(fields.keys())[:10],
             )
-            return fields
+            return fields if isinstance(fields, dict) else {}
 
     async def update_record(
         self,
@@ -102,14 +104,22 @@ class SafetyBitableClient:
             if data.get("code") != 0:
                 logger.error(
                     "Bitable update_record 失败: record_id=%s code=%s msg=%s",
-                    record_id, data.get("code"), data.get("msg"),
+                    record_id,
+                    data.get("code"),
+                    data.get("msg"),
                 )
                 return False
-            logger.info("Bitable update_record 成功: record_id=%s fields=%s", record_id, list(fields.keys()))
+            logger.info(
+                "Bitable update_record 成功: record_id=%s fields=%s",
+                record_id,
+                list(fields.keys()),
+            )
             return True
 
     async def download_attachment(
-        self, file_token: str, extra: str | None = None,
+        self,
+        file_token: str,
+        extra: str | None = None,
     ) -> bytes | None:
         """下载附件内容。返回文件字节，失败返回 None。
 
@@ -117,7 +127,9 @@ class SafetyBitableClient:
         优先使用 extra（从 Bitable API 返回的 url 中提取）；若无 extra 则直接尝试。
         """
         token = await self._token()
-        base_url = f"https://open.feishu.cn/open-apis/drive/v1/medias/{file_token}/download"
+        base_url = (
+            f"https://open.feishu.cn/open-apis/drive/v1/medias/{file_token}/download"
+        )
 
         async def _try_download(url: str) -> bytes | None:
             async with httpx.AsyncClient(timeout=30, follow_redirects=True) as http:
@@ -129,7 +141,9 @@ class SafetyBitableClient:
                     return resp.content
                 logger.warning(
                     "Bitable 下载附件失败: url=%s... status=%s body=%s",
-                    url[:100], resp.status_code, (resp.text or "")[:200],
+                    url[:100],
+                    resp.status_code,
+                    (resp.text or "")[:200],
                 )
                 return None
 
@@ -157,32 +171,40 @@ class SafetyBitableClient:
         """
         token = await self._token()
 
-        async def _try(headers: dict | None = None) -> bytes | None:
+        async def _try(headers: dict[str, str] | None = None) -> bytes | None:
             h = headers if headers is not None else {}
             async with httpx.AsyncClient(timeout=30, follow_redirects=True) as http:
                 resp = await http.get(download_url, headers=h)
                 if resp.status_code != 200:
                     logger.warning(
                         "Bitable URL 下载附件失败: url=%s... status=%s body=%s",
-                        download_url[:120], resp.status_code, (resp.text or "")[:200],
+                        download_url[:120],
+                        resp.status_code,
+                        (resp.text or "")[:200],
                     )
                     return None
                 content = resp.content
                 ct = resp.headers.get("content-type", "")
                 # 验证：拒绝空内容 或 明显是 JSON/HTML 错误响应
                 if not content:
-                    logger.warning("Bitable URL 下载到空内容: url=%s...", download_url[:120])
+                    logger.warning(
+                        "Bitable URL 下载到空内容: url=%s...", download_url[:120]
+                    )
                     return None
                 if ct.startswith("application/json") or ct.startswith("text/html"):
                     text = content[:500].decode(errors="replace")
                     logger.warning(
                         "Bitable URL 返回非文件内容(ct=%s): url=%s... body=%s",
-                        ct, download_url[:120], text,
+                        ct,
+                        download_url[:120],
+                        text,
                     )
                     return None
                 logger.debug(
                     "Bitable URL 下载成功: size=%d ct=%s url=%s...",
-                    len(content), ct, download_url[:120],
+                    len(content),
+                    ct,
+                    download_url[:120],
                 )
                 return content
 
@@ -226,7 +248,10 @@ class SafetyBitableClient:
             if data.get("code") != 0:
                 logger.error("Bitable search_records 失败: %s", data.get("msg"))
                 return []
-            return data.get("data", {}).get("items", [])
+            items = data.get("data", {}).get("items", [])
+            if not isinstance(items, list):
+                return []
+            return [item for item in items if isinstance(item, dict)]
 
     async def list_fields(self, table_id: str | None = None) -> list[dict[str, Any]]:
         """列出表格的所有字段。"""
@@ -242,7 +267,10 @@ class SafetyBitableClient:
             if data.get("code") != 0:
                 logger.error("Bitable list_fields 失败: %s", data.get("msg"))
                 return []
-            return data.get("data", {}).get("items", [])
+            items = data.get("data", {}).get("items", [])
+            if not isinstance(items, list):
+                return []
+            return [item for item in items if isinstance(item, dict)]
 
     async def create_field(
         self,
@@ -274,12 +302,18 @@ class SafetyBitableClient:
             if data.get("code") != 0:
                 logger.error(
                     "Bitable create_field 失败: field=%s code=%s msg=%s",
-                    field_name, data.get("code"), data.get("msg"),
+                    field_name,
+                    data.get("code"),
+                    data.get("msg"),
                 )
                 return {}
             field = data.get("data", {}).get("field", {})
-            logger.info("Bitable create_field 成功: %s (id=%s)", field_name, field.get("field_id"))
-            return field
+            logger.info(
+                "Bitable create_field 成功: %s (id=%s)",
+                field_name,
+                field.get("field_id"),
+            )
+            return field if isinstance(field, dict) else {}
 
     async def update_field(
         self,
@@ -315,9 +349,11 @@ class SafetyBitableClient:
             if data.get("code") != 0:
                 logger.error(
                     "Bitable update_field 失败: field_id=%s code=%s msg=%s",
-                    field_id, data.get("code"), data.get("msg"),
+                    field_id,
+                    data.get("code"),
+                    data.get("msg"),
                 )
                 return {}
             field = data.get("data", {}).get("field", {})
             logger.info("Bitable update_field 成功: field_id=%s", field_id)
-            return field
+            return field if isinstance(field, dict) else {}

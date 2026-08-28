@@ -10,6 +10,11 @@ export type LLMConfig = components['schemas']['LLMConfigResponse']
 export type LLMConfigFormData = components['schemas']['LLMConfigCreate']
 export type LLMConfigUpdate = components['schemas']['LLMConfigUpdate']
 export type LLMCapabilityDetection = components['schemas']['LLMCapabilityDetectionResponse']
+export type LLMConfigProbeRequest = components['schemas']['LLMConfigProbeRequest']
+export type LLMConfigProbeResponse = components['schemas']['LLMConfigProbeResponse']
+export type LLMConfigProbeResult =
+  | { ok: true; data: LLMConfigProbeResponse }
+  | { ok: false; error: string }
 export type FeishuConfig = components['schemas']['FeishuConfigResponse']
 export type FeishuConfigUpsert = components['schemas']['FeishuConfigUpsert']
 export type AgentMemoryTenantPolicy =
@@ -235,6 +240,21 @@ export async function testLLMConfig(id: string) {
   return fetchApi<LLMCapabilityDetection>(`/llm/configs/${id}/test`, {
     method: 'POST',
   })
+}
+
+export async function probeLLMConfig(data: LLMConfigProbeRequest): Promise<LLMConfigProbeResult> {
+  try {
+    const response = await fetchApi<LLMConfigProbeResponse>('/llm/configs/probe', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+    return { ok: true, data: response.data }
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : '连通性测试失败',
+    }
+  }
 }
 
 function unwrapResponseData<T>(value: unknown): T {

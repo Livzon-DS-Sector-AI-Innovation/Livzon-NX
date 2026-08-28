@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date, datetime
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
@@ -26,6 +27,10 @@ class DeviationInvestigationPushRecordListItem(BaseModel):
     qa_head_name: str | None = None
     qa_head_result: str | None = None
     qa_head_reviewed_at: datetime | None = None
+    submitters: list[dict[str, Any]] | None = None
+    department_heads: list[dict[str, Any]] | None = None
+    qas: list[dict[str, Any]] | None = None
+    qa_heads: list[dict[str, Any]] | None = None
     feishu_base_table_id: str | None = None
     feishu_base_record_id: str | None = None
     feishu_sync_status: str | None = "pending"
@@ -63,7 +68,9 @@ class CreateDeviationInvestigationPushRecordRequest(BaseModel):
     qa_head_reviewed_at: datetime | None = None
 
     @model_validator(mode="after")
-    def validate_deviation_reference(self) -> "CreateDeviationInvestigationPushRecordRequest":
+    def validate_deviation_reference(
+        self,
+    ) -> CreateDeviationInvestigationPushRecordRequest:
         if not self.deviation_id and not (self.deviation_code or "").strip():
             raise ValueError("deviation_id 和 deviation_code 至少提供一个")
         return self

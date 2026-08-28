@@ -74,13 +74,9 @@ def _build_fields(
         )
 
     subject = (
-        record.product_name
-        if hasattr(record, "product_name")
-        else record.material_name
+        record.product_name if hasattr(record, "product_name") else record.material_name
     )
-    batch_no = (
-        record.batch_no if hasattr(record, "batch_no") else record.material_batch
-    )
+    batch_no = record.batch_no if hasattr(record, "batch_no") else record.material_batch
     fields = {
         "检验编号": record.inspection_no,
         "产品/物料名称": subject or "",
@@ -126,8 +122,7 @@ async def sync_inspection_record_to_feishu(
         None,
         fields,
         search_conditions=[
-            (field_name, _as_text(value))
-            for field_name, value in search_conditions
+            (field_name, _as_text(value)) for field_name, value in search_conditions
         ],
     )
     return {

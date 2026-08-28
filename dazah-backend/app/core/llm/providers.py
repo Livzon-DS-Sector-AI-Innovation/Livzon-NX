@@ -1,8 +1,7 @@
 """Provider registry for LLM services."""
 
-from typing import Literal
 from dataclasses import dataclass
-
+from typing import Literal
 
 ProviderType = Literal["openai", "deepseek", "qwen", "moonshot", "custom"]
 
@@ -10,6 +9,7 @@ ProviderType = Literal["openai", "deepseek", "qwen", "moonshot", "custom"]
 @dataclass
 class ProviderConfig:
     """Provider configuration."""
+
     name: str
     base_url: str
     default_model: str

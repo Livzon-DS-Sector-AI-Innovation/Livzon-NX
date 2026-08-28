@@ -23,6 +23,7 @@ from app.core.database import get_db
 from app.core.response import success_response
 from app.platform.identity.deps import AdminUser, CurrentUser
 from app.platform.identity.models import Department
+from app.platform.identity.rbac import resolve_user_permissions, resolve_user_roles
 from app.platform.identity.repository import (
     DepartmentRepository,
     ExternalIdentityBindingRepository,
@@ -240,6 +241,7 @@ async def logout(
 async def get_me(
     current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
+    settings: Settings = Depends(get_settings),
 ) -> JSONResponse:
     """Return the current platform user."""
     if current_user is None:
@@ -247,7 +249,12 @@ async def get_me(
     from app.platform.identity.permission_repository import PermissionGrantRepository
 
     response = UserResponse.model_validate(current_user)
-    if current_user.role == "admin":
+    roles = await resolve_user_roles(db, current_user.id)
+    response.roles = [role.code for role in roles]
+    response.permissions = await resolve_user_permissions(db, current_user.id)
+    if settings.effective_module_access_mode == "all":
+        response.module_codes = sorted(MODULES_BY_CODE)
+    elif current_user.role == "admin":
         response.module_codes = sorted(MODULES_BY_CODE)
     else:
         grants = await PermissionGrantRepository().list_grants(
@@ -1071,9 +1078,7 @@ async def trigger_sync_all(
             extra={
                 "status": data.get("status"),
                 "created_bindings": data.get("bindings", {}).get("created", 0),
-                "conflict_count": len(
-                    data.get("bindings", {}).get("conflicts", [])
-                ),
+                "conflict_count": len(data.get("bindings", {}).get("conflicts", [])),
             },
         )
     )

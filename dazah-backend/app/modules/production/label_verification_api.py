@@ -1,8 +1,10 @@
 import logging
 from datetime import date
+from typing import Any
 from uuid import UUID
 
 from fastapi import Depends, Query, UploadFile
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -16,8 +18,10 @@ from app.shared.module_api import create_module_router
 from app.shared.module_registry import MODULES_BY_CODE
 from app.shared.schemas import PageParams
 
-router = create_module_router(MODULES_BY_CODE["quality"])
 logger = logging.getLogger(__name__)
+
+
+router = create_module_router(MODULES_BY_CODE["quality"])
 
 
 def get_label_verification_service(
@@ -38,7 +42,7 @@ async def list_label_verifications(
     end_date: date | None = Query(None, description="复核日期截止"),
     page_params: PageParams = Depends(),
     service: LabelVerificationService = Depends(get_label_verification_service),
-):
+) -> Any:
     verifications, total = await service.list_verifications(
         batch_number=batch_number,
         product_name=product_name,
@@ -61,7 +65,7 @@ async def list_label_verifications(
 async def create_label_verification(
     payload: LabelVerificationCreate,
     service: LabelVerificationService = Depends(get_label_verification_service),
-):
+) -> Any:
     verification = await service.create_verification(payload)
     return success_response(
         data=verification.model_dump(mode="json"),
@@ -73,7 +77,7 @@ async def create_label_verification(
 @router.get("/label-verifications/statistics", summary="标签复核统计")
 async def get_label_verification_statistics(
     service: LabelVerificationService = Depends(get_label_verification_service),
-):
+) -> Any:
     stats = await service.get_statistics()
     return success_response(data=stats.model_dump(mode="json"))
 
@@ -85,7 +89,7 @@ async def get_label_verification_statistics(
 async def get_verifications_by_batch(
     batch_number: str,
     service: LabelVerificationService = Depends(get_label_verification_service),
-):
+) -> Any:
     verifications = await service.get_by_batch_number(batch_number)
     data = [v.model_dump(mode="json") for v in verifications]
     return success_response(data=data)
@@ -98,7 +102,7 @@ async def get_verifications_by_batch(
 async def get_label_verification(
     verification_id: UUID,
     service: LabelVerificationService = Depends(get_label_verification_service),
-):
+) -> Any:
     verification = await service.get_verification(verification_id)
     return success_response(
         data=verification.model_dump(mode="json"),
@@ -113,7 +117,7 @@ async def update_label_verification(
     verification_id: UUID,
     payload: LabelVerificationUpdate,
     service: LabelVerificationService = Depends(get_label_verification_service),
-):
+) -> Any:
     verification = await service.update_verification(verification_id, payload)
     return success_response(
         data=verification.model_dump(mode="json"),
@@ -128,7 +132,7 @@ async def update_label_verification(
 async def delete_label_verification(
     verification_id: UUID,
     service: LabelVerificationService = Depends(get_label_verification_service),
-):
+) -> Any:
     await service.delete_verification(verification_id)
     return success_response(message="标签复核记录删除成功")
 
@@ -140,18 +144,18 @@ async def delete_label_verification(
 async def upload_label_verification_video(
     file: UploadFile,
     service: LabelVerificationService = Depends(get_label_verification_service),
-):
+) -> Any:
     """上传视频文件，返回文件 key 和文件名"""
     import os
-    from fastapi import UploadFile
     from datetime import datetime
+
     from app.core.config import get_settings
 
     settings = get_settings()
     upload_dir = os.path.join(settings.UPLOAD_DIR, "label-verification")
     os.makedirs(upload_dir, exist_ok=True)
 
-    file_ext = os.path.splitext(file.filename or ".mp4")[1]
+    os.path.splitext(file.filename or ".mp4")[1]
     timestamp = int(datetime.now().timestamp())
     safe_name = f"video_{timestamp}_{file.filename or 'unknown'}"
     file_path = os.path.join(upload_dir, safe_name)
@@ -179,18 +183,22 @@ async def analyze_label_verification_video(
     file_key: str,
     fps: float = 1.0,
     service: LabelVerificationService = Depends(get_label_verification_service),
-):
+) -> Any:
     """分析视频中的标签信息，返回 AI 识别结果"""
     import os
+
     from app.core.config import get_settings
-    from app.modules.production.label_verification_video_service import LabelVerificationVideoService
-    from app.core.llm import LLMOutputError, llm_client
+    from app.core.llm import llm_client
+    from app.modules.production.label_verification_video_service import (
+        LabelVerificationVideoService,
+    )
 
     settings = get_settings()
     video_path = os.path.join(settings.UPLOAD_DIR, file_key)
 
     if not os.path.exists(video_path):
         from fastapi import HTTPException
+
         raise HTTPException(status_code=404, detail="视频文件不存在")
 
     # 提取视频帧
@@ -199,6 +207,7 @@ async def analyze_label_verification_video(
 
     if not frames:
         from fastapi import HTTPException
+
         raise HTTPException(status_code=400, detail="无法从视频中提取帧")
 
     # 使用统一的 LLM 客户端（视觉模型）
@@ -227,34 +236,47 @@ async def analyze_label_verification_video(
     if len(frames) > 1:
         images_to_analyze.append(frames[-1])
 
+    result = await llm_client.chat_vision(prompt, images_to_analyze)
+
+    # 解析 JSON 结果
+    import json
+
     try:
-        ai_result = await llm_client.chat_vision_json(prompt, images_to_analyze)
-    except LLMOutputError as e:
-        ai_result = {"raw_response": e.raw_response, "error": "JSON 解析失败"}
+        # 清理可能的 markdown 格式
+        cleaned = result.strip()
+        if cleaned.startswith("```"):
+            cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
+        if cleaned.endswith("```"):
+            cleaned = cleaned[:-3]
+        cleaned = cleaned.strip()
+
+        ai_result = json.loads(cleaned)
+    except json.JSONDecodeError:
+        ai_result = {"raw_response": result, "error": "JSON 解析失败"}
+
+        return {
+            "code": 200,
+            "message": "视频分析完成",
+            "data": {
+                "frames_extracted": len(frames),
+                "fps_used": fps,
+                "ai_result": ai_result,
+            },
+        }
+
     except Exception as e:
         logger.error(f"视频分析失败: {e}")
         from fastapi import HTTPException
-        raise HTTPException(status_code=500, detail=f"视频分析失败: {str(e)}")
 
-    return {
-        "code": 200,
-        "message": "视频分析完成",
-        "data": {
-            "frames_extracted": len(frames),
-            "fps_used": fps,
-            "ai_result": ai_result,
-        },
-    }
+        raise HTTPException(status_code=500, detail=f"视频分析失败: {str(e)}")
 
 
 # ─── 自动对比接口 ───
 
 
-from pydantic import BaseModel, Field
-
-
 class AutoCompareRequest(BaseModel):
     """自动对比请求体"""
+
     video_file_key: str = Field(..., description="视频文件 key")
     batch_number: str = Field(..., description="批号")
     product_name: str = Field("", description="产品名称")
@@ -275,13 +297,15 @@ class AutoCompareRequest(BaseModel):
 async def auto_compare_video(
     payload: AutoCompareRequest,
     service: LabelVerificationService = Depends(get_label_verification_service),
-):
+) -> Any:
     """
     自动分析视频中的标签信息，与表单数据逐项对比，返回 8 项核对结论。
     如果识别不全，会自动降低帧率重新分析。
     """
     import os
+
     from app.core.config import get_settings
+    from app.core.llm import llm_client
     from app.modules.production.label_verification_video_service import (
         LabelVerificationVideoService,
     )
@@ -293,11 +317,13 @@ async def auto_compare_video(
     if not os.path.exists(video_path):
         # 尝试 label-verification 子目录
         video_path = os.path.join(
-            settings.UPLOAD_DIR, "label-verification",
-            os.path.basename(payload.video_file_key)
+            settings.UPLOAD_DIR,
+            "label-verification",
+            os.path.basename(payload.video_file_key),
         )
         if not os.path.exists(video_path):
             from fastapi import HTTPException
+
             raise HTTPException(status_code=404, detail="视频文件不存在")
 
     # 构建表单数据
@@ -314,6 +340,13 @@ async def auto_compare_video(
         "total_weight": payload.total_weight,
     }
 
+    # 初始化 AI 服务（使用视觉模型）
+    os.getenv("AI_API_KEY", "")
+    os.getenv("AI_BASE_URL", "https://api.openai.com/v1")
+    os.getenv("AI_VISION_MODEL", "gpt-4o")
+
+    # 使用统一的 LLM 客户端（视觉模型）
+
     # 执行自动对比
     video_service = LabelVerificationVideoService(settings.UPLOAD_DIR)
 
@@ -321,10 +354,12 @@ async def auto_compare_video(
         result = await video_service.analyze_and_compare(
             video_path=video_path,
             form_data=form_data,
+            ai_service=llm_client,
         )
     except Exception as e:
         logger.error(f"自动对比失败: {e}")
         from fastapi import HTTPException
+
         raise HTTPException(status_code=500, detail=f"视频分析失败: {str(e)}")
 
     return success_response(

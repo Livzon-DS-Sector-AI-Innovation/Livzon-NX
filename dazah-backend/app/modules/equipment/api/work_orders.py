@@ -7,13 +7,14 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.exc import MissingGreenlet
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm.attributes import NO_VALUE
+from sqlalchemy.orm.attributes import NO_VALUE  # type: ignore[attr-defined]
 
 from app.core.database import get_db
 from app.core.deps import CurrentUser
 from app.core.exceptions import AppException
 from app.core.response import paginated_response, success_response
 from app.modules.equipment import service
+from app.modules.equipment.models.work_order import WorkOrder
 from app.modules.equipment.schemas import (
     MaterialConsumeRequest,
     MaterialConsumeResponse,
@@ -34,7 +35,7 @@ def _require_user(current_user: CurrentUser) -> uuid.UUID:
     return current_user.id
 
 
-def _to_response(wo) -> WorkOrderResponse:
+def _to_response(wo: WorkOrder) -> WorkOrderResponse:
     """将 ORM WorkOrder 转为响应对象，填充关联名称"""
     # 异步环境下写操作返回的对象可能未 eager load images 关系
     # 提前检测，直接跳过懒加载赋值，在 resp 上补充空列表
@@ -102,13 +103,19 @@ async def list_work_orders(
     db: AsyncSession = Depends(get_db),
 ) -> JSONResponse:
     work_orders, total = await service.get_work_orders(
-        db, status=status, equipment_id=equipment_id,
-        priority=priority, order_type=order_type,
-        page=page, page_size=page_size,
+        db,
+        status=status,
+        equipment_id=equipment_id,
+        priority=priority,
+        order_type=order_type,
+        page=page,
+        page_size=page_size,
     )
     return paginated_response(
         data=[_to_response(wo) for wo in work_orders],
-        page=page, page_size=page_size, total=total,
+        page=page,
+        page_size=page_size,
+        total=total,
     )
 
 

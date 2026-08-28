@@ -27,6 +27,34 @@ Reuse the existing development images without rebuilding:
 .\scripts\dev.ps1 -NoBuild
 ```
 
+For faster source reloads on Windows, use the hybrid native-development
+launcher. It keeps PostgreSQL, Redis, MinIO, and EDBO in Docker, while running
+the Backend, Frontend, and Hermes-Lite as local processes:
+
+```powershell
+.\scripts\dev-native.ps1
+```
+
+On the first run, or after dependency changes, synchronize native dependencies:
+
+```powershell
+.\scripts\dev-native.ps1 -Sync
+```
+
+The launcher uses `pnpm` when it is available and otherwise falls back to
+Node.js Corepack, using the `pnpm@10.33.0` version declared by the project.
+
+The launcher runs the native Alembic migration before starting the Backend,
+automatically maps Compose service URLs to localhost, and uses Next.js
+Turbopack by default. Use `-FrontendWebpack` if the Webpack development
+command is needed. Press `Ctrl+C` to stop the three native processes; the four
+infrastructure containers remain running. Stop those containers explicitly
+when the development environment is no longer needed:
+
+```powershell
+docker compose --env-file .env.local -f compose.dev.yml stop db redis minio edbo-service
+```
+
 Useful local URLs:
 
 - Frontend: http://localhost:3000
@@ -53,6 +81,12 @@ the API contract changed.
 
 ## Configuration Notes
 
+- Environment configuration has one source per environment: the workspace
+  root `.env.local` for development and the workspace root `.env` for
+  production. Do not create `.env`, `.env.local`, or other environment files
+  inside `dazah-backend/`, `dazah-frontend/`, or `Hermes-Lite/`.
+- The root `.env.local` is used by native development and `compose.dev.yml`;
+  the production host keeps its root `.env` at `/opt/dazah/current/.env`.
 - Browser-side frontend code must call relative `/api/v1/...` paths.
 - Frontend server-side code must use `API_BASE_URL`.
 - Do not use `NEXT_PUBLIC_API_BASE_URL`, `NEXT_PUBLIC_API_URL`, or similar
@@ -95,4 +129,5 @@ docker compose --env-file .env -f compose.yml up -d
 Production services use `pull_policy: never`, so deployment does not depend on
 the server reaching an image registry. The root Compose runs Alembic migrations
 to `head` before starting the backend. The subproject Compose files are retained
-for historical compatibility but are not workspace deployment entry points.
+for historical compatibility, read `../.env.local`/`../.env`, and are not
+workspace deployment entry points.

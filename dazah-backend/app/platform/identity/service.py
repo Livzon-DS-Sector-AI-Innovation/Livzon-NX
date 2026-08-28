@@ -612,9 +612,7 @@ async def diagnose_livzon_feishu_config(
         )
         scope_department_count = len(scope.get("department_ids") or [])
         authorized_department_ids = [
-            str(item)
-            for item in scope.get("department_ids") or []
-            if str(item).strip()
+            str(item) for item in scope.get("department_ids") or [] if str(item).strip()
         ]
         scope_user_count = len(scope.get("user_ids") or [])
         scope_group_count = len(scope.get("group_ids") or [])

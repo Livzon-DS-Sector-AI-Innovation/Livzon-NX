@@ -172,7 +172,7 @@ export function PurchaseOrderClient({
             render: (_value: unknown, record: PurchaseOrderLineResponse) => record.material_description || record.product_name,
           },
           {
-            title: '规则型号/规格型号',
+            title: '规格型号',
             key: 'rule_model_compatibility',
             width: 170,
             ellipsis: true,
@@ -196,7 +196,7 @@ export function PurchaseOrderClient({
             ellipsis: true,
           },
           {
-            title: '规则型号',
+            title: '规格型号',
             dataIndex: 'rule_model',
             key: 'rule_model',
             width: 150,
@@ -238,7 +238,7 @@ export function PurchaseOrderClient({
                 record.material_description || record.product_name,
             },
             {
-              title: '规则型号/规格型号',
+              title: '规格型号',
               key: 'rule_model_compatibility',
               width: 170,
               ellipsis: true,

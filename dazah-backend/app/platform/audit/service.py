@@ -72,9 +72,7 @@ def _category_filter(category: AuditCategory) -> ColumnElement[bool]:
         AuditLog.resource_type.in_(_PERMISSION_RESOURCE_TYPES), false()
     )
     agent_tools = func.coalesce(AuditLog.resource_type == "agent_tool", false())
-    automations = func.coalesce(
-        AuditLog.resource_type == "agent_automation", false()
-    )
+    automations = func.coalesce(AuditLog.resource_type == "agent_automation", false())
     feishu = func.coalesce(
         or_(
             AuditLog.method == "FEISHU",
@@ -197,9 +195,7 @@ class GeneralAuditLogService:
             raise ValueError("Conversation audit entries are not general audit logs")
         extra = redact_sensitive(log.extra or {}, max_string_length=500)
         summary = {
-            key: extra[key]
-            for key in _CATEGORY_SUMMARY_KEYS[category]
-            if key in extra
+            key: extra[key] for key in _CATEGORY_SUMMARY_KEYS[category] if key in extra
         }
         return GeneralAuditLogItem(
             id=log.id,

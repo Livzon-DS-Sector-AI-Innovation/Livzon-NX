@@ -1,19 +1,247 @@
 """Procurement database queries live here."""
 
 from datetime import date
+from typing import Any
+from typing import cast as typing_cast
 from uuid import UUID
 
-from sqlalchemy import String, cast, func, or_, select, update
+from sqlalchemy import String, Table, case, cast, func, or_, select, update
+from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.procurement.models import (
     ContractRecord,
     InvoiceRecognitionRecord,
+    MaterialCatalogRecord,
+    MaterialSourceConfig,
     PurchaseRequest,
     PurchaseRequestApproval,
     PurchaseRequestItem,
     Supplier,
 )
+
+
+class MaterialSourceConfigRepository:
+    """Persistence operations for the single procurement material source."""
+
+    CONFIG_KEY = "material-master"
+
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def get(self) -> MaterialSourceConfig | None:
+        result = await self.session.execute(
+            select(MaterialSourceConfig).where(
+                MaterialSourceConfig.config_key == self.CONFIG_KEY,
+                MaterialSourceConfig.is_deleted.is_(False),
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def save(
+        self,
+        config: MaterialSourceConfig,
+    ) -> MaterialSourceConfig:
+        existing = await self.get()
+        if existing is None:
+            self.session.add(config)
+        else:
+            existing.source_url = config.source_url
+            existing.app_token = config.app_token
+            existing.table_id = config.table_id
+            existing.view_id = config.view_id
+            existing.material_code_field = config.material_code_field
+            existing.material_code_field_type = config.material_code_field_type
+            existing.material_description_field = config.material_description_field
+            existing.rule_model_field = config.rule_model_field
+            existing.last_test_status = config.last_test_status
+            existing.last_test_error = config.last_test_error
+            existing.last_tested_at = config.last_tested_at
+            existing.updated_by = config.updated_by
+            config = existing
+        await self.session.flush()
+        return config
+
+    async def invalidate_catalog(self, source_config_id: UUID) -> None:
+        await self.session.execute(
+            update(MaterialCatalogRecord)
+            .where(
+                MaterialCatalogRecord.source_config_id == source_config_id,
+                MaterialCatalogRecord.is_deleted.is_(False),
+            )
+            .values(is_deleted=True)
+        )
+
+
+class MaterialCatalogRepository:
+    """Persistence operations for the procurement material-code mirror."""
+
+    # 单批写入条数：PostgreSQL 单语句参数数量上限以内，同时保持批次数可控
+    WRITE_BATCH_SIZE = 1000
+
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def list_feishu_record_ids(self, source_config_id: UUID) -> set[str]:
+        """只返回已有记录的飞书 record_id，用于计算本次同步的缺失集合。"""
+        result = await self.session.execute(
+            select(MaterialCatalogRecord.feishu_record_id).where(
+                MaterialCatalogRecord.source_config_id == source_config_id,
+            )
+        )
+        return set(result.scalars().all())
+
+    async def bulk_upsert(self, records: list[dict[str, Any]]) -> int:
+        """批量插入或更新物料目录记录（PostgreSQL ON CONFLICT upsert）。
+
+        插入和更新合并为少量批量语句，替代逐条 INSERT/UPDATE；
+        DO UPDATE 同时把 is_deleted 重置为 False，实现软删除记录的重新激活。
+        asyncpg 对 ON CONFLICT DO UPDATE 不返回可靠 rowcount（通常为 -1），
+        因此按批内行数返回，调用方用它累计已落库记录数。
+        """
+        if not records:
+            return 0
+        table = typing_cast(Table, MaterialCatalogRecord.__table__)
+        statement = postgresql_insert(table)
+        statement = statement.on_conflict_do_update(
+            index_elements=[
+                table.c.source_config_id,
+                table.c.feishu_record_id,
+            ],
+            set_={
+                "material_code": statement.excluded.material_code,
+                "material_description": statement.excluded.material_description,
+                "rule_model": statement.excluded.rule_model,
+                "material_unit": statement.excluded.material_unit,
+                "material_template": statement.excluded.material_template,
+                "material_category": statement.excluded.material_category,
+                "material_subcategory": statement.excluded.material_subcategory,
+                "material_cost_category": (statement.excluded.material_cost_category),
+                "feishu_created_time": statement.excluded.feishu_created_time,
+                "feishu_last_modified_time": (
+                    statement.excluded.feishu_last_modified_time
+                ),
+                "last_synced_at": statement.excluded.last_synced_at,
+                "is_deleted": statement.excluded.is_deleted,
+                "updated_by": statement.excluded.updated_by,
+            },
+        )
+        for start in range(0, len(records), self.WRITE_BATCH_SIZE):
+            batch = records[start : start + self.WRITE_BATCH_SIZE]
+            await self.session.execute(statement, batch)
+        return len(records)
+
+    async def deactivate_missing(
+        self,
+        source_config_id: UUID,
+        missing_record_ids: list[str],
+    ) -> int:
+        """把本次同步中飞书已不存在的记录标记为软删除。
+
+        missing_record_ids 由调用方在内存中对比得出，通常接近为空，
+        避免对全表执行 NOT IN（数万条）巨型更新。
+        """
+        if not missing_record_ids:
+            return 0
+        total = 0
+        for start in range(0, len(missing_record_ids), self.WRITE_BATCH_SIZE):
+            batch = missing_record_ids[start : start + self.WRITE_BATCH_SIZE]
+            result = await self.session.execute(
+                update(MaterialCatalogRecord)
+                .where(
+                    MaterialCatalogRecord.source_config_id == source_config_id,
+                    MaterialCatalogRecord.feishu_record_id.in_(batch),
+                    MaterialCatalogRecord.is_deleted.is_(False),
+                )
+                .values(is_deleted=True)
+            )
+            total += int(result.rowcount or 0)  # type: ignore[attr-defined]
+        return total
+
+    async def list_records(
+        self,
+        *,
+        source_config_id: UUID,
+        keyword: str | None = None,
+        material_code: str | None = None,
+        material_description: str | None = None,
+        rule_model: str | None = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[MaterialCatalogRecord], int]:
+        filters = [
+            MaterialCatalogRecord.source_config_id == source_config_id,
+            MaterialCatalogRecord.is_deleted.is_(False),
+        ]
+        if material_code:
+            filters.append(
+                MaterialCatalogRecord.material_code.ilike(f"%{material_code}%")
+            )
+        if material_description:
+            filters.append(
+                MaterialCatalogRecord.material_description.ilike(
+                    f"%{material_description}%"
+                )
+            )
+        if rule_model:
+            filters.append(MaterialCatalogRecord.rule_model.ilike(f"%{rule_model}%"))
+        if keyword:
+            keyword_filter = f"%{keyword}%"
+            filters.append(
+                or_(
+                    MaterialCatalogRecord.material_code.ilike(keyword_filter),
+                    MaterialCatalogRecord.material_description.ilike(keyword_filter),
+                    MaterialCatalogRecord.rule_model.ilike(keyword_filter),
+                )
+            )
+
+        count = await self.session.scalar(
+            select(func.count(MaterialCatalogRecord.id)).where(*filters)
+        )
+        result = await self.session.execute(
+            select(MaterialCatalogRecord)
+            .where(*filters)
+            .order_by(
+                MaterialCatalogRecord.material_code.asc(),
+                MaterialCatalogRecord.material_description.asc(),
+                MaterialCatalogRecord.feishu_record_id.asc(),
+            )
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+        return list(result.scalars().all()), int(count or 0)
+
+    async def list_option_records(
+        self,
+        *,
+        source_config_id: UUID,
+        keyword: str,
+        limit: int,
+    ) -> list[MaterialCatalogRecord]:
+        """List active local mirror rows for bounded material autocomplete."""
+        contains_pattern = f"%{keyword}%"
+        prefix_pattern = f"{keyword}%"
+        match_rank = case(
+            (MaterialCatalogRecord.material_code.ilike(keyword), 0),
+            (MaterialCatalogRecord.material_code.ilike(prefix_pattern), 1),
+            else_=2,
+        )
+        result = await self.session.execute(
+            select(MaterialCatalogRecord)
+            .where(
+                MaterialCatalogRecord.source_config_id == source_config_id,
+                MaterialCatalogRecord.is_deleted.is_(False),
+                MaterialCatalogRecord.material_code.ilike(contains_pattern),
+            )
+            .order_by(
+                match_rank,
+                MaterialCatalogRecord.material_code.asc(),
+                MaterialCatalogRecord.material_description.asc(),
+                MaterialCatalogRecord.feishu_record_id.asc(),
+            )
+            .limit(limit)
+        )
+        return list(result.scalars().all())
 
 
 class InvoiceRecognitionRepository:
@@ -111,7 +339,7 @@ class InvoiceRecognitionRepository:
             .values(is_deleted=True)
         )
         result = await self.session.execute(stmt)
-        return result.rowcount > 0
+        return int(getattr(result, "rowcount", 0) or 0) > 0
 
     async def batch_delete_records(self, record_ids: list[UUID]) -> int:
         if not record_ids:
@@ -126,7 +354,7 @@ class InvoiceRecognitionRepository:
             .values(is_deleted=True)
         )
         result = await self.session.execute(stmt)
-        return result.rowcount
+        return int(getattr(result, "rowcount", 0) or 0)
 
 
 class SupplierRepository:
@@ -241,9 +469,7 @@ class ContractRecordRepository:
         page: int = 1,
         page_size: int = 20,
     ) -> tuple[list[ContractRecord], int]:
-        base_query = select(ContractRecord).where(
-            ContractRecord.is_deleted.is_(False)
-        )
+        base_query = select(ContractRecord).where(ContractRecord.is_deleted.is_(False))
         count_query = select(func.count(ContractRecord.id)).where(
             ContractRecord.is_deleted.is_(False)
         )
@@ -291,6 +517,18 @@ class PurchaseRequestRepository:
         result = await self.session.execute(
             select(PurchaseRequest).where(
                 PurchaseRequest.id == request_id,
+                PurchaseRequest.is_deleted.is_(False),
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def find_by_import_duplicate_key(
+        self,
+        duplicate_key: str,
+    ) -> PurchaseRequest | None:
+        result = await self.session.execute(
+            select(PurchaseRequest).where(
+                PurchaseRequest.import_duplicate_key == duplicate_key,
                 PurchaseRequest.is_deleted.is_(False),
             )
         )
@@ -377,8 +615,8 @@ class PurchaseRequestRepository:
         page: int | None = None,
         page_size: int | None = None,
     ) -> tuple[list[tuple[PurchaseRequest, PurchaseRequestItem]], int]:
-        request_item_match = (
-            PurchaseRequestItem.purchase_request_id == cast(PurchaseRequest.id, String)
+        request_item_match = PurchaseRequestItem.purchase_request_id == cast(
+            PurchaseRequest.id, String
         )
         filters = [
             PurchaseRequest.is_deleted.is_(False),
@@ -502,3 +740,29 @@ class PurchaseRequestRepository:
         self.session.add(approval)
         await self.session.flush()
         return approval
+
+    async def delete(self, request_id: UUID) -> bool:
+        """软删除采购申请及其明细、审批记录。"""
+        stmt = (
+            update(PurchaseRequest)
+            .where(
+                PurchaseRequest.id == request_id,
+                PurchaseRequest.is_deleted.is_(False),
+            )
+            .values(is_deleted=True)
+        )
+        result = await self.session.execute(stmt)
+        if int(getattr(result, "rowcount", 0) or 0) == 0:
+            return False
+        request_id_str = str(request_id)
+        await self.session.execute(
+            update(PurchaseRequestItem)
+            .where(PurchaseRequestItem.purchase_request_id == request_id_str)
+            .values(is_deleted=True)
+        )
+        await self.session.execute(
+            update(PurchaseRequestApproval)
+            .where(PurchaseRequestApproval.purchase_request_id == request_id_str)
+            .values(is_deleted=True)
+        )
+        return True

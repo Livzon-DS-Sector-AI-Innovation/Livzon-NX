@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
@@ -19,7 +20,7 @@ from app.modules.energy.wiki_repository import EnergyWikiRepository
 
 
 @pytest.mark.asyncio
-async def test_replace_page_bindings_preserves_existing_binding_id():
+async def test_replace_page_bindings_preserves_existing_binding_id() -> Any:
     sheet_id = uuid4()
     existing_id = uuid4()
     stale = EnergyFeishuPageBinding(
@@ -36,11 +37,11 @@ async def test_replace_page_bindings_preserves_existing_binding_id():
         tab_name="电量旧名称",
         sort_order=0,
     )
-    scalar_result = MagicMock()
+    scalar_result: Any = MagicMock()
     scalar_result.all.return_value = [existing, stale]
-    result = MagicMock()
+    result: Any = MagicMock()
     result.scalars.return_value = scalar_result
-    session = MagicMock()
+    session: Any = MagicMock()
     session.execute = AsyncMock(return_value=result)
     session.delete = AsyncMock()
     session.flush = AsyncMock()
@@ -70,7 +71,9 @@ async def test_replace_page_bindings_preserves_existing_binding_id():
 
 
 @pytest.mark.asyncio
-async def test_repository_archives_source_and_pages_immutable_snapshot_rows(db_session):
+async def test_repository_archives_source_and_pages_immutable_snapshot_rows(
+    db_session: Any,
+) -> Any:
     repo = EnergyWikiRepository(db_session)
     config = await repo.save_config(
         EnergyFeishuConfig(
@@ -162,7 +165,7 @@ async def test_repository_archives_source_and_pages_immutable_snapshot_rows(db_s
 
     assert first.snapshot_number == 1
     assert (await repo.next_snapshot_number(sheet.id)) == 3
-    assert (await repo.get_latest_snapshot(sheet.id)).id == latest.id
+    assert (await repo.get_latest_snapshot(sheet.id)).id == latest.id  # type: ignore[union-attr]
     rows, total = await repo.list_snapshot_rows(
         snapshot_id=latest.id, page=2, page_size=1
     )

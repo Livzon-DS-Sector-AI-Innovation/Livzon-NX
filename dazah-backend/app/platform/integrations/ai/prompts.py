@@ -43,23 +43,27 @@ COMPANY_KNOWLEDGE_BASE = """
 
 | 建筑 | 结构 | 层数 | 耐火 | 火灾类别 | 主要危险因素 |
 |------|------|------|------|----------|-------------|
-| 发酵车间 | 钢筋混凝土 | 3(局部4) | 二级 | 丙类 | 火灾爆炸、容器爆炸、中毒窒息、触电、灼烫、机械伤害、高处坠落、物体打击、起重伤害、粉尘、噪声、高温 |
+| 发酵车间 | 钢筋混凝土 | 3(局部4) | 二级 | 丙类 | 火灾爆炸、容器爆炸、中毒窒息、\
+触电、灼烫、机械伤害、高处坠落、物体打击、起重伤害、粉尘、噪声、高温 |
 | 接罐站 | 钢筋混凝土 | 2 | 二级 | 丙类 | 同上 |
 | 提取一车间 | 钢筋混凝土 | 4 | 二级 | 丙类 | 同上 |
 | 提取二车间 | 钢筋混凝土 | 4 | 二级 | 丙类 | 同上 |
 | 提炼三部 | 钢筋混凝土 | 2 | 二级 | 丙类 | 同上 |
 | 提炼二部二车间 | 钢筋混凝土 | 2 | 二级 | 丙类 | 同上 |
-| 喷雾车间 | 钢筋混凝土 | 3 | 二级 | 丁类 | 火灾爆炸、容器爆炸、中毒窒息、触电、灼烫、机械伤害、高处坠落、物体打击、起重伤害、噪声、高温 |
+| 喷雾车间 | 钢筋混凝土 | 3 | 二级 | 丁类 | 火灾爆炸、容器爆炸、中毒窒息、触电、\
+灼烫、机械伤害、高处坠落、物体打击、起重伤害、噪声、高温 |
 | 无菌喷雾车间 | 钢筋混凝土 | 5 | 二级 | 丙类 | 同上 |
 | 车间一 | 钢筋混凝土 | 4 | 二级 | **甲类** | 同上（高火灾爆炸风险） |
 | 车间二 | 钢筋混凝土 | 4 | **一级** | **甲类** | 同上（高火灾爆炸风险） |
 | 车间四 | 钢筋混凝土 | 3 | 二级 | **甲类** | 同上（高火灾爆炸风险） |
-| 仓库一 | 钢筋混凝土 | 4 | 二级 | 丙类 | 火灾爆炸、中毒窒息、触电、车辆伤害、起重伤害、粉尘、噪声 |
+| 仓库一 | 钢筋混凝土 | 4 | 二级 | 丙类 | 火灾爆炸、中毒窒息、触电、\
+车辆伤害、起重伤害、粉尘、噪声 |
 | 仓库四/五 | 钢筋混凝土 | 1 | 二级 | **甲类** | 同上 |
 | 罐组一 | - | - | - | **甲类** | 火灾爆炸、中毒窒息、灼烫、车辆伤害、起重伤害 |
 | 氨水罐区 | - | - | - | - | 中毒窒息、灼烫 |
 | 酸碱罐区 | - | - | - | - | 中毒窒息、灼烫 |
-| 动力车间(含消防水罐) | 钢筋混凝土 | 2 | 二级 | 丙类 | 火灾爆炸、容器爆炸、中毒窒息、触电、灼烫、机械伤害、高处坠落、物体打击、起重伤害、噪声、高温 |
+| 动力车间(含消防水罐) | 钢筋混凝土 | 2 | 二级 | 丙类 | 火灾爆炸、容器爆炸、\
+中毒窒息、触电、灼烫、机械伤害、高处坠落、物体打击、起重伤害、噪声、高温 |
 | RTO装置区 | - | - | - | 丁类 | 火灾爆炸、机械伤害、高处坠落、物体打击、起重伤害 |
 
 ## 典型工艺与设备安全配置
@@ -91,9 +95,12 @@ LEC 风险等级分级标准（D = L × E × C）：
 | D 值范围     | 风险等级         | 管控层级    | 责任人                             |
 |-------------|-----------------|------------|-----------------------------------|
 | D ≥ 320     | 一级/重大风险     | 公司级      | 公司主要负责人                     |
-| 160 ≤ D ≤ 319 | 二级/较大风险   | 部门级      | 安全工程中心 + 各部门按职责分工       |
-| 70 ≤ D ≤ 159  | 三级/一般风险   | 班组/岗位级  | 所在部门负责管控，安全工程中心监督落实  |
-| D < 70       | 四级/低风险     | 班组/岗位级  | 所在班组/岗位负责管控，部门安全员监督   |
+| 160 ≤ D ≤ 319 | 二级/较大风险   | 部门级      | 安全工程中心 + 各部门按职责\
+分工       |\
+| 70 ≤ D ≤ 159  | 三级/一般风险   | 班组/岗位级  | 所在部门负责管控，安全工程中心\
+监督落实  |\
+| D < 70       | 四级/低风险     | 班组/岗位级  | 所在班组/岗位负责管控，\
+部门安全员监督   |
 """
 
 LEC_SCORING_GUIDE = """
@@ -128,13 +135,15 @@ LEC 评分参考标准：
 # 系统角色定义
 # ═══════════════════════════════════════════
 
-SYSTEM_ROLE = f"""你是一个专业的危险源辨识与风险评价专家助手，服务于原料药生产企业（丽珠集团福州福兴医药有限公司）。
+SYSTEM_ROLE = f"""你是一个专业的危险源辨识与风险评价专家助手，服务于原料药生产企业\
+（丽珠集团福州福兴医药有限公司）。
 
 你需要基于提供的上下文信息（部门、岗位、生产步骤、作业活动、设备设施、原辅料、附件文本等）和下方企业知识库，
 进行危险源辨识和LEC风险评价。你必须严格遵循以下规则：
 
 1. **仅基于已有信息**：只根据提供的上下文和知识库进行判断，不得编造未出现的信息
-2. **信息来源不足时填“待人工确认”**：如果提供的资料不足以支撑某个字段的判断，该字段填写“待人工确认”
+2. **信息来源不足时填“待人工确认”**：如果提供的资料不足以支撑某个字段的判断，\
+该字段填写“待人工确认”
 3. **输出结构化 JSON**：严格按照要求的 JSON 格式输出，不输出多余内容
 4. **基于行业知识**：结合原料药生产（发酵、提取、精制、干燥、包装等）的行业知识进行判断
 5. **保守原则**：当不确定时，偏向更高风险等级评估
@@ -144,14 +153,15 @@ SYSTEM_ROLE = f"""你是一个专业的危险源辨识与风险评价专家助�
 """
 
 # 旧版 SCRIPT1_PROMPT ~ SCRIPT7_PROMPT 已移除。
-# WORKFLOW_STEP_CONFIG 现已使用 4 字段格式（input_info/work_rules/reference_docs/output_format），
+# WORKFLOW_STEP_CONFIG 现已使用 4 字段格式\
+# （input_info/work_rules/reference_docs/output_format），
 # 与前端 workflow-templates.ts 保持同步。
 # ═══════════════════════════════════════════
 # 提示词构建工具
 # ═══════════════════════════════════════════
 
 
-def build_prompt(workflow_config: dict) -> str:
+def build_prompt(workflow_config: dict[str, Any]) -> str:
     """将结构化提示词合并为完整 prompt，供 AI Agent 使用。
 
     支持两种格式，自动检测：
@@ -164,20 +174,26 @@ def build_prompt(workflow_config: dict) -> str:
 
     这样前端保存的 4 字段结构化配置和硬编码 fallback 的单一 prompt 都能正常工作。
     """
-    if any(k in workflow_config for k in ("input_info", "work_rules", "reference_docs", "output_format")):
-        parts = []
+    if any(
+        k in workflow_config
+        for k in ("input_info", "work_rules", "reference_docs", "output_format")
+    ):
+        parts: list[str] = []
         if workflow_config.get("input_info"):
-            parts.append("## 输入信息\n" + workflow_config["input_info"])
+            parts.append("## 输入信息\n" + str(workflow_config["input_info"]))
         if workflow_config.get("work_rules"):
-            parts.append("## 工作规则\n" + workflow_config["work_rules"])
+            parts.append("## 工作规则\n" + str(workflow_config["work_rules"]))
         if workflow_config.get("reference_docs"):
-            parts.append("## 调用文档\n" + workflow_config["reference_docs"])
+            parts.append("## 调用文档\n" + str(workflow_config["reference_docs"]))
         if workflow_config.get("output_format"):
-            parts.append("## 输出格式\n" + workflow_config["output_format"])
+            parts.append("## 输出格式\n" + str(workflow_config["output_format"]))
         return "\n\n".join(parts)
 
     # 旧格式向后兼容
-    return workflow_config.get("prompt_template") or workflow_config.get("prompt", "")
+    legacy = workflow_config.get("prompt_template") or workflow_config.get("prompt", "")
+    return (
+        legacy if isinstance(legacy, str) else str(legacy) if legacy is not None else ""
+    )
 
 
 # ═══════════════════════════════════════════
@@ -266,7 +282,8 @@ WORKFLOW_STEP_CONFIG: dict[int, dict[str, Any]] = {
         ),
         "work_rules": (
             "1. 采用LEC法，公式 D = L × E × C\n"
-            "2. 仅评价「未考虑任何现有控制措施前」的固有风险，不得将现有控制措施纳入评分\n"
+            "2. 仅评价「未考虑任何现有控制措施前」的固有风险，不得将现有控制措施\n"
+            "纳入评分\n"
             "3. 评分依据：\n"
             "   - L（可能性，0.1~10）：结合岗位、作业活动、危险类型评估事故发生概率\n"
             "   - E（暴露频率，0.5~10）：结合作业频次、接触时长评估人员暴露程度\n"
@@ -274,13 +291,16 @@ WORKFLOW_STEP_CONFIG: dict[int, dict[str, Any]] = {
             "4. 如知识库中已有LEC评分标准与风险分级标准，优先按知识库标准执行\n"
             "5. 风险等级判定：D≥320→level_1（重大）、160≤D<320→level_2（较大）、"
             "70≤D<160→level_3（一般）、D<70→level_4（低）\n"
-            "6. 若L、E、C任一字段无法判定，填写「待人工确认」，此时D值和风险等级也填「待人工确认」\n"
+            "6. 若L、E、C任一字段无法判定，填写「待人工确认」，此时D值和风险等级也填\n"
+            "「待人工确认」\n"
             "7. 必须基于人工确认后的危险源信息进行评价"
         ),
         "reference_docs": (
             "LEC风险评价法标准（格雷厄姆-金尼法）\n\n"
-            + LEC_SCORING_GUIDE + "\n"
-            + RISK_LEVEL_TABLE + "\n"
+            + LEC_SCORING_GUIDE
+            + "\n"
+            + RISK_LEVEL_TABLE
+            + "\n"
             "企业风险分级管控管理制度\n"
             "企业知识库：危险有害因素辨识结果表"
         ),
@@ -306,12 +326,15 @@ WORKFLOW_STEP_CONFIG: dict[int, dict[str, Any]] = {
         ),
         "work_rules": (
             "1. 仅识别和提取当前岗位、当前生产步骤、当前危险源已存在的控制措施\n"
-            "2. 不输出建议新增措施，不输出优化措施，仅输出当前已存在、可从资料中获得依据的措施\n"
+            "2. 不输出建议新增措施，不输出优化措施，仅输出当前已存在、可从资料中获得\n"
+            "依据的措施\n"
             "3. 四个维度：\n"
             "   - 工程控制措施：通风、联锁、报警、防护装置、隔离、泄压、接地、检测等\n"
-            "   - 管理控制措施：规程、培训、巡检、作业许可、交接班、警示标识、制度管理等\n"
+            "   - 管理控制措施：规程、培训、巡检、作业许可、交接班、警示标识、\n"
+            "制度管理等\n"
             "   - 个人防护措施（PPE）：防护装备、佩戴要求、使用要求\n"
-            "   - 应急措施：事故应急处置流程、现场应急器材配置、报警与撤离要求、急救处置等\n"
+            "   - 应急措施：事故应急处置流程、现场应急器材配置、报警与撤离要求、\n"
+            "急救处置等\n"
             "4. 每项措施尽量附简要依据来源\n"
             "5. 信息不足时填写「待人工确认」\n"
             "6. 必须基于人工确认后的危险源和固有风险信息进行分析"
@@ -354,14 +377,13 @@ WORKFLOW_STEP_CONFIG: dict[int, dict[str, Any]] = {
             "6. C（残余）：仅当现有措施能明确降低事故后果严重程度时才可下降；"
             "若措施主要作用于预防发生而不能减轻后果，C保持与固有一致\n"
             "7. 残余风险通常不应高于固有风险\n"
-            "8. 个人防护措施通常优先影响后果严重性或局部暴露，不应替代工程控制和管理控制\n"
+            "8. 个人防护措施通常优先影响后果严重性或局部暴露，不应替代工程控制和\n"
+            "管理控制\n"
             "9. 应急措施主要用于降低事故扩大后果，不应直接大幅降低事故发生可能性\n"
             "10. 信息不足时填写「待人工确认」"
         ),
         "reference_docs": (
-            "LEC风险评价法标准\n\n"
-            + LEC_SCORING_GUIDE + "\n"
-            + RISK_LEVEL_TABLE + "\n"
+            "LEC风险评价法标准\n\n" + LEC_SCORING_GUIDE + "\n" + RISK_LEVEL_TABLE + "\n"
             "企业风险分级管控管理制度\n"
             "企业知识库：危险有害因素辨识结果表"
         ),
@@ -386,7 +408,8 @@ WORKFLOW_STEP_CONFIG: dict[int, dict[str, Any]] = {
             "残余风险等级（工作流5+人工确认）、管控等级（人工）。"
         ),
         "work_rules": (
-            "风险控制层级（优先顺序）：消除/替代 → 工程控制 → 管理控制 → 个体防护 → 应急优化\n\n"
+            "风险控制层级（优先顺序）：消除/替代 → 工程控制 → 管理控制 → 个体防护\n"
+            "→ 应急优化\n\n"
             "是否需提出建议措施（needs_recommendation）：\n"
             "- 残余风险level_1或level_2：原则上必须提出建议措施 →「是」\n"
             "- 残余风险level_3且现有措施存在明显缺口 →「是」\n"
@@ -438,19 +461,19 @@ WORKFLOW_STEP_CONFIG: dict[int, dict[str, Any]] = {
             "3. 仅将明确采纳、明确实施的措施纳入评价\n"
             "4. L（措施后）：结合已实施建议措施对事故发生可能性的进一步削减作用判断；"
             "优先考虑消除/替代、工程改造、联锁、自动化等对概率的影响\n"
-            "5. E（措施后）：结合建议措施对人员接触频次、暴露时长、暴露范围的进一步降低作用判断\n"
+            "5. E（措施后）：结合建议措施对人员接触频次、暴露时长、暴露范围的进一步\n"
+            "降低作用判断\n"
             "6. C（措施后）：仅当建议措施能明确降低事故后果严重程度时才可下降；"
             "若主要作用于预防而不能减轻后果，C保持与残余一致\n"
             "7. 措施后风险通常不应高于原残余风险\n"
             "8. 风险下降幅度应与建议措施的类型、针对性、实施深度相匹配\n"
             "9. 不得仅因「提出了建议」就默认风险下降\n"
-            "10. 个体防护和应急优化通常不能替代消除、替代、工程控制和管理控制的核心作用\n"
+            "10. 个体防护和应急优化通常不能替代消除、替代、工程控制和管理控制的\n"
+            "核心作用\n"
             "11. 信息不足时填写「待人工确认」"
         ),
         "reference_docs": (
-            "LEC风险评价法标准\n\n"
-            + LEC_SCORING_GUIDE + "\n"
-            + RISK_LEVEL_TABLE + "\n"
+            "LEC风险评价法标准\n\n" + LEC_SCORING_GUIDE + "\n" + RISK_LEVEL_TABLE + "\n"
             "企业风险分级管控管理制度\n"
             "企业风险管控层级规定\n"
             "GB/T 12801-2008《生产过程安全卫生要求总则》"
@@ -521,14 +544,14 @@ STANDALONE_WORKFLOW_CONFIG: dict[str, dict[str, Any]] = {
             "- 企业风险分级管控标准"
         ),
         "output_format": (
-            '## 输出格式\n'
-            '返回 JSON 格式（只返回 JSON，不要额外说明）：\n'
-            '```json\n'
-            '{\n'
+            "## 输出格式\n"
+            "返回 JSON 格式（只返回 JSON，不要额外说明）：\n"
+            "```json\n"
+            "{\n"
             '  "is_critical": true,\n'
             '  "reason": "判定理由（说明符合哪些关键作业判定条件，或不符合的原因）"\n'
-            '}\n'
-            '```'
+            "}\n"
+            "```"
         ),
         "expected_keys": ["is_critical", "reason"],
     },
@@ -548,7 +571,8 @@ STANDALONE_WORKFLOW_CONFIG: dict[str, dict[str, Any]] = {
             "## 任务\n"
             "将用户的自然语言查询转换为结构化的特殊作业台账筛选条件。\n\n"
             "## 可用筛选字段\n"
-            "- operation_type: hot_work/confined_space/height_work/temporary_electricity/blind_plate/excavation/lifting/road_breaking\n"
+            "- operation_type: hot_work/confined_space/height_work/"
+            "temporary_electricity/blind_plate/excavation/lifting/road_breaking\n"
             "- operation_level: special/grade1/grade2\n"
             "- risk_level: level_1/level_2/level_3/level_4\n"
             "- department: 部门名称（字符串）\n"
@@ -557,8 +581,12 @@ STANDALONE_WORKFLOW_CONFIG: dict[str, dict[str, Any]] = {
             "- keyword: 模糊搜索关键词\n"
             "- is_critical: true/false\n\n"
             "## 映射规则\n"
-            "- 作业类型：动火作业→hot_work, 受限空间→confined_space, 高处作业→height_work, 临时用电→temporary_electricity, 盲板抽堵→blind_plate, 动土作业→excavation, 起重吊装→lifting, 断路作业→road_breaking\n"
-            "- 风险等级：一级/重大→level_1, 二级/较大→level_2, 三级/一般→level_3, 四级/低→level_4\n"
+            "- 作业类型：动火作业→hot_work, 受限空间→confined_space,"
+            "高处作业→height_work, 临时用电→temporary_electricity,"
+            "盲板抽堵→blind_plate, 动土作业→excavation,"
+            "起重吊装→lifting, 断路作业→road_breaking\n"
+            "- 风险等级：一级/重大→level_1, 二级/较大→level_2,"
+            "三级/一般→level_3, 四级/低→level_4\n"
             "- 作业级别：特级→special, 一级→grade1, 二级→grade2\n\n"
             "## 约束\n"
             "- 无法识别的字段设为 null\n"
@@ -573,10 +601,10 @@ STANDALONE_WORKFLOW_CONFIG: dict[str, dict[str, Any]] = {
             "- 企业风险分级管控标准"
         ),
         "output_format": (
-            '## 输出格式\n'
-            '返回 JSON 格式（未匹配字段设为 null，只返回 JSON 不要额外说明）：\n'
-            '```json\n'
-            '{\n'
+            "## 输出格式\n"
+            "返回 JSON 格式（未匹配字段设为 null，只返回 JSON 不要额外说明）：\n"
+            "```json\n"
+            "{\n"
             '  "operation_type": null,\n'
             '  "operation_level": null,\n'
             '  "risk_level": null,\n'
@@ -586,13 +614,19 @@ STANDALONE_WORKFLOW_CONFIG: dict[str, dict[str, Any]] = {
             '  "keyword": null,\n'
             '  "is_critical": null,\n'
             '  "explanation": "用中文简述你理解的筛选条件"\n'
-            '}\n'
-            '```'
+            "}\n"
+            "```"
         ),
         "expected_keys": [
-            "operation_type", "operation_level", "risk_level",
-            "department", "date_from", "date_to",
-            "keyword", "is_critical", "explanation",
+            "operation_type",
+            "operation_level",
+            "risk_level",
+            "department",
+            "date_from",
+            "date_to",
+            "keyword",
+            "is_critical",
+            "explanation",
         ],
     },
     "hazard-identification-export": {
@@ -630,10 +664,10 @@ STANDALONE_WORKFLOW_CONFIG: dict[str, dict[str, Any]] = {
             "- 你是一个数据库查询助手，只返回 JSON"
         ),
         "output_format": (
-            '## 输出格式\n'
-            '返回 JSON 格式（只返回 JSON 不要额外说明）：\n'
-            '```json\n'
-            '{\n'
+            "## 输出格式\n"
+            "返回 JSON 格式（只返回 JSON 不要额外说明）：\n"
+            "```json\n"
+            "{\n"
             '  "department": null,\n'
             '  "position": null,\n'
             '  "risk_level": null,\n'
@@ -641,12 +675,17 @@ STANDALONE_WORKFLOW_CONFIG: dict[str, dict[str, Any]] = {
             '  "date_to": null,\n'
             '  "keyword": null,\n'
             '  "explanation": "用中文简述你理解的筛选条件"\n'
-            '}\n'
-            '```'
+            "}\n"
+            "```"
         ),
         "expected_keys": [
-            "department", "position", "risk_level",
-            "date_from", "date_to", "keyword", "explanation",
+            "department",
+            "position",
+            "risk_level",
+            "date_from",
+            "date_to",
+            "keyword",
+            "explanation",
         ],
     },
 }
@@ -680,7 +719,8 @@ HAZARD_WORKFLOW_STEP_CONFIG: dict[int, dict[str, Any]] = {
             "contractor_defect(承包商缺陷)/documentation(文件化)/special_operation(特殊作业)\n"
             "5. 生成隐患描述（description）：客观、具体、包含位置+缺陷+风险\n"
             "6. 识别重点缺陷（key_defect）\n"
-            "7. 所有隐患都必须提供判定依据（major_hazard_basis），说明判定理由和参照标准\n"
+            "7. 所有隐患都必须提供判定依据（major_hazard_basis），说明判定理由和\n"
+            "参照标准\n"
             "8. 仅基于图片内容和已填写信息，不编造\n"
             "9. 信息不足时填写「待人工确认」"
         ),
@@ -697,8 +737,11 @@ HAZARD_WORKFLOW_STEP_CONFIG: dict[int, dict[str, Any]] = {
             '"major_hazard_basis":"重大隐患判定依据或空"}'
         ),
         "expected_keys": [
-            "hazard_type", "hazard_level", "hazard_category",
-            "key_defect", "major_hazard_basis",
+            "hazard_type",
+            "hazard_level",
+            "hazard_category",
+            "key_defect",
+            "major_hazard_basis",
         ],
     },
     2: {
@@ -730,9 +773,7 @@ HAZARD_WORKFLOW_STEP_CONFIG: dict[int, dict[str, Any]] = {
             "企业应急预案及应急处置卡\n"
             "行业最佳实践"
         ),
-        "output_format": (
-            '{"corrective_preventive_measures":"具体纠正预防措施"}'
-        ),
+        "output_format": ('{"corrective_preventive_measures":"具体纠正预防措施"}'),
         "expected_keys": ["corrective_preventive_measures"],
     },
 }

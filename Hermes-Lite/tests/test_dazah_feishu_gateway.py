@@ -941,7 +941,7 @@ def test_read_only_container_keeps_gateway_lock_in_private_tmpfs() -> None:
     project_root = Path(__file__).resolve().parents[1]
     dockerfile = (project_root / "Dockerfile").read_text(encoding="utf-8")
     compose = (project_root / "docker-compose.yml").read_text(encoding="utf-8")
-    env_example = (project_root / ".env.example").read_text(encoding="utf-8")
+    env_example = (project_root.parent / ".env.example").read_text(encoding="utf-8")
 
     expected = "HERMES_GATEWAY_LOCK_DIR=/run/hermes-feishu/gateway-locks"
     assert expected in dockerfile

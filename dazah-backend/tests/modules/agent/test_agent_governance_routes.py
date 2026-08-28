@@ -1,7 +1,8 @@
 import hashlib
 import json
 from datetime import UTC, datetime, timedelta
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
+from typing import Any
 from uuid import uuid4
 
 import pytest
@@ -16,13 +17,15 @@ from app.modules.agent.models import AgentToolCall
 from app.modules.agent.repository import AgentRepository
 from app.platform.identity.deps import get_current_user
 
+SimpleNamespace: Any = _SimpleNamespace
+
 
 @pytest.mark.anyio
 async def test_safe_trace_export_contains_only_metadata_and_valid_digest(
     db_session: AsyncSession,
 ) -> None:
     trace_id = uuid4()
-    admin = SimpleNamespace(id=uuid4(), role="admin")
+    admin: Any = SimpleNamespace(id=uuid4(), role="admin")
 
     response = await api.export_control_plane_trace(
         trace_id=trace_id,
@@ -43,7 +46,7 @@ async def test_safe_trace_export_contains_only_metadata_and_valid_digest(
         separators=(",", ":"),
     ).encode()
     assert payload["verification"]["sha256"] == hashlib.sha256(canonical).hexdigest()
-    assert response.headers["content-disposition"].endswith(f"{trace_id}.json\"")
+    assert response.headers["content-disposition"].endswith(f'{trace_id}.json"')
 
 
 @pytest.mark.anyio
@@ -83,12 +86,12 @@ async def test_runtime_overview_clears_failure_after_same_tool_recovers(
     )
     await db_session.flush()
 
-    admin = SimpleNamespace(id=uuid4(), role="admin")
+    admin: Any = SimpleNamespace(id=uuid4(), role="admin")
 
-    async def override_db():
+    async def override_db() -> Any:
         yield db_session
 
-    async def override_current_user():
+    async def override_current_user() -> Any:
         return admin
 
     app.dependency_overrides[get_db] = override_db
@@ -98,13 +101,10 @@ async def test_runtime_overview_clears_failure_after_same_tool_recovers(
             transport=ASGITransport(app=app),
             base_url="http://test",
         ) as client:
-            failed_response = await client.get(
-                "/api/v1/agent/control/runtime-overview"
-            )
+            failed_response = await client.get("/api/v1/agent/control/runtime-overview")
             assert failed_response.status_code == status.HTTP_200_OK
-            assert (
-                failed_response.json()["data"]["latest_error_trace_id"]
-                == str(correlation_id)
+            assert failed_response.json()["data"]["latest_error_trace_id"] == str(
+                correlation_id
             )
 
             recovered_at = datetime.now(UTC) - timedelta(minutes=1)

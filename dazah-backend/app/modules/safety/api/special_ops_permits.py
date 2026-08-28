@@ -1,6 +1,7 @@
 """Safety API — special_ops_permits endpoints."""
 
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -34,7 +35,7 @@ async def get_special_operation_permits(
     keyword: str | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """获取特殊作业票列表"""
     service = SpecialOperationService(db)
     skip = (page - 1) * page_size
@@ -56,7 +57,7 @@ async def create_special_operation_permit(
     data: SpecialOperationPermitCreate,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """创建特殊作业票"""
     service = SpecialOperationService(db)
     item = await service.create_permit(data)
@@ -73,7 +74,7 @@ async def get_special_operation_permit(
     permit_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """获取特殊作业票详情"""
     service = SpecialOperationService(db)
     item = await service.get_permit(permit_id)
@@ -92,7 +93,7 @@ async def update_special_operation_permit(
     data: SpecialOperationPermitUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """更新特殊作业票"""
     service = SpecialOperationService(db)
     item = await service.update_permit(permit_id, data)
@@ -111,7 +112,7 @@ async def delete_special_operation_permit(
     permit_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """删除特殊作业票"""
     service = SpecialOperationService(db)
     result = await service.delete_permit(permit_id)
@@ -133,7 +134,7 @@ async def submit_special_operation_permit(
     permit_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """提交作业票（草稿→已提交）"""
     service = SpecialOperationService(db)
     item = await service.submit_permit(permit_id)
@@ -152,7 +153,7 @@ async def approve_special_operation_permit(
     permit_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """审批作业票（已提交→已审批）"""
     service = SpecialOperationService(db)
     item = await service.approve_permit(permit_id)
@@ -172,7 +173,7 @@ async def reject_special_operation_permit(
     reason: str = Query(..., description="驳回原因"),
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """驳回作业票（已提交→已驳回）"""
     service = SpecialOperationService(db)
     item = await service.reject_permit(permit_id, reason)
@@ -191,7 +192,7 @@ async def start_special_operation_permit(
     permit_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """开始作业（已审批→作业中）"""
     service = SpecialOperationService(db)
     item = await service.start_permit(permit_id)
@@ -211,7 +212,7 @@ async def complete_special_operation_permit(
     method: str = Query(..., description="完工方式: normal/early_termination"),
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """完工验收（作业中→已完工）"""
     service = SpecialOperationService(db)
     item = await service.complete_permit(permit_id, method)
@@ -230,7 +231,7 @@ async def archive_special_operation_permit(
     permit_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """归档作业票（已完工→已归档）"""
     service = SpecialOperationService(db)
     item = await service.archive_permit(permit_id)
@@ -238,5 +239,3 @@ async def archive_special_operation_permit(
         return ApiResponse(code=400, message="无法归档，当前状态不允许")
     await db.commit()
     return ApiResponse(data=SpecialOperationPermitResponse.model_validate(item))
-
-

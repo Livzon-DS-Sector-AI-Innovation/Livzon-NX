@@ -98,7 +98,7 @@ export function WorkOrderDetailDrawer({ onRefresh }: WorkOrderDetailDrawerProps)
           await assignWorkOrder(wo.id, { assignee_id: assigneeId })
           message.success('指派成功')
           await refreshDetail(wo.id)
-        } catch (error: any) {
+        } catch (error) {
           message.error(error?.message || '指派失败')
           throw error
         }
@@ -111,7 +111,7 @@ export function WorkOrderDetailDrawer({ onRefresh }: WorkOrderDetailDrawerProps)
       await startWorkOrder(wo.id)
       message.success('已开始维修')
       await refreshDetail(wo.id)
-    } catch (error: any) {
+    } catch (error) {
       message.error(error?.message || '操作失败')
     }
   }
@@ -140,7 +140,7 @@ export function WorkOrderDetailDrawer({ onRefresh }: WorkOrderDetailDrawerProps)
           await completeWorkOrder(wo.id, { repair_detail: repairDetail })
           message.success('已提交验收')
           await refreshDetail(wo.id)
-        } catch (error: any) {
+        } catch (error) {
           message.error(error?.message || '操作失败')
           throw error
         }
@@ -171,7 +171,7 @@ export function WorkOrderDetailDrawer({ onRefresh }: WorkOrderDetailDrawerProps)
           await verifyWorkOrder(wo.id, { result, remark: remark || undefined })
           message.success(result === '合格' ? '验收通过' : '已打回重修')
           await refreshDetail(wo.id)
-        } catch (error: any) {
+        } catch (error) {
           message.error(error?.message || '操作失败')
           throw error
         }
@@ -184,7 +184,7 @@ export function WorkOrderDetailDrawer({ onRefresh }: WorkOrderDetailDrawerProps)
       await closeWorkOrder(wo.id)
       message.success('工单已关闭')
       await refreshDetail(wo.id)
-    } catch (error: any) {
+    } catch (error) {
       message.error(error?.message || '操作失败')
     }
   }
@@ -194,7 +194,7 @@ export function WorkOrderDetailDrawer({ onRefresh }: WorkOrderDetailDrawerProps)
       await claimWorkOrder(wo.id)
       message.success('抢单成功')
       await refreshDetail(wo.id)
-    } catch (error: any) {
+    } catch (error) {
       message.error(error?.message || '抢单失败')
     }
   }

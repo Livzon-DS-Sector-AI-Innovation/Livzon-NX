@@ -4,6 +4,9 @@ import type {
   InvoiceRecognitionRecordListResponse,
   ContractRecordApiResponse,
   ContractRecordListResponse,
+  MaterialOptionListResponse,
+  MaterialCatalogListResponse,
+  MaterialSourceConfigApiResponse,
   PurchaseOrderListResponse,
   PurchaseRequestApiResponse,
   PurchaseRequestListResponse,
@@ -20,6 +23,10 @@ type SupplierQuery =
   operations['list_supplier_records_api_v1_procurement_suppliers_get']['parameters']['query']
 type ContractRecordQuery =
   operations['list_contract_generation_records_api_v1_procurement_contracts_get']['parameters']['query']
+type MaterialOptionQuery =
+  operations['list_material_option_records_api_v1_procurement_material_options_get']['parameters']['query']
+type MaterialCatalogQuery =
+  operations['list_material_catalog_records_api_v1_procurement_material_catalog_get']['parameters']['query']
 
 function getServerApiBaseUrls() {
   return getBackendFallbackUrls()
@@ -98,6 +105,32 @@ export async function fetchPurchaseRequests(
 ): Promise<PurchaseRequestListResponse> {
   const path = `/api/v1/procurement/purchase-requests${buildQueryString(query)}`
   return fetchApiWithServerFallback<PurchaseRequestListResponse>(path, requestHeaders)
+}
+
+export async function fetchMaterialOptions(
+  query: MaterialOptionQuery,
+  requestHeaders?: HeadersInit,
+  signal?: AbortSignal,
+): Promise<MaterialOptionListResponse> {
+  const path = `/api/v1/procurement/material-options${buildQueryString(query)}`
+  return fetchApiWithServerFallback<MaterialOptionListResponse>(path, requestHeaders, signal)
+}
+
+export async function fetchMaterialCatalog(
+  query: MaterialCatalogQuery = {},
+  requestHeaders?: HeadersInit,
+): Promise<MaterialCatalogListResponse> {
+  const path = `/api/v1/procurement/material-catalog${buildQueryString(query)}`
+  return fetchApiWithServerFallback<MaterialCatalogListResponse>(path, requestHeaders)
+}
+
+export async function fetchMaterialSourceConfig(
+  requestHeaders?: HeadersInit,
+): Promise<MaterialSourceConfigApiResponse> {
+  return fetchApiWithServerFallback<MaterialSourceConfigApiResponse>(
+    '/api/v1/procurement/material-source-config',
+    requestHeaders,
+  )
 }
 
 export async function fetchPurchaseOrders(
@@ -206,9 +239,10 @@ function parseDownloadFilenameWithDefault(contentDisposition: string | null, fal
 async function fetchWithServerFallback(
   path: string,
   requestHeaders?: HeadersInit,
+  signal?: AbortSignal,
 ): Promise<Response> {
   if (typeof window !== 'undefined') {
-    const response = await fetch(path, { cache: 'no-store' })
+    const response = await fetch(path, { cache: 'no-store', signal })
     if (!response.ok) {
       throw new Error(`请求失败: ${response.status} ${response.statusText}`)
     }
@@ -222,6 +256,7 @@ async function fetchWithServerFallback(
       response = await fetch(`${baseUrl}${path}`, {
         cache: 'no-store',
         headers: requestHeaders,
+        signal,
       })
     } catch (error) {
       lastError = error
@@ -241,7 +276,8 @@ async function fetchWithServerFallback(
 async function fetchApiWithServerFallback<T>(
   path: string,
   requestHeaders?: HeadersInit,
+  signal?: AbortSignal,
 ): Promise<T> {
-  const response = await fetchWithServerFallback(path, requestHeaders)
+  const response = await fetchWithServerFallback(path, requestHeaders, signal)
   return response.json()
 }

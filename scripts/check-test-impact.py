@@ -47,10 +47,7 @@ def revision_exists(revision: str) -> bool:
 
 def resolve_revisions(base: str | None, head: str | None) -> tuple[str, str]:
     resolved_head = (
-        head
-        or os.environ.get("CI_HEAD_SHA")
-        or os.environ.get("GITHUB_SHA")
-        or "HEAD"
+        head or os.environ.get("CI_HEAD_SHA") or os.environ.get("GITHUB_SHA") or "HEAD"
     )
     if not revision_exists(resolved_head):
         resolved_head = "HEAD"
@@ -120,14 +117,9 @@ def evaluate(
     changed_tests: set[str],
 ) -> tuple[list[tuple[Requirement, list[str]]], list[str]]:
     roots = tuple(policy["production_roots"])
-    includes = [
-        re.compile(pattern) for pattern in policy["production_include"]
-    ]
+    includes = [re.compile(pattern) for pattern in policy["production_include"]]
     ignores = [re.compile(pattern) for pattern in policy.get("ignore", [])]
-    rules = [
-        (rule, re.compile(rule["source"]))
-        for rule in policy["rules"]
-    ]
+    rules = [(rule, re.compile(rule["source"])) for rule in policy["rules"]]
     requirements: dict[Requirement, list[str]] = {}
     unmatched: list[str] = []
 
@@ -151,8 +143,7 @@ def evaluate(
                 description=rule["description"],
                 captures=tuple(sorted(captures.items())),
                 test_patterns=tuple(
-                    render_pattern(pattern, captures)
-                    for pattern in rule["tests"]
+                    render_pattern(pattern, captures) for pattern in rule["tests"]
                 ),
             )
             requirements.setdefault(requirement, []).append(path)
@@ -189,9 +180,7 @@ def main() -> int:
             print(f"  {path}", file=sys.stderr)
 
     for requirement, source_paths in violations:
-        captures = ", ".join(
-            f"{name}={value}" for name, value in requirement.captures
-        )
+        captures = ", ".join(f"{name}={value}" for name, value in requirement.captures)
         suffix = f" ({captures})" if captures else ""
         print(
             f"Missing tests for {requirement.rule_id}{suffix}: "

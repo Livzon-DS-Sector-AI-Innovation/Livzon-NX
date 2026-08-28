@@ -4,7 +4,6 @@ Trimmed to only include _resolve_active_profile_name (used by system_prompt.py).
 """
 
 from pathlib import Path
-from typing import Optional
 
 
 def _hermes_home_path() -> Path:

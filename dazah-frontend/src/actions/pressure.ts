@@ -1,6 +1,5 @@
 'use server'
 
-import { getServerApiBaseUrl } from '@/lib/server-api'
 import { revalidatePath } from 'next/cache'
 import { getAuthHeaders } from '@/lib/auth'
 import type {
@@ -20,7 +19,7 @@ import type {
   UpdateMergedRowRequest,
 } from '@/types/pressure'
 
-const API_BASE = getServerApiBaseUrl()
+const API_BASE = process.env.API_BASE_URL || 'http://localhost:8000'
 
 // ============ Helper ============
 

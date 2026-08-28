@@ -83,7 +83,9 @@ async function api<T>(moduleCode: FeishuModuleCode, path: string, init?: Request
   const body = await response.json().catch(() => null) as ApiEnvelope<T> | null
   if (!response.ok || !body) {
     const detail = typeof body?.detail === 'string' ? body.detail : body?.detail?.message
-    throw new Error(body?.message || detail || body?.error?.message || `请求失败（${response.status}）`)
+    throw new Error(
+      body?.message || detail || body?.error?.message || `请求失败（${response.status}）`,
+    )
   }
   return body.data
 }

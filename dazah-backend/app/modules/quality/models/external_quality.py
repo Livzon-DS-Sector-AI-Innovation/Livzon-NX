@@ -16,7 +16,7 @@ from sqlalchemy import (
     UniqueConstraint,
     Uuid,
 )
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, synonym
 
 from app.shared.base_model import BaseModel
 
@@ -82,6 +82,9 @@ class Supplier(ExternalQualityBaseModel):
         Text, nullable=True, comment="供应范围"
     )
     remark: Mapped[str | None] = mapped_column(Text, nullable=True, comment="备注")
+    # The current API contract calls this field ``remarks`` while the legacy
+    # table stores ``remark``.  A synonym keeps both contracts/data layouts.
+    remarks = synonym("remark")
     status: Mapped[str] = mapped_column(
         String(30),
         nullable=False,

@@ -43,10 +43,11 @@ export default function ManualInputPage() {
   const [addForm] = Form.useForm()
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/immutability
     loadPoints()
   }, [area])
 
-  const loadPoints = async () => {
+  async function loadPoints() {
     setLoading(true)
     try {
       const res = await getPointMappings({ area, page_size: 200 })

@@ -8,6 +8,7 @@ Create Date: 2026-07-01 10:15:00.000000
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+
 from alembic import op
 
 # revision identifiers, used by Alembic.
@@ -50,14 +51,19 @@ def upgrade() -> None:
             ),
             sa.Column("created_by", sa.Uuid(), nullable=True),
             sa.Column("updated_by", sa.Uuid(), nullable=True),
-            sa.Column("is_deleted", sa.Boolean(), server_default="false", nullable=False),
+            sa.Column(
+                "is_deleted", sa.Boolean(), server_default="false", nullable=False
+            ),
             sa.PrimaryKeyConstraint("id"),
-            sa.UniqueConstraint("record_code", name="uq_validation_records_record_code"),
+            sa.UniqueConstraint(
+                "record_code", name="uq_validation_records_record_code"
+            ),
             schema="quality",
         )
 
     existing_indexes = {
-        index["name"] for index in inspector.get_indexes("validation_records", schema="quality")
+        index["name"]
+        for index in inspector.get_indexes("validation_records", schema="quality")
     }
     if "ix_quality_validation_records_record_type" not in existing_indexes:
         op.create_index(
@@ -83,7 +89,8 @@ def downgrade() -> None:
 
     if inspector.has_table("validation_records", schema="quality"):
         existing_indexes = {
-            index["name"] for index in inspector.get_indexes("validation_records", schema="quality")
+            index["name"]
+            for index in inspector.get_indexes("validation_records", schema="quality")
         }
         if "ix_quality_validation_records_record_type" in existing_indexes:
             op.drop_index(

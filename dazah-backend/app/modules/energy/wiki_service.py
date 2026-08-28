@@ -238,9 +238,7 @@ class EnergyWikiService:
             )
         except ValueError as exc:
             source_label = (
-                "Wiki 根节点或电子表格"
-                if data.source_type == "wiki"
-                else "多维表格"
+                "Wiki 根节点或电子表格" if data.source_type == "wiki" else "多维表格"
             )
             raise AppException(
                 message=(
@@ -304,9 +302,7 @@ class EnergyWikiService:
             root_token = self._parse_source_root_token(source_url, source_type)
         except ValueError as exc:
             source_label = (
-                "Wiki 根节点或电子表格"
-                if source_type == "wiki"
-                else "多维表格"
+                "Wiki 根节点或电子表格" if source_type == "wiki" else "多维表格"
             )
             raise AppException(
                 message=(
@@ -344,9 +340,7 @@ class EnergyWikiService:
             await self.session.commit()
         except IntegrityError as exc:
             await self.session.rollback()
-            raise AppException(
-                message="该飞书数据入口已存在", status_code=409
-            ) from exc
+            raise AppException(message="该飞书数据入口已存在", status_code=409) from exc
         return EnergyFeishuSourceRootResponse.model_validate(root)
 
     async def test_connectivity(self) -> EnergyFeishuConnectivityResult:
@@ -369,8 +363,7 @@ class EnergyWikiService:
                         name="应用凭据",
                         status="ok",
                         message=(
-                            "App ID / Secret 认证成功；"
-                            "请继续添加 Wiki 或多维表格入口"
+                            "App ID / Secret 认证成功；请继续添加 Wiki 或多维表格入口"
                         ),
                     )
                 )
@@ -610,9 +603,7 @@ class EnergyWikiService:
                     if root.source_type == "base":
                         await self._sync_bitable_root(config, root, run)
                     elif self._is_direct_spreadsheet_root(root):
-                        await self._sync_spreadsheet_root(
-                            config, root, run, client
-                        )
+                        await self._sync_spreadsheet_root(config, root, run, client)
                     else:
                         nodes = await client.discover_tree(root.root_token)
                         for node in nodes:
@@ -1037,9 +1028,7 @@ class EnergyWikiService:
         page_key: str,
         *,
         sheet_title: str | None = None,
-    ) -> list[
-        tuple[EnergyWorkbookSheet, EnergySheetSnapshot, list[EnergySnapshotRow]]
-    ]:
+    ) -> list[tuple[EnergyWorkbookSheet, EnergySheetSnapshot, list[EnergySnapshotRow]]]:
         sources: list[
             tuple[EnergyWorkbookSheet, EnergySheetSnapshot, list[EnergySnapshotRow]]
         ] = []
@@ -1113,9 +1102,7 @@ class EnergyWikiService:
                     continue
                 parsed_metrics: list[tuple[dict[str, Any], Decimal]] = []
                 for column, metric in metric_columns:
-                    value = self._try_parse_overview_decimal(
-                        self._cell(values, column)
-                    )
+                    value = self._try_parse_overview_decimal(self._cell(values, column))
                     if value is None:
                         continue
                     if metric.get("ratio") and abs(value) <= 1:
@@ -1217,9 +1204,7 @@ class EnergyWikiService:
         totals: dict[tuple[str, str, str], Decimal] = defaultdict(Decimal)
         counts: dict[tuple[str, str, str], int] = defaultdict(int)
         trends: dict[tuple[date, str, str, str], Decimal] = defaultdict(Decimal)
-        distributions: dict[tuple[str, str, str, str], Decimal] = defaultdict(
-            Decimal
-        )
+        distributions: dict[tuple[str, str, str, str], Decimal] = defaultdict(Decimal)
         latest: dict[tuple[str, str, str], tuple[datetime, Decimal]] = {}
         last_observed_at: datetime | None = None
         invalid_count = 0
@@ -1228,9 +1213,7 @@ class EnergyWikiService:
             metric_type = str(spec["energy_type"])
             if energy_type and energy_type not in {metric_type, sheet.title}:
                 continue
-            headers = self._header_values(
-                snapshot.header_values or sheet.headers
-            )
+            headers = self._header_values(snapshot.header_values or sheet.headers)
             total_columns = [
                 (index, header)
                 for index, header in enumerate(headers)
@@ -1267,9 +1250,7 @@ class EnergyWikiService:
                         default=None,
                     )
                     metric_key = (
-                        metric_type
-                        if len(total_columns) == 1
-                        else total_header.strip()
+                        metric_type if len(total_columns) == 1 else total_header.strip()
                     )
                     key = (metric_key, metric_type, str(spec["unit"]))
                     totals[key] += value
@@ -2216,9 +2197,8 @@ class EnergyWikiService:
 
     @staticmethod
     def _is_direct_spreadsheet_root(root: EnergyFeishuSourceRoot) -> bool:
-        return (
-            root.source_type == "wiki"
-            and EnergyFeishuClient.is_spreadsheet_url(root.source_url)
+        return root.source_type == "wiki" and EnergyFeishuClient.is_spreadsheet_url(
+            root.source_url
         )
 
     @staticmethod

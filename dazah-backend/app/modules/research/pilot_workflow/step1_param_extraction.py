@@ -3,6 +3,7 @@
 import json
 import logging
 from pathlib import Path
+from typing import Any
 
 from app.modules.research.llm_service import call_llm
 from app.modules.research.models import PilotWorkflow
@@ -27,6 +28,7 @@ def _read_document_text(document_path: str | None) -> str:
     if suffix == ".docx":
         try:
             from docx import Document
+
             doc = Document(str(path))
             return "\n".join(p.text for p in doc.paragraphs)
         except Exception as e:
@@ -36,6 +38,7 @@ def _read_document_text(document_path: str | None) -> str:
     if suffix == ".pdf":
         try:
             import pdfplumber
+
             text_parts = []
             with pdfplumber.open(str(path)) as pdf:
                 for page in pdf.pages:
@@ -50,7 +53,7 @@ def _read_document_text(document_path: str | None) -> str:
     return ""
 
 
-def _build_prompt(document_text: str, extra_context: dict | None) -> str:
+def _build_prompt(document_text: str, extra_context: dict[str, Any] | None) -> str:
     """构建参数提取的 LLM prompt"""
     context_section = ""
     if extra_context:
@@ -111,9 +114,9 @@ def _build_prompt(document_text: str, extra_context: dict | None) -> str:
 
 
 async def execute_param_extraction(
-    step_input: dict,
+    step_input: dict[str, Any],
     workflow: PilotWorkflow,
-) -> dict:
+) -> dict[str, Any]:
     """执行参数提取与风险初判"""
     # 读取文档
     document_text = _read_document_text(workflow.input_document_path)
@@ -137,6 +140,8 @@ async def execute_param_extraction(
             result = json.loads(result)
         except json.JSONDecodeError:
             result = {"raw_text": result}
+    if not isinstance(result, dict):
+        result = {}
 
     return {
         "step": "param_extraction",

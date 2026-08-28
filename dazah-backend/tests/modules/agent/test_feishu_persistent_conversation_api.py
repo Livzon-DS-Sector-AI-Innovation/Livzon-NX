@@ -1,5 +1,6 @@
 import uuid
 from collections.abc import AsyncIterator
+from typing import Any
 
 import pytest
 from fastapi import HTTPException
@@ -32,12 +33,12 @@ async def test_feishu_conversation_route_persists_history_and_is_idempotent(
     async def override_db() -> AsyncIterator[AsyncSession]:
         yield db_session
 
-    async def allow_scope(self, db, *, user):
+    async def allow_scope(self: Any, db: Any, *, user: Any) -> Any:
         return None
 
     monkeypatch.setattr(api, "require_service_token", lambda *args: None)
     monkeypatch.setattr(
-        api.AgentAccessScopeService,
+        api.AgentAccessScopeService,  # type: ignore[attr-defined]
         "get_current_scope",
         allow_scope,
     )
@@ -121,7 +122,7 @@ async def test_feishu_conversation_route_persists_history_and_is_idempotent(
                 "run_id": str(uuid.uuid4()),
             }
             reset_payload["source"] = {
-                **prepare_payload["source"],
+                **prepare_payload["source"],  # type: ignore[dict-item]
                 "message_id": reset_payload["external_message_id"],
             }
             reset = await client.post(
@@ -133,7 +134,7 @@ async def test_feishu_conversation_route_persists_history_and_is_idempotent(
             assert reset.json()["session_id"] != session_id
             assert reset.json()["messages"] == []
 
-        detail = await AgentService(settings=object()).get_session_detail(
+        detail = await AgentService(settings=object()).get_session_detail(  # type: ignore[arg-type]
             db_session,
             session_id=uuid.UUID(session_id),
             current_user=user,
@@ -166,7 +167,7 @@ async def test_feishu_conversation_route_rejects_cross_tenant_subject(
     with pytest.raises(HTTPException) as exc:
         await api._require_feishu_subject_user(
             db_session,
-            subject=api.AgentTrustedSubject(
+            subject=api.AgentTrustedSubject(  # type: ignore[attr-defined]
                 tenant_id="tenant-b",
                 user_id=user.id,
                 source="feishu",

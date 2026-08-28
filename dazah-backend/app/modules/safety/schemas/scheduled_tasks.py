@@ -2,12 +2,13 @@
 
 import uuid
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
+from typing import Any
 
 from pydantic import BaseModel, Field
 
 
-class TaskStatusEnum(str, Enum):
+class TaskStatusEnum(StrEnum):
     """任务执行状态枚举"""
 
     RUNNING = "running"
@@ -15,7 +16,7 @@ class TaskStatusEnum(str, Enum):
     FAILURE = "failure"
 
 
-class HeaderColorEnum(str, Enum):
+class HeaderColorEnum(StrEnum):
     """卡片头部颜色枚举"""
 
     BLUE = "blue"
@@ -47,12 +48,22 @@ class ScheduledTaskCreate(BaseModel):
 
     name: str = Field(..., min_length=1, max_length=200, description="任务名称")
     description: str | None = Field(None, description="任务描述")
-    cron_expression: str = Field(..., min_length=1, max_length=100, description="Cron 表达式")
+    cron_expression: str = Field(
+        ..., min_length=1, max_length=100, description="Cron 表达式"
+    )
     cron_desc: str | None = Field(None, max_length=200, description="Cron 可读描述")
-    feishu_chat_id: str = Field(..., min_length=1, max_length=100, description="目标飞书群聊 chat_id")
-    feishu_chat_name: str | None = Field(None, max_length=200, description="飞书群聊名称")
-    header_color: HeaderColorEnum = Field(HeaderColorEnum.BLUE, description="卡片头部颜色")
-    data_sources: list[DataSourceItem] = Field(default_factory=list, description="数据来源配置")
+    feishu_chat_id: str = Field(
+        ..., min_length=1, max_length=100, description="目标飞书群聊 chat_id"
+    )
+    feishu_chat_name: str | None = Field(
+        None, max_length=200, description="飞书群聊名称"
+    )
+    header_color: HeaderColorEnum = Field(
+        HeaderColorEnum.BLUE, description="卡片头部颜色"
+    )
+    data_sources: list[DataSourceItem] = Field(
+        default_factory=list, description="数据来源配置"
+    )
     card_template: str | None = Field(None, description="消息卡片模板")
     is_enabled: bool = Field(True, description="是否启用")
 
@@ -62,10 +73,16 @@ class ScheduledTaskUpdate(BaseModel):
 
     name: str | None = Field(None, min_length=1, max_length=200, description="任务名称")
     description: str | None = Field(None, description="任务描述")
-    cron_expression: str | None = Field(None, min_length=1, max_length=100, description="Cron 表达式")
+    cron_expression: str | None = Field(
+        None, min_length=1, max_length=100, description="Cron 表达式"
+    )
     cron_desc: str | None = Field(None, max_length=200, description="Cron 可读描述")
-    feishu_chat_id: str | None = Field(None, min_length=1, max_length=100, description="目标飞书群聊 chat_id")
-    feishu_chat_name: str | None = Field(None, max_length=200, description="飞书群聊名称")
+    feishu_chat_id: str | None = Field(
+        None, min_length=1, max_length=100, description="目标飞书群聊 chat_id"
+    )
+    feishu_chat_name: str | None = Field(
+        None, max_length=200, description="飞书群聊名称"
+    )
     header_color: HeaderColorEnum | None = Field(None, description="卡片头部颜色")
     data_sources: list[DataSourceItem] | None = Field(None, description="数据来源配置")
     card_template: str | None = Field(None, description="消息卡片模板")
@@ -83,7 +100,7 @@ class ScheduledTaskResponse(BaseModel):
     feishu_chat_id: str
     feishu_chat_name: str | None
     header_color: str
-    data_sources: list | None
+    data_sources: list[Any] | None
     card_template: str | None
     is_enabled: bool
     last_run_at: datetime | None
@@ -105,7 +122,7 @@ class ScheduledTaskLogResponse(BaseModel):
     started_at: datetime
     completed_at: datetime | None
     status: str
-    data_snapshot: dict | None
+    data_snapshot: dict[str, Any] | None
     card_content: str | None
     feishu_msg_id: str | None
     error_message: str | None
@@ -121,7 +138,9 @@ class CardPreviewRequest(BaseModel):
 
     data_sources: list[DataSourceItem] = Field(..., description="数据来源配置")
     card_template: str = Field(..., description="消息卡片模板")
-    header_color: HeaderColorEnum = Field(HeaderColorEnum.BLUE, description="卡片头部颜色")
+    header_color: HeaderColorEnum = Field(
+        HeaderColorEnum.BLUE, description="卡片头部颜色"
+    )
 
 
 class CardPreviewResponse(BaseModel):
@@ -129,7 +148,9 @@ class CardPreviewResponse(BaseModel):
 
     card_json: str = Field(..., description="飞书卡片 JSON")
     markdown_preview: str = Field(..., description="渲染后的 Markdown 预览")
-    variables: dict[str, str] = Field(default_factory=dict, description="解析后的变量值")
+    variables: dict[str, str] = Field(
+        default_factory=dict, description="解析后的变量值"
+    )
 
 
 class DataSourceOption(BaseModel):

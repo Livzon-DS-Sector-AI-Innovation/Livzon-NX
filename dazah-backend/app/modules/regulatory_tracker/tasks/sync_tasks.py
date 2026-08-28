@@ -1,25 +1,29 @@
 """Background sync tasks — APScheduler integration."""
 
 import logging
-from datetime import datetime, timezone
 
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.cron import CronTrigger
-from sqlalchemy import select
+# APScheduler does not publish typing metadata for these imports.
+from apscheduler.schedulers.asyncio import (  # type: ignore[import-untyped]
+    AsyncIOScheduler,
+)
+from apscheduler.triggers.cron import (  # type: ignore[import-untyped]
+    CronTrigger,
+)
 
 from app.core.config import get_settings
 from app.core.database import async_session_factory
 from app.modules.regulatory_tracker import repository as repo
-from app.modules.regulatory_tracker.models import DataChannel, DataSource
+from app.modules.regulatory_tracker.services.ai_analysis_service import (
+    analyze_new_documents,
+)
 from app.modules.regulatory_tracker.services.sync_service import run_sync_job
-from app.modules.regulatory_tracker.services.ai_analysis_service import analyze_new_documents
 
 logger = logging.getLogger(__name__)
 
 scheduler = AsyncIOScheduler()
 
 
-async def daily_sync_job():
+async def daily_sync_job() -> None:
     """每日定时同步任务：同步 CDE 国内药品技术指导原则前 1-3 页。"""
     logger.info("⏰ 开始每日同步任务 (daily_sync, pages 1-3)")
 
@@ -30,7 +34,9 @@ async def daily_sync_job():
                 logger.error("CDE 数据源不存在，跳过同步")
                 return
 
-            channel = await repo.get_channel_by_code(db, source.id, "cde_domestic_guideline")
+            channel = await repo.get_channel_by_code(
+                db, source.id, "cde_domestic_guideline"
+            )
             if not channel:
                 logger.error("cde_domestic_guideline 栏目不存在，跳过同步")
                 return
@@ -51,7 +57,8 @@ async def daily_sync_job():
             )
 
             logger.info(
-                "✅ 每日同步完成: status=%s checked=%d new=%d updated=%d failed=%d error=%s",
+                "✅ 每日同步完成: status=%s checked=%d new=%d updated=%d "
+                "failed=%d error=%s",
                 result["status"],
                 result["checked"],
                 result["new"],
@@ -64,9 +71,7 @@ async def daily_sync_job():
         logger.exception("❌ 每日同步任务异常")
 
 
-
-
-async def daily_ai_analysis_job():
+async def daily_ai_analysis_job() -> None:
     """每日 AI 分析任务：分析新采集的法规文档。"""
     logger.info("⏰ 开始每日 AI 分析任务")
 
@@ -82,7 +87,8 @@ async def daily_ai_analysis_job():
     except Exception:
         logger.exception("❌ AI 分析任务异常")
 
-def start_scheduler():
+
+def start_scheduler() -> None:
     """启动定时调度器。"""
     settings = get_settings()
     cron_expr = settings.DAILY_SYNC_CRON  # e.g. "0 2 * * *"
@@ -108,7 +114,7 @@ def start_scheduler():
         name="CDE 国内药品技术指导原则每日同步",
         replace_existing=True,
     )
-    
+
     # AI 分析任务：在同步后 1 小时运行
     ai_trigger = CronTrigger(
         minute=parts[0],
@@ -125,12 +131,12 @@ def start_scheduler():
         name="法规文档 AI 每日分析",
         replace_existing=True,
     )
-    
+
     scheduler.start()
     logger.info("📅 Scheduler 已启动, cron=%s (Asia/Shanghai)", cron_expr)
 
 
-def stop_scheduler():
+def stop_scheduler() -> None:
     """停止定时调度器。"""
     if scheduler.running:
         scheduler.shutdown(wait=False)

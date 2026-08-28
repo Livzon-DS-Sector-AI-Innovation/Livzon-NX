@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import io
 import uuid
-from types import SimpleNamespace
+from collections.abc import AsyncIterator
+from types import SimpleNamespace as _SimpleNamespace
+from typing import Any
 
 import pytest
 from docx import Document
@@ -13,9 +15,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.quality.models.ai_analysis_log import QualityAiAnalysisLog
 from app.modules.quality.models.deviations import Deviation
 
+SimpleNamespace: Any = _SimpleNamespace
+
 
 @pytest.fixture(autouse=True)
-async def _clean_ai_session_tables(db_session: AsyncSession) -> None:
+async def _clean_ai_session_tables(db_session: AsyncSession) -> AsyncIterator[Any]:
     await db_session.execute(text("CREATE SCHEMA IF NOT EXISTS quality"))
     await db_session.execute(
         text(
@@ -36,7 +40,8 @@ async def _clean_ai_session_tables(db_session: AsyncSession) -> None:
                 created_by UUID NULL,
                 updated_by UUID NULL,
                 is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
-                CONSTRAINT uq_quality_deviation_ai_sessions_deviation_id UNIQUE (deviation_id)
+                CONSTRAINT uq_quality_deviation_ai_sessions_deviation_id UNIQUE
+                (deviation_id)
             )
             """
         )
@@ -65,16 +70,20 @@ async def _clean_ai_session_tables(db_session: AsyncSession) -> None:
             """
         )
     )
-    await db_session.execute(text("DELETE FROM quality.deviation_ai_session_attachments"))
+    await db_session.execute(
+        text("DELETE FROM quality.deviation_ai_session_attachments")
+    )
     await db_session.execute(text("DELETE FROM quality.deviation_ai_sessions"))
-    await db_session.execute(QualityAiAnalysisLog.__table__.delete())
-    await db_session.execute(Deviation.__table__.delete())
+    await db_session.execute(QualityAiAnalysisLog.__table__.delete())  # type: ignore[attr-defined]
+    await db_session.execute(Deviation.__table__.delete())  # type: ignore[attr-defined]
     await db_session.commit()
     yield
-    await db_session.execute(text("DELETE FROM quality.deviation_ai_session_attachments"))
+    await db_session.execute(
+        text("DELETE FROM quality.deviation_ai_session_attachments")
+    )
     await db_session.execute(text("DELETE FROM quality.deviation_ai_sessions"))
-    await db_session.execute(QualityAiAnalysisLog.__table__.delete())
-    await db_session.execute(Deviation.__table__.delete())
+    await db_session.execute(QualityAiAnalysisLog.__table__.delete())  # type: ignore[attr-defined]
+    await db_session.execute(Deviation.__table__.delete())  # type: ignore[attr-defined]
     await db_session.commit()
 
 
@@ -176,12 +185,12 @@ async def test_regenerate_and_apply_deviation_ai_session(
     captured_prompt: dict[str, str] = {}
 
     async def _fake_llm_chat_json(
-        self,  # noqa: ANN001
-        messages: list[dict],
-        expected_keys=None,  # noqa: ANN001
-        temperature=None,  # noqa: ANN001
-        config_type="text",  # noqa: ANN001
-    ) -> dict:
+        self: Any,  # noqa: ANN001
+        messages: list[dict[Any, Any]],
+        expected_keys: Any = None,  # noqa: ANN001
+        temperature: Any = None,  # noqa: ANN001
+        config_type: Any = "text",  # noqa: ANN001
+    ) -> dict[str, Any]:
         captured_prompt["prompt"] = messages[0]["content"] if messages else ""
         return {
             "deviation_analysis": {

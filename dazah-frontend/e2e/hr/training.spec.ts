@@ -3,52 +3,52 @@ import { test, expect } from '@playwright/test'
 test.describe('培训模块首页', () => {
   test('页面加载并显示标题', async ({ page }) => {
     await page.goto('/hr/training')
-    await expect(page.locator('h1', { hasText: '老厂培训管理' })).toBeVisible()
+    await expect(page.locator('h1', { hasText: '培训管理' })).toBeVisible()
   })
 
-  test('显示6个功能卡片', async ({ page }) => {
+  test('显示8个功能卡片', async ({ page }) => {
     await page.goto('/hr/training')
     await page.waitForTimeout(1000)
     const cards = page.locator('.ant-card')
-    await expect(cards).toHaveCount(6)
+    await expect(cards).toHaveCount(8)
   })
 
   test('年度培训计划卡片可点击', async ({ page }) => {
     await page.goto('/hr/training')
     await page.waitForTimeout(1000)
-    const title = page.locator('.ant-card').filter({ hasText: '年度培训计划' }).locator('h3').first()
-    await expect(title).toBeVisible()
-    await title.click()
+    const link = page.locator('main a[href="/hr/training/annual-plan"]')
+    await expect(link).toBeVisible()
+    await link.click()
     await page.waitForTimeout(1500)
     await expect(page).toHaveURL(/.*\/hr\/training\/annual-plan/)
   })
 
-  test('新员工入职培训卡片可点击', async ({ page }) => {
+  test('新员工培训卡片可点击', async ({ page }) => {
     await page.goto('/hr/training')
     await page.waitForTimeout(1000)
-    const title = page.locator('.ant-card').filter({ hasText: '新员工入职培训' }).locator('h3').first()
-    await expect(title).toBeVisible()
-    await title.click()
+    const link = page.locator('main a[href="/hr/training/new-employee"]')
+    await expect(link).toBeVisible()
+    await link.click()
     await page.waitForTimeout(1500)
-    await expect(page).toHaveURL(/.*\/hr\/training\/onboarding/)
+    await expect(page).toHaveURL(/.*\/hr\/training\/new-employee/)
   })
 
-  test('培训通知卡片可点击', async ({ page }) => {
+  test('培训资料卡片可点击', async ({ page }) => {
     await page.goto('/hr/training')
     await page.waitForTimeout(1000)
-    const title = page.locator('.ant-card').filter({ hasText: '培训通知' }).locator('h3').first()
-    await expect(title).toBeVisible()
-    await title.click()
+    const link = page.locator('main a[href="/hr/training/sign-in"]')
+    await expect(link).toBeVisible()
+    await link.click()
     await page.waitForTimeout(1500)
-    await expect(page).toHaveURL(/.*\/hr\/training\/notification/)
+    await expect(page).toHaveURL(/.*\/hr\/training\/sign-in/)
   })
 
   test('培训签到表卡片可点击', async ({ page }) => {
     await page.goto('/hr/training')
     await page.waitForTimeout(1000)
-    const title = page.locator('.ant-card').filter({ hasText: '培训签到表' }).locator('h3').first()
-    await expect(title).toBeVisible()
-    await title.click()
+    const link = page.locator('main a[href="/hr/training/sign-in"]')
+    await expect(link).toBeVisible()
+    await link.click()
     await page.waitForTimeout(1500)
     await expect(page).toHaveURL(/.*\/hr\/training\/sign-in/)
   })
@@ -56,21 +56,17 @@ test.describe('培训模块首页', () => {
   test('培训台账卡片可点击', async ({ page }) => {
     await page.goto('/hr/training')
     await page.waitForTimeout(1000)
-    const title = page.locator('.ant-card').filter({ hasText: '培训台账' }).locator('h3').first()
-    await expect(title).toBeVisible()
-    await title.click()
+    const link = page.locator('main a[href="/hr/training/ledger"]')
+    await expect(link).toBeVisible()
+    await link.click()
     await page.waitForTimeout(1500)
     await expect(page).toHaveURL(/.*\/hr\/training\/ledger/)
   })
 
-  test('AI出题卡片可点击', async ({ page }) => {
-    await page.goto('/hr/training')
-    await page.waitForTimeout(1000)
-    const title = page.locator('.ant-card').filter({ hasText: 'AI 出题' }).locator('h3').first()
-    await expect(title).toBeVisible()
-    await title.click()
-    await page.waitForTimeout(1500)
-    await expect(page).toHaveURL(/.*\/hr\/training\/ai-exam/)
+  test('AI出题旧入口重定向到培训资料', async ({ page }) => {
+    await page.goto('/hr/training/ai-exam')
+    await expect(page).toHaveURL(/.*\/hr\/training\/sign-in/)
+    await expect(page.getByText('培训签到表', { exact: true }).first()).toBeVisible()
   })
 })
 
@@ -118,13 +114,13 @@ test.describe('培训签到表', () => {
   test('页面加载并显示标题', async ({ page }) => {
     await page.goto('/hr/training/sign-in')
     await page.waitForTimeout(2000)
-    await expect(page.locator('h1', { hasText: '培训签到表' })).toBeVisible()
+    await expect(page.getByText('培训签到表', { exact: true }).first()).toBeVisible()
   })
 
   test('表单元素存在', async ({ page }) => {
     await page.goto('/hr/training/sign-in')
     await page.waitForTimeout(2000)
-    const inputs = page.locator('input, .ant-input, .ant-select').first()
+    const inputs = page.locator('.ant-select:visible, input:not([type="radio"]):visible, textarea:visible').first()
     await expect(inputs).toBeVisible()
   })
 })
@@ -159,18 +155,16 @@ test.describe('年度培训计划', () => {
   })
 })
 
-test.describe('AI出题', () => {
-  test('页面加载并显示标题', async ({ page }) => {
+test.describe('AI出题兼容入口', () => {
+  test('旧入口重定向到培训资料', async ({ page }) => {
     await page.goto('/hr/training/ai-exam')
-    await page.waitForTimeout(2000)
-    await expect(page.locator('h1', { hasText: 'AI 出题' })).toBeVisible()
+    await expect(page).toHaveURL(/.*\/hr\/training\/sign-in/)
+    await expect(page.getByText('培训签到表', { exact: true }).first()).toBeVisible()
   })
 
-  test('上传区域存在', async ({ page }) => {
+  test('重定向后培训资料入口可用', async ({ page }) => {
     await page.goto('/hr/training/ai-exam')
-    await page.waitForTimeout(2000)
-    const upload = page.locator('.ant-upload, [class*="upload"], button').first()
-    await expect(upload).toBeVisible()
+    await expect(page.getByRole('button', { name: '新建培训资料' })).toBeVisible()
   })
 })
 

@@ -1,123 +1,161 @@
 'use client'
 
-import { useState } from 'react'
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { App, Button, Card, Descriptions, Space, Tag } from 'antd'
-import { ArrowLeftOutlined, DeleteOutlined, DownloadOutlined, EditOutlined } from '@ant-design/icons'
+import { useEffect } from 'react'
+import { useRouter, useParams } from 'next/navigation'
+import { App, Card, Button, Space, Form, Input, Select, DatePicker, Radio } from 'antd'
+import { ArrowLeftOutlined, DeleteOutlined } from '@ant-design/icons'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import dayjs from 'dayjs'
-import { deleteFeishuDeviationLedgerRecord } from '@/actions/quality'
-import { exportFeishuDeviationLedgerRecord } from '@/lib/api/quality'
-import type { FeishuDeviationLedgerRecordItem } from '@/types/quality'
+import { fetchDeviation } from '@/lib/api/client/quality'
+import { updateDeviation, deleteDeviation } from '@/actions/quality-deviation'
+import type { DeviationDetail as DeviationDetailType, DeviationStatus } from '@/types/quality'
 
-const LEVEL_LABELS: Record<string, string> = {
-  major: '重大',
-  moderate: '次要',
-  minor: '微小',
-  '重大': '重大',
-  '次要': '次要',
-  '微小': '微小',
+/** JSON 列视图类型：后端以 JSON 存储（generated 类型为 unknown[]），此处补充视图层类型 */
+type DeviationJsonView = Omit<DeviationDetailType, 'investigation_records' | 'review_opinions'> & {
+  investigation_records?: unknown[] | null
+  review_opinions?: unknown[] | null
+}
+
+const { TextArea } = Input
+
+const STATUS_LABELS: Record<DeviationStatus, string> = {
+  draft: '草稿',
+  pending_ai_analysis: '待AI分析',
+  pending_investigation: '待调查',
+  pending_dept_head_review: '待部门主管审核',
+  pending_cross_dept_head_review: '待跨部门主管审核',
+  pending_qa_review: '待QA审核',
+  pending_qa_head_review: '待QA主管审核',
+  pending_quality_head_review: '待质量主管审核',
+  pending_final_code: '待最终编号',
+  returned: '已退回',
+  closed: '已关闭',
+  cancelled: '已取消',
+}
+
+const STATUS_COLORS: Record<DeviationStatus, string> = {
+  draft: 'default',
+  pending_ai_analysis: 'purple',
+  pending_investigation: 'blue',
+  pending_dept_head_review: 'orange',
+  pending_cross_dept_head_review: 'orange',
+  pending_qa_review: 'orange',
+  pending_qa_head_review: 'orange',
+  pending_quality_head_review: 'orange',
+  pending_final_code: 'cyan',
+  returned: 'red',
+  closed: 'green',
+  cancelled: 'default',
 }
 
 const LEVEL_OPTIONS = [
-  { value: '重大', label: '重大' },
-  { value: '次要', label: '次要' },
-  { value: '微小', label: '微小' },
+  { label: '次要偏差', value: 'minor' },
+  { label: '中等偏差', value: 'moderate' },
+  { label: '严重偏差', value: 'major' },
 ]
-
-function normalizeLevelValue(value: string | null | undefined): string {
-  if (!value) return ''
-  return LEVEL_LABELS[value] || value
-}
-
-const booleanOptions = [
-  { label: '是', value: 'true' },
-  { label: '否', value: 'false' },
-]
-
-function formatDateTimeForInput(value: string | null | undefined): string {
-  if (!value) return ''
-  const parsed = dayjs(value)
-  return parsed.isValid() ? parsed.format('YYYY-MM-DDTHH:mm') : ''
-}
-
-function formatDateTime(value: string | null | undefined): string {
-  if (!value) return '-'
-  const parsed = dayjs(value)
-  return parsed.isValid() ? parsed.format('YYYY-MM-DD HH:mm') : value
-}
-
-function formatBoolean(value: boolean | null | undefined): string {
-  if (value === true) return '是'
-  if (value === false) return '否'
-  return '-'
-}
 
 function getErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback
 }
 
-export function DeviationDetail({
-  initialDeviation = null,
-  initialLoadError = null,
-  initialEditMode = false,
-  saveAction,
-}: {
-  initialDeviation?: FeishuDeviationLedgerRecordItem | null
+interface DeviationDetailProps {
+  initialDeviation?: DeviationDetailType | null
   initialLoadError?: string | null
   initialEditMode?: boolean
-  saveAction?: (formData: FormData) => void | Promise<void>
-}) {
+  saveAction?: ((formData: FormData) => Promise<void>) | undefined
+}
+
+export function DeviationDetail(props: DeviationDetailProps = {}) {
   const router = useRouter()
+  const params = useParams()
   const { message, modal } = App.useApp()
-  const [editMode] = useState(initialEditMode)
-  const [exporting, setExporting] = useState(false)
-  const deviation = initialDeviation
+  const queryClient = useQueryClient()
+  const id = params.id as string
 
-  if (initialLoadError) {
-    return (
-      <Card>
-        <div style={{ display: 'grid', gap: 16 }}>
-          <div>加载飞书偏差台账失败：{initialLoadError}</div>
-          <div>
-            <Link href="/quality/deviations/ledger">
-              <Button icon={<ArrowLeftOutlined />}>返回台账列表</Button>
-            </Link>
-          </div>
-        </div>
-      </Card>
-    )
+  const { data: deviation, isLoading: loading, error } = useQuery<DeviationJsonView>({
+    queryKey: ['quality-deviation', 'detail', id],
+    queryFn: () => fetchDeviation(id),
+    enabled: !!id,
+    initialData: (props.initialDeviation ?? undefined) as DeviationJsonView | undefined,
+  })
+
+  const [editForm] = Form.useForm()
+  // 监听"偏差是否曾发生"勾选值，控制曾发生编号输入框的可用/显隐
+  const hasOccurredBefore = Form.useWatch('has_occurred_before', editForm)
+
+  useEffect(() => {
+    if (props.initialLoadError) {
+      message.error(props.initialLoadError)
+      router.push('/quality/deviations/ledger')
+    }
+  }, [props.initialLoadError, message, router])
+
+  useEffect(() => {
+    if (error && !props.initialDeviation) {
+      message.error(getErrorMessage(error, '加载失败'))
+      router.push('/quality/deviations/ledger')
+    }
+  }, [error, message, router, props.initialDeviation])
+
+  // 数据加载后回填表单（对齐桌面台账：可编辑区域直接展示可编辑内容）
+  useEffect(() => {
+    if (deviation) {
+      editForm.setFieldsValue({
+        affected_items: deviation.affected_items,
+        batch_number: deviation.batch_number,
+        description: deviation.description,
+        has_occurred_before: deviation.has_occurred_before,
+        previous_occurrence_code: deviation.previous_occurrence_code,
+        root_cause_analysis: deviation.root_cause_analysis,
+        level: deviation.level,
+        investigation_completed_at: deviation.investigation_completed_at ? dayjs(deviation.investigation_completed_at) : null,
+        corrective_actions: deviation.corrective_actions,
+        material_disposition: deviation.material_disposition,
+        is_closed: deviation.status === 'closed',
+      })
+    }
+  }, [deviation, editForm])
+
+  const handleSaveEdit = async () => {
+    try {
+      const values = await editForm.validateFields()
+      // 组装更新数据：可编辑列对齐桌面台账
+      await updateDeviation(deviation!.id, {
+        description: values.description,
+        affected_items: values.affected_items || null,
+        batch_number: values.batch_number || null,
+        has_occurred_before: values.has_occurred_before,
+        // 曾发生编号为空串时提交 null，避免落库空字符串
+        previous_occurrence_code: values.previous_occurrence_code || null,
+        root_cause_analysis: values.root_cause_analysis,
+        level: values.level,
+        investigation_completed_at: values.investigation_completed_at
+          ? values.investigation_completed_at.toISOString()
+          : null,
+        corrective_actions: values.corrective_actions,
+        material_disposition: values.material_disposition,
+        // 是否关闭：选择"是"时置为已关闭，否则恢复为草稿/进行中
+        status: values.is_closed === true ? 'closed' : values.is_closed === false && deviation!.status === 'closed' ? 'draft' : deviation!.status,
+      })
+      message.success('保存成功')
+      queryClient.invalidateQueries({ queryKey: ['quality-deviation', 'detail', id] })
+      queryClient.invalidateQueries({ queryKey: ['quality-deviation', 'list'] })
+    } catch (error: unknown) {
+      message.error(getErrorMessage(error, '保存失败'))
+    }
   }
-
-  if (!deviation) {
-    return (
-      <Card>
-        <div style={{ display: 'grid', gap: 16 }}>
-          <div>未找到飞书偏差台账记录</div>
-          <div>
-            <Link href="/quality/deviations/ledger">
-              <Button icon={<ArrowLeftOutlined />}>返回台账列表</Button>
-            </Link>
-          </div>
-        </div>
-      </Card>
-    )
-  }
-
-  const detailHref = `/quality/deviations/${deviation.record_id}`
-  const editHref = `${detailHref}?edit=1`
 
   const handleDelete = () => {
     modal.confirm({
       title: '确认删除',
-      content: `确定要删除飞书偏差台账“${deviation.deviation_code || deviation.record_id}”吗？此操作不可恢复。`,
+      content: '确定要删除此偏差吗？此操作不可恢复。',
       okText: '删除',
       okType: 'danger',
       cancelText: '取消',
       onOk: async () => {
         try {
-          await deleteFeishuDeviationLedgerRecord(deviation.record_id)
-          message.success('飞书台账已删除')
+          await deleteDeviation(deviation!.id)
+          message.success('删除成功')
           router.push('/quality/deviations/ledger')
         } catch (error: unknown) {
           message.error(getErrorMessage(error, '删除失败'))
@@ -126,302 +164,95 @@ export function DeviationDetail({
     })
   }
 
-  const handleExport = async () => {
-    try {
-      setExporting(true)
-      const { blob, filename } = await exportFeishuDeviationLedgerRecord(
-        deviation.record_id
-      )
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = filename
-      a.click()
-      URL.revokeObjectURL(url)
-      message.success('导出成功')
-    } catch (error: unknown) {
-      message.error(getErrorMessage(error, '导出失败'))
-    } finally {
-      setExporting(false)
-    }
+  if (loading) {
+    return <div>加载中...</div>
+  }
+
+  if (!deviation) {
+    return <div>未找到偏差</div>
   }
 
   return (
     <div>
       <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Space>
-          <Link href="/quality/deviations/ledger">
-            <Button icon={<ArrowLeftOutlined />}>返回</Button>
-          </Link>
-          <h2 style={{ margin: 0 }}>{deviation.deviation_code || deviation.record_id}</h2>
-          <Tag color={deviation.status === 'closed' ? 'green' : 'default'}>
-            {deviation.status === 'closed' ? '已关闭' : '未关闭'}
-          </Tag>
+          <Button icon={<ArrowLeftOutlined />} onClick={() => router.push('/quality/deviations/ledger')}>
+            返回
+          </Button>
+          <h2 style={{ margin: 0 }}>{deviation.deviation_code}</h2>
         </Space>
         <Space>
-          <Button icon={<DownloadOutlined />} loading={exporting} onClick={() => void handleExport()}>
-            导出Word
+          <Button type="primary" onClick={handleSaveEdit}>
+            保存
           </Button>
-          {!editMode ? (
-            <Link href={editHref}>
-              <Button icon={<EditOutlined />}>编辑</Button>
-            </Link>
-          ) : (
-            <>
-              <Link href={detailHref}>
-                <Button>取消</Button>
-              </Link>
-              <Button
-                type="primary"
-                {...(saveAction ? { htmlType: 'submit', form: 'deviation-edit-form' } : {})}
-              >
-                保存
-              </Button>
-            </>
-          )}
           <Button danger icon={<DeleteOutlined />} onClick={handleDelete}>
             删除
           </Button>
         </Space>
       </div>
 
-      {!editMode ? (
-        <Card title="飞书台账详情">
-          <Descriptions column={2}>
-            <Descriptions.Item label="偏差编号">{deviation.deviation_code || '-'}</Descriptions.Item>
-            <Descriptions.Item label="飞书记录ID">{deviation.record_id}</Descriptions.Item>
-            <Descriptions.Item label="产品名称/批号">
-              {deviation.affected_items || deviation.batch_number || '-'}
-            </Descriptions.Item>
-            <Descriptions.Item label="偏差等级">
-              {deviation.level ? LEVEL_LABELS[deviation.level] || deviation.level : '-'}
-            </Descriptions.Item>
-            <Descriptions.Item label="偏差简要描述" span={2}>
-              {deviation.description || deviation.title || '-'}
-            </Descriptions.Item>
-            <Descriptions.Item label="偏差是否曾发生">
-              {formatBoolean(deviation.has_occurred_before)}
-            </Descriptions.Item>
-            <Descriptions.Item label="是否关闭">
-              {deviation.status === 'closed' ? '是' : '否'}
-            </Descriptions.Item>
-            <Descriptions.Item label="根本原因" span={2}>
-              {deviation.root_cause_analysis || '-'}
-            </Descriptions.Item>
-            <Descriptions.Item label="调查完成时间">
-              {formatDateTime(deviation.investigation_completed_at)}
-            </Descriptions.Item>
-            <Descriptions.Item label="关闭时间">
-              {formatDateTime(deviation.close_time)}
-            </Descriptions.Item>
-            <Descriptions.Item label="纠正预防措施" span={2}>
-              {deviation.corrective_actions || '-'}
-            </Descriptions.Item>
-            <Descriptions.Item label="产品/物料处理结果" span={2}>
-              {deviation.material_disposition || '-'}
-            </Descriptions.Item>
-            <Descriptions.Item label="飞书最近更新时间">
-              {formatDateTime(deviation.feishu_source_updated_at || deviation.updated_at || deviation.created_at)}
-            </Descriptions.Item>
-            <Descriptions.Item label="创建时间">
-              {formatDateTime(deviation.created_at)}
-            </Descriptions.Item>
-          </Descriptions>
-        </Card>
-      ) : (
-        <Card title="编辑飞书台账">
-          <form id="deviation-edit-form" action={saveAction}>
-            <div style={{ display: 'grid', gap: 16 }}>
-              <label style={{ display: 'grid', gap: 8 }}>
-                <span>偏差编号</span>
-                <input
-                  value={deviation.deviation_code}
-                  disabled
-                  style={{
-                    width: '100%',
-                    minHeight: 44,
-                    borderRadius: 8,
-                    border: '1px solid #d9d9d9',
-                    padding: '0 11px',
-                    background: '#f5f5f5',
-                  }}
-                />
-              </label>
-              <label style={{ display: 'grid', gap: 8 }}>
-                <span>产品名称/批号</span>
-                <input
-                  name="affected_items"
-                  defaultValue={deviation.affected_items || ''}
-                  style={{
-                    width: '100%',
-                    minHeight: 44,
-                    borderRadius: 8,
-                    border: '1px solid #d9d9d9',
-                    padding: '0 11px',
-                  }}
-                />
-              </label>
-              <label style={{ display: 'grid', gap: 8 }}>
-                <span>偏差简要描述</span>
-                <textarea
-                  name="description"
-                  rows={4}
-                  defaultValue={deviation.description || ''}
-                  style={{
-                    width: '100%',
-                    borderRadius: 8,
-                    border: '1px solid #d9d9d9',
-                    padding: '8px 11px',
-                  }}
-                />
-              </label>
-              <label style={{ display: 'grid', gap: 8 }}>
-                <span>偏差是否曾发生</span>
-                <select
-                  name="has_occurred_before"
-                  defaultValue={
-                    deviation.has_occurred_before === true
-                      ? 'true'
-                      : deviation.has_occurred_before === false
-                        ? 'false'
-                        : ''
-                  }
-                  style={{
-                    width: '100%',
-                    minHeight: 44,
-                    borderRadius: 8,
-                    border: '1px solid #d9d9d9',
-                    padding: '0 11px',
-                    background: '#fff',
-                  }}
-                >
-                  <option value="">请选择</option>
-                  {booleanOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label style={{ display: 'grid', gap: 8 }}>
-                <span>根本原因</span>
-                <textarea
-                  name="root_cause_analysis"
-                  rows={4}
-                  defaultValue={deviation.root_cause_analysis || ''}
-                  style={{
-                    width: '100%',
-                    borderRadius: 8,
-                    border: '1px solid #d9d9d9',
-                    padding: '8px 11px',
-                  }}
-                />
-              </label>
-              <label style={{ display: 'grid', gap: 8 }}>
-                <span>偏差等级</span>
-                <select
-                  name="level"
-                  defaultValue={normalizeLevelValue(deviation.level)}
-                  style={{
-                    width: '100%',
-                    minHeight: 44,
-                    borderRadius: 8,
-                    border: '1px solid #d9d9d9',
-                    padding: '0 11px',
-                    background: '#fff',
-                  }}
-                >
-                  <option value="">请选择</option>
-                  {LEVEL_OPTIONS.map(({ value, label }) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label style={{ display: 'grid', gap: 8 }}>
-                <span>调查完成时间</span>
-                <input
-                  name="investigation_completed_at"
-                  type="datetime-local"
-                  defaultValue={formatDateTimeForInput(deviation.investigation_completed_at)}
-                  style={{
-                    width: '100%',
-                    minHeight: 44,
-                    borderRadius: 8,
-                    border: '1px solid #d9d9d9',
-                    padding: '0 11px',
-                  }}
-                />
-              </label>
-              <label style={{ display: 'grid', gap: 8 }}>
-                <span>纠正预防措施</span>
-                <textarea
-                  name="corrective_actions"
-                  rows={4}
-                  defaultValue={deviation.corrective_actions || ''}
-                  style={{
-                    width: '100%',
-                    borderRadius: 8,
-                    border: '1px solid #d9d9d9',
-                    padding: '8px 11px',
-                  }}
-                />
-              </label>
-              <label style={{ display: 'grid', gap: 8 }}>
-                <span>产品/物料处理结果</span>
-                <textarea
-                  name="material_disposition"
-                  rows={4}
-                  defaultValue={deviation.material_disposition || ''}
-                  style={{
-                    width: '100%',
-                    borderRadius: 8,
-                    border: '1px solid #d9d9d9',
-                    padding: '8px 11px',
-                  }}
-                />
-              </label>
-              <label style={{ display: 'grid', gap: 8 }}>
-                <span>是否关闭</span>
-                <select
-                  name="is_closed"
-                  defaultValue={deviation.status === 'closed' ? 'true' : 'false'}
-                  style={{
-                    width: '100%',
-                    minHeight: 44,
-                    borderRadius: 8,
-                    border: '1px solid #d9d9d9',
-                    padding: '0 11px',
-                    background: '#fff',
-                  }}
-                >
-                  {booleanOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label style={{ display: 'grid', gap: 8 }}>
-                <span>关闭时间</span>
-                <input
-                  name="close_time"
-                  type="datetime-local"
-                  defaultValue={formatDateTimeForInput(deviation.close_time)}
-                  style={{
-                    width: '100%',
-                    minHeight: 44,
-                    borderRadius: 8,
-                    border: '1px solid #d9d9d9',
-                    padding: '0 11px',
-                  }}
-                />
-              </label>
-            </div>
-          </form>
-        </Card>
-      )}
+      <Card title="偏差台账编辑" style={{ marginBottom: 16 }}>
+        <Form form={editForm} layout="vertical">
+          <Form.Item label="偏差编号">
+            <Input value={deviation.deviation_code} disabled />
+          </Form.Item>
+          <Form.Item name="affected_items" label="产品名称">
+            <Input placeholder="请输入产品名称" />
+          </Form.Item>
+          <Form.Item name="batch_number" label="批号">
+            <Input placeholder="请输入批号" />
+          </Form.Item>
+          <Form.Item name="description" label="偏差简要描述">
+            <TextArea rows={4} placeholder="请输入偏差简要描述" />
+          </Form.Item>
+          <Form.Item name="has_occurred_before" label="偏差是否曾发生" required>
+            <Radio.Group
+              onChange={(e) => {
+                if (e.target.value === false) {
+                  editForm.setFieldValue('previous_occurrence_code', null)
+                }
+              }}
+            >
+              <Radio value={true}>是</Radio>
+              <Radio value={false}>否</Radio>
+            </Radio.Group>
+          </Form.Item>
+          {hasOccurredBefore === true && (
+            <Form.Item name="previous_occurrence_code" label="曾发生偏差编号（多个编号换行填写）">
+              <TextArea rows={2} placeholder="请填写曾发生偏差编号，多个编号换行分隔" />
+            </Form.Item>
+          )}
+          <Form.Item name="root_cause_analysis" label="根本原因">
+            <TextArea rows={3} placeholder="请输入根本原因" />
+          </Form.Item>
+          <Form.Item name="level" label="偏差等级">
+            <Select placeholder="请选择偏差等级" options={LEVEL_OPTIONS} allowClear />
+          </Form.Item>
+          <Form.Item name="investigation_completed_at" label="调查完成时间">
+            <DatePicker
+              showTime
+              format="YYYY-MM-DD HH:mm"
+              style={{ width: '100%' }}
+              placeholder="请选择调查完成时间"
+            />
+          </Form.Item>
+          <Form.Item name="corrective_actions" label="纠正预防措施">
+            <TextArea rows={3} placeholder="请输入纠正预防措施" />
+          </Form.Item>
+          <Form.Item name="material_disposition" label="产品/物料处理结果">
+            <TextArea rows={3} placeholder="请输入产品/物料处理结果" />
+          </Form.Item>
+          <Form.Item name="is_closed" label="是否关闭">
+            <Select
+              placeholder="请选择是否关闭"
+              options={[
+                { label: '是', value: true },
+                { label: '否', value: false },
+              ]}
+            />
+          </Form.Item>
+        </Form>
+      </Card>
     </div>
   )
 }

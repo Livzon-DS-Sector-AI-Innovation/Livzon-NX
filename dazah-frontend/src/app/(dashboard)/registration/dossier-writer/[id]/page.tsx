@@ -244,8 +244,8 @@ export default function DossierDetailPage() {
         }
       })
       message.success('分类已更新')
-    } catch (err: any) {
-      message.error(err.message || '更新分类失败')
+    } catch (err) {
+      message.error((err instanceof Error ? err.message : '') || '更新分类失败')
     }
   }
 
@@ -274,8 +274,8 @@ export default function DossierDetailPage() {
       
       // Trigger preview refresh
       setPreviewRefreshKey(prev => prev + 1)
-    } catch (err: any) {
-      message.error(err?.message || '上传失败')
+    } catch (err) {
+      message.error((err instanceof Error ? err.message : '') || '上传失败')
     } finally {
       setParsing(false)
     }
@@ -289,8 +289,8 @@ export default function DossierDetailPage() {
       const result = await matchAssetsToChapters(dossierId)
       message.success(result.message)
       loadChapterTree(dossierId)
-    } catch (err: any) {
-      message.error(err?.message || '匹配失败')
+    } catch (err) {
+      message.error((err instanceof Error ? err.message : '') || '匹配失败')
     } finally {
       setMatching(false)
     }
@@ -309,8 +309,8 @@ export default function DossierDetailPage() {
       } else {
         message.error(result.message)
       }
-    } catch (err: any) {
-      message.error(err?.message || '导出失败')
+    } catch (err) {
+      message.error((err instanceof Error ? err.message : '') || '导出失败')
     } finally {
       setExporting(false)
     }
@@ -328,8 +328,8 @@ export default function DossierDetailPage() {
       } else {
         message.error(result.message)
       }
-    } catch (err: any) {
-      message.error(err?.message || '导出失败')
+    } catch (err) {
+      message.error((err instanceof Error ? err.message : '') || '导出失败')
     } finally {
       setExporting(false)
     }
@@ -360,9 +360,9 @@ export default function DossierDetailPage() {
       } else {
         message.warning(result.message)
       }
-    } catch (error: any) {
+    } catch (error) {
       message.destroy('filling')
-      message.error(error.message || '填充失败')
+      message.error((error instanceof Error ? error.message : '') || '填充失败')
     } finally {
       setFilling(false)
     }

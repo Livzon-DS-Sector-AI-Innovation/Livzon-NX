@@ -3,7 +3,9 @@
 import { useEffect, useState } from 'react'
 import { App, Button, Card, Form, Select, Spin, } from 'antd'
 import { PlusOutlined } from '@ant-design/icons'
-import { fetchDepartments, fetchEmployees, createTrainingLedgerPage } from '@/lib/api/hr'
+import { fetchEmployees } from '@/lib/api/hr'
+import { fetchTrainingDepartments } from '@/lib/api/client/hr'
+import { createTrainingLedgerPage } from '@/actions/hr'
 
 export default function TrainingLedgerNewClient() {
   const { message } = App.useApp()
@@ -17,14 +19,13 @@ export default function TrainingLedgerNewClient() {
 
   useEffect(() => {
     setLoading(true)
-    fetchDepartments({ page_size: 200 })
-      .then((res) => {
-        const names = (res.data || []).map((d: any) => d.name)
+    fetchTrainingDepartments()
+      .then((names) => {
         setDepartments(names)
       })
       .catch(() => message.error('加载部门列表失败'))
       .finally(() => setLoading(false))
-  }, [])
+  }, [message])
 
   const handleDeptChange = (dept: string) => {
     setSelectedDept(dept)
@@ -52,12 +53,12 @@ export default function TrainingLedgerNewClient() {
       })
       message.success('培训台账创建成功')
       window.location.href = `/hr/training/ledger?employee_number=${emp.employee_number}`
-    } catch (err: any) {
-      if (err.message?.includes('Duplicate') || err.message?.includes('已存在')) {
+    } catch (err) {
+      if ((err instanceof Error ? err.message : '')?.includes('Duplicate') || (err instanceof Error ? err.message : '')?.includes('已存在')) {
         message.warning('该员工的培训台账已存在')
         window.location.href = `/hr/training/ledger?employee_number=${emp.employee_number}`
       } else {
-        message.error(err.message || '创建失败')
+        message.error((err instanceof Error ? err.message : '') || '创建失败')
       }
     } finally {
       setSubmitting(false)

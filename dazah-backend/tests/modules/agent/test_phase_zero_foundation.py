@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from typing import Any
 
 import pytest
 from fastapi import HTTPException
@@ -65,7 +66,7 @@ def test_tool_metadata_infers_business_module_and_permission_key() -> None:
         idempotent=True,
         output_schema={"type": "object"},
     )
-    async def get_batch(context: ToolContext, data: SampleInput) -> dict:
+    async def get_batch(context: ToolContext, data: SampleInput) -> dict[str, Any]:
         return {"batch_id": str(data.batch_id)}
 
     spec = registry.require("quality.get_batch")
@@ -226,7 +227,7 @@ def test_permission_normalization_is_deterministic() -> None:
 async def test_business_tool_scope_rejects_anonymous_actor_fail_closed() -> None:
     with pytest.raises(HTTPException) as exc_info:
         await AgentAccessScopeService().require_tool_access(
-            object(),
+            object(),  # type: ignore[arg-type]
             user=None,
             tool_name="quality.list_deviations",
             module="quality",

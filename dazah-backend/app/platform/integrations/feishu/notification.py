@@ -9,6 +9,7 @@
 
 import json
 import logging
+from typing import Any
 
 from app.core.config import get_settings
 
@@ -16,9 +17,9 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 
-async def _get_client():
+async def _get_client() -> Any:
     """获取 lark-oapi 客户端实例"""
-    import lark_oapi as lark
+    import lark_oapi as lark  # type: ignore[import-untyped]
 
     return (
         lark.Client.builder()
@@ -30,11 +31,11 @@ async def _get_client():
     )
 
 
-async def _get_tenant_token(client) -> str:
+async def _get_tenant_token(client: Any) -> str:
     """获取 tenant_access_token"""
     import json as _json
 
-    from lark_oapi.api.auth.v3 import (
+    from lark_oapi.api.auth.v3 import (  # type: ignore[import-untyped]
         InternalTenantAccessTokenRequest,
         InternalTenantAccessTokenRequestBody,
     )
@@ -53,7 +54,8 @@ async def _get_tenant_token(client) -> str:
     if not resp.success():
         logger.error(
             "Failed to get tenant token: code=%s, msg=%s",
-            resp.code, resp.msg,
+            resp.code,
+            resp.msg,
         )
         raise RuntimeError(
             f"Failed to get tenant token: code={resp.code}, msg={resp.msg}"
@@ -61,6 +63,8 @@ async def _get_tenant_token(client) -> str:
     if resp.raw and resp.raw.content:
         data = _json.loads(resp.raw.content.decode("utf-8"))
         token = data.get("tenant_access_token", "")
+        if not isinstance(token, str) or not token:
+            raise RuntimeError("Empty tenant token response")
         logger.info("Tenant token obtained successfully")
         return token
     logger.error("Empty tenant token response")
@@ -71,7 +75,8 @@ async def send_user_card(
     open_id: str,
     title: str,
     content: str,
-    elements: list[dict] | None = None,
+    elements: list[dict[str, Any]] | None = None,
+    receive_id_type: str = "open_id",
 ) -> bool:
     """发送卡片消息给单个用户（DM）。
 
@@ -89,12 +94,12 @@ async def send_user_card(
         client = await _get_client()
         token = await _get_tenant_token(client)
 
-        from lark_oapi.api.im.v1 import (
+        from lark_oapi.api.im.v1 import (  # type: ignore[import-untyped]
             CreateMessageRequest,
             CreateMessageRequestBody,
         )
 
-        card = {
+        card: dict[str, Any] = {
             "config": {"wide_screen_mode": True},
             "header": {
                 "title": {"tag": "plain_text", "content": title},
@@ -112,7 +117,7 @@ async def send_user_card(
 
         req = (
             CreateMessageRequest.builder()
-            .receive_id_type("open_id")
+            .receive_id_type(receive_id_type)
             .request_body(
                 CreateMessageRequestBody.builder()
                 .receive_id(open_id)
@@ -126,9 +131,10 @@ async def send_user_card(
         resp = await client.im.v1.message.acreate(req)
         if not resp.success():
             logger.error(
-                "❌ send_user_card FAILED: open_id=%s, code=%s, msg=%s, "
-                "status_code=%s",
-                open_id, resp.code, resp.msg,
+                "❌ send_user_card FAILED: open_id=%s, code=%s, msg=%s, status_code=%s",
+                open_id,
+                resp.code,
+                resp.msg,
                 resp.status_code if hasattr(resp, "status_code") else "N/A",
             )
             return False
@@ -137,16 +143,70 @@ async def send_user_card(
     except Exception as e:
         logger.error(
             "❌ send_user_card EXCEPTION for open_id=%s: %s: %s",
-            open_id, type(e).__name__, e,
+            open_id,
+            type(e).__name__,
+            e,
         )
         return False
+
+
+async def send_user_card_with_message_id(
+    open_id: str,
+    title: str,
+    content: str,
+    elements: list[dict[str, Any]] | None = None,
+    receive_id_type: str = "open_id",
+) -> str | None:
+    """Send a card and return Feishu's message id when available.
+
+    This compatibility entry point shares the current platform credential
+    resolution and does not expose response bodies or credentials to callers.
+    """
+    logger.info("send_user_card_with_message_id: attempting to send to %s", open_id)
+    try:
+        client = await _get_client()
+        token = await _get_tenant_token(client)
+
+        from lark_oapi.api.im.v1 import (
+            CreateMessageRequest,
+            CreateMessageRequestBody,
+        )
+
+        card_json = await build_card(title=title, content=content, elements=elements)
+        request = (
+            CreateMessageRequest.builder()
+            .receive_id_type(receive_id_type)
+            .request_body(
+                CreateMessageRequestBody.builder()
+                .receive_id(open_id)
+                .msg_type("interactive")
+                .content(card_json)
+                .build()
+            )
+            .build()
+        )
+        request.headers["Authorization"] = f"Bearer {token}"
+        response = await client.im.v1.message.acreate(request)
+        if not response.success():
+            logger.error(
+                "send_user_card_with_message_id failed: code=%s, msg=%s",
+                response.code,
+                response.msg,
+            )
+            return None
+        return response.data.message_id if response.data else None
+    except Exception:
+        logger.exception(
+            "send_user_card_with_message_id failed for open_id=%s", open_id
+        )
+        return None
 
 
 async def build_card(
     title: str,
     content: str,
     header_template: str = "orange",
-    elements: list[dict] | None = None,
+    elements: list[dict[str, Any]] | None = None,
 ) -> str:
     """构建飞书卡片 JSON 字符串。
 
@@ -161,7 +221,7 @@ async def build_card(
     Returns:
         飞书卡片 JSON 字符串
     """
-    card = {
+    card: dict[str, Any] = {
         "config": {"wide_screen_mode": True},
         "header": {
             "title": {"tag": "plain_text", "content": title},
@@ -174,3 +234,35 @@ async def build_card(
     if elements:
         card["elements"].extend(elements)
     return json.dumps(card, ensure_ascii=False)
+
+
+async def update_card(message_id: str, card: dict[str, Any]) -> bool:
+    """Update an existing Feishu interactive card."""
+    logger.info("update_card: attempting to patch message_id=%s", message_id)
+    try:
+        client = await _get_client()
+        token = await _get_tenant_token(client)
+
+        from lark_oapi.api.im.v1 import PatchMessageRequest, PatchMessageRequestBody
+
+        request = (
+            PatchMessageRequest.builder()
+            .message_id(message_id)
+            .request_body(
+                PatchMessageRequestBody.builder()
+                .content(json.dumps(card, ensure_ascii=False))
+                .build()
+            )
+            .build()
+        )
+        request.headers["Authorization"] = f"Bearer {token}"
+        response = await client.im.v1.message.apatch(request)
+        if not response.success():
+            logger.error(
+                "update_card failed: code=%s, msg=%s", response.code, response.msg
+            )
+            return False
+        return True
+    except Exception:
+        logger.exception("update_card failed for message_id=%s", message_id)
+        return False

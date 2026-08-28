@@ -6,6 +6,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.modules.equipment.schemas.work_order_image import WorkOrderImageResponse
+
 # ==================== 维修工单 ====================
 WorkOrderType = Literal["故障维修", "计划维护", "巡检", "校准", "异常处理", "日常维护"]
 WorkOrderPriority = Literal["紧急", "高", "中", "低"]
@@ -26,9 +28,7 @@ class WorkOrderCreate(BaseModel):
     maintenance_plan_id: uuid.UUID | None = Field(
         default=None, description="关联维护计划ID"
     )
-    planned_start_date: date | None = Field(
-        default=None, description="计划执行日期"
-    )
+    planned_start_date: date | None = Field(default=None, description="计划执行日期")
     checklist_template_id: uuid.UUID | None = Field(
         default=None, description="关联巡检模板ID"
     )
@@ -124,8 +124,6 @@ class WorkOrderResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-from app.modules.equipment.schemas.work_order_image import WorkOrderImageResponse
-
 WorkOrderResponse.model_rebuild()
 
 
@@ -141,17 +139,20 @@ class WorkOrderStatistics(BaseModel):
 # ==================== 领料 ====================
 class MaterialConsumeItem(BaseModel):
     """单条领料项"""
+
     spare_part_id: uuid.UUID = Field(..., description="备件ID")
     quantity: int = Field(..., ge=1, description="领用数量")
 
 
 class MaterialConsumeRequest(BaseModel):
     """领料请求"""
+
     items: list[MaterialConsumeItem] = Field(..., min_length=1, description="领料清单")
 
 
 class MaterialConsumeResponse(BaseModel):
     """领料记录响应"""
+
     id: uuid.UUID
     spare_part_id: uuid.UUID
     work_order_id: uuid.UUID

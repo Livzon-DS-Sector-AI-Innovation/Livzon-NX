@@ -150,8 +150,8 @@ async def outbound_stock(
             message=f"库存不足，当前库存 {stock.current_qty}，出库数量 {quantity}"
         )
 
-    stock = await repo.update_stock_qty(db, spare_part_id, -quantity)
-    if not stock:
+    updated_stock = await repo.update_stock_qty(db, spare_part_id, -quantity)
+    if not updated_stock:
         raise NotFoundException("库存记录", str(spare_part_id))
 
     await repo.create_transaction(
@@ -164,8 +164,8 @@ async def outbound_stock(
     )
 
     await db.flush()
-    await db.refresh(stock)
-    return stock
+    await db.refresh(updated_stock)
+    return updated_stock
 
 
 async def adjust_stock(
@@ -179,8 +179,8 @@ async def adjust_stock(
     diff = data.new_qty - stock.current_qty
 
     if diff != 0:
-        stock = await repo.update_stock_qty(db, spare_part_id, diff)
-        if not stock:
+        updated_stock = await repo.update_stock_qty(db, spare_part_id, diff)
+        if not updated_stock:
             raise NotFoundException("库存记录", str(spare_part_id))
 
         await repo.create_transaction(
@@ -193,8 +193,9 @@ async def adjust_stock(
             },
         )
 
-    await db.flush()
-    await db.refresh(stock)
+        await db.flush()
+        await db.refresh(updated_stock)
+        return updated_stock
     return stock
 
 

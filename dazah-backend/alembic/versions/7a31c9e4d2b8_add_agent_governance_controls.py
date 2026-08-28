@@ -66,7 +66,5 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.drop_column("feishu_configs", "require_group_mention", schema="identity")
     op.drop_column("feishu_configs", "allowed_group_chat_ids", schema="identity")
-    op.drop_column(
-        "external_identity_bindings", "verified_at", schema="identity"
-    )
+    op.drop_column("external_identity_bindings", "verified_at", schema="identity")
     op.drop_column("external_identity_bindings", "source", schema="identity")

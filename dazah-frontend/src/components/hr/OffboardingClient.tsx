@@ -1,12 +1,15 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
-import { App, Button, Table, Space, Popconfirm, Input, Tag } from 'antd'
-import { PlusOutlined, SearchOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons'
+import { App, Button, Table, Space, Popconfirm, Input, Tag, Tooltip, Select, DatePicker } from 'antd'
+import { PlusOutlined, SearchOutlined, EditOutlined, DeleteOutlined, EyeOutlined, SyncOutlined, FileTextOutlined } from '@ant-design/icons'
+import dayjs from 'dayjs'
 import { OffboardingRecord } from '@/types/hr'
-import { fetchOffboardingRecordsAction, deleteOffboardingRecord } from '@/actions/hr'
+import { fetchOffboardingRecordsAction, deleteOffboardingRecord, syncOffboardingFromFeishuAction, updateOffboardingRecord, generateOffboardingCertificateAction } from '@/actions/hr'
 import OffboardingForm from './OffboardingForm'
+import OffboardingDetailDrawer from './OffboardingDetailDrawer'
 import HrChatbot from './HrChatbot'
+import { usePermission } from '@/hooks/usePermission'
 
 interface OffboardingClientProps {
   initialRecords: OffboardingRecord[]
@@ -17,14 +20,21 @@ export default function OffboardingClient({
   initialRecords,
   initialTotal }: OffboardingClientProps) {
   const { message } = App.useApp()
+  // 编辑权限：仅人力资源部（hr:write）可新增/编辑/删除，其他部门只读
+  const { has } = usePermission()
+  const canEditHr = has('hr:write')
   const [records, setRecords] = useState<OffboardingRecord[]>(initialRecords)
   const [total, setTotal] = useState(initialTotal)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const [formOpen, setFormOpen] = useState(false)
   const [editingRecord, setEditingRecord] = useState<OffboardingRecord | null>(null)
+  const [viewingRecord, setViewingRecord] = useState<OffboardingRecord | null>(null)
+  const [detailOpen, setDetailOpen] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [syncing, setSyncing] = useState(false)
   const [searchKeyword, setSearchKeyword] = useState('')
+  const [editingCell, setEditingCell] = useState<{ recordId: string; field: string } | null>(null)
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -35,12 +45,12 @@ export default function OffboardingClient({
         page_size: pageSize })
       setRecords(res.data)
       setTotal(res.meta?.total || 0)
-    } catch (err: any) {
-      message.error(err.message || '加载数据失败')
+    } catch (err) {
+      message.error((err instanceof Error ? err.message : '') || '加载数据失败')
     } finally {
       setLoading(false)
     }
-  }, [searchKeyword, page, pageSize])
+  }, [searchKeyword, page, pageSize, message])
 
   const handlePageChange = (newPage: number, newPageSize: number) => {
     setPage(newPage)
@@ -54,6 +64,11 @@ export default function OffboardingClient({
   const handleEdit = (record: OffboardingRecord) => {
     setEditingRecord(record)
     setFormOpen(true)
+  }
+
+  const handleView = (record: OffboardingRecord) => {
+    setViewingRecord(record)
+    setDetailOpen(true)
   }
 
   const handleAdd = () => {
@@ -70,17 +85,89 @@ export default function OffboardingClient({
       await deleteOffboardingRecord(id)
       message.success('删除成功')
       loadData()
-    } catch (err: any) {
-      message.error(err.message || '删除失败')
+    } catch (err) {
+      message.error((err instanceof Error ? err.message : '') || '删除失败')
+    }
+  }
+
+  const handleGenerateCertificate = async (record: OffboardingRecord) => {
+    try {
+      const { bytes, filename } = await generateOffboardingCertificateAction(record.id)
+      const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' })
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+      message.success('离职证明已生成并下载')
+      loadData()
+    } catch (err) {
+      message.error((err instanceof Error ? err.message : '') || '生成失败')
+    }
+  }
+
+  const handleSyncFeishu = async () => {
+    setSyncing(true)
+    try {
+      const res = await syncOffboardingFromFeishuAction()
+      message.success(res.message || '同步完成')
+      loadData()
+    } catch (err) {
+      message.error((err instanceof Error ? err.message : '') || '同步飞书失败')
+    } finally {
+      setSyncing(false)
     }
   }
 
   useEffect(() => {
-    loadData()
-  }, [searchKeyword, page, pageSize])
+    queueMicrotask(loadData)
+  }, [searchKeyword, page, pageSize, loadData])
+
+  // 离职类型选项（与表单、后端一致）
+  const offboardingTypeOptions = [
+    { label: '辞职', value: '辞职' },
+    { label: '正常离职', value: '正常离职' },
+    { label: '补办手续', value: '补办手续' },
+    { label: '辞退', value: '辞退' },
+    { label: '合同到期', value: '合同到期' },
+    { label: '退休', value: '退休' },
+    { label: '其他', value: '其他' },
+  ]
+
+  // 交接状态选项（与多维表格一致）
+  const handoverStatusOptions = [
+    { label: '待交接', value: '待交接' },
+    { label: '交接中', value: '交接中' },
+    { label: '已完成', value: '已完成' },
+  ]
+
+  // 行内编辑处理
+  const handleCellEdit = (recordId: string, field: string) => {
+    setEditingCell({ recordId, field })
+  }
+
+  const handleCellSave = async (recordId: string, field: string, value: string) => {
+    try {
+      await updateOffboardingRecord(recordId, { [field]: value })
+      message.success('更新成功')
+      setEditingCell(null)
+      loadData()
+    } catch (err) {
+      message.error((err instanceof Error ? err.message : '') || '更新失败')
+      setEditingCell(null)
+    }
+  }
+
+  const handleCellCancel = () => {
+    setEditingCell(null)
+  }
 
   const typeColorMap: Record<string, string> = {
-    辞职: 'default',
+    正常离职: 'default',
+    补办手续: 'orange',
     辞退: 'red',
     合同到期: 'orange',
     退休: 'blue',
@@ -91,74 +178,214 @@ export default function OffboardingClient({
     交接中: 'processing',
     已完成: 'success' }
 
+  // 10个核心列 + 离职专属字段
   const columns = [
     {
-      title: '员工姓名',
-      key: 'employee_name',
-      width: 120,
-      render: (_: any, record: OffboardingRecord) => record.employee?.name || '-' },
-    {
       title: '工号',
+      dataIndex: 'employee_number',
       key: 'employee_number',
-      width: 120,
-      render: (_: any, record: OffboardingRecord) => record.employee?.employee_number || '-' },
+      width: 110,
+      fixed: 'left' as const,
+      render: (_: unknown, record: OffboardingRecord) => record.employee_number || record.employee?.employee_number || '-' },
     {
-      title: '离职日期',
+      title: '姓名',
+      dataIndex: 'name',
+      key: 'name',
+      width: 90,
+      fixed: 'left' as const,
+      render: (_: unknown, record: OffboardingRecord) => (
+        <a onClick={() => handleView(record)} className="text-blue-600 hover:text-blue-800 cursor-pointer">
+          {record.name || record.employee?.name || '-'}
+        </a>
+      ) },
+    {
+      title: '域账户',
+      dataIndex: 'domain_account',
+      key: 'domain_account',
+      width: 120,
+      render: (_: unknown, record: OffboardingRecord) => record.domain_account || record.employee?.domain_account || '-' },
+    {
+      title: '性别',
+      dataIndex: 'gender',
+      key: 'gender',
+      width: 70,
+      render: (_: unknown, record: OffboardingRecord) => record.gender || record.employee?.gender || '-' },
+    {
+      title: '一级部门',
+      dataIndex: 'department',
+      key: 'department',
+      width: 120,
+      render: (_: unknown, record: OffboardingRecord) => record.department || record.employee?.department || '-' },
+    {
+      title: '二级部门',
+      dataIndex: 'sub_department',
+      key: 'sub_department',
+      width: 120,
+      render: (_: unknown, record: OffboardingRecord) => record.sub_department || '-' },
+    {
+      title: '职位/岗位',
+      dataIndex: 'position',
+      key: 'position',
+      width: 120,
+      render: (_: unknown, record: OffboardingRecord) => record.position || record.employee?.position || '-' },
+    {
+      title: '职级',
+      dataIndex: 'level',
+      key: 'level',
+      width: 80,
+      render: (_: unknown, record: OffboardingRecord) => record.level || record.employee?.level || '-' },
+    {
+      title: '联系电话',
+      dataIndex: 'phone',
+      key: 'phone',
+      width: 130,
+      render: (_: unknown, record: OffboardingRecord) => record.phone || record.employee?.phone || '-' },
+    {
+      title: '邮箱',
+      dataIndex: 'email',
+      key: 'email',
+      width: 180,
+      render: (_: unknown, record: OffboardingRecord) => record.email || record.employee?.email || '-' },
+    {
+      title: '最后工作日',
       dataIndex: 'offboarding_date',
       key: 'offboarding_date',
-      width: 120 },
+      width: 120,
+      render: (date: string, record: OffboardingRecord) => {
+        if (editingCell?.recordId === record.id && editingCell?.field === 'offboarding_date') {
+          return (
+            <DatePicker
+              value={date ? dayjs(date) : null}
+              onChange={(d) => handleCellSave(record.id, 'offboarding_date', d ? d.format('YYYY-MM-DD') : '')}
+              onBlur={handleCellCancel}
+              autoFocus
+              style={{ width: '100%' }}
+              size="small"
+              format="YYYY-MM-DD"
+            />
+          )
+        }
+        return (
+          <span
+            onClick={() => handleCellEdit(record.id, 'offboarding_date')}
+            className="cursor-pointer hover:opacity-80"
+          >
+            {date || '-'}
+          </span>
+        )
+      }
+    },
     {
       title: '离职类型',
       dataIndex: 'offboarding_type',
       key: 'offboarding_type',
       width: 100,
-      render: (type: string) => <Tag color={typeColorMap[type] || 'default'}>{type}</Tag> },
-    {
-      title: '离职原因',
-      dataIndex: 'reason',
-      key: 'reason',
-      ellipsis: true },
+      render: (type: string, record: OffboardingRecord) => {
+        if (editingCell?.recordId === record.id && editingCell?.field === 'offboarding_type') {
+          return (
+            <Select
+              value={type}
+              options={offboardingTypeOptions}
+              onChange={(value) => handleCellSave(record.id, 'offboarding_type', value)}
+              onBlur={handleCellCancel}
+              autoFocus
+              style={{ width: '100%' }}
+              size="small"
+            />
+          )
+        }
+        return (
+          <Tag
+            color={typeColorMap[type] || 'default'}
+            onClick={() => handleCellEdit(record.id, 'offboarding_type')}
+            className="cursor-pointer hover:opacity-80"
+          >
+            {type || '-'}
+          </Tag>
+        )
+      }
+    },
     {
       title: '交接状态',
       dataIndex: 'handover_status',
       key: 'handover_status',
       width: 100,
-      render: (status: string) => <Tag color={handoverColorMap[status] || 'default'}>{status}</Tag> },
-    {
-      title: '备注',
-      dataIndex: 'notes',
-      key: 'notes',
-      ellipsis: true },
+      render: (status: string, record: OffboardingRecord) => {
+        if (editingCell?.recordId === record.id && editingCell?.field === 'handover_status') {
+          return (
+            <Select
+              value={status}
+              options={handoverStatusOptions}
+              onChange={(value) => handleCellSave(record.id, 'handover_status', value)}
+              onBlur={handleCellCancel}
+              autoFocus
+              style={{ width: '100%' }}
+              size="small"
+            />
+          )
+        }
+        return (
+          <Tag
+            color={handoverColorMap[status] || 'default'}
+            onClick={() => handleCellEdit(record.id, 'handover_status')}
+            className="cursor-pointer hover:opacity-80"
+          >
+            {status}
+          </Tag>
+        )
+      }
+    },
     {
       title: '操作',
       key: 'action',
-      width: 150,
-      render: (_: any, record: OffboardingRecord) => (
+      width: 140,
+      fixed: 'right' as const,
+      render: (_: unknown, record: OffboardingRecord) => (
         <Space size="small">
-          <Button
-            type="text"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          >
-            编辑
-          </Button>
-          <Popconfirm
-            title="确认删除"
-            description="确定要删除该离职记录吗？"
-            onConfirm={() => handleDelete(record.id)}
-            okText="确定"
-            cancelText="取消"
-          >
+          <Tooltip title="查看详情">
             <Button
               type="text"
               size="small"
-              danger
-              icon={<DeleteOutlined />}
-            >
-              删除
-            </Button>
-          </Popconfirm>
+              icon={<EyeOutlined />}
+              onClick={() => handleView(record)}
+            />
+          </Tooltip>
+          {canEditHr ? (
+            <>
+              <Tooltip title="编辑">
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<EditOutlined />}
+                  onClick={() => handleEdit(record)}
+                />
+              </Tooltip>
+              <Tooltip title="生成离职证明">
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<FileTextOutlined />}
+                  onClick={() => handleGenerateCertificate(record)}
+                />
+              </Tooltip>
+              <Popconfirm
+                title="确认删除"
+                description="确定要删除该离职记录吗？"
+                onConfirm={() => handleDelete(record.id)}
+                okText="确定"
+                cancelText="取消"
+              >
+                <Tooltip title="删除">
+                  <Button
+                    type="text"
+                    size="small"
+                    danger
+                    icon={<DeleteOutlined />}
+                  />
+                </Tooltip>
+              </Popconfirm>
+            </>
+          ) : null}
         </Space>
       ) },
   ]
@@ -172,15 +399,20 @@ export default function OffboardingClient({
         <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
           新增离职记录
         </Button>
+        {canEditHr ? (
+          <Button icon={<SyncOutlined spin={syncing} />} loading={syncing} onClick={handleSyncFeishu}>
+            同步飞书
+          </Button>
+        ) : null}
       </div>
 
-      <div className="flex flex-wrap gap-3 items-center">
+      <div className="flex flex-nowrap gap-2 items-center">
         <Input
-          placeholder="搜索姓名或工号"
+          placeholder="姓名/工号"
           value={searchKeyword}
           onChange={(e) => setSearchKeyword(e.target.value)}
           prefix={<SearchOutlined />}
-          className="w-64"
+          style={{ width: 130 }}
           allowClear
         />
       </div>
@@ -197,7 +429,8 @@ export default function OffboardingClient({
           showSizeChanger: true,
           showTotal: (t) => `共 ${t} 条`,
           onChange: handlePageChange }}
-        scroll={{ x: 1000 }}
+        scroll={{ x: 1600 }}
+        size="small"
       />
 
       <OffboardingForm
@@ -205,6 +438,12 @@ export default function OffboardingClient({
         record={editingRecord}
         onClose={() => setFormOpen(false)}
         onSuccess={handleFormSuccess}
+      />
+
+      <OffboardingDetailDrawer
+        open={detailOpen}
+        record={viewingRecord}
+        onClose={() => setDetailOpen(false)}
       />
 
       <HrChatbot />

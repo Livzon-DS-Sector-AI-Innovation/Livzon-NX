@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from sqlalchemy import Date, String, Text, ARRAY, Integer
+from sqlalchemy import ARRAY, Date, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.shared.base_model import BaseModel
@@ -20,7 +20,9 @@ class ValidationRecord(BaseModel):
     status: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
     department: Mapped[str | None] = mapped_column(String(100), nullable=True)
     equipment_code: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    product_codes: Mapped[list[str] | None] = mapped_column(ARRAY(String), nullable=True)
+    product_codes: Mapped[list[str] | None] = mapped_column(
+        ARRAY(String), nullable=True
+    )
     planned_end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     # 设备确认/工艺验证/清洁验证/其他验证 专属字段
     group_chat: Mapped[str | None] = mapped_column(String(255), nullable=True)

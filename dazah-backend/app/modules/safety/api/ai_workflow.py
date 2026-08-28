@@ -2,6 +2,7 @@
 
 import os
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, Depends, Query, UploadFile
 from fastapi.responses import FileResponse, PlainTextResponse
@@ -37,7 +38,7 @@ async def get_ai_workflow_configs(
     is_enabled: bool | None = Query(None, description="是否启用"),
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """获取 AI 工作流配置列表，可按模块代码过滤"""
     service = ConfigService(db)
     skip = (page - 1) * page_size
@@ -59,7 +60,7 @@ async def get_ai_workflow_config(
     config_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """获取单个 AI 工作流配置详情"""
     service = ConfigService(db)
     item = await service.get_ai_workflow_config(config_id)
@@ -77,7 +78,7 @@ async def create_ai_workflow_config(
     data: AIWorkflowConfigCreate,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """创建新的 AI 工作流配置"""
     service = ConfigService(db)
     item = await service.create_ai_workflow_config(data)
@@ -95,7 +96,7 @@ async def update_ai_workflow_config(
     data: AIWorkflowConfigUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """更新 AI 工作流配置"""
     service = ConfigService(db)
     item = await service.update_ai_workflow_config(config_id, data)
@@ -114,7 +115,7 @@ async def delete_ai_workflow_config(
     config_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """删除 AI 工作流配置"""
     service = ConfigService(db)
     result = await service.delete_ai_workflow_config(config_id)
@@ -136,7 +137,7 @@ async def upload_workflow_attachment(
     file: UploadFile,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """上传调用文档附件（PDF/Word/Excel/TXT/MD），自动转换为 Markdown 供 AI 读取。
 
     返回附件元数据，前端将其存入 reference_docs.attachments 列表。
@@ -157,14 +158,16 @@ async def preview_workflow_attachment(
     attachment_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """预览上传的附件原始文件（浏览器内嵌预览或触发下载）。"""
     service = AttachmentService()
     file_path = service.get_preview_path(attachment_id)
 
     # 知识库附件（无原始文件）— 返回 MD 预览
     if not file_path:
-        md_path = os.path.join(service.UPLOAD_DIR, service.MD_SUBDIR, f"{attachment_id}.md")
+        md_path = os.path.join(
+            service.UPLOAD_DIR, service.MD_SUBDIR, f"{attachment_id}.md"
+        )
         if os.path.exists(md_path):
             with open(md_path, encoding="utf-8") as f:
                 content = f.read()
@@ -185,7 +188,9 @@ async def preview_workflow_attachment(
     }
     media_type = media_types.get(ext, "application/octet-stream")
 
-    return FileResponse(file_path, media_type=media_type, filename=os.path.basename(file_path))
+    return FileResponse(
+        file_path, media_type=media_type, filename=os.path.basename(file_path)
+    )
 
 
 @ai_workflow_router.delete(
@@ -197,7 +202,7 @@ async def delete_workflow_attachment(
     attachment_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """删除附件及其关联的原始文件和 Markdown 文件。"""
     service = AttachmentService()
     deleted = await service.delete_attachment(attachment_id)
@@ -215,7 +220,7 @@ async def create_workflow_attachments_from_knowledge(
     body: KnowledgeAttachmentRequest,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-):
+) -> Any:
     """选择知识库文章作为调用文档附件，自动转为 Markdown 供 AI 读取。
 
     返回附件元数据列表，前端将其追加到 reference_docs.attachments。
@@ -226,5 +231,3 @@ async def create_workflow_attachments_from_knowledge(
         data=[ReferenceAttachmentResponse(**r).model_dump() for r in results],
         meta={"total": len(results)},
     )
-
-

@@ -2,18 +2,30 @@
 
 import csv
 import re
+from collections.abc import Sequence
 from datetime import UTC, date, datetime
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from hashlib import sha256
 from io import BytesIO, StringIO
 from pathlib import Path
+from typing import Any
 from uuid import UUID, uuid4
 
-from openpyxl import Workbook, load_workbook
-from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
-from openpyxl.utils import get_column_letter
-from openpyxl.worksheet.page import PageMargins
-from openpyxl.worksheet.properties import PageSetupProperties
+import xlrd  # type: ignore[import-untyped]
+from openpyxl import Workbook, load_workbook  # type: ignore[import-untyped]
+from openpyxl.styles import (  # type: ignore[import-untyped]
+    Alignment,
+    Border,
+    Font,
+    PatternFill,
+    Side,
+)
+from openpyxl.utils import get_column_letter  # type: ignore[import-untyped]
+from openpyxl.worksheet.page import PageMargins  # type: ignore[import-untyped]
+from openpyxl.worksheet.properties import (  # type: ignore[import-untyped]
+    PageSetupProperties,
+)
+from pydantic import ValidationError
 from pypdf import PdfReader
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -48,6 +60,9 @@ from app.modules.procurement.schemas import (
     PurchaseOrderLineResponse,
     PurchaseRequestCategory,
     PurchaseRequestCreate,
+    PurchaseRequestImportError,
+    PurchaseRequestImportResult,
+    PurchaseRequestImportSummary,
     PurchaseRequestItemInput,
     PurchaseRequestResponse,
     PurchaseRequestStatus,
@@ -108,8 +123,12 @@ PURCHASE_APPROVAL_WORKFLOWS = {
         PurchaseApprovalRole.responsible_leader,
     ),
     "urgent": (
+        PurchaseApprovalRole.hardware_warehouse,
         PurchaseApprovalRole.department_head,
         PurchaseApprovalRole.responsible_leader,
+        PurchaseApprovalRole.supervising_leader,
+        PurchaseApprovalRole.finance_director,
+        PurchaseApprovalRole.general_manager,
     ),
 }
 
@@ -123,13 +142,115 @@ PURCHASE_CATEGORY_LABELS = {
     "office": "办公用品",
     "raw-auxiliary": "原辅料",
     "chemical-glass": "化玻",
-    "electrical": "电器",
+    "electrical": "电气",
     "advertising-printing": "广告/印刷",
     "fire": "消防",
     "packaging": "包材",
     "labor-special": "特防",
     "labor-miscellaneous": "杂品",
     "urgent": "加急单",
+}
+
+SUPPORTED_PURCHASE_REQUEST_IMPORT_EXTENSIONS = {".xlsx", ".xls", ".csv"}
+
+# 导入时用于识别采购类型的中文名称/别名（键在查找时经 _normalize_header 归一化，
+# 支持包含式匹配：如工作表名“霉酚酸五金”可匹配“五金”）
+PURCHASE_REQUEST_IMPORT_CATEGORY_ALIASES: dict[str, str] = {
+    "五金材料": "hardware",
+    "五金件": "hardware",
+    "五金工具": "hardware",
+    "五金": "hardware",
+    "电脑材料": "computer",
+    "电脑": "computer",
+    "办公用品": "office",
+    "办公": "office",
+    "其他商品": "office",
+    "原辅料": "raw-auxiliary",
+    "原辅材料": "raw-auxiliary",
+    "原料": "raw-auxiliary",
+    "辅料": "raw-auxiliary",
+    "化玻": "chemical-glass",
+    "化学玻璃": "chemical-glass",
+    "化学试剂": "chemical-glass",
+    "玻璃仪器": "chemical-glass",
+    "电气": "electrical",
+    "电器": "electrical",
+    "电气材料": "electrical",
+    "电气件": "electrical",
+    "广告印刷": "advertising-printing",
+    "广告": "advertising-printing",
+    "印刷": "advertising-printing",
+    "消防": "fire",
+    "消防器材": "fire",
+    "消防用品": "fire",
+    "包材": "packaging",
+    "包装材料": "packaging",
+    "特防": "labor-special",
+    "劳保特防": "labor-special",
+    "杂品": "labor-miscellaneous",
+    "劳保杂品": "labor-miscellaneous",
+    "加急单": "urgent",
+    "加急": "urgent",
+}
+
+# 导入表头别名 → 采购申请明细字段
+PURCHASE_REQUEST_IMPORT_ITEM_FIELD_ALIASES: dict[str, tuple[str, ...]] = {
+    "item_category": ("申请类型", "明细申请类型", "明细采购类型"),
+    "product_name": ("商品名称", "名称", "物品名称"),
+    "specification": ("规格",),
+    "material_code": ("物料编码", "物料编号", "编码", "物料代码"),
+    "material_description": ("物料说明", "物料描述", "物料名称"),
+    "rule_model": ("规格型号", "型号"),
+    "purpose": ("用途",),
+    "material": ("材质",),
+    "brand": ("品牌",),
+    "quantity": (
+        "数量",
+        "请购数量",
+        "申购数量",
+        "需求数量",
+        "需求数量(kg)",
+        "月需求数量",
+        "月需求数量(kg)",
+        "1个月需求数量",
+    ),
+    "unit": ("单位",),
+    "unit_price": (
+        "单价",
+        "单价（元）",
+        "单价(元)",
+        "预估单价",
+        "预估单价（元）",
+        "预估单价(元)",
+        "预算单价",
+    ),
+    "total_amount": (
+        "预估总价",
+        "预估总价（元）",
+        "预估总价(元)",
+        "总价",
+        "总价（元）",
+        "总额",
+        "总额（元）",
+        "合计金额",
+    ),
+    "remarks": ("备注",),
+}
+
+# 导入表头别名 → 采购申请单级字段（取自工作表内首个非空值）
+PURCHASE_REQUEST_IMPORT_SHEET_FIELD_ALIASES: dict[str, tuple[str, ...]] = {
+    "category": ("采购类型", "采购类别", "类别"),
+    "request_department": (
+        "申购部门",
+        "申请部门",
+        "部门",
+        "部门名称",
+        "使用部门",
+        "需求部门",
+        "申购部门名称",
+        "申请部门名称",
+    ),
+    "request_date": ("申请日期", "申购日期", "日期"),
 }
 
 MATERIAL_FIELD_PURCHASE_CATEGORY_VALUES = {
@@ -154,7 +275,7 @@ PURCHASE_ORDER_EXPORT_MATERIAL_HEADERS = [
     "序号",
     "物料编码",
     "物料说明",
-    "规则型号",
+    "规格型号",
     "用途",
     "材质",
     "品牌",
@@ -169,7 +290,7 @@ PURCHASE_ORDER_EXPORT_COMPATIBILITY_HEADERS = [
     "序号",
     "物料编码/商品名称",
     "物料说明/商品名称",
-    "规则型号/规格型号",
+    "规格型号",
     "用途",
     "材质",
     "品牌",
@@ -185,7 +306,7 @@ PURCHASE_ORDER_EXPORT_URGENT_HEADERS = [
     "申请类型",
     "物料编码/商品名称",
     "物料说明/商品名称",
-    "规则型号/规格型号",
+    "规格型号",
     "用途",
     "材质",
     "品牌",
@@ -382,6 +503,429 @@ async def import_supplier_table_file(
     )
 
 
+async def import_purchase_request_table_file(
+    db: AsyncSession,
+    file_bytes: bytes,
+    *,
+    file_name: str,
+) -> PurchaseRequestImportResult:
+    """从 xlsx/xls/csv 表格导入采购申请。
+
+    每个工作表生成一份采购申请草稿；行级与工作表级错误分别收集，
+    一个工作表失败不影响其他工作表。同一文件（内容哈希相同）的同一
+    工作表重复导入时跳过，避免生成重复申请草稿。
+    """
+    if not file_bytes:
+        raise ValueError("上传文件为空")
+
+    suffix = _get_file_suffix(file_name)
+    if suffix not in SUPPORTED_PURCHASE_REQUEST_IMPORT_EXTENSIONS:
+        supported = "、".join(sorted(SUPPORTED_PURCHASE_REQUEST_IMPORT_EXTENSIONS))
+        raise ValueError(f"暂不支持该文件类型，请上传 {supported} 文件")
+
+    sheets = _parse_purchase_request_import_sheets(file_bytes, suffix)
+    result = PurchaseRequestImportResult(file_name=file_name, total_sheets=len(sheets))
+    for sheet_name, rows, parse_error, title_department in sheets:
+        if parse_error is not None:
+            result.failed_rows.append(
+                PurchaseRequestImportError(
+                    sheet_name=sheet_name,
+                    row=None,
+                    message=parse_error,
+                )
+            )
+            continue
+        if not rows:
+            continue
+        duplicate_key = sha256(file_bytes + f"|{sheet_name}".encode()).hexdigest()
+        existing = await PurchaseRequestRepository(db).find_by_import_duplicate_key(
+            duplicate_key
+        )
+        if existing is not None:
+            result.failed_rows.append(
+                PurchaseRequestImportError(
+                    sheet_name=sheet_name,
+                    row=None,
+                    message=f"工作表“{sheet_name}”已导入过（相同文件），已跳过重复导入",
+                )
+            )
+            continue
+        summary, errors = await _import_purchase_request_sheet(
+            db,
+            sheet_name=sheet_name,
+            rows=rows,
+            file_name=file_name,
+            title_department=title_department,
+            duplicate_key=duplicate_key,
+        )
+        result.failed_rows.extend(errors)
+        if summary is not None:
+            result.imported_requests.append(summary)
+    return result
+
+
+async def _import_purchase_request_sheet(
+    db: AsyncSession,
+    *,
+    sheet_name: str,
+    rows: list[tuple[int, dict[str, object]]],
+    file_name: str,
+    title_department: str = "",
+    duplicate_key: str = "",
+) -> tuple[PurchaseRequestImportSummary | None, list[PurchaseRequestImportError]]:
+    errors: list[PurchaseRequestImportError] = []
+
+    try:
+        category_value, category_source = _resolve_import_category(sheet_name, rows)
+    except ValueError as exc:
+        return None, [
+            PurchaseRequestImportError(
+                sheet_name=sheet_name,
+                row=None,
+                message=str(exc),
+            )
+        ]
+
+    # 申购部门优先级：表内“申请部门”列 → 标题行“申请部门：xxx” → 回退
+    request_department = _first_sheet_field_value(rows, "request_department")
+    if not request_department:
+        request_department = title_department
+    if not request_department:
+        request_department = _fallback_import_department(sheet_name, file_name)
+    request_date = _parse_import_request_date(rows)
+
+    items: list[PurchaseRequestItemInput] = []
+    for row_number, raw_data in rows:
+        try:
+            items.append(
+                _build_import_item(
+                    raw_data,
+                    row_number=row_number,
+                    category_value=category_value,
+                )
+            )
+        except (ValueError, ValidationError) as exc:
+            errors.append(
+                PurchaseRequestImportError(
+                    sheet_name=sheet_name,
+                    row=row_number,
+                    message=str(exc),
+                )
+            )
+
+    if errors:
+        # 任一明细错误（如总额计算不一致）→ 整张工作表不导入，
+        # 避免错误明细被静默跳过导致提交后才发现问题
+        detail = "；".join(error.message for error in errors[:5])
+        if len(errors) > 5:
+            detail = f"{detail}；等共{len(errors)}处"
+        return None, [
+            PurchaseRequestImportError(
+                sheet_name=sheet_name,
+                row=None,
+                message=(
+                    f"工作表“{sheet_name}”存在{len(errors)}处明细错误，"
+                    f"整张工作表未导入，请修改后重新提交：{detail}"
+                ),
+            )
+        ]
+
+    if not items:
+        return None, errors + [
+            PurchaseRequestImportError(
+                sheet_name=sheet_name,
+                row=None,
+                message="该工作表没有可导入的明细行",
+            )
+        ]
+
+    try:
+        created = await create_purchase_request(
+            db,
+            PurchaseRequestCreate(
+                category=PurchaseRequestCategory(category_value),
+                request_department=request_department,
+                request_date=request_date,
+                attachment_note=f"通过表格导入（{sheet_name}）",
+                import_duplicate_key=duplicate_key or None,
+                items=items,
+            ),
+        )
+    except (ValueError, ValidationError) as exc:
+        return None, errors + [
+            PurchaseRequestImportError(
+                sheet_name=sheet_name,
+                row=None,
+                message=f"申请生成失败：{exc}",
+            )
+        ]
+
+    summary = PurchaseRequestImportSummary(
+        request_id=created.id,
+        sheet_name=sheet_name,
+        category=PurchaseRequestCategory(category_value),
+        category_label=PURCHASE_CATEGORY_LABELS.get(category_value, category_value),
+        category_source=category_source,
+        request_department=request_department,
+        request_date=request_date,
+        items_count=len(items),
+    )
+    return summary, errors
+
+
+def _resolve_import_category(
+    sheet_name: str,
+    rows: list[tuple[int, dict[str, object]]],
+) -> tuple[str, str]:
+    """识别采购类型，返回 (采购类型, 来源)。
+
+    来源依次为：表内“采购类型”列（识别值须一致）→ 工作表名称（包含式
+    匹配，如“霉酚酸五金”）→ 明细“申请类型”列（识别值一致）→ 按明细
+    字段自动推断（物料编码+物料说明 → 五金材料；商品名称 → 办公用品）。
+    无法识别且无法映射的值不阻断，全部失败时抛出 ValueError。
+    """
+    normalized_values: list[tuple[int, str]] = []
+    for row_number, raw_data in rows:
+        value = _get_import_field(raw_data, "category")
+        if not value:
+            continue
+        normalized = _match_import_category(value)
+        if normalized is not None:
+            normalized_values.append((row_number, normalized))
+
+    if normalized_values:
+        first_category = normalized_values[0][1]
+        if any(value != first_category for _, value in normalized_values):
+            mixed = "、".join(dict.fromkeys(value for _, value in normalized_values))
+            raise ValueError(
+                f"采购类型列包含多种类型（{mixed}），请按类型拆分到不同工作表"
+            )
+        return first_category, "column"
+
+    normalized_name = _match_import_category(sheet_name)
+    if normalized_name is not None:
+        return normalized_name, "sheet_name"
+
+    item_category_values: list[tuple[int, str]] = []
+    for row_number, raw_data in rows:
+        value = _get_import_field(raw_data, "item_category")
+        if not value:
+            continue
+        normalized = _match_import_category(value)
+        if normalized is not None:
+            item_category_values.append((row_number, normalized))
+    if item_category_values:
+        first_item_category = item_category_values[0][1]
+        if all(value == first_item_category for _, value in item_category_values):
+            return first_item_category, "inferred"
+
+    inferred = _infer_import_category(rows)
+    if inferred is not None:
+        return inferred, "inferred"
+
+    raise ValueError(
+        "无法识别采购类型：请在表头添加“采购类型”列，"
+        "或将工作表命名为含类别名称的表名（如“霉酚酸五金”“加急单”）；"
+        "也可以提供物料编码/物料说明或商品名称列，由系统自动判断"
+    )
+
+
+def _match_import_category(value: str) -> str | None:
+    """类别别名匹配：先精确匹配，再按别名长度降序做包含匹配。"""
+    key = _normalize_header(value)
+    if not key:
+        return None
+    exact = PURCHASE_REQUEST_IMPORT_CATEGORY_ALIASES.get(key)
+    if exact is not None:
+        return exact
+    for alias in sorted(
+        PURCHASE_REQUEST_IMPORT_CATEGORY_ALIASES,
+        key=len,
+        reverse=True,
+    ):
+        normalized_alias = _normalize_header(alias)
+        if normalized_alias and normalized_alias in key:
+            return PURCHASE_REQUEST_IMPORT_CATEGORY_ALIASES[alias]
+    return None
+
+
+def _infer_import_category(
+    rows: list[tuple[int, dict[str, object]]],
+) -> str | None:
+    """按明细字段存在性推断采购类型；字段需要有可导入的数据。"""
+    has_material_code = any(
+        _get_import_field(raw_data, "material_code") for _, raw_data in rows
+    )
+    has_material_description = any(
+        _get_import_field(raw_data, "material_description") for _, raw_data in rows
+    )
+    if has_material_code and has_material_description:
+        return PurchaseRequestCategory.hardware.value
+    has_product_name = any(
+        _get_import_field(raw_data, "product_name") for _, raw_data in rows
+    )
+    if has_product_name:
+        return PurchaseRequestCategory.office.value
+    return None
+
+
+def _fallback_import_department(sheet_name: str, file_name: str) -> str:
+    """申购部门缺失时的回退值：工作表名去掉类别关键字（如“霉酚酸五金”→“霉酚酸”）；
+    无法提取时 CSV 使用文件名，其他使用“未填写”。"""
+    normalized = _normalize_header(sheet_name)
+    if normalized:
+        for alias in sorted(
+            PURCHASE_REQUEST_IMPORT_CATEGORY_ALIASES,
+            key=len,
+            reverse=True,
+        ):
+            normalized_alias = _normalize_header(alias)
+            if normalized_alias and normalized_alias in normalized:
+                candidate = re.sub(
+                    r"[\s_\-—:：]+$",
+                    "",
+                    sheet_name.replace(alias, ""),
+                ).strip()
+                if candidate:
+                    return candidate
+                return "未填写"
+    if sheet_name in {"CSV", "csv"}:
+        stem = Path(file_name).stem.strip()
+        if stem:
+            return stem
+    return "未填写"
+
+
+def _build_import_item(
+    raw_data: dict[str, object],
+    *,
+    row_number: int,
+    category_value: str,
+) -> PurchaseRequestItemInput:
+    """按行构建明细；任何字段问题抛出带行号的 ValueError。"""
+    item_category: PurchaseRequestCategory | None = None
+    item_category_value = _get_import_field(raw_data, "item_category")
+    if item_category_value:
+        normalized_item_category = _match_import_category(item_category_value)
+        if normalized_item_category is None:
+            raise ValueError(f"第{row_number}行申请类型无法识别：{item_category_value}")
+        item_category = PurchaseRequestCategory(normalized_item_category)
+
+    if category_value == PurchaseRequestCategory.urgent.value:
+        if item_category is None:
+            raise ValueError(f"第{row_number}行加急单明细缺少申请类型")
+    elif item_category is not None and item_category.value != category_value:
+        raise ValueError(
+            f"第{row_number}行申请类型“{item_category.value}”与采购分类不一致"
+        )
+
+    item_uses_material_fields = (
+        item_category.value if item_category is not None else category_value
+    ) in MATERIAL_FIELD_PURCHASE_CATEGORY_VALUES
+    product_name = _get_import_field(raw_data, "product_name")
+    material_code = _get_import_field(raw_data, "material_code")
+    material_description = _get_import_field(raw_data, "material_description")
+    if item_uses_material_fields:
+        if not material_code:
+            raise ValueError(f"第{row_number}行缺少物料编码")
+        # 原辅料/包材等表格常见“商品名称”列代替“物料说明”列
+        material_description = material_description or product_name
+        if not material_description:
+            raise ValueError(f"第{row_number}行缺少物料说明")
+    elif not product_name:
+        # 办公用品等表格常见“物料描述”列代替“商品名称”列
+        product_name = material_description
+        if not product_name:
+            raise ValueError(f"第{row_number}行缺少商品名称")
+
+    quantity = _parse_import_number(_get_import_field(raw_data, "quantity"))
+    if quantity is None:
+        raise ValueError(f"第{row_number}行数量无效")
+    if quantity < 0:
+        raise ValueError(f"第{row_number}行数量不能为负数")
+    unit_price_value = _get_import_field(raw_data, "unit_price")
+    unit_price = _parse_import_number(unit_price_value)
+    if unit_price is None:
+        if unit_price_value:
+            raise ValueError(f"第{row_number}行单价无效")
+        unit_price = Decimal("0")
+    elif unit_price < 0:
+        raise ValueError(f"第{row_number}行单价不能为负数")
+
+    total_amount_value = _get_import_field(raw_data, "total_amount")
+    if total_amount_value:
+        table_total = _parse_import_number(total_amount_value)
+        if table_total is None:
+            raise ValueError(f"第{row_number}行预估总价无效")
+        if unit_price_value:
+            calculated_total = _calculate_line_amount(quantity, unit_price)
+            if calculated_total != table_total:
+                raise ValueError(
+                    f"第{row_number}行预估总价（{_format_decimal(table_total)}）"
+                    f"与数量×单价（{_format_decimal(calculated_total)}）不一致"
+                )
+
+    return PurchaseRequestItemInput(
+        item_category=item_category,
+        product_name=product_name,
+        specification=_get_import_field(raw_data, "specification"),
+        material_code=material_code,
+        material_description=material_description,
+        rule_model=_get_import_field(raw_data, "rule_model"),
+        purpose=_get_import_field(raw_data, "purpose"),
+        material=_get_import_field(raw_data, "material"),
+        brand=_get_import_field(raw_data, "brand"),
+        quantity=quantity,
+        unit=_get_import_field(raw_data, "unit"),
+        unit_price=unit_price,
+        remarks=_get_import_field(raw_data, "remarks"),
+    )
+
+
+def _get_import_field(raw_data: dict[str, object], field_name: str) -> str:
+    aliases = PURCHASE_REQUEST_IMPORT_ITEM_FIELD_ALIASES.get(
+        field_name,
+        PURCHASE_REQUEST_IMPORT_SHEET_FIELD_ALIASES.get(field_name, ()),
+    )
+    normalized_aliases = {_normalize_header(alias) for alias in aliases}
+    for column, value in raw_data.items():
+        if _normalize_header(column) in normalized_aliases:
+            return _format_cell_string(value)
+    return ""
+
+
+def _first_sheet_field_value(
+    rows: list[tuple[int, dict[str, object]]],
+    field_name: str,
+) -> str:
+    for _, raw_data in rows:
+        value = _get_import_field(raw_data, field_name)
+        if value:
+            return value
+    return ""
+
+
+def _parse_import_number(value: str) -> Decimal | None:
+    text = value.strip().replace(",", "").replace("¥", "").replace("￥", "")
+    if not text:
+        return None
+    try:
+        return Decimal(text)
+    except InvalidOperation:
+        return None
+
+
+def _parse_import_request_date(
+    rows: list[tuple[int, dict[str, object]]],
+) -> date:
+    raw_value = _first_sheet_field_value(rows, "request_date")
+    if raw_value:
+        parsed = _parse_supplier_date(raw_value)
+        if parsed is not None:
+            return parsed
+    return datetime.now(UTC).date()
+
+
 async def list_suppliers(
     db: AsyncSession,
     *,
@@ -400,9 +944,11 @@ async def list_suppliers(
         page=page,
         page_size=page_size,
     )
-    return [
-        SupplierResponse.model_validate(supplier) for supplier in suppliers
-    ], total, columns
+    return (
+        [SupplierResponse.model_validate(supplier) for supplier in suppliers],
+        total,
+        columns,
+    )
 
 
 async def create_purchase_request(
@@ -420,6 +966,7 @@ async def create_purchase_request(
         request_department=data.request_department,
         request_date=data.request_date,
         attachment_note=data.attachment_note,
+        import_duplicate_key=data.import_duplicate_key or None,
         status=PurchaseRequestStatus.draft.value,
         total_amount=total_amount,
         status_updated_at=now,
@@ -466,6 +1013,23 @@ async def get_purchase_request(
 ) -> PurchaseRequestResponse:
     repository = PurchaseRequestRepository(db)
     return await _get_purchase_request_response(repository, request_id)
+
+
+async def delete_purchase_request(
+    db: AsyncSession,
+    request_id: UUID,
+) -> bool:
+    """删除采购申请草稿（软删除，含明细与审批记录）。
+
+    仅草稿状态允许删除；已提交或已审批的申请不可删除。
+    """
+    repository = PurchaseRequestRepository(db)
+    request = await repository.get(request_id)
+    if not request:
+        raise ValueError("采购申请不存在")
+    if request.status != PurchaseRequestStatus.draft.value:
+        raise ValueError("仅草稿状态的采购申请可以删除")
+    return await repository.delete(request_id)
 
 
 async def list_purchase_requests(
@@ -675,7 +1239,6 @@ def _store_contract_file(
     return str(file_path)
 
 
-
 async def submit_purchase_request(
     db: AsyncSession,
     request_id: UUID,
@@ -692,6 +1255,14 @@ async def submit_purchase_request(
     items = await repository.list_items(request_id)
     if not items:
         raise ValueError("采购申请至少需要一条明细")
+    for item in items:
+        calculated_total = _calculate_line_amount(item.quantity, item.unit_price)
+        if calculated_total != item.total_amount:
+            raise ValueError(
+                f"第{item.sequence}条明细总额（{_format_decimal(item.total_amount)}）"
+                f"与数量×单价（{_format_decimal(calculated_total)}）不一致，"
+                "请修改后重新提交"
+            )
 
     now = datetime.now(UTC)
     first_role = get_purchase_approval_workflow(request.category)[0]
@@ -799,21 +1370,17 @@ def _count_current_round_approvals(
     *,
     approval_role: PurchaseApprovalRole,
 ) -> int:
-    rejected_times = [
-        approval.approval_time
-        for approval in approvals
-        if approval.result == PurchaseApprovalResult.rejected.value
-    ]
-    latest_rejection = max(rejected_times) if rejected_times else None
-    return sum(
-        approval.approval_role == approval_role.value
-        and approval.result == PurchaseApprovalResult.approved.value
-        and (
-            latest_rejection is None
-            or approval.approval_time > latest_rejection
-        )
-        for approval in approvals
-    )
+    """统计最近一次驳回后同角色已批准的人数（基于记录顺序，避免同一时刻时间戳歧义）。"""
+    count = 0
+    for approval in reversed(approvals):
+        if approval.result == PurchaseApprovalResult.rejected.value:
+            break
+        if (
+            approval.approval_role == approval_role.value
+            and approval.result == PurchaseApprovalResult.approved.value
+        ):
+            count += 1
+    return count
 
 
 def _build_purchase_request_items(
@@ -1130,7 +1697,7 @@ def _get_purchase_order_export_column_widths(
 
 
 def _apply_purchase_order_sheet_setup(
-    worksheet,
+    worksheet: Any,
     column_widths: dict[str, float],
 ) -> None:
     for column_letter, width in column_widths.items():
@@ -1151,7 +1718,7 @@ def _apply_purchase_order_sheet_setup(
 
 
 def _write_merged_title(
-    worksheet,
+    worksheet: Any,
     row_index: int,
     value: str,
     column_count: int,
@@ -1169,7 +1736,7 @@ def _write_merged_title(
 
 
 def _write_department_row(
-    worksheet,
+    worksheet: Any,
     row_index: int,
     department: str,
     column_count: int,
@@ -1190,7 +1757,7 @@ def _write_department_row(
 
 
 def _write_purchase_order_header_row(
-    worksheet,
+    worksheet: Any,
     row_index: int,
     headers: list[str],
 ) -> None:
@@ -1207,7 +1774,7 @@ def _write_purchase_order_header_row(
 
 
 def _write_purchase_order_detail_row(
-    worksheet,
+    worksheet: Any,
     row_index: int,
     index: int,
     line: PurchaseOrderLineResponse,
@@ -1228,9 +1795,7 @@ def _write_purchase_order_detail_row(
         )
         cell.border = _purchase_order_border()
     text_columns = (
-        (2, 3, 4, 5, 6, 11)
-        if material_field_mode is False
-        else (2, 3, 4, 5, 6, 7, 12)
+        (2, 3, 4, 5, 6, 11) if material_field_mode is False else (2, 3, 4, 5, 6, 7, 12)
     )
     for column_index in text_columns:
         worksheet.cell(row_index, column_index).alignment = Alignment(
@@ -1243,7 +1808,7 @@ def _write_purchase_order_detail_row(
 
 
 def _write_purchase_order_total_row(
-    worksheet,
+    worksheet: Any,
     row_index: int,
     label: str,
     total_formula: str,
@@ -1265,7 +1830,7 @@ def _write_purchase_order_total_row(
     worksheet.cell(row_index, amount_column).number_format = "0.00"
 
 
-def _write_signature_row(worksheet, row_index: int, column_count: int) -> None:
+def _write_signature_row(worksheet: Any, row_index: int, column_count: int) -> None:
     worksheet.merge_cells(
         start_row=row_index,
         start_column=1,
@@ -1353,6 +1918,152 @@ def _parse_supplier_text_table(
     return _build_supplier_rows(list(reader), "CSV" if delimiter == "," else "TSV")
 
 
+def _parse_purchase_request_import_sheets(
+    file_bytes: bytes,
+    suffix: str,
+) -> list[
+    tuple[
+        str,
+        list[tuple[int, dict[str, object]]] | None,
+        str | None,
+        str,
+    ]
+]:
+    """按格式解析全部工作表，返回 [(sheet_name, rows, error, title_department), ...]。
+
+    完全空白的工作表直接跳过；有内容但缺少表头或没有数据行的工作表
+    记录为工作表级错误（rows 为 None），不中断其他工作表。
+    title_department 为表头前标题行中“申请部门/申购部门：xxx”提取的申购部门。
+    """
+    if suffix == ".xlsx":
+        return _parse_purchase_request_xlsx_sheets(file_bytes)
+    if suffix == ".xls":
+        return _parse_purchase_request_xls_sheets(file_bytes)
+    return _parse_purchase_request_csv_sheet(file_bytes)
+
+
+def _parse_purchase_request_xlsx_sheets(
+    file_bytes: bytes,
+) -> list[
+    tuple[
+        str,
+        list[tuple[int, dict[str, object]]] | None,
+        str | None,
+        str,
+    ]
+]:
+    workbook = load_workbook(BytesIO(file_bytes), read_only=True, data_only=True)
+    sheets: list[
+        tuple[
+            str,
+            list[tuple[int, dict[str, object]]] | None,
+            str | None,
+            str,
+        ]
+    ] = []
+    for worksheet in workbook.worksheets:
+        table_rows = list(worksheet.iter_rows(values_only=True))
+        if not table_rows:
+            continue
+        try:
+            _, rows, _ = _build_supplier_rows(table_rows, worksheet.title)
+        except ValueError as exc:
+            sheets.append((worksheet.title, None, str(exc), ""))
+            continue
+        title_department = _extract_import_request_department(table_rows)
+        sheets.append((worksheet.title, rows, None, title_department))
+    return sheets
+
+
+def _parse_purchase_request_xls_sheets(
+    file_bytes: bytes,
+) -> list[
+    tuple[
+        str,
+        list[tuple[int, dict[str, object]]] | None,
+        str | None,
+        str,
+    ]
+]:
+    workbook = xlrd.open_workbook(file_contents=file_bytes)
+    sheets: list[
+        tuple[
+            str,
+            list[tuple[int, dict[str, object]]] | None,
+            str | None,
+            str,
+        ]
+    ] = []
+    for worksheet in workbook.sheets():
+        table_rows = [
+            _xls_row_values(worksheet, row_index)
+            for row_index in range(worksheet.nrows)
+        ]
+        if not table_rows:
+            continue
+        try:
+            _, rows, _ = _build_supplier_rows(table_rows, worksheet.name)
+        except ValueError as exc:
+            sheets.append((worksheet.name, None, str(exc), ""))
+            continue
+        title_department = _extract_import_request_department(table_rows)
+        sheets.append((worksheet.name, rows, None, title_department))
+    return sheets
+
+
+def _xls_row_values(worksheet: xlrd.sheet.Sheet, row_index: int) -> tuple[object, ...]:
+    values: list[object] = []
+    for col_index in range(worksheet.ncols):
+        cell = worksheet.cell(row_index, col_index)
+        if cell.ctype == xlrd.XL_CELL_DATE:
+            values.append(
+                xlrd.xldate.xldate_as_datetime(cell.value, worksheet.book.datemode)
+            )
+        else:
+            values.append(cell.value)
+    return tuple(values)
+
+
+def _parse_purchase_request_csv_sheet(
+    file_bytes: bytes,
+) -> list[
+    tuple[
+        str,
+        list[tuple[int, dict[str, object]]] | None,
+        str | None,
+        str,
+    ]
+]:
+    text = _decode_table_text(file_bytes)
+    reader = csv.reader(StringIO(text), delimiter=",")
+    table_rows = list(reader)
+    if not table_rows:
+        return [("CSV", None, "表格中没有可导入的数据行", "")]
+    _, rows, _ = _build_supplier_rows(table_rows, "CSV")
+    return [("CSV", rows, None, "")]
+
+
+def _extract_import_request_department(
+    table_rows: Sequence[Sequence[object]],
+) -> str:
+    """从表头前的标题行中提取“申请部门/申购部门：xxx”的申购部门。"""
+    header_index = _find_header_row_index(table_rows)
+    if header_index is None:
+        return ""
+    for row in table_rows[:header_index]:
+        for value in row:
+            text = _format_cell_string(value)
+            if not text:
+                continue
+            match = re.search(
+                r"(?:申请部门|申购部门)\s*[:：]\s*([^\n]+)",
+                text,
+            )
+            if match:
+                return match.group(1).strip()
+    return ""
+
+
 def _decode_table_text(file_bytes: bytes) -> str:
     for encoding in ("utf-8-sig", "gb18030"):
         try:
@@ -1363,7 +2074,7 @@ def _decode_table_text(file_bytes: bytes) -> str:
 
 
 def _build_supplier_rows(
-    table_rows: list[tuple[object, ...] | list[object]],
+    table_rows: Sequence[Sequence[object]],
     sheet_name: str,
 ) -> tuple[list[str], list[tuple[int, dict[str, object]]], str]:
     header_index = _find_header_row_index(table_rows)
@@ -1389,6 +2100,8 @@ def _build_supplier_rows(
         }
         if all(value in ("", None) for value in raw_data.values()):
             continue
+        if _is_import_non_item_row(raw_data):
+            continue
         rows.append((row_index, raw_data))
 
     if not rows:
@@ -1396,12 +2109,49 @@ def _build_supplier_rows(
     return columns, rows, sheet_name
 
 
+def _is_import_non_item_row(raw_data: dict[str, object]) -> bool:
+    """跳过表格中的合计、签名等非明细行（采购申请导入与供应商导入共用）。
+
+    判断规则：行内出现“合计/总计/小计”；或整行只有一个非空单元格，
+    且内容为签字栏关键词；或仅序号/行号列有值（如只有“序号 1”的占位行）。
+    """
+    non_empty = [
+        (column, value) for column, value in raw_data.items() if value not in ("", None)
+    ]
+    if not non_empty:
+        return True
+    text = " ".join(str(value) for _, value in non_empty)
+    if re.search(r"合计|总计|小计", text):
+        return True
+    if len(non_empty) == 1:
+        column, value = non_empty[0]
+        if re.search(r"领导|负责人|经理|主管|统计人|申请人|五金库|签字|签名", text):
+            return True
+        if _normalize_header(column) in {"序号", "行号"}:
+            return True
+        # 仅含标点/空白的占位行（如“.”）
+        if not re.search(r"[\u4e00-\u9fffA-Za-z0-9]", text):
+            return True
+    return False
+
+
 def _find_header_row_index(
-    table_rows: list[tuple[object, ...] | list[object]],
+    table_rows: Sequence[Sequence[object]],
 ) -> int | None:
     for index, row in enumerate(table_rows):
         non_empty_count = sum(1 for value in row if _format_cell_string(value))
-        if non_empty_count >= 2:
+        if non_empty_count < 2:
+            continue
+        # 表头字段应连续分布；排除“公司名+月均”这类分散单元格的标题行
+        max_run = 0
+        run = 0
+        for value in row:
+            if _format_cell_string(value):
+                run += 1
+                max_run = max(max_run, run)
+            else:
+                run = 0
+        if max_run >= 2:
             return index
     return None
 
@@ -1566,7 +2316,7 @@ def _extract_seller_name(lines: list[str]) -> str | None:
             line,
         )
         if len(names) >= 2:
-            return names[1].strip()
+            return str(names[1].strip())
 
         seller_name = _extract_seller_name_before_marker(line)
         if seller_name:
@@ -1654,6 +2404,7 @@ def _parse_line_item(line: str) -> InvoiceLineItem | None:
     tax_rate = _extract_tax_rate(parts[tax_rate_index])
     numeric_text = " ".join(pre_tax_parts[numeric_start:])
     dense_quantity = _extract_dense_quantity(numeric_text, tax_amount, tax_rate)
+    quantity: Decimal | None
     if dense_quantity is not None:
         quantity = dense_quantity
     else:

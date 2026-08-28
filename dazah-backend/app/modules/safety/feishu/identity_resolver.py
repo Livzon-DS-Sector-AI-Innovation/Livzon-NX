@@ -127,9 +127,7 @@ class IdentityResolver:
         """
         dept = await self._find_department_by_name(department_name)
         if dept is None:
-            logger.warning(
-                "resolve_department_leader: 未找到部门 %r", department_name
-            )
+            logger.warning("resolve_department_leader: 未找到部门 %r", department_name)
             return None
 
         # ── 配置优先：Bitable 人工维护的部门负责人 ──
@@ -138,7 +136,8 @@ class IdentityResolver:
             leader_name = config["leader"]
             logger.info(
                 "resolve_department_leader: %r → config leader %r",
-                department_name, leader_name,
+                department_name,
+                leader_name,
             )
             return await self.resolve_by_name(leader_name, department_hint=dept.name)
 
@@ -159,7 +158,9 @@ class IdentityResolver:
 
         logger.info(
             "resolve_department_leader: %r → %r (leader of %r)",
-            department_name, leader.name, dept.name,
+            department_name,
+            leader.name,
+            dept.name,
         )
         return self._user_to_person(leader, dept.name)
 
@@ -181,9 +182,7 @@ class IdentityResolver:
         """
         dept = await self._find_department_by_name(department_name)
         if dept is None:
-            logger.warning(
-                "resolve_supervising_leader: 未找到部门 %r", department_name
-            )
+            logger.warning("resolve_supervising_leader: 未找到部门 %r", department_name)
             return None
 
         # ── 配置优先：Bitable 人工维护的分管领导 ──
@@ -192,9 +191,12 @@ class IdentityResolver:
             supervisor_name = config["supervisor"]
             logger.info(
                 "resolve_supervising_leader: %r → config supervisor %r",
-                department_name, supervisor_name,
+                department_name,
+                supervisor_name,
             )
-            return await self.resolve_by_name(supervisor_name, department_hint=dept.name)
+            return await self.resolve_by_name(
+                supervisor_name, department_hint=dept.name
+            )
 
         # ── 回退：identity.departments 的父部门 leader ──
         if not dept.parent_feishu_department_id:
@@ -230,14 +232,17 @@ class IdentityResolver:
 
         logger.info(
             "resolve_supervising_leader: %r → 父部门 %r → leader %r",
-            department_name, parent_dept.name, leader.name,
+            department_name,
+            parent_dept.name,
+            leader.name,
         )
         return self._user_to_person(leader, parent_dept.name)
 
     # ── 隐患模型便捷方法 ──────────────────────────────────────
 
     async def resolve_responsible_person(
-        self, hazard: HazardReport,
+        self,
+        hazard: HazardReport,
     ) -> ResolvedPerson | None:
         """① 责任人：rectification_responsible_person_name → open_id。"""
         if not hazard.rectification_responsible_person_name:
@@ -252,34 +257,40 @@ class IdentityResolver:
         )
 
     async def resolve_hazard_department_leader(
-        self, hazard: HazardReport,
+        self,
+        hazard: HazardReport,
     ) -> ResolvedPerson | None:
         """② 部门负责人：hazard.department → 部门 leader → open_id。"""
         if not hazard.department:
             logger.warning(
-                "hazard %s: department 为空", hazard.hazard_no,
+                "hazard %s: department 为空",
+                hazard.hazard_no,
             )
             return None
         return await self.resolve_department_leader(hazard.department)
 
     async def resolve_hazard_supervising_leader(
-        self, hazard: HazardReport,
+        self,
+        hazard: HazardReport,
     ) -> ResolvedPerson | None:
         """③ 分管领导：hazard.department → 父部门 leader → open_id。"""
         if not hazard.department:
             logger.warning(
-                "hazard %s: department 为空", hazard.hazard_no,
+                "hazard %s: department 为空",
+                hazard.hazard_no,
             )
             return None
         return await self.resolve_supervising_leader(hazard.department)
 
     async def resolve_discoverer(
-        self, hazard: HazardReport,
+        self,
+        hazard: HazardReport,
     ) -> ResolvedPerson | None:
         """④ 隐患发现人：discovered_by_name → open_id。"""
         if not hazard.discovered_by_name:
             logger.warning(
-                "hazard %s: discovered_by_name 为空", hazard.hazard_no,
+                "hazard %s: discovered_by_name 为空",
+                hazard.hazard_no,
             )
             return None
         return await self.resolve_by_name(
@@ -336,25 +347,28 @@ class IdentityResolver:
         # 多人同名，尝试用部门提示消歧
         if department_hint:
             filtered = [
-                u for u in users
-                if u.department and department_hint in u.department
+                u for u in users if u.department and department_hint in u.department
             ]
             if len(filtered) == 1:
                 logger.info(
                     "_find_user_by_name: %r 多命中 %d，部门消歧 → %r",
-                    name, len(users), filtered[0].name,
+                    name,
+                    len(users),
+                    filtered[0].name,
                 )
                 return filtered[0]
             if filtered:
                 logger.warning(
                     "_find_user_by_name: %r 部门消歧后仍有 %d 人，取第一个",
-                    name, len(filtered),
+                    name,
+                    len(filtered),
                 )
                 return filtered[0]
 
         logger.warning(
             "_find_user_by_name: %r 匹配 %d 人，无法消歧，取第一个",
-            name, len(users),
+            name,
+            len(users),
         )
         return users[0]
 
@@ -389,7 +403,10 @@ class IdentityResolver:
         return None
 
     async def _find_user_by_email(self, email: str) -> User | None:
-        """按 email 查找用户（Bitable open_id 与 identity.users open_id 不匹配时的回退）。"""
+        """按 email 查找用户。
+
+        Bitable open_id 与 identity.users open_id 不匹配时的回退。
+        """
         from app.platform.identity.models import User as IdentityUser
 
         if not email:
@@ -429,14 +446,18 @@ class IdentityResolver:
             return dept
 
         # 策略 2+3: 模糊匹配
-        stmt = select(IdentityDept).where(
-            IdentityDept.is_deleted == False,  # noqa: E712
-            IdentityDept.status_is_deleted == False,  # noqa: E712
-            or_(
-                IdentityDept.name.ilike(f"%{name}"),
-                IdentityDept.name.ilike(f"%{name}%"),
-            ),
-        ).order_by(IdentityDept.order, IdentityDept.name)
+        stmt = (
+            select(IdentityDept)
+            .where(
+                IdentityDept.is_deleted == False,  # noqa: E712
+                IdentityDept.status_is_deleted == False,  # noqa: E712
+                or_(
+                    IdentityDept.name.ilike(f"%{name}"),
+                    IdentityDept.name.ilike(f"%{name}%"),
+                ),
+            )
+            .order_by(IdentityDept.order, IdentityDept.name)
+        )
         result = await self._session.execute(stmt)
         depts = list(result.scalars().all())
 
@@ -446,13 +467,16 @@ class IdentityResolver:
         if len(depts) > 1:
             logger.warning(
                 "_find_department_by_name: %r 模糊匹配 %d 个部门，取第一个 %r",
-                name, len(depts), depts[0].name,
+                name,
+                len(depts),
+                depts[0].name,
             )
 
         return depts[0]
 
     async def _find_department_by_id(
-        self, feishu_department_id: str,
+        self,
+        feishu_department_id: str,
     ) -> Department | None:
         """按 feishu_department_id 精确查找部门。"""
         from app.platform.identity.models import Department as IdentityDept

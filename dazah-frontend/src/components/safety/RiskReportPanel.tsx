@@ -95,7 +95,7 @@ export default function RiskReportPanel() {
   }
 
   useEffect(() => {
-    loadData()
+    queueMicrotask(loadData)
   }, [dailyRiskReportQueryParams.page, dailyRiskReportQueryParams.page_size, statusFilter, reportTypeFilter])
 
   const handleSearch = () => {

@@ -1,0 +1,1327 @@
+"""菜单种子数据（由前端 menu-config.ts 的 moduleMenus 静态转写，单一历史来源）。
+
+- 该文件仅在启动 seed_menus() 时读取一次；前端渲染以数据库为准（见 §菜单数据库化）。
+- 节点字段：key/name/path/children/icon/permission_code/disabled
+- type 推断规则：有 children → directory；无 children → menu；disabled → status=disabled
+- key 层级拼接 `{parent_key}:{key}` 保证全局唯一（如 safety:regulation）
+"""
+
+# ruff: noqa: E501  # 种子数据行（名称/路径）天然超长，属数据文件豁免
+
+from __future__ import annotations
+
+from typing import Any
+
+
+def _n(
+    key: str,
+    name: str,
+    path: str = "",
+    *,
+    children: list[Any] | None = None,
+    icon: str | None = None,
+    permission: str | None = None,
+    disabled: bool = False,
+) -> dict[str, Any]:
+    return {
+        "key": key,
+        "name": name,
+        "path": path,
+        "children": children,
+        "icon": icon,
+        "permission_code": permission,
+        "disabled": disabled,
+    }
+
+
+SEED_MENUS: list[dict[str, Any]] = [
+    # ── 生产管理 ────────────────────────────────────────────────
+    _n(
+        "production",
+        "生产管理",
+        "/production",
+        icon="factory",
+        children=[
+            _n("batches", "批次管理", "/production/batches"),
+            _n("plan", "生产计划", "/production/plan"),
+            _n("cost", "生产成本", "/production/cost"),
+            _n("process", "工艺规程（开发中）", "/production/process", disabled=True),
+            _n("records", "生产记录（开发中）", "/production/records", disabled=True),
+            _n("balance", "物料平衡（开发中）", "/production/balance", disabled=True),
+        ],
+    ),
+    # ── 设备管理 ────────────────────────────────────────────────
+    _n(
+        "equipment",
+        "设备管理",
+        "/equipment",
+        icon="cog",
+        children=[
+            _n("stats", "设备仪表盘", "/equipment/stats"),
+            _n("assets", "设备台账", "/equipment/assets"),
+            _n("maintenance", "维护保养", "/equipment/maintenance"),
+            _n("inspection", "设备巡检", "/equipment/inspection"),
+            _n("spare-parts", "备件管理", "/equipment/spare-parts"),
+            _n("personnel", "人员配置", "/equipment/personnel"),
+        ],
+    ),
+    # ── 能源管理 ────────────────────────────────────────────────
+    _n(
+        "energy",
+        "能源管理",
+        "/energy",
+        icon="bolt",
+        children=[
+            _n("overview", "能源总览", "/energy"),
+            _n("devices", "数据源配置", "/energy/devices"),
+            _n("alerts", "预警管理", "/energy/alerts"),
+            _n("collect-logs", "采集日志", "/energy/collect-logs"),
+        ],
+    ),
+    # ── 安全管理（按化工安全生产管理体系分级）───────────────────
+    _n(
+        "safety",
+        "安全管理",
+        "/safety",
+        icon="shield",
+        children=[
+            _n(
+                "system-config",
+                "系统配置",
+                "",
+                children=[
+                    _n("ai-workflow", "AI工作流配置", "/safety/ai-workflow-config"),
+                    _n("scheduled-tasks", "定时任务", "/safety/scheduled-tasks"),
+                ],
+            ),
+            _n(
+                "ops-safety",
+                "作业安全",
+                "",
+                children=[
+                    _n("special-ops-mgmt", "特殊作业管理", "/safety/special-ops"),
+                    _n(
+                        "daily-risk-report",
+                        "关键风险作业报备",
+                        "/safety/risk-reporting",
+                    ),
+                ],
+            ),
+            _n(
+                "risk-hazard",
+                "风险与隐患",
+                "",
+                children=[
+                    _n(
+                        "risk-grading",
+                        "风险分级管控",
+                        "",
+                        children=[
+                            _n(
+                                "hazard-identification",
+                                "危险源辨识工作流",
+                                "/safety/hazard-identification",
+                            ),
+                            _n(
+                                "hazard-ledger",
+                                "危险源辨识台账",
+                                "/safety/hazard-identification/ledger",
+                            ),
+                        ],
+                    ),
+                    _n(
+                        "hazard-inspection",
+                        "隐患排查治理",
+                        "",
+                        children=[
+                            _n(
+                                "hazard-inspection-ledger",
+                                "隐患台账",
+                                "/safety/hazard-ledger",
+                            ),
+                        ],
+                    ),
+                    _n(
+                        "regulation",
+                        "安全操规管理",
+                        "",
+                        children=[
+                            _n("regulation-list", "安全操规台账", "/safety/regulation"),
+                            _n(
+                                "regulation-generator",
+                                "标准化生成",
+                                "/safety/regulation/generator",
+                            ),
+                        ],
+                    ),
+                    _n(
+                        "ehs-change",
+                        "EHS变更管理",
+                        "",
+                        children=[
+                            _n("ehs-change-apply", "EHS变更申请", "/safety/ehs-change"),
+                        ],
+                    ),
+                ],
+            ),
+            _n(
+                "emergency-accident",
+                "应急与事故",
+                "",
+                children=[
+                    _n("accident-ledger", "事故台账", "/safety/accident"),
+                    _n("emergency-plan", "应急预案", "", disabled=True),
+                ],
+            ),
+            _n(
+                "training-check",
+                "安全培训与检查",
+                "",
+                children=[
+                    _n("safety-check", "安全检查", "/safety/check"),
+                    _n("safety-training", "安全培训", "/safety/training"),
+                    _n("contractor", "相关方管理", "/safety/contractor"),
+                ],
+            ),
+            _n(
+                "occupational-health-group",
+                "职业健康",
+                "",
+                children=[
+                    _n("oh-monitor", "职业危害因素监测", "/safety/occupational-health"),
+                ],
+            ),
+            _n(
+                "regulation-info",
+                "法规与安全信息",
+                "",
+                children=[
+                    _n("knowledge-base", "安全知识库", "/safety/knowledge-base"),
+                ],
+            ),
+        ],
+    ),
+    # ── 研发管理 ────────────────────────────────────────────────
+    _n(
+        "rd",
+        "研发管理",
+        "/rd",
+        icon="beaker",
+        children=[
+            _n(
+                "project-initiation",
+                "立项（开发中）",
+                "/rd/project-initiation",
+                disabled=True,
+            ),
+            _n("route-development", "打通路线", "/rd/route-development"),
+            _n("process-optimization", "工艺优化", "/rd/process-optimization"),
+            _n("pilot-workflow", "中试研究", "/rd/pilot-workflow"),
+            _n(
+                "process-validation",
+                "工艺验证（开发中）",
+                "/rd/process-validation",
+                disabled=True,
+            ),
+            _n(
+                "registration-filing",
+                "申报资料（开发中）",
+                "/rd/registration-filing",
+                disabled=True,
+            ),
+            _n("projects", "研发项目（开发中）", "/rd/projects", disabled=True),
+            _n("experiments", "实验记录（开发中）", "/rd/experiments", disabled=True),
+            _n("reports", "研发报告（开发中）", "/rd/reports", disabled=True),
+            _n("bayesian", "贝叶斯优化", "/rd/bayesian"),
+            _n("ich-analysis", "ICH Q3C/Q3D 杂质识别", "/rd/ich-analysis"),
+        ],
+    ),
+    # ── 注册管理 ────────────────────────────────────────────────
+    _n(
+        "registration",
+        "注册管理",
+        "/registration",
+        icon="document",
+        children=[
+            _n(
+                "project",
+                "申报项目",
+                "/registration/project",
+                children=[
+                    _n(
+                        "project-ledger",
+                        "申报台账",
+                        "/registration/project-ledger",
+                        children=[
+                            _n(
+                                "international-associated-review",
+                                "国际注册（关联审评机制）",
+                                "/registration/project-ledger/international-associated-review",
+                            ),
+                            _n(
+                                "international-standalone-review",
+                                "国际注册（原料药单独审评机制）",
+                                "/registration/project-ledger/international-standalone-review",
+                            ),
+                            _n(
+                                "domestic-associated-review",
+                                "国内注册（关联审评机制）",
+                                "/registration/project-ledger/domestic-associated-review",
+                            ),
+                            _n(
+                                "domestic-standalone-review",
+                                "国内注册（原料药单独审评机制）",
+                                "/registration/project-ledger/domestic-standalone-review",
+                            ),
+                        ],
+                    ),
+                    _n(
+                        "declaration-progress",
+                        "申报进度",
+                        "/registration/declaration-progress",
+                        children=[
+                            _n(
+                                "international-planned-in-progress",
+                                "2026国际注册（计划和进行中）项目",
+                                "/registration/declaration-progress/international-planned-in-progress",
+                            ),
+                            _n(
+                                "domestic-planned-in-progress",
+                                "2026年国内注册（计划和进行中）项目",
+                                "/registration/declaration-progress/domestic-planned-in-progress",
+                            ),
+                            _n(
+                                "new-product-projects",
+                                "2026年新产品项目",
+                                "/registration/declaration-progress/new-product-projects",
+                            ),
+                            _n(
+                                "international-completed",
+                                "2026年国际注册（已完成）",
+                                "/registration/declaration-progress/international-completed",
+                            ),
+                            _n(
+                                "domestic-completed",
+                                "2026年国内注册（已完成）",
+                                "/registration/declaration-progress/domestic-completed",
+                            ),
+                            _n(
+                                "gmp-projects",
+                                "2026年GMP项目",
+                                "/registration/declaration-progress/gmp-projects",
+                            ),
+                            _n(
+                                "us-fda-progress",
+                                "美国FDA注册进展",
+                                "/registration/declaration-progress/us-fda-progress",
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+            _n(
+                "authorization-letter",
+                "授权书管理",
+                "/registration/authorization-letter",
+            ),
+            _n(
+                "certificate-management",
+                "证书管理",
+                "/registration/certificate-management",
+                children=[
+                    _n(
+                        "international-registration",
+                        "国外注册",
+                        "/registration/certificate-management/international-registration",
+                    ),
+                    _n(
+                        "domestic-registration",
+                        "国内注册",
+                        "/registration/certificate-management/domestic-registration",
+                    ),
+                    _n(
+                        "domestic-gmp",
+                        "国内GMP",
+                        "/registration/certificate-management/domestic-gmp",
+                    ),
+                    _n(
+                        "international-gmp",
+                        "国际GMP",
+                        "/registration/certificate-management/international-gmp",
+                    ),
+                ],
+            ),
+            _n("regulation", "法规跟踪", "/registration/regulation"),
+            _n(
+                "fees",
+                "注册费用",
+                "/registration/fees",
+                children=[
+                    _n("fee-ledger", "费用台账", "/registration/fees/ledger"),
+                    _n(
+                        "inspection-contacts", "外检联系", "/registration/fees/contacts"
+                    ),
+                ],
+            ),
+            _n("knowledge", "注册知识库", "/registration/knowledge"),
+        ],
+    ),
+    # ── 质量管理 ────────────────────────────────────────────────
+    _n(
+        "quality",
+        "质量管理",
+        "/quality",
+        icon="check-circle",
+        children=[
+            _n("feishu-settings", "飞书设置", "/quality/feishu-settings"),
+            _n("documents", "文件管理", "/quality/documents"),
+            _n(
+                "deviations",
+                "偏差管理",
+                "/quality/deviations",
+                children=[
+                    _n("deviation-records", "报告记录", "/quality/deviations/records"),
+                    _n(
+                        "deviation-investigations",
+                        "调查推送",
+                        "/quality/deviations/investigations",
+                    ),
+                    _n("deviation-ledger", "偏差台账", "/quality/deviations/ledger"),
+                ],
+            ),
+            _n(
+                "capas",
+                "CAPA管理",
+                "/quality/capas",
+                children=[
+                    _n("capa-ledger", "CAPA台账", "/quality/capas/ledger"),
+                    _n("capa-plans", "计划跟踪", "/quality/capas/plans"),
+                ],
+            ),
+            _n(
+                "complaints",
+                "投诉管理",
+                "/quality/complaints",
+                children=[
+                    _n("complaint-ledger", "投诉台账", "/quality/complaints/ledger"),
+                ],
+            ),
+            _n("department-contacts", "部门联系人", "/quality/department-contacts"),
+            _n(
+                "inspection",
+                "质量检验",
+                "/quality/inspection",
+                children=[
+                    _n(
+                        "inspection-items",
+                        "物品管理",
+                        "/quality/inspection/items",
+                        children=[
+                            _n(
+                                "inspection-items-inventory",
+                                "库存台账",
+                                "/quality/inspection/items/inventory",
+                            ),
+                            _n(
+                                "inspection-items-inbound",
+                                "入库记录",
+                                "/quality/inspection/items/inbound",
+                            ),
+                            _n(
+                                "inspection-items-outbound",
+                                "出库记录",
+                                "/quality/inspection/items/outbound",
+                            ),
+                        ],
+                    ),
+                    _n(
+                        "inspection-instruments",
+                        "仪器管理",
+                        "/quality/inspection/instruments",
+                        children=[
+                            _n(
+                                "inspection-instruments-equipment",
+                                "仪器设备",
+                                "/quality/inspection/instruments/equipment",
+                            ),
+                            _n(
+                                "inspection-instruments-assets",
+                                "资产台账",
+                                "/quality/inspection/instruments/assets",
+                            ),
+                            _n(
+                                "inspection-instruments-calibration",
+                                "校准计划",
+                                "/quality/inspection/instruments/calibration",
+                            ),
+                            _n(
+                                "inspection-instruments-maintenance",
+                                "维护保养",
+                                "/quality/inspection/instruments/maintenance",
+                            ),
+                            _n(
+                                "inspection-instruments-repair",
+                                "维修记录",
+                                "/quality/inspection/instruments/repair",
+                            ),
+                            _n(
+                                "inspection-instruments-change",
+                                "变更记录",
+                                "/quality/inspection/instruments/change",
+                            ),
+                            _n(
+                                "inspection-instruments-contracts",
+                                "外协合同",
+                                "/quality/inspection/instruments/contracts",
+                            ),
+                            _n(
+                                "inspection-instruments-plans",
+                                "年度计划",
+                                "/quality/inspection/instruments/plans",
+                            ),
+                        ],
+                    ),
+                    _n(
+                        "inspection-finished",
+                        "成品检验",
+                        "/quality/inspection/finished",
+                        children=[
+                            _n(
+                                "inspection-finished-mpa",
+                                "霉酚酸",
+                                "/quality/inspection/finished/mpa",
+                            ),
+                            _n(
+                                "inspection-finished-mvt",
+                                "美伐他汀",
+                                "/quality/inspection/finished/mvt",
+                            ),
+                            _n(
+                                "inspection-finished-lft",
+                                "洛伐他汀",
+                                "/quality/inspection/finished/lft",
+                            ),
+                            _n(
+                                "inspection-finished-dls",
+                                "多拉菌素",
+                                "/quality/inspection/finished/dls",
+                            ),
+                            _n(
+                                "inspection-finished-lkms",
+                                "林可霉素",
+                                "/quality/inspection/finished/lkms",
+                            ),
+                            _n(
+                                "inspection-finished-bbas",
+                                "L-苯丙氨酸",
+                                "/quality/inspection/finished/bbas",
+                            ),
+                            _n(
+                                "inspection-finished-formulations",
+                                "预混剂",
+                                "/quality/inspection/finished/formulations",
+                            ),
+                            _n(
+                                "inspection-finished-tryptophan",
+                                "色氨酸",
+                                "/quality/inspection/finished/tryptophan",
+                            ),
+                            _n(
+                                "inspection-finished-water",
+                                "纯化水",
+                                "/quality/inspection/finished/water",
+                            ),
+                        ],
+                    ),
+                    _n(
+                        "inspection-solid",
+                        "固体物料检验",
+                        "/quality/inspection/solid",
+                        children=[
+                            _n(
+                                "inspection-solid-raw",
+                                "原料检验",
+                                "/quality/inspection/solid/raw-inspection",
+                            ),
+                            _n(
+                                "inspection-solid-ys-000",
+                                "YS000",
+                                "/quality/inspection/solid/ys-000",
+                            ),
+                            _n(
+                                "inspection-solid-ys-100",
+                                "YS100",
+                                "/quality/inspection/solid/ys-100",
+                            ),
+                            _n(
+                                "inspection-solid-ys-200",
+                                "YS200",
+                                "/quality/inspection/solid/ys-200",
+                            ),
+                            _n(
+                                "inspection-solid-ys-300",
+                                "YS300",
+                                "/quality/inspection/solid/ys-300",
+                            ),
+                            _n(
+                                "inspection-solid-ys-400",
+                                "YS400",
+                                "/quality/inspection/solid/ys-400",
+                            ),
+                            _n(
+                                "inspection-solid-ys-500",
+                                "YS500",
+                                "/quality/inspection/solid/ys-500",
+                            ),
+                            _n(
+                                "inspection-solid-ys-600",
+                                "YS600",
+                                "/quality/inspection/solid/ys-600",
+                            ),
+                            _n(
+                                "inspection-solid-ys-700",
+                                "YS700",
+                                "/quality/inspection/solid/ys-700",
+                            ),
+                            _n(
+                                "inspection-solid-ys-800",
+                                "YS800",
+                                "/quality/inspection/solid/ys-800",
+                            ),
+                            _n(
+                                "inspection-solid-manual",
+                                "待人工归组",
+                                "/quality/inspection/solid/manual",
+                            ),
+                        ],
+                    ),
+                    _n(
+                        "inspection-liquid",
+                        "液体物料检验",
+                        "/quality/inspection/liquid",
+                        children=[
+                            _n(
+                                "inspection-liquid-raw",
+                                "原料检验",
+                                "/quality/inspection/liquid/raw-inspection",
+                            ),
+                            _n(
+                                "inspection-liquid-yl-0xx",
+                                "YL0xx",
+                                "/quality/inspection/liquid/yl-0xx",
+                            ),
+                            _n(
+                                "inspection-liquid-yl-1xx",
+                                "YL1xx",
+                                "/quality/inspection/liquid/yl-1xx",
+                            ),
+                            _n(
+                                "inspection-liquid-yl-2xx",
+                                "YL2xx",
+                                "/quality/inspection/liquid/yl-2xx",
+                            ),
+                            _n(
+                                "inspection-liquid-yl-3xx",
+                                "YL3xx",
+                                "/quality/inspection/liquid/yl-3xx",
+                            ),
+                            _n(
+                                "inspection-liquid-yl-4xx",
+                                "YL4xx",
+                                "/quality/inspection/liquid/yl-4xx",
+                            ),
+                            _n(
+                                "inspection-liquid-yl-5xx",
+                                "YL5xx",
+                                "/quality/inspection/liquid/yl-5xx",
+                            ),
+                            _n(
+                                "inspection-liquid-yl-6xx",
+                                "YL6xx",
+                                "/quality/inspection/liquid/yl-6xx",
+                            ),
+                            _n(
+                                "inspection-liquid-yl-7xx",
+                                "YL7xx",
+                                "/quality/inspection/liquid/yl-7xx",
+                            ),
+                            _n(
+                                "inspection-liquid-yl-8xx",
+                                "YL8xx",
+                                "/quality/inspection/liquid/yl-8xx",
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+            _n(
+                "oos-oot",
+                "OOS/OOT管理",
+                "/quality/oos-oot",
+                children=[
+                    _n(
+                        "oos-oot-report-records",
+                        "报告记录",
+                        "/quality/oos-oot/report-records",
+                    ),
+                    _n(
+                        "oos-oot-investigation-push",
+                        "调查推送",
+                        "/quality/oos-oot/investigation-push",
+                    ),
+                    _n("oos-ledger", "OOS台账", "/quality/oos-oot/oos-ledger"),
+                    _n("oot-ledger", "OOT台账", "/quality/oos-oot/oot-ledger"),
+                    _n("oot-limits", "各产品OOT限度", "/quality/oos-oot/oot-limits"),
+                    _n(
+                        "product-departments",
+                        "产品涉及部门",
+                        "/quality/oos-oot/product-departments",
+                    ),
+                ],
+            ),
+            _n(
+                "product-quality",
+                "产品质量管理",
+                "/quality/product-quality",
+                children=[
+                    _n("product-quality-mfn", "霉酚酸", "/quality/product-quality/mfn"),
+                    _n(
+                        "product-quality-dljs",
+                        "多拉菌素",
+                        "/quality/product-quality/dljs",
+                    ),
+                    _n(
+                        "product-quality-lftt",
+                        "洛伐他汀",
+                        "/quality/product-quality/lftt",
+                    ),
+                    _n(
+                        "product-quality-mftt",
+                        "美伐他汀",
+                        "/quality/product-quality/mftt",
+                    ),
+                    _n(
+                        "product-quality-yslkms",
+                        "盐酸林可霉素",
+                        "/quality/product-quality/yslkms",
+                    ),
+                    _n(
+                        "product-quality-bbas",
+                        "L-苯丙氨酸",
+                        "/quality/product-quality/bbas",
+                    ),
+                    _n(
+                        "product-quality-sas",
+                        "L-色氨酸",
+                        "/quality/product-quality/sas",
+                    ),
+                ],
+            ),
+            _n(
+                "return-recalls",
+                "退货召回",
+                "/quality/return-recalls",
+                children=[
+                    _n(
+                        "return-application",
+                        "退货申请",
+                        "/quality/return-recalls/return-application",
+                    ),
+                    _n(
+                        "return-ledger",
+                        "退货台账",
+                        "/quality/return-recalls/return-ledger",
+                    ),
+                ],
+            ),
+            _n(
+                "suppliers",
+                "供应商管理",
+                "/quality/suppliers",
+                children=[
+                    _n(
+                        "supplier-qualification",
+                        "供应商资质台账",
+                        "/quality/suppliers/qualification",
+                    ),
+                ],
+            ),
+            _n(
+                "validation-confirmation",
+                "验证与确认",
+                "/quality/validation",
+                children=[
+                    _n("validation-plans", "验证主计划", "/quality/validation/plans"),
+                    _n(
+                        "equipment-qualification",
+                        "设备确认",
+                        "/quality/validation/equipment-qualification",
+                    ),
+                    _n(
+                        "process-validation",
+                        "工艺验证",
+                        "/quality/validation/process-validation",
+                    ),
+                    _n(
+                        "cleaning-validation",
+                        "清洁验证",
+                        "/quality/validation/cleaning-validation",
+                    ),
+                    _n(
+                        "other-validations",
+                        "其他验证",
+                        "/quality/validation/other-validations",
+                    ),
+                ],
+            ),
+            _n(
+                "change",
+                "变更控制",
+                "/quality/change",
+                children=[
+                    _n("change-ledger", "技术变更台账", "/quality/change/ledger"),
+                    _n(
+                        "file-change-ledger",
+                        "文件变更台账",
+                        "/quality/file-change/ledger",
+                    ),
+                    _n(
+                        "change-action-plans",
+                        "变更计划",
+                        "/quality/change/action-plans",
+                    ),
+                ],
+            ),
+        ],
+    ),
+    # ── 行政管理 ────────────────────────────────────────────────
+    _n(
+        "admin",
+        "行政管理",
+        "/admin",
+        icon="building",
+        children=[
+            _n("notice", "公告通知（开发中）", "/admin/notice", disabled=True),
+            _n("meeting", "会议管理（开发中）", "/admin/meeting", disabled=True),
+            _n("approval", "文件审批（开发中）", "/admin/approval", disabled=True),
+        ],
+    ),
+    # ── 人事管理 ────────────────────────────────────────────────
+    _n(
+        "hr",
+        "人事管理",
+        "/hr",
+        icon="users",
+        children=[
+            _n("departments", "部门管理", "/hr/departments"),
+            _n(
+                "employee-management",
+                "员工管理",
+                "/hr/employee-management",
+                permission="hr:employee:read",
+                children=[
+                    _n(
+                        "profile",
+                        "员工档案",
+                        "/hr/profile",
+                        permission="hr:employee:read",
+                    ),
+                    _n("feishu-contacts", "飞书联系人", "/hr/feishu-contacts"),
+                ],
+            ),
+            _n("recruitment", "招聘管理", "/hr/recruitment"),
+            _n("onboarding", "入职台账", "/hr/onboarding"),
+            _n("offboarding", "离职管理", "/hr/offboarding"),
+            _n("position-transfer", "岗位调动管理", "/hr/position-transfer"),
+            _n(
+                "contracts",
+                "合同管理",
+                "/hr/contracts",
+                children=[
+                    _n("contracts-ledger", "合同台账", "/hr/contracts"),
+                    _n(
+                        "contract-approval-results",
+                        "合同到期审批结果",
+                        "/hr/contracts/approval-results",
+                    ),
+                ],
+            ),
+            _n(
+                "training",
+                "培训管理",
+                "/hr/training",
+                children=[
+                    _n("annual-plan", "年度培训计划", "/hr/training/annual-plan"),
+                    _n("sign-in-sheet", "培训资料", "/hr/training/sign-in"),
+                    _n(
+                        "new-employee-training",
+                        "新员工培训",
+                        "/hr/training/new-employee",
+                    ),
+                    _n("training-ledger", "培训台账", "/hr/training/ledger"),
+                    _n(
+                        "employee-training-list",
+                        "员工培训清单",
+                        "/hr/training/employee-training-list",
+                    ),
+                    _n("trainer", "培训师管理", "/hr/training/trainer"),
+                    _n(
+                        "position-training",
+                        "岗位培训清单",
+                        "/hr/training/position-training",
+                    ),
+                    _n("plan-tracking", "培训计划跟踪", "/hr/training/plan-tracking"),
+                ],
+            ),
+            _n(
+                "hr-settings",
+                "HR设置",
+                "/hr/settings/feishu",
+                children=[
+                    _n("hr-settings-feishu", "飞书设置", "/hr/settings/feishu"),
+                    _n("hr-settings-reminder", "提醒设置", "/hr/settings/reminder"),
+                    _n("hr-settings-approval", "审批流程设置", "/hr/settings/approval"),
+                    _n(
+                        "hr-settings-dept-mapping",
+                        "培训部门映射",
+                        "/hr/settings/dept-mapping",
+                        permission="hr:write",
+                    ),
+                    _n(
+                        "hr-settings-dept-scopes",
+                        "部门权限配置",
+                        "/hr/settings/dept-scopes",
+                        permission="hr:write",
+                    ),
+                ],
+            ),
+        ],
+    ),
+    # ── 仓储管理 ────────────────────────────────────────────────
+    _n(
+        "warehouse",
+        "仓储管理",
+        "/warehouse",
+        icon="archive",
+        children=[
+            _n("ai-analysis", "AI分析", "/warehouse/ai-analysis"),
+            _n(
+                "materials",
+                "原辅料及包材",
+                "/warehouse/materials/dashboard",
+                children=[
+                    _n(
+                        "raw-summary",
+                        "原辅料库存总表",
+                        "/warehouse/materials/raw-summary",
+                    ),
+                    _n(
+                        "raw-detail",
+                        "原辅料库存明细表",
+                        "/warehouse/materials/raw-detail",
+                    ),
+                    _n(
+                        "raw-ledger",
+                        "原辅料出库总账",
+                        "/warehouse/materials/raw-ledger",
+                    ),
+                    _n(
+                        "packaging-summary",
+                        "包材库存总表",
+                        "/warehouse/materials/packaging-summary",
+                    ),
+                    _n(
+                        "packaging-detail",
+                        "包材库存明细表",
+                        "/warehouse/materials/packaging-detail",
+                    ),
+                    _n(
+                        "packaging-ledger",
+                        "包材出库总账",
+                        "/warehouse/materials/packaging-ledger",
+                    ),
+                    _n(
+                        "inbound-ledger",
+                        "入库总账",
+                        "/warehouse/materials/inbound-ledger",
+                    ),
+                    _n(
+                        "qualified-suppliers",
+                        "原辅材料合格供应商一览表",
+                        "/warehouse/materials/qualified-suppliers",
+                    ),
+                    _n(
+                        "material-name-code-map",
+                        "物料名称及代码对应表",
+                        "/warehouse/materials/material-name-code-map",
+                    ),
+                ],
+            ),
+            _n(
+                "hardware",
+                "五金",
+                "/warehouse/hardware/dashboard",
+                children=[
+                    _n("hardware-summary", "五金", "/warehouse/hardware/summary"),
+                    _n("hardware-electrical", "电仪", "/warehouse/hardware/electrical"),
+                    _n(
+                        "hardware-101-1-workshop",
+                        "101-1车间",
+                        "/warehouse/hardware/101-1-workshop",
+                    ),
+                    _n(
+                        "hardware-101-2-workshop",
+                        "101-2车间",
+                        "/warehouse/hardware/101-2-workshop",
+                    ),
+                    _n(
+                        "hardware-102-workshop",
+                        "102车间",
+                        "/warehouse/hardware/102-workshop",
+                    ),
+                    _n(
+                        "hardware-103-workshop",
+                        "103车间",
+                        "/warehouse/hardware/103-workshop",
+                    ),
+                    _n(
+                        "hardware-201-1-workshop",
+                        "201-1车间",
+                        "/warehouse/hardware/201-1-workshop",
+                    ),
+                    _n(
+                        "hardware-201-2-workshop",
+                        "201-2车间",
+                        "/warehouse/hardware/201-2-workshop",
+                    ),
+                    _n(
+                        "hardware-201-3-workshop",
+                        "201-3车间",
+                        "/warehouse/hardware/201-3-workshop",
+                    ),
+                    _n(
+                        "hardware-202-workshop",
+                        "202车间",
+                        "/warehouse/hardware/202-workshop",
+                    ),
+                    _n(
+                        "hardware-203-workshop",
+                        "203车间",
+                        "/warehouse/hardware/203-workshop",
+                    ),
+                    _n(
+                        "hardware-203-3-workshop",
+                        "203-3车间",
+                        "/warehouse/hardware/203-3-workshop",
+                    ),
+                    _n(
+                        "hardware-thermal-station",
+                        "热动站",
+                        "/warehouse/hardware/thermal-station",
+                    ),
+                    _n(
+                        "hardware-power-department",
+                        "动力部",
+                        "/warehouse/hardware/power-department",
+                    ),
+                    _n(
+                        "hardware-wastewater",
+                        "污水处理",
+                        "/warehouse/hardware/wastewater",
+                    ),
+                    _n("hardware-warehouse", "仓库", "/warehouse/hardware/warehouse"),
+                    _n(
+                        "hardware-rd-center",
+                        "研发中心",
+                        "/warehouse/hardware/rd-center",
+                    ),
+                    _n("hardware-others", "其它", "/warehouse/hardware/others"),
+                    _n(
+                        "hardware-inbound-ledger",
+                        "入库记录",
+                        "/warehouse/hardware/inbound-ledger",
+                    ),
+                    _n(
+                        "hardware-outbound-ledger",
+                        "出库记录",
+                        "/warehouse/hardware/outbound-ledger",
+                    ),
+                ],
+            ),
+            _n(
+                "product",
+                "成品库存",
+                "/warehouse/product/dashboard",
+                children=[
+                    _n("product-summary", "产品汇总", "/warehouse/product/summary"),
+                    _n(
+                        "product-details",
+                        "产品明细",
+                        "",
+                        children=[
+                            _n(
+                                "product-detail-l-phenylalanine",
+                                "L-苯丙氨酸库存明细",
+                                "/warehouse/product/details/l-phenylalanine",
+                            ),
+                            _n(
+                                "product-detail-fumaric-acid",
+                                "霉酚酸库存明细",
+                                "/warehouse/product/details/fumaric-acid",
+                            ),
+                            _n(
+                                "product-detail-l-tryptophan",
+                                "L-色氨酸库存明细",
+                                "/warehouse/product/details/l-tryptophan",
+                            ),
+                            _n(
+                                "product-detail-mevastatin",
+                                "美伐他汀库存明细",
+                                "/warehouse/product/details/mevastatin",
+                            ),
+                            _n(
+                                "product-detail-kitasamycin-hcl",
+                                "盐酸林可霉素库存明细",
+                                "/warehouse/product/details/kitasamycin-hcl",
+                            ),
+                            _n(
+                                "product-detail-doramectin",
+                                "多拉菌素库存明细",
+                                "/warehouse/product/details/doramectin",
+                            ),
+                            _n(
+                                "product-detail-lovastatin",
+                                "洛伐他汀库存明细",
+                                "/warehouse/product/details/lovastatin",
+                            ),
+                            _n(
+                                "product-detail-florfenicol-premix",
+                                "氟苯尼考预混剂库存明细",
+                                "/warehouse/product/details/florfenicol-premix",
+                            ),
+                            _n(
+                                "product-detail-demeclocycline-hcl",
+                                "盐酸去甲金霉素库存明细",
+                                "/warehouse/product/details/demeclocycline-hcl",
+                            ),
+                            _n(
+                                "product-detail-fenbendazole-powder",
+                                "芬苯达唑粉剂库存明细",
+                                "/warehouse/product/details/fenbendazole-powder",
+                            ),
+                        ],
+                    ),
+                    _n(
+                        "product-inbound-ledger",
+                        "入库总账",
+                        "/warehouse/product/inbound-ledger",
+                    ),
+                    _n(
+                        "product-outbound-ledger",
+                        "出库台账",
+                        "/warehouse/product/outbound-ledger",
+                    ),
+                    _n("product-shipping", "发货情况", "/warehouse/product/shipping"),
+                ],
+            ),
+            _n("warehouse-settings", "仓储设置", "/warehouse/settings"),
+        ],
+    ),
+    # ── 采购管理 ────────────────────────────────────────────────
+    _n(
+        "purchasing",
+        "采购管理",
+        "/purchasing",
+        icon="cart",
+        children=[
+            _n(
+                "request",
+                "采购申请",
+                "",
+                children=[
+                    _n("request-hardware", "五金材料", "/purchasing/request/hardware"),
+                    _n("request-computer", "电脑材料", "/purchasing/request/computer"),
+                    _n("request-office", "办公用品", "/purchasing/request/office"),
+                    _n(
+                        "request-raw-auxiliary",
+                        "原辅料",
+                        "/purchasing/request/raw-auxiliary",
+                    ),
+                    _n(
+                        "request-chemical-glass",
+                        "化玻",
+                        "/purchasing/request/chemical-glass",
+                    ),
+                    _n("request-electrical", "电器", "/purchasing/request/electrical"),
+                    _n(
+                        "request-labor-protection",
+                        "劳保",
+                        "/purchasing/request/labor-protection",
+                    ),
+                ],
+            ),
+            _n(
+                "approval",
+                "采购审批",
+                "",
+                children=[
+                    _n(
+                        "approval-hardware",
+                        "五金材料",
+                        "",
+                        children=[
+                            _n(
+                                "approval-hardware-department-head",
+                                "部门负责人",
+                                "/purchasing/approval/hardware/department-head",
+                            ),
+                            _n(
+                                "approval-hardware-responsible-leader",
+                                "分管领导",
+                                "/purchasing/approval/hardware/responsible-leader",
+                            ),
+                        ],
+                    ),
+                    _n(
+                        "approval-computer",
+                        "电脑材料",
+                        "",
+                        children=[
+                            _n(
+                                "approval-computer-department-head",
+                                "部门负责人",
+                                "/purchasing/approval/computer/department-head",
+                            ),
+                            _n(
+                                "approval-computer-responsible-leader",
+                                "分管领导",
+                                "/purchasing/approval/computer/responsible-leader",
+                            ),
+                        ],
+                    ),
+                    _n(
+                        "approval-office",
+                        "办公用品",
+                        "",
+                        children=[
+                            _n(
+                                "approval-office-department-head",
+                                "部门负责人",
+                                "/purchasing/approval/office/department-head",
+                            ),
+                            _n(
+                                "approval-office-responsible-leader",
+                                "分管领导",
+                                "/purchasing/approval/office/responsible-leader",
+                            ),
+                        ],
+                    ),
+                    _n(
+                        "approval-raw-auxiliary",
+                        "原辅料",
+                        "",
+                        children=[
+                            _n(
+                                "approval-raw-auxiliary-department-head",
+                                "部门负责人",
+                                "/purchasing/approval/raw-auxiliary/department-head",
+                            ),
+                            _n(
+                                "approval-raw-auxiliary-responsible-leader",
+                                "分管领导",
+                                "/purchasing/approval/raw-auxiliary/responsible-leader",
+                            ),
+                        ],
+                    ),
+                    _n(
+                        "approval-chemical-glass",
+                        "化玻",
+                        "",
+                        children=[
+                            _n(
+                                "approval-chemical-glass-department-head",
+                                "部门负责人",
+                                "/purchasing/approval/chemical-glass/department-head",
+                            ),
+                            _n(
+                                "approval-chemical-glass-responsible-leader",
+                                "分管领导",
+                                "/purchasing/approval/chemical-glass/responsible-leader",
+                            ),
+                        ],
+                    ),
+                    _n(
+                        "approval-electrical",
+                        "电器",
+                        "",
+                        children=[
+                            _n(
+                                "approval-electrical-department-head",
+                                "部门负责人",
+                                "/purchasing/approval/electrical/department-head",
+                            ),
+                            _n(
+                                "approval-electrical-responsible-leader",
+                                "分管领导",
+                                "/purchasing/approval/electrical/responsible-leader",
+                            ),
+                        ],
+                    ),
+                    _n(
+                        "approval-labor-protection",
+                        "劳保",
+                        "",
+                        children=[
+                            _n(
+                                "approval-labor-protection-department-head",
+                                "部门负责人",
+                                "/purchasing/approval/labor-protection/department-head",
+                            ),
+                            _n(
+                                "approval-labor-protection-responsible-leader",
+                                "分管领导",
+                                "/purchasing/approval/labor-protection/responsible-leader",
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+            _n(
+                "supplier",
+                "供应商管理（开发中）",
+                "/purchasing/supplier",
+                disabled=True,
+            ),
+            _n("order", "采购订单（开发中）", "/purchasing/order", disabled=True),
+            _n("invoice-recognition", "发票识别", "/purchasing/invoice-recognition"),
+            _n("contract-summary", "合同汇总", "/purchasing/contract-summary"),
+            _n(
+                "contract-generation",
+                "合同生成",
+                "",
+                children=[
+                    _n(
+                        "contract-generation-fixed-assets",
+                        "固定资产",
+                        "/purchasing/contract-generation/fixed-assets",
+                    ),
+                    _n(
+                        "contract-generation-consumables",
+                        "耗材",
+                        "/purchasing/contract-generation/consumables",
+                    ),
+                    _n(
+                        "contract-generation-hardware",
+                        "五金",
+                        "/purchasing/contract-generation/hardware",
+                    ),
+                    _n(
+                        "contract-generation-raw-materials",
+                        "原材料",
+                        "/purchasing/contract-generation/raw-materials",
+                    ),
+                ],
+            ),
+        ],
+    ),
+]

@@ -10,6 +10,15 @@ class ApiResponse(BaseModel):
     meta: dict[str, Any] | None = None
 
 
+class ApiResponseEnvelope[T](BaseModel):
+    """Typed variant of the common API envelope used by migrated modules."""
+
+    code: int = 200
+    message: str = "success"
+    data: T
+    meta: dict[str, Any] | None = None
+
+
 class PageParams(BaseModel):
     page: int = Field(default=1, ge=1)
     page_size: int = Field(default=20, ge=1, le=200)

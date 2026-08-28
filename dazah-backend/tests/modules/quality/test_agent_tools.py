@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
+from typing import Any, cast
 
 import pytest
 
@@ -13,9 +14,11 @@ from app.modules.agent.tools import tool_registry
 from app.modules.quality import agent_tools as quality_agent_tools
 from app.modules.quality.schemas.inspection import InspectionRecordOut
 
+SimpleNamespace: Any = _SimpleNamespace
+
 
 class AllowAllAccessScopeService:
-    async def require_tool_access(self, *args, **kwargs):
+    async def require_tool_access(self: Any, *args: Any, **kwargs: Any) -> Any:
         return None
 
 
@@ -100,7 +103,7 @@ EXPECTED_QUALITY_OPERATIONS = {
 
 
 class FakeDb:
-    async def get(self, _model, item_id):
+    async def get(self: Any, _model: Any, item_id: Any) -> Any:
         return SimpleNamespace(
             id=item_id,
             status="active",
@@ -110,19 +113,19 @@ class FakeDb:
 
 
 class FakeAgentRepository:
-    def __init__(self) -> None:
-        self.tool_calls = []
-        self.confirmations = []
+    def __init__(self: Any) -> None:
+        self.tool_calls = []  # type: ignore[var-annotated]
+        self.confirmations = []  # type: ignore[var-annotated]
 
     async def create_tool_call(
-        self,
-        db,
+        self: Any,
+        db: Any,
         *,
-        session_id,
-        operation,
-        request_payload,
-    ):
-        call = SimpleNamespace(
+        session_id: Any,
+        operation: Any,
+        request_payload: Any,
+    ) -> Any:
+        call: Any = SimpleNamespace(
             session_id=session_id,
             operation=operation,
             request_payload=request_payload,
@@ -134,32 +137,32 @@ class FakeAgentRepository:
         return call
 
     async def finish_tool_call(
-        self,
-        db,
-        call,
+        self: Any,
+        db: Any,
+        call: Any,
         *,
-        status,
-        response_payload=None,
-        error_message=None,
-    ):
+        status: Any,
+        response_payload: Any = None,
+        error_message: Any = None,
+    ) -> Any:
         call.status = status
         call.response_payload = response_payload
         call.error_message = error_message
         return call
 
     async def create_confirmation(
-        self,
-        db,
+        self: Any,
+        db: Any,
         *,
-        session_id,
-        user_id,
-        operation,
-        summary,
-        risk_level,
-        request_payload,
-        expires_at,
-    ):
-        confirmation = SimpleNamespace(
+        session_id: Any,
+        user_id: Any,
+        operation: Any,
+        summary: Any,
+        risk_level: Any,
+        request_payload: Any,
+        expires_at: Any,
+    ) -> Any:
+        confirmation: Any = SimpleNamespace(
             id=uuid.uuid4(),
             session_id=session_id,
             user_id=user_id,
@@ -201,7 +204,7 @@ def test_quality_tools_exclude_deleted_approval_and_config_operations() -> None:
 
 @pytest.mark.anyio
 async def test_quality_write_tool_returns_confirmation_before_execution() -> None:
-    repo = FakeAgentRepository()
+    repo: Any = FakeAgentRepository()
     service = AgentService(
         settings=SimpleNamespace(AGENT_WRITE_CONFIRM_TTL_SECONDS=300),
         repo=repo,
@@ -209,7 +212,7 @@ async def test_quality_write_tool_returns_confirmation_before_execution() -> Non
     )
 
     response = await service.execute_tool(
-        FakeDb(),
+        cast(Any, FakeDb)(),
         request=AgentToolExecuteRequest(
             operation="quality.create_deviation",
             subject=AgentTrustedSubject(
@@ -272,19 +275,19 @@ async def test_list_inspection_records_tool_uses_quality_service(
         updated_at=datetime.now(UTC),
     )
 
-    async def fake_list_resource_records(*args, **kwargs):
+    async def fake_list_resource_records(*args: Any, **kwargs: Any) -> Any:
         assert args[1] == "inspection_records"
         assert kwargs["filters"]["conclusion"] == "合格"
         return [record], 1
 
     monkeypatch.setattr(
-        quality_agent_tools.inspection,
+        quality_agent_tools.inspection,  # type: ignore[attr-defined]
         "list_resource_records",
         fake_list_resource_records,
     )
 
     result = await quality_agent_tools.list_inspection_records(
-        SimpleNamespace(db=FakeDb()),
+        SimpleNamespace(db=cast(Any, FakeDb)()),
         quality_agent_tools.InspectionRecordListInput(conclusion="合格"),
     )
 

@@ -3,6 +3,7 @@
 import io
 import logging
 import re
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -10,7 +11,7 @@ logger = logging.getLogger(__name__)
 class COAParser:
     """COA PDF 解析器"""
 
-    def __init__(self, pdf_data: bytes):
+    def __init__(self, pdf_data: bytes) -> None:
         self.pdf_data = pdf_data
         self.text = ""
         self.metadata: dict[str, str] = {}
@@ -19,6 +20,7 @@ class COAParser:
         """提取 PDF 全文"""
         try:
             import pdfplumber
+
             with pdfplumber.open(io.BytesIO(self.pdf_data)) as pdf:
                 for page in pdf.pages:
                     page_text = page.extract_text()
@@ -85,14 +87,18 @@ class COAParser:
             if match:
                 self.metadata["manufacturer"] = match.group(1).strip()[:200]
                 break
-        
+
         # 如果没有找到，尝试从文本开头提取（通常是公司名）
         if "manufacturer" not in self.metadata:
-            lines = text.split('\n')
+            lines = text.split("\n")
             for line in lines[:5]:  # 只看前 5 行
                 line = line.strip()
                 # 匹配包含 Co., Ltd, Corporation, Inc 等的行
-                if re.search(r'(Co\.?\s*,?\s*LTD|Corporation|Inc\.?|Company|公司)', line, re.IGNORECASE):
+                if re.search(
+                    r"(Co\.?\s*,?\s*LTD|Corporation|Inc\.?|Company|公司)",
+                    line,
+                    re.IGNORECASE,
+                ):
                     self.metadata["manufacturer"] = line[:200]
                     break
 
@@ -106,7 +112,7 @@ class COAParser:
             if match:
                 self.metadata["english_name"] = match.group(1).strip()[:200]
                 break
-        
+
         # 如果没有英文名，使用 Product Name
         if "english_name" not in self.metadata and "drug_name" in self.metadata:
             self.metadata["english_name"] = self.metadata["drug_name"]
@@ -134,7 +140,7 @@ class COAParser:
             match = re.search(pattern, text, re.IGNORECASE)
             if match:
                 formula = match.group(1).strip()
-                if re.match(r'^[A-Z][a-zA-Z0-9()]+$', formula) and len(formula) > 3:
+                if re.match(r"^[A-Z][a-zA-Z0-9()]+$", formula) and len(formula) > 3:
                     self.metadata["molecular_formula"] = formula
                     break
 
@@ -206,17 +212,20 @@ class COAParser:
             if match:
                 self.metadata["expiration_date"] = match.group(1).strip()
                 break
-        
+
         # 如果没有找到，尝试从 "Date of Testing" 推算（加 4 年）
         if "expiration_date" not in self.metadata:
-            match = re.search(r"Date\s+of\s+Testing[:\s]+(\d{4}-\d{2}-\d{2})", text, re.IGNORECASE)
+            match = re.search(
+                r"Date\s+of\s+Testing[:\s]+(\d{4}-\d{2}-\d{2})", text, re.IGNORECASE
+            )
             if match:
                 from datetime import datetime, timedelta
+
                 try:
                     test_date = datetime.strptime(match.group(1), "%Y-%m-%d")
-                    expiry_date = test_date + timedelta(days=4*365)  # 假设 4 年有效期
+                    expiry_date = test_date + timedelta(days=4 * 365)  # 假设 4 年有效期
                     self.metadata["expiration_date"] = expiry_date.strftime("%Y-%m-%d")
-                except:
+                except Exception:
                     pass
 
         # 贮存条件 - 匹配 "Storage Temperature" 或 "Storage Condition"
@@ -233,9 +242,15 @@ class COAParser:
                 storage_text = match.group(1).strip()
                 # 智能识别贮存条件
                 storage_lower = storage_text.lower()
-                if any(kw in storage_lower for kw in ["-20", "- 20", "20°c", "frozen", "冷冻"]):
+                if any(
+                    kw in storage_lower
+                    for kw in ["-20", "- 20", "20°c", "frozen", "冷冻"]
+                ):
                     self.metadata["storage_condition"] = "冷冻"
-                elif any(kw in storage_lower for kw in ["2-8", "2~8", "2℃-8℃", "cold", "冷藏"]):
+                elif any(
+                    kw in storage_lower
+                    for kw in ["2-8", "2~8", "2℃-8℃", "cold", "冷藏"]
+                ):
                     self.metadata["storage_condition"] = "冷藏"
                 elif any(kw in storage_lower for kw in ["room", "常温", "室温", "25"]):
                     self.metadata["storage_condition"] = "常温"
@@ -248,7 +263,7 @@ class COAParser:
 
         return self.metadata
 
-    def parse(self) -> dict:
+    def parse(self) -> dict[str, Any]:
         """完整解析 COA"""
         self.extract_text()
         self.extract_metadata()
@@ -258,7 +273,7 @@ class COAParser:
         }
 
 
-def parse_coa(pdf_data: bytes) -> dict:
+def parse_coa(pdf_data: bytes) -> dict[str, Any]:
     """便捷函数：解析 COA PDF"""
     parser = COAParser(pdf_data)
     return parser.parse()

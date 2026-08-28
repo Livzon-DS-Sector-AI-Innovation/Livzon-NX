@@ -2,6 +2,7 @@
 
 import json
 import uuid
+from typing import Any
 
 import httpx
 from sqlalchemy import select
@@ -19,7 +20,11 @@ from app.modules.equipment.models.inspection_template import (
     InspectionTemplate,
     InspectionTemplateItem,
 )
-from app.modules.equipment.service.ai.client import AIAnalysisError, analyze_image
+from app.modules.equipment.service.ai.client import (
+    AIAnalysisError,
+    analyze_image,
+    parse_correction,
+)
 from app.modules.equipment.service.ai.prompts import (
     MANUAL_SUBMIT_SYSTEM_PROMPT,
     SYSTEM_PROMPT,
@@ -34,7 +39,7 @@ async def analyze_inspection_photo(
     equipment_id: uuid.UUID,
     image_base64: str,
     image_mime_type: str,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """对巡检照片进行 AI 分析，返回每个检查项的分析结果。
 
     支持线路巡检（路线→地点→设备→模板链）和设备巡检（多模板合并）。
@@ -102,7 +107,7 @@ async def analyze_inspection_photo(
 
     # 5. 将 AI 结果按顺序映射到模板检查项
     #    若 AI 返回数量不足，缺失项自动补"跳过"
-    results: list[dict] = []
+    results: list[dict[str, Any]] = []
     for i, item in enumerate(items):
         ai_item = ai_items[i] if i < len(ai_items) else {}
         result_value = ai_item.get("result", "跳过")
@@ -112,14 +117,16 @@ async def analyze_inspection_photo(
         if i >= len(ai_items) and not remark:
             remark = "AI 未返回该检查项结果"
 
-        results.append({
-            "template_item_id": str(item.id),
-            "item_name": item.item_name,
-            "expected_result": item.expected_result,
-            "result": result_value,
-            "actual_value": ai_item.get("actual_value") or None,
-            "remark": remark,
-        })
+        results.append(
+            {
+                "template_item_id": str(item.id),
+                "item_name": item.item_name,
+                "expected_result": item.expected_result,
+                "result": result_value,
+                "actual_value": ai_item.get("actual_value") or None,
+                "remark": remark,
+            }
+        )
 
     return results
 
@@ -130,7 +137,7 @@ async def parse_manual_submission(
     equipment_id: uuid.UUID,
     user_text: str,
     equipment_name: str = "",
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """使用 AI 解析巡检人员发送的非结构化手动提交文本。
 
     Args:
@@ -161,12 +168,11 @@ async def parse_manual_submission(
         for item in items
     ]
 
-    client = QwenClient()
     try:
         user_prompt = build_manual_submit_user_prompt(
             items_list, user_text, equipment_name
         )
-        raw_response = await client.parse_correction(
+        raw_response = await parse_correction(
             system_prompt=MANUAL_SUBMIT_SYSTEM_PROMPT,
             user_prompt=user_prompt,
         )
@@ -177,8 +183,6 @@ async def parse_manual_submission(
             message=f"AI 服务连接失败: {str(e)}",
             status_code=502,
         ) from e
-    finally:
-        await client.close()
 
     # 解析 AI 响应
     try:
@@ -192,7 +196,7 @@ async def parse_manual_submission(
 
     # 映射回模板检查项
     item_map = {item["template_item_id"]: item for item in items_list}
-    results: list[dict] = []
+    results: list[dict[str, Any]] = []
     for ai_item in ai_items:
         tid = ai_item.get("template_item_id", "")
         item_info = item_map.get(tid, {})
@@ -200,14 +204,16 @@ async def parse_manual_submission(
         if result_value not in ("正常", "异常", "跳过"):
             result_value = "正常"
 
-        results.append({
-            "template_item_id": tid,
-            "item_name": item_info.get("item_name", ai_item.get("item_name", "")),
-            "expected_result": item_info.get("expected_result", ""),
-            "result": result_value,
-            "actual_value": ai_item.get("actual_value") or None,
-            "remark": ai_item.get("remark") or None,
-        })
+        results.append(
+            {
+                "template_item_id": tid,
+                "item_name": item_info.get("item_name", ai_item.get("item_name", "")),
+                "expected_result": item_info.get("expected_result", ""),
+                "result": result_value,
+                "actual_value": ai_item.get("actual_value") or None,
+                "remark": ai_item.get("remark") or None,
+            }
+        )
 
     return results
 
@@ -218,8 +224,7 @@ async def parse_manual_submission(
 async def _get_task(db: AsyncSession, task_id: uuid.UUID) -> InspectionTask:
     """获取巡检任务。"""
     result = await db.execute(
-        select(InspectionTask)
-        .where(
+        select(InspectionTask).where(
             InspectionTask.id == task_id,
             InspectionTask.is_deleted == False,  # noqa: E712
         )
@@ -301,7 +306,7 @@ async def _get_inspection_items(
 
 async def get_inspection_items_for_session(
     db: AsyncSession, task_id: uuid.UUID, equipment_id: uuid.UUID
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """获取检查项列表（供飞书会话使用），返回轻量 dict 列表。"""
     task = await _get_task(db, task_id)
     items = await _get_inspection_items(db, task, equipment_id)

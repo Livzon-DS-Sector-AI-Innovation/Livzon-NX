@@ -10,14 +10,14 @@ from app.modules.warehouse.feishu_client import (
 
 
 class FakeRedis:
-    def __init__(self) -> None:
+    def __init__(self: Any) -> None:
         self.values: dict[str, str] = {}
         self.ttls: dict[str, int] = {}
 
-    async def get(self, key: str) -> str | None:
-        return self.values.get(key)
+    async def get(self: Any, key: str) -> str | None:
+        return self.values.get(key)  # type: ignore[no-any-return]
 
-    async def set(self, key: str, value: str, ex: int | None = None) -> bool:
+    async def set(self: Any, key: str, value: str, ex: int | None = None) -> bool:
         self.values[key] = value
         if ex is not None:
             self.ttls[key] = ex
@@ -25,18 +25,18 @@ class FakeRedis:
 
 
 class FakeResponse:
-    def __init__(self, body: dict[str, Any], status_code: int = 200) -> None:
+    def __init__(self: Any, body: dict[str, Any], status_code: int = 200) -> None:
         self.body = body
         self.status_code = status_code
         self.headers: dict[str, str] = {}
 
-    def raise_for_status(self) -> None:
+    def raise_for_status(self: Any) -> None:
         if self.status_code >= 400:
             raise AssertionError("飞书业务错误应在 HTTP 状态检查前转换")
         return None
 
-    def json(self) -> dict[str, Any]:
-        return self.body
+    def json(self: Any) -> dict[str, Any]:
+        return self.body  # type: ignore[no-any-return]
 
 
 class FakeAsyncClient:
@@ -45,21 +45,21 @@ class FakeAsyncClient:
     request_bodies: list[dict[str, Any] | None] = []
     response_override: FakeResponse | None = None
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
+    def __init__(self: Any, *args: Any, **kwargs: Any) -> None:
         return None
 
-    async def __aenter__(self) -> "FakeAsyncClient":
-        return self
+    async def __aenter__(self: Any) -> "FakeAsyncClient":
+        return self  # type: ignore[no-any-return]
 
-    async def __aexit__(self, *args: Any) -> None:
+    async def __aexit__(self: Any, *args: Any) -> None:
         return None
 
-    async def post(self, path: str, json: dict[str, Any]) -> FakeResponse:
+    async def post(self: Any, path: str, json: dict[str, Any]) -> FakeResponse:
         FakeAsyncClient.token_calls += 1
         return FakeResponse({"code": 0, "tenant_access_token": "tenant-token"})
 
     async def request(
-        self,
+        self: Any,
         method: str,
         path: str,
         *,
@@ -71,7 +71,7 @@ class FakeAsyncClient:
         FakeAsyncClient.request_bodies.append(json)
         if FakeAsyncClient.response_override is not None:
             return FakeAsyncClient.response_override
-        if path.endswith("/tables") and not params.get("page_token"):
+        if path.endswith("/tables") and not params.get("page_token"):  # type: ignore[union-attr]
             return FakeResponse(
                 {
                     "code": 0,
@@ -108,14 +108,14 @@ class FakeAsyncClient:
 
 @pytest.fixture(autouse=True)
 def patch_dependencies(monkeypatch: pytest.MonkeyPatch) -> FakeRedis:
-    fake_redis = FakeRedis()
+    fake_redis: Any = FakeRedis()
     FakeAsyncClient.token_calls = 0
     FakeAsyncClient.request_calls = []
     FakeAsyncClient.request_bodies = []
     FakeAsyncClient.response_override = None
     monkeypatch.setattr(module, "redis_client", fake_redis)
-    monkeypatch.setattr(module.httpx, "AsyncClient", FakeAsyncClient)
-    return fake_redis
+    monkeypatch.setattr(module.httpx, "AsyncClient", FakeAsyncClient)  # type: ignore[attr-defined]
+    return fake_redis  # type: ignore[no-any-return]
 
 
 @pytest.mark.asyncio

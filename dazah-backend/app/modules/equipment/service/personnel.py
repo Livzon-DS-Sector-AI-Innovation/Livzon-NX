@@ -32,6 +32,7 @@ from app.platform.identity.models import User
 
 # ── 角色 Service ──
 
+
 async def create_role(db: AsyncSession, data: RoleCreate) -> RoleResponse:
     existing = await repo.get_role_by_code(db, data.code)
     if existing:
@@ -67,7 +68,11 @@ async def list_roles(
 ) -> tuple[list[RoleResponse], int]:
     offset = (page - 1) * page_size
     roles, total = await repo.list_roles(
-        db, scope=scope, is_active=is_active, offset=offset, limit=page_size,
+        db,
+        scope=scope,
+        is_active=is_active,
+        offset=offset,
+        limit=page_size,
     )
     return [RoleResponse.model_validate(r) for r in roles], total
 
@@ -108,6 +113,7 @@ async def get_role_by_code(db: AsyncSession, code: str) -> RoleResponse | None:
 
 
 # ── 人员 Service ──
+
 
 async def add_personnel(
     db: AsyncSession, data: PersonnelAddRequest
@@ -156,9 +162,7 @@ async def add_personnel(
     return result
 
 
-async def get_personnel(
-    db: AsyncSession, personnel_id: uuid.UUID
-) -> PersonnelResponse:
+async def get_personnel(db: AsyncSession, personnel_id: uuid.UUID) -> PersonnelResponse:
     personnel = await repo.get_personnel_by_id(db, personnel_id)
     if not personnel:
         raise NotFoundException("设备人员", str(personnel_id))
@@ -195,9 +199,7 @@ async def get_personnel(
     avatar_url = None
     position = None
     if personnel.user_id:
-        user_result = await db.execute(
-            select(User).where(User.id == personnel.user_id)
-        )
+        user_result = await db.execute(select(User).where(User.id == personnel.user_id))
         user = user_result.scalar_one_or_none()
         if user:
             avatar_url = user.avatar_url
@@ -286,9 +288,7 @@ async def list_personnel(
     user_ids = [p.user_id for p in items if p.user_id]
     user_map: dict[uuid.UUID, User] = {}
     if user_ids:
-        user_result = await db.execute(
-            select(User).where(User.id.in_(user_ids))
-        )
+        user_result = await db.execute(select(User).where(User.id.in_(user_ids)))
         user_map = {u.id: u for u in user_result.scalars().all()}
 
     personnel_list: list[PersonnelResponse] = []
@@ -316,7 +316,10 @@ async def list_personnel(
         )
 
     return PersonnelListResponse(
-        items=personnel_list, total=total, page=page, page_size=page_size,
+        items=personnel_list,
+        total=total,
+        page=page,
+        page_size=page_size,
     )
 
 
@@ -424,12 +427,13 @@ async def refresh_feishu(db: AsyncSession) -> FeishuRefreshResult:
         return result
 
     user_ids = [r.user_id for r in rows if r.user_id]
-    users_result = await db.execute(
-        select(User).where(User.id.in_(user_ids))
-    )
+    users_result = await db.execute(select(User).where(User.id.in_(user_ids)))
     user_map = {u.id: u for u in users_result.scalars().all()}
 
     for p in rows:
+        if p.user_id is None:
+            result.unmatched += 1
+            continue
         user = user_map.get(p.user_id)
         if not user:
             result.unmatched += 1
@@ -437,8 +441,12 @@ async def refresh_feishu(db: AsyncSession) -> FeishuRefreshResult:
 
         changed = False
         for field in [
-            "name", "employee_no", "department", "mobile",
-            "feishu_user_id", "feishu_open_id",
+            "name",
+            "employee_no",
+            "department",
+            "mobile",
+            "feishu_user_id",
+            "feishu_open_id",
         ]:
             new_val = getattr(user, field, None)
             old_val = getattr(p, field, None)

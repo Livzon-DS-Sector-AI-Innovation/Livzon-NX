@@ -1,6 +1,7 @@
 """Contract tests for global API exception and response mappings."""
 
 import json
+from typing import Any
 
 import pytest
 from fastapi.exceptions import RequestValidationError
@@ -38,8 +39,8 @@ def _request(method: str = "GET", path: str = "/api/v1/test") -> Request:
     )
 
 
-def _body(response) -> dict:
-    return json.loads(response.body)
+def _body(response: Any) -> dict[str, Any]:
+    return json.loads(response.body)  # type: ignore[no-any-return]
 
 
 @pytest.mark.asyncio
@@ -77,8 +78,8 @@ async def test_app_exception_handler_preserves_status_and_safe_detail() -> None:
     ],
 )
 async def test_http_exception_handler_keeps_error_schema(
-    status_code,
-    detail,
+    status_code: Any,
+    detail: Any,
 ) -> None:
     response = await http_exception_handler(
         _request(),
@@ -134,7 +135,7 @@ async def test_integrity_error_maps_to_conflict_without_database_detail() -> Non
         "code": 409,
         "message": "数据状态冲突，请刷新后重试",
     }
-    assert "secret" not in response.body.decode()
+    assert "secret" not in response.body.decode()  # type: ignore[union-attr]
 
 
 def test_domain_exception_types_have_expected_contracts() -> None:

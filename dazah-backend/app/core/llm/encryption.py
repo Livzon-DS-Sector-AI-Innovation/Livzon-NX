@@ -1,7 +1,9 @@
 """Fernet encryption for API keys."""
 
 import os
+
 from cryptography.fernet import Fernet, InvalidToken
+
 from .exceptions import LLMConfigError
 
 
@@ -32,7 +34,9 @@ def decrypt_api_key(encrypted_key: str) -> str:
     try:
         return fernet.decrypt(encrypted_key.encode()).decode()
     except InvalidToken:
-        raise LLMConfigError("Failed to decrypt API key - invalid encryption key or corrupted data")
+        raise LLMConfigError(
+            "Failed to decrypt API key - invalid encryption key or corrupted data"
+        )
 
 
 def mask_api_key(api_key: str) -> str:

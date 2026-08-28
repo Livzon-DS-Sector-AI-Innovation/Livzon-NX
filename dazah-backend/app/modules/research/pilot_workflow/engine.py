@@ -3,6 +3,7 @@
 import logging
 import uuid
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,7 +25,7 @@ from app.modules.research.pilot_workflow.step4_report_writing import (
 
 logger = logging.getLogger(__name__)
 
-STEP_DEFINITIONS = [
+STEP_DEFINITIONS: list[dict[str, Any]] = [
     {
         "step_order": 1,
         "step_code": "param_extraction",
@@ -69,19 +70,22 @@ async def _create_steps(session: AsyncSession, workflow_id: uuid.UUID) -> None:
 async def _execute_step(
     session: AsyncSession,
     step: PilotWorkflowStep,
-    step_defn: dict,
+    step_defn: dict[str, Any],
     workflow: PilotWorkflow,
-) -> dict:
+) -> dict[str, Any]:
     """执行单个步骤，返回输出数据"""
     step.status = "running"
     step.started_at = datetime.now(UTC)
     await session.flush()
 
     try:
-        output = await step_defn["executor"](
+        raw_output = await step_defn["executor"](
             step_input=step.input_data or {},
             workflow=workflow,
         )
+        if not isinstance(raw_output, dict):
+            raise ValueError("工作流步骤输出必须是 JSON 对象")
+        output = {str(key): value for key, value in raw_output.items()}
         step.output_data = output
         step.status = "waiting_approval"
         step.completed_at = datetime.now(UTC)
@@ -112,19 +116,18 @@ async def start_workflow(workflow_id: uuid.UUID) -> None:
         await session.flush()
 
         # 获取工作流和第一个步骤
-        result = await session.execute(
+        workflow_result = await session.execute(
             select(PilotWorkflow).where(PilotWorkflow.id == workflow_id)
         )
-        workflow = result.scalar_one()
+        workflow = workflow_result.scalar_one()
 
-        result = await session.execute(
-            select(PilotWorkflowStep)
-            .where(
+        step_result = await session.execute(
+            select(PilotWorkflowStep).where(
                 PilotWorkflowStep.workflow_id == workflow_id,
                 PilotWorkflowStep.step_order == 1,
             )
         )
-        step = result.scalar_one()
+        step = step_result.scalar_one()
         step.input_data = {}
 
         # 执行第一步
@@ -136,16 +139,16 @@ async def start_workflow(workflow_id: uuid.UUID) -> None:
             await session.rollback()
 
 
-async def approve_step(workflow_id: uuid.UUID) -> dict:
+async def approve_step(workflow_id: uuid.UUID) -> dict[str, Any]:
     """确认当前步骤，异步执行下一步。返回执行结果信息。"""
     import asyncio
-    
+
     async with async_session_factory() as session:
         # 获取工作流
-        result = await session.execute(
+        workflow_result = await session.execute(
             select(PilotWorkflow).where(PilotWorkflow.id == workflow_id)
         )
-        workflow = result.scalar_one_or_none()
+        workflow = workflow_result.scalar_one_or_none()
         if not workflow:
             return {"error": "工作流不存在"}
 
@@ -153,12 +156,12 @@ async def approve_step(workflow_id: uuid.UUID) -> dict:
             return {"error": f"工作流状态为 {workflow.status}，无法继续"}
 
         # 获取所有步骤
-        result = await session.execute(
+        steps_result = await session.execute(
             select(PilotWorkflowStep)
             .where(PilotWorkflowStep.workflow_id == workflow_id)
             .order_by(PilotWorkflowStep.step_order)
         )
-        steps = list(result.scalars().all())
+        steps = list(steps_result.scalars().all())
 
         # 找到当前等待确认的步骤
         waiting_step = None
@@ -189,30 +192,33 @@ async def approve_step(workflow_id: uuid.UUID) -> dict:
 
         # 准备下一步
         next_step = steps[next_idx]
-        next_defn = STEP_DEFINITIONS[next_idx]
+        STEP_DEFINITIONS[next_idx]
 
         # 累积所有已完成步骤的输出作为下一步的输入
-        accumulated_results = {}
+        accumulated_results: dict[str, Any] = {}
         for s in steps[:next_idx]:
             if s.output_data and isinstance(s.output_data, dict):
                 step_key = s.step_code
                 accumulated_results[step_key] = s.output_data
         next_step.input_data = accumulated_results
-        
+
         # 标记下一步为运行中
         next_step.status = "running"
         next_step.started_at = datetime.now(UTC)
-        
+
         await session.commit()
-        
+
         # 在后台异步执行下一步
         asyncio.create_task(_execute_next_step_async(workflow_id, next_idx))
-        
+
         return {
             "status": "running",
             "step_order": next_step.step_order,
             "step_name": next_step.step_name,
-            "message": f"步骤 {waiting_step.step_order} 已确认，步骤 {next_step.step_order} 正在执行",
+            "message": (
+                f"步骤 {waiting_step.step_order} 已确认，"
+                f"步骤 {next_step.step_order} 正在执行"
+            ),
         }
 
 
@@ -220,21 +226,21 @@ async def _execute_next_step_async(workflow_id: uuid.UUID, step_idx: int) -> Non
     """异步执行工作流步骤"""
     async with async_session_factory() as session:
         # 获取工作流
-        result = await session.execute(
+        workflow_result = await session.execute(
             select(PilotWorkflow).where(PilotWorkflow.id == workflow_id)
         )
-        workflow = result.scalar_one()
-        
+        workflow = workflow_result.scalar_one()
+
         # 获取步骤
-        result = await session.execute(
+        steps_result = await session.execute(
             select(PilotWorkflowStep)
             .where(PilotWorkflowStep.workflow_id == workflow_id)
             .order_by(PilotWorkflowStep.step_order)
         )
-        steps = list(result.scalars().all())
+        steps = list(steps_result.scalars().all())
         step = steps[step_idx]
         step_defn = STEP_DEFINITIONS[step_idx]
-        
+
         try:
             await _execute_step(session, step, step_defn, workflow)
             await session.commit()

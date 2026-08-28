@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -12,15 +13,17 @@ class OhHazardMonitorBase(BaseModel):
     monitor_no: str = Field(..., max_length=64, description="监测编号")
     workplace: str = Field(..., max_length=255, description="监测场所/车间")
     location: str | None = Field(None, max_length=255, description="具体监测点位")
-    equipment_info: str | None = Field(None, max_length=255, description="关联设备/岗位")
+    equipment_info: str | None = Field(
+        None, max_length=255, description="关联设备/岗位"
+    )
     detection_type: str = Field(..., description="检测类型")
     detection_date: datetime | None = Field(None, description="检测日期")
     detection_agency: str | None = Field(None, max_length=255, description="检测机构")
     inspector_name: str | None = Field(None, max_length=100, description="检测人员")
     verifier_name: str | None = Field(None, max_length=100, description="验证人员")
-    detection_results: list | None = Field(None, description="检测结果数组")
-    abnormality_records: list | None = Field(None, description="异常处置记录")
-    attachments: list | None = Field(None, description="附件列表")
+    detection_results: list[Any] | None = Field(None, description="检测结果数组")
+    abnormality_records: list[Any] | None = Field(None, description="异常处置记录")
+    attachments: list[Any] | None = Field(None, description="附件列表")
     notes: str | None = Field(None, description="备注")
 
 
@@ -36,15 +39,17 @@ class OhHazardMonitorUpdate(BaseModel):
     monitor_no: str | None = Field(None, max_length=64, description="监测编号")
     workplace: str | None = Field(None, max_length=255, description="监测场所/车间")
     location: str | None = Field(None, max_length=255, description="具体监测点位")
-    equipment_info: str | None = Field(None, max_length=255, description="关联设备/岗位")
+    equipment_info: str | None = Field(
+        None, max_length=255, description="关联设备/岗位"
+    )
     detection_type: str | None = Field(None, description="检测类型")
     detection_date: datetime | None = Field(None, description="检测日期")
     detection_agency: str | None = Field(None, max_length=255, description="检测机构")
     inspector_name: str | None = Field(None, max_length=100, description="检测人员")
     verifier_name: str | None = Field(None, max_length=100, description="验证人员")
-    detection_results: list | None = Field(None, description="检测结果数组")
-    abnormality_records: list | None = Field(None, description="异常处置记录")
-    attachments: list | None = Field(None, description="附件列表")
+    detection_results: list[Any] | None = Field(None, description="检测结果数组")
+    abnormality_records: list[Any] | None = Field(None, description="异常处置记录")
+    attachments: list[Any] | None = Field(None, description="附件列表")
     notes: str | None = Field(None, description="备注")
 
 
@@ -68,5 +73,3 @@ class VerifyMonitorRequest(BaseModel):
 
     verified_by: str | None = Field(None, max_length=100, description="验证人")
     comments: str | None = Field(None, description="验证意见")
-
-

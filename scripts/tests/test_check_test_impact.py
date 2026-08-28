@@ -97,9 +97,7 @@ def test_all_matching_rules_must_have_their_own_test() -> None:
         {"tests/quality/test_service.py"},
     )
 
-    assert [requirement.rule_id for requirement, _ in violations] == [
-        "contract"
-    ]
+    assert [requirement.rule_id for requirement, _ in violations] == ["contract"]
     assert unmatched == []
 
 

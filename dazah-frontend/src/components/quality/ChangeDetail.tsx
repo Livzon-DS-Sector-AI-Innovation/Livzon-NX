@@ -4,23 +4,14 @@ import { useCallback, useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { App, Button, Card, DatePicker, Descriptions, Form, Input, Modal, Select, Space, Table, Tag } from 'antd'
 import { ArrowLeftOutlined, DeleteOutlined, EditOutlined, SyncOutlined } from '@ant-design/icons'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import dayjs from 'dayjs'
-import {
-  createChangeActionPlan,
-  deleteChange,
-  deleteChangeActionPlan,
-  syncChangeActionPlanToFeishu,
-  syncChangeActionPlansFromFeishu,
-  updateChange,
-  updateChangeActionPlan,
-} from '@/actions/quality'
-import {
-  fetchChange,
-  fetchChangeActionPlansByChange,
-} from '@/lib/api/quality'
+import { createChangeActionPlan, deleteChange, deleteChangeActionPlan, syncChangeActionPlanToFeishu, syncChangeActionPlansFromFeishu, updateChange, updateChangeActionPlan } from '@/actions/quality-change'
+import { fetchChange, fetchChangeActionPlansByChange } from '@/lib/api/client/quality'
+
 import type { ChangeActionPlanListItem, ChangeDetail as ChangeDetailType } from '@/types/quality'
+import { ChangeActionPlanEditModal } from './ChangeActionPlanEditModal'
 import { QualityAiPanel } from './QualityAiPanel'
-import { ChangeActionPlanEditModal } from './change-action-plan-edit-modal'
 
 const changeLevelOptions = [
   { label: '一级', value: '一级' },
@@ -43,12 +34,9 @@ export function ChangeDetail() {
   const router = useRouter()
   const params = useParams()
   const { message, modal } = App.useApp()
-  const [change, setChange] = useState<ChangeDetailType | null>(null)
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
   const [editorOpen, setEditorOpen] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [plans, setPlans] = useState<ChangeActionPlanListItem[]>([])
-  const [planLoading, setPlanLoading] = useState(false)
   const [planEditorOpen, setPlanEditorOpen] = useState(false)
   const [planSaving, setPlanSaving] = useState(false)
   const [editingPlan, setEditingPlan] = useState<ChangeActionPlanListItem | null>(null)
@@ -61,41 +49,31 @@ export function ChangeDetail() {
     return fallback
   }, [])
 
-  const loadData = useCallback(async () => {
-    try {
-      const data = await fetchChange(params.id as string)
-      setChange(data)
-    } catch (error: unknown) {
+  const changeId = params.id as string
+  const { data: change, isLoading: loading, error } = useQuery<ChangeDetailType>({
+    queryKey: ['quality-change', 'detail', changeId],
+    queryFn: () => fetchChange(changeId),
+    enabled: !!changeId,
+  })
+
+  useEffect(() => {
+    if (error) {
       message.error(getErrorMessage(error, '加载失败'))
       router.push('/quality/change')
-    } finally {
-      setLoading(false)
     }
-  }, [getErrorMessage, message, params.id, router])
+  }, [error, getErrorMessage, message, router])
+
+  const { data: plans = [], isLoading: planLoading, error: plansError } = useQuery({
+    queryKey: ['quality-change-plan', 'by-change', changeId],
+    queryFn: () => fetchChangeActionPlansByChange(changeId),
+    enabled: !!changeId,
+  })
 
   useEffect(() => {
-    void Promise.resolve().then(loadData)
-  }, [loadData])
-
-  const loadPlans = useCallback(async () => {
-    if (!params.id) return
-    try {
-      setPlanLoading(true)
-      const data = await fetchChangeActionPlansByChange(params.id as string)
-      setPlans(data)
-    } catch (error: unknown) {
-      message.error(getErrorMessage(error, '加载变更计划失败'))
-    } finally {
-      setPlanLoading(false)
+    if (plansError) {
+      message.error(getErrorMessage(plansError, '加载变更计划失败'))
     }
-  }, [getErrorMessage, message, params.id])
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void loadPlans()
-    }, 0)
-    return () => window.clearTimeout(timer)
-  }, [loadPlans])
+  }, [plansError, getErrorMessage, message])
 
   const handleOpenEdit = useCallback(() => {
     if (!change) return
@@ -129,14 +107,14 @@ export function ChangeDetail() {
       })
       message.success('保存成功')
       setEditorOpen(false)
-      await loadData()
+      queryClient.invalidateQueries({ queryKey: ['quality-change', 'detail', changeId] })
     } catch (error: unknown) {
       if (error && typeof error === 'object' && 'errorFields' in error) return
       message.error(getErrorMessage(error, '保存失败'))
     } finally {
       setSaving(false)
     }
-  }, [change, form, getErrorMessage, loadData, message])
+  }, [change, changeId, form, getErrorMessage, message, queryClient])
 
   const handleDelete = useCallback(() => {
     if (!change) return
@@ -162,11 +140,11 @@ export function ChangeDetail() {
     try {
       const result = await syncChangeActionPlansFromFeishu()
       message.success(`同步完成：成功 ${result.synced} 条，失败 ${result.failed} 条`)
-      await loadPlans()
+      queryClient.invalidateQueries({ queryKey: ['quality-change-plan', 'by-change', changeId] })
     } catch (error: unknown) {
       message.error(getErrorMessage(error, '同步飞书失败'))
     }
-  }, [getErrorMessage, loadPlans, message])
+  }, [changeId, getErrorMessage, message, queryClient])
 
   const handlePlanSubmit = useCallback(async (values: Record<string, unknown>) => {
     if (!change) return
@@ -186,13 +164,13 @@ export function ChangeDetail() {
       }
       setPlanEditorOpen(false)
       setEditingPlan(null)
-      await loadPlans()
+      queryClient.invalidateQueries({ queryKey: ['quality-change-plan', 'by-change', changeId] })
     } catch (error: unknown) {
       message.error(getErrorMessage(error, '保存变更计划失败'))
     } finally {
       setPlanSaving(false)
     }
-  }, [change, editingPlan, getErrorMessage, loadPlans, message])
+  }, [change, changeId, editingPlan, getErrorMessage, message, queryClient])
 
   const handlePlanDelete = useCallback((record: ChangeActionPlanListItem) => {
     modal.confirm({
@@ -205,23 +183,23 @@ export function ChangeDetail() {
         try {
           await deleteChangeActionPlan(record.id)
           message.success('变更计划已删除')
-          await loadPlans()
+          queryClient.invalidateQueries({ queryKey: ['quality-change-plan', 'by-change', changeId] })
         } catch (error: unknown) {
           message.error(getErrorMessage(error, '删除变更计划失败'))
         }
       },
     })
-  }, [getErrorMessage, loadPlans, message, modal])
+  }, [changeId, getErrorMessage, message, modal, queryClient])
 
   const handlePlanSyncSingle = useCallback(async (record: ChangeActionPlanListItem) => {
     try {
       await syncChangeActionPlanToFeishu(record.id)
       message.success('已回写飞书')
-      await loadPlans()
+      queryClient.invalidateQueries({ queryKey: ['quality-change-plan', 'by-change', changeId] })
     } catch (error: unknown) {
       message.error(getErrorMessage(error, '回写飞书失败'))
     }
-  }, [getErrorMessage, loadPlans, message])
+  }, [changeId, getErrorMessage, message, queryClient])
 
   const planColumns = [
     { title: '项目名称', dataIndex: 'project_name', width: 180 },
@@ -281,7 +259,7 @@ export function ChangeDetail() {
       </div>
 
       <div style={{ marginBottom: 16 }}>
-        <QualityAiPanel entityType="change" entityId={change.id} onApplied={loadData} />
+        <QualityAiPanel entityType="change" entityId={change.id} onApplied={() => queryClient.invalidateQueries({ queryKey: ['quality-change', 'detail', changeId] })} />
       </div>
 
       <Card title="变更基础信息">

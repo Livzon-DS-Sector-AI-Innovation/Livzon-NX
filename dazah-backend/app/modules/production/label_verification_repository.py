@@ -1,6 +1,7 @@
 """Quality database queries live here."""
 
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import asc, desc, func, select
@@ -47,18 +48,12 @@ class LabelVerificationRepository:
         sort_by: str = "verification_time",
         sort_order: str = "desc",
     ) -> tuple[list[LabelVerification], int]:
-        stmt = select(LabelVerification).where(
-            LabelVerification.is_deleted.is_(False)
-        )
+        stmt = select(LabelVerification).where(LabelVerification.is_deleted.is_(False))
 
         if batch_number:
-            stmt = stmt.where(
-                LabelVerification.batch_number.ilike(f"%{batch_number}%")
-            )
+            stmt = stmt.where(LabelVerification.batch_number.ilike(f"%{batch_number}%"))
         if product_name:
-            stmt = stmt.where(
-                LabelVerification.product_name.ilike(f"%{product_name}%")
-            )
+            stmt = stmt.where(LabelVerification.product_name.ilike(f"%{product_name}%"))
         if result_status:
             stmt = stmt.where(LabelVerification.result_status == result_status)
         if start_date:
@@ -95,7 +90,7 @@ class LabelVerificationRepository:
         verification.is_deleted = True
         await self.session.flush()
 
-    async def get_statistics(self) -> dict:
+    async def get_statistics(self) -> dict[str, Any]:
         """获取标签复核统计数据"""
         base_filter = LabelVerification.is_deleted.is_(False)
         today = date.today()
@@ -177,9 +172,7 @@ class LabelVerificationRepository:
             "by_batch": batch_map,
         }
 
-    async def get_by_batch_number(
-        self, batch_number: str
-    ) -> list[LabelVerification]:
+    async def get_by_batch_number(self, batch_number: str) -> list[LabelVerification]:
         """根据批号查询历史记录"""
         result = await self.session.execute(
             select(LabelVerification)

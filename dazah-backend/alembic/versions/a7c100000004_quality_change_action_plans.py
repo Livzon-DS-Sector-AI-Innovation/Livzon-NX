@@ -8,6 +8,7 @@ Create Date: 2026-06-30 23:30:00.000000
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+
 from alembic import op
 
 # revision identifiers, used by Alembic.
@@ -60,13 +61,17 @@ def upgrade() -> None:
             ),
             sa.Column("created_by", sa.Uuid(), nullable=True),
             sa.Column("updated_by", sa.Uuid(), nullable=True),
-            sa.Column("is_deleted", sa.Boolean(), server_default="false", nullable=False),
+            sa.Column(
+                "is_deleted", sa.Boolean(), server_default="false", nullable=False
+            ),
             sa.PrimaryKeyConstraint("id"),
             schema="quality",
         )
     existing_indexes = {
         index["name"]
-        for index in inspector.get_indexes("quality_change_action_plans", schema="quality")
+        for index in inspector.get_indexes(
+            "quality_change_action_plans", schema="quality"
+        )
     }
     if "ix_quality_change_action_plans_change_code" not in existing_indexes:
         op.create_index(
@@ -84,7 +89,9 @@ def downgrade() -> None:
     if inspector.has_table("quality_change_action_plans", schema="quality"):
         existing_indexes = {
             index["name"]
-            for index in inspector.get_indexes("quality_change_action_plans", schema="quality")
+            for index in inspector.get_indexes(
+                "quality_change_action_plans", schema="quality"
+            )
         }
         if "ix_quality_change_action_plans_change_code" in existing_indexes:
             op.drop_index(

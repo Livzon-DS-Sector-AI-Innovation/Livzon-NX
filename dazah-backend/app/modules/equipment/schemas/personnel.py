@@ -2,10 +2,12 @@
 
 import uuid
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, Field
 
 # ── 角色 Schema ──
+
 
 class RoleCreate(BaseModel):
     """创建角色请求"""
@@ -43,6 +45,7 @@ class RoleResponse(BaseModel):
 
 # ── 人员 Schema ──
 
+
 class PersonnelAddRequest(BaseModel):
     """添加人员请求 — 从 identity.users 选取"""
 
@@ -56,14 +59,14 @@ class PersonnelAddResult(BaseModel):
 
     added: list[uuid.UUID]
     skipped: list[uuid.UUID] = Field(default_factory=list)
-    errors: list[dict] = Field(default_factory=list)
+    errors: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class PersonnelUpdate(BaseModel):
     """更新人员请求"""
 
     is_active: bool | None = Field(None, description="是否在岗")
-    extended_attrs: dict | None = Field(None, description="扩展属性")
+    extended_attrs: dict[str, Any] | None = Field(None, description="扩展属性")
 
 
 class PersonnelRoleAssign(BaseModel):
@@ -120,7 +123,7 @@ class PersonnelResponse(BaseModel):
     feishu_user_id: str | None
     feishu_open_id: str | None
     mobile: str | None
-    extended_attrs: dict | None
+    extended_attrs: dict[str, Any] | None
     is_active: bool
     roles: list[PersonnelRoleInfo] = Field(default_factory=list)
     categories: list[PersonnelCategoryInfo] = Field(default_factory=list)
@@ -141,6 +144,7 @@ class PersonnelListResponse(BaseModel):
 
 # ── 候选人查询 Schema ──
 
+
 class CandidateResponse(BaseModel):
     """可分配人员信息（供其他业务模块调用）"""
 
@@ -154,6 +158,7 @@ class CandidateResponse(BaseModel):
 
 # ── 飞书刷新结果 ──
 
+
 class FeishuRefreshResult(BaseModel):
     """飞书刷新结果"""
 
@@ -161,4 +166,4 @@ class FeishuRefreshResult(BaseModel):
     updated: int = Field(description="成功更新数")
     skipped: int = Field(description="跳过（无变更）")
     unmatched: int = Field(description="未匹配（identity 中找不到）")
-    errors: list[dict] = Field(default_factory=list)
+    errors: list[dict[str, Any]] = Field(default_factory=list)

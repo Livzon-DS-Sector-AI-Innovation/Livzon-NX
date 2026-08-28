@@ -124,9 +124,7 @@ def _it_to_dict(task: Any) -> dict[str, Any]:
     }
 
 
-async def _get_template_item_map(
-    db: AsyncSession, task: Any
-) -> dict[str, str]:
+async def _get_template_item_map(db: AsyncSession, task: Any) -> dict[str, str]:
     """根据任务类型获取模板检查项的 item_name → template_item_id 映射。
 
     线路巡检：从路线 → 地点 → 设备 → 模板绑定获取（可能多个模板合并）
@@ -168,13 +166,13 @@ async def _get_template_item_map(
 
     elif task.equipment_templates:
         # 新方式：从设备-模板映射聚合所有唯一模板
-        seen_tids: set[uuid.UUID] = set()
+        equipment_seen_tids: set[uuid.UUID] = set()
         for tpl_ids in task.equipment_templates.values():
             for tid_str in tpl_ids:
                 tid = uuid.UUID(tid_str) if isinstance(tid_str, str) else tid_str
-                if tid not in seen_tids:
-                    seen_tids.add(tid)
-        for tid in seen_tids:
+                if tid not in equipment_seen_tids:
+                    equipment_seen_tids.add(tid)
+        for tid in equipment_seen_tids:
             item_stmt = select(InspectionTemplateItem).where(
                 InspectionTemplateItem.template_id == tid,
                 InspectionTemplateItem.is_deleted == False,  # noqa: E712

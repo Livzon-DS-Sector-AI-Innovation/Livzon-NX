@@ -31,16 +31,12 @@ async def create_inspection_template(
     current_user: CurrentUser = None,
 ) -> JSONResponse:
     template = await service.create_inspection_template(db, data)
-    return success_response(
-        data=InspectionTemplateResponse.model_validate(template)
-    )
+    return success_response(data=InspectionTemplateResponse.model_validate(template))
 
 
 @router.get("/", summary="巡检模板列表")
 async def list_inspection_templates(
-    equipment_category_id: uuid.UUID | None = Query(
-        None, description="设备分类ID"
-    ),
+    equipment_category_id: uuid.UUID | None = Query(None, description="设备分类ID"),
     is_active: bool | None = Query(None, description="是否启用"),
     keyword: str | None = Query(None, description="关键词搜索"),
     page: int = Query(1, ge=1, description="页码"),
@@ -56,9 +52,7 @@ async def list_inspection_templates(
         page_size=page_size,
     )
     return paginated_response(
-        data=[
-            InspectionTemplateResponse.model_validate(t) for t in templates
-        ],
+        data=[InspectionTemplateResponse.model_validate(t) for t in templates],
         page=page,
         page_size=page_size,
         total=total,
@@ -71,9 +65,7 @@ async def get_inspection_template(
     db: AsyncSession = Depends(get_db),
 ) -> JSONResponse:
     template = await service.get_inspection_template_by_id(db, template_id)
-    return success_response(
-        data=InspectionTemplateResponse.model_validate(template)
-    )
+    return success_response(data=InspectionTemplateResponse.model_validate(template))
 
 
 @router.put("/{template_id}", summary="修改巡检模板")
@@ -84,9 +76,7 @@ async def update_inspection_template(
     current_user: CurrentUser = None,
 ) -> JSONResponse:
     template = await service.update_inspection_template(db, template_id, data)
-    return success_response(
-        data=InspectionTemplateResponse.model_validate(template)
-    )
+    return success_response(data=InspectionTemplateResponse.model_validate(template))
 
 
 @router.delete("/{template_id}", summary="删除巡检模板")

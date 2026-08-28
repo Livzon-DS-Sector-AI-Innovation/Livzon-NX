@@ -2,15 +2,23 @@ from datetime import UTC, datetime
 from typing import cast
 from uuid import UUID
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.platform.identity.models import (
+    DataScopeRule,
     Department,
+    DepartmentRoleRule,
     ExternalIdentityBinding,
     FeishuConfig,
     FeishuUserToken,
+    Menu,
+    Permission,
+    Role,
+    RoleMenu,
+    RolePermission,
     User,
+    UserRole,
 )
 
 
@@ -575,3 +583,340 @@ class FeishuUserTokenRepository:
         session.add(token)
         await session.flush()
         return token
+
+
+class RbacRepository:
+    """RBAC 查询与写入，保留当前身份仓储的兼容实现。"""
+
+    async def list_roles(self, session: AsyncSession) -> list[Role]:
+        result = await session.execute(
+            select(Role)
+            .where(Role.is_deleted.is_(False))
+            .order_by(Role.is_system.desc(), Role.created_at)
+        )
+        return list(result.scalars().all())
+
+    async def get_role_by_id(self, session: AsyncSession, role_id: UUID) -> Role | None:
+        result = await session.execute(
+            select(Role).where(Role.id == role_id, Role.is_deleted.is_(False))
+        )
+        return result.scalar_one_or_none()
+
+    async def get_role_by_code(self, session: AsyncSession, code: str) -> Role | None:
+        result = await session.execute(
+            select(Role).where(Role.code == code, Role.is_deleted.is_(False))
+        )
+        return result.scalar_one_or_none()
+
+    async def create_role(
+        self,
+        session: AsyncSession,
+        *,
+        name: str,
+        code: str,
+        description: str | None = None,
+    ) -> Role:
+        role = Role(name=name, code=code, description=description, is_system=False)
+        session.add(role)
+        await session.flush()
+        return role
+
+    async def update_role(
+        self,
+        session: AsyncSession,
+        role: Role,
+        *,
+        name: str | None = None,
+        description: str | None = None,
+    ) -> Role:
+        if name is not None:
+            role.name = name
+        if description is not None:
+            role.description = description
+        await session.flush()
+        return role
+
+    async def soft_delete_role(self, session: AsyncSession, role: Role) -> None:
+        role.is_deleted = True
+        await session.flush()
+
+    async def list_permissions(self, session: AsyncSession) -> list[Permission]:
+        result = await session.execute(
+            select(Permission)
+            .where(Permission.is_deleted.is_(False))
+            .order_by(Permission.module, Permission.action)
+        )
+        return list(result.scalars().all())
+
+    async def list_role_permission_codes(
+        self, session: AsyncSession, role_id: UUID
+    ) -> list[str]:
+        result = await session.execute(
+            select(Permission.code)
+            .join(RolePermission, RolePermission.permission_id == Permission.id)
+            .where(
+                RolePermission.role_id == role_id,
+                RolePermission.is_deleted.is_(False),
+                Permission.is_deleted.is_(False),
+            )
+        )
+        return list(result.scalars().all())
+
+    async def set_role_permissions(
+        self,
+        session: AsyncSession,
+        role_id: UUID,
+        permission_ids: list[UUID],
+    ) -> None:
+        await session.execute(
+            delete(RolePermission).where(
+                RolePermission.role_id == role_id,
+                RolePermission.is_deleted.is_(False),
+            )
+        )
+        for permission_id in dict.fromkeys(permission_ids):
+            session.add(RolePermission(role_id=role_id, permission_id=permission_id))
+        await session.flush()
+
+    async def list_user_roles(self, session: AsyncSession, user_id: UUID) -> list[Role]:
+        result = await session.execute(
+            select(Role)
+            .join(UserRole, UserRole.role_id == Role.id)
+            .where(
+                UserRole.user_id == user_id,
+                UserRole.source == "manual",
+                UserRole.is_deleted.is_(False),
+                Role.is_deleted.is_(False),
+            )
+        )
+        return list(result.scalars().all())
+
+    async def assign_user_role(
+        self, session: AsyncSession, user_id: UUID, role_id: UUID
+    ) -> UserRole:
+        result = await session.execute(
+            select(UserRole).where(
+                UserRole.user_id == user_id,
+                UserRole.role_id == role_id,
+                UserRole.source == "manual",
+                UserRole.is_deleted.is_(False),
+            )
+        )
+        row = result.scalar_one_or_none()
+        if row is None:
+            row = UserRole(user_id=user_id, role_id=role_id, source="manual")
+            session.add(row)
+            await session.flush()
+        return row
+
+    async def remove_user_role(
+        self, session: AsyncSession, user_id: UUID, role_id: UUID
+    ) -> bool:
+        result = await session.execute(
+            select(UserRole).where(
+                UserRole.user_id == user_id,
+                UserRole.role_id == role_id,
+                UserRole.source == "manual",
+                UserRole.is_deleted.is_(False),
+            )
+        )
+        row = result.scalar_one_or_none()
+        if row is None:
+            return False
+        row.is_deleted = True
+        await session.flush()
+        return True
+
+    async def list_dept_rules(self, session: AsyncSession) -> list[DepartmentRoleRule]:
+        result = await session.execute(
+            select(DepartmentRoleRule)
+            .where(DepartmentRoleRule.is_deleted.is_(False))
+            .order_by(DepartmentRoleRule.created_at)
+        )
+        return list(result.scalars().all())
+
+    async def create_dept_rule(
+        self,
+        session: AsyncSession,
+        *,
+        role_id: UUID,
+        feishu_department_id: str | None = None,
+        department_name: str | None = None,
+    ) -> DepartmentRoleRule:
+        rule = DepartmentRoleRule(
+            role_id=role_id,
+            feishu_department_id=feishu_department_id,
+            department_name=department_name,
+        )
+        session.add(rule)
+        await session.flush()
+        return rule
+
+    async def get_dept_rule_by_id(
+        self, session: AsyncSession, rule_id: UUID
+    ) -> DepartmentRoleRule | None:
+        result = await session.execute(
+            select(DepartmentRoleRule).where(
+                DepartmentRoleRule.id == rule_id,
+                DepartmentRoleRule.is_deleted.is_(False),
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def soft_delete_dept_rule(
+        self, session: AsyncSession, rule: DepartmentRoleRule
+    ) -> None:
+        rule.is_deleted = True
+        await session.flush()
+
+    async def list_data_scope_rules(self, session: AsyncSession) -> list[DataScopeRule]:
+        result = await session.execute(
+            select(DataScopeRule)
+            .where(DataScopeRule.is_deleted.is_(False))
+            .order_by(DataScopeRule.created_at)
+        )
+        return list(result.scalars().all())
+
+    async def get_data_scope_rule_by_id(
+        self, session: AsyncSession, rule_id: UUID
+    ) -> DataScopeRule | None:
+        result = await session.execute(
+            select(DataScopeRule).where(
+                DataScopeRule.id == rule_id,
+                DataScopeRule.is_deleted.is_(False),
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def get_data_scope_rule_by_target(
+        self,
+        session: AsyncSession,
+        *,
+        role_id: UUID | None = None,
+        user_id: UUID | None = None,
+    ) -> DataScopeRule | None:
+        stmt = select(DataScopeRule).where(DataScopeRule.is_deleted.is_(False))
+        if role_id is not None:
+            stmt = stmt.where(DataScopeRule.role_id == role_id)
+        if user_id is not None:
+            stmt = stmt.where(DataScopeRule.user_id == user_id)
+        result = await session.execute(stmt)
+        return result.scalars().first()
+
+    async def create_data_scope_rule(
+        self,
+        session: AsyncSession,
+        *,
+        role_id: UUID | None = None,
+        user_id: UUID | None = None,
+        scope_type: str,
+        department_names: str | None = None,
+    ) -> DataScopeRule:
+        rule = DataScopeRule(
+            role_id=role_id,
+            user_id=user_id,
+            scope_type=scope_type,
+            department_names=department_names,
+        )
+        session.add(rule)
+        await session.flush()
+        return rule
+
+    async def update_data_scope_rule(
+        self, session: AsyncSession, rule: DataScopeRule, **fields: object
+    ) -> DataScopeRule:
+        for field, value in fields.items():
+            setattr(rule, field, value)
+        await session.flush()
+        return rule
+
+    async def soft_delete_data_scope_rule(
+        self, session: AsyncSession, rule: DataScopeRule
+    ) -> None:
+        rule.is_deleted = True
+        await session.flush()
+
+
+class MenuRepository:
+    """菜单与角色菜单绑定的查询/写入。"""
+
+    async def list_all(self, session: AsyncSession) -> list[Menu]:
+        result = await session.execute(
+            select(Menu)
+            .where(Menu.is_deleted.is_(False))
+            .order_by(Menu.sort_order, Menu.created_at)
+        )
+        return list(result.scalars().all())
+
+    async def get_by_id(self, session: AsyncSession, menu_id: UUID) -> Menu | None:
+        result = await session.execute(
+            select(Menu).where(Menu.id == menu_id, Menu.is_deleted.is_(False))
+        )
+        return result.scalar_one_or_none()
+
+    async def get_by_key(self, session: AsyncSession, key: str) -> Menu | None:
+        result = await session.execute(
+            select(Menu).where(Menu.key == key, Menu.is_deleted.is_(False))
+        )
+        return result.scalar_one_or_none()
+
+    async def list_children(self, session: AsyncSession, menu_id: UUID) -> list[Menu]:
+        result = await session.execute(
+            select(Menu).where(
+                Menu.parent_id == menu_id,
+                Menu.is_deleted.is_(False),
+            )
+        )
+        return list(result.scalars().all())
+
+    async def create(self, session: AsyncSession, **fields: object) -> Menu:
+        menu = Menu(**fields)
+        session.add(menu)
+        await session.flush()
+        return menu
+
+    async def update(self, session: AsyncSession, menu: Menu, **fields: object) -> Menu:
+        for field, value in fields.items():
+            setattr(menu, field, value)
+        await session.flush()
+        return menu
+
+    async def soft_delete(self, session: AsyncSession, menu: Menu) -> None:
+        menu.is_deleted = True
+        await session.execute(
+            delete(RoleMenu).where(
+                RoleMenu.menu_id == menu.id,
+                RoleMenu.is_deleted.is_(False),
+            )
+        )
+        await session.flush()
+
+    async def list_role_menus(self, session: AsyncSession, role_id: UUID) -> list[Menu]:
+        result = await session.execute(
+            select(Menu)
+            .join(RoleMenu, RoleMenu.menu_id == Menu.id)
+            .where(
+                RoleMenu.role_id == role_id,
+                RoleMenu.is_deleted.is_(False),
+                Menu.is_deleted.is_(False),
+            )
+        )
+        return list(result.scalars().all())
+
+    async def list_role_menu_ids(
+        self, session: AsyncSession, role_id: UUID
+    ) -> list[UUID]:
+        return [menu.id for menu in await self.list_role_menus(session, role_id)]
+
+    async def set_role_menus(
+        self, session: AsyncSession, role_id: UUID, menu_ids: list[UUID]
+    ) -> None:
+        await session.execute(
+            delete(RoleMenu).where(
+                RoleMenu.role_id == role_id,
+                RoleMenu.is_deleted.is_(False),
+            )
+        )
+        for menu_id in dict.fromkeys(menu_ids):
+            session.add(RoleMenu(role_id=role_id, menu_id=menu_id))
+        await session.flush()
