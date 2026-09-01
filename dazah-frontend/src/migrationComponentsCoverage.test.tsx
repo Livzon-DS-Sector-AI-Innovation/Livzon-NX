@@ -80,7 +80,7 @@ const mocks = vi.hoisted(() => {
     permissionAllowed: true,
     message: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn(), loading: vi.fn() },
     modal: { confirm: vi.fn(({ onOk }: { onOk?: () => unknown }) => void onOk?.()) },
-    router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() },
+    router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn(), prefetch: vi.fn() },
   }
 })
 
@@ -132,6 +132,11 @@ vi.mock('@/actions/warehouse', () => mocks.moduleFactory('actions/warehouse'))
 vi.mock('@/actions/quality-capa', () => mocks.moduleFactory('actions/quality-capa'))
 vi.mock('@/actions/quality-change', () => mocks.moduleFactory('actions/quality-change'))
 vi.mock('@/actions/quality-deviation', () => mocks.moduleFactory('actions/quality-deviation'))
+vi.mock('@/actions/quality-deviation-workbench', () => mocks.moduleFactory('actions/quality-deviation-workbench'))
+vi.mock('@/actions/quality-inspection', () => mocks.moduleFactory('actions/quality-inspection'))
+vi.mock('@/actions/validation-audit', () => mocks.moduleFactory('actions/validation-audit'))
+vi.mock('@/lib/api/validation-audit', () => mocks.moduleFactory('lib/api/validation-audit'))
+vi.mock('@/lib/api/dossier-writer-client', () => mocks.moduleFactory('lib/api/dossier-writer-client'))
 vi.mock('@/lib/api/client/hr', () => mocks.moduleFactory('lib/api/client/hr'))
 vi.mock('@/lib/api/client/admin', () => mocks.moduleFactory('lib/api/client/admin'))
 vi.mock('@/lib/api/client/quality', () => mocks.moduleFactory('lib/api/client/quality'))
@@ -266,18 +271,24 @@ vi.mock('antd', async () => {
   ;(Checkbox as typeof Checkbox & { Group: typeof CheckboxGroup }).Group = CheckboxGroup
   const Card = ({ children, title, extra, onClick, ...props }: { children?: ReactNode; title?: ReactNode; extra?: ReactNode; onClick?: () => void } & Record<string, unknown>) =>
     createElement('section', { ...props, onClick }, title, extra, children)
-  const Table = ({ columns = [], dataSource = [], rowKey, locale, onRow, rowSelection, ...props }: { columns?: Array<{ title?: ReactNode; dataIndex?: string; render?: (value: unknown, record: Record<string, unknown>, index: number) => ReactNode }>; dataSource?: Array<Record<string, unknown>>; rowKey?: string | ((record: Record<string, unknown>) => string); locale?: { emptyText?: ReactNode }; onRow?: (record: Record<string, unknown>, index?: number) => Record<string, unknown>; rowSelection?: { onChange?: (keys: unknown[]) => void } } & Record<string, unknown>) => {
+  const Table = ({ columns = [], dataSource = [], rowKey, locale, onRow, rowSelection, ...props }: { columns?: Array<{ title?: ReactNode; dataIndex?: string; render?: (value: unknown, record: Record<string, unknown>, index: number) => ReactNode }>; dataSource?: Array<Record<string, unknown>>; rowKey?: string | ((record: Record<string, unknown>) => string); locale?: { emptyText?: ReactNode }; onRow?: (record: Record<string, unknown>, index?: number) => Record<string, unknown>; rowSelection?: { onChange?: (keys: unknown[], rows?: Record<string, unknown>[]) => void } } & Record<string, unknown>) => {
     const rows = dataSource.length ? dataSource.map((record, rowIndex) => {
       const key = typeof rowKey === 'function' ? rowKey(record) : rowKey ? String(record[rowKey]) : rowIndex
       const rowProps = onRow?.(record, rowIndex) ?? {}
-      return createElement('tr', { key, ...rowProps, onClick: (event: unknown) => { (rowProps.onClick as ((event: unknown) => void) | undefined)?.(event); rowSelection?.onChange?.([key]) } }, columns.map((column, index) => createElement('td', { key: `${index}` }, column.render ? column.render(column.dataIndex ? record[column.dataIndex] : undefined, record, rowIndex) : column.dataIndex ? String(record[column.dataIndex] ?? '') : '')))
+      return createElement('tr', { key, ...rowProps, onClick: (event: unknown) => { (rowProps.onClick as ((event: unknown) => void) | undefined)?.(event); rowSelection?.onChange?.([key], [record]) } }, columns.map((column, index) => createElement('td', { key: `${index}` }, column.render ? column.render(column.dataIndex ? record[column.dataIndex] : undefined, record, rowIndex) : column.dataIndex ? String(record[column.dataIndex] ?? '') : '')))
     }) : createElement('tr', { key: 'empty' }, createElement('td', { colSpan: columns.length }, locale?.emptyText ?? ''))
     return createElement('table', { ...props }, createElement('thead', null, createElement('tr', null, columns.map((column, index) => createElement('th', { key: index }, column.title))),), createElement('tbody', null, rows))
   }
-  const Modal = ({ open, children, footer, title, onCancel, onOk }: { open?: boolean; children?: ReactNode; footer?: ReactNode; title?: ReactNode; onCancel?: () => void; onOk?: () => void }) => open ? createElement('div', { role: 'dialog' }, createElement('h2', null, title), createElement('button', { onClick: onCancel }, '取消'), createElement('button', { onClick: onOk }, '确定'), children, footer) : null
+  const Modal = ({ open, children, footer, title, onCancel, onOk, afterOpenChange }: { open?: boolean; children?: ReactNode; footer?: ReactNode; title?: ReactNode; onCancel?: () => void; onOk?: () => void; afterOpenChange?: (open: boolean) => void }) => {
+    React.useEffect(() => { afterOpenChange?.(Boolean(open)) }, [open])
+    return open ? createElement('div', { role: 'dialog' }, createElement('h2', null, title), createElement('button', { onClick: onCancel }, '取消'), createElement('button', { onClick: onOk }, '确定'), children, footer) : null
+  }
   ;(Modal as typeof Modal & { confirm: (config: { onOk?: () => unknown }) => void; destroyAll: () => void }).confirm = (config) => void config.onOk?.()
   ;(Modal as typeof Modal & { confirm: (config: { onOk?: () => unknown }) => void; destroyAll: () => void }).destroyAll = () => undefined
-  const Drawer = ({ open, children, title, onClose, extra }: { open?: boolean; children?: ReactNode; title?: ReactNode; onClose?: () => void; extra?: ReactNode }) => open ? createElement('aside', null, createElement('h2', null, title), createElement('button', { onClick: onClose }, '关闭'), extra, children) : null
+  const Drawer = ({ open, children, title, onClose, extra, afterOpenChange }: { open?: boolean; children?: ReactNode; title?: ReactNode; onClose?: () => void; extra?: ReactNode; afterOpenChange?: (open: boolean) => void }) => {
+    React.useEffect(() => { afterOpenChange?.(Boolean(open)) }, [open])
+    return open ? createElement('aside', null, createElement('h2', null, title), createElement('button', { onClick: onClose }, '关闭'), extra, children) : null
+  }
   const Alert = ({ title, description, children }: { title?: ReactNode; description?: ReactNode; children?: ReactNode }) => createElement('div', null, title, description, children)
   const Divider = ({ children }: { children?: ReactNode }) => createElement('div', null, children)
   const Tag = ({ children, closable, onClose, ...props }: { children?: ReactNode; closable?: boolean; onClose?: () => void } & Record<string, unknown>) => createElement('span', props, children, closable ? createElement('button', { onClick: onClose, 'aria-label': '关闭标签' }, '×') : null)
@@ -424,6 +435,11 @@ import PositionTransferClient from './components/hr/PositionTransferClient'
 import DepartmentClient from './components/hr/DepartmentClient'
 import { useSyncPolling } from './components/hr/useSyncPolling'
 import OnboardingManagementPage from './components/hr/onboarding-management/OnboardingManagementPage'
+import { Sidebar } from './components/layout/Sidebar'
+import ValidationAuditListClient from './components/registration/validation-audit/ValidationAuditListClient'
+import ValidationAuditNewClient from './components/registration/validation-audit/ValidationAuditNewClient'
+import ValidationAuditDetailClient from './components/registration/validation-audit/ValidationAuditDetailClient'
+import { DocxPreview } from './components/registration/DocxPreview'
 import DeptRecipientDrawer from './components/hr/DeptRecipientDrawer'
 import ContractApprovalResultsClient from './components/hr/ContractApprovalResultsClient'
 import ApprovalSettingsListClient from './components/hr/ApprovalSettingsListClient'
@@ -438,6 +454,13 @@ import ReturnApplicationPage from './components/quality/ReturnApplicationPage'
 import ReturnLedgerPage from './components/quality/ReturnLedgerPage'
 import SupplierQualificationPage from './components/quality/SupplierQualificationPage'
 import { DeviationReportRecordPage } from './components/quality/DeviationReportRecordPage'
+import { DeviationHistoryPage } from './components/quality/DeviationHistoryPage'
+import { DeviationWorkbenchPage } from './components/quality/DeviationWorkbenchPage'
+import { InspectionFeishuRecordModal } from './components/quality/inspection/InspectionFeishuRecordModal'
+import { InspectionFeishuTable } from './components/quality/inspection/InspectionFeishuTable'
+import { DepartmentContactPage } from './components/quality/DepartmentContactPage'
+import DocumentCatalogPickerModal from './components/hr/DocumentCatalogPickerModal'
+import OnboardingAttachmentPreviewModal from './components/hr/onboarding-management/OnboardingAttachmentPreviewModal'
 import CertificateSheetPage from './components/registration/CertificateSheetPage'
 import CertificateManagementDashboard from './components/registration/CertificateManagementDashboard'
 import CertificateDashboardPage from './components/registration/CertificateDashboardPage'
@@ -2280,6 +2303,25 @@ describe('migrated component coverage', () => {
     closeRendered(rendered)
   })
 
+  it('drives oral exam document upload parsing including duplicate and failure files', async () => {
+    getMock('actions/quality', 'extractExamDocumentText').mockResolvedValue({ text: '口试素材正文内容' })
+    const rendered = renderClient(createElement(OralExamAiModal, {
+      open: true, sourceFiles: [], onClose: vi.fn(), onConfirm: vi.fn(),
+    }))
+    await settle()
+    const uploadBtn = Array.from(rendered.container.querySelectorAll('button')).find((b) => b.textContent?.includes('上传文档'))
+    expect(uploadBtn).toBeTruthy()
+    await act(async () => { uploadBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    await settle()
+    expect(rendered.container.textContent).toContain('template.pdf')
+    expect(mocks.message.success).toHaveBeenCalledWith(expect.stringContaining('文档解析完成'))
+    // 同名文件重复上传 → 去重：列表中仍只有一条
+    await act(async () => { uploadBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    await settle()
+    expect(rendered.container.textContent?.match(/template\.pdf/g)?.length).toBe(1)
+    closeRendered(rendered)
+  })
+
   it('drives oral exam AI file resolution, generation, editing and confirmation', async () => {
     getMock('actions/quality', 'resolveDocumentEntryContent').mockResolvedValue([{ name: 'SOP', code: 'SOP-1', matched: true, attachments: [{ md_text: '口试素材' }] }])
     const onClose = vi.fn()
@@ -3627,3 +3669,881 @@ describe('migrated component coverage', () => {
   }, 180000)
 
 })
+
+describe('quality deviation history / workbench / inspection modal coverage', () => {
+  beforeEach(() => {
+    vi.resetAllMocks()
+    mocks.permissionAllowed = true
+    localStorage.clear()
+    window.URL.createObjectURL = vi.fn(() => 'blob:test')
+    window.URL.revokeObjectURL = vi.fn()
+  })
+
+  afterEach(() => {
+    document.body.replaceChildren()
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  it('renders deviation history rows and their column renderers', async () => {
+    getMock('lib/api/client/quality', 'fetchHistoricalDeviations').mockResolvedValue({
+      items: [{
+        id: 'hist-1', code: 'PC-2026-0001', deviation_event: '含量偏差', deviation_content: '批次A 收率偏低',
+        direct_cause: '投料错误', root_cause: 'SOP 未更新', attachment_count: 3, created_at: '2026-08-10T02:00:00Z',
+      }, {
+        id: 'hist-2', code: '', deviation_event: null, deviation_content: null,
+        direct_cause: null, root_cause: null, attachment_count: 0, created_at: '2026-08-11T02:00:00Z',
+      }],
+      total: 2,
+    })
+    const rendered = renderClient(createElement(DeviationHistoryPage))
+    await settle()
+    expect(rendered.container.textContent).toContain('PC-2026-0001')
+    expect(rendered.container.textContent).toContain('含量偏差')
+    expect(rendered.container.textContent).toContain('直接原因：投料错误')
+    expect(rendered.container.textContent).toContain('根本原因：SOP 未更新')
+    expect(rendered.container.textContent).toContain('3 个')
+    const findButton = (text: string) => Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent?.includes(text))
+    getMock('lib/api/client/quality', 'fetchHistoricalDeviation').mockResolvedValue({
+      id: 'hist-1', code: 'PC-2026-0001', deviation_event: '含量偏差',
+      attachments: [
+        { id: 'att-pdf', file_name: '现场.pdf', url: '/api/files/pdf', file_size: 2 * 1024 * 1024, converted: false },
+        { id: 'att-md', file_name: '调查报告.docx', url: '/api/files/md', file_size: 512, converted: true },
+        { id: 'att-kb', file_name: '旧记录.doc', url: '/api/files/kb', file_size: 20480, converted: false },
+        { id: 'att-x', file_name: '无大小.pdf', url: '/api/files/x', converted: false },
+      ],
+    })
+    getMock('actions/quality-deviation-workbench', 'updateHistoricalDeviation').mockResolvedValue({ id: 'hist-1' })
+    getMock('actions/quality-deviation-workbench', 'aiExtractHistoricalDeviation').mockResolvedValue({
+      id: 'hist-1', code: 'PC-2026-0001', deviation_event: 'AI 事件', direct_cause: 'AI 直接原因', root_cause: 'AI 根因',
+      attachments: [
+        { id: 'att-pdf', file_name: '现场.pdf', url: '/api/files/pdf', file_size: 2 * 1024 * 1024, converted: false },
+        { id: 'att-md', file_name: '调查报告.docx', url: '/api/files/md', file_size: 512, converted: true },
+        { id: 'att-kb', file_name: '旧记录.doc', url: '/api/files/kb', file_size: 20480, converted: false },
+        { id: 'att-x', file_name: '无大小.pdf', url: '/api/files/x', converted: false },
+      ],
+    })
+    getMock('actions/quality-deviation-workbench', 'deleteHistoricalDeviation').mockResolvedValue({ ok: true })
+    getMock('actions/quality-deviation-workbench', 'uploadHistoricalDeviationAttachment').mockResolvedValue({
+      id: 'att-new', file_name: 'template.pdf', url: '/api/files/att-new',
+    })
+    getMock('actions/quality-deviation-workbench', 'batchImportHistoricalDeviations').mockResolvedValue({
+      total: 2, succeeded: 1, failed: 1, results: [{ status: 'failed', file_name: '坏文件.docx' }],
+    })
+    findButton('编辑')?.click()
+    await settle()
+    // 编辑抽屉：详情 + 附件列表 + 操作按钮
+    expect(rendered.container.textContent).toContain('历史偏差 - PC-2026-0001')
+    expect(rendered.container.textContent).toContain('调查报告.docx')
+    findButton('AI 提取')?.click()
+    await settle()
+    findButton('上传附件')?.click()
+    await settle()
+    expect(mocks.message.success).toHaveBeenCalledWith(expect.stringContaining('上传成功'))
+    // 附件在线预览：首个为 PDF（blob 内嵌分支），随后 MD 文本含表格/图片（markdown 组件渲染器分支）
+    vi.stubGlobal('fetch', vi.fn(async (input: string) => {
+      if (String(input).includes('/api/files/pdf')) {
+        return new Response(new Blob(['%PDF-1.4'], { type: 'application/pdf' }), {
+          status: 200, headers: { 'content-type': 'application/pdf' },
+        })
+      }
+      return new Response('# 预览的 Markdown 正文\n\n![图](/api/files/pic.png)\n\n| 项目 | 结果 |\n|---|---|\n| 含量 | 合格 |', {
+        status: 200, headers: { 'content-type': 'text/markdown' },
+      })
+    }))
+    findButton('预览')?.click()
+    await settle()
+    expect(rendered.container.textContent).toContain('附件预览 - 现场.pdf')
+    // 关闭 PDF 预览（Modal onCancel 渲染为“取消”），改预览 MD 附件
+    const dialogCancel = rendered.container.querySelector('[role="dialog"] button')
+    act(() => { dialogCancel?.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    await settle()
+    const mdPreview = Array.from(rendered.container.querySelectorAll('button')).filter((b) => b.textContent?.trim() === '预览')
+    act(() => { mdPreview[1]?.click() })
+    await settle()
+    expect(rendered.container.textContent).toContain('调查报告.docx')
+    expect(rendered.container.textContent).toContain('预览的 Markdown 正文')
+    expect(rendered.container.textContent).toContain('含量')
+    // 抽屉内附件删除（Popconfirm 触发 modal.confirm onOk）
+    const delAttachment = Array.from(rendered.container.querySelectorAll('button')).filter((b) => b.textContent?.trim() === '删除')
+    getMock('actions/quality-deviation-workbench', 'deleteHistoricalDeviationAttachment').mockResolvedValue({ attachments: [] })
+    act(() => { delAttachment[delAttachment.length - 1]?.click() })
+    await settle()
+    expect(getMock('actions/quality-deviation-workbench', 'deleteHistoricalDeviationAttachment')).toHaveBeenCalledWith('hist-1', expect.any(String))
+    findButton('保存')?.click()
+    await settle()
+    expect(getMock('actions/quality-deviation-workbench', 'updateHistoricalDeviation')).toHaveBeenCalled()
+    expect(mocks.message.success).toHaveBeenCalledWith('已保存')
+    // 删除走 modal.confirm（harness 自动执行 onOk）
+    findButton('删除')?.click()
+    await settle()
+    expect(getMock('actions/quality-deviation-workbench', 'deleteHistoricalDeviation')).toHaveBeenCalledWith('hist-1')
+    closeRendered(rendered)
+
+    // 新建模式：暂存附件后保存会先创建记录再逐个上传附件
+    getMock('actions/quality-deviation-workbench', 'createHistoricalDeviation').mockResolvedValue({ id: 'hist-new' })
+    getMock('actions/quality-deviation-workbench', 'uploadHistoricalDeviationAttachment').mockResolvedValue({
+      id: 'att-new2', file_name: 'template.pdf', url: '/api/files/new2',
+    })
+    const createView = renderClient(createElement(DeviationHistoryPage))
+    await settle()
+    const findCreateBtn = (text: string) => Array.from(createView.container.querySelectorAll('button')).find((b) => b.textContent?.includes(text))
+    findCreateBtn('新建历史偏差')?.click()
+    await settle()
+    expect(createView.container.textContent).toContain('新建历史偏差')
+    findCreateBtn('上传附件')?.click()
+    await settle()
+    findCreateBtn('保存')?.click()
+    await settle()
+    expect(getMock('actions/quality-deviation-workbench', 'createHistoricalDeviation')).toHaveBeenCalled()
+    expect(getMock('actions/quality-deviation-workbench', 'uploadHistoricalDeviationAttachment')).toHaveBeenCalledWith(
+      'hist-new',
+      expect.any(FormData),
+    )
+    closeRendered(createView)
+  })
+
+  it('renders deviation workbench list and settings-backed page', async () => {
+    getMock('lib/api/client/quality', 'fetchDeviationWorkbenchReports').mockResolvedValue({
+      items: [{
+        id: 'wb-1', code: 'WB-2026-0001', deviation_summary: '有关键偏差', status: 'completed',
+        created_at: '2026-08-11T03:04:05Z', source_type: 'report_record',
+      }],
+      total: 1,
+    })
+    getMock('lib/api/client/quality', 'fetchDeviationWorkbenchSettings').mockResolvedValue({
+      report_system_prompt: '请以 GMP 视角分析偏差', model_name: 'gpt-test', is_enabled: true,
+    })
+    getMock('lib/api/client/quality', 'fetchFeishuDeviationReportRecords').mockResolvedValue({
+      items: [{ record_id: 'fr-1', deviation_code: 'DEV-9', product_batch: 'B2026', description: '飞书偏差描述' }],
+      total: 1,
+    })
+    getMock('lib/api/client/quality', 'fetchDeviationWorkbenchReport').mockResolvedValue({
+      id: 'wb-1', code: 'WB-2026-0001', status: 'completed', source_type: 'report_record',
+      model_name: 'llm-a', report_md: '# 调查报告\n\n结论内容',
+      context_snapshot: {
+        historical_deviations: [{ code: 'PC-2026-0001', deviation_event: '历史事件', root_cause: '历史根因' }],
+        documents: [{ code: 'SOP-001', name: '偏差管理规程', content: '规程内容' }],
+      },
+      attachments: [{ id: 'att-1', file_name: '现场记录.docx', url: '/api/files/att-1' }],
+    })
+    getMock('actions/quality-deviation-workbench', 'updateDeviationWorkbenchSettings').mockResolvedValue({
+      report_system_prompt: '新提示词', model_name: 'llm-a', is_enabled: true,
+    })
+    getMock('actions/quality-deviation-workbench', 'deleteDeviationWorkbenchReport').mockResolvedValue({ ok: true })
+    getMock('actions/quality-deviation-workbench', 'analyzeDeviationWorkbench').mockResolvedValue({
+      id: 'wb-2', code: 'WB-2026-0002', status: 'completed', source_type: 'manual',
+      report_md: '# 新报告', context_snapshot: {}, attachments: [],
+    })
+    const rendered = renderClient(createElement(DeviationWorkbenchPage, { initialRecordId: null }))
+    await settle()
+    expect(rendered.container.textContent).toContain('WB-2026-0001')
+    expect(rendered.container.textContent).toContain('有关键偏差')
+    // 过滤栏交互：来源/状态下拉切换与搜索框输入触发查询条件更新
+    const wbSelects = Array.from(rendered.container.querySelectorAll('select')) as HTMLSelectElement[]
+    for (const sel of wbSelects.slice(0, 2)) {
+      if (sel.options.length > 1) {
+        act(() => { sel.value = sel.options[1].value; sel.dispatchEvent(new Event('change', { bubbles: true })) })
+      }
+    }
+    const wbSearch = rendered.container.querySelector('input[placeholder*="搜索编号"]') as HTMLInputElement | null
+    act(() => { if (wbSearch) { wbSearch.value = 'WB'; wbSearch.dispatchEvent(new Event('input', { bubbles: true })) } })
+    await settle()
+    const findButton = (text: string) => Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent?.includes(text))
+    findButton('刷新')?.click()
+    await settle()
+    // 详情抽屉：报告正文 / 参考来源 / 附件与预览
+    findButton('查看')?.click()
+    await settle()
+    expect(rendered.container.textContent).toContain('调查报告 - WB-2026-0001')
+    expect(rendered.container.textContent).toContain('参考来源')
+    expect(rendered.container.textContent).toContain('附件（1）')
+    expect(rendered.container.textContent).toContain('现场记录.docx')
+    // 附件预览：AttachmentContent 以原生 fetch 拉取标准 MD 并渲染
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('# 附件预览内容', {
+      status: 200, headers: { 'content-type': 'text/markdown' },
+    })))
+    findButton('预览')?.click()
+    await settle()
+    expect(rendered.container.textContent).toContain('附件预览内容')
+    // 导出按钮存在即可（harness Modal 不触发 afterOpenChange，预览加载链路不在此覆盖）
+    const exportBtn = findButton('导出 Markdown')
+    expect(exportBtn).toBeTruthy()
+    exportBtn?.click()
+    await settle()
+    // 设置抽屉：提示词回填与保存
+    findButton('设置')?.click()
+    await settle()
+    expect(rendered.container.textContent).toContain('偏差工作台设置')
+    findButton('保存')?.click()
+    await settle()
+    expect(getMock('actions/quality-deviation-workbench', 'updateDeviationWorkbenchSettings')).toHaveBeenCalled()
+    // 新建抽屉：上传附件（Upload beforeUpload 拦截）后生成报告
+    findButton('新建偏差工作台')?.click()
+    await settle()
+    expect(rendered.container.textContent).toContain('新建偏差工作台 - 生成调查报告')
+    findButton('上传附件')?.click()
+    await settle()
+    getMock('actions/quality-deviation-workbench', 'uploadDeviationWorkbenchAttachment').mockResolvedValue({
+      id: 'desc-1', file_name: 'template.pdf', storage_key: 'sk-1', asset_keys: [],
+    })
+    findButton('生成调查报告')?.click()
+    await settle()
+    expect(getMock('actions/quality-deviation-workbench', 'analyzeDeviationWorkbench')).toHaveBeenCalled()
+    closeRendered(rendered)
+
+    // 带 initialRecordId 挂载：创建抽屉预选报告记录并回填 prefill
+    getMock('lib/api/client/quality', 'fetchFeishuDeviationReportRecord').mockResolvedValue({
+      record_id: 'fr-1', deviation_code: 'DEV-9', product_batch: 'B2026', description: '飞书偏差描述',
+      attachments: [{ name: '报告.docx', url: 'https://feishu.example/a' }],
+    })
+    const prefilled = renderClient(createElement(DeviationWorkbenchPage, { initialRecordId: 'fr-1' }))
+    await settle()
+    expect(prefilled.container.textContent).toContain('飞书偏差描述')
+    closeRendered(prefilled)
+  })
+
+  it('renders workbench failed/processing report states and delete confirm', async () => {
+    getMock('lib/api/client/quality', 'fetchDeviationWorkbenchReports').mockResolvedValue({
+      items: [
+        { id: 'f1', code: 'WB-F', status: 'failed', created_at: '2026-08-11T00:00:00Z', deviation_summary: '失败样本' },
+        { id: 'p1', code: 'WB-P', status: 'processing', created_at: '2026-08-11T00:00:00Z', deviation_summary: '进行中样本' },
+      ],
+      total: 2,
+    })
+    getMock('lib/api/client/quality', 'fetchDeviationWorkbenchSettings').mockResolvedValue(null)
+    getMock('lib/api/client/quality', 'fetchFeishuDeviationReportRecords').mockResolvedValue({ items: [], total: 0 })
+    getMock('lib/api/client/quality', 'fetchDeviationWorkbenchReport').mockResolvedValue({
+      id: 'f1', code: 'WB-F', status: 'failed', source_type: 'manual', error_message: '模型超时',
+      report_md: '', context_snapshot: {}, attachments: [],
+    })
+    getMock('actions/quality-deviation-workbench', 'deleteDeviationWorkbenchReport').mockResolvedValue({ ok: true })
+    const rendered = renderClient(createElement(DeviationWorkbenchPage, { initialRecordId: null }))
+    await settle()
+    expect(rendered.container.textContent).toContain('失败样本')
+    expect(rendered.container.textContent).toContain('进行中样本')
+    const findButton = (text: string) => Array.from(rendered.container.querySelectorAll('button')).find((b) => b.textContent?.includes(text))
+    findButton('查看')?.click()
+    await settle()
+    expect(rendered.container.textContent).toContain('模型超时')
+    findButton('删除')?.click()
+    await settle()
+    expect(getMock('actions/quality-deviation-workbench', 'deleteDeviationWorkbenchReport')).toHaveBeenCalledWith('f1')
+    closeRendered(rendered)
+
+    // 创建抽屉：手动来源未填内容时拦截；上传失败与关闭清理分支
+    getMock('lib/api/client/quality', 'fetchDeviationWorkbenchReports').mockResolvedValue({ items: [], total: 0 })
+    getMock('lib/api/client/quality', 'fetchDeviationWorkbenchSettings').mockResolvedValue(null)
+    getMock('actions/quality-deviation-workbench', 'analyzeDeviationWorkbench').mockResolvedValue(null)
+    getMock('actions/quality-deviation-workbench', 'uploadDeviationWorkbenchAttachment').mockRejectedValue(new Error('容量超限'))
+    getMock('actions/quality-deviation-workbench', 'deleteDeviationWorkbenchAttachment').mockResolvedValue({ ok: true })
+    const createView = renderClient(createElement(DeviationWorkbenchPage, { initialRecordId: null }))
+    await settle()
+    const cf = (text: string) => Array.from(createView.container.querySelectorAll('button')).find((b) => b.textContent?.includes(text))
+    cf('新建偏差工作台')?.click()
+    await settle()
+    cf('生成调查报告')?.click()
+    await settle()
+    expect(mocks.message.warning).toHaveBeenCalledWith('请手动输入偏差内容或上传附件')
+    cf('上传附件')?.click()
+    await settle()
+    expect(mocks.message.error).toHaveBeenCalledWith('容量超限')
+    // 上传成功 → descriptor 渲染（storage_key → 标准MD 标记）
+    getMock('actions/quality-deviation-workbench', 'uploadDeviationWorkbenchAttachment').mockResolvedValue({
+      id: 'desc-ok', file_name: 'report.pdf', storage_key: 'sk-1', converted_md_key: 'md-1', asset_keys: [],
+    })
+    cf('上传附件')?.click()
+    await settle()
+    expect(mocks.message.success).toHaveBeenCalledWith('上传成功')
+    // 关闭创建抽屉（未生成）→ 未消费附件清理（无 descriptor 时无需 delete）
+    cf('关闭')?.click()
+    await settle()
+    closeRendered(createView)
+  })
+
+  it('renders inspection record modal fields and submits create payload', async () => {
+    getMock('lib/api/client/quality', 'fetchInspectionFeishuFields').mockResolvedValue({
+      fields: [
+        { field_name: '检验编号', ui_type: 'Text', editable: true },
+        { field_name: '结论', ui_type: 'SingleSelect', editable: true },
+        { field_name: '数量', ui_type: 'Number', editable: true },
+        { field_name: '完成日期', ui_type: 'DateTime', editable: true },
+        { field_name: '合格', ui_type: 'Checkbox', editable: true },
+        { field_name: '项目', ui_type: 'MultiSelect', editable: true },
+        { field_name: '来源链接', ui_type: 'Url', editable: true },
+        { field_name: '创建时间', ui_type: 'CreatedTime', editable: false },
+        { field_name: '附件', ui_type: 'Attachment', editable: false },
+      ],
+    })
+    const onSuccess = vi.fn()
+    const onClose = vi.fn()
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, blob: async () => new Blob(['x']) })
+    vi.stubGlobal('fetch', fetchMock)
+    const openMock = vi.fn()
+    vi.stubGlobal('open', openMock)
+    const rendered = renderClient(createElement(InspectionFeishuRecordModal, {
+      open: true, entityCode: 'finish_inspect', mode: 'create',
+      initialValues: {
+        record_id: 'rec-9',
+        '创建时间': '2026-08-12T00:00:00Z',
+        '附件': [{ name: '报告.pdf', url: 'blob:direct', file_token: 'ft-9' }],
+        '数量': '12', '合格': '是', '项目': ['A', 'B'], '来源链接': { link: 'https://x.test', text: '来源' },
+        '完成日期': '2026-08-01',
+      },
+      onClose, onSuccess,
+    }))
+    await settle()
+    expect(rendered.container.textContent).toContain('检验编号')
+    // 只读字段值经 renderReadOnlyValue 渲染（Descriptions mock 以属性承载标题/label）
+    expect(rendered.container.textContent).toContain('2026-08-12T00:00:00Z')
+    // 只读附件点击走后端代理下载（fetch → blob → window.open）
+    const attachmentButton = Array.from(rendered.container.querySelectorAll('button')).find((b) => b.textContent === '报告.pdf')
+    attachmentButton?.click()
+    await settle()
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/quality/inspection/feishu/finish_inspect/records/rec-9/attachments/ft-9/content',
+    )
+    const findButton = (text: string) => Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent?.includes(text))
+    findButton('确定')?.click()
+    await settle()
+    expect(onSuccess).toHaveBeenCalled()
+    expect(onClose).toHaveBeenCalled()
+    closeRendered(rendered)
+
+    // 编辑模式 + 直链附件（无 token）+ 下载失败提示分支
+    getMock('lib/api/client/quality', 'fetchInspectionFeishuFields').mockResolvedValue({
+      fields: [
+        { field_name: '检验编号', ui_type: 'Text', editable: true },
+        { field_name: '直链附件', ui_type: 'Attachment', editable: false },
+        { field_name: '代理附件', ui_type: 'Attachment', editable: false },
+      ],
+      can_push: false,
+    })
+    getMock('actions/quality-inspection', 'updateInspectionFeishuRecord').mockResolvedValue({ record_id: 'r1' })
+    const failFetch = vi.fn().mockResolvedValue({
+      ok: false, status: 403, json: async () => ({ message: '附件未授权' }),
+    })
+    vi.stubGlobal('fetch', failFetch)
+    const editView = renderClient(createElement(InspectionFeishuRecordModal, {
+      open: true, entityCode: 'finish', mode: 'edit',
+      initialValues: {
+        record_id: 'r1', '检验编号': 'JY-7',
+        '直链附件': [{ name: '直链.pdf', url: 'https://files.example/d.pdf' }],
+        '代理附件': [{ name: '代理.pdf', url: 'blob:x', file_token: 'ft-e' }],
+      },
+      onClose: vi.fn(), onSuccess: vi.fn(),
+    }))
+    await settle()
+    expect(editView.container.textContent).toContain('编辑记录')
+    const directBtn = Array.from(editView.container.querySelectorAll('button')).find((b) => b.textContent === '直链.pdf')
+    await act(async () => { directBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    const proxyBtn = Array.from(editView.container.querySelectorAll('button')).find((b) => b.textContent === '代理.pdf')
+    await act(async () => { proxyBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    await settle()
+    // 代理附件下载失败：错误文案透传（内部 message 为 App.useApp 桩）
+    expect(mocks.message.error).toHaveBeenCalledWith('附件未授权')
+    const okEdit = Array.from(editView.container.querySelectorAll('button')).find((b) => b.textContent?.includes('确定'))
+    await act(async () => { okEdit?.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    await settle()
+    expect(getMock('actions/quality-inspection', 'updateInspectionFeishuRecord')).toHaveBeenCalledWith(
+      'finish', 'r1', expect.objectContaining({ 检验编号: 'JY-7' }),
+    )
+    closeRendered(editView)
+  })
+})
+
+describe('department contact / inspection table / picker / attachment preview coverage', () => {
+  beforeEach(() => {
+    vi.resetAllMocks()
+    mocks.permissionAllowed = true
+    localStorage.clear()
+    window.URL.createObjectURL = vi.fn(() => 'blob:test')
+    window.URL.revokeObjectURL = vi.fn()
+  })
+
+  afterEach(() => {
+    document.body.replaceChildren()
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  it('renders department contacts table and opens edit modal', async () => {
+    const items = [{
+      id: 'c1', name: '张三', avatar_url: null, bitable_user_id: null, department: '质量部',
+      enterprise_email: 'z@liv.com', open_id: 'ou-1', department_head_name: '李四',
+      department_head_avatar_url: null, department_head_bitable_user_id: null,
+      department_head_enterprise_email: 'l@liv.com', department_head_open_id: 'ou-2',
+      feishu_record_id: 'r-1', created_at: '2026-08-01', updated_at: '2026-08-02',
+    }]
+    const rendered = renderClient(createElement(DepartmentContactPage, {
+      items, total: 1, page: 1, pageSize: 20, activeDepartment: '', departmentOptions: ['质量部'],
+    }))
+    await settle()
+    expect(rendered.container.textContent).toContain('张三')
+    expect(rendered.container.textContent).toContain('李四')
+    const findButton = (text: string) => Array.from(rendered.container.querySelectorAll('button')).find((b) => b.textContent?.includes(text))
+    getMock('lib/api/client/hr', 'fetchHrMembers').mockResolvedValue([{ open_id: 'ou-9', name: '王五', avatar_url: null }])
+    findButton('修改')?.click()
+    await settle()
+    expect(rendered.container.querySelector('[role="dialog"]')).toBeTruthy()
+    // 编辑弹窗确定 → 飞书同步保存
+    getMock('actions/quality', 'updateDepartmentContactFeishu').mockResolvedValue({ id: 'c1' })
+    findButton('确定')?.click()
+    await settle()
+    expect(getMock('actions/quality', 'updateDepartmentContactFeishu')).toHaveBeenCalledWith(
+      'c1',
+      expect.objectContaining({ department: '质量部' }),
+    )
+    expect(mocks.message.success).toHaveBeenCalledWith('部门联系人已更新')
+    closeRendered(rendered)
+  })
+
+  it('renders inspection feishu table rows via list api and pull action', async () => {
+    getMock('lib/api/client/quality', 'fetchInspectionFeishuFields').mockResolvedValue({
+      fields: [{ field_name: '检验编号', ui_type: 'Text', editable: true }], can_push: true,
+    })
+    vi.stubGlobal('fetch', vi.fn(async (input: string) => {
+      if (String(input).includes('/records')) {
+        return new Response(JSON.stringify({ data: [{ record_id: 'x1', 检验编号: 'JY-1' }], meta: { total: 1, configured: true, fields: ['检验编号'], display_fields: ['检验编号'] } }), { status: 200, headers: { 'content-type': 'application/json' } })
+      }
+      return new Response(JSON.stringify({ data: [], meta: { total: 0, configured: true, fields: [], display_fields: [] } }), { status: 200, headers: { 'content-type': 'application/json' } })
+    }))
+    getMock('actions/quality-inspection', 'pullInspectionFeishuRecords').mockResolvedValue({ synced: 1, failed: 0 })
+    const rendered = renderClient(createElement(InspectionFeishuTable, {
+      title: '成品检验', listApi: '/api/v1/quality/inspection/feishu/finish/records',
+      pullApi: '/api/v1/quality/inspection/feishu/finish/pull', entityCode: 'finish', editable: true,
+    }))
+    await settle()
+    expect(rendered.container.textContent).toContain('成品检验')
+    expect(rendered.container.textContent).toContain('JY-1')
+    closeRendered(rendered)
+  })
+
+  it('renders document catalog picker with departments and entries', async () => {
+    getMock('lib/api/client/quality', 'fetchDocumentDepartments').mockResolvedValue([
+      { id: 'd1', name: '质量管理部' },
+    ])
+    getMock('lib/api/client/quality', 'fetchDocumentEntries').mockResolvedValue({
+      items: [{ id: 'e1', code: 'SOP-1', name: '偏差管理规程', version: 'V1', category: 'S' }], total: 1,
+    })
+    const onConfirm = vi.fn()
+    const onClose = vi.fn()
+    const rendered = renderClient(createElement(DocumentCatalogPickerModal, {
+      open: true, onClose, onConfirm, excludeNames: ['已选文件'],
+    }))
+    await settle()
+    expect(rendered.container.textContent).toContain('偏差管理规程')
+    // 关键字搜索触发重新分页拉取
+    const searchInput = rendered.container.querySelector('input[placeholder="搜索文件名称/编码"]') as HTMLInputElement | null
+    act(() => {
+      if (searchInput) {
+        searchInput.value = '规程'
+        searchInput.dispatchEvent(new Event('input', { bubbles: true }))
+      }
+    })
+    await settle()
+    expect(getMock('lib/api/client/quality', 'fetchDocumentEntries')).toHaveBeenCalledWith(
+      expect.objectContaining({ keyword: '规程' }),
+    )
+    // 勾选条目（Table mock 行点击触发 rowSelection.onChange）后确认录入
+    const row = Array.from(rendered.container.querySelectorAll('tr')).find((tr) => tr.textContent?.includes('偏差管理规程'))
+    act(() => { row?.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    await settle()
+    // harness Modal 固定渲染“取消/确定”，onOk 即确认录入
+    findBtn(rendered, '确定')?.click()
+    await settle()
+    expect(onConfirm).toHaveBeenCalled()
+    closeRendered(rendered)
+
+    // 部门/条目加载失败 → 各自 catch 降级分支
+    getMock('lib/api/client/quality', 'fetchDocumentDepartments').mockRejectedValue(new Error('500'))
+    getMock('lib/api/client/quality', 'fetchDocumentEntries').mockRejectedValue(new Error('500'))
+    const failView = renderClient(createElement(DocumentCatalogPickerModal, {
+      open: true, onClose: vi.fn(), onConfirm: vi.fn(),
+    }))
+    await settle()
+    expect(failView.container.textContent).toContain('从文件管理选择培训内容')
+    closeRendered(failView)
+  })
+
+  it('drives inspection table detail/edit/delete/pull and unconfigured banner', async () => {
+    getMock('lib/api/client/quality', 'fetchInspectionFeishuFields').mockResolvedValue({
+      fields: [{ field_name: '检验编号', ui_type: 'Text', editable: true }], can_push: false,
+    })
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      data: [{ record_id: 'x1', 检验编号: 'JY-1' }],
+      meta: { total: 1, configured: true, fields: ['检验编号'], display_fields: ['检验编号'] },
+    }), { status: 200, headers: { 'content-type': 'application/json' } })))
+    getMock('actions/quality-inspection', 'deleteInspectionFeishuRecord').mockResolvedValue({ record_id: 'x1' })
+    getMock('actions/quality-inspection', 'pullInspectionFeishuRecords').mockResolvedValue({ synced: 2, failed: 0 })
+    const rendered = renderClient(createElement(InspectionFeishuTable, {
+      title: '物料检验', listApi: '/api/v1/quality/inspection/feishu/material/records',
+      pullApi: '/api/v1/quality/inspection/feishu/material/pull', entityCode: 'material', editable: true,
+    }))
+    await settle()
+    const findButton = (text: string) => Array.from(rendered.container.querySelectorAll('button')).find((b) => b.textContent?.includes(text))
+    findButton('详情')?.click()
+    await settle()
+    findButton('编辑')?.click()
+    await settle()
+    expect(rendered.container.textContent).toContain('编辑记录')
+    findButton('确定')?.click()
+    await settle()
+    findButton('删除')?.click()
+    await settle()
+    expect(getMock('actions/quality-inspection', 'deleteInspectionFeishuRecord')).toHaveBeenCalledWith('material', 'x1')
+    findButton('同步飞书数据')?.click()
+    await settle()
+    expect(getMock('actions/quality-inspection', 'pullInspectionFeishuRecords')).toHaveBeenCalledWith('material')
+    closeRendered(rendered)
+
+    // 未配置态：Alert + 空态错误分支
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      data: [], meta: { total: 0, configured: false, fields: [], display_fields: [] },
+    }), { status: 200, headers: { 'content-type': 'application/json' } })))
+    const unconfigured = renderClient(createElement(InspectionFeishuTable, {
+      title: '成品检验', listApi: '/api/v1/quality/inspection/feishu/finish/records', entityCode: 'finish',
+    }))
+    // 查询 promise 链需多轮 flush 才能把 configured:false 落到 queryData
+    await settle(); await settle(); await settle()
+    expect(unconfigured.container.textContent).toContain('飞书数据源未配置')
+    closeRendered(unconfigured)
+  })
+
+  it('renders esg training report table with records and filter options', async () => {
+    getMock('lib/api/hr', 'fetchEsgRecordsByDept').mockResolvedValue({
+      data: [{
+        id: 'esg-1', training_date: '2026-08-05', training_name: 'GMP 年度培训', training_method: '线上',
+        caliber: '集团', training_type: '质量培训', employee_name: '张三', employee_account: 'zhangsan',
+        department: '质量部', employee_level: 'P4', gender: '男', age: 30, duration: 2,
+        apply_company: '公司A', apply_company_no: 'AC-1', remarks: '备注',
+      }],
+      meta: { total: 1 },
+    })
+    getMock('lib/api/hr', 'fetchEsgFilterOptions').mockResolvedValue({ training_type: ['质量培训'] })
+    const rendered = renderClient(createElement(EsgTrainingReportClient, {
+      department: '质量部', dateFrom: '2026-08-01', dateTo: '2026-08-31', periodLabel: '8 月', printRequest: 0,
+    }))
+    await settle()
+    expect(rendered.container.textContent).toContain('GMP 年度培训')
+    expect(rendered.container.textContent).toContain('张三')
+    closeRendered(rendered)
+
+    // printRequest>0 触发 doPrint：拉全量 → 新窗口写打印页
+    const fakeWindow = {
+      document: { write: vi.fn(), close: vi.fn() },
+      focus: vi.fn(),
+      print: vi.fn(),
+    }
+    vi.stubGlobal('open', vi.fn(() => fakeWindow))
+    const printView = renderClient(createElement(EsgTrainingReportClient, {
+      department: '质量部', dateFrom: '2026-08-01', dateTo: '2026-08-31', periodLabel: '8 月', printRequest: 1,
+    }))
+    await settle()
+    expect(fakeWindow.document.write).toHaveBeenCalledWith(expect.stringContaining('GMP 年度培训'))
+    expect(fakeWindow.print).toHaveBeenCalled()
+    closeRendered(printView)
+
+    // 浏览器拦截弹窗 → 错误提示分支
+    vi.stubGlobal('open', vi.fn(() => null))
+    const blockedView = renderClient(createElement(EsgTrainingReportClient, {
+      department: '质量部', dateFrom: '', dateTo: '', periodLabel: '', printRequest: 1,
+    }))
+    await settle()
+    expect(mocks.message.error).toHaveBeenCalledWith('浏览器拦截了弹出窗口，请允许后重试')
+    closeRendered(blockedView)
+  })
+
+  it('renders onboarding attachment preview for a pdf blob', async () => {
+    const onClose = vi.fn()
+    const blob = new Blob(['%PDF-1.4'], { type: 'application/pdf' })
+    const rendered = renderClient(createElement(OnboardingAttachmentPreviewModal, {
+      open: true, fileName: 'report.pdf', blob, onClose,
+    }))
+    await settle()
+    expect(rendered.container.textContent).toContain('report.pdf')
+    // iframe 承载 PDF 预览
+    expect(rendered.container.querySelector('iframe')).toBeTruthy()
+    closeRendered(rendered)
+  })
+
+  it('degrades legacy .doc and reports spreadsheet parse failures', async () => {
+    // 老 .doc：mammoth 不支持 → 降级为 other，不报错
+    const docView = renderClient(createElement(OnboardingAttachmentPreviewModal, {
+      open: true, fileName: 'legacy.doc', blob: new Blob(['x']), onClose: vi.fn(),
+    }))
+    await settle()
+    expect(docView.container.textContent).toContain('legacy.doc')
+    closeRendered(docView)
+
+    // .xlsx 内容解析分支（XLSX.read → sheet_to_json 渲染表格或降级）
+    const xlsxView = renderClient(createElement(OnboardingAttachmentPreviewModal, {
+      open: true, fileName: 'data.xlsx', blob: new Blob(['not-a-xlsx']), onClose: vi.fn(),
+    }))
+    await settle()
+    expect(xlsxView.container.textContent).toContain('预览 - data.xlsx')
+    closeRendered(xlsxView)
+
+    // CSV UTF-8 文本解析路径
+    const csvView = renderClient(createElement(OnboardingAttachmentPreviewModal, {
+      open: true, fileName: 'list.csv', blob: new Blob(['姓名,部门\n张三,质量部'], { type: 'text/csv' }), onClose: vi.fn(),
+    }))
+    await settle()
+    expect(csvView.container.textContent).toContain('预览 - list.csv')
+    closeRendered(csvView)
+
+    // 空 blob 直接返回，不渲染内容分支
+    const emptyView = renderClient(createElement(OnboardingAttachmentPreviewModal, {
+      open: true, fileName: 'missing.bin', blob: null, onClose: vi.fn(),
+    }))
+    await settle()
+    expect(emptyView.container.textContent).toContain('missing.bin')
+    closeRendered(emptyView)
+  })
+})
+
+describe('sidebar navigation / onboarding attachment flow / validation audit shell', () => {
+  beforeEach(() => {
+    vi.resetAllMocks()
+    mocks.permissionAllowed = true
+    localStorage.clear()
+    window.URL.createObjectURL = vi.fn(() => 'blob:test')
+    window.URL.revokeObjectURL = vi.fn()
+  })
+
+  afterEach(() => {
+    document.body.replaceChildren()
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  it('navigates parent menu labels with a landing path without toggling collapse', async () => {
+    const modules = [{
+      key: 'migration', moduleCode: 'quality', label: '迁移模块', icon: 'appstore', path: '/migration',
+      children: [
+        {
+          key: 'dash', label: '仓储仪表盘', path: '/migration/dash',
+          children: [{ key: 'dash-detail', label: '仪表盘明细', path: '/migration/dash/detail' }],
+        },
+        { key: 'cfg', label: '模块设置', path: '/migration/cfg', placement: 'bottom' as const, adminOnly: true },
+      ],
+    }]
+    const rendered = renderClient(createElement(Sidebar, {
+      user: { role: 'admin', name: '管理员' } as never, modules: modules as never,
+    }))
+    await settle()
+    expect(rendered.container.textContent).toContain('仓储仪表盘')
+    expect(rendered.container.textContent).toContain('模块设置')
+    // 带 path 的父级点击标签直接导航到落地页（span 的 stopPropagation 阻止展开切换）；
+    // 叶子路径经 Menu onClick→keyPathMap 的分支在简化 Menu mock 下不渲染子层级，不在此覆盖
+    const parentLabel = Array.from(rendered.container.querySelectorAll('span'))
+      .find((s) => s.textContent === '仓储仪表盘')
+    expect(parentLabel).toBeTruthy()
+    // React onMouseEnter 由原生 mouseover 合成，触发预取回调（Sidebar 66 行）
+    act(() => { parentLabel?.dispatchEvent(new MouseEvent('mouseover', { bubbles: true })) })
+    act(() => { parentLabel?.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    expect(mocks.router.push).toHaveBeenCalledWith('/migration/dash')
+    closeRendered(rendered)
+  })
+
+  it('opens onboarding attachment preview modal from list row', async () => {
+    getMock('lib/api/client/hr', 'fetchOnboardingList').mockResolvedValue({
+      data: [{
+        id: 'ob-1', name: '张三', department: '生产部', position: '操作员',
+        onboarding_date: '2026-08-20', status: '进行中',
+        resignation_attachment: [
+          { file_token: 'ft-pdf', name: '离职证明.pdf' },
+          { name: '直链.docx', url: 'https://files.example/d.docx' },
+          { name: '坏附件.bin' },
+          { file_token: 'ft-png', name: '照片.png' },
+        ],
+        id_attachment: [], education_attachment: [], other_attachment: [],
+      }],
+      total: 1,
+    })
+    getMock('lib/api/client/hr', 'fetchDepartments').mockResolvedValue({ data: [] })
+    getMock('lib/api/client/hr', 'fetchJobPostings').mockResolvedValue({ data: [] })
+    getMock('lib/api/client/hr', 'fetchOnboardingAttachmentContent').mockResolvedValue(
+      new Blob(['%PDF-1.4'], { type: 'application/pdf' }),
+    )
+    const openMock = vi.fn()
+    vi.stubGlobal('open', openMock)
+    const rendered = renderClient(createElement(OnboardingManagementPage))
+    await settle()
+    expect(rendered.container.textContent).toContain('张三')
+    const clickText = async (text: string) => {
+      const el = Array.from(rendered.container.querySelectorAll('span, button, a')).find((e) => e.textContent === text)
+      await act(async () => { el?.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+      await settle()
+    }
+    // 带 token PDF → 预览弹窗
+    await clickText('离职证明.pdf')
+    expect(rendered.container.textContent).toContain('预览 - 离职证明.pdf')
+    // 关闭预览
+    await act(async () => {
+      Array.from(rendered.container.querySelectorAll('button')).find((b) => b.textContent === '取消')?.click()
+    })
+    // 无 token 有直链 → 新标签打开
+    await clickText('直链.docx')
+    expect(openMock).toHaveBeenCalledWith('https://files.example/d.docx', '_blank')
+    // 无 token 无直链 → 警告
+    await clickText('坏附件.bin')
+    expect(mocks.message.warning).toHaveBeenCalledWith('附件无下载地址')
+    closeRendered(rendered)
+
+    // 编辑详情加载失败 → 错误提示
+    const editFailView = renderClient(createElement(OnboardingManagementPage))
+    await settle()
+    getMock('lib/api/client/hr', 'fetchOnboardingById').mockRejectedValue(new Error('详情接口 500'))
+    const editBtn = Array.from(editFailView.container.querySelectorAll('button')).find((b) => b.textContent === '编辑')
+    await act(async () => { editBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    await settle()
+    expect(mocks.message.error).toHaveBeenCalledWith('详情接口 500')
+    closeRendered(editFailView)
+
+    // 编辑成功 → 保存 → 删除 流
+    getMock('lib/api/client/hr', 'fetchOnboardingById').mockResolvedValue({
+      data: {
+        id: 'ob-1', name: '张三', department: '生产部',
+        resignation_attachment: [{ file_token: 'ft-pdf', name: '离职证明.pdf' }],
+        id_attachment: [], education_attachment: [], other_attachment: [],
+      },
+    })
+    getMock('actions/hr', 'updateOnboardingAction').mockResolvedValue({ code: 200, message: 'ok' })
+    getMock('actions/hr', 'deleteOnboardingAction').mockResolvedValue({ code: 200, message: 'ok' })
+    const editView = renderClient(createElement(OnboardingManagementPage))
+    await settle()
+    const findIn = (view: HTMLDivElement, text: string) =>
+      Array.from(view.querySelectorAll('button')).find((b) => b.textContent === text)
+    await act(async () => { findIn(editView.container, '编辑')?.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    await settle()
+    await act(async () => { findIn(editView.container, '确定')?.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    await settle()
+    await act(async () => { findIn(editView.container, '删除')?.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    await settle()
+    closeRendered(editView)
+  })
+
+  it('mounts validation audit list and new shells with empty state', async () => {
+    getMock('lib/api/validation-audit', 'fetchValidationAuditTasks').mockResolvedValue({ items: [], total: 0 })
+    const list = renderClient(createElement(ValidationAuditListClient, { initialTasks: [], initialTotal: 0 }))
+    await settle()
+    expect(list.container.textContent).toContain('验证')
+    closeRendered(list)
+
+    const form = renderClient(createElement(ValidationAuditNewClient))
+    await settle()
+    expect(form.container.textContent).toContain('验证')
+    closeRendered(form)
+  })
+
+  it('drives validation audit list row actions and new task navigation', async () => {
+    const task = {
+      id: 'vt-1', task_name: '无菌工艺验证审核', product_name: '产品S', source_company: '101 车间',
+      audit_mode: 'protocol', status: 'completed', conclusion: 'pass',
+      serious_count: 0, general_count: 2, suggestion_count: 1, created_at: '2026-08-01',
+    }
+    getMock('lib/api/validation-audit', 'fetchValidationAuditTasks').mockResolvedValue({ items: [task], total: 1 })
+    getMock('actions/validation-audit', 'deleteValidationAuditTask').mockResolvedValue({ ok: true })
+    const rendered = renderClient(createElement(ValidationAuditListClient, { initialTasks: [task], initialTotal: 1 } as never))
+    await settle()
+    expect(rendered.container.textContent).toContain('无菌工艺验证审核')
+    const findButton = (text: string) => Array.from(rendered.container.querySelectorAll('button')).find((b) => b.textContent?.includes(text))
+    findButton('查看')?.click()
+    expect(mocks.router.push).toHaveBeenCalledWith('/registration/validation-audit/vt-1')
+    findButton('新建审核任务')?.click()
+    expect(mocks.router.push).toHaveBeenCalledWith('/registration/validation-audit/new')
+    findButton('删除')?.click()
+    await settle()
+    expect(getMock('actions/validation-audit', 'deleteValidationAuditTask')).toHaveBeenCalledWith('vt-1')
+    closeRendered(rendered)
+  })
+
+  it('renders docx preview with chapter fetch and download callback', async () => {
+    getMock('lib/api/dossier-writer-client', 'fetchChapterDocx').mockResolvedValue(new ArrayBuffer(64))
+    const onDownload = vi.fn()
+    const rendered = renderClient(createElement(DocxPreview, {
+      chapterId: 'ch-1', chapterTitle: '第五章 分析方法', onDownload, refreshKey: 0,
+    }))
+    await settle()
+    expect(rendered.container.textContent).toContain('第五章 分析方法')
+    const dl = Array.from(rendered.container.querySelectorAll('button')).find((b) => b.textContent?.trim() === '下载')
+    expect(dl).toBeTruthy()
+    dl?.click()
+    expect(onDownload).toHaveBeenCalled()
+    closeRendered(rendered)
+
+    // 无 chapterId 时渲染引导空态
+    const emptyView = renderClient(createElement(DocxPreview, { chapterId: null }))
+    await settle()
+    expect(emptyView.container.textContent).toContain('请从左侧目录选择一个章节')
+    closeRendered(emptyView)
+  })
+
+  it('renders validation audit detail with files, issues and report', async () => {
+    const task = {
+      id: 't1', task_name: 'X 制剂工艺验证审核', product_name: '产品X', method_name: 'HPLC',
+      source_company: '质量部', audit_mode: 'protocol', status: 'completed', conclusion: 'pass',
+      risk_level: '低', serious_count: 0, general_count: 1, suggestion_count: 0,
+      compliant_count: 5, non_compliant_count: 1, report_path: null,
+      created_at: '2026-08-01', updated_at: '2026-08-02',
+    }
+    const files = [{
+      id: 'f1', file_type: 'protocol', original_filename: '方案.docx', file_size: 10240,
+      parse_status: 'parsed', created_at: '2026-08-01',
+    }]
+    const issues = [{
+      id: 'i1', task_id: 't1', file_id: 'f1', issue_no: 'ISS-1', dimension: '方法学',
+      check_item: '专属性', description: '缺少强制降解描述', suggestion: '补充降解条件',
+      issue_type: 'general', page_no: 3, evidence_text: '……', created_at: '2026-08-01',
+    }]
+    const report = {
+      id: 'r1', task_id: 't1', report_title: '审核报告', report_markdown: '# 审核结论\n\n通过',
+      report_file_path: null, version: 1, created_at: '2026-08-02',
+    }
+    getMock('lib/api/validation-audit', 'fetchValidationAuditTaskById').mockResolvedValue({ data: task })
+    getMock('lib/api/validation-audit', 'fetchValidationAuditFiles').mockResolvedValue({ data: files })
+    getMock('lib/api/validation-audit', 'fetchValidationAuditIssues').mockResolvedValue({ data: issues })
+    getMock('lib/api/validation-audit', 'fetchValidationAuditReport').mockResolvedValue({ data: report })
+    const rendered = renderClient(createElement(ValidationAuditDetailClient, {
+      task, initialFiles: files, initialIssues: issues, initialReport: report,
+    } as never))
+    await settle()
+    expect(rendered.container.textContent).toContain('X 制剂工艺验证审核')
+    expect(rendered.container.textContent).toContain('方案.docx')
+    expect(rendered.container.textContent).toContain('缺少强制降解描述')
+    closeRendered(rendered)
+  })
+
+  it('opens document catalog picker from sign-in tab and merges selection', async () => {
+    getMock('lib/api/client/quality', 'fetchDocumentDepartments').mockResolvedValue([{ id: 'd1', name: '质量部' }])
+    getMock('lib/api/client/quality', 'fetchDocumentEntries').mockResolvedValue({
+      items: [{ id: 'e1', code: 'SOP-2', name: '洁净区规程', version: 'V1', category: 'S' }], total: 1,
+    })
+    getMock('actions/quality', 'resolveDocumentEntryContent').mockResolvedValue([
+      { name: '洁净区规程', code: 'SOP-2' },
+    ])
+    const rendered = renderClient(createElement(TrainingSignInTabsClient))
+    await settle()
+    findBtn(rendered, '从文件管理选择')?.click()
+    await settle()
+    // 空勾选确认：直接关闭分支
+    findBtn(rendered, '确定')?.click()
+    await settle()
+    // 重新打开并勾选条目确认：解析编码合并进培训内容
+    findBtn(rendered, '从文件管理选择')?.click()
+    await settle()
+    const row = Array.from(rendered.container.querySelectorAll('tr')).find((tr) => tr.textContent?.includes('洁净区规程'))
+    act(() => { row?.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    await settle()
+    findBtn(rendered, '确定')?.click()
+    await settle()
+    expect(mocks.message.success).toHaveBeenCalledWith(expect.stringContaining('已从文件管理选择'))
+    expect(rendered.container.textContent).toContain('《洁净区规程》')
+    closeRendered(rendered)
+  })
+})
+
+function findBtn(rendered: { container: HTMLDivElement }, text: string) {
+  return Array.from(rendered.container.querySelectorAll('button')).find((b) => b.textContent?.includes(text))
+}

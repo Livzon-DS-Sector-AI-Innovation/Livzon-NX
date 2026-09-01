@@ -32,5 +32,7 @@ export function maskMiddle(v?: string | null, keepHead = 4, keepTail = 0): strin
   const s = (v || '').trim()
   if (!s) return '-'
   if (s.length <= keepHead + keepTail) return s
-  return `${s.slice(0, keepHead)}${'*'.repeat(Math.min(6, s.length - keepHead - keepTail))}${s.slice(-keepTail)}`
+  // keepTail=0 时 slice(-0) 等价 slice(0)，会把原文整体回显，须显式置空
+  const tail = keepTail > 0 ? s.slice(-keepTail) : ''
+  return `${s.slice(0, keepHead)}${'*'.repeat(Math.min(6, s.length - keepHead - keepTail))}${tail}`
 }
