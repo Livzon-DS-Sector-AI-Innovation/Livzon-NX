@@ -3,6 +3,7 @@
 import logging
 from datetime import UTC, datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +14,10 @@ from app.modules.hr.feishu_settings_service import (
 )
 from app.modules.hr.models import ContractManagement, HrFeishuEntitySetting
 from app.platform.integrations.feishu.bitable import BitableClient, _to_ms_timestamp
+
+# 飞书日期字段为用户时区（东八区）语义；按系统本地时区解析会在
+# UTC 运行环境（CI/生产容器）把跨零点的时刻少算一天
+_CHINA_TIMEZONE = ZoneInfo("Asia/Shanghai")
 
 logger = logging.getLogger(__name__)
 
@@ -426,7 +431,7 @@ class ContractSyncService:
                 val = str(val)
             # 飞书日期字段返回毫秒时间戳，需要转成 date 对象
             if local_key in date_fields and isinstance(val, (int, float)):
-                val = dt.fromtimestamp(val / 1000).date()
+                val = dt.fromtimestamp(val / 1000, tz=_CHINA_TIMEZONE).date()
             result[local_key] = val
 
         return result
