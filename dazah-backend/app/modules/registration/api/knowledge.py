@@ -1,5 +1,6 @@
 """Registration knowledge API routes."""
 
+import asyncio
 import logging
 import uuid
 from typing import Any
@@ -295,8 +296,13 @@ async def upload_attachment(
     content_type = sniff_upload_mime(safe_name, file_content)
     object_key = f"knowledge/{article_id}/{uuid4().hex}_{safe_name}"
     try:
-        storage.upload_object(
-            "registration", object_key, file_content, len(file_content), content_type
+        await asyncio.to_thread(
+            storage.upload_object,
+            "registration",
+            object_key,
+            file_content,
+            len(file_content),
+            content_type,
         )
     except Exception:
         logger.exception(
@@ -358,8 +364,12 @@ async def preview_attachment(
     _require_user(current_user)
     from fastapi import Response
 
-    attachment = await RegistrationKnowledgeService(db).get_attachment(attachment_id)
-    obj = storage.get_object("registration", attachment.file_path)
+    attachment = await RegistrationKnowledgeService(db).get_attachment_model(
+        attachment_id
+    )
+    obj = await asyncio.to_thread(
+        storage.get_object, "registration", attachment.file_path
+    )
     if obj is None:
         raise NotFoundException("附件文件")
     data, content_type = obj
@@ -382,13 +392,19 @@ async def delete_attachment(
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     _require_user(current_user)
-    attachment = await RegistrationKnowledgeService(db).get_attachment(attachment_id)
+    attachment = await RegistrationKnowledgeService(db).get_attachment_model(
+        attachment_id
+    )
     stored_object: tuple[bytes, str] | None = None
     if storage.is_enabled():
         try:
-            stored_object = storage.get_object("registration", attachment.file_path)
+            stored_object = await asyncio.to_thread(
+                storage.get_object, "registration", attachment.file_path
+            )
             # 先删除对象；数据库失败时下面用原内容恢复，避免留下已删除记录或断链。
-            storage.delete_object("registration", attachment.file_path)
+            await asyncio.to_thread(
+                storage.delete_object, "registration", attachment.file_path
+            )
         except Exception as exc:
             logger.exception(
                 "删除附件存储对象失败: object_key=%s", attachment.file_path
@@ -403,7 +419,8 @@ async def delete_attachment(
         if storage.is_enabled() and stored_object is not None:
             try:
                 data, content_type = stored_object
-                storage.upload_object(
+                await asyncio.to_thread(
+                    storage.upload_object,
                     "registration",
                     attachment.file_path,
                     data,
@@ -439,6 +456,7 @@ async def extract_article_from_file(
     task_id = await jobs.submit_job(
         _extract_article_task,
         ttl=600,
+        status_extra={"owner": str(current_user.id)},
         file_name=safe_name,
         content_type=sniff_upload_mime(safe_name, file_content),
         file_content=file_content,
@@ -460,6 +478,7 @@ async def summarize_attachment(
     task_id = await jobs.submit_job(
         _summarize_attachment_task,
         ttl=600,
+        status_extra={"owner": str(current_user.id)},
         attachment_id=attachment_id,
     )
     return success_response(
@@ -476,6 +495,10 @@ async def get_task_status(
     job = await jobs.get_job_status(task_id)
     if job is None:
         raise AppException(message="任务不存在或已过期", status_code=404)
+    # 归属校验：任务结果（可能含文档内容）仅提交人可查看
+    owner = str(job.get("owner") or "")
+    if owner and owner != str(current_user.id):
+        raise AppException(message="无权查看该任务", status_code=403)
     # 适配前端轮询契约：{task_id, status:
     # pending/running/completed/failed,
     # result?, error?}

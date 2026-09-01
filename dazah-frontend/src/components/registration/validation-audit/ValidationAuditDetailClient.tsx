@@ -1,7 +1,5 @@
 'use client'
 
- 'use client'
-
 import { useState, useCallback, useEffect, type JSX } from 'react'
 import {
   Button, Space, Tag, App, Card, Descriptions, Upload, Select, Empty,
@@ -103,6 +101,11 @@ export default function ValidationAuditDetailClient({
     : issues.filter(i => i.issue_type === issueFilter)
 
   const [uploadFileList, setUploadFileList] = useState<any[]>([])
+  // 联合审核模式下补传文件需明确类型（后端按该类型解析与审核）；
+  // 单模式任务的类型由任务模式唯一确定，不展示选择器。
+  const [uploadFileType, setUploadFileType] = useState<'protocol' | 'report'>(
+    task.audit_mode === 'report' ? 'report' : 'protocol'
+  )
 
   const handleUpload = async () => {
     if (uploadFileList.length === 0) {
@@ -115,46 +118,52 @@ export default function ValidationAuditDetailClient({
       const originFile = file.originFileObj || file
       formData.append('files', originFile)
     }
-    formData.append('file_type', task.audit_mode === 'report' ? 'report' : 'protocol')
+    formData.append('file_type', uploadFileType)
 
     setUploading(true)
-    const result = await uploadValidationAuditFiles(task.id, formData)
-    setUploading(false)
-
-    if (result.success) {
-      message.success('文件上传成功')
-      setUploadFileList([])
-      // Refresh data from backend
-      await refreshData()
-    } else {
-      message.error(result.message)
+    try {
+      const result = await uploadValidationAuditFiles(task.id, formData)
+      if (result.success) {
+        message.success('文件上传成功')
+        setUploadFileList([])
+        await refreshData()
+      } else {
+        message.error(result.message)
+      }
+    } finally {
+      setUploading(false)
     }
+
   }
 
   const handleParse = async () => {
     setParsing(true)
-    const result = await parseValidationAuditFiles(task.id)
-    if (result.success) {
-      message.success('文件解析完成')
-      // Refresh data from backend
-      await refreshData()
-    } else {
-      message.error(result.message)
+    try {
+      const result = await parseValidationAuditFiles(task.id)
+      if (result.success) {
+        message.success('文件解析完成')
+        await refreshData()
+      } else {
+        message.error(result.message)
+      }
+    } finally {
+      setParsing(false)
     }
-    setParsing(false)
   }
 
   const handleAudit = async () => {
     setAuditing(true)
-    const result = await runValidationAudit(task.id)
-    if (result.success) {
-      message.success('审核完成')
-      // Refresh data from backend
-      await refreshData()
-    } else {
-      message.error(result.message)
+    try {
+      const result = await runValidationAudit(task.id)
+      if (result.success) {
+        message.success('审核完成')
+        await refreshData()
+      } else {
+        message.error(result.message)
+      }
+    } finally {
+      setAuditing(false)
     }
-    setAuditing(false)
   }
 
   // Workflow conditions based on CURRENT state (not stale initial state)
@@ -296,6 +305,17 @@ export default function ValidationAuditDetailClient({
           <Space size={8} wrap>
             {canUpload && (
               <>
+                {task.audit_mode === 'protocol_report' && (
+                  <Select
+                    value={uploadFileType}
+                    onChange={setUploadFileType}
+                    style={{ width: 160 }}
+                    options={[
+                      { value: 'protocol', label: '作为验证方案上传' },
+                      { value: 'report', label: '作为验证报告上传' },
+                    ]}
+                  />
+                )}
                 <Upload
                   multiple
                   accept=".docx,.pdf"
@@ -560,7 +580,7 @@ function MarkdownContent({ content }: { content: string }) {
     } else if (line.startsWith('# ')) {
       elements.push(<h1 key={idx} className="text-[22px] font-semibold text-[var(--color-charcoal)] mt-6 mb-3">{line.slice(2)}</h1>)
     } else if (line.startsWith('- ') || line.startsWith('* ')) {
-      elements.push(<li key={idx} className="text-[13px] text-[var(--color-charcoal)] ml-4 list-disc">{line.slice(2)}</li>)
+      elements.push(<div key={idx} className="text-[13px] text-[var(--color-charcoal)] ml-4 list-disc" role="listitem">{line.slice(2)}</div>)
     } else if (line.startsWith('---')) {
       elements.push(<hr key={idx} className="border-[var(--color-hairline)] my-4" />)
     } else if (line.trim() === '') {

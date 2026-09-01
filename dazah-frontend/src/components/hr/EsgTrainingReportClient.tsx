@@ -1,12 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { App, Button, Form, Input, InputNumber, Modal, Popconfirm, Select, Spin, Table, DatePicker } from 'antd'
-import { EditOutlined, DeleteOutlined } from '@ant-design/icons'
+import { useCallback, useEffect, useState, type Key } from 'react'
+import { App, Button, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Table, DatePicker } from 'antd'
+import { EditOutlined, DeleteOutlined, FilterOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { HR_DISPLAY_DATE_FORMAT } from '@/lib/dayjs-config'
 import type { EsgTrainingRecord } from '@/types/hr'
-import { fetchEsgRecordsByDept } from '@/lib/api/hr'
+import { fetchEsgRecordsByDept, fetchEsgFilterOptions, type EsgRecordFilters } from '@/lib/api/hr'
 import { updateEsgTrainingRecord, deleteEsgTrainingRecord } from '@/actions/hr'
 
 interface Props {
@@ -36,39 +36,102 @@ const TRAINING_TYPE_OPTIONS = [
   '领导力', '管理类', '多元化', '女性领导力发展计划',
 ]
 
+// 拉取某部门筛选范围内的全量 ESG 记录（循环分页直到取完），供打印使用
+async function fetchAllEsgRecords(
+  dept: string,
+  dateFrom: string,
+  dateTo: string,
+  filters?: EsgRecordFilters
+): Promise<EsgTrainingRecord[]> {
+  const all: EsgTrainingRecord[] = []
+  const pageSize = 1000
+  let p = 1
+  for (;;) {
+    const res = await fetchEsgRecordsByDept(
+      dept,
+      p,
+      pageSize,
+      dateFrom || undefined,
+      dateTo || undefined,
+      filters
+    )
+    const rows = res.data || []
+    all.push(...rows)
+    const total = res.meta?.total ?? all.length
+    if (all.length >= total || rows.length === 0) break
+    p += 1
+  }
+  return all
+}
+
+// ── 列头筛选面板公共类型 ──
+interface FilterDropdownRenderProps {
+  selectedKeys: Key[]
+  setSelectedKeys: (keys: Key[]) => void
+  confirm: () => void
+  clearFilters?: () => void
+}
+
 export default function EsgTrainingReportClient({ department, dateFrom, dateTo, periodLabel, printRequest }: Props) {
   const { message } = App.useApp()
   const [records, setRecords] = useState<EsgTrainingRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [editingRecord, setEditingRecord] = useState<EsgTrainingRecord | null>(null)
   const [saving, setSaving] = useState(false)
+  const [page, setPage] = useState(1)
+  const [pageSize] = useState(50)
+  const [total, setTotal] = useState(0)
+  const [filters, setFilters] = useState<EsgRecordFilters>({})
+  const [filterOptions, setFilterOptions] = useState<Record<string, string[]>>({})
   const [form] = Form.useForm()
 
-  const loadData = async () => {
+  const activeFilterCount = Object.values(filters).filter(
+    (v) => v !== undefined && v !== ''
+  ).length
+
+  const applyFilters = useCallback((patch: EsgRecordFilters) => {
+    setFilters((prev) => ({ ...prev, ...patch }))
+  }, [])
+
+  const loadData = useCallback(async (p = 1) => {
     setLoading(true)
     try {
-      const res = await fetchEsgRecordsByDept(department, 1, 500)
+      const res = await fetchEsgRecordsByDept(
+        department,
+        p,
+        pageSize,
+        dateFrom || undefined,
+        dateTo || undefined,
+        filters
+      )
       setRecords(res.data || [])
+      setTotal(res.meta?.total ?? (res.data?.length || 0))
+      setPage(p)
     } catch (e) {
       message.error('加载失败: ' + ((e instanceof Error ? e.message : '') || '未知错误'))
     } finally {
       setLoading(false)
     }
-  }
+  }, [department, dateFrom, dateTo, pageSize, filters, message])
 
-  useEffect(() => { loadData() }, [department])
+  // 枚举列筛选选项：部门/日期范围内去重
+  useEffect(() => {
+    fetchEsgFilterOptions(department, dateFrom || undefined, dateTo || undefined)
+      .then((opts) => setFilterOptions(opts))
+      .catch(() => setFilterOptions({}))
+  }, [department, dateFrom, dateTo])
 
-  // 客户端按筛选范围过滤（与导出一致）
-  const filteredRecords = (dateFrom && dateTo)
-    ? records.filter((r) => {
-        if (!r.training_date) return false
-        return r.training_date >= dateFrom && r.training_date <= dateTo
-      })
-    : records
+  // 部门或筛选日期变化 → 回到第一页重新加载（服务端分页 + 服务端日期过滤）
+  useEffect(() => {
+    // 依赖变化时同步回到第一页加载：loadData 内部 setLoading 为首个同步步骤
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadData(1)
+  }, [loadData])
 
-  // 按导出内容打印：新窗口渲染与导出 Excel 一致的表格后调起打印
-  const doPrint = () => {
-    if (filteredRecords.length === 0) {
+  // 按导出内容打印：新窗口渲染与导出 Excel 一致的表格后调起打印（含当前列筛选）
+  const doPrint = async () => {
+    const all = await fetchAllEsgRecords(department, dateFrom, dateTo, filters)
+    if (all.length === 0) {
       message.warning('当前筛选范围内没有数据')
       return
     }
@@ -76,7 +139,7 @@ export default function EsgTrainingReportClient({ department, dateFrom, dateTo, 
     const esc = (v: unknown) =>
       String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     const headerHtml = PRINT_HEADERS.map((h) => `<th>${esc(h)}</th>`).join('')
-    const bodyHtml = filteredRecords
+    const bodyHtml = all
       .map((r) => `<tr>${PRINT_FIELDS.map((f) => `<td>${esc(f ? r[f] ?? '' : '')}</td>`).join('')}</tr>`)
       .join('')
     const w = window.open('', '_blank')
@@ -103,7 +166,8 @@ export default function EsgTrainingReportClient({ department, dateFrom, dateTo, 
   }
 
   useEffect(() => {
-    if (printRequest > 0) queueMicrotask(doPrint)
+    if (printRequest > 0) void doPrint()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [printRequest])
 
   const handleEdit = (record: EsgTrainingRecord) => {
@@ -123,7 +187,7 @@ export default function EsgTrainingReportClient({ department, dateFrom, dateTo, 
       await updateEsgTrainingRecord(editingRecord!.id, payload)
       message.success('更新成功')
       setEditingRecord(null)
-      loadData()
+      loadData(page)
     } catch (e) {
       message.error((e instanceof Error ? e.message : '') || '保存失败')
     } finally {
@@ -135,33 +199,220 @@ export default function EsgTrainingReportClient({ department, dateFrom, dateTo, 
     try {
       await deleteEsgTrainingRecord(id)
       message.success('删除成功')
-      loadData()
+      loadData(page)
     } catch (e) {
       message.error((e instanceof Error ? e.message : '') || '删除失败')
     }
   }
 
+  // ── 列头筛选：文本包含 / 枚举单选 / 数值区间（均走服务端查询）──
+  const isActive = (v: unknown) => v !== undefined && v !== ''
+
+  const textFilter = (field: keyof EsgRecordFilters, placeholder: string) => ({
+    filterDropdown: ({ selectedKeys, setSelectedKeys, confirm }: FilterDropdownRenderProps) => (
+      <div style={{ padding: 8 }} onKeyDown={(e) => e.stopPropagation()}>
+        <Input
+          value={(selectedKeys[0] as string) || ''}
+          placeholder={placeholder}
+          allowClear
+          style={{ width: 180, marginBottom: 8, display: 'block' }}
+          onChange={(e) => setSelectedKeys(e.target.value ? [e.target.value] : [])}
+          onPressEnter={() => {
+            applyFilters({ [field]: (selectedKeys[0] as string) || undefined })
+            confirm()
+          }}
+        />
+        <Space>
+          <Button
+            type="primary"
+            size="small"
+            onClick={() => {
+              applyFilters({ [field]: (selectedKeys[0] as string) || undefined })
+              confirm()
+            }}
+          >
+            筛选
+          </Button>
+          <Button
+            size="small"
+            onClick={() => {
+              setSelectedKeys([])
+              applyFilters({ [field]: undefined })
+              confirm()
+            }}
+          >
+            清除
+          </Button>
+        </Space>
+      </div>
+    ),
+    filterIcon: () => <FilterOutlined style={{ color: isActive(filters[field]) ? '#1677ff' : undefined }} />,
+  })
+
+  const enumFilter = (field: keyof EsgRecordFilters, options: string[]) => ({
+    filterDropdown: ({ selectedKeys, setSelectedKeys, confirm }: FilterDropdownRenderProps) => (
+      <div style={{ padding: 8 }} onKeyDown={(e) => e.stopPropagation()}>
+        <Select
+          style={{ width: 180, marginBottom: 8, display: 'block' }}
+          placeholder="选择"
+          allowClear
+          showSearch
+          optionFilterProp="label"
+          value={(selectedKeys[0] as string) || undefined}
+          options={options.map((o) => ({ value: o, label: o }))}
+          onChange={(v) => setSelectedKeys(v ? [v] : [])}
+        />
+        <Space>
+          <Button
+            type="primary"
+            size="small"
+            onClick={() => {
+              applyFilters({ [field]: (selectedKeys[0] as string) || undefined })
+              confirm()
+            }}
+          >
+            筛选
+          </Button>
+          <Button
+            size="small"
+            onClick={() => {
+              setSelectedKeys([])
+              applyFilters({ [field]: undefined })
+              confirm()
+            }}
+          >
+            清除
+          </Button>
+        </Space>
+      </div>
+    ),
+    filterIcon: () => <FilterOutlined style={{ color: isActive(filters[field]) ? '#1677ff' : undefined }} />,
+  })
+
+  const numberRangeFilter = (field: 'age' | 'duration', label: string) => {
+    const minField = `${field}_min` as keyof EsgRecordFilters
+    const maxField = `${field}_max` as keyof EsgRecordFilters
+    const active = isActive(filters[minField]) || isActive(filters[maxField])
+    return {
+      filterDropdown: ({ selectedKeys, setSelectedKeys, confirm }: FilterDropdownRenderProps) => {
+        const [minStr, maxStr] = String(selectedKeys[0] ?? '').split(',')
+        const toNum = (v: string) => (v === '' || v === undefined ? undefined : Number(v))
+        return (
+          <div style={{ padding: 8 }} onKeyDown={(e) => e.stopPropagation()}>
+            <div className="mb-2 flex items-center gap-1">
+              <InputNumber
+                size="small"
+                min={0}
+                placeholder="最小"
+                style={{ width: 82 }}
+                value={minStr ? Number(minStr) : undefined}
+                onChange={(v) => setSelectedKeys([`${v ?? ''},${maxStr ?? ''}`])}
+              />
+              <span className="text-gray-400">~</span>
+              <InputNumber
+                size="small"
+                min={0}
+                placeholder="最大"
+                style={{ width: 82 }}
+                value={maxStr ? Number(maxStr) : undefined}
+                onChange={(v) => setSelectedKeys([`${minStr ?? ''},${v ?? ''}`])}
+              />
+            </div>
+            <Space>
+              <Button
+                type="primary"
+                size="small"
+                onClick={() => {
+                  applyFilters({ [minField]: toNum(minStr), [maxField]: toNum(maxStr) })
+                  confirm()
+                }}
+              >
+                筛选
+              </Button>
+              <Button
+                size="small"
+                onClick={() => {
+                  setSelectedKeys([])
+                  applyFilters({ [minField]: undefined, [maxField]: undefined })
+                  confirm()
+                }}
+              >
+                清除
+              </Button>
+            </Space>
+            <span className="sr-only">{label}</span>
+          </div>
+        )
+      },
+      filterIcon: () => <FilterOutlined style={{ color: active ? '#1677ff' : undefined }} />,
+    }
+  }
+
+  const clearAllFilters = () => setFilters({})
+
   const columns = [
     { title: '培训日期', dataIndex: 'training_date', width: 110, render: (v: string) => v ? dayjs(v).format(HR_DISPLAY_DATE_FORMAT) : '-' },
-    { title: '培训名称', dataIndex: 'training_name', width: 220, ellipsis: true },
-    { title: '培训方式', dataIndex: 'training_method', width: 90 },
-    { title: '口径', dataIndex: 'caliber', width: 80 },
-    { title: '培训类型', dataIndex: 'training_type', width: 90 },
-    { title: '姓名', dataIndex: 'employee_name', width: 80 },
-    { title: '员工账号', dataIndex: 'employee_account', width: 100 },
-    { title: '身份所属地', dataIndex: 'location_address', width: 100 },
+    {
+      title: '培训名称', dataIndex: 'training_name', width: 220, ellipsis: true,
+      ...textFilter('training_name', '搜索培训名称'),
+    },
+    {
+      title: '培训方式', dataIndex: 'training_method', width: 90,
+      ...enumFilter('training_method', filterOptions.training_method?.length ? filterOptions.training_method : ['线上', '线下']),
+    },
+    {
+      title: '口径', dataIndex: 'caliber', width: 80,
+      ...enumFilter('caliber', filterOptions.caliber?.length ? filterOptions.caliber : ['公司组织', '部门组织']),
+    },
+    {
+      title: '培训类型', dataIndex: 'training_type', width: 90,
+      ...enumFilter('training_type', filterOptions.training_type?.length ? filterOptions.training_type : TRAINING_TYPE_OPTIONS),
+    },
+    {
+      title: '姓名', dataIndex: 'employee_name', width: 80,
+      ...textFilter('employee_name', '搜索姓名'),
+    },
+    {
+      title: '员工账号', dataIndex: 'employee_account', width: 100,
+      ...textFilter('employee_account', '搜索员工账号'),
+    },
+    {
+      title: '身份所属地', dataIndex: 'location_address', width: 100,
+      ...enumFilter('location_address', filterOptions.location_address?.length ? filterOptions.location_address : ['中国大陆']),
+    },
     { title: '部门', dataIndex: 'department', width: 120 },
-    { title: '层级', dataIndex: 'employee_level', width: 80 },
-    { title: '性别', dataIndex: 'gender', width: 60 },
-    { title: '年龄', dataIndex: 'age', width: 60 },
-    { title: '培训时长(h)', dataIndex: 'duration', width: 80 },
+    {
+      title: '层级', dataIndex: 'employee_level', width: 80,
+      ...enumFilter('employee_level', filterOptions.employee_level ?? []),
+    },
+    {
+      title: '性别', dataIndex: 'gender', width: 60,
+      ...enumFilter('gender', filterOptions.gender?.length ? filterOptions.gender : ['男', '女']),
+    },
+    {
+      title: '年龄', dataIndex: 'age', width: 60,
+      ...numberRangeFilter('age', '年龄'),
+    },
+    {
+      title: '培训时长(h)', dataIndex: 'duration', width: 80,
+      ...numberRangeFilter('duration', '时长'),
+    },
     { title: '是否通过本次培训成功实现晋升', dataIndex: 'is_inside', width: 140, render: () => '-' },
-    { title: '备注', dataIndex: 'remarks', width: 150, ellipsis: true },
-    { title: '单位名称', dataIndex: 'apply_company', width: 120, ellipsis: true },
-    { title: '单位编码', dataIndex: 'apply_company_no', width: 100 },
+    {
+      title: '备注', dataIndex: 'remarks', width: 150, ellipsis: true,
+      ...textFilter('remarks', '搜索备注'),
+    },
+    {
+      title: '单位名称', dataIndex: 'apply_company', width: 120, ellipsis: true,
+      ...textFilter('apply_company', '搜索单位名称'),
+    },
+    {
+      title: '单位编码', dataIndex: 'apply_company_no', width: 100,
+      ...textFilter('apply_company_no', '搜索单位编码'),
+    },
     {
       title: '操作', width: 140, fixed: 'right' as const,
-      render: (_: any, record: EsgTrainingRecord) => (
+      render: (_: unknown, record: EsgTrainingRecord) => (
         <div className="no-print flex gap-2">
           <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>编辑</Button>
           <Popconfirm title="删除?" onConfirm={() => handleDelete(record.id)}>
@@ -172,11 +423,30 @@ export default function EsgTrainingReportClient({ department, dateFrom, dateTo, 
     },
   ]
 
-  if (loading) return <div className="flex justify-center py-20"><Spin size="large" /></div>
-
   return (
     <>
-      <Table rowKey="id" dataSource={filteredRecords} columns={columns} scroll={{ x: 2000 }} size="small" pagination={{ pageSize: 50, showSizeChanger: false }} />
+      {activeFilterCount > 0 && (
+        <div className="no-print mb-2 flex items-center gap-2 text-sm text-gray-600">
+          <FilterOutlined style={{ color: '#1677ff' }} />
+          <span>已启用 {activeFilterCount} 项列筛选</span>
+          <Button size="small" onClick={clearAllFilters}>清空筛选</Button>
+        </div>
+      )}
+      <Table
+        rowKey="id"
+        dataSource={records}
+        columns={columns}
+        loading={loading}
+        scroll={{ x: 2000 }}
+        size="small"
+        pagination={{
+        current: page,
+        pageSize,
+        total,
+        showTotal: (t: number) => `共 ${t} 条`,
+        showSizeChanger: false,
+        onChange: (p: number) => loadData(p),
+      }} />
 
       <Modal title="编辑ESG培训记录" open={!!editingRecord} onCancel={() => setEditingRecord(null)} onOk={handleSave} confirmLoading={saving} width={640}>
         <Form form={form} layout="vertical">

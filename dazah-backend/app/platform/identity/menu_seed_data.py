@@ -387,6 +387,16 @@ SEED_MENUS: list[dict[str, Any]] = [
                         "/quality/deviations/investigations",
                     ),
                     _n("deviation-ledger", "偏差台账", "/quality/deviations/ledger"),
+                    _n(
+                        "deviation-history",
+                        "历史偏差",
+                        "/quality/deviations/history",
+                    ),
+                    _n(
+                        "deviation-workbench",
+                        "偏差工作台",
+                        "/quality/deviations/workbench",
+                    ),
                 ],
             ),
             _n(
@@ -1112,6 +1122,11 @@ SEED_MENUS: list[dict[str, Any]] = [
                         ],
                     ),
                     _n(
+                        "product-inbound-detail",
+                        "成品入库明细",
+                        "/warehouse/product/inbound-detail",
+                    ),
+                    _n(
                         "product-inbound-ledger",
                         "入库总账",
                         "/warehouse/product/inbound-ledger",
@@ -1125,6 +1140,11 @@ SEED_MENUS: list[dict[str, Any]] = [
                 ],
             ),
             _n("warehouse-settings", "仓储设置", "/warehouse/settings"),
+            _n(
+                "warehouse-feishu-config",
+                "飞书设置",
+                "/warehouse/feishu-config",
+            ),
         ],
     ),
     # ── 采购管理 ────────────────────────────────────────────────

@@ -1,5 +1,6 @@
 'use client'
 
+import { qualityTokens } from './themeTokens'
 import Link from 'next/link'
 import { Card, Row, Col } from 'antd'
 import {
@@ -36,13 +37,13 @@ export function QualityLanding() {
       title: '偏差管理',
       description: '记录和跟踪生产偏差',
       href: '/quality/deviations',
-      icon: <FileTextOutlined style={{ fontSize: 32, color: '#1677ff' }} />,
+      icon: <FileTextOutlined style={{ fontSize: 32, color: qualityTokens.primary }} />,
     },
     {
       title: 'CAPA管理',
       description: '纠正和预防措施',
       href: '/quality/capas',
-      icon: <SafetyCertificateOutlined style={{ fontSize: 32, color: '#1aae39' }} />,
+      icon: <SafetyCertificateOutlined style={{ fontSize: 32, color: qualityTokens.success }} />,
     },
     {
       title: '投诉管理',
@@ -78,7 +79,7 @@ export function QualityLanding() {
       title: '退货召回',
       description: '处理退货申请和退货台账',
       href: '/quality/return-recalls',
-      icon: <RollbackOutlined style={{ fontSize: 32, color: '#fa8c16' }} />,
+      icon: <RollbackOutlined style={{ fontSize: 32, color: qualityTokens.warning }} />,
     },
     {
       title: '供应商管理',
@@ -112,7 +113,7 @@ export function QualityLanding() {
                   {card.icon}
                   <div>
                     <div style={{ fontSize: 16, fontWeight: 600 }}>{card.title}</div>
-                    <div style={{ fontSize: 13, color: '#787671' }}>{card.description}</div>
+                    <div style={{ fontSize: 13, color: qualityTokens.textMuted }}>{card.description}</div>
                   </div>
                 </div>
               </Card>

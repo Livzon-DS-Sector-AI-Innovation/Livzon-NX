@@ -17,8 +17,38 @@ import {
   EyeOutlined,
   PaperClipOutlined,
 } from '@ant-design/icons'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import type { Components } from 'react-markdown'
 import { deleteDocumentEntryAttachment } from '@/actions/quality'
 import type { DocumentEntryAttachment, DocumentEntryItem } from '@/types/quality'
+
+/** 标准 MD 预览渲染：表格带边框、图片经相对 API 路径加载（同源 cookie 鉴权） */
+const markdownPreviewComponents: Components = {
+  img: (props) => (
+    <Image
+      src={typeof props.src === 'string' ? props.src : ''}
+      alt={props.alt ?? ''}
+      width={1200}
+      height={900}
+      unoptimized
+      className="h-auto max-w-full rounded border border-gray-200"
+    />
+  ),
+  table: ({ children }) => (
+    <div className="my-3 overflow-x-auto">
+      <table className="min-w-full border-collapse text-sm">{children}</table>
+    </div>
+  ),
+  th: ({ children }) => (
+    <th className="border border-gray-300 bg-gray-50 px-2 py-1 text-left font-medium">
+      {children}
+    </th>
+  ),
+  td: ({ children }) => (
+    <td className="border border-gray-300 px-2 py-1 align-top">{children}</td>
+  ),
+}
 
 export interface AttachmentPreviewState {
   attachment: DocumentEntryAttachment
@@ -78,9 +108,18 @@ export function DocumentAttachmentPreviewModal({
                 />
               )
             ) : (
-              <pre className="whitespace-pre-wrap break-words bg-gray-50 p-4 text-sm leading-relaxed">
-                {preview.text || '无预览内容'}
-              </pre>
+              <div className="whitespace-pre-wrap break-words bg-gray-50 p-4 text-sm leading-relaxed">
+                {preview.text ? (
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={markdownPreviewComponents}
+                  >
+                    {preview.text}
+                  </ReactMarkdown>
+                ) : (
+                  '无预览内容'
+                )}
+              </div>
             )}
           </div>
         )}

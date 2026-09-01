@@ -621,7 +621,7 @@ describe('migrated component coverage', () => {
     localStorage.clear()
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ code: 200, data: [], meta: { total: 0 } }), { status: 200, headers: { 'content-type': 'application/json' } })))
     for (const moduleName of ['actions/hr', 'actions/quality', 'actions/registration', 'actions/warehouse', 'actions/quality-capa', 'actions/quality-change', 'actions/quality-deviation', 'lib/api/client/hr', 'lib/api/client/quality', 'lib/api/client/registration', 'lib/api/client/regulatoryTracker', 'lib/api/client/warehouse', 'lib/api/hr', 'lib/api/quality', 'lib/api/registration', 'lib/api/warehouse']) {
-      for (const name of ['fetch', 'list', 'get', 'load', 'fetchTrainingDepartments', 'fetchTrainingPersonnelConfigs', 'fetchAnnualTrainingPlans', 'fetchPlanItems', 'fetchPlanAttachmentSections', 'fetchUsedTrainingContent', 'fetchTrainingSession', 'fetchSessionDocuments', 'fetchEmployeeTrainingMembers', 'fetchEmployeeTrainingRecords', 'fetchNewEmployeeTrainingList', 'fetchNewEmployeeTrainingStats', 'fetchPositionTrainingLists', 'fetchCustomTrainingDepartments', 'fetchTrainingDeptMappings', 'fetchHrFeishuAppSettings', 'fetchHrFeishuEntitySettings', 'fetchHrFeishuEntityFieldMappingBundle', 'fetchHrFeishuEntityTables', 'fetchEmailConfig', 'fetchDocumentDepartments', 'fetchDocumentEntries', 'fetchRegulatoryTrackerDocumentsClient', 'fetchRegulatoryTrackerNotificationRecipientsClient', 'fetchRegulatoryTrackerSyncStatusClient', 'fetchRegulatoryTrackerDocumentDetailClient', 'fetchProjectLedgerRecordHistory', 'fetchDeclarationProgressRecordHistory', 'fetchAuthorizationLedger', 'fetchAuthorizationFda', 'fetchWarehouseDashboard', 'fetchWarehouseMaterialPage', 'fetchWarehouseRecordDetail']) {
+      for (const name of ['fetch', 'list', 'get', 'load', 'fetchTrainingDepartments', 'fetchEmployeeDepartments', 'fetchDeptApprovalConfigNames', 'fetchTrainingPersonnelConfigs', 'fetchAnnualTrainingPlans', 'fetchPlanItems', 'fetchPlanAttachmentSections', 'fetchUsedTrainingContent', 'fetchTrainingSession', 'fetchSessionDocuments', 'fetchEmployeeTrainingMembers', 'fetchEmployeeTrainingRecords', 'fetchNewEmployeeTrainingList', 'fetchNewEmployeeTrainingStats', 'fetchPositionTrainingLists', 'fetchCustomTrainingDepartments', 'fetchTrainingDeptMappings', 'fetchHrFeishuAppSettings', 'fetchHrFeishuEntitySettings', 'fetchHrFeishuEntityFieldMappingBundle', 'fetchHrFeishuEntityTables', 'fetchEmailConfig', 'fetchDocumentDepartments', 'fetchDocumentEntries', 'fetchRegulatoryTrackerDocumentsClient', 'fetchRegulatoryTrackerNotificationRecipientsClient', 'fetchRegulatoryTrackerSyncStatusClient', 'fetchRegulatoryTrackerDocumentDetailClient', 'fetchProjectLedgerRecordHistory', 'fetchDeclarationProgressRecordHistory', 'fetchAuthorizationLedger', 'fetchAuthorizationFda', 'fetchWarehouseDashboard', 'fetchWarehouseMaterialPage', 'fetchWarehouseRecordDetail']) {
         getMock(moduleName, name).mockResolvedValue([])
       }
     }
@@ -1313,6 +1313,9 @@ describe('migrated component coverage', () => {
     await settle()
     Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent?.includes('添加到培训台账'))?.click()
     await settle()
+    // 台账入账改为受控确认弹窗：点击弹窗内"确定"触发 doAddToLedger
+    Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent === '确 定' || button.textContent === '确定')?.click()
+    await settle()
     expect(getMock('actions/hr', 'upsertTrainingSession')).toHaveBeenCalled()
     expect(getMock('actions/hr', 'upsertTrainingDocument')).toHaveBeenCalled()
     expect(getMock('actions/hr', 'createTrainingLedger')).toHaveBeenCalled()
@@ -1797,11 +1800,33 @@ describe('migrated component coverage', () => {
     await settle()
     findButton('新增')?.click()
     await settle()
-    Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent === '确定')?.click()
+    // Drawer 必填校验：物料名称、问题描述必填（日期默认今天）
+    const setInput = (placeholder: string, value: string) => {
+      const input = rendered.container.querySelector(
+        `input[placeholder="${placeholder}"]`,
+      ) as HTMLInputElement | null
+      if (input) {
+        input.value = value
+        input.dispatchEvent(new Event('input', { bubbles: true }))
+        input.dispatchEvent(new Event('change', { bubbles: true }))
+      }
+    }
+    setInput('请输入物料名称', '原料A')
+    setInput('请输入调查编号', 'INV-1')
+    const desc = rendered.container.querySelector(
+      'textarea[placeholder="请输入问题描述"]',
+    ) as HTMLTextAreaElement | null
+    if (desc) {
+      desc.value = '偏差描述'
+      desc.dispatchEvent(new Event('input', { bubbles: true }))
+      desc.dispatchEvent(new Event('change', { bubbles: true }))
+    }
+    await settle()
+    findButton('保存')?.click()
     await settle()
     findButton('修改')?.click()
     await settle()
-    Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent === '确定')?.click()
+    findButton('保存')?.click()
     await settle()
     findButton('删除')?.click()
     await settle()
@@ -1843,6 +1868,7 @@ describe('migrated component coverage', () => {
     await settle()
     findButton('新增')?.click()
     await settle()
+    // 产品质量标准 Modal（onOk 默认「确定」），无必填字段
     Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent === '确定')?.click()
     await settle()
     findButton('修改')?.click()
@@ -1884,7 +1910,7 @@ describe('migrated component coverage', () => {
     findButton('详情')?.click()
     await settle()
     expect(rendered.container.textContent).toContain('报告记录详情')
-    findButton('进入 AI 工作台')?.click()
+    findButton('进入偏差工作台')?.click()
     findButton('关闭')?.click()
     findButton('编辑')?.click()
     await settle()
@@ -1897,57 +1923,43 @@ describe('migrated component coverage', () => {
     expect(getMock('actions/quality', 'pullQualityRecordsFromFeishu')).toHaveBeenCalledWith('deviation_report_record')
     expect(getMock('actions/quality-deviation', 'updateDeviationReportRecord')).toHaveBeenCalled()
     expect(getMock('actions/quality-deviation', 'deleteDeviationReportRecord')).toHaveBeenCalled()
-    expect(mocks.router.push).toHaveBeenCalledWith('/quality/deviations/deviation-1/ai')
+    expect(mocks.router.push).toHaveBeenCalledWith('/quality/deviations/workbench?record_id=deviation-1')
     closeRendered(rendered)
   })
 
-  it('drives onboarding stage filters, editable details and sync actions', async () => {
+  it('drives onboarding attachment-led edit, delete and refresh flows', async () => {
     const records = [
-      { id: 'onboard-1', name: '候选人A', onboard_date: '', department: '质量部', level: '分析员', status: '进行中', health_status: '未进行', resignation_cert: '未提供', id_card: '未提供', education_cert: '未提供' },
-      { id: 'onboard-2', name: '候选人B', onboard_date: '2026-08-01', department: '质量部', level: '主管', status: '进行中', health_status: '合格', resignation_cert: '已提供', id_card: '已提供', education_cert: '已提供' },
-      { id: 'onboard-3', name: '候选人C', onboard_date: '2026-07-01', department: '生产部', level: '工程师', status: '已完成', health_status: '合格', resignation_cert: '已提供', id_card: '已提供', education_cert: '已提供' },
-      { id: 'onboard-4', name: '候选人D', onboard_date: '2026-07-01', department: '生产部', level: '工程师', status: '已放弃', health_status: '不合格', resignation_cert: '未提供', id_card: '未提供', education_cert: '未提供' },
+      { id: 'onboard-1', name: '候选人A', onboard_date: '2026-08-01', department: '质量部', level: '分析员' },
+      { id: 'onboard-2', name: '候选人B', onboard_date: '2026-08-02', department: '生产部', level: '主管' },
     ]
     getMock('lib/api/client/hr', 'fetchOnboardingList').mockResolvedValue({ data: records, meta: { total: records.length } })
-    getMock('lib/api/client/hr', 'fetchOnboardingDashboard').mockResolvedValue({ data: { stages: {}, total: records.length } })
     getMock('lib/api/client/hr', 'fetchDepartments').mockResolvedValue({ data: [{ id: 'dept-1', name: '质量部' }, { id: 'dept-2', name: '生产部' }] })
     getMock('lib/api/client/hr', 'fetchJobPostings').mockResolvedValue({ data: [{ id: 'job-1', title: '分析员' }, { id: 'job-2', title: '主管' }] })
     getMock('actions/hr', 'updateOnboardingAction').mockResolvedValue({})
-    getMock('actions/hr', 'syncOnboardingToEmployeeAction').mockResolvedValue({ message: '已同步员工档案' })
-    getMock('actions/hr', 'syncOnboardingToContractAction').mockResolvedValue({ message: '已同步合同' })
+    getMock('actions/hr', 'deleteOnboardingAction').mockResolvedValue({ message: '已删除' })
     vi.stubGlobal('confirm', vi.fn(() => true))
     const rendered = renderClient(createElement(OnboardingManagementPage))
     await settle()
+    expect(rendered.container.textContent).toContain('候选人A')
     const findButton = (text: string) => Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent?.includes(text))
-    const findSection = (text: string) => Array.from(rendered.container.querySelectorAll('section')).find((section) => section.textContent?.includes(text))
-    findSection('完成')?.click()
-    await settle()
+    // 编辑弹窗 → 保存 → updateOnboardingAction（antd Modal mock 将 okText 渲染为「确定」）
     Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent?.includes('编辑'))?.click()
     await settle()
-    const candidateCard = findSection('候选人B')
-    candidateCard?.click()
-    await settle()
-    for (const select of Array.from(rendered.container.querySelectorAll('select'))) {
-      const option = Array.from(select.options).find((item) => item.value)
-      if (option) {
-        select.value = option.value
-        select.dispatchEvent(new Event('change', { bubbles: true }))
-      }
-    }
-    await settle()
-    findButton('保存')?.click()
-    await settle()
-    const completedCard = findSection('候选人C')
-    completedCard?.click()
-    await settle()
-    findButton('同步到合同管理')?.click()
-    findButton('同步到员工档案')?.click()
-    await settle()
-    findButton('刷新数据')?.click()
+    findButton('确定')?.click()
     await settle()
     expect(getMock('actions/hr', 'updateOnboardingAction')).toHaveBeenCalled()
-    expect(getMock('actions/hr', 'syncOnboardingToEmployeeAction')).toHaveBeenCalled()
-    expect(getMock('actions/hr', 'syncOnboardingToContractAction')).toHaveBeenCalled()
+    // 删除（Popconfirm 确认）→ deleteOnboarding
+    await settle()
+    const deleteBtn = Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent?.includes('删除'))
+    if (deleteBtn) {
+      deleteBtn.click()
+      await settle()
+    }
+    expect(getMock('actions/hr', 'deleteOnboardingAction')).toHaveBeenCalled()
+    // 刷新 → 重新拉取列表
+    findButton('刷新')?.click()
+    await settle()
+    expect(getMock('lib/api/client/hr', 'fetchOnboardingList')).toHaveBeenCalled()
     closeRendered(rendered)
   })
 
@@ -2340,7 +2352,14 @@ describe('migrated component coverage', () => {
   it('drives department recipient and clerk drawer load, select-all and save flows', async () => {
     getMock('lib/api/client/hr', 'fetchDeptRecipients').mockResolvedValue([{ id: 'recipient-1', department: '质量部', use_dept_leader: false, recipient_open_ids: [], recipient_names: [] }])
     getMock('actions/hr', 'saveDeptRecipients').mockResolvedValue({})
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ data: [{ id: 'dept-1', name: '质量部', leader_name: '主管', children: [{ id: 'dept-2', name: 'QA组' }] }] }), { status: 200 })))
+    vi.stubGlobal('fetch', vi.fn(async (input: unknown) => {
+      const url = String(input)
+      // drawer 三路请求：审批配置部门名单 / 部门树，其余走默认
+      const data = url.includes('dept-approval-configs/names')
+        ? ['质量部', 'QA组']
+        : [{ id: 'dept-1', name: '质量部', leader_name: '主管', children: [{ id: 'dept-2', name: 'QA组' }] }]
+      return new Response(JSON.stringify({ data }), { status: 200 })
+    }))
     const members = [{ open_id: 'member-1', name: '李四', department: '质量部' }, { open_id: 'member-2', name: '王五', department: 'QA组' }]
     const recipient = renderClient(createElement(DeptRecipientDrawer, { open: true, reminderConfigId: 'reminder-1', hrMembers: members, onClose: vi.fn() }))
     await settle()
@@ -2459,8 +2478,8 @@ describe('migrated component coverage', () => {
     getMock('lib/api/client/hr', 'fetchTrainingDepartments').mockResolvedValue(['质量部', '生产部'])
     getMock('lib/api/client/hr', 'fetchCustomTrainingDepartments').mockResolvedValue(['研发部'])
     getMock('lib/api/client/hr', 'fetchFeishuMembers').mockResolvedValue({ data: [{ open_id: 'u-new', name: '李四', department: '生产部' }], meta: { total: 1 } })
-    getMock('lib/api/client/hr', 'saveDeptScope').mockResolvedValue({ visible_depts: ['生产部'] })
-    getMock('lib/api/client/hr', 'clearDeptScope').mockResolvedValue({})
+    getMock('actions/hr', 'saveDeptScopeAction').mockResolvedValue({ visible_depts: ['生产部'] })
+    getMock('actions/hr', 'clearDeptScopeAction').mockResolvedValue({})
     const rendered = renderClient(createElement(DeptScopeSettingsClient))
     await settle()
     expect(rendered.container.textContent).toContain('用户可见部门配置')
@@ -2484,8 +2503,8 @@ describe('migrated component coverage', () => {
     for (const button of Array.from(rendered.container.querySelectorAll('button')).filter((item) => item.textContent?.includes('清除'))) button.click()
     for (const button of Array.from(rendered.container.querySelectorAll('button')).filter((item) => item.textContent?.includes('移除'))) button.click()
     await settle()
-    expect(getMock('lib/api/client/hr', 'saveDeptScope')).toHaveBeenCalled()
-    expect(getMock('lib/api/client/hr', 'clearDeptScope')).toHaveBeenCalled()
+    expect(getMock('actions/hr', 'saveDeptScopeAction')).toHaveBeenCalled()
+    expect(getMock('actions/hr', 'clearDeptScopeAction')).toHaveBeenCalled()
     closeRendered(rendered)
   })
 
@@ -2507,8 +2526,8 @@ describe('migrated component coverage', () => {
         { open_id: 'u-new', name: '李四', department: '生产部' },
       ], meta: { total: 101 },
     }).mockResolvedValueOnce({ data: [{ open_id: 'u-page-2', name: '王五', department: '生产部' }], meta: { total: 101 } })
-    getMock('lib/api/client/hr', 'saveDeptScope').mockResolvedValue({ visible_depts: ['质量部'] })
-    getMock('lib/api/client/hr', 'clearDeptScope').mockResolvedValue({})
+    getMock('actions/hr', 'saveDeptScopeAction').mockResolvedValue({ visible_depts: ['质量部'] })
+    getMock('actions/hr', 'clearDeptScopeAction').mockResolvedValue({})
     const rendered = renderClient(createElement(DeptScopeSettingsClient))
     await settle()
     const search = rendered.container.querySelector('input[placeholder*="搜索飞书联系人"]') as HTMLInputElement | null
@@ -2547,8 +2566,8 @@ describe('migrated component coverage', () => {
     firstRemove?.click()
     await settle()
 
-    getMock('lib/api/client/hr', 'saveDeptScope').mockRejectedValueOnce(new Error('保存范围失败'))
-    getMock('lib/api/client/hr', 'clearDeptScope').mockRejectedValueOnce(new Error('移除范围失败'))
+    getMock('actions/hr', 'saveDeptScopeAction').mockRejectedValueOnce(new Error('保存范围失败'))
+    getMock('actions/hr', 'clearDeptScopeAction').mockRejectedValueOnce(new Error('移除范围失败'))
     const remainingSave = Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent?.includes('保存'))
     remainingSave?.click()
     await settle()
@@ -2556,8 +2575,8 @@ describe('migrated component coverage', () => {
     remainingRemove?.click()
     await settle()
     expect(getMock('lib/api/client/hr', 'fetchFeishuMembers')).toHaveBeenCalledTimes(4)
-    expect(getMock('lib/api/client/hr', 'saveDeptScope')).toHaveBeenCalled()
-    expect(getMock('lib/api/client/hr', 'clearDeptScope')).toHaveBeenCalled()
+    expect(getMock('actions/hr', 'saveDeptScopeAction')).toHaveBeenCalled()
+    expect(getMock('actions/hr', 'clearDeptScopeAction')).toHaveBeenCalled()
     closeRendered(rendered)
   })
 
@@ -3030,8 +3049,8 @@ describe('migrated component coverage', () => {
     getMock('lib/api/client/hr', 'fetchFeishuMembers').mockResolvedValue({
       data: [{ open_id: 'user-2', name: '李四', department: '生产部' }], meta: { total: 1 },
     })
-    getMock('lib/api/client/hr', 'saveDeptScope').mockResolvedValue({ visible_depts: ['质量部', '生产部'] })
-    getMock('lib/api/client/hr', 'clearDeptScope').mockResolvedValue(undefined)
+    getMock('actions/hr', 'saveDeptScopeAction').mockResolvedValue({ visible_depts: ['质量部', '生产部'] })
+    getMock('actions/hr', 'clearDeptScopeAction').mockResolvedValue(undefined)
     const rendered = renderClient(createElement(DeptScopeSettingsClient))
     await settle()
     const search = Array.from(rendered.container.querySelectorAll('input')).find((input) => input.placeholder?.includes('搜索飞书联系人'))
@@ -3056,8 +3075,8 @@ describe('migrated component coverage', () => {
         await settle()
       }
     }
-    expect(getMock('lib/api/client/hr', 'saveDeptScope')).toHaveBeenCalled()
-    expect(getMock('lib/api/client/hr', 'clearDeptScope')).toHaveBeenCalled()
+    expect(getMock('actions/hr', 'saveDeptScopeAction')).toHaveBeenCalled()
+    expect(getMock('actions/hr', 'clearDeptScopeAction')).toHaveBeenCalled()
     closeRendered(rendered)
   })
 
@@ -3539,7 +3558,6 @@ describe('migrated component coverage', () => {
           if (path.includes('OnboardingManagementPage')) {
             const onboarding = { id: 'onboard-1', name: '候选人', onboard_date: '2026-08-20', department: '质量部', level: '专员', status: '进行中', health_status: '合格', resignation_cert: '已提供', id_card: '已提供', education_cert: '未提供' }
             getMock('lib/api/client/hr', 'fetchOnboardingList').mockResolvedValue({ data: [onboarding], meta: { total: 1, page: 1, page_size: 20 } })
-            getMock('lib/api/client/hr', 'fetchOnboardingDashboard').mockResolvedValue({ data: { stages: {}, total: 1 } })
             getMock('lib/api/client/hr', 'fetchDepartments').mockResolvedValue({ data: [{ id: 'dept-1', name: '质量部' }], meta: { total: 1 } })
             getMock('lib/api/client/hr', 'fetchJobPostings').mockResolvedValue({ data: [{ id: 'job-1', title: '分析员' }], meta: { total: 1 } })
             getMock('actions/hr', 'updateOnboardingAction').mockResolvedValue({})

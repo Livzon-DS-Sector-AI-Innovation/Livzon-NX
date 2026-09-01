@@ -91,7 +91,7 @@ export default function EmployeeDashboardClient({ stats }: Props) {
         </Col>
       </Row>
 
-      <Card title="合同即将到期详情（90天内）">
+      <Card title="合同即将到期详情（本季度）">
         <Table
           rowKey="employee_number"
           columns={expiringColumns}

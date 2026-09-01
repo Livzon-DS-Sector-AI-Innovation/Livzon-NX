@@ -256,7 +256,8 @@ const saveMock = vi.fn((url: string, opts?: RequestInit) => {
         pickerInput.dispatchEvent(new Event('focus'))
         await flush(150)
       })
-      const cell = Array.from(document.querySelectorAll('.ant-picker-dropdown .ant-picker-cell')).find((c) => (c.getAttribute('title') || '').includes('2026-08-15')) as HTMLElement | undefined
+      const pickDate = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-15`
+      const cell = Array.from(document.querySelectorAll('.ant-picker-dropdown .ant-picker-cell')).find((c) => (c.getAttribute('title') || '').includes(pickDate)) as HTMLElement | undefined
       await act(async () => { cell?.click(); await flush(80) })
     }
     await act(async () => { await flush(50) })
@@ -294,7 +295,8 @@ const saveMock = vi.fn((url: string, opts?: RequestInit) => {
         pickerInput.dispatchEvent(new Event('focus'))
         await flush(150)
       })
-      const cell = Array.from(document.querySelectorAll('.ant-picker-dropdown .ant-picker-cell')).find((c) => (c.getAttribute('title') || '').includes('2026-08-15')) as HTMLElement | undefined
+      const pickDate = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-15`
+      const cell = Array.from(document.querySelectorAll('.ant-picker-dropdown .ant-picker-cell')).find((c) => (c.getAttribute('title') || '').includes(pickDate)) as HTMLElement | undefined
       await act(async () => { cell?.click(); await flush(80) })
     }
     await act(async () => { await flush(50) })

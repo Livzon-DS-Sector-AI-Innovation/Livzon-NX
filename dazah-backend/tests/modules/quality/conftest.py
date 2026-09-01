@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import warnings
 from collections.abc import Iterator
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
@@ -23,6 +24,21 @@ warnings.filterwarnings(
     message=r".*There is no current event loop.*",
     category=DeprecationWarning,
 )
+
+
+@pytest.fixture(autouse=True)
+def _grant_quality_permissions(monkeypatch: pytest.MonkeyPatch) -> None:
+    """质量端点内精校验依赖 resolve_user_permissions；测试用户视为通配权限。
+
+    针对子域/记录归属的精细化行为由 test_edit_scope.py 自行打桩覆盖。
+    """
+    from app.modules.quality.api import deps as quality_deps
+
+    monkeypatch.setattr(
+        quality_deps,
+        "resolve_user_permissions",
+        AsyncMock(return_value=["*"]),
+    )
 
 
 @pytest.fixture(autouse=True)

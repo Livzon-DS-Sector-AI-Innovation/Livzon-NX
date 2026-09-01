@@ -21,11 +21,6 @@ const statusOptions = [
   { value: '4', label: '暂停使用' },
 ]
 
-const genderMap: Record<string, string> = {
-  '1': '男',
-  '2': '女',
-}
-
 export default function FeishuContactListClient() {
   const { message } = App.useApp()
   const [data, setData] = useState<FeishuContactVM[]>([])
@@ -152,12 +147,6 @@ export default function FeishuContactListClient() {
       dataIndex: 'email',
       width: 200,
       render: (email: string | null) => <Typography.Text style={{ fontSize: 12 }}>{email || '-'}</Typography.Text>,
-    },
-    {
-      title: '性别',
-      dataIndex: 'gender',
-      width: 60,
-      render: (gender: string | null) => (gender ? genderMap[gender] || '-' : '-'),
     },
     {
       title: '状态',

@@ -85,7 +85,7 @@ def _fill_header(
 
         # r2: 应受训人数（总人数）；实际受训人数合计留空待签名
         total = len(data.employee_names)
-        fill_after_phrase(table.rows[2].cells[0], "应受训人数", str(total))
+        fill_after_phrase(table.rows[2].cells[0], "应受训人数", str(total), center=True)
 
         # r3 是标签行（培训时间/培训题目或内容概要/授课人），r4 是填写行
         time_text = ""
@@ -143,16 +143,18 @@ def _fill_data_rows(
     # 本页人员
     start = page * PER_PAGE
     page_names = data.employee_names[start : start + PER_PAGE]
+    dept_map = data.employee_dept_map or {}
 
     # 填充数据行
     for i, name in enumerate(page_names):
+        person_dept = dept_map.get(name, "")
         if i < half_page:  # 左栏
             row_idx = data_start_row + i
             if row_idx < remarks_row:
                 row = table.rows[row_idx]
                 # 序号保留模板预置值，只填姓名/部门
                 fill_whole_cell(row.cells[1], name, fmt_src)
-                fill_whole_cell(row.cells[3], data.department or "", fmt_src)
+                fill_whole_cell(row.cells[3], person_dept, fmt_src)
                 fill_whole_cell(row.cells[4], "", fmt_src)  # 签到
         else:  # 右栏
             row_idx = data_start_row + (i - half_page)
@@ -160,7 +162,7 @@ def _fill_data_rows(
                 row = table.rows[row_idx]
                 # 序号保留模板预置值，只填姓名/部门
                 fill_whole_cell(row.cells[6], name, fmt_src)
-                fill_whole_cell(row.cells[7], data.department or "", fmt_src)
+                fill_whole_cell(row.cells[7], person_dept, fmt_src)
                 fill_whole_cell(row.cells[9], "", fmt_src)  # 签到
 
     # 空行：保留序号，只清空姓名/部门/签到
@@ -181,6 +183,13 @@ def _fill_data_rows(
             fill_whole_cell(row.cells[6], "", fmt_src)
             fill_whole_cell(row.cells[7], "", fmt_src)
             fill_whole_cell(row.cells[9], "", fmt_src)
+
+    # 备注行：清除模板自带的"+"填充符（避免导出后备注下方出现"+"）
+    for cell in table.rows[remarks_row].cells:
+        for para in cell.paragraphs:
+            for r in para.runs:
+                if r.text.strip() == "+":
+                    r.text = ""
 
     # 备注行（仅第一页填写）
     if data.remarks and page == 0:

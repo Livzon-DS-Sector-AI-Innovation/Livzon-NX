@@ -19,11 +19,22 @@ from app.modules.hr.schemas import (
 
 
 class _NestedTransaction:
+    """同时支持 `async with` 与 `await` 两种用法的 savepoint 桩。"""
+
     async def __aenter__(self) -> _NestedTransaction:
         return self
 
     async def __aexit__(self, *_args: object) -> None:
         return None
+
+    def __await__(self):
+        # 立即完成的生成器：await 直接得到 self，无事件循环依赖
+        if False:
+            yield
+        return self
+
+    commit = AsyncMock()
+    rollback = AsyncMock()
 
 
 def _department(**overrides: object) -> SimpleNamespace:
@@ -52,6 +63,11 @@ def _department(**overrides: object) -> SimpleNamespace:
 async def test_department_sync_updates_rebinds_creates_and_cleans_stale(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # 部门飞书同步改由人事专属应用拉取：隔离 DB 凭证解析
+    monkeypatch.setattr(
+        "app.modules.hr.service.get_hr_feishu_app_credentials",
+        AsyncMock(return_value=("cli_hr_test", "hr_secret_plain")),
+    )
     root = _department(
         name="总经办",
         code="ROOT",
@@ -121,7 +137,10 @@ async def test_department_sync_updates_rebinds_creates_and_cleans_stale(
             }.get(user_id)
         )
     )
-    monkeypatch.setattr("app.modules.hr.feishu.contact.FeishuContact", lambda: contact)
+    monkeypatch.setattr(
+        "app.modules.hr.feishu.contact.FeishuContact",
+        lambda *args, **kwargs: contact,
+    )
 
     stats = await instance.sync_departments_from_feishu()
 
@@ -133,6 +152,198 @@ async def test_department_sync_updates_rebinds_creates_and_cleans_stale(
     assert unbound.parent_id == root.id
     assert repo.create.await_count == 1
     assert session.flush.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_department_sync_prefers_top_dept_with_children_as_root(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """parent_id 数据异常（多个顶层部门）时，同步根必须选有子部门的顶层，
+    而不是 next() 碰到的第一个叶子顶层，否则 BFS 只能拉到残缺子树。"""
+    leaf_root = _department(
+        name="车队",
+        code="LEAF",
+        feishu_open_department_id="od-leaf",
+    )
+    real_root = _department(
+        name="丽珠集团（宁夏）制药有限公司",
+        code="ROOT",
+        feishu_open_department_id="od-real-root",
+    )
+    child = _department(
+        name="质量管理部",
+        code="QM",
+        feishu_open_department_id="od-qm",
+        parent_id=real_root.id,
+    )
+    repo = SimpleNamespace(
+        list_all_departments=AsyncMock(
+            return_value=[leaf_root, real_root, child]
+        ),
+        update=AsyncMock(),
+        create=AsyncMock(),
+    )
+    result = SimpleNamespace(scalar=lambda: 0, scalar_one_or_none=lambda: None)
+    session = SimpleNamespace(
+        execute=AsyncMock(return_value=result),
+        flush=AsyncMock(),
+        rollback=AsyncMock(),
+        begin_nested=lambda: _NestedTransaction(),
+    )
+    instance = service.DepartmentService.__new__(service.DepartmentService)
+    instance.repo = repo
+    instance.session = session
+    instance._feishu = None
+
+    monkeypatch.setattr(
+        "app.core.redis.cache_get", AsyncMock(return_value=None)
+    )
+    cache_set = AsyncMock()
+    monkeypatch.setattr("app.core.redis.cache_set", cache_set)
+    captured_root: dict[str, str] = {}
+
+    async def _fake_get_all_departments(root_department_id: str) -> list[dict]:
+        captured_root["root"] = root_department_id
+        return [
+            {
+                "department_id": "od-real-root",
+                "name": "丽珠集团（宁夏）制药有限公司",
+                "member_count": 1,
+                "order": 0,
+            },
+            {
+                "department_id": "od-qm",
+                "name": "质量管理部",
+                "parent_department_id": "od-real-root",
+                "member_count": 3,
+                "order": 1,
+            },
+        ]
+
+    monkeypatch.setattr(
+        "app.platform.integrations.feishu.contact.get_all_departments",
+        _fake_get_all_departments,
+    )
+    monkeypatch.setattr(
+        "app.modules.hr.service.get_hr_feishu_app_credentials",
+        AsyncMock(return_value=("cli_hr_test", "hr_secret_plain")),
+    )
+
+    await instance.sync_departments_from_feishu()
+
+    assert captured_root["root"] == "od-real-root"
+
+
+@pytest.mark.asyncio
+async def test_department_sync_empty_tree_aborts_without_caching(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """飞书树拉取为空时必须中止同步且不得写缓存，防止空结果污染 24h 缓存。"""
+    root = _department(
+        name="丽珠集团（宁夏）制药有限公司",
+        code="ROOT",
+        feishu_open_department_id="od-real-root",
+    )
+    repo = SimpleNamespace(
+        list_all_departments=AsyncMock(return_value=[root]),
+        update=AsyncMock(),
+        create=AsyncMock(),
+    )
+    session = SimpleNamespace(
+        execute=AsyncMock(),
+        flush=AsyncMock(),
+        rollback=AsyncMock(),
+        begin_nested=lambda: _NestedTransaction(),
+    )
+    instance = service.DepartmentService.__new__(service.DepartmentService)
+    instance.repo = repo
+    instance.session = session
+    instance._feishu = None
+
+    monkeypatch.setattr(
+        "app.core.redis.cache_get", AsyncMock(return_value=None)
+    )
+    cache_set = AsyncMock()
+    monkeypatch.setattr("app.core.redis.cache_set", cache_set)
+
+    async def _fake_get_all_departments(root_department_id: str) -> list[dict]:
+        return []
+
+    monkeypatch.setattr(
+        "app.platform.integrations.feishu.contact.get_all_departments",
+        _fake_get_all_departments,
+    )
+    monkeypatch.setattr(
+        "app.modules.hr.service.get_hr_feishu_app_credentials",
+        AsyncMock(return_value=("cli_hr_test", "hr_secret_plain")),
+    )
+
+    with pytest.raises(AppException) as exc_info:
+        await instance.sync_departments_from_feishu()
+
+    assert exc_info.value.status_code == 502
+    cache_set.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_department_sync_keeps_root_not_in_bfs_tree(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """飞书 BFS 树从根的下级开始、不含根本身：陈旧清理不得把同步根误删，
+    否则会连带解除全部一级部门的父级引用、摧毁整棵层级树。"""
+    root = _department(
+        name="丽珠集团（宁夏）制药有限公司",
+        code="ROOT",
+        feishu_open_department_id="od-real-root",
+    )
+    level1 = _department(
+        name="质量管理部",
+        code="QM",
+        feishu_open_department_id="od-qm",
+        parent_id=root.id,
+    )
+    repo = SimpleNamespace(
+        list_all_departments=AsyncMock(return_value=[root, level1]),
+        update=AsyncMock(),
+        create=AsyncMock(),
+    )
+    result = SimpleNamespace(scalar=lambda: 0, scalar_one_or_none=lambda: None)
+    session = SimpleNamespace(
+        execute=AsyncMock(return_value=result),
+        flush=AsyncMock(),
+        rollback=AsyncMock(),
+        begin_nested=lambda: _NestedTransaction(),
+    )
+    instance = service.DepartmentService.__new__(service.DepartmentService)
+    instance.repo = repo
+    instance.session = session
+    instance._feishu = None
+
+    feishu_rows = [
+        {
+            "department_id": "od-qm",
+            "name": "质量管理部",
+            "member_count": 3,
+            "order": 1,
+            "leader_user_id": "",
+        },
+    ]
+    monkeypatch.setattr(
+        "app.core.redis.cache_get",
+        AsyncMock(return_value=json.dumps(feishu_rows, ensure_ascii=False)),
+    )
+    cache_set = AsyncMock()
+    monkeypatch.setattr("app.core.redis.cache_set", cache_set)
+    monkeypatch.setattr(
+        "app.modules.hr.service.get_hr_feishu_app_credentials",
+        AsyncMock(return_value=("cli_hr_test", "hr_secret_plain")),
+    )
+
+    await instance.sync_departments_from_feishu()
+
+    # 根不在树里但必须保留，且一级部门的父级引用不被解除
+    assert root.is_deleted is False
+    assert level1.parent_id == root.id
 
 
 @pytest.mark.asyncio
@@ -213,7 +424,7 @@ def _offboarding_record(**overrides: object) -> SimpleNamespace:
         "offboarding_date": date(2026, 8, 20),
         "offboarding_type": "辞职",
         "reason": "个人原因",
-        "handover_status": "待交接",
+        "status": "在职",
         "education": "本科",
         "degree": "学士",
         "major": "化学",

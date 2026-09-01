@@ -8,6 +8,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { createReturnLedgerRecord, deleteReturnLedgerRecord, pullReturnLedgerRecords, updateReturnLedgerRecord } from '@/actions/quality'
 import { fetchDepartmentContacts, fetchReturnLedgerRecords } from '@/lib/api/client/quality'
 import type { DepartmentContact, ReturnLedgerItem } from '@/types/quality'
+import { TableEmptyState } from './TableEmptyState'
+
 
 interface ReturnLedgerPageProps {
   initialItems?: ReturnLedgerItem[]
@@ -54,6 +56,8 @@ export default function ReturnLedgerPage({
   const [modalVisible, setModalVisible] = useState(false)
   const [editingRecord, setEditingRecord] = useState<ReturnLedgerItem | null>(null)
   const [form] = Form.useForm<FormValues>()
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
 
   const { data: contacts = [] } = useQuery<DepartmentContact[]>({
     queryKey: ['quality-department-contacts'],
@@ -173,7 +177,7 @@ export default function ReturnLedgerPage({
     }
   }, [queryClient, message])
 
-  const hasFilters = filterProduct || filterBatch
+  const hasFilters = searchKeyword || filterProduct || filterBatch
   const clearFilters = useCallback(() => {
     setFilterProduct(undefined)
     setFilterBatch(undefined)
@@ -195,6 +199,13 @@ export default function ReturnLedgerPage({
     if (filterBatch) result = result.filter((item) => item.product_batch_number === filterBatch)
     return result
   })()
+
+  // 搜索/筛选变化时回到第一页
+  useEffect(() => {
+    setPage(1)
+  }, [searchKeyword, filterProduct, filterBatch])
+
+  const pagedItems = filteredItems.slice((page - 1) * pageSize, page * pageSize)
 
   const columns: ColumnsType<ReturnLedgerItem> = [
     {
@@ -315,8 +326,24 @@ export default function ReturnLedgerPage({
           rowKey="record_id"
           loading={loading}
           columns={columns}
-          dataSource={filteredItems}
-          pagination={false}
+          dataSource={pagedItems}
+          locale={{
+            emptyText: (
+              <TableEmptyState hasFilters={Boolean(hasFilters)} hasError={Boolean(error)} />
+            ),
+          }}
+          pagination={{
+            current: page,
+            pageSize,
+            total: filteredItems.length,
+            showSizeChanger: true,
+            showQuickJumper: true,
+            showTotal: (t) => `共 ${t} 条`,
+            onChange: (nextPage, nextPageSize) => {
+              setPage(nextPage)
+              setPageSize(nextPageSize)
+            },
+          }}
           scroll={{ x: 1700 }}
         />
       </Card>

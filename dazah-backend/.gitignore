@@ -36,5 +36,6 @@ docs/superpowers
 uploads/
 backups/
 .env.*
+!.env.example
 
 /storage/

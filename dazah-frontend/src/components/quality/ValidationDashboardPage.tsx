@@ -1,5 +1,6 @@
 'use client'
 
+import { qualityTokens } from './themeTokens'
 import { useState } from 'react'
 import Link from 'next/link'
 import { Card, Col, Empty, Progress, Row, Spin, Statistic } from 'antd'
@@ -250,7 +251,7 @@ export function ValidationDashboardClient({
                           size="small"
                           style={{
                             borderRadius: 8,
-                            background: '#fafafa',
+                            background: qualityTokens.bgSoft,
                             border: `2px solid ${chartColors[idx % chartColors.length]}33`,
                           }}
                         >

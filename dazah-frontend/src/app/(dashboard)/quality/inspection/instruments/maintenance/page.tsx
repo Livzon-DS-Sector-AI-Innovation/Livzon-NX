@@ -10,6 +10,8 @@ export default function InstrMaintenancePage() {
         title="设备维护保养记录"
         listApi="/api/v1/quality/instruments/maintenance"
         pullApi="/api/v1/quality/instruments/maintenance/pull"
+        entityCode="qc_instr_maintenance"
+        editable
       />
     </QualityQueryProvider>
   )

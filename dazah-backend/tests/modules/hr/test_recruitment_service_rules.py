@@ -72,7 +72,9 @@ async def test_candidate_crud_listing_job_resolution_and_status_email_failure() 
                 "total": 1,
             }
         ),
-        get_job_names=AsyncMock(return_value={"j1": "工程师"}),
+        get_job_display_names=AsyncMock(
+            return_value={"j1": "工程师", "工程师": "工程师"}
+        ),
         create_candidate=AsyncMock(return_value={"id": "c2", "姓名": "李四"}),
         get_candidate=AsyncMock(
             return_value={"id": "c1", "姓名": "张三", "应聘职位": "j1"}
@@ -176,17 +178,22 @@ async def test_onboarding_create_prefers_list_then_falls_back_and_resolves_job()
         get_candidate=AsyncMock(
             return_value={"id": "c2", "姓名": "李四", "应聘职位": "j2"}
         ),
-        get_job_names=AsyncMock(return_value={"j1": "工程师", "j2": "经理"}),
+        get_job_display_names=AsyncMock(
+            return_value={
+                "j1": "工程师", "工程师": "工程师",
+                "j2": "经理", "经理": "经理",
+            }
+        ),
         create_onboarding=AsyncMock(side_effect=lambda data: {"id": "o1", **data}),
         list_onboarding=AsyncMock(return_value={"items": [{"id": "o1"}], "total": 1}),
         get_onboarding=AsyncMock(return_value={"id": "o1"}),
         update_onboarding=AsyncMock(return_value={"id": "o1", "status": "完成"}),
-        get_dashboard_stats=AsyncMock(return_value={"total": 1}),
     )
     instance = _onboarding(repo)
     created = await instance.create_from_interview("c1")
     assert created["level"] == "工程师"
-    assert created["status"] == "进行中"
+    # 入职台账附件化改造：create_from_interview 不再写旧版进度枚举字段
+    assert "status" not in created
 
     repo.list_candidates.return_value = ([], 0)
     fallback = await instance.create_from_interview("c2")
@@ -197,7 +204,6 @@ async def test_onboarding_create_prefers_list_then_falls_back_and_resolves_job()
     assert (await instance.update_onboarding("o1", {"status": "完成"}))[
         "status"
     ] == "完成"
-    assert await instance.get_dashboard({"质量部"}) == {"total": 1}
 
 
 @pytest.mark.anyio

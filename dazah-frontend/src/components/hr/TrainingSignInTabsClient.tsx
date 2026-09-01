@@ -1,13 +1,14 @@
 'use client'
 
 import { useState, useCallback, useEffect, useRef } from 'react'
-import { Tabs, Card, Segmented, Select, Space, Button, App, AutoComplete } from 'antd'
+import { Tabs, Card, Segmented, Select, Space, Button, App, AutoComplete, Modal, Checkbox, Switch } from 'antd'
 import { FormOutlined, CheckSquareOutlined, BellOutlined, SettingOutlined, BookOutlined, SaveOutlined, AuditOutlined, ToolOutlined, FileAddOutlined, FolderOpenOutlined, RobotOutlined, UserAddOutlined, PaperClipOutlined } from '@ant-design/icons'
 import SignInSheetClient from './SignInSheetClient'
 import TrainingEvaluationListClient from './TrainingEvaluationListClient'
 import TrainingNotificationClient from './TrainingNotificationClient'
 import TrainingPersonnelConfigModal from './TrainingPersonnelConfigModal'
 import AttachmentContentModal, { type ContentEntry } from './AttachmentContentModal'
+import DocumentCatalogPickerModal, { type DocumentCatalogPick } from './DocumentCatalogPickerModal'
 import OralExamSheetClient from './OralExamSheetClient'
 import PracticalExamSheetClient from './PracticalExamSheetClient'
 import AiWrittenExamClient from './AiWrittenExamClient'
@@ -29,6 +30,7 @@ import {
   markTrainingContentUsed,
   upsertTrainingSession,
   upsertTrainingDocument,
+  updateTrainingLedger,
 } from '@/actions/hr'
 import { downloadZip } from '@/lib/download'
 import { with201SubDepts, unify201Dept, DEPT_201_MC, DEPT_201_DR, ensureDeptMappings, useDeptMappings } from './trainingDept'
@@ -132,6 +134,9 @@ export default function TrainingSignInTabsClient() {
   const { message, modal } = App.useApp()
   const [exportingAll, setExportingAll] = useState(false)
   const [addingLedger, setAddingLedger] = useState(false)
+  const [ledgerPresented, setLedgerPresented] = useState(true)
+  const [ledgerConfirmOpen, setLedgerConfirmOpen] = useState(false)
+  const [docPickerOpen, setDocPickerOpen] = useState(false)
   const [fetchingNewHires, setFetchingNewHires] = useState(false)
   const [session, setSession] = useState<TrainingSessionData>({})
   const [configOpen, setConfigOpen] = useState(false)
@@ -171,6 +176,13 @@ export default function TrainingSignInTabsClient() {
   // 不会及时更新，曾导致一次点击创建两个会话；ref 保证流程内幂等
   const sessionIdRef = useRef<string | undefined>(undefined)
   const sessionInFlightRef = useRef<Promise<string> | null>(null)
+  // ── 自动保存（10s 一次；培训有内容才保存；内容未变跳过）──
+  const sessionRef = useRef<TrainingSessionData>({})
+  const lastSavedSnapshotRef = useRef<string | undefined>(undefined)
+  const autoSaveInFlightRef = useRef(false)
+  const restoreFinishedRef = useRef(false)
+  const [lastAutoSaveAt, setLastAutoSaveAt] = useState<string | undefined>()
+  const [autoSaveFailed, setAutoSaveFailed] = useState(false)
   const assignSessionId = useCallback((id: string | undefined) => {
     sessionIdRef.current = id
     setSessionId(id)
@@ -188,6 +200,10 @@ export default function TrainingSignInTabsClient() {
       onOk: () => {
         setSession({})
         assignSessionId(undefined)
+        sessionRef.current = {}
+        lastSavedSnapshotRef.current = undefined
+        setAutoSaveFailed(false)
+        setLastAutoSaveAt(undefined)
         setOralPayload(null)
         setPracticalPayload(null)
         setAiWrittenPayload(null)
@@ -248,6 +264,8 @@ export default function TrainingSignInTabsClient() {
 
   // 勾选的附件培训内容 → session.content（评估表"培训教材"自动录入来源）
   useEffect(() => {
+    // 依赖变化时同步合并 session.content：仅 contentFormatted 变化触发，非每次渲染
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSession((prev) => (prev.content === contentFormatted ? prev : { ...prev, content: contentFormatted }))
   }, [contentFormatted])
 
@@ -266,6 +284,15 @@ export default function TrainingSignInTabsClient() {
   // 保存全部五类资料草稿（签到/评估/通知/口试/实操，后两类有内容才存），返回保存条数
   const saveAllDocs = async (): Promise<number> => {
     const id = await ensureSession()
+    // 同步会话头表字段（topic/人员/日期/级别等）：恢复流程从 sessions 表读这些，
+    // 不更新会导致刷新后 topic/人员等被旧值覆盖
+    if (id) {
+      try {
+        await upsertTrainingSession({ id, ...buildSessionUpsert(session) })
+      } catch (e) {
+        console.warn('[saveAllDocs] 会话头表同步失败（草稿仍会保存）', e)
+      }
+    }
     const entries: { type: string; payload: Record<string, unknown> }[] = [
       { type: 'sign_in', payload: { ...session } as unknown as Record<string, unknown> },
     ]
@@ -282,10 +309,89 @@ export default function TrainingSignInTabsClient() {
   }
 
   const [savingAll, setSavingAll] = useState(false)
-  const handleSaveAllDocs = async () => {
+
+  // ── 自动保存：10s 轮询；培训有内容（topic 非空/已选计划）才保存；内容未变跳过 ──
+  // 会话/草稿的变化走 setSession 或 docBuildersRef，统一用"指纹"检测是否有新内容
+  const saveAllDocsRef = useRef(saveAllDocs)
+  saveAllDocsRef.current = saveAllDocs
+
+  const computeContentFingerprint = useCallback((): string | null => {
+    const s = sessionRef.current
+    // 培训题目或内容概要有内容时才进入自动保存（避免建空会话）
+    if (!(s.topic || '').trim()) return null
+    try {
+      const docs: Record<string, unknown> = {}
+      for (const t of ['evaluation', 'notification', 'oral_exam', 'practical_exam', 'ai_written_exam', 'attachment']) {
+        const p = docBuildersRef.current[t]?.()
+        if (p) docs[t] = p
+      }
+      // session 全字段参与指纹（content/location/issuer 等虽不存 sessions 表，
+      // 但会进 sign_in 草稿 payload，变化必须触发保存）
+      return JSON.stringify({ session: { ...s }, docs })
+    } catch {
+      return null
+    }
+  }, [])
+
+  const persistAutoSave = useCallback(async () => {
+    if (autoSaveInFlightRef.current) return
+    const fp = computeContentFingerprint()
+    if (fp === null || fp === lastSavedSnapshotRef.current) return
+    autoSaveInFlightRef.current = true
+    try {
+      await saveAllDocsRef.current()
+      lastSavedSnapshotRef.current = fp
+      setAutoSaveFailed(false)
+      setLastAutoSaveAt(new Date().toLocaleTimeString('zh-CN', { hour12: false }))
+    } catch (e) {
+      // 保存失败不更新指纹，下个周期自动重试；但必须让用户可见（DESIGN §7）
+      setAutoSaveFailed(true)
+      console.warn('[AutoSave] 自动保存失败，将在下个周期重试', e)
+    } finally {
+      autoSaveInFlightRef.current = false
+    }
+  }, [computeContentFingerprint])
+
+  // session 同步进 ref（定时器/隐藏兜底读取最新值，避免闭包旧值）；
+  // 恢复完成后把当前内容设为"已保存"基线，避免刷新恢复后立刻触发一次无意义自动保存
+  // 该 effect 刻意不设依赖：ref 需在每次渲染后同步最新值（闭包兜底）
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    sessionRef.current = session
+    if (restoreFinishedRef.current) {
+      restoreFinishedRef.current = false
+      const fp = computeContentFingerprint()
+      if (fp !== null) lastSavedSnapshotRef.current = fp
+      setLastAutoSaveAt(new Date().toLocaleTimeString('zh-CN', { hour12: false }))
+    }
+  })
+
+  // 10 秒轮询自动保存
+  useEffect(() => {
+    const timer = setInterval(() => {
+      void persistAutoSave()
+    }, 10_000)
+    return () => clearInterval(timer)
+  }, [persistAutoSave])
+
+  // 页面隐藏（切走/刷新/关闭）前兜底保存一次，把丢失窗口从 10s 压到接近 0
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') void persistAutoSave()
+    }
+    window.addEventListener('visibilitychange', onVisibility)
+    return () => window.removeEventListener('visibilitychange', onVisibility)
+  }, [persistAutoSave])
+
+  // 手动保存成功后同步指纹，避免紧接着被自动保存重复写一次
+  const handleSaveAllDocsManual = async () => {
     setSavingAll(true)
     try {
       const n = await saveAllDocs()
+      const fp = computeContentFingerprint()
+      if (fp !== null) lastSavedSnapshotRef.current = fp
+      setAutoSaveFailed(false)
+      setLastAutoSaveAt(new Date().toLocaleTimeString('zh-CN', { hour12: false }))
       message.success(`已保存 ${n} 类培训资料`)
     } catch (err) {
       message.error((err instanceof Error ? err.message : '') || '保存失败')
@@ -294,11 +400,18 @@ export default function TrainingSignInTabsClient() {
     }
   }
 
+  // 台账"做二级培训"入口：新二级会话入台账后，自动把源台账副本标记为已完成二级
+  const parentRecordIdRef = useRef<string | undefined>(undefined)
+
   // 恢复（?session=xx&doc=yy 台账"打开编辑"跳转；否则恢复上次保存的会话，避免保存后刷新丢失）
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const sid = params.get('session') || localStorage.getItem('hr_training_last_session')
     const docType = params.get('doc')
+    const parentRecord = params.get('parent_record')
+    if (parentRecord) {
+      parentRecordIdRef.current = parentRecord
+    }
     if (!sid) return
     ;(async () => {
       try {
@@ -362,6 +475,9 @@ export default function TrainingSignInTabsClient() {
           } else if (d.doc_type === 'notification') setNotifyDraft(d.payload)
         }
         if (docType) setActiveTab(docType)
+        // 恢复完成后标记：session 同步 effect 将当前内容设为"已保存"基线，
+        // 避免刷新恢复后 10 秒内立刻触发一次无意义自动保存
+        restoreFinishedRef.current = true
       } catch (err) {
         console.error('[TrainingTabs] restore session failed:', err)
       }
@@ -371,7 +487,7 @@ export default function TrainingSignInTabsClient() {
 
   // ── 人员配置下拉 ──
   const [personnelConfigs, setPersonnelConfigs] = useState<import('@/types/hr').TrainingPersonnelConfig[]>([])
-  const [selectedConfigId, setSelectedConfigId] = useState<string | undefined>()
+  const [selectedConfigIds, setSelectedConfigIds] = useState<string[]>([])
   const [loadingConfigs, setLoadingConfigs] = useState(false)
 
   // 级别/部门变化时重载该部门人员配置列表
@@ -387,7 +503,7 @@ export default function TrainingSignInTabsClient() {
     })
       .then((res) => {
         setPersonnelConfigs(res.data || [])
-        setSelectedConfigId(undefined)
+        setSelectedConfigIds([])
       })
       .catch(() => setPersonnelConfigs([]))
       .finally(() => setLoadingConfigs(false))
@@ -399,6 +515,8 @@ export default function TrainingSignInTabsClient() {
 
   // 配置弹窗关闭后刷新下拉（新建/保存/删除配置后立即可选）
   useEffect(() => {
+    // 依赖变化时同步刷新下拉：仅 configOpen 变化触发，非每次渲染
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!configOpen) reloadPersonnelConfigs()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [configOpen])
@@ -541,6 +659,44 @@ export default function TrainingSignInTabsClient() {
     setContentModalOpen(false)
   }
 
+  // 从文件管理选择确认：解析最新编码 → 去重合并进已勾选条目（走同一培训内容/AI 出题链路）
+  const handleDocPickerConfirm = (items: DocumentCatalogPick[]) => {
+    if (!items.length) {
+      setDocPickerOpen(false)
+      return
+    }
+    void (async () => {
+      const resolvedItems = await resolveDocumentEntryContent(items.map((i) => i.name)).catch(() => [])
+      setCheckedEntries((prev) => {
+        const map = new Map(prev.map((e) => [e.name, e]))
+        items.forEach((i) => {
+          if (map.has(i.name)) return
+          const item = resolvedItems.find((x) => x.name === i.name)
+          const code = item?.code ?? i.code ?? null
+          map.set(i.name, {
+            key: `doc-${i.name}`,
+            group: '文件管理',
+            name: i.name,
+            code,
+            attachment_id: '',
+            resolvedCode: code,
+          })
+        })
+        const merged = Array.from(map.values())
+        // 与附件内容选择一致：签到表题目按勾选清单刷新
+        const formatted = formatTopicForSignin(merged)
+        setSession((prev) => ({
+          ...prev,
+          topic: formatted,
+          checked_content: merged.map((e) => ({ name: e.name, code: e.resolvedCode })),
+        }))
+        return merged as (typeof checkedEntries)[number][]
+      })
+      setDocPickerOpen(false)
+      message.success(`已从文件管理选择 ${items.length} 个文件条目`)
+    })()
+  }
+
   const handleSessionChange = useCallback((update: TrainingSessionData) => {
     setSession((prev) => ({ ...prev, ...update }))
   }, [])
@@ -566,13 +722,25 @@ export default function TrainingSignInTabsClient() {
     }))
   }
 
-  // 选择配置后加载该班组人员
-  const handleSelectConfig = (configId: string) => {
-    setSelectedConfigId(configId)
-    const cfg = personnelConfigs.find((c) => c.id === configId)
-    if (cfg && (cfg.personnel || []).length > 0) {
-      applyPersonnel(cfg.personnel)
-      message.success(`已加载「${cfg.config_name}」${cfg.personnel.length} 人`)
+  // 选择配置后加载班组人员（支持多选：多个班组人员合并去重后一起加载）
+  const handleSelectConfigs = (configIds: string[]) => {
+    setSelectedConfigIds(configIds)
+    const selected = personnelConfigs.filter((c) => configIds.includes(c.id))
+    const seen = new Set<string>()
+    const merged: TrainingPersonnelItem[] = []
+    selected.forEach((cfg) => {
+      ;(cfg.personnel || []).forEach((p) => {
+        const key = `${p.name}|${p.department || ''}`
+        if (!seen.has(key)) {
+          seen.add(key)
+          merged.push(p)
+        }
+      })
+    })
+    if (merged.length) {
+      applyPersonnel(merged)
+      const names = selected.map((c) => c.config_name).join('、')
+      message.success(`已加载「${names}」共 ${merged.length} 人`)
     }
   }
 
@@ -597,7 +765,7 @@ export default function TrainingSignInTabsClient() {
         (session.employee_names || []).map((n) => n?.trim()).filter(Boolean)
       )
       const merged: TrainingPersonnelItem[] = [
-        ...(session.employee_names || []).map((name, idx) => ({
+        ...(session.employee_names || []).map((name) => ({
           name,
           department: (session.employee_dept_map || {})[name],
         })),
@@ -694,159 +862,175 @@ export default function TrainingSignInTabsClient() {
         }
       } catch { /* 检查失败不阻断 */ }
     }
+    // 打开受控确认弹窗（"是否呈现"开关在弹窗内受控切换）
+    setLedgerConfirmOpen(true)
+  }
+
+  const doAddToLedger = async () => {
     const timeStart = session.training_time_start || ''
     const timeEnd = session.training_time_end || ''
-    modal.confirm({
-      title: '确认添加到培训台账',
-      content: `是否将本次培训信息（${session.topic}）录入培训台账？`,
-      onOk: async () => {
-        setAddingLedger(true)
+    setAddingLedger(true)
+    try {
+      // 确认后再复核：防并发/连点导致重复入台账
+      if (sessionIdRef.current) {
         try {
-          // 确认后再复核：防并发/连点导致重复入台账
-          if (sessionIdRef.current) {
-            try {
-              const chk = await fetch(
-                `/api/v1/hr/training-ledgers?session_id=${sessionIdRef.current}&page_size=1`,
-                { cache: 'no-store' },
-              )
-              if (chk.ok) {
-                const json = await chk.json()
-                if ((json.meta?.total || 0) > 0) {
-                  message.warning('本次培训已添加到培训台账，请勿重复添加')
-                  return
-                }
-              }
-            } catch { /* 检查失败不阻断 */ }
-          }
-          const sid = await ensureSession().catch(() => undefined)
-          // 落款部门：培训通知中修改过则用修改后的，否则公司级固定人事行政部、总经办归人事行政部
-          const archiveDept =
-            session.issuer_department ||
-            (session.department === '总经办' ? '人事行政部' : session.department || '人事行政部')
-          const trainerFull = session.instructor ? `${archiveDept}/${session.instructor}` : archiveDept
-
-          // ── 公司级培训：主台账归落款部门，涉及部门=全部受训部门，培训对象=全部人员放一起 ──
-          // ── 部门级培训：同公司级，构造单条主记录（培训对象=全部人员，内容全量一致），
-          //     涉及部门=真实参训部门（人员→部门映射，支持跨部门参训），由后端按涉及部门拆内容一致的副本；
-          //     主记录归属按参训人员判定：有 MC 人员归 MC、有 DR 人员归 DR（无对应人员不建记录） ──
-          const deptMap = session.employee_dept_map || {}
-          const groups: { teaching_dept: string; ledger_department: string; involved: string; names: string[] }[] = []
-
-          if (level === '公司级' || !archiveDept) {
-            // 公司级培训：只构造一条主记录（后端 create_record 按 involved_depts 为每个受训部门自动创建内容一致的副本）
-            const traineeDepts = (session.trainee_departments || []).filter(Boolean)
-            if (traineeDepts.length) {
-              groups.push({
-                teaching_dept: archiveDept,
-                ledger_department: archiveDept,
-                involved: traineeDepts.join('、'),
-                names: sessionNames, // 全部受训人员，不按部门拆分
-              })
-            }
-          } else {
-            // 部门级培训：单条主记录，涉及部门=真实参训部门（人员映射中的部门，含跨部门参训）
-            const realDepts = new Set<string>()
-            ;(Object.values(deptMap || {}) as string[]).forEach((d) => d && realDepts.add(d))
-            if (!realDepts.size) {
-              // 无人员映射时回退受训部门（主办部门）
-              ;(session.trainee_departments || []).filter(Boolean).forEach((d) => realDepts.add(d))
-            }
-            // 主记录归属：有 MC 人员→201二车间（MC），有 DR 人员→201二车间（DR），否则用落款部门
-            const hasMc = sessionNames.some((n) => deptMap[n] === DEPT_201_MC)
-            const hasDr = sessionNames.some((n) => deptMap[n] === DEPT_201_DR)
-            const primaryDept = hasMc ? DEPT_201_MC : hasDr ? DEPT_201_DR : archiveDept
-            groups.push({
-              teaching_dept: archiveDept,
-              ledger_department: primaryDept,
-              involved: [...realDepts].join('、'),
-              names: sessionNames, // 全部受训人员，不按部门拆分
-            })
-          }
-
-          // 无分组时退化为单条（涉及部门保留受训部门）
-          const records = groups.length ? groups : [{ teaching_dept: archiveDept, ledger_department: archiveDept, involved: (session.trainee_departments || []).join('、'), names: sessionNames }]
-
-          // 整场培训涉及部门去重（含 201 二车间 MC/DR 各组）→ 多部门培训标 pending 待二级确认
-          const allDeptSet = new Set<string>()
-          for (const g of records) {
-            g.involved.split('、').filter(Boolean).forEach((d) => allDeptSet.add(d))
-          }
-          const isMultiDept = allDeptSet.size >= 2
-
-          // 台账培训内容写全：优先培训附件 Tab 完整清单（含手动添加的行），回退勾选文件，再回退培训题目
-          const attachmentPayloadForLedger = docBuildersRef.current['attachment']?.() as
-            | { items?: { name: string; code?: string | null }[] }
-            | null
-            | undefined
-          const attachmentFullText = attachmentPayloadForLedger?.items?.length
-            ? attachmentPayloadForLedger.items
-                .map((e) => (e.code ? `《${e.name}》（${e.code}）` : `《${e.name}》`))
-                .join('、')
-            : ''
-          const fullContent = attachmentFullText || contentFormatted || session.topic
-
-          const basePayload = {
-            training_date: session.training_date!,
-            training_subject: session.topic!,
-            training_method: session.training_method || '',
-            duration_hours: computeDurationHours(),
-            trainer: trainerFull,
-            source_type: 'notification' as const,
-            session_id: sid,
-            // 台账"培训时间（日期+时间）"列格式：2026.01.06 09:00~10:00
-            training_datetime: [session.training_date?.replace(/-/g, '.'), timeStart && timeEnd ? `${timeStart}~${timeEnd}` : ''].filter(Boolean).join(' '),
-            training_content: fullContent,
-            instructor: session.instructor,
-            // 一级/二级：公司级培训或涉及部门≥3个 → 一级；否则（1~2个部门内部培训）→ 二级
-            level_category:
-              level === '公司级' || (session.trainee_departments || []).filter(Boolean).length >= 3
-                ? '一级'
-                : '二级',
-            ledger_assessment_method: session.assessment_method,
-            plan_source: level === '公司级' ? '公司计划' : '部门计划',
-            // 培训类别：按桌面《培训类别.xlsx》关键词自动识别，未命中留空
-            training_type: matchTrainingType(session.topic || '', fullContent || ''),
-            // 人药/兽药：按培训内容关键词自动识别，未命中留空
-            drug_category: matchDrugCategory(session.topic || '', fullContent || ''),
-            // 考核方式为口试时，台账"考核成绩"直接记为合格、"成绩汇总"记为 /
-            assessment_result: session.assessment_method === '口试' ? '合格' : undefined,
-            score_summary: session.assessment_method === '口试' ? '/' : undefined,
-          }
-          for (const g of records) {
-            await createTrainingLedger({
-              ...basePayload,
-              ledger_department: g.ledger_department,
-              second_level_status: isMultiDept ? 'pending' : undefined,
-              teaching_dept: g.teaching_dept,
-              involved_depts: g.involved,
-              trainees: g.names.join('、') || g.involved,
-            })
-          }
-          // 入台账同时自动保存全部资料，台账"资料"抽屉即可回看
-          const savedCount = await saveAllDocs().catch(() => 0)
-          message.success(savedCount ? `已添加到培训台账，并自动保存 ${savedCount} 类培训资料` : '已添加到培训台账')
-          // 勾选的附件文件条目写入"已培训" → 下次置灰不可再选
-          if (checkedEntries.length) {
-            try {
-              await markTrainingContentUsed(
-                checkedEntries.map((e) => ({ name: e.name, code: e.resolvedCode, attachment_id: e.attachment_id })),
-              )
-              setUsedNames((prev) => new Set([...prev, ...checkedEntries.map((e) => e.name)]))
-              setCheckedEntries([])
-              const curItem = planItems.find((i) => i.id === selectedItemId)
-              const base = curItem?.content_textbook || curItem?.content_and_textbook || ''
-              if (base) setSession((prev) => ({ ...prev, topic: base }))
-            } catch (err) {
-              message.error((err instanceof Error ? err.message : '') || '标记文件条目已培训失败')
+          const chk = await fetch(
+            `/api/v1/hr/training-ledgers?session_id=${sessionIdRef.current}&page_size=1`,
+            { cache: 'no-store' },
+          )
+          if (chk.ok) {
+            const json = await chk.json()
+            if ((json.meta?.total || 0) > 0) {
+              message.warning('本次培训已添加到培训台账，请勿重复添加')
+              return
             }
           }
-        } catch (err) {
-          message.error((err instanceof Error ? err.message : '') || '添加到培训台账失败')
-        } finally {
-          setAddingLedger(false)
+        } catch { /* 检查失败不阻断 */ }
+      }
+      const sid = await ensureSession().catch(() => undefined)
+      // 落款部门：培训通知中修改过则用修改后的，否则公司级固定人事行政部、总经办归人事行政部
+      const archiveDept =
+        session.issuer_department ||
+        (session.department === '总经办' ? '人事行政部' : session.department || '人事行政部')
+      const trainerFull = session.instructor ? `${archiveDept}/${session.instructor}` : archiveDept
+
+      // ── 公司级培训：主台账归落款部门，涉及部门=全部受训部门，培训对象=全部人员放一起 ──
+      // ── 部门级培训：同公司级，构造单条主记录（培训对象=全部人员，内容全量一致），
+      //     涉及部门=真实参训部门（人员→部门映射，支持跨部门参训），由后端按涉及部门拆内容一致的副本；
+      //     主记录归属按参训人员判定：有 MC 人员归 MC、有 DR 人员归 DR（无对应人员不建记录） ──
+      const deptMap = session.employee_dept_map || {}
+      const groups: { teaching_dept: string; ledger_department: string; involved: string; names: string[] }[] = []
+
+      if (level === '公司级' || !archiveDept) {
+        // 公司级培训：只构造一条主记录（后端 create_record 按 involved_depts 为每个受训部门自动创建内容一致的副本）
+        const traineeDepts = (session.trainee_departments || []).filter(Boolean)
+        if (traineeDepts.length) {
+          groups.push({
+            teaching_dept: archiveDept,
+            ledger_department: archiveDept,
+            involved: traineeDepts.join('、'),
+            names: sessionNames, // 全部受训人员，不按部门拆分
+          })
         }
-      },
-    })
+      } else {
+        // 部门级培训：单条主记录，涉及部门=真实参训部门（人员映射中的部门，含跨部门参训）
+        const realDepts = new Set<string>()
+        ;(Object.values(deptMap || {}) as string[]).forEach((d) => d && realDepts.add(d))
+        if (!realDepts.size) {
+          // 无人员映射时回退受训部门（主办部门）
+          ;(session.trainee_departments || []).filter(Boolean).forEach((d) => realDepts.add(d))
+        }
+        // 主记录归属：有 MC 人员→201二车间（MC），有 DR 人员→201二车间（DR），否则用落款部门
+        const hasMc = sessionNames.some((n) => deptMap[n] === DEPT_201_MC)
+        const hasDr = sessionNames.some((n) => deptMap[n] === DEPT_201_DR)
+        const primaryDept = hasMc ? DEPT_201_MC : hasDr ? DEPT_201_DR : archiveDept
+        groups.push({
+          teaching_dept: archiveDept,
+          ledger_department: primaryDept,
+          involved: [...realDepts].join('、'),
+          names: sessionNames, // 全部受训人员，不按部门拆分
+        })
+      }
+
+      // 无分组时退化为单条（涉及部门保留受训部门）
+      const records = groups.length ? groups : [{ teaching_dept: archiveDept, ledger_department: archiveDept, involved: (session.trainee_departments || []).join('、'), names: sessionNames }]
+
+      // 整场培训涉及部门去重（含 201 二车间 MC/DR 各组）→ 多部门培训标 pending 待二级确认
+      const allDeptSet = new Set<string>()
+      for (const g of records) {
+        g.involved.split('、').filter(Boolean).forEach((d) => allDeptSet.add(d))
+      }
+      const isMultiDept = allDeptSet.size >= 2
+
+      // 台账培训内容写全：优先培训附件 Tab 完整清单（含手动添加的行），回退勾选文件，再回退培训题目
+      const attachmentPayloadForLedger = docBuildersRef.current['attachment']?.() as
+        | { items?: { name: string; code?: string | null }[] }
+        | null
+        | undefined
+      const attachmentFullText = attachmentPayloadForLedger?.items?.length
+        ? attachmentPayloadForLedger.items
+            .map((e) => (e.code ? `《${e.name}》（${e.code}）` : `《${e.name}》`))
+            .join('、')
+        : ''
+      const fullContent = attachmentFullText || contentFormatted || session.topic
+
+      const basePayload = {
+        training_date: session.training_date!,
+        training_subject: session.topic!,
+        training_method: session.training_method || '',
+        duration_hours: computeDurationHours(),
+        trainer: trainerFull,
+        source_type: 'notification' as const,
+        session_id: sid,
+        // 台账"培训时间（日期+时间）"列格式：2026.01.06 09:00~10:00
+        training_datetime: [session.training_date?.replace(/-/g, '.'), timeStart && timeEnd ? `${timeStart}~${timeEnd}` : ''].filter(Boolean).join(' '),
+        training_content: fullContent,
+        instructor: session.instructor,
+        // 一级/二级：公司级培训或涉及部门≥3个 → 一级；否则（1~2个部门内部培训）→ 二级
+        level_category:
+          level === '公司级' || (session.trainee_departments || []).filter(Boolean).length >= 3
+            ? '一级'
+            : '二级',
+        ledger_assessment_method: session.assessment_method,
+        plan_source: level === '公司级' ? '公司计划' : '部门计划',
+        // 培训类别：按桌面《培训类别.xlsx》关键词自动识别，未命中留空
+        training_type: matchTrainingType(session.topic || '', fullContent || ''),
+        // 人药/兽药：按培训内容关键词自动识别，未命中留空
+        drug_category: matchDrugCategory(session.topic || '', fullContent || ''),
+        // 考核方式为口试时，台账"考核成绩"直接记为合格、"成绩汇总"记为 /
+        assessment_result: session.assessment_method === '口试' ? '合格' : undefined,
+        score_summary: session.assessment_method === '口试' ? '/' : undefined,
+        is_presented: ledgerPresented,
+      }
+      for (const g of records) {
+        await createTrainingLedger({
+          ...basePayload,
+          ledger_department: g.ledger_department,
+          second_level_status: isMultiDept ? 'pending' : undefined,
+          teaching_dept: g.teaching_dept,
+          involved_depts: g.involved,
+          trainees: g.names.join('、') || g.involved,
+        })
+      }
+      // 入台账同时自动保存全部资料，台账"资料"抽屉即可回看
+      const savedCount = await saveAllDocs().catch(() => 0)
+      message.success(savedCount ? `已添加到培训台账，并自动保存 ${savedCount} 类培训资料` : '已添加到培训台账')
+      // 台账"做二级培训"入口闭环：二级会话入台账后，自动把源台账副本置为已完成二级
+      if (parentRecordIdRef.current) {
+        try {
+          await updateTrainingLedger(parentRecordIdRef.current, { second_level_status: 'done' })
+          parentRecordIdRef.current = undefined
+        } catch {
+          /* 闭环失败不阻断入台账，用户可在台账页手动确认 */
+        }
+      }
+      // 同步自动保存指纹，避免紧接着被轮询重复写一次
+      sessionRef.current = session
+      const fpAfterLedger = computeContentFingerprint()
+      if (fpAfterLedger !== null) lastSavedSnapshotRef.current = fpAfterLedger
+      setAutoSaveFailed(false)
+      setLastAutoSaveAt(new Date().toLocaleTimeString('zh-CN', { hour12: false }))
+      // 勾选的附件文件条目写入"已培训" → 下次置灰不可再选
+      if (checkedEntries.length) {
+        try {
+          await markTrainingContentUsed(
+            checkedEntries.map((e) => ({ name: e.name, code: e.resolvedCode, attachment_id: e.attachment_id || null })),
+          )
+          setUsedNames((prev) => new Set([...prev, ...checkedEntries.map((e) => e.name)]))
+          setCheckedEntries([])
+          const curItem = planItems.find((i) => i.id === selectedItemId)
+          const base = curItem?.content_textbook || curItem?.content_and_textbook || ''
+          if (base) setSession((prev) => ({ ...prev, topic: base }))
+        } catch (err) {
+          message.error((err instanceof Error ? err.message : '') || '标记文件条目已培训失败')
+        }
+      }
+    } catch (err) {
+      message.error((err instanceof Error ? err.message : '') || '添加到培训台账失败')
+    } finally {
+      setAddingLedger(false)
+      setLedgerConfirmOpen(false)
+    }
   }
 
 
@@ -1026,18 +1210,21 @@ export default function TrainingSignInTabsClient() {
             </Space>
           )}
         </Space>
-        {selectedItemId && planSections.length > 0 && (
-          <div className="mt-2">
-            <Space size={8} wrap align="center">
+        <div className="mt-2">
+          <Space size={8} wrap align="center">
+            {selectedItemId && planSections.length > 0 && (
               <Button size="small" onClick={() => setContentModalOpen(true)}>
                 选择培训附件内容
               </Button>
-              {contentFormatted && (
-                <span className="text-xs text-gray-600">已录入：{contentFormatted}</span>
-              )}
-            </Space>
-          </div>
-        )}
+            )}
+            <Button size="small" onClick={() => setDocPickerOpen(true)}>
+              从文件管理选择
+            </Button>
+            {contentFormatted && (
+              <span className="text-xs text-gray-600">已录入：{contentFormatted}</span>
+            )}
+          </Space>
+        </div>
         <div className="mt-3">
           <Space wrap size={12}>
             <Button icon={<SettingOutlined />} onClick={() => setConfigOpen(true)}>
@@ -1053,16 +1240,28 @@ export default function TrainingSignInTabsClient() {
               拉取新员工(入职一周)
             </Button>
             <Select
-              value={selectedConfigId}
-              onChange={handleSelectConfig}
-              placeholder={loadingConfigs ? '加载中...' : '加载班组人员'}
+              mode="multiple"
+              value={selectedConfigIds}
+              onChange={handleSelectConfigs}
+              placeholder={loadingConfigs ? '加载中...' : '加载班组人员（可多选）'}
               loading={loadingConfigs}
               options={personnelConfigs.map((c) => ({
                 value: c.id,
                 label: `${c.config_name}（${(c.personnel || []).length}人）`,
               }))}
-              style={{ minWidth: 200 }}
+              optionRender={(option) => (
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    checked={selectedConfigIds.includes(String(option.value))}
+                    style={{ pointerEvents: 'none' }}
+                  />
+                  <span>{option.label}</span>
+                </div>
+              )}
+              maxTagCount={2}
+              style={{ minWidth: 240 }}
               allowClear
+              onClear={() => handleSelectConfigs([])}
             />
           </Space>
         </div>
@@ -1080,9 +1279,18 @@ export default function TrainingSignInTabsClient() {
             <Button type="primary" icon={<BookOutlined />} onClick={handleAddToLedger} loading={addingLedger}>
               添加到培训台账
             </Button>
-            <Button type="primary" icon={<SaveOutlined />} loading={savingAll} title="一键保存签到/评估/通知/口试/实操/笔试/培训附件七类资料草稿" onClick={handleSaveAllDocs}>
+            <Button type="primary" icon={<SaveOutlined />} loading={savingAll} title="一键保存签到/评估/通知/口试/实操/笔试/培训附件七类资料草稿" onClick={handleSaveAllDocsManual}>
                 保存
               </Button>
+            {autoSaveFailed ? (
+              <span className="text-xs text-red-600">
+                自动保存失败，将在下个周期自动重试；也可点击「保存」手动重试
+              </span>
+            ) : lastAutoSaveAt ? (
+              <span className="text-xs text-green-600">
+                已自动保存 {lastAutoSaveAt}
+              </span>
+            ) : null}
             <Button icon={<FileAddOutlined />} onClick={handleNewTraining} title="清空并开始新建一份培训资料">
               新建培训资料
             </Button>
@@ -1113,6 +1321,40 @@ export default function TrainingSignInTabsClient() {
         initialCheckedKeys={checkedEntries.map((e) => e.key)}
         onClose={() => setContentModalOpen(false)}
         onConfirm={handleContentConfirm}
+      />
+
+      {/* 添加到培训台账确认弹窗（受控：Switch 可正常切换） */}
+      <Modal
+        open={ledgerConfirmOpen}
+        title="确认添加到培训台账"
+        onCancel={() => setLedgerConfirmOpen(false)}
+        onOk={doAddToLedger}
+        confirmLoading={addingLedger}
+        okText="确定"
+        cancelText="取消"
+      >
+        <div>是否将本次培训信息（{session.topic}）录入培训台账？</div>
+        <div style={{ marginTop: 12 }}>
+          是否呈现（不呈现则不进入员工培训清单）：
+          <Switch
+            checked={ledgerPresented}
+            onChange={setLedgerPresented}
+            checkedChildren="是"
+            unCheckedChildren="否"
+            style={{ marginLeft: 8 }}
+          />
+        </div>
+      </Modal>
+
+      {/* 从质量管理-文件管理选择培训内容 */}
+      <DocumentCatalogPickerModal
+        open={docPickerOpen}
+        onClose={() => setDocPickerOpen(false)}
+        onConfirm={handleDocPickerConfirm}
+        excludeNames={[
+          ...checkedEntries.map((e) => e.name),
+          ...Array.from(usedNames),
+        ]}
       />
 
       <style jsx global>{`

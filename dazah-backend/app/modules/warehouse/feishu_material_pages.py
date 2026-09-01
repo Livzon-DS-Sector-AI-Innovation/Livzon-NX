@@ -234,6 +234,12 @@ FEISHU_WAREHOUSE_MATERIAL_PAGES = {
         "tblmghZOEyVHO2Yl",
         FEISHU_FINISHED_PRODUCT_APP_TOKEN,
     ),
+    "product-inbound-detail": FeishuWarehouseMaterialPage(
+        "product-inbound-detail",
+        "成品入库明细",
+        "tblA5XrTrmoCv9SW",
+        FEISHU_FINISHED_PRODUCT_APP_TOKEN,
+    ),
     "product-inbound-ledger": FeishuWarehouseMaterialPage(
         "product-inbound-ledger",
         "入库总账",

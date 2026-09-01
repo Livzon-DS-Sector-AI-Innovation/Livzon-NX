@@ -23,6 +23,13 @@ function parsePreview(attachmentId: string, fileName: string, preview: any): Con
     ;(preview.tables || []).forEach((t: any) =>
       tables.push({ title: t.title || fileName, header: t.header || [], rows: t.rows || [] }),
     )
+  } else if (preview?.kind === 'table') {
+    // 单 sheet / 整文件表格：header/rows 在顶层（如 xlsx_sheet 预览）
+    tables.push({
+      title: preview.title || fileName,
+      header: preview.header || [],
+      rows: preview.rows || [],
+    })
   } else {
     ;(preview?.blocks || []).forEach((b: any) => {
       if (b?.type === 'table' && Array.isArray(b.rows) && b.rows.length) {

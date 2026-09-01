@@ -4,17 +4,23 @@
 1. 编码匹配：文件名中的编码（含修订号，如 SMP-QA-001-02 → SMP-QA-001/02）精确/前缀匹配；
 2. 名称模糊匹配：文件名中文核心词与条目名称互含，唯一则命中；
 3. LLM 匹配：前两步失败时，调用全局 llm_client 在候选条目中识别最匹配条目。
+
+word 附件转换：.doc/.docx/.wps 转标准 MD（模板化管线，保留表格与图片），
+图片存为独立对象并在 attachment 记录 `asset_keys` 中登记。
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import re
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -36,11 +42,14 @@ from app.core.storage import (
 from app.core.storage import (
     is_enabled as minio_enabled,
 )
-from app.core.upload_security import safe_upload_filename
+from app.core.upload_security import safe_upload_filename, sniff_upload_mime
 from app.modules.quality.models.document_catalog import (
     DocumentEntry,
 )
-from app.modules.quality.service.document_catalog_md import convert_word_attachment
+from app.modules.quality.service.document_catalog_md import (
+    ExtractedImage,
+    convert_word_attachment,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -51,9 +60,25 @@ CODE_REV_PATTERN = re.compile(
     r"([A-Z]{2,3}-[A-Za-z0-9（）()]+-\d{3})(?:[-\/](\d{1,3}))?"
 )
 
-ALLOWED_EXT = {".md", ".doc", ".docx", ".pdf", ".png", ".jpg", ".jpeg", ".gif", ".bmp"}
-WORD_EXT = {".doc", ".docx"}
+ALLOWED_EXT = {
+    ".md",
+    ".doc",
+    ".docx",
+    ".wps",
+    ".pdf",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".bmp",
+}
+WORD_EXT = {".doc", ".docx", ".wps"}
 TEXT_MD_MIME = "text/markdown; charset=utf-8"
+
+# 转换后 md 中图片占位引用（document_catalog_docx_md 产物），如 (img_000.png)
+_MD_IMAGE_REF_RE = re.compile(r"!\[image\]\((img_\d+\.[A-Za-z0-9]+)\)")
+# md 中的图片引用行（供培训出题 AI 的文本输入需剥离）
+_MD_ANY_IMAGE_RE = re.compile(r"!\[[^\]]*\]\([^)]*\)")
 
 ATTACHMENT_MAX_SIZE = 20 * 1024 * 1024  # 20MB
 
@@ -114,6 +139,7 @@ def _new_attachment(
     converted: bool,
     converted_md_key: str | None = None,
     uploaded_by: str = "",
+    asset_keys: list[str] | None = None,
 ) -> dict[str, Any]:
     return {
         "file_name": file_name,
@@ -124,7 +150,18 @@ def _new_attachment(
         "converted": converted,
         "uploaded_at": datetime.now(UTC).isoformat(),
         "uploaded_by": uploaded_by or "",
+        "asset_keys": list(asset_keys or []),
+        # 转换管线标记（历史附件重转脚本据此跳过已处理附件）
+        "pipeline": "v2",
     }
+
+
+def _attachment_asset_url(entry_id: Any, asset_key: str) -> str:
+    """图片对象的前端可加载 URL（经 Next 代理注入鉴权）。"""
+    return (
+        f"/api/v1/quality/document-entries/{entry_id}"
+        f"/attachments/{quote(asset_key, safe='/')}/content"
+    )
 
 
 async def upload_attachment_to_entry(
@@ -134,8 +171,12 @@ async def upload_attachment_to_entry(
     content: bytes,
     content_type: str,
     uploaded_by: str = "",
+    prepared: tuple[str, list[ExtractedImage]] | None = None,
 ) -> dict[str, Any]:
-    """上传附件并绑定到条目：word 附件两段式转标准 MD 存储，图片/PDF 原样存储。"""
+    """上传附件并绑定到条目：word 附件转标准 MD（表格/图片保留），图片/PDF 原样存储。
+
+    prepared 为外部已完成转换的结果（批量导入先转换后匹配时传入，避免重复转换）。
+    """
     ext = os.path.splitext(file_name or "")[1].lower()
     if ext not in ALLOWED_EXT:
         raise AppException(
@@ -153,9 +194,15 @@ async def upload_attachment_to_entry(
         stored_keys.append(original_key)
 
         converted_md_key: str | None = None
+        asset_keys: list[str] = []
         if ext in WORD_EXT:
             try:
-                md_text = convert_word_attachment(file_name, content)
+                if prepared is None:
+                    # soffice 子进程与 docx 解析为阻塞调用，放入线程避免阻塞事件循环
+                    prepared = await asyncio.to_thread(
+                        convert_word_attachment, file_name, content
+                    )
+                md_text, images = prepared
             except Exception:  # noqa: BLE001
                 # 转换失败（伪 docx/加密/损坏文件）：降级为原样存储，仍可下载/预览原文件
                 logger.warning(
@@ -163,6 +210,18 @@ async def upload_attachment_to_entry(
                     extra={"component": "quality", "file": file_name},
                 )
             else:
+                name_to_url: dict[str, str] = {}
+                for image in images:
+                    asset_key = (
+                        f"document-catalog/attachments/{uuid.uuid4().hex}_{image.name}"
+                    )
+                    _store_file(asset_key, image.data, image.content_type)
+                    stored_keys.append(asset_key)
+                    asset_keys.append(asset_key)
+                    name_to_url[image.name] = _attachment_asset_url(entry.id, asset_key)
+                md_text = _MD_IMAGE_REF_RE.sub(
+                    lambda m: f"![image]({name_to_url[m.group(1)]})", md_text
+                )
                 md_key = (
                     f"document-catalog/attachments/{uuid.uuid4().hex}_"
                     f"{os.path.splitext(file_name)[0]}.md"
@@ -182,6 +241,7 @@ async def upload_attachment_to_entry(
             converted=converted_md_key is not None,
             converted_md_key=converted_md_key,
             uploaded_by=uploaded_by,
+            asset_keys=asset_keys,
         )
         attachments = list(entry.attachments or [])
         attachments.append(attachment)
@@ -207,6 +267,78 @@ def extract_code_and_rev(file_name: str) -> tuple[str, str | None] | None:
     if not match:
         return None
     return match.group(1), match.group(2)
+
+
+@dataclass(slots=True)
+class VersionUpdateInfo:
+    """附件导入触发的条目文件编码版本升级信息。"""
+
+    old_code: str
+    new_code: str
+
+
+# 条目编码修订号：`SOP-QC-001/08` 的 /08，或结尾 `-08`/`_08` 变体；结尾 3 位
+# 数字（如 SOP-QC-001 的 001）属于文件编号本身，不视为修订号。
+_ENTRY_CODE_REV_RE = re.compile(
+    r"^(?P<prefix>.+?)(?:/(?P<slash_rev>\d{1,3})|[-_](?P<sep_rev>\d{1,2}))$"
+)
+
+
+def _parse_entry_code_revision(code: str | None) -> tuple[int, str] | None:
+    """解析条目编码修订号，返回 (数值, 原始文本)；无修订号返回 None。"""
+    if not code:
+        return None
+    match = _ENTRY_CODE_REV_RE.match(code.strip())
+    if not match:
+        return None
+    rev_text = match.group("slash_rev") or match.group("sep_rev")
+    return int(rev_text), rev_text
+
+
+def sync_entry_version(
+    entry: DocumentEntry,
+    file_name: str,
+    rev_source: str | None = None,
+) -> VersionUpdateInfo | None:
+    """版本号高于条目编码修订号时，升级条目文件编码。
+
+    版本号即编码 `/` 后的数据（如 SOP-QC-001/08 的 08）。按正文匹配绑定时
+    以正文编号（rev_source）为版本来源，文件名编号不可信。文件名/正文无
+    修订号、或修订号相等/更低时不更新；升级保留条目编码原前缀与补零宽度。
+    """
+    parsed = extract_code_and_rev(rev_source or file_name)
+    if parsed is None or parsed[1] is None:
+        return None
+    file_rev = int(parsed[1])
+
+    entry_code = (entry.code or "").strip()
+    if not entry_code:
+        return None
+    existing = _parse_entry_code_revision(entry_code)
+    if existing is not None and file_rev <= existing[0]:
+        return None
+
+    if existing is not None:
+        prefix = entry_code[: len(entry_code) - len(existing[1])].rstrip("/-_")
+        new_rev = str(file_rev).zfill(max(len(existing[1]), 2))
+    else:
+        prefix = entry_code
+        new_rev = str(file_rev).zfill(2)
+    new_code = f"{prefix}/{new_rev}"
+
+    info = VersionUpdateInfo(old_code=entry_code, new_code=new_code)
+    entry.code = new_code
+    logger.info(
+        "document entry code version upgraded",
+        extra={
+            "component": "quality",
+            "entry_id": str(entry.id),
+            "old_code": entry_code,
+            "new_code": new_code,
+            "file": file_name,
+        },
+    )
+    return info
 
 
 CJK_SEQ_RE = re.compile(r"[\u4e00-\u9fff]{4,}")
@@ -286,34 +418,105 @@ async def find_entry_by_file_name(
     if len(matches) > 1 and len({m.code for m in matches}) == 1:
         # 同编码重复行：绑定到附件最少的一条
         return min(matches, key=lambda m: len(m.attachments or []))
+    if rev and len(matches) > 1:
+        # 文件名版本高于全部候选（多版本并存）：绑定最新版本条目，
+        # 由 sync_entry_version 完成编码升级；存在更高版本候选时不猜
+        lower_than_file = [
+            _parse_entry_code_revision(m.code) or (0, "") for m in matches
+        ]
+        if all(parsed_rev[0] < int(rev) for parsed_rev in lower_than_file):
+            return matches[lower_than_file.index(max(lower_than_file))]
+    return None
+
+
+def _normalize_identity(value: str) -> str:
+    """名称/编号归一化：去空白、全角括号转半角、小写。"""
+    return (
+        re.sub(r"\s+", "", value).replace("（", "(").replace("）", ")").lower()
+    )
+
+
+CONTENT_CODE_RE = re.compile(r"\*\*文件编号\*\*[:：]\s*(\S+)")
+CONTENT_TITLE_RE = re.compile(r"^#\s+(.+)$", re.MULTILINE)
+
+
+def extract_content_identity(md_text: str) -> tuple[str | None, str | None]:
+    """从转换后 md 头部提取正文身份：(文件编号, 标题)。"""
+    head = md_text[:2000]
+    code = CONTENT_CODE_RE.search(head)
+    title = CONTENT_TITLE_RE.search(head)
+    return (
+        code.group(1) if code else None,
+        title.group(1).strip() if title else None,
+    )
+
+
+async def match_entry_by_content(
+    db: AsyncSession, content_code: str | None, content_title: str | None
+) -> DocumentEntry | None:
+    """正文匹配：优先正文文件编号（主干一致，全串一致优先），其次正文标题
+    与条目名称归一化后完全一致。"""
+    if content_code:
+        # 去掉全部分隔符后比对，兼容 - 与 / 两种修订分隔写法
+        nc = re.sub(r"[\s/\-]+", "", content_code).upper()
+        head = _escape_like(nc[:8])
+        result = await db.execute(
+            select(DocumentEntry).where(
+                DocumentEntry.is_deleted.is_(False),
+                DocumentEntry.code.ilike(f"{head}%"),
+            )
+        )
+        normed = [
+            (e, re.sub(r"[\s/\-]+", "", e.code or "").upper())
+            for e in result.scalars().all()
+        ]
+        full = [e for e, c in normed if c == nc]
+        if len(full) == 1:
+            return full[0]
+        related = [
+            e for e, c in normed if c and (c.startswith(nc) or nc.startswith(c))
+        ]
+        if len(related) == 1:
+            return related[0]
+    if content_title:
+        nt = _normalize_identity(content_title)
+        result = await db.execute(
+            select(DocumentEntry).where(
+                DocumentEntry.is_deleted.is_(False),
+                DocumentEntry.name.ilike(f"%{_escape_like(content_title)}%"),
+            )
+        )
+        exact = [
+            e
+            for e in result.scalars().all()
+            if _normalize_identity(e.name or "") == nt
+        ]
+        if len(exact) == 1:
+            return exact[0]
     return None
 
 
 async def match_entry_by_name(db: AsyncSession, file_name: str) -> DocumentEntry | None:
-    """名称模糊匹配：文件名中文核心词与条目名称互含，唯一则命中。"""
+    """名称匹配：文件名中文核心词与条目名称归一化后完全一致，唯一则命中；
+    多条同名时绑定附件最少的一条。"""
     core = extract_cjk_core(file_name)
     if not core:
         return None
-    for candidate in (core, core[:8], core[:6]):
-        if len(candidate) < 4:
-            break
-        result = await db.execute(
-            select(DocumentEntry).where(
-                DocumentEntry.is_deleted.is_(False),
-                DocumentEntry.name.ilike(f"%{_escape_like(candidate)}%"),
-            )
+    result = await db.execute(
+        select(DocumentEntry).where(
+            DocumentEntry.is_deleted.is_(False),
+            DocumentEntry.name.ilike(f"%{_escape_like(core)}%"),
         )
-        matches = result.scalars().all()
-        if len(matches) == 1:
-            return matches[0]
-        if len(matches) > 1:
-            # 反向包含进一步收敛
-            narrowed = [
-                m for m in matches if (m.name or "") in core or core in (m.name or "")
-            ]
-            if len(narrowed) == 1:
-                return narrowed[0]
-            return None
+    )
+    matches = [
+        m
+        for m in result.scalars().all()
+        if _normalize_identity(m.name or "") == _normalize_identity(core)
+    ]
+    if len(matches) == 1:
+        return matches[0]
+    if len(matches) > 1:
+        return min(matches, key=lambda m: len(m.attachments or []))
     return None
 
 
@@ -395,15 +598,25 @@ async def llm_match_entry(db: AsyncSession, file_name: str) -> DocumentEntry | N
 
 
 async def match_entry_for_attachment(
-    db: AsyncSession, file_name: str
+    db: AsyncSession,
+    file_name: str,
+    content_identity: tuple[str | None, str | None] | None = None,
 ) -> tuple[DocumentEntry | None, str]:
-    """三段式匹配，返回 (条目, 匹配方式 code/name/llm/none)。"""
-    entry = await find_entry_by_file_name(db, file_name)
-    if entry is not None:
-        return entry, "code"
+    """四段式匹配：文件名称 → 文件编号 → 正文内容 → LLM 兜底。
+
+    content_identity 为转换后 md 提取的 (正文文件编号, 正文标题)，
+    仅在名称与编号均未命中时参与正文匹配。
+    """
     entry = await match_entry_by_name(db, file_name)
     if entry is not None:
         return entry, "name"
+    entry = await find_entry_by_file_name(db, file_name)
+    if entry is not None:
+        return entry, "code"
+    if content_identity is not None:
+        entry = await match_entry_by_content(db, *content_identity)
+        if entry is not None:
+            return entry, "content"
     entry = await llm_match_entry(db, file_name)
     if entry is not None:
         return entry, "llm"
@@ -430,6 +643,9 @@ async def delete_attachment_from_entry(
     converted_key = target.get("converted_md_key")
     if converted_key and converted_key not in keys:
         keys.append(converted_key)
+    for asset_key in target.get("asset_keys") or []:
+        if asset_key and asset_key not in keys:
+            keys.append(asset_key)
     backups: dict[str, tuple[bytes, str]] = {}
     deleted_keys: list[str] = []
     try:
@@ -469,20 +685,31 @@ async def delete_attachment_from_entry(
 def read_attachment_preview(
     entry: DocumentEntry, storage_key: str
 ) -> tuple[bytes, str]:
-    """读取附件预览内容：word 返回转换后标准 MD；图片/PDF 返回原文件。"""
+    """读取附件预览内容：word 返回转换后标准 MD；图片/PDF 返回原文件；
+    word 转换提取的图片对象（asset_keys）返回图片本身。"""
     for attachment in entry.attachments or []:
-        if attachment.get("storage_key") != storage_key:
-            continue
-        if attachment.get("converted_md_key"):
-            stored = _read_file(attachment["converted_md_key"])
+        if attachment.get("storage_key") == storage_key:
+            if attachment.get("converted_md_key"):
+                stored = _read_file(attachment["converted_md_key"])
+                if stored is not None:
+                    data, _ = stored
+                    return data, TEXT_MD_MIME
+            stored = _read_file(storage_key)
             if stored is not None:
                 data, _ = stored
-                return data, TEXT_MD_MIME
-        stored = _read_file(storage_key)
-        if stored is not None:
-            data, _ = stored
-            return data, attachment.get("content_type") or "application/octet-stream"
-        break
+                return (
+                    data,
+                    attachment.get("content_type") or "application/octet-stream",
+                )
+            break
+        if storage_key in (attachment.get("asset_keys") or []):
+            stored = _read_file(storage_key)
+            if stored is None:
+                break
+            data, content_type = stored
+            if content_type == "application/octet-stream":
+                content_type = sniff_upload_mime(storage_key, data)
+            return data, content_type
     return b"", "application/octet-stream"
 
 
@@ -513,6 +740,8 @@ def read_entry_md_contents(entry: DocumentEntry) -> list[dict[str, Any]]:
                 },
             )
             continue
+        # 图片引用对 AI 出题是噪音，剥离后再作为材料输入
+        md_text = re.sub(r"\n{3,}", "\n\n", _MD_ANY_IMAGE_RE.sub("", md_text))
         contents.append(
             {"file_name": attachment.get("file_name") or "", "md_text": md_text}
         )

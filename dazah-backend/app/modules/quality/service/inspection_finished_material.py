@@ -11,6 +11,9 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AppException
+from app.modules.quality.service import (
+    inspection_dashboard_config as _dash_cfg,
+)
 from app.modules.quality.service import quality_feishu_sync as feishu_sync_service
 from app.modules.quality.service.inspection_helpers import (
     _get_feishu_one,
@@ -1048,3 +1051,84 @@ async def pull_material_records_by_entity(
 ) -> dict[str, int]:
     await ensure_quality_feishu_entity_settings(db)
     return await _pull_count(db, entity_code)
+
+
+# ═══════════════════════════════════════════
+#  成品页展示列规则（列裁剪）
+# ═══════════════════════════════════════════
+
+# 仪表盘检测项 metric_key 汇总（实体 → metric_key 集合）
+_FINISHED_DASHBOARD_METRIC_KEYS: dict[str, set[str]] = {}
+for _name in vars(_dash_cfg):
+    if _name.endswith("_DASHBOARD_ENTITY_CONFIGS"):
+        _configs = getattr(_dash_cfg, _name)
+        if isinstance(_configs, dict):
+            for _code, _meta in _configs.items():
+                keys = {
+                    str(metric.get("metric_key") or "")
+                    for metric in (_meta.get("metric_configs") or ())
+                }
+                _FINISHED_DASHBOARD_METRIC_KEYS.setdefault(_code, set()).update(keys)
+# LKMS 单实体布局（LKMS_VET_DASHBOARD_METRIC_CONFIGS）
+_lkms_metric_keys = {
+    str(metric.get("metric_key") or "")
+    for metric in getattr(_dash_cfg, "LKMS_VET_DASHBOARD_METRIC_CONFIGS", ())
+}
+if _lkms_metric_keys:
+    _FINISHED_DASHBOARD_METRIC_KEYS.setdefault(
+        _dash_cfg.LKMS_VET_DASHBOARD_ENTITY_CODE, set()
+    ).update(_lkms_metric_keys)
+
+
+def _pick_first_field(field_names: list[str], hints: tuple[str, ...]) -> str | None:
+    """按名称提示词取首个字段（保证只取 1 列）。"""
+    for name in field_names:
+        if any(hint in name for hint in hints):
+            return name
+    return None
+
+
+def _metric_priority(name: str) -> int:
+    """检测项展示优先级（越小越靠前）：含量>总杂质>单一/最大杂质>未知杂质>其他。"""
+    if "含量" in name:
+        return 0
+    if "总杂质" in name:
+        return 1
+    if "单一" in name or "最大" in name:
+        return 2
+    if "未知" in name:
+        return 3
+    return 4
+
+
+def get_finished_display_fields(
+    entity_code: str,
+    all_field_names: list[str],
+) -> list[str]:
+    """计算成品页精简展示列：批号 / 批量(数量) / 规格(包装) / 检测项目(最多 5 项)。
+
+    检测项目规则：
+    1. 优先用仪表盘 metric_key 与字段交集（与仪表盘一致，仅保留交集里）。
+    2. 交集为空（客户子表或字段限值不一致）→ 兜底：字段名含「含量」或「杂质」。
+    3. 检测项按优先级（含量/总杂质/单一最大杂质/未知杂质/其他）排序后最多取 5 个。
+    其余字段（年/月/日、有效期、包装单位、报告日期/报告单号/报告单等）隐藏，
+    通过前端「详情」查看。
+    """
+    batch = _pick_first_field(all_field_names, ("批号",))
+    quantity = _pick_first_field(all_field_names, ("批量", "数量"))
+    spec = _pick_first_field(all_field_names, ("规格", "包装规格"))
+    # 多数成品表无「规格」字眼，规格列兜底到包装单位字段（如 kg/Drum、kg/桶）
+    if spec is None:
+        spec = _pick_first_field(all_field_names, ("kg/", "桶", "Bag"))
+
+    dashboard_keys = _FINISHED_DASHBOARD_METRIC_KEYS.get(entity_code, set())
+    if dashboard_keys:
+        candidates = [name for name in all_field_names if name in dashboard_keys]
+    else:
+        candidates = [
+            name for name in all_field_names if ("含量" in name or "杂质" in name)
+        ]
+
+    metrics = sorted(candidates, key=_metric_priority)[:5]
+
+    return [f for f in [batch, quantity, spec, *metrics] if f]

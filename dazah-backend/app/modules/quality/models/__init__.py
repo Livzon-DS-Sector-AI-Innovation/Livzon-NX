@@ -23,6 +23,10 @@ from app.modules.quality.models.deviation_ai_session import (
 from app.modules.quality.models.deviation_investigation_push_record import (
     DeviationInvestigationPushRecord,
 )
+from app.modules.quality.models.deviation_workbench import (
+    DeviationWorkbenchReport,
+    DeviationWorkbenchSettings,
+)
 from app.modules.quality.models.deviations import Deviation
 from app.modules.quality.models.document_catalog import (
     DocumentDepartment,
@@ -50,6 +54,7 @@ from app.modules.quality.models.finished_product_inspection import (
 from app.modules.quality.models.finished_trend_alert_notification import (
     FinishedTrendAlertNotification,
 )
+from app.modules.quality.models.historical_deviation import HistoricalDeviation
 from app.modules.quality.models.inspection import InspectionRecord
 from app.modules.quality.models.lab_instrument import LabInstrument
 from app.modules.quality.models.lab_item import LabItem
@@ -72,6 +77,9 @@ from app.modules.quality.models.validation_record import ValidationRecord
 
 __all__ = [
     "Deviation",
+    "HistoricalDeviation",
+    "DeviationWorkbenchSettings",
+    "DeviationWorkbenchReport",
     "CAPA",
     "CapaPlanTrack",
     "QualityAiAnalysisLog",

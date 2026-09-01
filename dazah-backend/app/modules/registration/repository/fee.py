@@ -27,6 +27,19 @@ def _year_from_filter(year_from: int) -> ColumnElement[bool]:
     return payment_year >= year_from
 
 
+def _year_equal_filter(year: int) -> ColumnElement[bool]:
+    """按 payment_date 前四位年份等值过滤，与 year_from/汇总口径一致。"""
+    payment_year = func.cast(
+        sa.case(
+            (
+                RegistrationFee.payment_date.op("~")("^[0-9]{4}"),
+                func.left(RegistrationFee.payment_date, 4),
+            ),
+            else_="0",
+        ),
+        Integer,
+    )
+    return payment_year == year
 class RegistrationFeeRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
@@ -65,6 +78,7 @@ class RegistrationFeeRepository:
         year: int | None = None,
         year_from: int | None = None,
         keyword: str | None = None,
+        limit: int | None = None,
     ) -> list[RegistrationFee]:
         stmt = select(RegistrationFee).where(RegistrationFee.is_deleted.is_(False))
 
@@ -81,7 +95,7 @@ class RegistrationFeeRepository:
         if country:
             stmt = stmt.where(RegistrationFee.country == country)
         if year:
-            stmt = stmt.where(func.extract("year", RegistrationFee.created_at) == year)
+            stmt = stmt.where(_year_equal_filter(year))
         if keyword:
             like_keyword = f"%{keyword}%"
             stmt = stmt.where(
@@ -94,6 +108,8 @@ class RegistrationFeeRepository:
             )
 
         stmt = stmt.order_by(desc(RegistrationFee.created_at))
+        if limit:
+            stmt = stmt.limit(limit)
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 

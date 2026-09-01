@@ -17,6 +17,15 @@ import InstructorAutoComplete from './InstructorAutoComplete'
 const METHOD_OPTIONS = ['面授', '实操', '函授', '远程教育', '其他']
 const ASSESS_OPTIONS = ['笔试', '口试', '实操', '写总结']
 const EVAL_RESULTS = ['经考核，基本达到培训效果。', '经考核，不能达到预期培训效果。']
+
+// 补考结果输入：支持数值或"-"（不适用）；"-"与空提交为空（导出显示"-"）
+const toIntOrDash = (v: unknown) => {
+  if (v === undefined || v === null || v === '') return undefined
+  const s = String(v).trim()
+  if (s === '-' || s === '—') return undefined
+  const n = Number(s)
+  return Number.isNaN(n) ? undefined : n
+}
 const ATTACHMENTS = [
   { name: 'has_notification', label: '1、培训通知（需包含培训内容、时间、地点、培训对象名单、培训方式）' },
   { name: 'has_signin_sheet', label: '2、培训签到表' },
@@ -95,6 +104,7 @@ export default function TrainingEvaluationListClient({ sessionData, onSessionCha
       if (typeof patch[k] === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(patch[k] as string)) patch[k] = dayjs(patch[k] as string)
     }
     form.setFieldsValue(patch)
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- syncFv 一次性同步草稿状态，仅依赖变化触发
     syncFv()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialDraft])
@@ -137,6 +147,7 @@ export default function TrainingEvaluationListClient({ sessionData, onSessionCha
     }
     if (Object.keys(patch).length) {
       form.setFieldsValue(patch)
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- syncFv 同步草稿状态，仅依赖变化触发
       syncFv()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -190,9 +201,9 @@ export default function TrainingEvaluationListClient({ sessionData, onSessionCha
       fail_count: v.fail_count,
       absent_exam_count: v.absent_exam_count,
       fail_handling: v.fail_handling,
-      makeup_count: v.makeup_count,
-      makeup_pass_count: v.makeup_pass_count,
-      makeup_fail_count: v.makeup_fail_count,
+      makeup_count: toIntOrDash(v.makeup_count),
+      makeup_pass_count: toIntOrDash(v.makeup_pass_count),
+      makeup_fail_count: toIntOrDash(v.makeup_fail_count),
       makeup_fail_handling: v.makeup_fail_handling,
       evaluation_result: v.evaluation_result,
       evaluation_comment: v.evaluation_comment,
@@ -367,14 +378,14 @@ export default function TrainingEvaluationListClient({ sessionData, onSessionCha
                 <td style={eTdLabel} colSpan={2}>缺考及不合格人员处理方式</td>
                 <td style={eTd} colSpan={5}><Form.Item name="fail_handling" noStyle><Input.TextArea rows={1} autoSize /></Form.Item></td>
               </tr>
-              {/* R10 补考结果 */}
+              {/* R10 补考结果（支持数值或"-"=不适用；"-"与空提交为空，导出显示"-"） */}
               <tr>
                 <td style={eTdLabel} colSpan={2}>补考结果</td>
                 <td style={eTd} colSpan={5}>
                   <Space size={6} wrap>
-                    <span>补考:</span><Form.Item name="makeup_count" noStyle><InputNumber style={{ width: 55 }} min={0} /></Form.Item><span>人；</span>
-                    <span>合格:</span><Form.Item name="makeup_pass_count" noStyle><InputNumber style={{ width: 55 }} min={0} /></Form.Item><span>人；</span>
-                    <span>不合格:</span><Form.Item name="makeup_fail_count" noStyle><InputNumber style={{ width: 55 }} min={0} /></Form.Item><span>人。</span>
+                    <span>补考:</span><Form.Item name="makeup_count" noStyle><Input style={{ width: 60 }} placeholder="数值或-" /></Form.Item><span>人；</span>
+                    <span>合格:</span><Form.Item name="makeup_pass_count" noStyle><Input style={{ width: 60 }} placeholder="数值或-" /></Form.Item><span>人；</span>
+                    <span>不合格:</span><Form.Item name="makeup_fail_count" noStyle><Input style={{ width: 60 }} placeholder="数值或-" /></Form.Item><span>人。</span>
                   </Space>
                 </td>
               </tr>

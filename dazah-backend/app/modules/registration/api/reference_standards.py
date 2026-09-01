@@ -1,5 +1,6 @@
 """对照物质说明表 API 路由"""
 
+import asyncio
 from typing import Any
 from uuid import UUID
 
@@ -36,7 +37,7 @@ async def parse_coa_file(
 
     from app.modules.registration.reference_standard_generator import parse_coa
 
-    result = parse_coa(coa_data)
+    result = await asyncio.to_thread(parse_coa, coa_data)
 
     return success_response(
         data=result,

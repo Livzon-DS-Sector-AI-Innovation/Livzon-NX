@@ -16,8 +16,10 @@ class ChangeActionPlanListItem(BaseModel):
     related_work: str | None = None
     owner_name: str | None = None
     owner_user_id: str | None = None
+    owner_avatar_url: str | None = None
     director_name: str | None = None
     director_user_id: str | None = None
+    director_avatar_url: str | None = None
     deadline_date: date | None = None
     status: str | None = None
     delay_flag: str | None = None

@@ -70,6 +70,12 @@ async def test_offboarding_execute_sends_deduplicated_cards_and_records_cache(
     )
     send: Any = AsyncMock(side_effect=[None, RuntimeError("send failed")])
     monkeypatch.setattr(scheduler.feishu_notification, "send_user_card", send)  # type: ignore[attr-defined]
+    # 卡片改由人事专属应用发送：隔离 DB 凭证解析
+    monkeypatch.setattr(
+        scheduler,
+        "_get_hr_card_credentials",
+        AsyncMock(return_value=("cli_hr_test", "hr_secret_plain")),
+    )
     monkeypatch.setattr(redis, "cache_get", AsyncMock(return_value='["old"]'))
     cache_set: Any = AsyncMock()
     monkeypatch.setattr(redis, "cache_set", cache_set)
@@ -97,7 +103,7 @@ async def test_offboarding_execute_sends_deduplicated_cards_and_records_cache(
             "today": "2026-08-20",
         },
     )
-    assert "离职手续未办结" in send.await_args.kwargs["content"]
+    assert "离职资料更新提醒" in send.await_args.kwargs["content"]
 
 
 @pytest.mark.anyio
@@ -137,6 +143,12 @@ async def test_contract_sign_execute_resolves_clerks_sends_and_deduplicates(
     )
     send: Any = AsyncMock(side_effect=[None, RuntimeError("send failed")])
     monkeypatch.setattr(scheduler.feishu_notification, "send_user_card", send)  # type: ignore[attr-defined]
+    # 卡片改由人事专属应用发送：隔离 DB 凭证解析
+    monkeypatch.setattr(
+        scheduler,
+        "_get_hr_card_credentials",
+        AsyncMock(return_value=("cli_hr_test", "hr_secret_plain")),
+    )
     monkeypatch.setattr(redis, "cache_get", AsyncMock(return_value=None))
     monkeypatch.setattr(redis, "cache_set", AsyncMock())
     await scheduler.ContractSignReminderGenerator().execute_one(session, item)
@@ -165,6 +177,12 @@ async def test_contract_expiry_execute_limits_summary_and_updates_cache(
     ]
     send: Any = AsyncMock(side_effect=[None, RuntimeError("send failed")])
     monkeypatch.setattr(scheduler.feishu_notification, "send_user_card", send)  # type: ignore[attr-defined]
+    # 卡片改由人事专属应用发送：隔离 DB 凭证解析
+    monkeypatch.setattr(
+        scheduler,
+        "_get_hr_card_credentials",
+        AsyncMock(return_value=("cli_hr_test", "hr_secret_plain")),
+    )
     monkeypatch.setattr(redis, "cache_get", AsyncMock(return_value=None))
     cache_set: Any = AsyncMock()
     monkeypatch.setattr(redis, "cache_set", cache_set)

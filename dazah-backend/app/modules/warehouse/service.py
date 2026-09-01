@@ -61,7 +61,6 @@ from app.modules.warehouse.schemas import (
     WarehouseRecordFieldValue,
 )
 from app.platform.identity.data_scope import DepartmentScope
-from app.platform.integrations.feishu.bitable import BitableClient
 from app.platform.integrations.feishu.client import FeishuClient
 
 logger = logging.getLogger(__name__)
@@ -107,6 +106,7 @@ _DATE_SORT_DESC_FIELDS = {
     "hardware-inbound-ledger": "日期",
     "hardware-outbound-ledger": "日期",
     "product-inbound-ledger": "入库日期",
+    "product-inbound-detail": "入库日期",
     "product-outbound-ledger": "出库日期",
     "product-shipping": "日期",
     # 五金库存明细页：按业务/入库日期倒序，保证每天最新记录在前。
@@ -427,7 +427,9 @@ def _pick_dept_name(value: object | None) -> str:
 
 
 # ── 模块级共享缓存（进程内跨请求复用）──────────────────────────────
-# page_key -> (fetched_at, columns, normalized_rows)
+# app_token -> 仓储模块自有飞书客户端（凭证变更时整体清空）
+_MATERIAL_SYNC_CLIENTS: dict[str, Any] = {}
+# page_key -> (fetched_at, columns, normalized_rows, option_map)
 _PAGE_CACHE: dict[
     str,
     tuple[
@@ -441,8 +443,6 @@ _PAGE_CACHE: dict[
 _FIELD_META_CACHE: dict[str, tuple[datetime, list[dict[str, Any]]]] = {}
 # app_token:table_id -> (fetched_at, fields meta)（选项映射目标表）
 _TABLE_FIELDS_CACHE: dict[str, tuple[datetime, list[dict[str, Any]]]] = {}
-# app_token -> BitableClient（写回用，每个 Base 复用实例）
-_BITABLE_CLIENTS: dict[str, BitableClient] = {}
 # 仪表盘聚合结果缓存（TTL 300s，force 强制刷新）
 _DASHBOARD_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 
@@ -456,7 +456,6 @@ class WarehouseService:
         self._page_cache = _PAGE_CACHE
         self._field_meta_cache = _FIELD_META_CACHE
         self._table_fields_cache = _TABLE_FIELDS_CACHE
-        self._bitable_clients = _BITABLE_CLIENTS
         # 仪表盘聚合结果缓存：冷启动全量拉取耗时长，TTL 放宽到 300s，force 可强制刷新
         self._dashboard_cache = _DASHBOARD_CACHE
 
@@ -799,13 +798,6 @@ class WarehouseService:
             stats["month_count"] = month_count
         return stats
 
-    def _get_bitable_client(self, app_token: str) -> BitableClient:
-        client = self._bitable_clients.get(app_token)
-        if client is None:
-            client = BitableClient(app_token=app_token)
-            self._bitable_clients[app_token] = client
-        return client
-
     def _invalidate_page_cache(self, page_key: str) -> None:
         self._page_cache.pop(page_key, None)
         self._field_meta_cache.pop(page_key, None)
@@ -1126,7 +1118,8 @@ class WarehouseService:
             if page_token:
                 params["page_token"] = page_token
 
-            data = await self.feishu_client.request(
+            material_client = await self._get_material_client(app_token)
+            data = await material_client.request(
                 "GET",
                 f"/bitable/v1/apps/{app_token}/tables/{table_id}/fields",
                 params=params,
@@ -1163,7 +1156,8 @@ class WarehouseService:
             if page_token:
                 params["page_token"] = page_token
 
-            data = await self.feishu_client.request(
+            material_client = await self._get_material_client(app_token)
+            data = await material_client.request(
                 "GET",
                 f"/bitable/v1/apps/{app_token}/tables/{table_id}/records",
                 params=params,
@@ -1181,6 +1175,82 @@ class WarehouseService:
                 return items
 
         return items
+
+    async def fetch_feishu_table_records_incremental(
+        self,
+        *,
+        app_token: str,
+        table_id: str,
+        page_size: int,
+        sort_field: str,
+        last_synced_at: datetime,
+    ) -> list[dict[str, Any]]:
+        """增量拉取：records/search 单页双路（业务日期 + 最近修改）合并。
+
+        飞书 Bitable records/search 有两个实测约束（见
+        fetch_feishu_table_records 处注释）：
+        - 无 filter 时翻页失效（page_token 恒为 pageToken:500 循环）；
+        - filter 对 DateTime/自动字段比较返回 InvalidFilter。
+        因此无法真正"翻页式"增量。改为单页双路策略，每路各取一页：
+        - 路一：按业务日期字段降序第一页 —— 捕捉新增/近期录入
+          （业务日期在最新 500 条内的记录）；
+        - 路二：按 last_modified_time 降序第一页 —— 捕捉业务日期较旧
+          但近期被修改的记录；若飞书不支持按系统字段排序（请求报错），
+          静默跳过本路。
+        两路仅保留"日期或修改时间达到水线"的记录，按 record_id 去重合并，
+        无变更轮次返回空列表（0 次写库）。第 500 条之外的历史修改由
+        每日 00:00-06:00 全量兜底（scheduled.py）。
+        """
+        batch_size = min(max(page_size, 100), 500)
+        last_synced_ms = int(last_synced_at.timestamp() * 1000) if last_synced_at else 0
+
+        def _record_is_new(record: dict[str, Any]) -> bool:
+            fields = record.get("fields") or {}
+            date_value = fields.get(sort_field)
+            modified_ms = record.get("last_modified_time")
+            date_is_new = (
+                isinstance(date_value, (int, float)) and date_value >= last_synced_ms
+            )
+            modified_is_new = (
+                isinstance(modified_ms, (int, float)) and modified_ms >= last_synced_ms
+            )
+            return date_is_new or modified_is_new
+
+        async def _search_new_records(sort_name: str) -> list[dict[str, Any]]:
+            material_client = await self._get_material_client(app_token)
+            data = await material_client.request(
+                "POST",
+                f"/bitable/v1/apps/{app_token}/tables/{table_id}/records/search",
+                params={
+                    "page_size": batch_size,
+                    "field_name_type": "name",
+                    "automatic_fields": True,
+                },
+                json_body={"sort": [{"field_name": sort_name, "desc": True}]},
+                timeout=60.0,
+            )
+            return [
+                record for record in (data.get("items") or []) if _record_is_new(record)
+            ]
+
+        merged: dict[str, dict[str, Any]] = {}
+        for route_index, sort_name in enumerate((sort_field, "last_modified_time")):
+            try:
+                route_records = await _search_new_records(sort_name)
+            except Exception:
+                if route_index == 0:
+                    raise
+                # 路二为兜底增强：系统字段排序不被支持时只走路一
+                logger.debug(
+                    "warehouse incremental last_modified_time sort unsupported: %s",
+                    table_id,
+                )
+                continue
+            for record in route_records:
+                record_id = str(record.get("record_id") or "")
+                if record_id:
+                    merged[record_id] = record
+        return list(merged.values())
 
     async def fetch_material_page_from_feishu(
         self,
@@ -1200,6 +1270,43 @@ class WarehouseService:
             app_token=page_config.app_token,
             table_id=page_config.table_id,
             page_size=500,
+        )
+        option_map = await self._build_page_option_map(page_config, fields_response)
+        columns = self._build_columns(fields_response)
+        normalized_rows = self._build_normalized_rows(
+            columns, records_response, option_map=option_map
+        )
+        return page_config, columns, normalized_rows, option_map
+
+    async def fetch_material_page_from_feishu_incremental(
+        self,
+        page_key: str,
+        *,
+        last_synced_at: datetime | None,
+    ) -> tuple[
+        FeishuWarehouseMaterialPage,
+        list[WarehouseFeishuColumn],
+        list[dict[str, object | None]],
+        dict[str, str],
+    ]:
+        """增量拉取飞书页面：按日期字段降序只拉上次同步后的变更/新增。
+
+        无日期字段（不在 _DATE_SORT_DESC_FIELDS）的表不支持增量，回退全量。
+        """
+        page_config = await self._get_material_page_config(page_key)
+        sort_field = _DATE_SORT_DESC_FIELDS.get(page_key)
+        if not sort_field or not last_synced_at:
+            return await self.fetch_material_page_from_feishu(page_key)
+        fields_response = await self.fetch_feishu_table_fields(
+            app_token=page_config.app_token,
+            table_id=page_config.table_id,
+        )
+        records_response = await self.fetch_feishu_table_records_incremental(
+            app_token=page_config.app_token,
+            table_id=page_config.table_id,
+            page_size=500,
+            sort_field=sort_field,
+            last_synced_at=last_synced_at,
         )
         option_map = await self._build_page_option_map(page_config, fields_response)
         columns = self._build_columns(fields_response)
@@ -1320,9 +1427,12 @@ class WarehouseService:
     ) -> WarehouseFeishuMaterialPageResponse:
         resolved_source = await self._resolve_material_page_source(source)
         advanced_filters = self._parse_advanced_filters(filters)
-        # force=1（手动刷新）时绕过本地快照，直连飞书实时拉取；
-        # 其余情况默认读本地快照（秒回），由定时同步任务保证数据新鲜度
-        if resolved_source == "local" and not force:
+        # 本地快照模式：force=1（手动刷新）先做增量同步到本地镜像（秒级，
+        # 只拉变更/新增），再读镜像返回。删除与历史修改由每日 00:00-06:00
+        # 全量兜底对账，刷新不再全量拉取大表。其余情况直接读本地快照（秒回）。
+        if resolved_source == "local":
+            if force:
+                await self.sync_material_page_to_local(page_key, incremental=True)
             return await self.get_local_material_page(
                 page_key,
                 page=page,
@@ -1446,16 +1556,40 @@ class WarehouseService:
         )
 
     async def sync_material_page_to_local(
-        self, page_key: str
+        self,
+        page_key: str,
+        *,
+        incremental: bool = True,
     ) -> WarehouseFeishuMaterialPageResponse:
         page_config = await self._get_material_page_config(page_key)
+        prev_snapshot = await self.repo.get_material_page_snapshot(page_key)
+        last_synced_at = prev_snapshot.last_synced_at if prev_snapshot else None
+
+        # 增量条件：已有前次快照（有水线）且页面配置了日期排序字段；
+        # 否则回退全量拉取（首跑或无日期字段的表）
+        use_incremental = (
+            incremental
+            and prev_snapshot is not None
+            and bool(_DATE_SORT_DESC_FIELDS.get(page_key))
+        )
         try:
-            (
-                _,
-                columns,
-                normalized_rows,
-                _option_map,
-            ) = await self.fetch_material_page_from_feishu(page_key)
+            if use_incremental:
+                (
+                    _,
+                    columns,
+                    normalized_rows,
+                    _option_map,
+                ) = await self.fetch_material_page_from_feishu_incremental(
+                    page_key,
+                    last_synced_at=last_synced_at,
+                )
+            else:
+                (
+                    _,
+                    columns,
+                    normalized_rows,
+                    _option_map,
+                ) = await self.fetch_material_page_from_feishu(page_key)
         except HTTPException:
             raise
         except Exception as exc:
@@ -1496,7 +1630,21 @@ class WarehouseService:
                     last_synced_at=now,
                 )
             )
-        await self.repo.upsert_material_page_rows(snapshot.id, row_models)
+        if use_incremental:
+            # 增量模式：只 upsert 本次变更记录，不软删未变更的历史记录；
+            # 行数以本地实际存量为准（本次拉取只含变更子集）
+            await self.repo.upsert_material_page_rows_incremental(
+                snapshot.id, row_models
+            )
+            _, total_rows = await self.repo.list_material_page_rows(
+                snapshot.id, limit=1
+            )
+            # 建快照时写入的 total_rows 是本批变更行数（非表总量），
+            # 用本地存量修正，避免增量轮次把快照行数元数据覆盖成小值
+            snapshot.total_rows = total_rows
+        else:
+            await self.repo.upsert_material_page_rows(snapshot.id, row_models)
+            total_rows = len(normalized_rows)
 
         return self._build_material_page_response(
             page_key=page_config.page_key,
@@ -1504,7 +1652,7 @@ class WarehouseService:
             table_name=page_config.title,
             columns=columns,
             rows=normalized_rows[:50],
-            total=len(normalized_rows),
+            total=total_rows,
             page=1,
             page_size=50,
             last_sync_time=now,
@@ -2343,11 +2491,20 @@ class WarehouseService:
                 ",".join(skipped),
             )
 
-        client = self._get_bitable_client(page_config.app_token)
+        # 写回与读取/同步同用模块自有应用：平台应用未开通多维表格写
+        # scope（bitable:app / base:record:update），用它写回会被飞书
+        # 以 99991672 拒绝
+        client = await self._get_material_client(page_config.app_token)
         try:
-            record = await client.update_record(
-                page_config.table_id, record_id, payload
+            data = await client.request(
+                "PUT",
+                (
+                    f"/bitable/v1/apps/{page_config.app_token}"
+                    f"/tables/{page_config.table_id}/records/{record_id}"
+                ),
+                json_body={"fields": payload},
             )
+            record = data.get("record", {}) if isinstance(data, dict) else {}
         except Exception as exc:
             logger.exception("warehouse Feishu record update failed")
             raise HTTPException(
@@ -2360,9 +2517,15 @@ class WarehouseService:
     async def delete_material_page_record(self, page_key: str, record_id: str) -> None:
         """删除飞书多维表格中的记录。"""
         page_config = await self._get_material_page_config(page_key)
-        client = self._get_bitable_client(page_config.app_token)
+        client = await self._get_material_client(page_config.app_token)
         try:
-            await client.delete_record(page_config.table_id, record_id)
+            await client.request(
+                "DELETE",
+                (
+                    f"/bitable/v1/apps/{page_config.app_token}"
+                    f"/tables/{page_config.table_id}/records/{record_id}"
+                ),
+            )
         except Exception as exc:
             logger.exception("warehouse Feishu record delete failed")
             raise HTTPException(
@@ -2611,7 +2774,10 @@ class WarehouseService:
 
     async def _get_any_feishu_config_or_raise(self) -> Any | None:
         try:
-            return await self.repo.get_any_feishu_config()
+            config = await self.repo.get_any_feishu_config()
+            if config is not None:
+                return config
+            return self._env_fallback_feishu_config()
         except SQLAlchemyError as exc:
             raise AppException(
                 status_code=500,
@@ -2620,6 +2786,64 @@ class WarehouseService:
                 ),
                 detail=exc.__class__.__name__,
             ) from exc
+
+    @staticmethod
+    def _env_fallback_feishu_config() -> Any:
+        """平台 env 凭据回退（对齐 quality/hr 模式）。
+
+        warehouse.feishu_configs 尚无行时，用共享飞书应用（settings 中的
+        FEISHU_APP_ID/SECRET）构造内存配置对象（不落库），保证连接测试、
+        root 发现、附件下载等能力开箱即用；用户在飞书设置页保存专属
+        凭证后即覆盖此回退。
+        """
+        from app.core.config import get_settings
+        from app.core.secrets import encrypt_secret
+        from app.modules.warehouse.legacy_models import WarehouseFeishuConfig
+
+        settings = get_settings()
+        if not settings.FEISHU_APP_ID or not settings.FEISHU_APP_SECRET:
+            return None
+        from datetime import UTC, datetime
+        from uuid import uuid4
+
+        now = datetime.now(UTC)
+        return WarehouseFeishuConfig(
+            id=uuid4(),
+            config_name="仓储飞书配置（环境变量回退）",
+            app_id=settings.FEISHU_APP_ID,
+            encrypted_app_secret=encrypt_secret(settings.FEISHU_APP_SECRET),
+            is_active=True,
+            timezone="Asia/Shanghai",
+            daily_sync_time="02:00",
+            created_at=now,
+            updated_at=now,
+        )
+
+    async def _get_material_client(self, app_token: str) -> Any:
+        """物料页同步优先使用仓储模块自有应用（feishu-config 页配置的
+        app_id/secret），未配置时回退平台共享应用。
+
+        模块应用与平台应用是两个不同的飞书应用，各 Base 的表授权分别
+        授予对应应用；用错应用会对已授权的表报 403。
+        """
+        cached = _MATERIAL_SYNC_CLIENTS.get(app_token)
+        if cached is not None:
+            return cached
+        try:
+            get_config = self.repo.get_active_feishu_config
+        except AttributeError:
+            get_config = None
+        config: Any = None
+        if get_config is not None:
+            try:
+                config = await get_config()
+            except SQLAlchemyError:
+                config = None
+        if config and config.app_id and config.encrypted_app_secret:
+            client = self._build_feishu_client(config, app_token)
+            _MATERIAL_SYNC_CLIENTS[app_token] = client
+            return client
+        return self.feishu_client
 
     async def _get_active_feishu_config_or_raise(self) -> Any:
         try:
@@ -2632,6 +2856,8 @@ class WarehouseService:
                 ),
                 detail=exc.__class__.__name__,
             ) from exc
+        if not config:
+            config = self._env_fallback_feishu_config()
         if not config:
             raise AppException(message="请先启用仓储飞书配置")
         return config
@@ -2829,6 +3055,8 @@ class WarehouseService:
         )
 
     async def _after_feishu_config_saved(self, config: Any) -> None:
+        # 凭证变更后清空模块同步客户端缓存，确保新凭证立即生效
+        _MATERIAL_SYNC_CLIENTS.clear()
         if config.is_active:
             try:
                 from app.modules.warehouse.ws_client import restart_ws_from_db
@@ -3468,11 +3696,9 @@ class WarehouseService:
                     logger.warning(
                         "ignoring stale warehouse page binding: %s", binding.id
                     )
-        if not bindings:
-            # Existing migrated material pages have one authoritative local
-            # snapshot.  Expose it as the default former binding without writing
-            # a duplicate row merely because a page was opened.
-            bindings = [await self._page_binding_response(page_key)]
+        # 对齐 energy 契约：未发布绑定时返回空列表，
+        # 前端映射门据此原样渲染 legacy 页面（不再合成默认绑定，
+        # 避免仅打开页面就使通用映射表格接管台账页）。
         return WarehouseFeishuPageDataResponse(page_key=page_key, bindings=bindings)
 
     async def replace_page_bindings(self, page_key: str, data: Any) -> Any:

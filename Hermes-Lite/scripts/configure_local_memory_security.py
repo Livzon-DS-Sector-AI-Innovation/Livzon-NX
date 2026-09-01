@@ -67,13 +67,10 @@ def configure(env_path: Path, *, require_policy: bool) -> bool:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    workspace_root = Path(__file__).resolve().parents[2]
-    app_env = os.environ.get("APP_ENV", "development").strip().lower()
-    default_env_name = ".env" if app_env == "production" else ".env.local"
     parser.add_argument(
         "--env-file",
         type=Path,
-        default=workspace_root / default_env_name,
+        default=Path(__file__).resolve().parents[1] / ".env",
     )
     parser.add_argument(
         "--require-policy",

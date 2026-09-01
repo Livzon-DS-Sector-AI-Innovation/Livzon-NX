@@ -225,7 +225,7 @@ function MappedDatasetPageContent({
   }
 
   if (pageQuery.isError) {
-    return <Alert type="error" showIcon message={(pageQuery.error as Error).message} />
+    return <Alert type="error" showIcon title={(pageQuery.error as Error).message} />
   }
 
   return (
@@ -367,10 +367,10 @@ function MappedDatasetPageContent({
           ) : null}
 
           {activeBinding?.table.sync_error ? (
-            <Alert className="mb-4" type="warning" showIcon message={activeBinding.table.sync_error} />
+            <Alert className="mb-4" type="warning" showIcon title={activeBinding.table.sync_error} />
           ) : null}
           {datasetQuery.isError ? (
-            <Alert type="error" showIcon message={(datasetQuery.error as Error).message} />
+            <Alert type="error" showIcon title={(datasetQuery.error as Error).message} />
           ) : (
             <Table<WarehouseDatasetRecord>
               virtual

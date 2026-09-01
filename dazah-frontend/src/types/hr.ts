@@ -187,7 +187,7 @@ export const DEPARTMENT_CATEGORIES = {
 } as const
 
 export function getDepartmentCategory(deptName: string): string | null {
-  for (const [key, value] of Object.entries(DEPARTMENT_CATEGORIES)) {
+  for (const [, value] of Object.entries(DEPARTMENT_CATEGORIES)) {
     if (value.departments.some(d => deptName.includes(d) || d.includes(deptName))) {
       return value.label
     }
@@ -297,7 +297,7 @@ export interface OffboardingRecord {
   // Offboarding specific
   offboarding_type: string
   reason?: string
-  handover_status: string
+  status?: string
   // Education
   education?: string
   degree?: string
@@ -417,7 +417,7 @@ export interface DepartureRecord {
   offboarding_type?: string | null
   offboarding_date?: string | null
   reason?: string | null
-  handover_status?: string | null
+  status?: string | null
   created_at?: string | null
   updated_at?: string | null
   [key: string]: string | number | boolean | null | undefined
@@ -616,6 +616,8 @@ export interface TrainingLedgerRecord {
   ledger_department?: string | null
   owner_deleted?: boolean | null
   second_level_status?: string | null
+  // 是否呈现（默认显示，不呈现则不进入员工培训清单）
+  is_presented?: boolean | null
   created_at?: string | null
   updated_at?: string | null
 }

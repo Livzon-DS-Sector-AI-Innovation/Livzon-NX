@@ -17,6 +17,7 @@ import {
   Table,
   Tag,
   Typography,
+  Drawer,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons'
@@ -541,7 +542,9 @@ export default function ProjectLedgerSheetPage({ detail }: ProjectLedgerSheetPag
             </Button>
             <Popconfirm
               title="确认删除选中的申报台账记录吗？"
+              description="该记录的子记录与历史版本将一并软删除，可在历史版本中找回。"
               okText="删除"
+              okButtonProps={{ danger: true }}
               cancelText="取消"
               onConfirm={handleDelete}
               disabled={!selectedRecord}
@@ -589,6 +592,12 @@ export default function ProjectLedgerSheetPage({ detail }: ProjectLedgerSheetPag
           size="small"
           pagination={{ pageSize: 20, showSizeChanger: false }}
           dataSource={filteredRecords}
+          locale={{
+            emptyText:
+              keyword || productFilter || projectFilter
+                ? '当前筛选条件下暂无记录'
+                : '暂无台账记录',
+          }}
           columns={tableColumns}
           scroll={{ x: 'max-content' }}
           rowClassName={(record) =>
@@ -607,7 +616,7 @@ export default function ProjectLedgerSheetPage({ detail }: ProjectLedgerSheetPag
         />
       </Card>
 
-      <Modal
+      <Drawer
         destroyOnHidden
         open={formModalOpen}
         title={
@@ -617,16 +626,28 @@ export default function ProjectLedgerSheetPage({ detail }: ProjectLedgerSheetPag
               ? '新增申报台账子记录'
               : '新增申报台账主记录'
         }
-        okText={formMode === 'edit-main' ? '保存' : '新增'}
-        cancelText="取消"
-        confirmLoading={pending}
-        onOk={() => form.submit()}
-        onCancel={() => {
+        width={560}
+        footer={
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <Button
+              onClick={() => {
+                setFormModalOpen(false)
+                setEditingRecord(null)
+                form.resetFields()
+              }}
+            >
+              取消
+            </Button>
+            <Button type="primary" loading={pending} onClick={() => form.submit()}>
+              {formMode === 'edit-main' ? '保存' : '新增'}
+            </Button>
+          </div>
+        }
+        onClose={() => {
           setFormModalOpen(false)
           setEditingRecord(null)
           form.resetFields()
         }}
-        width={720}
       >
         <Form<ProjectLedgerFormValues> form={form} layout="vertical" onFinish={handleSubmit}>
           {detail.columns.map((column) => (
@@ -647,7 +668,7 @@ export default function ProjectLedgerSheetPage({ detail }: ProjectLedgerSheetPag
             </Form.Item>
           ))}
         </Form>
-      </Modal>
+      </Drawer>
 
       <Modal
         open={Boolean(historyRecord)}
@@ -724,8 +745,8 @@ export default function ProjectLedgerSheetPage({ detail }: ProjectLedgerSheetPag
           text-align: center;
           vertical-align: middle;
           font-size: 13px;
-          line-height: 3.825;
-          padding: 27px 14px;
+          line-height: 1.6;
+          padding: 10px 14px;
           border-bottom: 1px solid #f0f0f0;
         }
 
@@ -737,7 +758,7 @@ export default function ProjectLedgerSheetPage({ detail }: ProjectLedgerSheetPag
 
         .project-ledger-history-table .ant-table-tbody > tr > td {
           line-height: 1.6;
-          padding: 21px 12px;
+          padding: 12px;
         }
 
         .project-ledger-table .ant-table-tbody > tr.project-ledger-row:nth-child(even) > td,

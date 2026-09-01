@@ -234,6 +234,12 @@ async def test_training_scope_plan_and_attachment_routes_cover_success_paths(
     )
     approval_db = _Db([_Result([dept]), _Result([config])])
     await api.list_dept_approval_configs(db=approval_db, current_user=user)
+    names_resp = await api.list_dept_approval_config_names(
+        db=_Db([_Result([("质量部",), ("质量部",), ("生产部",)])]),
+        current_user=user,
+    )
+    # 接口内 dict.fromkeys 去重保序；SQL 层 order_by 排序（mock 不执行 SQL）
+    assert names_resp["data"] == ["质量部", "生产部"]
     create_db = _Db()
     await api.create_dept_approval_config(
         _Payload({"department_id": dept.id, "department_name": "质量部"}),
@@ -434,9 +440,9 @@ async def test_hr_email_and_recruitment_routes_cover_success_and_fallbacks(
     onboarding_service = SimpleNamespace(
         list_onboarding=AsyncMock(return_value=([{"name": "张三"}], 1)),
         create_from_interview=AsyncMock(return_value={"id": "onboarding"}),
-        get_dashboard=AsyncMock(return_value={"total": 1}),
         get_onboarding=AsyncMock(return_value={"name": "张三"}),
         update_onboarding=AsyncMock(return_value={"name": "张三"}),
+        delete_onboarding=AsyncMock(),
     )
     monkeypatch.setattr(api, "_resolve_visible_scope", AsyncMock(return_value=None))
     assert (await api.get_onboarding_names(onboarding_service))["data"] == ["张三"]
@@ -446,7 +452,7 @@ async def test_hr_email_and_recruitment_routes_cover_success_and_fallbacks(
     await api.create_onboarding_from_interview(
         {"candidate_id": "c"}, onboarding_service, user
     )
-    await api.get_onboarding_dashboard(SimpleNamespace(), onboarding_service, user)
+    await api.delete_onboarding_record_recruitment("r", onboarding_service, user)
     await api.get_onboarding_record_recruitment("r", onboarding_service, user)
     await api.update_onboarding_record_recruitment(
         "r", _Payload(), onboarding_service, user
@@ -718,6 +724,13 @@ async def test_hr_contract_expiry_task_and_training_exports_cover_real_paths(
         notification,
         "send_user_card_with_message_id",
         AsyncMock(return_value="msg-1"),
+    )
+    import app.modules.hr.feishu_settings_service as feishu_settings_module
+
+    monkeypatch.setattr(
+        feishu_settings_module,
+        "get_hr_feishu_app_credentials",
+        AsyncMock(return_value=("cli_hr_test", "hr_secret_plain")),
     )
     await api.push_contract_expiring_notify(payload={}, current_user=user)
     callback = submitted["callback"]

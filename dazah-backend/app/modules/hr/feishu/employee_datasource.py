@@ -90,9 +90,16 @@ class EmployeeBitableDataSource:
     """
 
     def __init__(
-        self, app_token: str | None = None, table_id: str | None = None
+        self,
+        app_token: str | None = None,
+        table_id: str | None = None,
+        *,
+        app_id: str | None = None,
+        app_secret: str | None = None,
     ) -> None:
-        self.client = BitableClient(app_token=app_token)
+        self.client = BitableClient(
+            app_token=app_token, app_id=app_id, app_secret=app_secret
+        )
         self.table_id = table_id or _settings.FEISHU_BITABLE_EMPLOYEE_TABLE_ID or ""
 
     def _is_enabled(self) -> bool:

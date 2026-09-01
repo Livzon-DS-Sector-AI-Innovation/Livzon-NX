@@ -57,8 +57,8 @@ class ReferenceSubstanceResponse(BaseModel):
     usage_method: str | None
     coa_file_url: str | None
     provider: str
-    handler: str
-    contact: str
+    handler: str | None
+    contact: str | None
     created_at: datetime
     updated_at: datetime
 

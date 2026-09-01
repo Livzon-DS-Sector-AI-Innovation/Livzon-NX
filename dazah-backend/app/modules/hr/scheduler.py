@@ -14,6 +14,13 @@ from app.platform.scheduler.registry import TaskGenerator as SchedulerTaskGenera
 logger = logging.getLogger(__name__)
 
 
+async def _get_hr_card_credentials(session: Any) -> tuple[str, str]:
+    """解析人事专属飞书凭证（严格独立，未配置时抛 HrFeishuNotConfigured）。"""
+    from app.modules.hr.feishu_settings_service import get_hr_feishu_app_credentials
+
+    return await get_hr_feishu_app_credentials(session)
+
+
 class ResumeFolderScanner(SchedulerTaskGenerator):
     """Every 30 seconds scan the resume watch folder for new PDF files."""
 
@@ -112,14 +119,15 @@ class OffboardingReminderGenerator(SchedulerTaskGenerator):
         if not should_trigger:
             return []
 
-        # 3. 查找需要提醒的离职记录（创建时间 + notify_hours <= 当前时间）
+        # 3. 查找需要提醒的离职记录：创建超过 notify_hours（默认24h/1天）
+        #    且在职状态尚未变为离职
         threshold_time = now - timedelta(hours=notify_hours)
         records = (
             (
                 await session.execute(
                     select(OffboardingRecord).where(
                         OffboardingRecord.created_at <= threshold_time,
-                        OffboardingRecord.handover_status != "已完成",
+                        OffboardingRecord.status != "离职",
                         OffboardingRecord.reminder_sent.is_(False),
                         OffboardingRecord.is_deleted.is_(False),
                     )
@@ -160,7 +168,11 @@ class OffboardingReminderGenerator(SchedulerTaskGenerator):
         ]
 
     async def execute_one(self, session: Any, item: Any) -> None:
-        """发送离职提醒卡片并标记 reminder_sent（引擎统一 commit）。"""
+        """发送离职提醒卡片并标记 reminder_sent（引擎统一 commit）。
+
+        合并为一条汇总提醒：把所有待更新资料的员工列在一张卡片里发一次，
+        避免每名员工一条导致消息过多。
+        """
         import json
         from datetime import datetime
 
@@ -168,62 +180,65 @@ class OffboardingReminderGenerator(SchedulerTaskGenerator):
 
         records = item["records"]
         recipient_open_ids = item["recipient_open_ids"]
-        message_template = item["message_template"]
+        message_template = item.get("message_template") or ""
         today = item["today"]
         now = datetime.now()
 
         if not recipient_open_ids:
             logger.warning("离职提醒：接收人未配置，跳过")
             return
+        if not records:
+            return
 
+        try:
+            app_id, app_secret = await _get_hr_card_credentials(session)
+        except Exception as exc:
+            logger.warning("人事飞书凭证未配置，跳过本次提醒: %s", exc)
+            return
+
+        # 汇总员工列表
+        lines = []
+        for idx, record in enumerate(records, start=1):
+            lines.append(
+                f"{idx}. {record.name or '未知'}"
+                f"（工号：{record.employee_number or '未知'}）"
+                f"｜部门：{record.department or '未知'}"
+                f"｜离职日期：{record.offboarding_date or '未知'}"
+            )
+        employee_list = "\n".join(lines)
+
+        # 合并成一条卡片：使用配置模板（含 {员工列表} 占位符），否则用默认汇总文案
+        if message_template and "{员工列表}" in message_template:
+            content = message_template.replace("{员工列表}", employee_list)
+        else:
+            content = (
+                "离职资料更新提醒\n\n"
+                "以下员工的在职状态已超过 1 天未更新为离职，请及时更新资料：\n\n"
+                + employee_list
+            )
+        title = "离职资料更新提醒"
+
+        sent_open_ids: set[str] = set()
+        for open_id in recipient_open_ids:
+            if open_id in sent_open_ids:
+                continue
+            sent_open_ids.add(open_id)
+            try:
+                await feishu_notification.send_user_card(
+                    open_id=open_id,
+                    title=title,
+                    content=content,
+                    app_id=app_id,
+                    app_secret=app_secret,
+                )
+            except Exception:
+                logger.exception(
+                    "发送离职提醒失败",
+                    extra={"open_id": open_id, "hr_module": "hr"},
+                )
+
+        # 标记全部已发送
         for record in records:
-            # 使用自定义模板或默认模板
-            if message_template:
-                content = message_template.replace("{姓名}", record.name or "未知")
-                content = content.replace("{工号}", record.employee_number or "未知")
-                content = content.replace("{部门}", record.department or "未知")
-                content = content.replace(
-                    "{离职日期}",
-                    str(record.offboarding_date) if record.offboarding_date else "未知",
-                )
-                content = content.replace(
-                    "{离职类型}", record.offboarding_type or "未知"
-                )
-            else:
-                content = f"""离职手续未办结提醒
-
-员工：{record.name or "未知"}
-工号：{record.employee_number or "未知"}
-部门：{record.department or "未知"}
-离职日期：{record.offboarding_date}
-离职类型：{record.offboarding_type or "未知"}
-
-该员工离职手续尚未办结，请及时跟进。"""
-
-            title = f"离职提醒 - {record.name or '未知'}"
-
-            sent_open_ids: set[str] = set()
-            for open_id in recipient_open_ids:
-                if open_id in sent_open_ids:
-                    continue
-                sent_open_ids.add(open_id)
-                try:
-                    await feishu_notification.send_user_card(
-                        open_id=open_id,
-                        title=title,
-                        content=content,
-                    )
-                except Exception:
-                    logger.exception(
-                        "发送离职提醒失败",
-                        extra={
-                            "record_id": str(record.id),
-                            "open_id": open_id,
-                            "hr_module": "hr",
-                        },
-                    )
-
-            # 标记已发送
             record.reminder_sent = True
             record.reminder_sent_at = now
 
@@ -237,7 +252,7 @@ class OffboardingReminderGenerator(SchedulerTaskGenerator):
         await cache_set(dedup_key, json.dumps(list(already_notified)), ex=86400)
 
         logger.info(
-            "离职提醒发送完成",
+            "离职提醒（汇总）发送完成",
             extra={
                 "total_records": len(records),
                 "recipients": len(recipient_open_ids),
@@ -358,6 +373,12 @@ class ContractSignReminderGenerator(SchedulerTaskGenerator):
             )
             return
 
+        try:
+            app_id, app_secret = await _get_hr_card_credentials(session)
+        except Exception as exc:
+            logger.warning("人事飞书凭证未配置，跳过本次提醒: %s", exc)
+            return
+
         approved_date = (
             item.supervisor_approved_at.strftime("%Y-%m-%d")
             if item.supervisor_approved_at
@@ -378,6 +399,8 @@ class ContractSignReminderGenerator(SchedulerTaskGenerator):
                     open_id=open_id,
                     title=title,
                     content=content,
+                    app_id=app_id,
+                    app_secret=app_secret,
                 )
             except Exception:
                 logger.exception(
@@ -543,6 +566,7 @@ class ContractExpiryReminderGenerator(SchedulerTaskGenerator):
         import json
 
         from app.core.redis import cache_get, cache_set
+        from app.modules.hr.contract_api import _fmt_contract_seq
 
         new_expiring = item["employees"]
         recipient_open_ids = item["recipient_open_ids"]
@@ -550,9 +574,10 @@ class ContractExpiryReminderGenerator(SchedulerTaskGenerator):
 
         lines = []
         for emp in new_expiring:
+            seq_text = _fmt_contract_seq(emp.get("contract_sequence", ""))
             lines.append(
                 f"- **{emp.get('name', '')}**（{emp.get('department', '')}），"
-                f"第{emp.get('contract_sequence', '')}次合同于 "
+                f"{seq_text}合同于 "
                 f"**{emp.get('contract_end_date', '')}** 到期"
             )
         summary = "\n".join(lines[:20])
@@ -561,6 +586,12 @@ class ContractExpiryReminderGenerator(SchedulerTaskGenerator):
 
         title = f"合同到期提醒（{today}）"
         content = f"以下人员合同即将到期，请及时处理续签：\n\n{summary}"
+
+        try:
+            app_id, app_secret = await _get_hr_card_credentials(session)
+        except Exception as exc:
+            logger.warning("人事飞书凭证未配置，跳过本次提醒: %s", exc)
+            return
 
         sent_open_ids: set[str] = set()
         for open_id in recipient_open_ids:
@@ -572,6 +603,8 @@ class ContractExpiryReminderGenerator(SchedulerTaskGenerator):
                     open_id=open_id,
                     title=title,
                     content=content,
+                    app_id=app_id,
+                    app_secret=app_secret,
                 )
             except Exception:
                 logger.exception(

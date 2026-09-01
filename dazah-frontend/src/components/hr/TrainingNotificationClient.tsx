@@ -179,6 +179,7 @@ export default function TrainingNotificationClient({
       issuer_department: v.issuer_department || sessionData.issuer_department || unify201Dept(sessionData.department),
       issue_date: v.issue_date ? dayjs(v.issue_date).format('YYYY-MM-DD') : (sessionData.issue_date || sessionData.training_date!),
       assessment_method: v.training_method || sessionData.assessment_method,
+      training_level: sessionData.training_level,
     }
   }
 

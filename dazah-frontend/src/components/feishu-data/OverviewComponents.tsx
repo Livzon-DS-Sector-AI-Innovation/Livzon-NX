@@ -74,7 +74,7 @@ export function DataQualityCard({ issues, sampleSize }: { issues: string[]; samp
   return (
     <Card title="数据质量" size="small">
       <Statistic title="有效样本" value={sampleSize} />
-      {issues.length ? <Alert type="warning" showIcon message="分析前需要关注" description={issues.join('；')} /> : <Alert type="success" showIcon message="未发现阻断分析的数据质量问题" />}
+      {issues.length ? <Alert type="warning" showIcon title="分析前需要关注" description={issues.join('；')} /> : <Alert type="success" showIcon title="未发现阻断分析的数据质量问题" />}
     </Card>
   )
 }
@@ -83,9 +83,9 @@ export function AnalysisPanel({ facts, algorithm, ai }: { facts: ReactNode; algo
   return (
     <Card title="分析结论" size="small">
       <Space direction="vertical" size={12} style={{ width: '100%' }}>
-        <Alert type="info" message="已验证事实" description={facts} />
-        <Alert type="warning" message="算法检测结果" description={algorithm} />
-        <Alert type="success" message="AI 辅助推断" description={ai || '尚未生成 AI 解释'} />
+        <Alert type="info" title="已验证事实" description={facts} />
+        <Alert type="warning" title="算法检测结果" description={algorithm} />
+        <Alert type="success" title="AI 辅助推断" description={ai || '尚未生成 AI 解释'} />
       </Space>
     </Card>
   )

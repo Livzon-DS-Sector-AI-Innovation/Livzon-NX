@@ -122,7 +122,6 @@ class KnowledgeAttachmentResponse(BaseModel):
     id: UUID = Field(..., description="附件ID")
     article_id: UUID = Field(..., description="文章ID")
     file_name: str = Field(..., description="原始文件名")
-    file_path: str = Field(..., description="存储路径")
     file_size: int = Field(..., description="文件大小（字节）")
     content_type: str = Field(..., description="MIME类型")
     ai_summary: str | None = Field(None, description="AI生成的结构化摘要")

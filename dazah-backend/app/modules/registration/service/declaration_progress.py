@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 import re
@@ -1091,8 +1092,13 @@ class DeclarationProgressWorkbookService:
         import_path = temp_dir / (filename or DECLARATION_PROGRESS_WORKBOOK_NAME)
         import_path.write_bytes(content)
 
-        await self.ensure_seeded()
-        versions = _load_versions_from_workbook_path(import_path)
+        try:
+            await self.ensure_seeded()
+            versions = await asyncio.to_thread(
+                _load_versions_from_workbook_path, import_path
+            )
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
         try:
             await self.repository.replace_all_versions(versions)
@@ -1119,9 +1125,9 @@ class DeclarationProgressWorkbookService:
         definitions, _ = _parse_workbook_definitions()
         temp_dir = Path(tempfile.mkdtemp(prefix="declaration-progress-export-"))
         export_path = temp_dir / DECLARATION_PROGRESS_EXPORT_NAME
-        shutil.copyfile(workbook_path, export_path)
+        await asyncio.to_thread(shutil.copyfile, workbook_path, export_path)
 
-        workbook = load_workbook(export_path)
+        workbook = await asyncio.to_thread(load_workbook, export_path)
         try:
             for excluded_sheet in DECLARATION_PROGRESS_EXCLUDED_SHEETS:
                 if excluded_sheet in workbook.sheetnames:
@@ -1137,7 +1143,7 @@ class DeclarationProgressWorkbookService:
                     definition,
                     rows,
                 )
-            workbook.save(export_path)
+            await asyncio.to_thread(workbook.save, export_path)
         finally:
             workbook.close()
 

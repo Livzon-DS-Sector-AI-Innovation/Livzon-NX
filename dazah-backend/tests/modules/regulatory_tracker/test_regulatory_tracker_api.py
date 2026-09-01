@@ -60,8 +60,11 @@ async def test_list_documents_serializes_pagination_and_document_fields(
 
     result = await routes.list_documents(
         keyword=None,
+        source_site=None,
         publish_date_from=None,
         publish_date_to=None,
+        capture_date_from=None,
+        capture_date_to=None,
         status_text=None,
         classification=None,
         is_new=None,
@@ -70,7 +73,7 @@ async def test_list_documents_serializes_pagination_and_document_fields(
         db=cast(AsyncSession, object()),
     )
 
-    assert result["data"]["total"] == 21
-    assert result["data"]["totalPages"] == 3
-    assert result["data"]["items"][0]["id"] == str(document_id)
-    assert result["data"]["items"][0]["title"] == "药品注册管理办法"
+    assert result.data.total == 21
+    assert result.data.total_pages == 3
+    assert result.data.items[0].id == document_id
+    assert result.data.items[0].title == "药品注册管理办法"

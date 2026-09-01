@@ -2,6 +2,7 @@
 import Link from 'next/link'
 import { Card, Row, Col, Tag, Typography } from 'antd'
 import {
+  CloudServerOutlined,
   DatabaseOutlined,
   ToolOutlined,
   ShoppingOutlined,
@@ -145,6 +146,26 @@ export default function WarehousePage() {
               </div>
             </a>
           ))}
+
+          {/* 外部系统入口：大宗物料管理系统（固定内网地址，新窗口打开） */}
+          <a
+            href="http://10.10.10.180:9002/Login"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block"
+          >
+            <div className="p-4 rounded-lg border border-[var(--color-hairline)] bg-white hover:border-[var(--color-primary)] hover:shadow-md cursor-pointer transition-all h-full flex flex-col gap-3">
+              <div
+                className="w-11 h-11 rounded-lg flex items-center justify-center text-white"
+                style={{ backgroundColor: '#5645d4' }}
+              >
+                <CloudServerOutlined style={{ fontSize: 20 }} />
+              </div>
+              <Text strong className="block text-[14px] leading-snug">
+                大宗物料管理系统
+              </Text>
+            </div>
+          </a>
         </div>
       </div>
 

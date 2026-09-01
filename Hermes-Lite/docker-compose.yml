@@ -6,7 +6,7 @@ services:
     image: ${HERMES_IMAGE:-hermes-lite:prod}
     container_name: ${HERMES_CONTAINER_NAME:-hermes-lite}
     env_file:
-      - ../.env
+      - .env
     environment:
       HERMES_HOME: /data/hermes
       DAZAH_API_BASE_URL: ${DAZAH_API_BASE_URL:-http://app:8000/api/v1}

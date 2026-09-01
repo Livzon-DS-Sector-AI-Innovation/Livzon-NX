@@ -242,7 +242,7 @@ async def hr_query_offboarding(keyword: str) -> list[dict[str, Any]]:
             else "",
             "offboarding_type": r.offboarding_type or "",
             "offboarding_reason": r.reason or "",
-            "status": r.handover_status or "",
+            "status": r.status or "",
         }
         for r in records
     ]

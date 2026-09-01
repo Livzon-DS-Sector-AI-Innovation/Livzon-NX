@@ -336,25 +336,7 @@ class ContractSyncService:
                     "[ContractSync] pull_from_feishu error for %s: %s", emp_no, e
                 )
 
-        # 飞书无 -> 本地有：软删除（以飞书为主，空表保护：避免删除全部本地记录）
-        feishu_record_ids = {
-            r.get("record_id", "") for r in feishu_records if r.get("record_id")
-        }
-        if not feishu_record_ids:
-            logger.info(
-                "[ContractSync] feishu_record_ids 为空，跳过本地软删除（空表保护）"
-            )
-            await self.session.flush()
-            result = {
-                "created": created,
-                "updated": updated,
-                "deleted": 0,
-                "total": len(feishu_records),
-            }
-            logger.info(
-                "[ContractSync] pull_from_feishu done (empty-table guard): %s", result
-            )
-            return result
+        # 飞书无 -> 本地有：软删除（飞书为唯一数据源，飞书无对应数据即删除本地）
         if feishu_emp_nos:
             local_delete_stmt = select(ContractManagement).where(
                 or_(
@@ -363,8 +345,9 @@ class ContractSyncService:
                 )
             )
         else:
+            # 飞书为空：本地全部软删除，保持平台与飞书一致
             local_delete_stmt = select(ContractManagement).where(
-                ContractManagement.id.isnot(None)
+                ContractManagement.is_deleted.is_(False)
             )
         local_to_delete = await self.session.execute(local_delete_stmt)
         for record in local_to_delete.scalars().all():

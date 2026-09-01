@@ -10,6 +10,8 @@ export default function ItemsOutboundPage() {
         title="领用明细"
         listApi="/api/v1/quality/items/outbound"
         pullApi="/api/v1/quality/items/outbound/pull"
+        entityCode="qc_items_outbound"
+        editable
       />
     </QualityQueryProvider>
   )

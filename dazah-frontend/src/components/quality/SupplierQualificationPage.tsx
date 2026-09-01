@@ -1,5 +1,6 @@
 'use client'
 
+import { qualityTokens } from './themeTokens'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import dayjs, { type Dayjs } from 'dayjs'
 import { App, Button, Card, DatePicker, Form, Input, Modal, Popconfirm, Select, Space, Switch, Table, Typography } from 'antd'
@@ -258,7 +259,7 @@ export default function SupplierQualificationPage({ initialItems = [] }: Supplie
       key: 'is_completed',
       width: 90,
       render: (value: boolean) => (
-        <span style={{ color: value ? '#1aae39' : '#dd5b00' }}>{value ? '已完成' : '未完成'}</span>
+        <span style={{ color: value ? qualityTokens.success : qualityTokens.orangeText }}>{value ? '已完成' : '未完成'}</span>
       ),
     },
     {

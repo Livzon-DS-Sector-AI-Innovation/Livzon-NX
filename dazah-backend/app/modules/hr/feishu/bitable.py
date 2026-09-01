@@ -177,7 +177,8 @@ class BitableClient:
                 self._path(table_id, "/records/search"),
                 json=body,
             )
-            items = data.get("items", [])
+            # 飞书空表时 items 可能为 null，需防御
+            items = data.get("items") or []
             new_items = [r for r in items if r.get("record_id") not in seen_record_ids]
             for r in new_items:
                 seen_record_ids.add(r.get("record_id"))
@@ -222,7 +223,8 @@ class BitableClient:
                 self._path(table_id, "/records"),
                 params=params,
             )
-            items = data.get("items", [])
+            # 飞书空表时 items 可能为 null，需防御
+            items = data.get("items") or []
             new_items = [r for r in items if r.get("record_id") not in seen_record_ids]
             for r in new_items:
                 seen_record_ids.add(r.get("record_id"))
@@ -331,8 +333,18 @@ class FeishuBitableSync:
     async def _find_employee_record(self, employee_number: str | None) -> str | None:
         if not employee_number:
             return None
+        # 新版 filter_obj（旧版 filter_str 已被飞书废弃，会返回 400）
         items = await self.bitable.search_records(
             self.employee_table,
-            filter_str=f'CurrentValue.[工号] = "{employee_number}"',
+            filter_obj={
+                "conjunction": "and",
+                "conditions": [
+                    {
+                        "field_name": "工号",
+                        "operator": "is",
+                        "value": [employee_number],
+                    }
+                ],
+            },
         )
         return items[0].get("record_id") if items else None

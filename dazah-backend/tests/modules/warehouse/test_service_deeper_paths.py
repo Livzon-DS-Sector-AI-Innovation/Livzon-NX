@@ -18,7 +18,6 @@ def _instance() -> service.WarehouseService:
     instance._page_cache = {}
     instance._field_meta_cache = {}
     instance._table_fields_cache = {}
-    instance._bitable_clients = {}
     instance._dashboard_cache = {}
     return instance
 

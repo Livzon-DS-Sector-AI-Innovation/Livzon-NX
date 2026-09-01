@@ -1,10 +1,15 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
-import { App, Drawer, Table, Switch, Select, Button, Space, Typography, Collapse, Tag } from 'antd'
+import { useEffect, useState } from 'react'
+import { App, Drawer, Table, Switch, Select, Button, Space, Typography } from 'antd'
 import { SaveOutlined, CheckOutlined } from '@ant-design/icons'
 import { fetchDeptRecipients, type DeptRecipientVM as DeptRecipient } from '@/lib/api/client/hr'
 import { saveDeptRecipients } from '@/actions/hr'
+
+interface DeptNode {
+  name?: string
+  children?: DeptNode[]
+}
 
 interface DeptRow {
   key: string
@@ -26,15 +31,75 @@ interface Props {
   mode?: 'recipient' | 'clerk'
 }
 
-// 递归展平部门树，返回所有节点（一级+二级+子级）
-function flattenTree(nodes: { id?: string; name?: string; leader_name?: string; children?: any[]; parent_id?: string }[], parentName: string): { id?: string; name: string; leader_name?: string; parent: string }[] {
-  const result: { id?: string; name: string; leader_name?: string; parent: string }[] = []
+// 从部门树为每个部门（含子孙节点）建立「叶子部门名 -> 该部门名」归属映射，
+// 用于把细粒度成员（车队/绿化/磅房等）归到其所属的配置部门下筛选
+function collectMembership(nodes: DeptNode[], rootName: string, map: Record<string, string>): Record<string, string> {
   for (const n of nodes) {
     if (!n.name) continue
-    result.push({ id: n.id, name: n.name, leader_name: n.leader_name, parent: parentName })
+    map[n.name] = rootName
     if (n.children?.length) {
-      result.push(...flattenTree(n.children, n.name))
+      collectMembership(n.children, rootName, map)
     }
+  }
+  return map
+}
+
+function findDeptNode(nodes: DeptNode[], name: string): DeptNode | undefined {
+  for (const n of nodes) {
+    if (n.name === name) return n
+    if (n.children?.length) {
+      const found = findDeptNode(n.children, name)
+      if (found) return found
+    }
+  }
+  return undefined
+}
+
+// 部门列表以「部门审批人配置」同款粒度为准（排除总经办、汇总车间展开为子车间等），
+// 与合同审批解析的部门粒度保持一致；树仅用于成员归属映射
+function buildMembership(treeData: DeptNode[], deptNames: string[]): Record<string, string> {
+  const membership: Record<string, string> = {}
+  for (const name of deptNames) {
+    const node = findDeptNode(treeData, name)
+    if (node) {
+      collectMembership([node], name, membership)
+    } else {
+      membership[name] = name
+    }
+  }
+  return membership
+}
+
+// ─── 配置部门名单的业务调整（以「部门审批人配置」名单为基础）───
+
+/** 部门合并：多个子部门合并为一个配置条目（人员按部门树归属自动归并） */
+const DEPT_MERGE: Record<string, string> = {
+  '103一车间': '103车间',
+  '103二车间': '103车间',
+  '103车间公用部门': '103车间',
+}
+
+/** 部门改名：对齐人员实际所在部门名（否则该条目匹配不到人） */
+const DEPT_RENAME: Record<string, string> = {
+  '生产部': '生产管理',
+}
+
+/** 从名单中移除的部门（保留其子部门条目） */
+const DEPT_REMOVE = new Set(['研发部'])
+
+/** 人员互选的部门组：组内任一条目配置时，可选组内全部部门成员（配置条目仍各自保存） */
+const DEPT_MEMBER_POOLS: Record<string, string[]> = {
+  '201二车间': ['201二车间', '201二车间（多拉）', '201三车间'],
+  '201二车间（多拉）': ['201二车间', '201二车间（多拉）', '201三车间'],
+  '201三车间': ['201二车间', '201二车间（多拉）', '201三车间'],
+}
+
+function transformDeptNames(raw: string[]): string[] {
+  const result: string[] = []
+  for (const n of raw) {
+    if (DEPT_REMOVE.has(n)) continue
+    const target = DEPT_MERGE[n] || DEPT_RENAME[n] || n
+    if (!result.includes(target)) result.push(target)
   }
   return result
 }
@@ -42,6 +107,7 @@ function flattenTree(nodes: { id?: string; name?: string; leader_name?: string; 
 export default function DeptRecipientDrawer({ open, onClose, reminderConfigId, hrMembers = [], mode = 'recipient' }: Props) {
   const { message } = App.useApp()
   const [rows, setRows] = useState<DeptRow[]>([])
+  const [membership, setMembership] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
 
@@ -50,24 +116,35 @@ export default function DeptRecipientDrawer({ open, onClose, reminderConfigId, h
     ;(async () => {
       setLoading(true)
       try {
-        const [recipients, treeRes] = await Promise.all([
+        const [recipients, deptCfgRes, treeRes] = await Promise.all([
           fetchDeptRecipients(reminderConfigId),
+          fetch('/api/v1/hr/dept-approval-configs/names', { cache: 'no-store' }).then(r => r.json()),
           fetch('/api/v1/hr/departments/tree', { cache: 'no-store' }).then(r => r.json()),
         ])
+        // 部门粒度与「部门审批人配置」一致（201一车间/201二车间/行政部 等，不含车队/绿化等细级），
+        // 再叠加业务调整：103 合并、生产部改名、剔除研发部
+        const deptNames = transformDeptNames((deptCfgRes.data ?? []).filter(Boolean))
         const treeData = treeRes.data || []
-        // 展平全部部门（一级+二级+子级）
-        const flat = flattenTree(treeData, '')
+        const membership = buildMembership(treeData, deptNames)
+        setMembership(membership)
+        // 历史已保存的细粒度（叶子部门）配置，按归属归并到对应部门行
         const recipientMap: Record<string, DeptRecipient> = {}
         for (const r of recipients) {
-          recipientMap[r.department] = r
+          const rootName = membership[r.department] || DEPT_RENAME[r.department] || r.department
+          const existing = recipientMap[rootName]
+          if (!existing) {
+            recipientMap[rootName] = r
+          } else if (!existing.recipient_open_ids?.length && r.recipient_open_ids?.length) {
+            recipientMap[rootName] = r
+          }
         }
-        setRows(flat.map((dept, idx) => {
-          const existing = recipientMap[dept.name]
+        setRows(deptNames.map((name: string) => {
+          const existing = recipientMap[name]
           return {
-            key: dept.id || `${dept.name}_${idx}`,
-            department: dept.name,
-            parent_department: dept.parent,
-            leader_name: dept.leader_name,
+            key: name,
+            department: name,
+            parent_department: '',
+            leader_name: undefined,
             use_dept_leader: existing?.use_dept_leader ?? true,
             recipient_open_ids: existing?.recipient_open_ids || [],
             recipient_names: existing?.recipient_names || [],
@@ -81,17 +158,6 @@ export default function DeptRecipientDrawer({ open, onClose, reminderConfigId, h
       }
     })()
   }, [open, reminderConfigId, message])
-
-  // 按一级部门分组
-  const grouped = useMemo(() => {
-    const groups: Record<string, DeptRow[]> = {}
-    for (const r of rows) {
-      const key = r.parent_department || r.department
-      if (!groups[key]) groups[key] = []
-      groups[key].push(r)
-    }
-    return Object.entries(groups)
-  }, [rows])
 
   const handleSave = async () => {
     setSaving(true)
@@ -128,7 +194,9 @@ export default function DeptRecipientDrawer({ open, onClose, reminderConfigId, h
   }
 
   const updateRow = (key: string, field: keyof DeptRow, value: unknown) => {
-    setRows(rows.map(r => (r.key === key ? { ...r, [field]: value } : r)))
+    // 函数式更新：onChange 中连续两次 updateRow 时基于最新 rows 依次生效，
+    // 避免后者覆盖前者（旧实现导致 recipient_open_ids 永远为空、点击无法选中）
+    setRows(prev => prev.map(r => (r.key === key ? { ...r, [field]: value } : r)))
   }
 
   const columns = [
@@ -156,8 +224,14 @@ export default function DeptRecipientDrawer({ open, onClose, reminderConfigId, h
       key: 'recipients',
       width: 300,
       render: (_: unknown, r: DeptRow) => {
-        // 筛选该部门下的人员
-        const deptMembers = hrMembers.filter(m => m.department === r.department)
+        // 筛选该部门下的人员（含细粒度子级成员，按归属映射归到部门）；
+        // 互选组（如 201二车间/多拉/三车间）内任一条目可选组内全部人员
+        const pool = DEPT_MEMBER_POOLS[r.department]
+        const deptMembers = hrMembers.filter(m =>
+          pool
+            ? pool.includes(m.department)
+            : m.department === r.department || membership[m.department] === r.department
+        )
         const deptOptions = deptMembers.map(m => ({
           value: m.open_id,
           label: m.name,
@@ -217,26 +291,12 @@ export default function DeptRecipientDrawer({ open, onClose, reminderConfigId, h
       {loading ? (
         <Typography.Text type="secondary">加载中...</Typography.Text>
       ) : (
-        <Collapse
-          defaultActiveKey={grouped.map(([g]) => g)}
-          items={grouped.map(([group, items]) => ({
-            key: group,
-            label: (
-              <Space>
-                <Typography.Text strong>{group}</Typography.Text>
-                <Tag color="blue">{items.length}个部门</Tag>
-              </Space>
-            ),
-            children: (
-              <Table
-                rowKey="key"
-                columns={columns}
-                dataSource={items}
-                pagination={false}
-                size="small"
-              />
-            ),
-          }))}
+        <Table
+          rowKey="key"
+          columns={columns}
+          dataSource={rows}
+          pagination={false}
+          size="small"
         />
       )}
     </Drawer>

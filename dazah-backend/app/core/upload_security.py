@@ -26,6 +26,12 @@ _EXTENSION_MIMES: dict[str, set[str]] = {
     ".docx": {
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     },
+    ".wps": {
+        "application/msword",
+        "application/vnd.ms-works",
+        "application/kswps",
+        "application/octet-stream",
+    },
     ".xls": {"application/vnd.ms-excel"},
     ".xlsx": {"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
     ".pptx": {
@@ -90,7 +96,10 @@ def sniff_upload_mime(filename: str, content: bytes) -> str:
         return "image/bmp"
     if content.startswith(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"):
         suffix = Path(filename).suffix.lower()
-        return "application/msword" if suffix == ".doc" else "application/vnd.ms-excel"
+        if suffix in {".doc", ".wps"}:
+            # WPS Writer 的 .wps 与 .doc 同为 OLE 复合文档
+            return "application/msword"
+        return "application/vnd.ms-excel"
     try:
         with ZipFile(BytesIO(content)) as archive:
             names = set(archive.namelist())

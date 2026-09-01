@@ -626,6 +626,43 @@ class WarehouseRepository:
 
         await self.session.flush()
 
+    async def upsert_material_page_rows_incremental(
+        self,
+        snapshot_id: Any,
+        rows: Sequence[MaterialPageRow],
+    ) -> None:
+        """增量同步专用：只 upsert 本次传入的变更记录，不软删未传入的历史记录。
+
+        与 upsert_material_page_rows 的差异：历史记录（本次未变更）保持原状，
+        避免高频增量拉取把未变更的旧记录误标为已删除。
+        """
+        result = await self.session.execute(
+            select(MaterialPageRow).where(
+                MaterialPageRow.page_snapshot_id == snapshot_id,
+            )
+        )
+        existing_rows: dict[str, MaterialPageRow] = {
+            row.source_record_id: row for row in result.scalars().all()
+        }
+
+        for row in rows:
+            existing = existing_rows.get(row.source_record_id)
+            if existing:
+                # 已在本地软删的记录，增量同步不应自动复活——只有全量同步
+                # （upsert_material_page_rows）确认飞书仍有该记录时才恢复，
+                # 避免飞书删除未生效 / 定时同步把已删记录反复拉回。
+                if existing.is_deleted:
+                    continue
+                existing.cells = row.cells
+                existing.search_text = row.search_text
+                existing.row_order = row.row_order
+                existing.last_synced_at = row.last_synced_at
+                existing.is_deleted = False
+            else:
+                self.session.add(row)
+
+        await self.session.flush()
+
     async def list_material_page_rows(
         self,
         snapshot_id: Any,

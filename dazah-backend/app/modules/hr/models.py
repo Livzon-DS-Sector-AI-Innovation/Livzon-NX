@@ -110,12 +110,19 @@ class Employee(BaseModel):
         Index("ix_employees_department", "department"),
         Index("ix_employees_status", "status"),
         Index("ix_employees_feishu_record_id", "feishu_record_id"),
+        # 软删除员工不再占用工号：仅未删除行要求工号唯一（离职同工号再入职）
+        Index(
+            "uq_employees_employee_number_active",
+            "employee_number",
+            unique=True,
+            postgresql_where=text("is_deleted = false"),
+        ),
         {"schema": "hr"},
     )
 
     # ─── Core identifiers ──
     employee_number: Mapped[str | None] = mapped_column(
-        String(32), unique=True, nullable=True, comment="工号"
+        String(32), nullable=True, comment="工号"
     )
     seq_number: Mapped[int | None] = mapped_column(
         Integer, nullable=True, comment="序号（飞书自动编号）"
@@ -527,12 +534,12 @@ class OffboardingRecord(BaseModel):
     reason: Mapped[str | None] = mapped_column(
         String(512), nullable=True, comment="离职原因"
     )
-    handover_status: Mapped[str] = mapped_column(
+    status: Mapped[str] = mapped_column(
         String(16),
         nullable=False,
-        default="待交接",
-        server_default="待交接",
-        comment="交接状态: 待交接, 交接中, 已完成",
+        default="在职",
+        server_default="在职",
+        comment="在职状态: 在职, 离职",
     )
 
     # ─── Education ───
@@ -874,6 +881,13 @@ class TrainingLedger(BaseModel):
         nullable=True,
         comment="二级培训确认: pending待确认/done已完成二级/not_needed不需二级",
     )
+    is_presented: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default="true",
+        comment="是否呈现（默认显示，不呈现则不进入员工培训清单）",
+    )
 
 
 class TrainingLedgerPage(BaseModel):
@@ -1057,10 +1071,10 @@ class HrDeptApprovalConfig(BaseModel):
         {"schema": "hr"},
     )
 
-    department_id: Mapped[UUID] = mapped_column(
+    department_id: Mapped[UUID | None] = mapped_column(
         ForeignKey("hr.departments.id"),
-        nullable=False,
-        comment="部门ID",
+        nullable=True,
+        comment="部门ID（部门表为空时为空，按 department_name 展示）",
     )
     department_name: Mapped[str] = mapped_column(
         String(64), nullable=False, comment="部门名称（冗余，方便展示）"
@@ -2000,12 +2014,16 @@ class TrainingPersonnelConfig(BaseModel):
 
     __tablename__ = "training_personnel_configs"
     __table_args__ = (
+        # 不同用户可各自建同名配置：唯一性按 (level, department, config_name,
+        # created_by) 且仅未软删记录唯一（部分唯一索引，避免 is_deleted 进约束）
         Index(
-            "ix_training_personnel_configs_level_dept_name",
+            "ix_training_personnel_configs_level_dept_name_owner",
             "level",
             "department",
             "config_name",
+            "created_by",
             unique=True,
+            postgresql_where=text("is_deleted = false"),
         ),
         {"schema": "hr"},
     )
@@ -2287,6 +2305,11 @@ class TrainingSession(BaseModel):
         ForeignKey("hr.annual_training_plan_items.id"),
         nullable=True,
         comment="关联计划项目",
+    )
+    parent_session_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("hr.training_sessions.id"),
+        nullable=True,
+        comment="上级培训会话（二级培训来源，从台账一键创建时记录）",
     )
     checked_content: Mapped[list[Any] | None] = mapped_column(
         JSON, nullable=True, comment="已选附件培训内容（《名称》（编号）条目）"

@@ -15,9 +15,9 @@ async def create_drug(db: AsyncSession, data: DrugCreate) -> Drug:
     return await repo.create_drug(db, data.model_dump())
 
 
-async def get_drugs(db: AsyncSession) -> list[Drug]:
+async def get_drugs(db: AsyncSession, limit: int = 500) -> list[Drug]:
     """获取所有药品"""
-    return await repo.get_drugs(db)
+    return await repo.get_drugs(db, limit=limit)
 
 
 async def get_drug(db: AsyncSession, drug_id: uuid.UUID) -> Drug:

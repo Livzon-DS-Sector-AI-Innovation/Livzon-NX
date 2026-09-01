@@ -30,6 +30,7 @@ from app.core.response import paginated_response, success_response
 from app.core.upload_security import read_upload_secure
 from app.modules.hr.esg_service import EsgTrainingRecordService
 from app.modules.hr.schemas import (
+    EsgListFilters,
     EsgTrainingRecordCreate,
     EsgTrainingRecordResponse,
     EsgTrainingRecordUpdate,
@@ -130,6 +131,10 @@ def get_esg_service(
     return EsgTrainingRecordService(session)
 
 
+# 单次导入行数上限（防超大文件拖垮导入与数据库）
+ESG_IMPORT_MAX_ROWS = 2000
+
+
 def _parse_esg_date(v: Any) -> date | None:
     if v is None or v == "":
         return None
@@ -200,9 +205,12 @@ def _esg_header_to_field(text: str) -> str | None:
     return _ESG_HEADER_CN_MAP.get(text.strip())
 
 
-@router.get("/esg-training-records", summary="ESG培训报表列表")
+@router.get("/esg-training-records", summary="ESG培训报表列表（支持各列筛选）")
 async def list_esg_records(
     department: str | None = None,
+    date_from: date | None = Query(None, description="培训日期起"),
+    date_to: date | None = Query(None, description="培训日期止"),
+    filters: EsgListFilters = Depends(),
     page_params: PageParams = Depends(),
     db: AsyncSession = Depends(get_db),
     service: EsgTrainingRecordService = Depends(get_esg_service),
@@ -217,6 +225,9 @@ async def list_esg_records(
         department=department,
         page=page_params.page,
         page_size=page_params.page_size,
+        date_from=date_from,
+        date_to=date_to,
+        filters=filters,
     )
     data = [
         EsgTrainingRecordResponse.model_validate(r).model_dump(mode="json")
@@ -225,6 +236,27 @@ async def list_esg_records(
     return paginated_response(
         data=data, page=page_params.page, page_size=page_params.page_size, total=total
     )
+
+
+@router.get(
+    "/esg-training-records/filter-options",
+    summary="ESG培训报表各枚举列筛选选项（部门+日期范围内去重）",
+)
+async def list_esg_filter_options(
+    department: str = Query(..., description="部门"),
+    date_from: date | None = Query(None, description="培训日期起"),
+    date_to: date | None = Query(None, description="培训日期止"),
+    db: AsyncSession = Depends(get_db),
+    service: EsgTrainingRecordService = Depends(get_esg_service),
+    current_user: CurrentUser = None,
+) -> Any:
+    from app.modules.hr.api import _assert_dept_in_scope
+
+    await _assert_dept_in_scope(db, current_user, department)
+    options = await service.filter_options(
+        department=department, date_from=date_from, date_to=date_to
+    )
+    return success_response(data=options)
 
 
 @router.post("/esg-training-records", summary="创建ESG培训记录")
@@ -424,6 +456,14 @@ async def import_esg_records(
             apply_company=vals.get("apply_company") or None,
             apply_company_no=vals.get("apply_company_no") or None,
         )
+        if created >= ESG_IMPORT_MAX_ROWS:
+            raise AppException(
+                status_code=400,
+                message=(
+                    "单次导入不得超过 "
+                    f"{ESG_IMPORT_MAX_ROWS} 条记录，请拆分文件后分批导入"
+                ),
+            )
         await service.create_record(data)
         created += 1
 

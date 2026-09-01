@@ -32,6 +32,8 @@ describe('quality migrated menu contract', () => {
       'deviation-records',
       'deviation-investigations',
       'deviation-ledger',
+      'deviation-history',
+      'deviation-workbench',
     ])
     expect(children.find((item) => item.key === 'capas')?.children?.map((item) => item.key)).toEqual([
       'capa-ledger',

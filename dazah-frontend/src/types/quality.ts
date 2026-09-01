@@ -412,8 +412,10 @@ export interface ChangeActionPlanListItem {
   related_work: string | null;
   owner_name: string | null;
   owner_user_id: string | null;
+  owner_avatar_url: string | null;
   director_name: string | null;
   director_user_id: string | null;
+  director_avatar_url: string | null;
   deadline_date: string | null;
   status: string | null;
   delay_flag: string | null;
@@ -1064,16 +1066,40 @@ export interface ValidationDashboardStats {
 export interface DepartmentContact {
   id: string;
   name: string | null;
+  avatar_url: string | null;
+  bitable_user_id: string | null;
   department: string;
   enterprise_email: string | null;
   open_id: string | null;
   department_head_name: string | null;
+  department_head_avatar_url: string | null;
+  department_head_bitable_user_id: string | null;
   department_head_enterprise_email: string | null;
   department_head_open_id: string | null;
   feishu_record_id: string | null;
   created_at: string;
   updated_at: string;
 }
+
+export interface UpdateFeishuDepartmentContactRequest {
+  open_id?: string | null;
+  department_head_open_id?: string | null;
+  department?: string | null;
+  enterprise_email?: string | null;
+}
+
+export type InspectionFeishuFieldMeta = {
+  field_name: string
+  ui_type: string
+  editable: boolean
+}
+
+export type InspectionFeishuFieldsResult = {
+  fields: InspectionFeishuFieldMeta[]
+  can_push: boolean
+}
+
+export type InspectionFeishuFields = Record<string, unknown>
 
 // ============ Department Weekly Confirmation Types ============
 export type ProductionStatus = 'production' | 'stopped';
@@ -1582,20 +1608,11 @@ export interface UploadDocumentEntryAttachmentResult {
   message?: string | null;
 }
 
-export interface BatchImportAttachmentResultItem {
-  file_name: string;
-  matched: boolean;
-  match_type: 'code' | 'name' | 'llm' | 'none';
-  entry_id: string | null;
-  entry_name: string | null;
-  entry_code: string | null;
-}
+export type BatchImportAttachmentResultItem =
+  components['schemas']['BatchImportAttachmentResultItem'];
 
-export interface BatchImportDocumentAttachmentsResult {
-  bound: number;
-  failed: number;
-  results: BatchImportAttachmentResultItem[];
-}
+export type BatchImportDocumentAttachmentsResult =
+  components['schemas']['BatchImportDocumentAttachmentsResult'];
 
 export interface DocumentCatalogImportSheetResult {
   sheet_name: string;
@@ -1640,3 +1657,19 @@ export type OosOotFeishuSyncOut = InspectionFeishuSyncResponse;
 export interface OosOotRecordListResponse { data: OosOotRecordOut[]; meta?: { total?: number } }
 export interface OotLimitProductListResponse { data: OotLimitProductOut[]; meta?: { total?: number } }
 export interface OotLimitItemListResponse { data: OotLimitItemOut[]; meta?: { total?: number } }
+
+// ---- 历史偏差（契约类型一律取自 generate-api 生成 schema，禁止手写同名契约）----
+export type HistoricalDeviationAttachment = components['schemas']['HistoricalDeviationAttachmentOut'];
+export type HistoricalDeviationListItem = components['schemas']['HistoricalDeviationListItem'];
+export type HistoricalDeviationDetail = components['schemas']['HistoricalDeviationDetail'];
+export type CreateHistoricalDeviationPayload = components['schemas']['CreateHistoricalDeviationRequest'];
+
+// ---- 偏差工作台 ----
+export type DeviationWorkbenchAttachment = components['schemas']['DeviationWorkbenchAttachmentOut'];
+export type DeviationWorkbenchAttachmentDescriptor = components['schemas']['DeviationWorkbenchAttachmentIn'];
+export type DeviationWorkbenchSettings = components['schemas']['DeviationWorkbenchSettingsOut'];
+export type DeviationWorkbenchSourceType = 'report_record' | 'manual';
+export type DeviationWorkbenchStatus = 'processing' | 'completed' | 'failed';
+export type DeviationWorkbenchReportListItem = components['schemas']['DeviationWorkbenchReportListItem'];
+export type DeviationWorkbenchReportDetail = components['schemas']['DeviationWorkbenchReportDetail'];
+export type CreateDeviationWorkbenchPayload = components['schemas']['CreateDeviationWorkbenchRequest'];

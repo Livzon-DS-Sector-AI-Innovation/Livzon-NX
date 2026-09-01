@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { App, Button, Drawer, Modal, Popconfirm, Spin, Table, Descriptions, Form, Input, Select, DatePicker, Tag, Space, Tooltip } from 'antd'
+import { useCallback, useEffect, useState } from 'react'
+import { App, Button, Drawer, Modal, Popconfirm, Spin, Table, Descriptions, Form, Input, Select, DatePicker, Tag, Space, Tooltip, Switch } from 'antd'
 import { EditOutlined, DeleteOutlined, EyeOutlined, FolderOpenOutlined, DownloadOutlined, FileExcelOutlined } from '@ant-design/icons'
 import { useRouter } from 'next/navigation'
 import dayjs from 'dayjs'
@@ -9,7 +9,7 @@ import { HR_DISPLAY_DATE_FORMAT, fmtTrainingDatetime } from '@/lib/dayjs-config'
 import type { TrainingLedgerRecord } from '@/types/hr'
 import { fetchTrainingLedgersByDept } from '@/lib/api/hr'
 import { fetchSessionDocuments, fetchTrainingSession } from '@/lib/api/client/hr'
-import { updateTrainingLedger, deleteTrainingLedger, generateOralExamResult, generatePracticalExamResult } from '@/actions/hr'
+import { updateTrainingLedger, deleteTrainingLedger, createSecondLevelTraining, generateOralExamResult, generatePracticalExamResult } from '@/actions/hr'
 import { downloadBytes } from '@/lib/download'
 import ImportExamScoresModal from './ImportExamScoresModal'
 
@@ -29,18 +29,44 @@ interface Props {
   printRequest: number
 }
 
-// 与后端导出 Excel 一致的列（14 列，年度培训统计表 SMP-HR-002-14）
+// 与后端导出 Excel 一致的列（15 列，年度培训统计表 SMP-HR-002-14）
 const PRINT_HEADERS = [
   '培训时间', '培训日期', '培训时长（h）', '培训内容', '授课部门',
   '授课人', '一级/二级', '涉及部门', '培训对象', '培训类型', '考核方式',
-  '部门/公司计划', '人药/兽药', '成绩汇总',
+  '部门/公司计划', '人药/兽药', '成绩汇总', '是否呈现',
 ]
 const PRINT_FIELDS: (keyof TrainingLedgerRecord)[] = [
   'training_datetime', 'training_date', 'duration_hours', 'training_content',
   'teaching_dept', 'instructor', 'level_category', 'involved_depts',
   'trainees', 'training_type', 'ledger_assessment_method',
-  'plan_source', 'drug_category', 'score_summary',
+  'plan_source', 'drug_category', 'score_summary', 'is_presented',
 ]
+
+// 拉取某部门筛选范围内的全量台账（循环分页直到取完），供打印使用
+async function fetchAllLedgers(
+  dept: string,
+  dateFrom: string,
+  dateTo: string
+): Promise<TrainingLedgerRecord[]> {
+  const all: TrainingLedgerRecord[] = []
+  const pageSize = 1000
+  let p = 1
+  for (;;) {
+    const res = await fetchTrainingLedgersByDept(
+      dept,
+      p,
+      pageSize,
+      dateFrom || undefined,
+      dateTo || undefined
+    )
+    const rows = res.data || []
+    all.push(...rows)
+    const total = res.meta?.total ?? all.length
+    if (all.length >= total || rows.length === 0) break
+    p += 1
+  }
+  return all
+}
 
 export default function AnnualTrainingStatsClient({ department, dateFrom, dateTo, periodLabel, printRequest }: Props) {
   const { message } = App.useApp()
@@ -49,6 +75,9 @@ export default function AnnualTrainingStatsClient({ department, dateFrom, dateTo
   const [detailRecord, setDetailRecord] = useState<TrainingLedgerRecord | null>(null)
   const [editingRecord, setEditingRecord] = useState<TrainingLedgerRecord | null>(null)
   const [saving, setSaving] = useState(false)
+  const [page, setPage] = useState(1)
+  const [pageSize] = useState(50)
+  const [total, setTotal] = useState(0)
   const [form] = Form.useForm()
   const router = useRouter()
 
@@ -103,33 +132,37 @@ export default function AnnualTrainingStatsClient({ department, dateFrom, dateTo
     }
   }
 
-  const loadData = async () => {
+  const loadData = useCallback(async (p = 1) => {
     setLoading(true)
     try {
-      const res = await fetchTrainingLedgersByDept(department, 1, 500)
+      const res = await fetchTrainingLedgersByDept(
+        department,
+        p,
+        pageSize,
+        dateFrom || undefined,
+        dateTo || undefined
+      )
       setRecords(res.data || [])
+      setTotal(res.meta?.total ?? (res.data?.length || 0))
+      setPage(p)
     } catch (e) {
       message.error('加载数据失败: ' + ((e instanceof Error ? e.message : '') || '未知错误'))
     } finally {
       setLoading(false)
     }
-  }
+  }, [department, dateFrom, dateTo, pageSize, message])
 
+  // 部门或筛选日期变化 → 回到第一页重新加载（服务端分页 + 服务端日期过滤）
   useEffect(() => {
-    queueMicrotask(loadData)
-  }, [department])
-
-  // 客户端按筛选范围过滤（与导出一致）
-  const filteredRecords = (dateFrom && dateTo)
-    ? records.filter((r) => {
-        if (!r.training_date) return false
-        return r.training_date >= dateFrom && r.training_date <= dateTo
-      })
-    : records
+    // 依赖变化时同步回到第一页加载：loadData 内部 setLoading 为首个同步步骤
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadData(1)
+  }, [loadData])
 
   // 按导出内容打印：新窗口渲染与导出 Excel 一致的表格后调起打印
-  const doPrint = () => {
-    if (filteredRecords.length === 0) {
+  const doPrint = async () => {
+    const all = await fetchAllLedgers(department, dateFrom, dateTo)
+    if (all.length === 0) {
       message.warning('当前筛选范围内没有数据')
       return
     }
@@ -137,7 +170,7 @@ export default function AnnualTrainingStatsClient({ department, dateFrom, dateTo
     const esc = (v: unknown) =>
       String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     const headerHtml = PRINT_HEADERS.map((h) => `<th>${esc(h)}</th>`).join('')
-    const bodyHtml = filteredRecords
+    const bodyHtml = all
       .map((r) => `<tr>${PRINT_FIELDS.map((f) => `<td>${esc(r[f] ?? '')}</td>`).join('')}</tr>`)
       .join('')
     const w = window.open('', '_blank')
@@ -164,7 +197,8 @@ export default function AnnualTrainingStatsClient({ department, dateFrom, dateTo
   }
 
   useEffect(() => {
-    if (printRequest > 0) doPrint()
+    if (printRequest > 0) void doPrint()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [printRequest])
 
   const handleEdit = (record: TrainingLedgerRecord) => {
@@ -185,7 +219,7 @@ export default function AnnualTrainingStatsClient({ department, dateFrom, dateTo
       })
       message.success('更新成功')
       setEditingRecord(null)
-      loadData()
+      loadData(page)
     } catch (e) {
       message.error((e instanceof Error ? e.message : '') || '保存失败')
     } finally {
@@ -197,7 +231,7 @@ export default function AnnualTrainingStatsClient({ department, dateFrom, dateTo
     try {
       await deleteTrainingLedger(id)
       message.success('删除成功')
-      loadData()
+      loadData(page)
     } catch (e) {
       message.error((e instanceof Error ? e.message : '') || '删除失败')
     }
@@ -208,9 +242,31 @@ export default function AnnualTrainingStatsClient({ department, dateFrom, dateTo
     try {
       await updateTrainingLedger(record.id, { second_level_status: status })
       message.success(status === 'done' ? '已确认完成二级培训' : '已确认无需二级培训')
-      loadData()
+      loadData(page)
     } catch (e) {
       message.error((e instanceof Error ? e.message : '') || '操作失败')
+    }
+  }
+
+  // 是否呈现切换：直接更新 is_presented 并刷新
+  const handleTogglePresented = async (record: TrainingLedgerRecord, checked: boolean) => {
+    try {
+      await updateTrainingLedger(record.id, { is_presented: checked })
+      message.success(checked ? '已设为呈现' : '已设为不呈现（不进入员工培训清单）')
+      loadData(page)
+    } catch (e) {
+      message.error((e instanceof Error ? e.message : '') || '切换失败')
+    }
+  }
+
+  // 从台账副本一键创建部门级二级培训会话并带入上级试卷，跳转到培训资料页
+  const handleCreateSecondLevel = async (record: TrainingLedgerRecord) => {
+    try {
+      const res = await createSecondLevelTraining(record.id)
+      message.success(`已创建二级培训会话（带入 ${res.copied_doc_types.length} 类试卷）`)
+      router.push(`/hr/training/sign-in?session=${res.id}&doc=ai_written_exam&parent_record=${res.parent_record_id}`)
+    } catch (e) {
+      message.error((e instanceof Error ? e.message : '') || '创建二级培训失败')
     }
   }
 
@@ -235,9 +291,26 @@ export default function AnnualTrainingStatsClient({ department, dateFrom, dateTo
     { title: '培训类型', dataIndex: 'training_type', width: 100 },
     { title: '考核方式', dataIndex: 'ledger_assessment_method', width: 90 },
     {
+      title: '是否呈现', dataIndex: 'is_presented', width: 90, fixed: 'right' as const,
+      render: (v: boolean | null | undefined, record: TrainingLedgerRecord) => (
+        <Switch
+          size="small"
+          checked={v !== false}
+          onChange={(checked) => handleTogglePresented(record, checked)}
+          checkedChildren="是"
+          unCheckedChildren="否"
+        />
+      ),
+    },
+    {
       title: '操作', width: 330, fixed: 'right' as const,
-      render: (_: any, record: TrainingLedgerRecord) => (
+      render: (_: unknown, record: TrainingLedgerRecord) => (
         <div className="no-print flex gap-2">
+          {record.second_level_status === 'pending' && record.session_id && (
+            <Button size="small" type="primary" ghost onClick={() => handleCreateSecondLevel(record)}>
+              做二级培训
+            </Button>
+          )}
           {record.second_level_status === 'pending' && (
             <>
               <Popconfirm title="确认已完成二级培训？" onConfirm={() => handleSetSecondLevel(record, 'done')}>
@@ -267,11 +340,18 @@ export default function AnnualTrainingStatsClient({ department, dateFrom, dateTo
     <>
       <Table
         rowKey="id"
-        dataSource={filteredRecords}
+        dataSource={records}
         columns={columns}
         scroll={{ x: 1400 }}
         size="small"
-        pagination={{ pageSize: 50, showSizeChanger: false }}
+        pagination={{
+          current: page,
+          pageSize,
+          total,
+          showTotal: (t: number) => `共 ${t} 条`,
+          showSizeChanger: false,
+          onChange: (p: number) => loadData(p),
+        }}
         rowClassName={(record) => {
           if (record.owner_deleted) return 'print-row ledger-owner-deleted-row'
           if (record.second_level_status === 'pending') return 'print-row ledger-pending-row'
@@ -435,6 +515,9 @@ export default function AnnualTrainingStatsClient({ department, dateFrom, dateTo
           <Form.Item name="score_summary" label="成绩汇总">
             <Input.TextArea rows={2} />
           </Form.Item>
+          <Form.Item name="is_presented" label="是否呈现" valuePropName="checked">
+            <Switch checkedChildren="是" unCheckedChildren="否" />
+          </Form.Item>
           <Form.Item name="remarks" label="备注">
             <Input.TextArea rows={2} />
           </Form.Item>
@@ -447,7 +530,7 @@ export default function AnnualTrainingStatsClient({ department, dateFrom, dateTo
         recordId={examScoreRecordId || ''}
         onClose={() => setExamScoreRecordId(null)}
         onSuccess={() => {
-          loadData()
+          loadData(page)
           // 同步刷新资料 Drawer 中的数据
           if (docsRecord) openDocs(docsRecord)
         }}

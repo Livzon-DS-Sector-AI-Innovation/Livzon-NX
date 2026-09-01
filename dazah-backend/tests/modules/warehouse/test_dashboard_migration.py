@@ -4,7 +4,7 @@
 测试通过 mock _load_page_rows 返回构造行数据验证统计口径。
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -12,7 +12,9 @@ from fastapi import HTTPException
 
 from app.modules.warehouse.service import WarehouseService
 
-CHINA = datetime(2026, 8, 14, 12, 0, 0)
+# 参考“今天”必须跟随真实当前日期（东八区）：仪表盘按 datetime.now 的
+# 当月/近 30 天窗口过滤，硬编码日期在跨月后会让断言必然失败。
+CHINA = datetime.now(timezone(timedelta(hours=8)))
 
 
 def _ms(dt) -> int:
@@ -31,7 +33,6 @@ async def _make_service() -> WarehouseService:
     service._page_cache = {}
     service._field_meta_cache = {}
     service._table_fields_cache = {}
-    service._bitable_clients = {}
     service._dashboard_cache = {}
     return service
 

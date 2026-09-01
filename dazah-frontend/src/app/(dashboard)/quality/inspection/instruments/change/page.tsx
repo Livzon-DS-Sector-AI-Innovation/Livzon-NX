@@ -10,6 +10,8 @@ export default function InstrChangePage() {
         title="设备变更记录"
         listApi="/api/v1/quality/instruments/change"
         pullApi="/api/v1/quality/instruments/change/pull"
+        entityCode="qc_instr_change"
+        editable
       />
     </QualityQueryProvider>
   )

@@ -147,6 +147,40 @@ export async function syncFromFeishuAction() {
   return res.json()
 }
 
+export async function syncOnboardingFromFeishuAction() {
+  const res = await authedFetch(
+    `${API_BASE}/api/v1/hr/onboarding-records/sync-from-feishu`,
+    {
+      method: 'POST',
+      cache: 'no-store',
+      signal: AbortSignal.timeout(120000),  // 2分钟超时
+    }
+  )
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.message || '从飞书同步入职台账失败')
+  }
+  revalidatePath('/hr/onboarding')
+  return res.json()
+}
+
+export async function syncDepartureFromFeishuAction() {
+  const res = await authedFetch(
+    `${API_BASE}/api/v1/hr/departure-records/sync-from-feishu`,
+    {
+      method: 'POST',
+      cache: 'no-store',
+      signal: AbortSignal.timeout(120000),  // 2分钟超时
+    }
+  )
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.message || '从飞书同步离职台账失败')
+  }
+  revalidatePath('/hr/departure')
+  return res.json()
+}
+
 export async function syncToFeishuAction(id: string) {
   const res = await authedFetch(`${API_BASE}/api/v1/hr/employees/${id}/sync-to-feishu`, {
     method: 'POST',
@@ -420,16 +454,19 @@ export async function importAnnualTrainingPlan(
 // ─── STUB: Candidate/Recruitment Actions (not yet implemented) ───
 
 export async function createCandidateAction(formData: FormData) {
+  void formData
   throw new Error('createCandidateAction: 功能尚未实现')
 }
 
 export async function parseResumePreviewAction(_formData: FormData): Promise<{
   data: { gender: string; school: string; education: string; major: string; match_report: string; recommendation_level: string }
 }> {
+  void _formData
   throw new Error('parseResumePreviewAction: 功能尚未实现')
 }
 
 export async function syncCandidateToFeishuAction(candidateId: string) {
+  void candidateId
   throw new Error('syncCandidateToFeishuAction: 功能尚未实现')
 }
 
@@ -989,15 +1026,21 @@ export async function syncOffboardingFromFeishuAction(): Promise<{ code: number;
 
 export async function generateOffboardingCertificateAction(
   recordId: string
-): Promise<{ bytes: ArrayBuffer; filename: string }> {
-  const { bytes, disposition } = await fetchDocBytes(
-    `${API_BASE}/api/v1/hr/offboarding-records/${recordId}/certificate`,
-    {},
-    '生成离职证明失败',
-  )
-  return {
-    bytes,
-    filename: filenameFromDisposition(disposition, '解除劳动合同通知单.docx'),
+): Promise<{ ok: boolean; bytes?: ArrayBuffer; filename?: string; message?: string }> {
+  try {
+    const { bytes, disposition } = await fetchDocBytes(
+      `${API_BASE}/api/v1/hr/offboarding-records/${recordId}/certificate`,
+      {},
+      '生成离职证明失败',
+    )
+    return {
+      ok: true,
+      bytes,
+      filename: filenameFromDisposition(disposition, '解除劳动合同通知单.docx'),
+    }
+  } catch (e) {
+    // 不 throw，返回结构化结果，避免 Server Action 抛错在生产环境触发通用错误页
+    return { ok: false, message: e instanceof Error ? e.message : '生成离职证明失败' }
   }
 }
 
@@ -1090,6 +1133,27 @@ export async function updateTrainingLedger(
   return res.json()
 }
 
+/** 从培训台账一键创建部门级二级培训会话，并带入上级公司级培训的试卷草稿 */
+export async function createSecondLevelTraining(
+  recordId: string
+): Promise<{
+  id: string
+  copied_doc_types: string[]
+  parent_record_id: string
+}> {
+  const res = await authedFetch(`${API_BASE}/api/v1/hr/training-sessions/from-ledger`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ record_id: recordId }),
+    cache: 'no-store',
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.message || err.detail || '创建二级培训会话失败')
+  }
+  return res.json().then((j) => j.data)
+}
+
 export async function deleteTrainingLedger(
   id: string
 ): Promise<{ code: number; message: string }> {
@@ -1180,7 +1244,9 @@ export async function generateTrainingSignInSheet(
 }
 
 export async function generateTrainingNotification(
-  data: components['schemas']['TrainingNotificationInput']
+  data: components['schemas']['TrainingNotificationInput'] & {
+    training_level?: string | null
+  }
 ): Promise<{ bytes: ArrayBuffer; filename: string }> {
   const { bytes, disposition } = await fetchDocBytes(
     `${API_BASE}/api/v1/hr/training-notification`,
@@ -2296,4 +2362,70 @@ export async function deleteTrainingDeptMappingAction(id: string) {
   }
   revalidatePath('/hr/settings/dept-mapping')
   return true
+}
+
+// ─── 入职台账写操作（Server Action 包装，浏览器禁直写后端） ───
+
+export async function deleteOnboardingAction(
+  id: string
+): Promise<{ code: number; message: string }> {
+  const res = await authedFetch(`${API_BASE}/api/v1/hr/onboarding/${id}`, {
+    method: 'DELETE',
+    cache: 'no-store',
+  })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(body?.message || '删除入职记录失败')
+  revalidatePath('/hr/onboarding')
+  return body
+}
+
+export async function uploadOnboardingAttachmentAction(
+  file: File
+): Promise<{ file_token: string; name: string }> {
+  const form = new FormData()
+  form.append('file', file)
+  const res = await authedFetch(`${API_BASE}/api/v1/hr/onboarding/attachments`, {
+    method: 'POST',
+    body: form,
+    cache: 'no-store',
+  })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(body?.message || '附件上传失败')
+  return body?.data ?? { file_token: '', name: file.name }
+}
+
+// ─── 部门可见范围（dept-scopes）写操作 ───
+
+export async function saveDeptScopeAction(
+  userId: string,
+  visibleDepts: string[],
+  userMeta?: { user_name?: string | null; user_department?: string | null }
+): Promise<{ user_id: string; visible_depts: string[] }> {
+  const res = await authedFetch(`${API_BASE}/api/v1/hr/dept-scopes/${userId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      visible_depts: visibleDepts,
+      user_name: userMeta?.user_name,
+      user_department: userMeta?.user_department,
+    }),
+    cache: 'no-store',
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.message || err.detail || '保存可见部门配置失败')
+  }
+  const json = await res.json()
+  return json.data
+}
+
+export async function clearDeptScopeAction(userId: string): Promise<void> {
+  const res = await authedFetch(`${API_BASE}/api/v1/hr/dept-scopes/${userId}`, {
+    method: 'DELETE',
+    cache: 'no-store',
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.message || err.detail || '清除可见部门配置失败')
+  }
 }

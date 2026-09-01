@@ -1,7 +1,6 @@
 'use client'
 
-"use client"
-
+import { qualityTokens } from './themeTokens'
 import { useState, useCallback } from 'react'
 import { App, Card, Button, Input, Space, List, Typography } from 'antd'
 import { SaveOutlined, EditOutlined, HistoryOutlined, ArrowLeftOutlined, EyeOutlined, FileTextOutlined } from '@ant-design/icons'
@@ -163,7 +162,7 @@ export function ReportEditor({
               </Space>
             </div>
           ) : effectiveReadOnly ? (
-            <div style={{ minHeight: 400, padding: 16, background: '#fafafa', borderRadius: 4, whiteSpace: 'pre-wrap', fontFamily: 'inherit' }}>
+            <div style={{ minHeight: 400, padding: 16, background: qualityTokens.bgSoft, borderRadius: 4, whiteSpace: 'pre-wrap', fontFamily: 'inherit' }}>
               {displayContent || <Text type="secondary">暂无内容</Text>}
             </div>
           ) : (

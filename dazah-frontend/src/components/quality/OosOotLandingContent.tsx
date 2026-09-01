@@ -1,5 +1,6 @@
 'use client'
 
+import { qualityTokens } from './themeTokens'
 import Link from 'next/link'
 import { Card, Row, Col } from 'antd'
 import {
@@ -20,10 +21,10 @@ export function OosOotLandingContent() {
           <Link href="/quality/oos-oot/report-records">
             <Card hoverable>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <FileTextOutlined style={{ fontSize: 32, color: '#1677ff' }} />
+                <FileTextOutlined style={{ fontSize: 32, color: qualityTokens.primary }} />
                 <div>
                   <div style={{ fontSize: 16, fontWeight: 600 }}>OOSOOT报告记录</div>
-                  <div style={{ fontSize: 13, color: '#787671' }}>查看和管理OOS/OOT报告记录</div>
+                  <div style={{ fontSize: 13, color: qualityTokens.textMuted }}>查看和管理OOS/OOT报告记录</div>
                 </div>
               </div>
             </Card>
@@ -33,10 +34,10 @@ export function OosOotLandingContent() {
           <Link href="/quality/oos-oot/investigation-push">
             <Card hoverable>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <SendOutlined style={{ fontSize: 32, color: '#1aae39' }} />
+                <SendOutlined style={{ fontSize: 32, color: qualityTokens.success }} />
                 <div>
                   <div style={{ fontSize: 16, fontWeight: 600 }}>OOSOOT调查推送记录</div>
-                  <div style={{ fontSize: 13, color: '#787671' }}>查看和管理调查推送记录</div>
+                  <div style={{ fontSize: 13, color: qualityTokens.textMuted }}>查看和管理调查推送记录</div>
                 </div>
               </div>
             </Card>
@@ -49,7 +50,7 @@ export function OosOotLandingContent() {
                 <OrderedListOutlined style={{ fontSize: 32, color: '#7b3ff2' }} />
                 <div>
                   <div style={{ fontSize: 16, fontWeight: 600 }}>OOS台账</div>
-                  <div style={{ fontSize: 13, color: '#787671' }}>OOS超出标准结果台账</div>
+                  <div style={{ fontSize: 13, color: qualityTokens.textMuted }}>OOS超出标准结果台账</div>
                 </div>
               </div>
             </Card>
@@ -62,7 +63,7 @@ export function OosOotLandingContent() {
                 <UnorderedListOutlined style={{ fontSize: 32, color: '#d46b08' }} />
                 <div>
                   <div style={{ fontSize: 16, fontWeight: 600 }}>OOT台账</div>
-                  <div style={{ fontSize: 13, color: '#787671' }}>OOT超出趋势结果台账</div>
+                  <div style={{ fontSize: 13, color: qualityTokens.textMuted }}>OOT超出趋势结果台账</div>
                 </div>
               </div>
             </Card>
@@ -75,7 +76,7 @@ export function OosOotLandingContent() {
                 <ProfileOutlined style={{ fontSize: 32, color: '#c41d7f' }} />
                 <div>
                   <div style={{ fontSize: 16, fontWeight: 600 }}>各产品OOT限度</div>
-                  <div style={{ fontSize: 13, color: '#787671' }}>维护各产品OOT限度通知单明细</div>
+                  <div style={{ fontSize: 13, color: qualityTokens.textMuted }}>维护各产品OOT限度通知单明细</div>
                 </div>
               </div>
             </Card>
@@ -88,7 +89,7 @@ export function OosOotLandingContent() {
                 <ApartmentOutlined style={{ fontSize: 32, color: '#531dab' }} />
                 <div>
                   <div style={{ fontSize: 16, fontWeight: 600 }}>产品涉及部门</div>
-                  <div style={{ fontSize: 13, color: '#787671' }}>管理产品涉及的部门信息</div>
+                  <div style={{ fontSize: 13, color: qualityTokens.textMuted }}>管理产品涉及的部门信息</div>
                 </div>
               </div>
             </Card>

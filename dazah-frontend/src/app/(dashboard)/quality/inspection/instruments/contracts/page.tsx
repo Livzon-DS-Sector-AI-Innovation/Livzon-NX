@@ -10,6 +10,8 @@ export default function InstrContractsPage() {
         title="设备维保合同"
         listApi="/api/v1/quality/instruments/contracts"
         pullApi="/api/v1/quality/instruments/contracts/pull"
+        entityCode="qc_instr_contracts"
+        editable
       />
     </QualityQueryProvider>
   )

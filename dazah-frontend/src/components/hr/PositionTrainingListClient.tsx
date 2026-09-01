@@ -331,8 +331,8 @@ export default function PositionTrainingListClient() {
 
   return (
     <div className="space-y-4">
-      {/* 部门选择（2 行自适应按钮组） */}
-      <div className="flex flex-wrap gap-2 max-h-[7.5rem] overflow-hidden">
+      {/* 部门选择（2 行自适应按钮组，超长可滚动） */}
+      <div className="flex flex-wrap gap-2 max-h-[7.5rem] overflow-y-auto">
         {mergedAllDepts.map((dept) => (
           <button
             key={dept}

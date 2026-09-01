@@ -13,6 +13,12 @@ from app.core.database import get_db
 from app.core.deps import CurrentUser
 from app.core.exceptions import AppException
 from app.core.response import paginated_response, success_response
+from app.modules.quality.api.deps import (
+    QUALITY_QA_SCOPE_PERMISSIONS,
+)
+from app.modules.quality.api.deps import (
+    assert_quality_edit_scope as _assert_quality_edit_scope,
+)
 from app.modules.quality.api.deps import require_user as _require_user
 from app.modules.quality.schemas.statistics import ValidationStatistics
 from app.modules.quality.schemas.validation import (
@@ -280,6 +286,11 @@ async def update_validation_endpoint(
     db: AsyncSession = Depends(get_db),
 ) -> JSONResponse:
     _require_user(current_user)
+    await _assert_quality_edit_scope(
+        db,
+        current_user,
+        scope_permission=QUALITY_QA_SCOPE_PERMISSIONS["validation_qa"],
+    )
     try:
         result = await update_validation(db, validation_id, data, "system")
     except ValueError as exc:
@@ -301,6 +312,11 @@ async def delete_validation_endpoint(
     db: AsyncSession = Depends(get_db),
 ) -> JSONResponse:
     _require_user(current_user)
+    await _assert_quality_edit_scope(
+        db,
+        current_user,
+        scope_permission=QUALITY_QA_SCOPE_PERMISSIONS["validation_qa"],
+    )
     try:
         result = await delete_validation(db, validation_id)
     except ValueError as exc:
@@ -358,6 +374,11 @@ async def update_validation_execution_endpoint(
     db: AsyncSession = Depends(get_db),
 ) -> JSONResponse:
     _require_user(current_user)
+    await _assert_quality_edit_scope(
+        db,
+        current_user,
+        scope_permission=QUALITY_QA_SCOPE_PERMISSIONS["validation_qa"],
+    )
     try:
         result = await update_validation_execution(
             db,

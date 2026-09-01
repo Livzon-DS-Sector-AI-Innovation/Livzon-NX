@@ -64,6 +64,9 @@ class LLMClient:
         temperature: float | None = None,
         max_tokens: int = 16384,
         config_type: str = "text",
+        enable_thinking: bool | None = None,
+        custom_context: str | None = None,
+        timeout: int | None = None,
     ) -> str:
         """Send a chat completion request and return the response text.
 
@@ -82,13 +85,34 @@ class LLMClient:
             LLMRateLimitError: If rate limit exceeded
         """
         client, config = await self._get_client_and_config(config_type)
+        if timeout is not None:
+            client = httpx.AsyncClient(
+                base_url=config.api_base_url.rstrip("/"),
+                headers={
+                    "Authorization": f"Bearer {config.api_key}",
+                    "Content-Type": "application/json",
+                },
+                timeout=timeout,
+            )
 
         try:
             # Use config temperature if not overridden
             temp = temperature if temperature is not None else config.temperature
+            thinking = (
+                getattr(config, "enable_thinking", False)
+                if enable_thinking is None
+                else enable_thinking
+            )
+            ctx = (
+                getattr(config, "custom_context", None)
+                if custom_context is None
+                else custom_context
+            )
 
             # For json_object format, ensure "json" appears in the prompt
             msgs = [dict(m) for m in messages]
+            if ctx:
+                msgs = [{"role": "system", "content": ctx}] + msgs
             if response_format == "json_object":
                 last = msgs[-1]
                 if (
@@ -105,6 +129,8 @@ class LLMClient:
             _apply_temperature(body, temp, config.model_name)
             if response_format:
                 body["response_format"] = {"type": response_format}
+            if thinking:
+                body["thinking"] = {"type": "enabled"}
 
             try:
                 resp = await client.post("/chat/completions", json=body)
@@ -138,6 +164,8 @@ class LLMClient:
         temperature: float | None = None,
         max_tokens: int = 16384,
         config_type: str = "text",
+        enable_thinking: bool | None = None,
+        custom_context: str | None = None,
     ) -> JsonObject:
         """Send an OpenAI-compatible tool-calling request.
 
@@ -148,13 +176,28 @@ class LLMClient:
         """
         client, config = await self._get_client_and_config(config_type)
         try:
+            thinking = (
+                getattr(config, "enable_thinking", False)
+                if enable_thinking is None
+                else enable_thinking
+            )
+            ctx = (
+                getattr(config, "custom_context", None)
+                if custom_context is None
+                else custom_context
+            )
+            msgs = [dict(message) for message in messages]
+            if ctx:
+                msgs = [{"role": "system", "content": ctx}] + msgs
             body: JsonObject = {
                 "model": config.model_name,
-                "messages": [dict(message) for message in messages],
+                "messages": msgs,
                 "tools": [dict(tool) for tool in tools],
                 "max_tokens": max_tokens,
             }
             _apply_temperature(body, temperature, config.model_name)
+            if thinking:
+                body["thinking"] = {"type": "enabled"}
             try:
                 response = await client.post("/chat/completions", json=body)
             except httpx.TimeoutException as exc:
@@ -188,6 +231,8 @@ class LLMClient:
         expected_keys: list[str] | None = None,
         temperature: float | None = None,
         config_type: str = "text",
+        enable_thinking: bool | None = None,
+        timeout: int | None = None,
     ) -> JsonObject:
         """Chat + parse JSON response.
 
@@ -208,6 +253,8 @@ class LLMClient:
             response_format="json_object",
             temperature=temperature,
             config_type=config_type,
+            enable_thinking=enable_thinking,
+            timeout=timeout,
         )
 
         # Strip markdown code fences if present
@@ -402,6 +449,8 @@ class LLMClient:
         messages: Sequence[Message],
         temperature: float | None = None,
         max_tokens: int = 4096,
+        enable_thinking: bool | None = None,
+        custom_context: str | None = None,
     ) -> AsyncIterator[dict[str, str]]:
         """Stream chat completion tokens.
 
@@ -413,14 +462,30 @@ class LLMClient:
 
         config = await get_config("text")
         temp = temperature if temperature is not None else config.temperature
+        thinking = (
+            getattr(config, "enable_thinking", False)
+            if enable_thinking is None
+            else enable_thinking
+        )
+        ctx = (
+            getattr(config, "custom_context", None)
+            if custom_context is None
+            else custom_context
+        )
+
+        msgs = list(messages)
+        if ctx:
+            msgs = [{"role": "system", "content": ctx}] + msgs
 
         body: JsonObject = {
             "model": config.model_name,
-            "messages": messages,
+            "messages": msgs,
             "max_tokens": max_tokens,
             "stream": True,
         }
         _apply_temperature(body, temp, config.model_name)
+        if thinking:
+            body["thinking"] = {"type": "enabled"}
 
         async with httpx.AsyncClient(
             base_url=config.api_base_url.rstrip("/"),

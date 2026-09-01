@@ -19,6 +19,10 @@ from app.modules.quality import repository as repo
 from app.modules.quality import service
 from app.modules.quality.api.deps import (
     IMPORT_FILE_MAX_SIZE,
+    QUALITY_QA_SCOPE_PERMISSIONS,
+)
+from app.modules.quality.api.deps import (
+    assert_quality_edit_scope as _assert_quality_edit_scope,
 )
 from app.modules.quality.api.deps import (
     build_docx_download_headers as _build_docx_download_headers,
@@ -28,6 +32,9 @@ from app.modules.quality.api.deps import (
 )
 from app.modules.quality.api.deps import (
     require_user as _require_user,
+)
+from app.modules.quality.api.deps import (
+    resolve_quality_list_scope as _resolve_quality_list_scope,
 )
 from app.modules.quality.api.uploads import read_upload_with_limit
 from app.modules.quality.schemas import (
@@ -53,7 +60,6 @@ from app.modules.quality.service import quality_import_export as ie_service
 from app.modules.quality.service.deviation_ledger_export import (
     generate_deviation_ledger_export_docx,
 )
-from app.platform.identity.data_scope import resolve_user_department_scope
 from app.shared.schemas import ApiResponseEnvelope
 
 logger = logging.getLogger(__name__)
@@ -85,9 +91,7 @@ async def list_deviations(
 ) -> JSONResponse:
     _require_user(current_user)
     assert current_user is not None
-    from app.platform.identity.data_scope import resolve_user_department_scope
-
-    scope = await resolve_user_department_scope(db, current_user)
+    scope = await _resolve_quality_list_scope(db, current_user)
     result = await service.get_deviation_list(
         db,
         status,
@@ -135,7 +139,7 @@ async def export_deviations(
 ) -> Any:
     _require_user(current_user)
     assert current_user is not None
-    scope = await resolve_user_department_scope(db, current_user)
+    scope = await _resolve_quality_list_scope(db, current_user)
 
     deviations, _ = await repo.get_deviations(
         db,
@@ -252,6 +256,11 @@ async def update_deviation_report_record_api(
     current_user: CurrentUser = None,
 ) -> JSONResponse:
     _require_user(current_user)
+    await _assert_quality_edit_scope(
+        db,
+        current_user,
+        scope_permission=QUALITY_QA_SCOPE_PERMISSIONS["system_qa"],
+    )
     result = await service.quality_feishu_pages.update_deviation_report_record(
         db, record_id, data
     )
@@ -269,6 +278,11 @@ async def delete_deviation_report_record_api(
     current_user: CurrentUser = None,
 ) -> JSONResponse:
     user_id = _require_user(current_user)
+    await _assert_quality_edit_scope(
+        db,
+        current_user,
+        scope_permission=QUALITY_QA_SCOPE_PERMISSIONS["system_qa"],
+    )
     try:
         await service.quality_feishu_pages.delete_deviation_report_record(
             db, record_id, actor_user_id=user_id
@@ -408,6 +422,11 @@ async def update_deviation(
     current_user: CurrentUser = None,
 ) -> JSONResponse:
     user_id = _current_user_id(_require_user(current_user))
+    await _assert_quality_edit_scope(
+        db,
+        current_user,
+        scope_permission=QUALITY_QA_SCOPE_PERMISSIONS["system_qa"],
+    )
     result = await service.update_deviation(db, deviation_id, data, user_id)
     return success_response(data=result)
 
@@ -423,6 +442,11 @@ async def delete_deviation(
     current_user: CurrentUser = None,
 ) -> JSONResponse:
     user_id = _require_user(current_user)
+    await _assert_quality_edit_scope(
+        db,
+        current_user,
+        scope_permission=QUALITY_QA_SCOPE_PERMISSIONS["system_qa"],
+    )
     result = await service.delete_deviation(db, deviation_id, deleted_by=user_id)
     return success_response(data=result)
 
@@ -438,6 +462,11 @@ async def batch_delete_deviations(
     current_user: CurrentUser = None,
 ) -> JSONResponse:
     user_id = _require_user(current_user)
+    await _assert_quality_edit_scope(
+        db,
+        current_user,
+        scope_permission=QUALITY_QA_SCOPE_PERMISSIONS["system_qa"],
+    )
 
     ids = data.get("ids", [])
     if not ids:
@@ -636,6 +665,11 @@ async def update_deviation_investigation_push_record(
     current_user: CurrentUser = None,
 ) -> JSONResponse:
     user_id = _current_user_id(_require_user(current_user))
+    await _assert_quality_edit_scope(
+        db,
+        current_user,
+        scope_permission=QUALITY_QA_SCOPE_PERMISSIONS["system_qa"],
+    )
     result = await service.update_deviation_investigation_push_record(
         db, record_id, data, user_id
     )
@@ -653,6 +687,11 @@ async def delete_deviation_investigation_push_record(
     current_user: CurrentUser = None,
 ) -> JSONResponse:
     user_id = _require_user(current_user)
+    await _assert_quality_edit_scope(
+        db,
+        current_user,
+        scope_permission=QUALITY_QA_SCOPE_PERMISSIONS["system_qa"],
+    )
     try:
         await service.quality_feishu_pages.delete_investigation_push_record(
             db, record_id, actor_user_id=user_id

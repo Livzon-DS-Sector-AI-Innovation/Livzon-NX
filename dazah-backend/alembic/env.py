@@ -12,6 +12,7 @@ from app.shared.module_registry import BUSINESS_MODULES, BUSINESS_SCHEMAS
 import_module("app.platform.audit.models")
 import_module("app.platform.identity.models")
 import_module("app.core.llm.config")
+import_module("app.core.models")
 import_module("app.modules.agent.models")
 for module in BUSINESS_MODULES:
     import_module(f"app.modules.{module.code}.models")

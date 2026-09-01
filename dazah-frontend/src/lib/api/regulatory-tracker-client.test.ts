@@ -90,6 +90,35 @@ describe('regulatory tracker client', () => {
     await expect(fetchAIAnalysis(makeDocument('d1', 'x'))).rejects.toThrow('失败')
   })
 
+  it('returns placeholder when backend analysis has not completed', async () => {
+    const doc = makeDocument('d1', '原料药杂质研究指导原则')
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(() =>
+        jsonResponse({ code: 200, message: 'success', data: { id: 'd1' } }),
+      )
+      .mockImplementationOnce(() =>
+        jsonResponse({
+          code: 200,
+          message: 'success',
+          data: { items: [makeDocument('d1', '原料药杂质研究指导原则')] },
+        }),
+      )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await fetchAIAnalysis(doc)
+    // 分析走真实后端接口（POST /analyze），不再有本地规则 mock
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      '/api/v1/regulatory-documents/d1/analyze',
+    )
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({ method: 'POST' })
+    // 后端尚未产出 aiSummary 时返回固定占位结果
+    expect(result.impactLevel).toBe('low')
+    expect(result.impactScore).toBe(30)
+    expect(result.impactSummary).toContain('尚未完成')
+    expect(result.keyChanges).toEqual([])
+  })
+
   it('fetches AI batch analysis and counts severity', async () => {
     const docs: RegulatoryDocument[] = [
       makeDocument('d1', '化学药研究指导原则'),

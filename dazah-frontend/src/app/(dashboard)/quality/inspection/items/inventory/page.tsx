@@ -10,6 +10,8 @@ export default function ItemsInventoryPage() {
         title="关键物资库存"
         listApi="/api/v1/quality/items/inventory"
         pullApi="/api/v1/quality/items/inventory/pull"
+        entityCode="qc_items_inventory"
+        editable
         filters={[
           { key: '存放位置', label: '存放位置', type: 'select', options: [
             { label: '物资储存室', value: '物资储存室' },

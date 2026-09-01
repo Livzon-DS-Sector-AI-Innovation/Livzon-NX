@@ -16,7 +16,7 @@ def mock_offboarding_record():
     record.department = "生产部"
     record.offboarding_date = datetime(2026, 7, 29).date()
     record.offboarding_type = "合同到期"
-    record.handover_status = "待交接"
+    record.status = "在职"
     record.reminder_sent = False
     record.is_deleted = False
     record.created_at = datetime(2026, 7, 28, 10, 0, 0)

@@ -2,6 +2,7 @@
 
 import io
 import logging
+import os
 import re
 from typing import Any
 
@@ -13,11 +14,11 @@ from docx.shared import Pt
 
 logger = logging.getLogger(__name__)
 
-# 固定信息
+# 固定信息（经办人/联系方式由部署方通过环境变量提供，禁止写死个人隐私信息）
 FIXED_INFO = {
     "provider": "珠海保税区丽珠合成制药有限公司",
-    "handler": "魏永红",
-    "contact": "13570680132",
+    "handler": os.environ.get("DOC_HANDLER_NAME", "（经办人姓名）"),
+    "contact": os.environ.get("DOC_HANDLER_PHONE", "（联系电话）"),
 }
 
 

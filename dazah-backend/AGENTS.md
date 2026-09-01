@@ -10,7 +10,7 @@
 - 模块清单与 schema 注册：`app/shared/module_registry.py`
 - API 契约：`openapi.json`
 - 数据库历史：`alembic/versions/` 和 Alembic 当前 head
-- 环境变量结构：工作区根目录 `.env.example`（生产）和 `.env.local.example`（开发）
+- 环境变量结构：`.env.example`
 
 规范不得重复维护容易过期的版本号、当前 revision ID 或完整第三方 API 教程。涉及版本敏感用法时，以项目当前版本和官方文档为准。
 
@@ -129,8 +129,7 @@ HTTP 500 只用于未预期的服务端故障，不得把可预期的业务分�
 
 ## 环境变量与敏感信息
 
-- 新增或修改环境变量时同步工作区根目录 `.env.example` / `.env.local.example`；
-  禁止在 `dazah-backend/` 下创建环境变量文件。
+- 新增或修改环境变量时同步 `.env.example`，并按根规范同步本地 `.env` 中的变量名。
 - 不读取、输出、记录或提交真实 secret、token、password、key、Cookie 或数据库凭据。
 - 日志、审计记录、异常和 API 响应必须对敏感字段脱敏。
 - 不在代码、测试、migration 或示例中硬编码真实业务凭证。
@@ -149,16 +148,7 @@ HTTP 500 只用于未预期的服务端故障，不得把可预期的业务分�
 
 ## 本地验证与 CI 门禁
 
-验证必须根据本次变更表面选择最小可信证据：先确认触达的模块、调用链、接口、数据结构和外部边界，再运行能够直接证明这些变化正确的最小检查集合。默认不为局部修改运行全量 Pytest、全量 coverage、完整 migration 流程或 Docker Build；不得用与改动无关的宽泛检查代替受影响路径验证。
-
-- 仅修改文档、注释或不参与运行时的规范文件时，检查 diff、引用路径和格式即可；没有代码或配置影响时无需运行 Ruff、Mypy、Pytest、migration 或构建。
-- 修改纯函数、Schema 校验、Service 或 Repository 局部逻辑时，对触达路径运行 Ruff/Mypy，并执行直接覆盖变化分支的测试文件或测试用例。
-- 修改 API 路由、请求/响应 Schema、权限或错误映射时，运行受影响接口的 `AsyncClient` 测试，覆盖本次变化涉及的成功路径和最可能失败路径；仅当契约发生变化时增加根目录契约生成及前端类型核对。
-- 修改 Model、migration 或模块 schema 时，增加独立测试库上的 Alembic head、相关升级/降级和受影响数据库测试；没有数据库结构变化时不运行完整 migration 流程。
-- 修改依赖、锁文件、Dockerfile、系统依赖、启动命令或运行时配置时，增加同步、启动或 Docker Build 中与变化直接相关的检查。
-- 只有影响范围无法可靠收敛，或触及应用启动、共享基础设施、全局路由、数据库基线、测试基础设施并可能波及大部分应用时，才扩大到相关测试集或完整后端门禁。完整门禁不是每次修改的默认交付要求。
-
-局部代码通常从以下定向检查中选择：
+开发中先执行受影响文件和定向测试：
 
 ```powershell
 uv run ruff check <相关路径>
@@ -166,13 +156,13 @@ uv run pytest <相关测试>
 uv run mypy <相关路径>
 ```
 
-根据风险和实际影响扩大验证范围。CI 对应关系如下：
+提交前根据风险扩大验证范围。CI 对应关系如下：
 
 - `Lint`：对变更 Python 文件执行 Ruff；所有触达文件必须零 error。
 - `Backend Test`：启动 PostgreSQL 测试容器，安装锁定依赖，确认 Alembic 只有一个 head，执行 `upgrade head`，然后运行全量 Pytest 和 coverage。
 - `Backend Docker Build`：构建后端生产镜像。
 
-仅在变更表面要求或需要复现 CI 失败时，在独立 PostgreSQL 测试库配置好 `TEST_DATABASE_URL` 后执行完整后端门禁：
+需要复现完整后端门禁时，在独立 PostgreSQL 测试库配置好 `TEST_DATABASE_URL` 后执行：
 
 ```powershell
 uv sync --frozen --group dev
@@ -188,7 +178,7 @@ docker build --tag dazah-backend:ci .
 - `alembic heads` 必须且只能有一个 head；结构变更还要验证空库升级、`upgrade()`、`downgrade()` 和模块 schema 创建。
 - 全应用行覆盖率不得低于 60%，分支覆盖率不得低于 33.5%，PR 变更可执行行
   覆盖率不得低于 80%；低覆盖模块通过触达即补测逐步治理。
-- API、共享基础设施、数据库、依赖、测试配置或跨模块变更也应先按可收敛的实际影响选择定向证据；不能可靠界定影响范围时才运行全量测试。
+- API、共享基础设施、数据库、依赖、测试配置或跨模块变更必须运行全量测试；局部纯实现可先定向验证，但交付时必须说明未执行的完整门禁。
 - Dockerfile、依赖锁、系统依赖、启动命令或运行时配置变化必须执行 Docker Build。
 - API 变化还要执行根目录契约生成脚本并验证前端生成类型。
-- 交付时记录实际运行的命令、结果及其覆盖的变更表面；未运行完整门禁不等于未验证，但必须说明为何现有证据已经充分。无法执行所需检查时必须说明原因、未验证范围和风险，不得声称 CI 可通过。
+- 无法执行检查时必须说明原因、未验证范围和风险，不得声称 CI 可通过。

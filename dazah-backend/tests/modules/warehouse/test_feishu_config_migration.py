@@ -16,7 +16,6 @@ async def _make_service() -> WarehouseService:
     service._page_cache = {}
     service._field_meta_cache = {}
     service._table_fields_cache = {}
-    service._bitable_clients = {}
     service._dashboard_cache = {}
     return service
 

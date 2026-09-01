@@ -16,6 +16,8 @@ export default defineConfig({
     },
   },
   test: {
+    // 全局 setup：补齐 happy-dom 缺失的 localStorage 并声明 React 19 act 环境
+    setupFiles: ['./vitest.setup.ts'],
     // The merged production page tests exercise Ant Design portals and
     // React 19 effects; under the full coverage worker fan-out they can
     // legitimately exceed Vitest's 5s default even though they are fast in

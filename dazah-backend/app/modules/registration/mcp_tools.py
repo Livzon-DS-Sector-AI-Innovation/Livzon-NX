@@ -42,6 +42,7 @@ async def registration_query_authorization_letters(
     keyword: str | None = None,
 ) -> list[dict[str, Any]]:
     """
+    _require_mcp_user()
     查询授权书生成记录。
 
     Args:
@@ -88,6 +89,7 @@ async def registration_query_fda_entries(
     keyword: str | None = None,
 ) -> list[dict[str, Any]]:
     """
+    _require_mcp_user()
     查询 FDA 授权记录。
 
     Args:
@@ -131,6 +133,7 @@ async def registration_query_certificates(
     keyword: str | None = None,
 ) -> list[dict[str, Any]]:
     """
+    _require_mcp_user()
     查询注册证书台账。
 
     Args:
@@ -183,6 +186,7 @@ async def registration_query_fees(
     product_name: str | None = None,
 ) -> list[dict[str, Any]]:
     """
+    _require_mcp_user()
     查询注册费用记录。
 
     Args:
@@ -248,6 +252,7 @@ async def registration_query_knowledge_articles(
     product: str | None = None,
 ) -> list[dict[str, Any]]:
     """
+    _require_mcp_user()
     查询注册知识库文章。
 
     Args:
@@ -304,6 +309,7 @@ async def registration_query_declaration_progress(
     sheet_key: str | None = None,
 ) -> list[dict[str, Any]]:
     """
+    _require_mcp_user()
     查询申报进度台账。返回最新的版本记录。
 
     Args:
@@ -446,9 +452,8 @@ async def registration_create_certificate(
     Args:
         certificate_name: 证照名称（如"GMP证书"、"CEP证书"）
         operator_name: 操作人姓名（仅供参考，实际操作人以认证用户为准）
-        sheet_key: 子表键，可选值：international-registr
-        ation/domestic-registration/domestic-gmp
-        /international-gmp，默认 domestic-gmp
+        sheet_key: 子表键，可选值：international-registration、
+        domestic-registration、domestic-gmp、international-gmp，默认 domestic-gmp
         certificate_number: 证书编号，可选
         issuing_authority: 发证机关，可选
         issue_date: 发证日期（YYYY-MM-DD），可选

@@ -9,8 +9,6 @@
 - 翻页通过页面操作触发
 """
 
-from __future__ import annotations
-
 import asyncio
 import json
 import logging
@@ -45,8 +43,7 @@ Object.defineProperty(navigator, 'languages', {get: () => ['zh-CN', 'zh', 'en']}
 window.chrome = {runtime: {}};
 const origQuery = window.navigator.permissions.query;
 window.navigator.permissions.query = (p) => (
-    p.name === 'notifications' ? Promise.resolve({state: Notification.permission}) : \
-    origQuery(p)
+    p.name === 'notifications' ? Promise.resolve({state: Notification.permission}) : origQuery(p)
 );
 """
 
@@ -73,12 +70,12 @@ class CdeDomesticGuidelineAdapter:
     def __init__(self, headless: bool = True):
         self.headless = headless
         self.list_url = CDE_GUIDELINE_LIST_URL
-        self._pw: Any = None
-        self._browser: Any = None
-        self._context: Any = None
-        self._page: Any = None
+        self._pw = None
+        self._browser = None
+        self._context = None
+        self._page = None
 
-    async def start(self) -> None:
+    async def start(self):
         """启动浏览器"""
         if CRAWLER_BROWSERS_PATH:
             os.environ["PLAYWRIGHT_BROWSERS_PATH"] = CRAWLER_BROWSERS_PATH
@@ -104,7 +101,7 @@ class CdeDomesticGuidelineAdapter:
         self._page = await self._context.new_page()
         logger.info("浏览器启动成功")
 
-    async def stop(self) -> None:
+    async def stop(self):
         """关闭浏览器"""
         try:
             if self._context:
@@ -121,14 +118,14 @@ class CdeDomesticGuidelineAdapter:
             self._pw = None
             self._page = None
 
-    async def __aenter__(self) -> CdeDomesticGuidelineAdapter:
+    async def __aenter__(self):
         await self.start()
         return self
 
-    async def __aexit__(self, *args: Any) -> None:
+    async def __aexit__(self, *args):
         await self.stop()
 
-    def _parse_guide_list_response(self, url: str, body: str) -> dict[str, Any] | None:
+    def _parse_guide_list_response(self, url: str, body: str) -> dict | None:
         """解析 getDomesticGuideList 响应，返回解析后的数据或 None"""
         if "getDomesticGuideList" not in url:
             return None
@@ -172,12 +169,12 @@ class CdeDomesticGuidelineAdapter:
 
     async def _open_page_and_wait_for_first_response(
         self, timeout_ms: int = 30000
-    ) -> dict[str, Any] | None:
+    ) -> dict | None:
         """打开列表页并等待第一次 getDomesticGuideList 响应"""
-        captured: dict[str, dict[str, Any] | None] = {"result": None}
+        captured = {"result": None}
         event = asyncio.Event()
 
-        async def on_response(response: Any) -> None:
+        async def on_response(response):
             url = response.url
             if "cde.org.cn" not in url:
                 return
@@ -210,12 +207,12 @@ class CdeDomesticGuidelineAdapter:
 
     async def _click_next_page_and_capture(
         self, timeout_ms: int = 15000
-    ) -> dict[str, Any] | None:
+    ) -> dict | None:
         """点击下一页按钮并捕获响应"""
-        captured: dict[str, dict[str, Any] | None] = {"result": None}
+        captured = {"result": None}
         event = asyncio.Event()
 
-        async def on_response(response: Any) -> None:
+        async def on_response(response):
             url = response.url
             if "cde.org.cn" not in url:
                 return
@@ -264,10 +261,7 @@ class CdeDomesticGuidelineAdapter:
                     const btns = document.querySelectorAll('a, button, li');
                     for (const b of btns) {
                         const text = b.textContent.trim();
-                        if (
-                            text === '下一页' || text === '>' || text === '›' ||
-                            text === '>>'
-                        ) {
+                        if (text === '下一页' || text === '>' || text === '›' || text === '>>') {
                             b.click();
                             return text;
                         }
@@ -402,7 +396,7 @@ class CdeDomesticGuidelineAdapter:
         Returns:
             每页结果的列表
         """
-        results: list[dict[str, Any] | None] = []
+        results = []
 
         # 打开页面获取第一页
         first_result = await self._open_page_and_wait_for_first_response()
@@ -460,7 +454,7 @@ class CdeDomesticGuidelineAdapter:
         return None
 
     @staticmethod
-    def normalize_record(record: dict[str, Any]) -> dict[str, Any]:
+    def normalize_record(record: dict) -> dict[str, Any]:
         """将 CDE 原始记录标准化。
 
         Args:

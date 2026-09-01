@@ -65,7 +65,7 @@ def _offboarding_record(**overrides: object) -> SimpleNamespace:
         "offboarding_type": "辞职",
         "reason": "个人原因",
         "notes": "已完成交接",
-        "handover_status": "已完成",
+        "status": "离职",
         "archive_number": "档案-1001",
         "qualifications": ["质量管理体系内审员", "注册安全工程师"],
         "certificate_number": "CERT-1",
@@ -223,6 +223,11 @@ async def test_offboarding_feishu_delete_handles_missing_and_errors() -> None:
 async def test_position_transfer_notifications_cover_send_dedupe_and_rejection(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # 岗位调动审批卡片改由人事专属应用发送：隔离 DB 凭证解析
+    monkeypatch.setattr(
+        "app.modules.hr.service.get_hr_feishu_app_credentials",
+        AsyncMock(return_value=("cli_hr_test", "hr_secret_plain")),
+    )
     record = SimpleNamespace(
         id=uuid4(),
         employee_name="张三",
@@ -255,6 +260,7 @@ async def test_position_transfer_notifications_cover_send_dedupe_and_rejection(
     instance = service.PositionTransferRecordService.__new__(
         service.PositionTransferRecordService
     )
+    instance.session = SimpleNamespace()
     await instance._notify_next_approver(record)
     assert record.feishu_approval_message_id == "msg-1"
     cache_set.assert_awaited_once_with(

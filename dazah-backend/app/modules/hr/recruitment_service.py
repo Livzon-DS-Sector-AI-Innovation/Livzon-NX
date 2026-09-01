@@ -80,11 +80,17 @@ class RecruitmentService:
         jobs = [_untranslate(item, JOB_FIELD_MAP) for item in items]
         # Attach candidate count per job
         all_cands, _ = await self.repo.list_candidates()
+        # 兼容两种数据形态：候选人的「应聘职位」可能是职位 record_id 或职位名称
+        job_ids = {j["id"] for j in jobs}
+        title_to_id = {j.get("title", ""): j["id"] for j in jobs if j.get("title")}
         count_map: dict[str, int] = {}
         for c in all_cands:
             jid = c.get("job_id", "")
-            if jid:
-                count_map[jid] = count_map.get(jid, 0) + 1
+            if not jid:
+                continue
+            target = jid if jid in job_ids else title_to_id.get(jid)
+            if target:
+                count_map[target] = count_map.get(target, 0) + 1
         for j in jobs:
             j["candidate_count"] = count_map.get(j["id"], 0)
         return jobs, total
@@ -142,12 +148,12 @@ class RecruitmentService:
         else:
             items, total = [], 0
         items = [_untranslate(item, CANDIDATE_FIELD_MAP) for item in items]
-        # resolve job_id (record id) to job_position (display name)
-        job_names = await self.repo.get_job_names()
+        # resolve job_id（record_id 或职位名称）到 job_position（显示名）
+        job_display = await self.repo.get_job_display_names()
         for item in items:
             jid = item.get("job_id")
-            if jid and jid in job_names:
-                item["job_position"] = job_names[jid]
+            if jid and jid in job_display:
+                item["job_position"] = job_display[jid]
         return items, total
 
     async def create_candidate(self, data: dict[str, Any]) -> dict[str, Any]:
@@ -161,9 +167,9 @@ class RecruitmentService:
         item = _untranslate(result, CANDIDATE_FIELD_MAP)
         jid = item.get("job_id")
         if jid:
-            job_names = await self.repo.get_job_names()
-            if jid in job_names:
-                item["job_position"] = job_names[jid]
+            job_display = await self.repo.get_job_display_names()
+            if jid in job_display:
+                item["job_position"] = job_display[jid]
         return item
 
     async def update_candidate(
@@ -1018,20 +1024,15 @@ class OnboardingService:
         # 关联查出职位名称
         jid = candidate.get("job_id")
         if jid and not candidate.get("job_position"):
-            job_names = await self.repo.get_job_names()
-            if jid in job_names:
-                candidate["job_position"] = job_names[jid]
+            job_display = await self.repo.get_job_display_names()
+            if jid in job_display:
+                candidate["job_position"] = job_display[jid]
 
         onboarding_data = {
             "name": candidate.get("name", ""),
             "onboard_date": _date.today().strftime("%Y-%m-%d"),
-            "status": "进行中",
             "level": candidate.get("job_position", "") or candidate.get("job_id", ""),
             "department": candidate.get("department", ""),
-            "health_status": "未进行",
-            "resignation_cert": "未提供",
-            "id_card": "未提供",
-            "education_cert": "未提供",
         }
         onboarding = await self.repo.create_onboarding(onboarding_data)
 
@@ -1080,8 +1081,8 @@ class OnboardingService:
         result = await self.repo.update_onboarding(record_id, data)
         return result
 
-    async def get_dashboard(
-        self, dept_alias_set: set[str] | None = None
-    ) -> dict[str, Any]:
-        logger.info("getting recruitment dashboard stats")
-        return await self.repo.get_dashboard_stats(dept_alias_set=dept_alias_set)
+    async def delete_onboarding(self, record_id: str) -> None:
+        """从飞书多维表格删除入职记录（不可恢复）。"""
+        logger.info("deleting onboarding", extra={"record_id": record_id})
+        await self.repo.delete_onboarding(record_id)
+

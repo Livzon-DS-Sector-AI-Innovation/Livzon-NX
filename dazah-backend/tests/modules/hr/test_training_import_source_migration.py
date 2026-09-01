@@ -207,3 +207,39 @@ async def test_analyze_headers_llm_rate_limit_returns_empty():
         result = await analyze_headers_by_llm("Sheet1", ["培训时间"])
 
     assert result == {"mapping": {}, "judgment": ""}
+
+
+# ── analyze_headers_by_llm：timeout / enable_thinking 传递 ──
+
+
+@pytest.mark.asyncio
+async def test_analyze_headers_llm_passes_timeout_and_no_thinking():
+    """模板识别场景：默认 30s 超时 + 关闭 thinking（不依赖全局配置）。"""
+    fake_client = MagicMock()
+    fake_client.chat_json = AsyncMock(return_value={"mapping": {}, "judgment": ""})
+
+    with patch("app.modules.hr.training_import_ai.llm_client", fake_client):
+        await analyze_headers_by_llm("Sheet1", ["培训时间", "培训内容"])
+
+    fake_client.chat_json.assert_awaited_once()
+    kwargs = fake_client.chat_json.await_args.kwargs
+    assert kwargs["timeout"] == 30
+    assert kwargs["enable_thinking"] is False
+    assert kwargs["temperature"] == 0.0
+    assert kwargs["expected_keys"] == ["mapping", "judgment"]
+
+
+@pytest.mark.asyncio
+async def test_analyze_headers_llm_timeout_thinking_overridable():
+    """调用方可覆盖 timeout 与 enable_thinking。"""
+    fake_client = MagicMock()
+    fake_client.chat_json = AsyncMock(return_value={"mapping": {}, "judgment": ""})
+
+    with patch("app.modules.hr.training_import_ai.llm_client", fake_client):
+        await analyze_headers_by_llm(
+            "Sheet1", ["培训时间"], timeout=60, enable_thinking=True
+        )
+
+    kwargs = fake_client.chat_json.await_args.kwargs
+    assert kwargs["timeout"] == 60
+    assert kwargs["enable_thinking"] is True

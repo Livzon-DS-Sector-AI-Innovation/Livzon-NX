@@ -113,13 +113,6 @@ class ProjectLedgerWorkbookImportResult(BaseModel):
     )
 
 
-class ProjectLedgerWorkbookExportArtifact(BaseModel):
-    """Workbook export artifact metadata."""
-
-    file_path: str = Field(..., description="导出文件绝对路径")
-    download_name: str = Field(..., description="下载文件名")
-
-
 class ProjectLedgerEntryInput(BaseModel):
     """Create/update payload."""
 

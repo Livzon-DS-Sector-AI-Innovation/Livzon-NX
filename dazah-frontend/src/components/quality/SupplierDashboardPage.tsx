@@ -1,5 +1,6 @@
 'use client'
 
+import { qualityTokens } from './themeTokens'
 import Link from 'next/link'
 import { Col, Empty, Row, Spin, Tooltip } from 'antd'
 import {
@@ -162,13 +163,13 @@ export function SupplierDashboardPage() {
     <div style={{ maxWidth: 1280, margin: '0 auto', paddingBottom: 40 }}>
       {/* ── 标题 ── */}
       <div style={{ marginBottom: 24 }}>
-        <div style={{ fontSize: 13, color: '#94a3b8', marginBottom: 4 }}>
+        <div style={{ fontSize: 13, color: qualityTokens.textTertiary, marginBottom: 4 }}>
           质量管理 / <span style={{ color: '#475569', fontWeight: 500 }}>供应商管理</span>
         </div>
-        <h1 style={{ fontSize: 28, fontWeight: 700, color: '#0f172a', margin: 0, letterSpacing: -0.5 }}>
+        <h1 style={{ fontSize: 28, fontWeight: 700, color: qualityTokens.textPrimary, margin: 0, letterSpacing: -0.5 }}>
           供应商资质仪表盘
         </h1>
-        <p style={{ color: '#64748b', marginTop: 6, fontSize: 13 }}>
+        <p style={{ color: qualityTokens.textSecondary, marginTop: 6, fontSize: 13 }}>
           基于供应商资质多维表格数据，实时监控 GMP 合规状态
         </p>
       </div>
@@ -186,8 +187,8 @@ export function SupplierDashboardPage() {
                   <div style={{ position: 'absolute', right: -16, top: -16, width: 64, height: 64, borderRadius: '50%', background: '#eff6ff' }} />
                   <div style={{ position: 'relative', zIndex: 1 }}>
                     <SafetyCertificateOutlined style={{ fontSize: 22, color: C.primary, marginBottom: 10 }} />
-                    <div style={{ fontSize: 12, color: '#64748b' }}>资质总数</div>
-                    <div style={{ fontSize: 28, fontWeight: 700, color: '#0f172a' }}>{stats?.total ?? 0}</div>
+                    <div style={{ fontSize: 12, color: qualityTokens.textSecondary }}>资质总数</div>
+                    <div style={{ fontSize: 28, fontWeight: 700, color: qualityTokens.textPrimary }}>{stats?.total ?? 0}</div>
                   </div>
                 </div>
               </Col>
@@ -197,7 +198,7 @@ export function SupplierDashboardPage() {
                   <div style={{ position: 'absolute', right: -16, top: -16, width: 64, height: 64, borderRadius: '50%', background: '#ecfdf5' }} />
                   <div style={{ position: 'relative', zIndex: 1 }}>
                     <CheckCircleOutlined style={{ fontSize: 22, color: C.success, marginBottom: 10 }} />
-                    <div style={{ fontSize: 12, color: '#64748b' }}>合格率</div>
+                    <div style={{ fontSize: 12, color: qualityTokens.textSecondary }}>合格率</div>
                     <div style={{ fontSize: 28, fontWeight: 700, color: (stats?.completion_rate ?? 0) >= 80 ? C.success : C.warning }}>
                       {stats?.completion_rate ?? 0}
                       <span style={{ fontSize: 14, fontWeight: 500 }}>%</span>
@@ -208,12 +209,12 @@ export function SupplierDashboardPage() {
               {/* 已延期 */}
               <Col xs={12} sm={8} md={4}>
                 <Tooltip title="资质已过截止日期，存在GMP合规风险">
-                  <div style={{ background: '#fff', borderRadius: 12, padding: '20px 18px', border: `1px solid ${(stats?.expired_count ?? 0) > 0 ? '#fecaca' : '#e2e8f0'}`, position: 'relative', overflow: 'hidden', cursor: 'help' }}>
+                  <div style={{ background: '#fff', borderRadius: 12, padding: '20px 18px', border: `1px solid ${(stats?.expired_count ?? 0) > 0 ? '#fecaca' : qualityTokens.border}`, position: 'relative', overflow: 'hidden', cursor: 'help' }}>
                     <div style={{ position: 'absolute', right: -16, top: -16, width: 64, height: 64, borderRadius: '50%', background: (stats?.expired_count ?? 0) > 0 ? '#fef2f2' : '#f8fafc' }} />
                     <div style={{ position: 'relative', zIndex: 1 }}>
-                      <ExclamationCircleOutlined style={{ fontSize: 22, color: (stats?.expired_count ?? 0) > 0 ? C.danger : '#94a3b8', marginBottom: 10 }} />
-                      <div style={{ fontSize: 12, color: '#64748b' }}>已延期</div>
-                      <div style={{ fontSize: 28, fontWeight: 700, color: (stats?.expired_count ?? 0) > 0 ? C.danger : '#0f172a' }}>{stats?.expired_count ?? 0}</div>
+                      <ExclamationCircleOutlined style={{ fontSize: 22, color: (stats?.expired_count ?? 0) > 0 ? C.danger : qualityTokens.textTertiary, marginBottom: 10 }} />
+                      <div style={{ fontSize: 12, color: qualityTokens.textSecondary }}>已延期</div>
+                      <div style={{ fontSize: 28, fontWeight: 700, color: (stats?.expired_count ?? 0) > 0 ? C.danger : qualityTokens.textPrimary }}>{stats?.expired_count ?? 0}</div>
                     </div>
                   </div>
                 </Tooltip>
@@ -225,7 +226,7 @@ export function SupplierDashboardPage() {
                     <div style={{ position: 'absolute', right: -16, top: -16, width: 64, height: 64, borderRadius: '50%', background: '#fffbeb' }} />
                     <div style={{ position: 'relative', zIndex: 1 }}>
                       <ClockCircleOutlined style={{ fontSize: 22, color: C.warning, marginBottom: 10 }} />
-                      <div style={{ fontSize: 12, color: '#64748b' }}>即将到期</div>
+                      <div style={{ fontSize: 12, color: qualityTokens.textSecondary }}>即将到期</div>
                       <div style={{ fontSize: 28, fontWeight: 700, color: C.warning }}>
                         {(stats?.due_30_count ?? 0) + (stats?.due_60_count ?? 0) + (stats?.due_90_count ?? 0)}
                       </div>
@@ -239,8 +240,8 @@ export function SupplierDashboardPage() {
                   <div style={{ position: 'absolute', right: -16, top: -16, width: 64, height: 64, borderRadius: '50%', background: '#f5f3ff' }} />
                   <div style={{ position: 'relative', zIndex: 1 }}>
                     <ShopOutlined style={{ fontSize: 22, color: C.info, marginBottom: 10 }} />
-                    <div style={{ fontSize: 12, color: '#64748b' }}>供应商数</div>
-                    <div style={{ fontSize: 28, fontWeight: 700, color: '#0f172a' }}>{stats?.supplier_count ?? 0}</div>
+                    <div style={{ fontSize: 12, color: qualityTokens.textSecondary }}>供应商数</div>
+                    <div style={{ fontSize: 28, fontWeight: 700, color: qualityTokens.textPrimary }}>{stats?.supplier_count ?? 0}</div>
                   </div>
                 </div>
               </Col>
@@ -250,8 +251,8 @@ export function SupplierDashboardPage() {
                   <div style={{ position: 'absolute', right: -16, top: -16, width: 64, height: 64, borderRadius: '50%', background: '#fff7ed' }} />
                   <div style={{ position: 'relative', zIndex: 1 }}>
                     <AlertOutlined style={{ fontSize: 22, color: '#f97316', marginBottom: 10 }} />
-                    <div style={{ fontSize: 12, color: '#64748b' }}>待完成</div>
-                    <div style={{ fontSize: 28, fontWeight: 700, color: '#0f172a' }}>{stats?.pending ?? 0}</div>
+                    <div style={{ fontSize: 12, color: qualityTokens.textSecondary }}>待完成</div>
+                    <div style={{ fontSize: 28, fontWeight: 700, color: qualityTokens.textPrimary }}>{stats?.pending ?? 0}</div>
                   </div>
                 </div>
               </Col>
@@ -263,17 +264,17 @@ export function SupplierDashboardPage() {
                 <Link href="/quality/suppliers/qualification" style={{ textDecoration: 'none' }}>
                   <div style={{ background: '#fff', borderRadius: 12, padding: '18px 20px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: 'all .2s', cursor: 'pointer' }}
                     onMouseEnter={e => { e.currentTarget.style.borderColor = '#93c5fd'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(37,99,235,.08)' }}
-                    onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.boxShadow = 'none' }}>
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = qualityTokens.border; e.currentTarget.style.boxShadow = 'none' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                       <div style={{ width: 40, height: 40, borderRadius: 10, background: 'linear-gradient(135deg, #2563eb, #6366f1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 18 }}>
                         <SafetyCertificateOutlined />
                       </div>
                       <div>
-                        <div style={{ fontWeight: 600, color: '#0f172a' }}>供应商资质台账</div>
-                        <div style={{ fontSize: 12, color: '#94a3b8' }}>管理资质信息，实时同步飞书</div>
+                        <div style={{ fontWeight: 600, color: qualityTokens.textPrimary }}>供应商资质台账</div>
+                        <div style={{ fontSize: 12, color: qualityTokens.textTertiary }}>管理资质信息，实时同步飞书</div>
                       </div>
                     </div>
-                    <RightOutlined style={{ color: '#94a3b8' }} />
+                    <RightOutlined style={{ color: qualityTokens.textTertiary }} />
                   </div>
                 </Link>
               </Col>
@@ -283,15 +284,15 @@ export function SupplierDashboardPage() {
             <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
               <Col xs={24} lg={14}>
                 <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: 20 }}>
-                  <h3 style={{ fontSize: 15, fontWeight: 600, color: '#0f172a', margin: '0 0 4px' }}>供应商风险排名 TOP10</h3>
-                  <p style={{ fontSize: 12, color: '#94a3b8', margin: '0 0 12px' }}>按逾期 + 待完成综合风险排序（红框 = 已延期项）</p>
+                  <h3 style={{ fontSize: 15, fontWeight: 600, color: qualityTokens.textPrimary, margin: '0 0 4px' }}>供应商风险排名 TOP10</h3>
+                  <p style={{ fontSize: 12, color: qualityTokens.textTertiary, margin: '0 0 12px' }}>按逾期 + 待完成综合风险排序（红框 = 已延期项）</p>
                   <ReactECharts option={riskRankingOption()} style={{ height: 320 }} />
                 </div>
               </Col>
               <Col xs={24} lg={10}>
                 <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: 20 }}>
-                  <h3 style={{ fontSize: 15, fontWeight: 600, color: '#0f172a', margin: '0 0 4px' }}>到期状态分布</h3>
-                  <p style={{ fontSize: 12, color: '#94a3b8', margin: '0 0 12px' }}>截止日期与当前时间对比分析</p>
+                  <h3 style={{ fontSize: 15, fontWeight: 600, color: qualityTokens.textPrimary, margin: '0 0 4px' }}>到期状态分布</h3>
+                  <p style={{ fontSize: 12, color: qualityTokens.textTertiary, margin: '0 0 12px' }}>截止日期与当前时间对比分析</p>
                   <ReactECharts option={expiryDonutOption()} style={{ height: 320 }} />
                 </div>
               </Col>
@@ -301,15 +302,15 @@ export function SupplierDashboardPage() {
             <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
               <Col xs={24} lg={12}>
                 <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: 20 }}>
-                  <h3 style={{ fontSize: 15, fontWeight: 600, color: '#0f172a', margin: '0 0 4px' }}>物料类型合规分析</h3>
-                  <p style={{ fontSize: 12, color: '#94a3b8', margin: '0 0 12px' }}>固体 / 液体 / 包材 — 已完成 vs 未完成</p>
+                  <h3 style={{ fontSize: 15, fontWeight: 600, color: qualityTokens.textPrimary, margin: '0 0 4px' }}>物料类型合规分析</h3>
+                  <p style={{ fontSize: 12, color: qualityTokens.textTertiary, margin: '0 0 12px' }}>固体 / 液体 / 包材 — 已完成 vs 未完成</p>
                   <ReactECharts option={materialComplianceOption()} style={{ height: 300 }} />
                 </div>
               </Col>
               <Col xs={24} lg={12}>
                 <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: 20 }}>
-                  <h3 style={{ fontSize: 15, fontWeight: 600, color: '#0f172a', margin: '0 0 4px' }}>到期时间趋势</h3>
-                  <p style={{ fontSize: 12, color: '#94a3b8', margin: '0 0 12px' }}>各月截止的资质数量分布</p>
+                  <h3 style={{ fontSize: 15, fontWeight: 600, color: qualityTokens.textPrimary, margin: '0 0 4px' }}>到期时间趋势</h3>
+                  <p style={{ fontSize: 12, color: qualityTokens.textTertiary, margin: '0 0 12px' }}>各月截止的资质数量分布</p>
                   <ReactECharts option={timelineOption()} style={{ height: 300 }} />
                 </div>
               </Col>
@@ -319,8 +320,8 @@ export function SupplierDashboardPage() {
             <Row gutter={[16, 16]}>
               <Col xs={24}>
                 <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: 20 }}>
-                  <h3 style={{ fontSize: 15, fontWeight: 600, color: '#0f172a', margin: '0 0 4px' }}>资质类型完成率</h3>
-                  <p style={{ fontSize: 12, color: '#94a3b8', margin: '0 0 12px' }}>
+                  <h3 style={{ fontSize: 15, fontWeight: 600, color: qualityTokens.textPrimary, margin: '0 0 4px' }}>资质类型完成率</h3>
+                  <p style={{ fontSize: 12, color: qualityTokens.textTertiary, margin: '0 0 12px' }}>
                     各类资质的完成进度（绿≥80% / 黄≥50% / 红&lt;50%），未完成的需重点关注
                   </p>
                   {(stats?.qualification_compliance || []).length > 0 ? (

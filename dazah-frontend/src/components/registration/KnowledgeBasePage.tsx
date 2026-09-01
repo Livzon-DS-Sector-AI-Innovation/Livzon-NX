@@ -183,7 +183,7 @@ export default function KnowledgeBasePage({
       key: 'source_url',
       width: 70,
       align: 'center',
-      render: (value: string | null) => value ? <a href={value} target="_blank" rel="noopener noreferrer" style={{ color: '#5645d4' }}>链接</a> : '-',
+      render: (value: string | null) => value ? <a href={value} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-primary)' }}>链接</a> : '-',
     },
   ]
 
@@ -313,6 +313,9 @@ export default function KnowledgeBasePage({
           const result = await createKnowledgeArticle(values)
           articleId = result?.id || null
           message.success('文章已新增')
+          if (!articleId && pendingFile) {
+            message.warning('未获取到新文章 ID，AI 提取的附件未上传，请手动上传')
+          }
         }
 
         // 如果有待上传的附件（AI提取的文件），自动上传
@@ -329,6 +332,7 @@ export default function KnowledgeBasePage({
             message.success('附件已自动上传')
           } catch (e) {
             console.error('附件上传失败:', e)
+            message.warning('文章已保存，但 AI 提取的附件自动上传失败，请手动上传')
           }
         }
 
@@ -424,11 +428,11 @@ export default function KnowledgeBasePage({
           </div>
           <div>
             <Typography.Text type="secondary">已发布</Typography.Text>
-            <div style={{ fontSize: 20, fontWeight: 600, color: '#52c41a' }}>{overview.published_articles}</div>
+            <div style={{ fontSize: 20, fontWeight: 600, color: 'var(--color-success, #1aae39)' }}>{overview.published_articles}</div>
           </div>
           <div>
             <Typography.Text type="secondary">草稿</Typography.Text>
-            <div style={{ fontSize: 20, fontWeight: 600, color: '#fa8c16' }}>{overview.draft_articles}</div>
+            <div style={{ fontSize: 20, fontWeight: 600, color: 'var(--color-warning, #dd5b00)' }}>{overview.draft_articles}</div>
           </div>
         </Space>
       </Card>
@@ -553,7 +557,14 @@ export default function KnowledgeBasePage({
         title={articleFormMode === 'create' ? '新增文章' : '编辑文章'}
         okText="保存"
         cancelText="取消"
-        onCancel={() => setArticleModalOpen(false)}
+        onCancel={() => {
+          // 取消弹窗时清掉 AI 提取的待上传附件，避免残留文件被上传到下一篇文章
+          if (pendingFile) {
+            setPendingFile(null)
+            message.info('已取消：AI 提取的附件不会上传')
+          }
+          setArticleModalOpen(false)
+        }}
         onOk={() => articleForm.submit()}
       >
         <Form<KnowledgeArticleCreate> form={articleForm} layout="vertical" onFinish={handleArticleSubmit}>
@@ -564,7 +575,7 @@ export default function KnowledgeBasePage({
                   上传文件自动提取内容
                 </Button>
               </Upload>
-              <div style={{ fontSize: 12, color: '#999', marginTop: 4 }}>支持 txt/md/pdf/doc 格式，AI 将自动提取标题、内容、标签等信息</div>
+              <div style={{ fontSize: 12, color: 'var(--color-steel)', marginTop: 4 }}>支持 txt/md/pdf/doc/docx 格式，AI 将自动提取标题、内容、标签等信息</div>
             </Form.Item>
           )}
           <Form.Item name="title" label="标题" rules={[{ required: true, message: '请输入标题' }]}>

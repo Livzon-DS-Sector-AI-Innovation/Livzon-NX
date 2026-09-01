@@ -1,5 +1,8 @@
 'use client'
 
+import { TableEmptyState } from './TableEmptyState'
+import { qualityTokens } from './themeTokens'
+
 import { useCallback, useMemo, useState } from 'react'
 import { App, Table, Tag, Space, Button, Input, Select, Tooltip, DatePicker } from 'antd'
 import { DeleteOutlined, SearchOutlined, ImportOutlined, ExportOutlined, FilterOutlined, ReloadOutlined } from '@ant-design/icons'
@@ -12,23 +15,23 @@ import { DeviationImportDrawer } from './DeviationImportDrawer'
 import dayjs, { Dayjs } from 'dayjs'
 
 const statusConfig: Record<DeviationStatus, { color: string; bgColor: string; label: string }> = {
-  draft: { color: '#787671', bgColor: '#f0eeec', label: '草稿' },
-  pending_ai_analysis: { color: '#1677ff', bgColor: '#e6f4ff', label: '待AI分析' },
+  draft: { color: qualityTokens.textMuted, bgColor: '#f0eeec', label: '草稿' },
+  pending_ai_analysis: { color: qualityTokens.primary, bgColor: '#e6f4ff', label: '待AI分析' },
   pending_investigation: { color: '#7b3ff2', bgColor: '#e6e0f5', label: '待调查' },
-  pending_dept_head_review: { color: '#dd5b00', bgColor: '#fff7e6', label: '待部门审核' },
-  pending_cross_dept_head_review: { color: '#dd5b00', bgColor: '#fff7e6', label: '待跨部门审核' },
-  pending_qa_review: { color: '#dd5b00', bgColor: '#fff7e6', label: '待QA审核' },
-  pending_qa_head_review: { color: '#dd5b00', bgColor: '#fff7e6', label: '待QA负责人审核' },
-  pending_quality_head_review: { color: '#dd5b00', bgColor: '#fff7e6', label: '待质量负责人审核' },
+  pending_dept_head_review: { color: qualityTokens.orangeText, bgColor: qualityTokens.warningSoft, label: '待部门审核' },
+  pending_cross_dept_head_review: { color: qualityTokens.orangeText, bgColor: qualityTokens.warningSoft, label: '待跨部门审核' },
+  pending_qa_review: { color: qualityTokens.orangeText, bgColor: qualityTokens.warningSoft, label: '待QA审核' },
+  pending_qa_head_review: { color: qualityTokens.orangeText, bgColor: qualityTokens.warningSoft, label: '待QA负责人审核' },
+  pending_quality_head_review: { color: qualityTokens.orangeText, bgColor: qualityTokens.warningSoft, label: '待质量负责人审核' },
   pending_final_code: { color: '#13c2c2', bgColor: '#e6fffb', label: '待编号' },
   returned: { color: '#e03131', bgColor: '#fff1f0', label: '已退回' },
-  closed: { color: '#1aae39', bgColor: '#e6f7e6', label: '已关闭' },
-  cancelled: { color: '#787671', bgColor: '#f0eeec', label: '已取消' },
+  closed: { color: qualityTokens.success, bgColor: '#e6f7e6', label: '已关闭' },
+  cancelled: { color: qualityTokens.textMuted, bgColor: '#f0eeec', label: '已取消' },
 }
 
 const levelConfig: Record<DeviationLevel, { color: string; bgColor: string; label: string }> = {
-  minor: { color: '#1aae39', bgColor: '#e6f7e6', label: '次要偏差' },
-  moderate: { color: '#dd5b00', bgColor: '#fff7e6', label: '中等偏差' },
+  minor: { color: qualityTokens.success, bgColor: '#e6f7e6', label: '次要偏差' },
+  moderate: { color: qualityTokens.orangeText, bgColor: qualityTokens.warningSoft, label: '中等偏差' },
   major: { color: '#e03131', bgColor: '#fff1f0', label: '严重偏差' },
 }
 
@@ -292,7 +295,7 @@ export function DeviationTable({ loading = false }: DeviationTableProps) {
       width: defaultColumnWidths.level,
       render: (level: DeviationLevel | null) => {
         if (!level) return '-'
-        const config = levelConfig[level] || { color: '#787671', bgColor: '#f0eeec', label: level }
+        const config = levelConfig[level] || { color: qualityTokens.textMuted, bgColor: '#f0eeec', label: level }
         return (
           <Tag style={{ color: config.color, background: config.bgColor, border: 'none', borderRadius: 4, fontWeight: 500 }}>
             {config.label}
@@ -399,7 +402,7 @@ export function DeviationTable({ loading = false }: DeviationTableProps) {
             padding: 16,
             border: '1px solid #f0f0f0',
             borderRadius: 8,
-            background: '#fafafa',
+            background: qualityTokens.bgSoft,
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
             gap: 12,
@@ -448,6 +451,9 @@ export function DeviationTable({ loading = false }: DeviationTableProps) {
       <Table
         columns={columns}
         dataSource={deviations}
+        locale={{
+          emptyText: <TableEmptyState hasFilters={Boolean(keyword || statusFilter || levelFilter)} />,
+        }}
         rowKey="id"
         rowSelection={{
           selectedRowKeys,

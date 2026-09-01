@@ -104,11 +104,6 @@ async def test_recruitment_repository_maps_and_filters_all_tables() -> None:
     candidate_result = await repo.get_candidate("candidate-1")
     assert candidate_result["resume_attachment"]["file_token"] == "file-1"
     assert (await repo.list_onboarding(dept_alias_set={"质量部"}))[1] == 1
-    dashboard = await repo.get_dashboard_stats()
-    assert dashboard["total"] == 2
-    assert dashboard["stages"]["stage_5_done"]["count"] == 1
-    scoped_dashboard = await repo.get_dashboard_stats({"质量部"})
-    assert scoped_dashboard["total"] == 1
 
     await repo.create_job({"title": "新岗位", "publish_date": "2026-08-26"})
     await repo.update_job("job-1", {"title": "更新岗位"})
@@ -131,9 +126,19 @@ async def test_recruitment_repository_unconfigured_and_not_found_paths(
         "get_module_setting",
         AsyncMock(return_value=""),
     )
+    # 凭证严格独立：_get_client 先解析人事专属凭证，这里隔离外部 DB 依赖
+    monkeypatch.setattr(
+        "app.modules.hr.feishu_settings_service.get_hr_feishu_app_credentials",
+        AsyncMock(return_value=("cli_hr_test", "hr_secret_plain")),
+    )
     monkeypatch.setattr(
         "app.core.config.get_settings",
         lambda: type("Settings", (), {"FEISHU_BITABLE_APP_TOKEN": ""})(),
+    )
+    # 第三来源（HR飞书实体设置表）也需隔离：连到有真实配置的库时
+    # 不应让"未配置"路径误判为已配置
+    monkeypatch.setattr(
+        repo, "_read_token_from_entity_settings", AsyncMock(return_value="")
     )
     assert await repo._get_client() is None
     assert await repo.list_jobs() == ([], 0)

@@ -58,7 +58,11 @@ export type FeishuWriteActions = {
   saveBindings: (pageKey: string, bindings: FeishuPageBinding[]) => Promise<unknown>
 }
 
-type PropsWithActions = Props & { writeActions?: FeishuWriteActions }
+type PropsWithActions = Props & {
+  writeActions?: FeishuWriteActions
+  /** 是否展示「Wiki / 多维表格入口」与「资源目录」区块（默认展示） */
+  showRootsAndCatalog?: boolean
+}
 
 const EMPTY_CONFIG: FeishuConfigInput = {
   config_name: '飞书数据源',
@@ -81,7 +85,11 @@ function sourcePathLabel(path: FeishuResource['source_path']) {
   return path.map((item) => item.title).filter(Boolean).join(' / ') || '-'
 }
 
-export function ModuleFeishuDataSourcePage({ moduleCode, writeActions }: PropsWithActions) {
+export function ModuleFeishuDataSourcePage({
+  moduleCode,
+  writeActions,
+  showRootsAndCatalog = true,
+}: PropsWithActions) {
   const { message } = App.useApp()
   const definition = useMemo(() => getFeishuModuleDefinition(moduleCode), [moduleCode])
   const [configForm] = Form.useForm<FeishuConfigInput>()
@@ -106,13 +114,23 @@ export function ModuleFeishuDataSourcePage({ moduleCode, writeActions }: PropsWi
   )
 
   const loadCatalog = useCallback(async (currentConfig?: FeishuConfig | null) => {
+    // 「页面数据表映射」卡依赖 resources：即使隐藏 Wiki 入口/资源目录区块
+    // （如仓储合并设置页），也必须拉取资源目录，否则映射卡永远为空。
+    // 隐藏模式下仅跳过 roots（入口发现）拉取。
+    const resourcesPromise = feishuDataSourceApi.listResources(moduleCode)
+    if (!showRootsAndCatalog) {
+      const nextResources = await resourcesPromise
+      setRoots([])
+      setResources(nextResources)
+      return
+    }
     const [nextRoots, nextResources] = await Promise.all([
       feishuDataSourceApi.listRoots(moduleCode, currentConfig?.id),
-      feishuDataSourceApi.listResources(moduleCode),
+      resourcesPromise,
     ])
     setRoots(nextRoots)
     setResources(nextResources)
-  }, [moduleCode])
+  }, [moduleCode, showRootsAndCatalog])
 
   const loadAll = useCallback(async () => {
     setLoading(true)
@@ -130,8 +148,16 @@ export function ModuleFeishuDataSourcePage({ moduleCode, writeActions }: PropsWi
         daily_sync_time: nextConfig.daily_sync_time || EMPTY_CONFIG.daily_sync_time,
         remark: nextConfig.remark,
       })
-      if (nextConfig.app_secret_configured) await loadCatalog(nextConfig)
-      else {
+      if (nextConfig.app_secret_configured) {
+        // 目录拉取失败只提示，不覆盖已回填的凭证表单
+        await loadCatalog(nextConfig).catch((catalogError) => {
+          message.error(
+            catalogError instanceof Error
+              ? catalogError.message
+              : '加载飞书目录失败',
+          )
+        })
+      } else {
         setRoots([])
         setResources([])
       }
@@ -304,7 +330,18 @@ export function ModuleFeishuDataSourcePage({ moduleCode, writeActions }: PropsWi
     }
   }
 
-  if (loading) return <div className="flex min-h-[420px] items-center justify-center"><Spin size="large" /></div>
+  if (loading) {
+    return (
+      <div className="flex min-h-[420px] items-center justify-center">
+        <Spin size="large" />
+        {/* useForm 实例必须在 Form 元素上连接：loading 期间先挂载隐藏表单，避免控制台警告 */}
+        <div className="hidden">
+          <Form form={configForm} />
+          <Form form={rootForm} />
+        </div>
+      </div>
+    )
+  }
 
   return (
     <main className="mx-auto max-w-[1440px] px-6 py-7">
@@ -330,8 +367,10 @@ export function ModuleFeishuDataSourcePage({ moduleCode, writeActions }: PropsWi
           </Form>
         </Card>
 
+        {showRootsAndCatalog && (
+        <>
         <Card title="Wiki / 多维表格入口" extra={<Button type="primary" icon={<PlusOutlined />} disabled={!config?.app_secret_configured} onClick={() => setRootModalOpen(true)}>添加入口</Button>}>
-          {!config?.app_secret_configured ? <Alert showIcon type="info" message="请先保存应用凭据，再添加一个或多个 Wiki/Base 入口。" /> : (
+          {!config?.app_secret_configured ? <Alert showIcon type="info" title="请先保存应用凭据，再添加一个或多个 Wiki/Base 入口。" /> : (
             <Table<FeishuSourceRoot>
               rowKey="id"
               dataSource={roots}
@@ -382,7 +421,7 @@ export function ModuleFeishuDataSourcePage({ moduleCode, writeActions }: PropsWi
               className="mb-3"
               type="info"
               showIcon
-              message={`已选择 ${selectedResourceIds.length} 个资源，可执行批量同步${supportsResourceDelete ? '或批量删除' : ''}。`}
+              title={`已选择 ${selectedResourceIds.length} 个资源，可执行批量同步${supportsResourceDelete ? '或批量删除' : ''}。`}
             />
           )}
           <Table<FeishuResource>
@@ -419,8 +458,10 @@ export function ModuleFeishuDataSourcePage({ moduleCode, writeActions }: PropsWi
           />
         </Card>
 
+        </>
+        )}
         <Card title="页面数据表映射" extra={<Button type="primary" loading={busyKey === 'bindings'} disabled={!pageKey} onClick={() => void saveBindings()}>发布映射</Button>}>
-          <Alert className="mb-4" type="info" showIcon message="选择菜单页面并点击勾选一张或多张数据表；数据展示页会按选择顺序生成页签。" />
+          <Alert className="mb-4" type="info" showIcon title="选择菜单页面并点击勾选一张或多张数据表；数据展示页会按选择顺序生成页签。" />
           <Space orientation="vertical" size={12} className="w-full">
             <Select
               showSearch
@@ -472,7 +513,7 @@ export function ModuleFeishuDataSourcePage({ moduleCode, writeActions }: PropsWi
         </Card>
       </Space>
 
-      <Modal title="添加飞书数据入口" open={rootModalOpen} confirmLoading={busyKey === 'new-root'} onOk={() => void addRoot()} onCancel={() => setRootModalOpen(false)} destroyOnHidden>
+      <Modal title="添加飞书数据入口" open={rootModalOpen} forceRender confirmLoading={busyKey === 'new-root'} onOk={() => void addRoot()} onCancel={() => setRootModalOpen(false)} destroyOnHidden>
         <Form form={rootForm} layout="vertical" initialValues={{ source_type: 'wiki' }}>
           <Form.Item name="name" label="入口名称" rules={[{ required: true, message: '请输入入口名称' }]}><Input /></Form.Item>
           <Form.Item name="source_type" label="入口类型" rules={[{ required: true }]}><Select options={[{ label: moduleCode === 'energy' ? 'Wiki 根节点 / 电子表格' : 'Wiki 根节点', value: 'wiki' }, { label: '多维表格 Base', value: 'base' }]} /></Form.Item>

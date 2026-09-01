@@ -85,7 +85,7 @@ const EMPTY_FDA_FORM_VALUES: AuthorizationFdaEntryInput = {
 }
 
 const docCellStyle = {
-  border: '1px solid #d9d9d9',
+  border: '1px solid var(--color-hairline)',
   padding: '10px 8px',
   verticalAlign: 'middle' as const,
   textAlign: 'center' as const,
@@ -1266,11 +1266,11 @@ export default function AuthorizationLetterClient({
                           <th
                             key={title}
                             style={{
-                              border: '1px solid #d9d9d9',
+                              border: '1px solid var(--color-hairline)',
                               padding: '10px 8px',
                               textAlign: 'center',
                               verticalAlign: 'middle',
-                              background: '#fafafa',
+                              background: 'var(--color-surface-soft)',
                               fontWeight: 600,
                               width,
                             }}
@@ -1289,7 +1289,7 @@ export default function AuthorizationLetterClient({
                           const isSelectedMain = selectedLedgerMainEffectiveId === record.id
                           const isSelectedUpdate = selectedLedgerUpdateEffectiveId === update.id
                           const rowBackground = isSelectedUpdate
-                            ? '#f3f0ff'
+                            ? 'var(--color-primary-bg, #ede9f8)'
                             : isSelectedMain
                               ? '#faf7ff'
                               : undefined

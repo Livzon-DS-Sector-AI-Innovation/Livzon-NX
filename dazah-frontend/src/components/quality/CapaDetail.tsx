@@ -1,5 +1,6 @@
 'use client'
 
+import { qualityTokens } from './themeTokens'
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { App, Card, Descriptions, Tag, Button, Space, Modal, Form, Input, Select } from 'antd'
@@ -559,7 +560,7 @@ export function CapaDetail() {
                 >
                   <div>
                     <div style={{ fontWeight: 500, marginBottom: 4 }}>{item.content}</div>
-                    <div style={{ color: '#787671' }}>
+                    <div style={{ color: qualityTokens.textMuted }}>
                       {`执行人: ${item.executors || '-'} | 预期完成: ${
                         item.expectedCompletionDate ? dayjs(item.expectedCompletionDate).format('YYYY-MM-DD') : '-'
                       }`}

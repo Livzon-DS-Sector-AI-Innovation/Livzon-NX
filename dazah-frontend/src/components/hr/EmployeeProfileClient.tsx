@@ -5,7 +5,7 @@ import { App, Button, Select, Input } from 'antd'
 import { PlusOutlined, SearchOutlined, SyncOutlined } from '@ant-design/icons'
 import { Employee } from '@/types/hr'
 import { fetchEmployeesAction, syncFromFeishuAction } from '@/actions/hr'
-import { fetchTrainingDepartments } from '@/lib/api/client/hr'
+import { fetchEmployeeDepartments } from '@/lib/api/client/hr'
 import { useHrStore } from '@/stores/hr'
 import { usePermission } from '@/hooks/usePermission'
 import EmployeeTable from './EmployeeTable'
@@ -77,9 +77,9 @@ export default function EmployeeProfileClient({
 
   const loadDepartments = useCallback(async () => {
     try {
-      // 部门选项使用"培训部门列表"接口：后端按当前用户可见范围过滤，
-      // 非管理员只看到自己可见的部门，避免筛选越权部门触发 403
-      const depts = await fetchTrainingDepartments()
+      // 部门选项使用员工档案自身的一级部门（员工统计接口的部门分布），
+      // 与员工实际 department 一致（如 AI创新部），避免出现培训口径的部门名
+      const depts = await fetchEmployeeDepartments()
       setDepartments(depts || [])
     } catch {
       setDepartments([])

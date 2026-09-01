@@ -22,6 +22,14 @@ class FeishuClient:
         self._app_id = app_id
         self._app_secret = app_secret
 
+    @property
+    def app_id(self) -> str | None:
+        return self._app_id
+
+    @property
+    def app_secret(self) -> str | None:
+        return self._app_secret
+
     async def _get_client(self) -> httpx.AsyncClient:
         if self._client is None or self._client.is_closed:
             self._client = httpx.AsyncClient(

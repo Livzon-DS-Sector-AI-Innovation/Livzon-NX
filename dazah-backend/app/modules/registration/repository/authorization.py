@@ -62,7 +62,7 @@ class AuthorizationLetterRepository:
         sort_column = getattr(AuthorizationLetter, sort_by, default_sort)
         order_func = desc if sort_order == "desc" else asc
         stmt = stmt.order_by(order_func(sort_column))
-        stmt = stmt.offset((page - 1) * page_size).limit(page_size)
+        stmt = stmt.offset(max(page - 1, 0) * page_size).limit(page_size)
 
         result = await self.session.execute(stmt)
         return list(result.scalars().all()), total

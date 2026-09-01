@@ -16,6 +16,12 @@ from app.core.database import get_db
 from app.core.deps import CurrentUser
 from app.core.exceptions import AppException
 from app.core.response import success_response
+from app.modules.quality.api.deps import (
+    QUALITY_QA_SCOPE_PERMISSIONS,
+)
+from app.modules.quality.api.deps import (
+    assert_quality_edit_scope as _assert_quality_edit_scope,
+)
 from app.modules.quality.schemas.product_quality_standard import (
     ProductQualityStandardCreate,
     ProductQualityStandardUpdate,
@@ -140,6 +146,11 @@ async def update_product_quality_standard(
 ) -> Any:
     if current_user is None:
         raise AppException(status_code=401, message="未授权，请先登录")
+    await _assert_quality_edit_scope(
+        db,
+        current_user,
+        scope_permission=QUALITY_QA_SCOPE_PERMISSIONS["product_qa"],
+    )
     entity_code = _resolve_product_entity(product_code)
     record = await update_product_quality_record(
         db, entity_code, record_id, data.model_dump(exclude_unset=True)
@@ -160,6 +171,11 @@ async def delete_product_quality_standard(
 ) -> Any:
     if current_user is None:
         raise AppException(status_code=401, message="未授权，请先登录")
+    await _assert_quality_edit_scope(
+        db,
+        current_user,
+        scope_permission=QUALITY_QA_SCOPE_PERMISSIONS["product_qa"],
+    )
     entity_code = _resolve_product_entity(product_code)
     await delete_product_quality_record(db, entity_code, record_id)
     return success_response(data=None, message="删除成功")

@@ -2,7 +2,7 @@
 
 import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,9 +21,10 @@ router = APIRouter()
 @router.get("/", summary="获取对照品列表")
 async def list_reference_substances(
     db: AsyncSession = Depends(get_db),
+    limit: int = Query(500, ge=1, le=1000, description="返回条数上限"),
 ) -> JSONResponse:
-    """获取所有对照品记录"""
-    substances = await repo.get_reference_substances(db)
+    """获取对照品记录列表"""
+    substances = await repo.get_reference_substances(db, limit=limit)
     data = [ReferenceSubstanceResponse.model_validate(s) for s in substances]
     return success_response(data=data)
 
