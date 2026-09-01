@@ -15,6 +15,7 @@ import {
   aiExtractHistoricalDeviation,
   analyzeDeviationWorkbench,
   createHistoricalDeviation,
+  deleteDeviationWorkbenchAttachment,
   deleteDeviationWorkbenchReport,
   deleteHistoricalDeviation,
   deleteHistoricalDeviationAttachment,
@@ -107,5 +108,20 @@ describe('quality deviation workbench server actions', () => {
     await createHistoricalDeviation({})
     expect(mocks.revalidatePath).toHaveBeenCalledWith('/quality/deviations/history')
     expect(mocks.revalidatePath).toHaveBeenCalledWith('/quality/deviations/workbench')
+  })
+
+  it('cleans up orphan workbench attachment objects with encoded key query', async () => {
+    await deleteDeviationWorkbenchAttachment([])
+    expect(mocks.actionFetch).toHaveBeenNthCalledWith(
+      1,
+      'http://backend.test/api/v1/quality/deviation-workbench/attachments',
+      expect.objectContaining({ method: 'DELETE' }),
+    )
+    await deleteDeviationWorkbenchAttachment(['sk/1', 'md 2'])
+    expect(mocks.actionFetch).toHaveBeenNthCalledWith(
+      2,
+      'http://backend.test/api/v1/quality/deviation-workbench/attachments?keys=sk%2F1&keys=md%202',
+      expect.objectContaining({ method: 'DELETE' }),
+    )
   })
 })
