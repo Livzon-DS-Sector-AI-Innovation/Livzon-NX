@@ -1,10 +1,12 @@
 'use client'
 
+import { qualityTokens } from './themeTokens'
 import { useState, useCallback } from 'react'
 import { Button, Input, Select, Space, Table, Tag, Tooltip, DatePicker, App } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, FilterOutlined } from '@ant-design/icons'
 import type { ValidationListItem } from '@/types/quality'
+import { TableEmptyState } from './TableEmptyState'
 import dayjs, { Dayjs } from 'dayjs'
 
 interface ValidationTableFilters {
@@ -396,7 +398,7 @@ export function ValidationTable({
 
       {/* 高级筛选 */}
       {showAdvancedFilters && (
-        <Space wrap style={{ marginBottom: 12, padding: 12, background: '#fafafa', borderRadius: 6 }}>
+        <Space wrap style={{ marginBottom: 12, padding: 12, background: qualityTokens.bgSoft, borderRadius: 6 }}>
           <Input
             placeholder="记录编号"
             style={{ width: 200 }}
@@ -471,6 +473,13 @@ export function ValidationTable({
         rowKey="record_id"
         loading={loading}
         dataSource={items}
+        locale={{
+          emptyText: (
+            <TableEmptyState
+              hasFilters={Boolean(filters.keyword || filters.status || filters.department)}
+            />
+          ),
+        }}
         columns={columnsWithAction}
         rowSelection={rowSelection}
         scroll={{ x: mode === 'master' ? 1500 : 2200 }}

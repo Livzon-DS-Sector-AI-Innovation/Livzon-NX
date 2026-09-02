@@ -69,7 +69,7 @@ def test_build_welcome_message():
 
 def test_all_tool_schemas_count():
     """应有 16 个工具 Schema。"""
-    assert len(ALL_TOOL_SCHEMAS) == 16
+    assert len(ALL_TOOL_SCHEMAS) == 17  # 新增 hr_query_onboarding
 
 
 def test_all_tool_executors_match():

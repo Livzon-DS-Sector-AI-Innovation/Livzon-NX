@@ -20,6 +20,7 @@ env/
 # Local configuration and secrets
 .env
 .env.*
+!.env.example
 auth.json
 credentials.json
 AGENTS.md

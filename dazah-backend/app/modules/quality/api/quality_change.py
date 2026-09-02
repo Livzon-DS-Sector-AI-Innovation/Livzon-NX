@@ -19,6 +19,10 @@ from app.modules.quality import repository as repo
 from app.modules.quality import service
 from app.modules.quality.api.deps import (
     IMPORT_FILE_MAX_SIZE,
+    QUALITY_QA_SCOPE_PERMISSIONS,
+)
+from app.modules.quality.api.deps import (
+    assert_quality_edit_scope as _assert_quality_edit_scope,
 )
 from app.modules.quality.api.deps import (
     build_docx_download_headers as _build_docx_download_headers,
@@ -28,6 +32,9 @@ from app.modules.quality.api.deps import (
 )
 from app.modules.quality.api.deps import (
     require_user as _require_user,
+)
+from app.modules.quality.api.deps import (
+    resolve_quality_list_scope as _resolve_quality_list_scope,
 )
 from app.modules.quality.api.uploads import read_upload_with_limit
 from app.modules.quality.schemas import (
@@ -48,7 +55,6 @@ from app.modules.quality.service import quality_import_export as ie_service
 from app.modules.quality.service.change_ledger_export import (
     generate_change_ledger_export_docx,
 )
-from app.platform.identity.data_scope import resolve_user_department_scope
 from app.shared.schemas import ApiResponseEnvelope
 
 logger = logging.getLogger(__name__)
@@ -82,9 +88,7 @@ async def list_changes(
 ) -> Any:
     _require_user(current_user)
     assert current_user is not None
-    from app.platform.identity.data_scope import resolve_user_department_scope
-
-    scope = await resolve_user_department_scope(db, current_user)
+    scope = await _resolve_quality_list_scope(db, current_user)
     result = await service.get_change_list(
         db,
         change_code,
@@ -238,6 +242,11 @@ async def update_change_action_plan(
     current_user: CurrentUser = None,
 ) -> JSONResponse:
     user_id = _current_user_id(_require_user(current_user))
+    await _assert_quality_edit_scope(
+        db,
+        current_user,
+        scope_permission=QUALITY_QA_SCOPE_PERMISSIONS["change_qa"],
+    )
     try:
         result = await service.update_change_action_plan_record(
             db, plan_id, data, user_id
@@ -316,6 +325,11 @@ async def delete_change_action_plan(
     current_user: CurrentUser = None,
 ) -> JSONResponse:
     _require_user(current_user)
+    await _assert_quality_edit_scope(
+        db,
+        current_user,
+        scope_permission=QUALITY_QA_SCOPE_PERMISSIONS["change_qa"],
+    )
     result = await service.delete_change_action_plan_record(db, plan_id)
     return success_response(data=result)
 
@@ -359,6 +373,11 @@ async def batch_delete_changes(
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
+    await _assert_quality_edit_scope(
+        db,
+        current_user,
+        scope_permission=QUALITY_QA_SCOPE_PERMISSIONS["change_qa"],
+    )
 
     ids = data.get("ids", [])
     if not ids:
@@ -466,7 +485,7 @@ async def export_changes(
 ) -> Any:
     _require_user(current_user)
     assert current_user is not None
-    department_scope = await resolve_user_department_scope(db, current_user)
+    department_scope = await _resolve_quality_list_scope(db, current_user)
 
     if scope == "single":
         if change_id is None:
@@ -604,6 +623,11 @@ async def update_change(
     current_user: CurrentUser = None,
 ) -> Any:
     user_id = _current_user_id(_require_user(current_user))
+    await _assert_quality_edit_scope(
+        db,
+        current_user,
+        scope_permission=QUALITY_QA_SCOPE_PERMISSIONS["change_qa"],
+    )
     result = await service.update_change(db, change_id, data, user_id)
     return success_response(data=result)
 
@@ -619,5 +643,10 @@ async def delete_change(
     current_user: CurrentUser = None,
 ) -> Any:
     user_id = _require_user(current_user)
+    await _assert_quality_edit_scope(
+        db,
+        current_user,
+        scope_permission=QUALITY_QA_SCOPE_PERMISSIONS["change_qa"],
+    )
     result = await service.delete_change(db, change_id, deleted_by=user_id)
     return success_response(data=result)

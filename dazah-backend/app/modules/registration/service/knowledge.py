@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -121,13 +121,21 @@ class RegistrationKnowledgeService:
             for article in articles
         ]
 
+    async def _increment_view_count_and_refresh(
+        self, article: KnowledgeArticle
+    ) -> None:
+        await self.repository.increment_view_count(article.id)
+        await self.session.commit()
+        # 视图计数用 bulk UPDATE 绕过 ORM 同步，updated_at 等列会被标记过期；
+        # 不 refresh 直接读属性会在 async 上下文触发 MissingGreenlet。
+        await self.session.refresh(article)
+
     async def get_article(self, article_id: UUID) -> KnowledgeArticleResponse:
         article = await self.repository.get_article_by_id(article_id)
         if article is None:
             raise NotFoundException("知识文章", str(article_id))
 
-        await self.repository.increment_view_count(article_id)
-        await self.session.commit()
+        await self._increment_view_count_and_refresh(article)
 
         return await self._build_article_response(article)
 
@@ -138,7 +146,7 @@ class RegistrationKnowledgeService:
         if category is None:
             raise NotFoundException("知识分类", str(data.category_id))
 
-        now = datetime.now(tz=None)
+        now = datetime.now(UTC)
         article = KnowledgeArticle(
             title=data.title,
             category_id=data.category_id,
@@ -169,7 +177,7 @@ class RegistrationKnowledgeService:
             and payload["is_published"]
             and not article.is_published
         ):
-            article.published_at = datetime.now(tz=None)
+            article.published_at = datetime.now(UTC)
 
         if "category_id" in payload:
             category = await self.repository.get_category_by_id(payload["category_id"])
@@ -252,8 +260,7 @@ class RegistrationKnowledgeService:
         if article is None:
             raise NotFoundException("知识文章", str(article_id))
 
-        await self.repository.increment_view_count(article_id)
-        await self.session.commit()
+        await self._increment_view_count_and_refresh(article)
 
         category = await self.repository.get_category_by_id(article.category_id)
         attachments = await self.repository.list_attachments_by_article(article_id)
@@ -280,7 +287,6 @@ class RegistrationKnowledgeService:
                     id=a.id,
                     article_id=a.article_id,
                     file_name=a.file_name,
-                    file_path=a.file_path,
                     file_size=a.file_size,
                     content_type=a.content_type,
                     ai_summary=a.ai_summary,
@@ -312,7 +318,6 @@ class RegistrationKnowledgeService:
                 id=a.id,
                 article_id=a.article_id,
                 file_name=a.file_name,
-                file_path=a.file_path,
                 file_size=a.file_size,
                 content_type=a.content_type,
                 ai_summary=a.ai_summary,
@@ -346,12 +351,18 @@ class RegistrationKnowledgeService:
             id=created.id,
             article_id=created.article_id,
             file_name=created.file_name,
-            file_path=created.file_path,
             file_size=created.file_size,
             content_type=created.content_type,
             ai_summary=created.ai_summary,
             created_at=created.created_at,
         )
+
+    async def get_attachment_model(self, attachment_id: UUID) -> KnowledgeAttachment:
+        """返回附件 ORM 模型（供服务端内部定位存储对象，路径不下发前端）。"""
+        attachment = await self.repository.get_attachment_by_id(attachment_id)
+        if attachment is None:
+            raise NotFoundException("附件", str(attachment_id))
+        return attachment
 
     async def get_attachment(self, attachment_id: UUID) -> KnowledgeAttachmentResponse:
         attachment = await self.repository.get_attachment_by_id(attachment_id)
@@ -361,7 +372,6 @@ class RegistrationKnowledgeService:
             id=attachment.id,
             article_id=attachment.article_id,
             file_name=attachment.file_name,
-            file_path=attachment.file_path,
             file_size=attachment.file_size,
             content_type=attachment.content_type,
             ai_summary=attachment.ai_summary,

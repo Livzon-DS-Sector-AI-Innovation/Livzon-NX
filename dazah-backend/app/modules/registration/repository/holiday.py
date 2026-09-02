@@ -17,12 +17,14 @@ async def create_holiday(db: AsyncSession, data: dict[str, Any]) -> Holiday:
     return holiday
 
 
-async def get_holidays(db: AsyncSession, year: int | None = None) -> list[Holiday]:
-    """获取节假日列表"""
+async def get_holidays(
+    db: AsyncSession, year: int | None = None, limit: int = 500
+) -> list[Holiday]:
+    """获取节假日列表，limit 为保护性上限"""
     query = select(Holiday).where(Holiday.is_deleted == False)  # noqa: E712
     if year:
         query = query.where(Holiday.year == year)
-    query = query.order_by(Holiday.date)
+    query = query.order_by(Holiday.date).limit(limit)
     result = await db.execute(query)
     return list(result.scalars().all())
 

@@ -36,17 +36,23 @@ export interface JobPostingVM {
   candidate_count?: number
 }
 
+export interface OnboardingAttachmentItem {
+  file_token: string
+  name?: string
+  url?: string
+}
+
 export interface OnboardingListItem {
   id: string
   name: string
   onboard_date?: string
   department?: string
   level?: string
-  status?: string
-  health_status?: string
-  resignation_cert?: string
-  id_card?: string
-  education_cert?: string
+  // 附件字段（飞书多维附件 type=17）
+  resignation_attachment?: OnboardingAttachmentItem[]
+  id_attachment?: OnboardingAttachmentItem[]
+  education_attachment?: OnboardingAttachmentItem[]
+  other_attachment?: OnboardingAttachmentItem[]
   created_at?: string
   updated_at?: string
 }
@@ -134,10 +140,13 @@ export async function fetchOnboardingById(id: string): Promise<{ code: number; m
   return res.json()
 }
 
-export async function fetchOnboardingDashboard(): Promise<{ code: number; message: string; data: { stages: Record<string, { count: number; label: string }>; total: number } }> {
-  const res = await fetch('/api/v1/hr/onboarding/dashboard', { cache: 'no-store' })
-  if (!res.ok) throw new Error('获取入职看板失败')
-  return res.json()
+export async function fetchOnboardingAttachmentContent(id: string, fileToken: string): Promise<Blob> {
+  const res = await fetch(`/api/v1/hr/onboarding/${id}/attachments/${fileToken}/content`)
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body?.message || '附件下载失败')
+  }
+  return res.blob()
 }
 
 export async function fetchOnboardingNames(): Promise<string[]> {
@@ -524,6 +533,14 @@ export async function fetchDeptApprovalConfigs() {
   return json.data as DeptApprovalConfigVM[]
 }
 
+/** 部门级审批人配置的部门名单（按配置粒度去重排序） */
+export async function fetchDeptApprovalConfigNames(): Promise<string[]> {
+  const res = await fetch('/api/v1/hr/dept-approval-configs/names', { cache: 'no-store' })
+  if (!res.ok) throw new Error('获取部门名单失败')
+  const json = await res.json()
+  return (json.data ?? []) as string[]
+}
+
 // ─── 岗位调动 ───
 
 export async function fetchPositionTransfers(params?: {
@@ -639,6 +656,18 @@ export async function fetchCustomTrainingDepartments(): Promise<string[]> {
   return json.data || []
 }
 
+/** 员工档案的一级部门（来自员工统计接口的部门分布，与员工实际 department 一致） */
+export async function fetchEmployeeDepartments(): Promise<string[]> {
+  const res = await fetch('/api/v1/hr/employees/stats', { cache: 'no-store' })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.message || err.detail || '获取员工部门列表失败')
+  }
+  const json = await res.json()
+  const dist = json?.data?.department_distribution || []
+  return (dist as { department: string }[]).map((d) => d.department)
+}
+
 // ─── 培训部门映射配置（HR 设置维护，前后端共用同一份数据源） ───
 
 export interface DeptMappingItem {
@@ -677,53 +706,12 @@ export async function fetchTrainingDeptMappings(): Promise<DeptMappingItem[]> {
 
 export type DeptMappingPayload = Omit<DeptMappingItem, 'id' | 'created_at' | 'updated_at'>
 
-export async function createTrainingDeptMapping(
-  data: Partial<DeptMappingPayload>,
-): Promise<DeptMappingItem> {
-  const res = await fetch('/api/v1/hr/training/dept-mappings', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(err.message || err.detail || '新增映射失败')
-  }
-  return (await res.json()).data
-}
-
-export async function updateTrainingDeptMapping(
-  id: string,
-  data: Partial<DeptMappingPayload>,
-): Promise<DeptMappingItem> {
-  const res = await fetch(`/api/v1/hr/training/dept-mappings/${id}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(err.message || err.detail || '更新映射失败')
-  }
-  return (await res.json()).data
-}
-
-export async function deleteTrainingDeptMapping(id: string): Promise<void> {
-  const res = await fetch(`/api/v1/hr/training/dept-mappings/${id}`, { method: 'DELETE' })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(err.message || err.detail || '删除映射失败')
-  }
-}
-
-// ─── 用户可见部门配置（部门级数据隔离，管理员） ───
-
 export interface DeptScopeItem {
   user_id: string
-  user_name: string
-  user_department: string
+  user_name?: string | null
+  user_department?: string | null
   visible_depts: string[]
-  updated_at: string | null
+  updated_at?: string | null
 }
 
 export async function fetchDeptScopes(): Promise<DeptScopeItem[]> {
@@ -744,40 +732,6 @@ export async function fetchDeptScope(userId: string): Promise<{ user_id: string;
   }
   const json = await res.json()
   return json.data || { user_id: userId, visible_depts: [] }
-}
-
-export async function saveDeptScope(
-  userId: string,
-  visibleDepts: string[],
-  userMeta?: { user_name?: string; user_department?: string }
-): Promise<{ user_id: string; visible_depts: string[] }> {
-  const res = await fetch(`/api/v1/hr/dept-scopes/${userId}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      visible_depts: visibleDepts,
-      user_name: userMeta?.user_name,
-      user_department: userMeta?.user_department,
-    }),
-    cache: 'no-store',
-  })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(err.message || err.detail || '保存可见部门配置失败')
-  }
-  const json = await res.json()
-  return json.data
-}
-
-export async function clearDeptScope(userId: string): Promise<void> {
-  const res = await fetch(`/api/v1/hr/dept-scopes/${userId}`, {
-    method: 'DELETE',
-    cache: 'no-store',
-  })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(err.message || err.detail || '清除可见部门配置失败')
-  }
 }
 
 // ─── 员工培训清单 ───
@@ -879,7 +833,6 @@ export async function fetchPositionTrainingListById(id: string): Promise<Positio
   const json = await res.json()
   return json.data
 }
-
 
 // ─── 培训计划跟踪 ───
 

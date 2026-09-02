@@ -15,7 +15,16 @@ from app.core.database import get_db
 from app.core.deps import CurrentUser
 from app.core.exceptions import AppException
 from app.core.response import error_response, paginated_response, success_response
+from app.modules.quality.api.deps import (
+    QUALITY_QA_SCOPE_PERMISSIONS,
+)
+from app.modules.quality.api.deps import (
+    assert_quality_edit_scope as _assert_quality_edit_scope,
+)
 from app.modules.quality.api.deps import require_user as _require_user
+from app.modules.quality.api.deps import (
+    resolve_quality_list_scope as _resolve_quality_list_scope,
+)
 from app.modules.quality.models.oos_oot import (
     OosOotRecord,
 )
@@ -245,12 +254,9 @@ async def list_oos_oot(
 ) -> Any:
     _require_user(current_user)
     assert current_user is not None
-    from app.platform.identity.data_scope import (
-        department_in_clause,
-        resolve_user_department_scope,
-    )
+    from app.platform.identity.data_scope import department_in_clause
 
-    scope = await resolve_user_department_scope(db, current_user)
+    scope = await _resolve_quality_list_scope(db, current_user)
     try:
         base_query = select(OosOotRecord).where(OosOotRecord.is_deleted.is_(False))
         count_query = (
@@ -379,6 +385,11 @@ async def update_oos_oot(
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
+    await _assert_quality_edit_scope(
+        db,
+        current_user,
+        scope_permission=QUALITY_QA_SCOPE_PERMISSIONS["system_qa"],
+    )
     try:
         result = await db.execute(
             select(OosOotRecord).where(
@@ -419,6 +430,11 @@ async def delete_oos_oot(
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
+    await _assert_quality_edit_scope(
+        db,
+        current_user,
+        scope_permission=QUALITY_QA_SCOPE_PERMISSIONS["system_qa"],
+    )
     try:
         result = await db.execute(
             select(OosOotRecord).where(

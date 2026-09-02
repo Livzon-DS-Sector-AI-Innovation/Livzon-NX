@@ -10,7 +10,8 @@ import {
 import { OnboardingRecord } from '@/types/hr'
 import {
   fetchOnboardingRecords,
-  syncOnboardingFromFeishu } from '@/lib/api/hr'
+} from '@/lib/api/hr'
+import { syncOnboardingFromFeishuAction } from '@/actions/hr'
 import OnboardingDetailModal from './OnboardingDetailModal'
 import HrChatbot from './HrChatbot'
 
@@ -67,7 +68,7 @@ export default function OnboardingClient({
   const handleSync = async () => {
     setSyncing(true)
     try {
-      const res = await syncOnboardingFromFeishu()
+      const res = await syncOnboardingFromFeishuAction()
       message.success(res.message)
       loadData()
     } catch (err) {

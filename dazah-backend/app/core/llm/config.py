@@ -26,6 +26,11 @@ class LLMConfigData:
     temperature: float
     timeout_seconds: int
     is_active: bool
+    enable_thinking: bool = False
+    custom_context: str | None = None
+    context_window_tokens: int = 200000
+    compress_threshold: float = 0.8
+    stream_output: bool = True
 
 
 class LLMConfigModel(BaseModel):
@@ -71,6 +76,37 @@ class LLMConfigModel(BaseModel):
         comment="Is active config",
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True, comment="Notes")
+    enable_thinking: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        server_default="false",
+        nullable=False,
+        comment="是否开启思考模式（返回 reasoning_content）",
+    )
+    custom_context: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="自定义上下文提示词（追加到系统提示词末尾）"
+    )
+    context_window_tokens: Mapped[int] = mapped_column(
+        Integer,
+        default=200000,
+        server_default="200000",
+        nullable=False,
+        comment="上下文窗口大小（token）",
+    )
+    compress_threshold: Mapped[float] = mapped_column(
+        Float,
+        default=0.8,
+        server_default="0.8",
+        nullable=False,
+        comment="上下文压缩阈值（比例）",
+    )
+    stream_output: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        server_default="true",
+        nullable=False,
+        comment="是否流式输出",
+    )
 
     def to_config_data(self) -> LLMConfigData:
         """Convert to config data with decrypted API key."""
@@ -84,6 +120,11 @@ class LLMConfigModel(BaseModel):
             temperature=self.temperature,
             timeout_seconds=self.timeout_seconds,
             is_active=self.is_active,
+            enable_thinking=self.enable_thinking,
+            custom_context=self.custom_context,
+            context_window_tokens=self.context_window_tokens,
+            compress_threshold=self.compress_threshold,
+            stream_output=self.stream_output,
         )
 
 
@@ -160,6 +201,5 @@ async def get_config(config_type: str = "text") -> LLMConfigData:
         return config
 
     raise LLMConfigError(
-        "LLM not configured. Set LLM_API_KEY in the workspace root .env.local "
-        "or configure via admin UI."
+        "LLM not configured. Set LLM_API_KEY in .env.local or configure via admin UI."
     )

@@ -3,6 +3,7 @@
 import logging
 from datetime import UTC, datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +14,10 @@ from app.modules.hr.feishu_settings_service import (
 )
 from app.modules.hr.models import ContractManagement, HrFeishuEntitySetting
 from app.platform.integrations.feishu.bitable import BitableClient, _to_ms_timestamp
+
+# 飞书日期字段为用户时区（东八区）语义；按系统本地时区解析会在
+# UTC 运行环境（CI/生产容器）把跨零点的时刻少算一天
+_CHINA_TIMEZONE = ZoneInfo("Asia/Shanghai")
 
 logger = logging.getLogger(__name__)
 
@@ -336,25 +341,7 @@ class ContractSyncService:
                     "[ContractSync] pull_from_feishu error for %s: %s", emp_no, e
                 )
 
-        # 飞书无 -> 本地有：软删除（以飞书为主，空表保护：避免删除全部本地记录）
-        feishu_record_ids = {
-            r.get("record_id", "") for r in feishu_records if r.get("record_id")
-        }
-        if not feishu_record_ids:
-            logger.info(
-                "[ContractSync] feishu_record_ids 为空，跳过本地软删除（空表保护）"
-            )
-            await self.session.flush()
-            result = {
-                "created": created,
-                "updated": updated,
-                "deleted": 0,
-                "total": len(feishu_records),
-            }
-            logger.info(
-                "[ContractSync] pull_from_feishu done (empty-table guard): %s", result
-            )
-            return result
+        # 飞书无 -> 本地有：软删除（飞书为唯一数据源，飞书无对应数据即删除本地）
         if feishu_emp_nos:
             local_delete_stmt = select(ContractManagement).where(
                 or_(
@@ -363,8 +350,9 @@ class ContractSyncService:
                 )
             )
         else:
+            # 飞书为空：本地全部软删除，保持平台与飞书一致
             local_delete_stmt = select(ContractManagement).where(
-                ContractManagement.id.isnot(None)
+                ContractManagement.is_deleted.is_(False)
             )
         local_to_delete = await self.session.execute(local_delete_stmt)
         for record in local_to_delete.scalars().all():
@@ -443,7 +431,7 @@ class ContractSyncService:
                 val = str(val)
             # 飞书日期字段返回毫秒时间戳，需要转成 date 对象
             if local_key in date_fields and isinstance(val, (int, float)):
-                val = dt.fromtimestamp(val / 1000).date()
+                val = dt.fromtimestamp(val / 1000, tz=_CHINA_TIMEZONE).date()
             result[local_key] = val
 
         return result

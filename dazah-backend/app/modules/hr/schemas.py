@@ -10,9 +10,9 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class DeptApprovalConfigCreate(BaseModel):
-    """部门级审批人配置 - 创建"""
+    """部门级审批人配置 - 创建（部门表为空时 department_id 可空，按名称展示）"""
 
-    department_id: UUID
+    department_id: UUID | None = None
     department_name: str = Field(..., max_length=64)
     direct_leader_name: str | None = Field(None, max_length=64)
     direct_leader_open_id: str | None = Field(None, max_length=64)
@@ -648,7 +648,9 @@ class TrainingSignInSheetInput(BaseModel):
     training_time_end: str | None = Field(
         None, max_length=32, description="培训结束时间"
     )
-    department: str = Field(..., max_length=64, description="受训部门")
+    department: str = Field(
+        ..., max_length=256, description="受训部门（多部门时用、拼接）"
+    )
     training_subject: str | None = Field(None, max_length=128, description="培训主题")
     topic: str = Field(..., max_length=256, description="培训题目或内容概要")
     instructor: str | None = Field(None, max_length=64, description="授课人")
@@ -656,6 +658,9 @@ class TrainingSignInSheetInput(BaseModel):
     training_method: str | None = Field(None, max_length=32, description="培训方式")
     employee_names: list[str] = Field(
         default_factory=list, description="应出席受训人员姓名列表"
+    )
+    employee_dept_map: dict[str, str] | None = Field(
+        None, description="人员姓名→所属部门（签到表数据行每人显示自己部门）"
     )
     remarks: str | None = Field(None, max_length=512, description="备注")
 
@@ -680,6 +685,11 @@ class TrainingNotificationInput(BaseModel):
     issue_date: date | None = Field(None, description="落款日期")
     assessment_method: str | None = Field(
         None, max_length=32, description="六、培训考核方式"
+    )
+    training_level: str | None = Field(
+        None,
+        max_length=16,
+        description="培训级别：公司级/部门级（五、培训要求第1条插入）",
     )
 
 
@@ -882,7 +892,7 @@ class OffboardingRecordBase(BaseModel):
     # Offboarding specific
     offboarding_type: str = Field("辞职", max_length=16, description="离职类型")
     reason: str | None = Field(None, max_length=512, description="离职原因")
-    handover_status: str = Field("待交接", max_length=16, description="交接状态")
+    status: str = Field("在职", max_length=16, description="在职状态")
 
     # Education
     education: str | None = Field(None, max_length=16, description="学历")
@@ -989,7 +999,7 @@ class OffboardingRecordUpdate(BaseModel):
     offboarding_date: date | None = Field(None)
     offboarding_type: str | None = Field(None, max_length=16)
     reason: str | None = Field(None, max_length=512)
-    handover_status: str | None = Field(None, max_length=16)
+    status: str | None = Field(None, max_length=16, description="在职状态")
     education: str | None = Field(None, max_length=16)
     degree: str | None = Field(None, max_length=32)
     major: str | None = Field(None, max_length=64)
@@ -1234,6 +1244,9 @@ class TrainingLedgerBase(BaseModel):
         max_length=16,
         description="二级培训确认: pending待确认/done已完成二级/not_needed不需二级",
     )
+    is_presented: bool = Field(
+        True, description="是否呈现（默认显示，不呈现则不进入员工培训清单）"
+    )
 
 
 class TrainingLedgerCreate(TrainingLedgerBase):
@@ -1270,6 +1283,7 @@ class TrainingLedgerUpdate(BaseModel):
     ledger_department: str | None = Field(None, max_length=128)
     owner_deleted: bool | None = None
     second_level_status: str | None = Field(None, max_length=16)
+    is_presented: bool | None = Field(None, description="是否呈现")
 
 
 class TrainingLedgerResponse(TrainingLedgerBase):
@@ -1413,6 +1427,44 @@ class EsgTrainingRecordBase(BaseModel):
 
 class EsgTrainingRecordCreate(EsgTrainingRecordBase):
     pass
+
+
+class EsgListFilters(BaseModel):
+    """ESG 培训报表列表各列筛选（query 模型，配合 Depends 使用）.
+
+    文本列按包含匹配（ilike），枚举列按精确匹配，数值列按闭区间。
+    """
+
+    training_name: str | None = Field(
+        None, max_length=512, description="培训名称（包含）"
+    )
+    training_method: str | None = Field(None, max_length=32, description="培训方式")
+    caliber: str | None = Field(None, max_length=32, description="口径")
+    training_type: str | None = Field(None, max_length=32, description="培训类型")
+    employee_name: str | None = Field(None, max_length=64, description="姓名（包含）")
+    employee_account: str | None = Field(
+        None, max_length=64, description="员工账号（包含）"
+    )
+    location_address: str | None = Field(None, max_length=64, description="身份所属地")
+    employee_level: str | None = Field(None, max_length=32, description="层级")
+    gender: str | None = Field(None, max_length=8, description="性别")
+    apply_company: str | None = Field(
+        None, max_length=128, description="单位名称（包含）"
+    )
+    apply_company_no: str | None = Field(
+        None, max_length=64, description="单位编码（包含）"
+    )
+    remarks: str | None = Field(None, max_length=512, description="备注（包含）")
+    age_min: int | None = Field(None, ge=0, description="年龄下限")
+    age_max: int | None = Field(None, ge=0, description="年龄上限")
+    duration_min: float | None = Field(None, ge=0, description="培训时长下限")
+    duration_max: float | None = Field(None, ge=0, description="培训时长上限")
+
+    def has_any(self) -> bool:
+        return any(
+            value is not None
+            for value in self.model_dump().values()
+        )
 
 
 class EsgTrainingRecordUpdate(BaseModel):
@@ -1742,6 +1794,16 @@ class TrainingDocumentOut(BaseModel):
     payload: dict[str, Any]
     created_at: datetime | None = None
     updated_at: datetime | None = None
+
+
+class TrainingSessionFromLedgerRequest(BaseModel):
+    """从培训台账记录一键创建部门级二级培训会话（带入上级试卷草稿）."""
+
+    record_id: UUID = Field(description="台账记录ID（部门副本）")
+    copy_doc_types: list[str] | None = Field(
+        default=None,
+        description="要复制的试卷类型，默认 ai_written_exam/oral_exam/practical_exam",
+    )
 
 
 # ─── 员工培训清单 Schemas ───
@@ -2133,36 +2195,25 @@ class CandidateResponse(CandidateBase):
 
 
 class OnboardingBase(BaseModel):
-    onboard_date: str | None = Field(None, description="入职日期")
+    """入职信息（对应飞书多维表格入职信息表 tblK1IWXATe2Nn2q 字段）"""
+
+    name: str | None = Field(None, description="姓名")
+    onboard_date: str | None = Field(None, description="入职日期（YYYY-MM-DD）")
     department: str | None = Field(None, description="入职部门")
-    level: str | None = Field(None, description="岗位职级")
-    supervisor: str | None = Field(None, description="直属上级")
-    contract_term: str | None = Field(None, description="合同期限")
-    salary: str | None = Field(None, description="薪资信息")
-    status: str = Field("进行中", description="入职状态")
-    # 入职进度跟踪字段（对应飞书多维表格入职信息表）
-    health_status: str | None = Field(None, description="体检状态: 未进行/合格/不合格")
-    resignation_cert: str | None = Field(None, description="离职证明: 已提供/未提供")
-    id_card: str | None = Field(None, description="身份证信息: 已提供/未提供")
-    education_cert: str | None = Field(None, description="学历证明: 已提供/未提供")
+    level: str | None = Field(None, description="岗位")
+    # 附件字段：元素格式 [{"file_token": "...", "name": "..."}]（飞书多维附件 type=17）
+    resignation_attachment: list[dict[str, Any]] | None = Field(
+        None, description="离职证明附件"
+    )
+    id_attachment: list[dict[str, Any]] | None = Field(None, description="身份信息附件")
+    education_attachment: list[dict[str, Any]] | None = Field(
+        None, description="学历证书附件"
+    )
+    other_attachment: list[dict[str, Any]] | None = Field(None, description="其他附件")
 
 
-class OnboardingCreate(OnboardingBase):
-    pass
-
-
-class OnboardingUpdate(BaseModel):
-    onboard_date: str | None = Field(None, description="入职日期")
-    department: str | None = Field(None, description="入职部门")
-    level: str | None = Field(None, description="岗位职级")
-    supervisor: str | None = Field(None, description="直属上级")
-    contract_term: str | None = Field(None, description="合同期限")
-    salary: str | None = Field(None, description="薪资信息")
-    status: str | None = Field(None, description="入职状态")
-    health_status: str | None = Field(None, description="体检状态: 未进行/合格/不合格")
-    resignation_cert: str | None = Field(None, description="离职证明: 已提供/未提供")
-    id_card: str | None = Field(None, description="身份证信息: 已提供/未提供")
-    education_cert: str | None = Field(None, description="学历证明: 已提供/未提供")
+class OnboardingUpdate(OnboardingBase):
+    """更新入职信息（可选字段，未传不更新）"""
 
 
 class OnboardingResponse(OnboardingBase):
@@ -2170,7 +2221,6 @@ class OnboardingResponse(OnboardingBase):
 
     id: str
     candidate_id: str | None = None
-    name: str | None = None
     position: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
@@ -2187,19 +2237,6 @@ class OnboardingSyncRequest(BaseModel):
         None, max_length=64, description="入职部门（来自入职表）"
     )
     level: str | None = Field(None, max_length=64, description="岗位（来自入职表）")
-
-
-# ─── Dashboard Schema ───
-
-
-class StageStat(BaseModel):
-    count: int = 0
-    label: str
-
-
-class OnboardingDashboardResponse(BaseModel):
-    stages: dict[str, StageStat]
-    total: int
 
 
 # ─── Health Check and Material Schemas ───

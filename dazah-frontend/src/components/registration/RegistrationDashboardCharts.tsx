@@ -71,42 +71,36 @@ export function RegistrationSummaryHero({
   metrics,
 }: RegistrationSummaryHeroProps) {
   return (
-    <Card
-      size="small"
-      styles={{
-        body: {
-          padding: 20,
-          background:
-            'linear-gradient(135deg, rgba(37,99,235,0.08) 0%, rgba(99,102,241,0.08) 50%, rgba(20,184,166,0.08) 100%)',
-        },
-      }}
-    >
-      <div style={{ marginBottom: 16 }}>
-        <Typography.Title level={4} style={{ margin: 0 }}>
-          {title}
-        </Typography.Title>
-      </div>
+    <Card size="small" styles={{ body: { padding: 20 } }}>
+      {title && (
+        <div style={{ marginBottom: 16 }}>
+          <Typography.Title level={4} style={{ margin: 0 }}>
+            {title}
+          </Typography.Title>
+        </div>
+      )}
 
       <Row gutter={[12, 12]}>
         {metrics.map((item) => (
           <Col xs={24} sm={12} xl={6} key={item.label}>
             <div
               style={{
-                background: '#fff',
+                background: 'var(--color-surface, #fff)',
                 borderRadius: 12,
                 padding: '16px 18px',
-                border: '1px solid rgba(148,163,184,0.18)',
-                boxShadow: '0 8px 24px rgba(15,23,42,0.04)',
-                minHeight: 108,
+                border: '1px solid var(--color-hairline)',
+                minHeight: 96,
               }}
             >
               <div
                 style={{
-                  width: 36,
-                  height: 4,
-                  borderRadius: 999,
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
                   background: item.accent,
-                  marginBottom: 12,
+                  display: 'inline-block',
+                  marginRight: 8,
+                  marginBottom: 2,
                 }}
               />
               <Typography.Text type="secondary" style={{ fontSize: 12 }}>

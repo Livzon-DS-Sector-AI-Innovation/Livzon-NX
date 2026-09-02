@@ -1,13 +1,21 @@
 'use client'
 
+import { TableEmptyState } from '../TableEmptyState'
+import { qualityTokens } from '../themeTokens'
+
 import { useState, useEffect } from 'react'
-import { Table, Card, Button, Input, Space, Typography, Alert, Select, App } from 'antd'
-import { SyncOutlined, SearchOutlined, FilterOutlined } from '@ant-design/icons'
+import { Table, Card, Button, Input, Space, Typography, Alert, Select, App, Popconfirm } from 'antd'
+import { SyncOutlined, SearchOutlined, FilterOutlined, PlusOutlined } from '@ant-design/icons'
 import type { TablePaginationConfig } from 'antd'
 import type { ColumnsType, ColumnType } from 'antd/es/table'
 import { createPortal } from 'react-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { pullQualityRecordsFromFeishu } from '@/actions/quality'
+import { deleteInspectionFeishuRecord, pullInspectionFeishuRecords } from '@/actions/quality-inspection'
+import { fetchInspectionFeishuFields } from '@/lib/api/client/quality'
+import type { InspectionFeishuFieldMeta } from '@/types/quality'
+import { InspectionFeishuRecordModal } from './InspectionFeishuRecordModal'
+import { InspectionFeishuRecordDetailDrawer } from './InspectionFeishuRecordDetailDrawer'
+import { renderFeishuValue } from './renderFeishuValue'
 
 export interface FilterConfig {
   key: string
@@ -26,6 +34,7 @@ interface Props {
   autoColumnPreset?: 'default' | 'finished'
   columns?: ColumnsType<Record<string, unknown>>
   filters?: FilterConfig[]
+  editable?: boolean
 }
 
 interface FetchResult {
@@ -33,6 +42,7 @@ interface FetchResult {
   total: number
   configured: boolean
   serverFields: string[]
+  displayFields: string[]
 }
 
 export function InspectionFeishuTable({
@@ -45,6 +55,7 @@ export function InspectionFeishuTable({
   autoColumnPreset = 'default',
   columns,
   filters = [],
+  editable = false,
 }: Props) {
   const { message } = App.useApp()
   const queryClient = useQueryClient()
@@ -53,6 +64,16 @@ export function InspectionFeishuTable({
   const [filterValues, setFilterValues] = useState<Record<string, string>>({})
   const [showFilters, setShowFilters] = useState(false)
   const [pagination, setPagination] = useState({ page: 1, pageSize: 20 })
+  const [modalOpen, setModalOpen] = useState(false)
+  const [modalMode, setModalMode] = useState<'create' | 'edit'>('create')
+  const [editingRecord, setEditingRecord] = useState<Record<string, unknown>>()
+
+  const { data: fieldsData } = useQuery<{ fields: InspectionFeishuFieldMeta[]; can_push: boolean } | null>({
+    queryKey: ['quality-inspection', 'fields', entityCode],
+    queryFn: () => fetchInspectionFeishuFields(entityCode as string),
+    enabled: editable && Boolean(entityCode),
+  })
+  const canPush = fieldsData?.can_push ?? false
 
   const { data: queryData, isFetching: loading, error } = useQuery<FetchResult>({
     queryKey: ['quality-inspection', 'list', listApi, { page: pagination.page, pageSize: pagination.pageSize, keyword, filterValues, entityCode }],
@@ -70,6 +91,7 @@ export function InspectionFeishuTable({
         total: json.meta?.total ?? 0,
         configured: json.meta?.configured !== false,
         serverFields: Array.isArray(json.meta?.fields) ? json.meta.fields as string[] : [],
+        displayFields: Array.isArray(json.meta?.display_fields) ? json.meta.display_fields as string[] : [],
       }
     },
     placeholderData: (prev) => prev,
@@ -79,6 +101,7 @@ export function InspectionFeishuTable({
   const total = queryData?.total ?? 0
   const configured = queryData?.configured ?? true
   const serverFields = queryData?.serverFields ?? []
+  const displayFields = queryData?.displayFields ?? []
 
   useEffect(() => {
     if (error) {
@@ -94,17 +117,39 @@ export function InspectionFeishuTable({
   }, [entityCode, listApi])
 
   const handlePull = async () => {
+    if (!entityCode) return
     setSyncing(true)
     try {
-      const result = await pullQualityRecordsFromFeishu(entityCode as any)
-      if (result) {
-        message.success(`已同步 ${result.synced ?? 0} 条记录`)
-        queryClient.invalidateQueries({ queryKey: ['quality-inspection', 'list', listApi] })
-      }
+      const result = await pullInspectionFeishuRecords(entityCode)
+      message.success(`已同步 ${result?.synced ?? 0} 条记录`)
+      queryClient.invalidateQueries({ queryKey: ['quality-inspection', 'list', listApi] })
     } catch {
       message.error('同步失败，请检查飞书设置')
     } finally {
       setSyncing(false)
+    }
+  }
+
+  const openCreate = () => {
+    setModalMode('create')
+    setEditingRecord(undefined)
+    setModalOpen(true)
+  }
+
+  const openEdit = (record: Record<string, unknown>) => {
+    setModalMode('edit')
+    setEditingRecord(record)
+    setModalOpen(true)
+  }
+
+  const handleDelete = async (record: Record<string, unknown>) => {
+    if (!entityCode) return
+    try {
+      await deleteInspectionFeishuRecord(entityCode, String(record.record_id ?? ''))
+      message.success('删除成功，已同步飞书')
+      queryClient.invalidateQueries({ queryKey: ['quality-inspection', 'list', listApi] })
+    } catch {
+      message.error('删除失败，请检查飞书设置')
     }
   }
 
@@ -138,6 +183,13 @@ export function InspectionFeishuTable({
     return 136
   }
 
+  const [detailRecord, setDetailRecord] = useState<Record<string, unknown>>()
+  const [detailOpen, setDetailOpen] = useState(false)
+  const openDetail = (record: Record<string, unknown>) => {
+    setDetailRecord(record)
+    setDetailOpen(true)
+  }
+
   const buildAutoColumn = (field: string): ColumnType<Record<string, unknown>> => {
     const width = autoColumnPreset === 'finished' ? getFinishedColumnWidth(field) : undefined
     const isFinishedPreset = autoColumnPreset === 'finished'
@@ -159,7 +211,7 @@ export function InspectionFeishuTable({
       key: field,
       width,
       align: isFinishedPreset ? 'center' : undefined,
-      render: (value: unknown) => (
+      render: (value: unknown, record: Record<string, unknown>) => (
         <div
           style={{
             whiteSpace: 'normal',
@@ -169,7 +221,7 @@ export function InspectionFeishuTable({
             width: '100%',
           }}
         >
-          {value === null || value === undefined || value === '' ? '-' : String(value)}
+          {renderFeishuValue(value, record, entityCode, message)}
         </div>
       ),
       onCell: () => ({
@@ -184,9 +236,36 @@ export function InspectionFeishuTable({
     }
   }
 
-  const tableColumns: ColumnsType<Record<string, unknown>> = (columns && columns.length > 0)
+  const operationColumn: ColumnType<Record<string, unknown>> = {
+    title: '操作',
+    key: '__operation',
+    width: editable ? 160 : 80,
+    fixed: 'right',
+    render: (_, record) => (
+      <Space>
+        <Button type="link" size="small" onClick={() => openDetail(record)}>详情</Button>
+        {editable && (
+          <>
+            <Button type="link" size="small" onClick={() => openEdit(record)}>编辑</Button>
+            <Popconfirm
+              title="删除后无法恢复，确定删除并同步飞书？"
+              onConfirm={() => handleDelete(record)}
+              okText="删除"
+              cancelText="取消"
+            >
+              <Button type="link" size="small" danger>删除</Button>
+            </Popconfirm>
+          </>
+        )}
+      </Space>
+    ),
+  }
+
+  const columnFields = displayFields.length > 0 ? displayFields : serverFields
+  const baseColumns: ColumnsType<Record<string, unknown>> = (columns && columns.length > 0)
     ? columns
-    : serverFields.map(buildAutoColumn)
+    : columnFields.map(buildAutoColumn)
+  const tableColumns: ColumnsType<Record<string, unknown>> = [...baseColumns, operationColumn]
 
   const tableScrollX = tableColumns.every((column) => typeof column.width === 'number')
     ? tableColumns.reduce((sum, column) => sum + Number(column.width), 0)
@@ -214,7 +293,12 @@ export function InspectionFeishuTable({
               筛选
             </Button>
           )}
-          {pullApi && (
+          {editable && canPush && (
+            <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+              新增
+            </Button>
+          )}
+          {pullApi && entityCode && (
             <Button type="primary" icon={<SyncOutlined />} onClick={handlePull} loading={syncing}>
               同步飞书数据
             </Button>
@@ -222,7 +306,7 @@ export function InspectionFeishuTable({
         </Space>
       </div>
       {showFilters && filters.length > 0 && (
-        <Card size="small" style={{ marginBottom: 16, background: '#fafafa' }}>
+        <Card size="small" style={{ marginBottom: 16, background: qualityTokens.bgSoft }}>
           <Space wrap>
             {filters.map(f => (
               <Space key={f.key} size={4}>
@@ -273,6 +357,15 @@ export function InspectionFeishuTable({
         <Table
           rowKey="record_id"
           dataSource={data}
+          locale={{
+            emptyText: (
+              <TableEmptyState
+                hasFilters={Boolean(keyword || Object.keys(filterValues).length)}
+                hasError={!configured}
+                errorMessage="飞书数据源未配置，请在「质量管理 -> 飞书设置」完成配置后查看数据"
+              />
+            ),
+          }}
           columns={tableColumns}
           loading={loading}
           size={autoColumnPreset === 'finished' ? 'small' : 'middle'}
@@ -288,6 +381,25 @@ export function InspectionFeishuTable({
           tableLayout={autoColumnPreset === 'finished' ? 'fixed' : undefined}
         />
       </Card>
+      {editable && entityCode && (
+        <InspectionFeishuRecordModal
+          open={modalOpen}
+          entityCode={entityCode}
+          mode={modalMode}
+          initialValues={editingRecord}
+          onClose={() => setModalOpen(false)}
+          onSuccess={() =>
+            queryClient.invalidateQueries({ queryKey: ['quality-inspection', 'list', listApi] })
+          }
+        />
+      )}
+      <InspectionFeishuRecordDetailDrawer
+        open={detailOpen}
+        entityCode={entityCode}
+        record={detailRecord}
+        allFields={serverFields}
+        onClose={() => setDetailOpen(false)}
+      />
     </div>
   )
 }

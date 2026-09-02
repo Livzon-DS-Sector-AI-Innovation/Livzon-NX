@@ -1,5 +1,8 @@
 'use client'
 
+import { TableEmptyState } from './TableEmptyState'
+import { qualityTokens } from './themeTokens'
+
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { App, Table, Space, Button, Input, Select, Tooltip, DatePicker } from 'antd'
 import { EditOutlined, DeleteOutlined, SearchOutlined, ImportOutlined, ExportOutlined, FilterOutlined, ReloadOutlined } from '@ant-design/icons'
@@ -13,21 +16,21 @@ import { buildResizableColumns, ResizableHeaderCell } from './ResizableTableHead
 import dayjs, { Dayjs } from 'dayjs'
 
 const statusConfig: Record<CapaWorkflowStatus, { color: string; bgColor: string; label: string }> = {
-  draft: { color: '#787671', bgColor: '#f0eeec', label: '草稿' },
-  part_a: { color: '#1677ff', bgColor: '#e6f4ff', label: 'A部分' },
-  part_b: { color: '#1677ff', bgColor: '#e6f4ff', label: 'B部分' },
-  part_c: { color: '#1677ff', bgColor: '#e6f4ff', label: 'C部分' },
-  pending_dept_head_confirm: { color: '#fa8c16', bgColor: '#fff7e6', label: '待部门主管确认' },
-  pending_qa_review: { color: '#fa8c16', bgColor: '#fff7e6', label: '待QA审核' },
-  pending_q_head_approval: { color: '#fa8c16', bgColor: '#fff7e6', label: '待质量主管审批' },
+  draft: { color: qualityTokens.textMuted, bgColor: '#f0eeec', label: '草稿' },
+  part_a: { color: qualityTokens.primary, bgColor: '#e6f4ff', label: 'A部分' },
+  part_b: { color: qualityTokens.primary, bgColor: '#e6f4ff', label: 'B部分' },
+  part_c: { color: qualityTokens.primary, bgColor: '#e6f4ff', label: 'C部分' },
+  pending_dept_head_confirm: { color: qualityTokens.warning, bgColor: qualityTokens.warningSoft, label: '待部门主管确认' },
+  pending_qa_review: { color: qualityTokens.warning, bgColor: qualityTokens.warningSoft, label: '待QA审核' },
+  pending_q_head_approval: { color: qualityTokens.warning, bgColor: qualityTokens.warningSoft, label: '待质量主管审批' },
   executing: { color: '#13c2c2', bgColor: '#e6fffb', label: '执行中' },
   pending_evaluation: { color: '#722ed1', bgColor: '#f9f0ff', label: '待效果评价' },
-  submitted: { color: '#1677ff', bgColor: '#e6f4ff', label: '已提交' },
+  submitted: { color: qualityTokens.primary, bgColor: '#e6f4ff', label: '已提交' },
   under_execution: { color: '#7b3ff2', bgColor: '#e6e0f5', label: '执行中' },
-  evaluation: { color: '#dd5b00', bgColor: '#fff7e6', label: '评估中' },
-  closed: { color: '#1aae39', bgColor: '#e6f7e6', label: '已关闭' },
+  evaluation: { color: qualityTokens.orangeText, bgColor: qualityTokens.warningSoft, label: '评估中' },
+  closed: { color: qualityTokens.success, bgColor: '#e6f7e6', label: '已关闭' },
   returned: { color: '#e03131', bgColor: '#fff1f0', label: '已退回' },
-  cancelled: { color: '#787671', bgColor: '#f0eeec', label: '已取消' },
+  cancelled: { color: qualityTokens.textMuted, bgColor: '#f0eeec', label: '已取消' },
 }
 
 const sourceConfig: Record<CapaSource, { label: string }> = {
@@ -419,7 +422,7 @@ export function CapaTable({ capas, total, loading = false }: CapaTableProps) {
             padding: 16,
             border: '1px solid #f0f0f0',
             borderRadius: 8,
-            background: '#fafafa',
+            background: qualityTokens.bgSoft,
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
             gap: 12,
@@ -479,6 +482,9 @@ export function CapaTable({ capas, total, loading = false }: CapaTableProps) {
       <Table
         columns={columns}
         dataSource={capas}
+        locale={{
+          emptyText: <TableEmptyState hasFilters={Boolean(keyword || statusFilter || categoryFilter)} />,
+        }}
         rowKey="id"
         components={{
           header: {

@@ -66,10 +66,40 @@ def _parse_qwen_tool_calls(content: str) -> list[dict[str, Any]] | None:
     return tool_calls if tool_calls else None
 
 
+# 需要用户显式确认的写工具（AGENTS：写操作必须人工确认 + 审计，LLM 输出不得替代确认）
+WRITE_TOOLS = frozenset(
+    {
+        "hr_create_training_record",
+        "hr_create_offboarding_record",
+        "hr_update_employee_basic",
+    }
+)
+_CONFIRM_KEYWORDS = ("确认", "同意", "确定", "执行吧", "确认执行")
+
+
+def _latest_user_text(messages: list[dict[str, Any]]) -> str:
+    """取最近一条用户消息的文本（写操作确认判定用）。"""
+    for message in reversed(messages):
+        if message.get("role") == "user":
+            content = message.get("content")
+            return content if isinstance(content, str) else ""
+    return ""
+
+
+def _sanitize_args(arguments: dict[str, Any]) -> dict[str, Any]:
+    """工具参数审计脱敏：只保留非 PII 键与值的短摘要。"""
+    safe_keys = ("employee_number", "training_date", "training_subject", "type")
+    return {
+        k: (str(v)[:32] if k in safe_keys else "<masked>")
+        for k, v in arguments.items()
+    }
+
+
 async def execute_tool_call(
     session: AsyncSession,
     tool_name: str,
     arguments: dict[str, Any],
+    messages: list[dict[str, Any]] | None = None,
 ) -> str:
     """执行单个工具调用并返回 JSON 字符串结果。
 
@@ -87,9 +117,34 @@ async def execute_tool_call(
             {"success": False, "error": f"未知工具: {tool_name}"}, ensure_ascii=False
         )
 
+    # 写工具必须由用户在最近一条消息中显式确认后才执行（防 LLM 误写）
+    if tool_name in WRITE_TOOLS:
+        latest_user_text = _latest_user_text(messages)
+        if not any(k in latest_user_text for k in _CONFIRM_KEYWORDS):
+            logger.warning(
+                "Write tool blocked pending user confirmation",
+                extra={"tool": tool_name, "tool_args": _sanitize_args(arguments)},
+            )
+            return json.dumps(
+                {
+                    "success": False,
+                    "needs_confirmation": True,
+                    "error": (
+                        "写操作需要用户确认：请向用户展示将要写入的内容，"
+                        "等用户回复「确认」后重试该工具。"
+                    ),
+                },
+                ensure_ascii=False,
+            )
+        logger.warning(
+            "Agent write tool executed",
+            extra={"tool": tool_name, "tool_args": _sanitize_args(arguments)},
+        )
+
     try:
         logger.info(
-            "Executing tool", extra={"tool": tool_name, "tool_args": str(arguments)}
+            "Executing tool",
+            extra={"tool": tool_name, "tool_args": _sanitize_args(arguments)},
         )
         data = await executor(session, **arguments)
         result = json.dumps(
@@ -133,6 +188,38 @@ async def run_agent_loop(
     # 构建消息列表：系统提示词 + 用户历史对话
     full_messages = [system_prompt] + list(messages)
 
+    # 读取 LLM 配置（思考模式 + 自定义上下文 + 上下文窗口/压缩 + 流式输出）
+    from app.core.llm.config import get_config
+
+    llm_config = await get_config("text")
+    enable_thinking = llm_config.enable_thinking
+    custom_context = llm_config.custom_context
+    context_window = llm_config.context_window_tokens
+    compress_threshold = llm_config.compress_threshold
+    stream_output = llm_config.stream_output
+
+    # 上下文压缩：估算当前 token 数，超过窗口阈值时压缩早期历史
+    if custom_context:
+        full_messages = [{"role": "system", "content": custom_context}] + full_messages
+
+    def _estimate_tokens(msgs: list[dict[str, Any]]) -> int:
+        """粗略估算 token 数：中文字符按 1 token，其他字符按 0.25 token。"""
+        total = 0
+        for m in msgs:
+            c = str(m.get("content") or "")
+            # 中文字符（含全角）
+            cn = sum(1 for ch in c if "一" <= ch <= "鿿")
+            other = len(c) - cn
+            total += cn + int(other * 0.25)
+        return total
+
+    limit = int(context_window * compress_threshold)
+    if limit > 0 and _estimate_tokens(full_messages) > limit:
+        # 保留系统提示词 + 最近 10 条消息，丢弃最早的历史（避免超出上下文窗口）
+        kept = [full_messages[0]] + list(full_messages[1:][-10:])
+        full_messages = kept
+        yield {"type": "status", "text": "对话较长，已压缩早期上下文以适配模型窗口。"}
+
     # ── Phase 1: 工具调用循环 ──
     for round_num in range(MAX_TOOL_ROUNDS):
         try:
@@ -141,9 +228,16 @@ async def run_agent_loop(
                 tools=ALL_TOOL_SCHEMAS,
                 temperature=0.3,
                 max_tokens=4096,
+                enable_thinking=enable_thinking,
+                custom_context=None,  # custom_context 已注入 full_messages
             )
         except (LLMRateLimitError, LLMProviderError, LLMConfigError):
             raise  # 向上抛出，由调用方处理
+
+        # 思考过程（若模型返回 reasoning_content）
+        reasoning = response.get("reasoning_content")
+        if reasoning:
+            yield {"type": "reasoning", "text": reasoning}
 
         # 如果 LLM 直接回复（不需要工具）
         tool_calls = response.get("tool_calls")
@@ -181,7 +275,9 @@ async def run_agent_loop(
             tool_cn = _tool_label(tool_name)
             yield {"type": "status", "text": f"正在查询{tool_cn}..."}
 
-            result = await execute_tool_call(session, tool_name, arguments)
+            result = await execute_tool_call(
+                session, tool_name, arguments, full_messages
+            )
 
             # 将工具结果加入历史
             full_messages.append(
@@ -195,10 +291,26 @@ async def run_agent_loop(
         # 发送分析状态
         yield {"type": "status", "text": "正在分析数据..."}
 
-    # ── Phase 2: 流式输出最终回复 ──
+    # ── Phase 2: 输出最终回复（按配置决定流式 or 一次性） ──
     try:
-        async for chunk in llm_client.stream_chat(full_messages, max_tokens=4096):
-            yield chunk
+        if stream_output:
+            async for chunk in llm_client.stream_chat(
+                full_messages,
+                max_tokens=4096,
+                enable_thinking=enable_thinking,
+                custom_context=None,  # 已注入 full_messages
+            ):
+                yield chunk
+        else:
+            # 非流式：一次性获取完整回答
+            final = await llm_client.chat(
+                full_messages,
+                response_format=None,
+                max_tokens=4096,
+                enable_thinking=enable_thinking,
+                custom_context=None,  # 已注入 full_messages
+            )
+            yield {"type": "content", "text": final or ""}
     except (LLMRateLimitError, LLMProviderError, LLMConfigError):
         raise
 
@@ -214,6 +326,7 @@ def _tool_label(name: str) -> str:
         "hr_query_contract_expiring": "合同到期信息",
         "hr_query_training_records": "培训记录",
         "hr_query_offboarding": "离职记录",
+        "hr_query_onboarding": "入职记录",
         "hr_query_position_transfers": "调动记录",
         "hr_list_teams": "班组信息",
         "hr_list_trainers": "培训师名单",

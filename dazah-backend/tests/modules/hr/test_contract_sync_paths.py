@@ -134,8 +134,14 @@ async def test_contract_sync_pull_updates_creates_and_soft_deletes() -> None:
 
 
 @pytest.mark.asyncio
-async def test_contract_sync_pull_has_empty_table_guard_and_fetch_error() -> None:
-    session = SimpleNamespace(execute=AsyncMock(), flush=AsyncMock(), add=MagicMock())
+async def test_contract_sync_pull_empty_feishu_soft_deletes_local_and_fetch_error() -> (
+    None
+):
+    # 合同对账语义变更：飞书为唯一数据源，空表时本地同样执行软删（不再空表保护跳过）
+    empty_result = SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: []))
+    session = SimpleNamespace(
+        execute=AsyncMock(return_value=empty_result), flush=AsyncMock(), add=MagicMock()
+    )
     service = ContractSyncService(session)
     service._get_bitable = AsyncMock(  # type: ignore[method-assign]
         return_value=SimpleNamespace(

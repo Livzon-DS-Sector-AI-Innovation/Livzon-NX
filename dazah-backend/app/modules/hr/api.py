@@ -40,12 +40,17 @@ from app.modules.hr.ai_chat_api import router as ai_chat_router
 from app.modules.hr.ai_exam_api import router as ai_exam_router
 from app.modules.hr.analysis_api import router as analysis_router
 from app.modules.hr.constants import DEPT_APPROVAL_EXCLUDE, DEPT_APPROVAL_NO_EXPAND
+from app.modules.hr.contract_api import _fmt_contract_seq
 from app.modules.hr.contract_api import router as contract_router
 from app.modules.hr.contract_settings_api import router as contract_settings_router
 from app.modules.hr.date_format import fmt_date_str
 from app.modules.hr.document_generator import generate_onboarding_training_record
 from app.modules.hr.esg_api import router as esg_router
 from app.modules.hr.feishu_settings_api import router as feishu_settings_router
+from app.modules.hr.feishu_settings_service import (
+    HrFeishuNotConfigured,
+    get_hr_feishu_app_credentials,
+)
 from app.modules.hr.models import (
     HrDepartment,
     HrDeptApprovalConfig,
@@ -127,9 +132,9 @@ from app.modules.hr.schemas import (
     OffboardingRecordCreate,
     OffboardingRecordResponse,
     OffboardingRecordUpdate,
-    OnboardingCreate,
     OnboardingEvaluationInput,
     OnboardingResponse,
+    OnboardingUpdate,
     OralExamExportRequest,
     PlanAttachmentListEnvelope,
     PlanAttachmentResponse,
@@ -164,6 +169,7 @@ from app.modules.hr.schemas import (
     TrainingNotifyInput,
     TrainingPersonnelConfigCreate,
     TrainingPersonnelConfigOut,
+    TrainingSessionFromLedgerRequest,
     TrainingSessionOut,
     TrainingSessionUpsert,
     TrainingSignInSheetInput,
@@ -311,6 +317,23 @@ async def _assert_dept_in_scope(
     return alias_set
 
 
+async def _is_super_admin_user(db: AsyncSession, current_user: CurrentUser) -> bool:
+    """判断当前用户是否为超级管理员（含 DEV_BYPASS 开发旁路）——用于培训人员配置等
+    需要"超管可见全部"的数据范围判定。与 data_scope 的超管判定保持一致。"""
+    _require_user(current_user)
+    assert current_user is not None
+    from app.platform.identity.rbac import (
+        DEV_BYPASS_OPEN_ID,
+        SUPER_ADMIN_ROLE_CODE,
+        resolve_user_roles,
+    )
+
+    if str(current_user.feishu_open_id or "") == DEV_BYPASS_OPEN_ID:
+        return True
+    roles = await resolve_user_roles(db, current_user.id)
+    return any(r.code == SUPER_ADMIN_ROLE_CODE for r in roles)
+
+
 async def _resolve_visible_norms(
     db: AsyncSession, current_user: CurrentUser
 ) -> set[str] | None:
@@ -337,16 +360,29 @@ def get_offboarding_service(
     return OffboardingRecordService(session)
 
 
-def get_onboarding_service(
+async def get_onboarding_service(
     session: AsyncSession = Depends(get_db),
 ) -> OnboardingRecordService:
-    return OnboardingRecordService(session)
+    # 老厂读数据源优先用人事自有应用；应用未配置时回退平台应用保持可用
+    try:
+        app_id, app_secret = await get_hr_feishu_app_credentials(session)
+    except HrFeishuNotConfigured:
+        return OnboardingRecordService(session)
+    return OnboardingRecordService(
+        session, feishu_app_id=app_id, feishu_app_secret=app_secret
+    )
 
 
-def get_departure_service(
+async def get_departure_service(
     session: AsyncSession = Depends(get_db),
 ) -> DepartureRecordService:
-    return DepartureRecordService(session)
+    try:
+        app_id, app_secret = await get_hr_feishu_app_credentials(session)
+    except HrFeishuNotConfigured:
+        return DepartureRecordService(session)
+    return DepartureRecordService(
+        session, feishu_app_id=app_id, feishu_app_secret=app_secret
+    )
 
 
 def get_team_service(
@@ -489,7 +525,14 @@ async def list_training_personnel_configs(
     current_user: CurrentUser = None,
 ) -> Any:
     await _assert_dept_in_scope(db, current_user, department)
-    configs = await service.list_configs(level=level, department=department)
+    assert current_user is not None
+    is_admin = await _is_super_admin_user(db, current_user)
+    configs = await service.list_configs(
+        level=level,
+        department=department,
+        owner_id=str(current_user.id),
+        is_admin=is_admin,
+    )
     data = [
         TrainingPersonnelConfigOut.model_validate(c).model_dump(mode="json")
         for c in configs
@@ -509,7 +552,8 @@ async def upsert_training_personnel_config(
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
-    config = await service.upsert_config(payload)
+    assert current_user is not None
+    config = await service.upsert_config(payload, owner_id=str(current_user.id))
     return success_response(
         data=TrainingPersonnelConfigOut.model_validate(config).model_dump(mode="json"),
         message="培训人员配置保存成功",
@@ -525,10 +569,15 @@ async def delete_training_personnel_config(
     service: TrainingPersonnelConfigService = Depends(
         get_training_personnel_config_service
     ),
+    db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
-    await service.delete_config(config_id)
+    assert current_user is not None
+    is_admin = await _is_super_admin_user(db, current_user)
+    await service.delete_config(
+        config_id, user_id=str(current_user.id), is_admin=is_admin
+    )
     return success_response(message="培训人员配置已删除")
 
 
@@ -800,11 +849,11 @@ async def push_contract_expiring_notify(
                 for emp in dept_emps:
                     emp_name = emp.get("name", "")
                     emp_no = emp.get("employee_number", "")
-                    emp_seq = emp.get("contract_sequence", "")
+                    emp_seq = _fmt_contract_seq(emp.get("contract_sequence", ""))
                     emp_end = emp.get("contract_end_date", "")
                     lines.append(
                         f"- **{emp_name}**（工号：{emp_no}），"
-                        f"第{emp_seq}次合同于 **{emp_end}** 到期"
+                        f"{emp_seq}合同于 **{emp_end}** 到期"
                     )
 
                 dept_title = f"【{dept_name}】合同到期提醒与审批"
@@ -833,15 +882,21 @@ async def push_contract_expiring_notify(
                     )
 
                 try:
+                    from app.modules.hr.feishu_settings_service import (
+                        get_hr_feishu_app_credentials,
+                    )
                     from app.platform.integrations.feishu.notification import (
                         send_user_card_with_message_id,
                     )
 
+                    app_id, app_secret = await get_hr_feishu_app_credentials(session)
                     message_id = await send_user_card_with_message_id(
                         open_id=leader_open_id,
                         title=dept_title,
                         content=dept_content,
                         elements=elements,
+                        app_id=app_id,
+                        app_secret=app_secret,
                     )
                     if message_id:
                         pushed += 1
@@ -875,6 +930,14 @@ async def push_contract_expiring_notify(
                     else:
                         failed += 1
                 except Exception:
+                    logger.warning(
+                        "合同到期推送单员工卡片失败",
+                        extra={
+                            "employee": emp.get("employee_number"),
+                            "hr_module": "hr",
+                        },
+                        exc_info=True,
+                    )
                     failed += 1
 
             # 标记本次推送的员工（7天TTL，防止短期重复推送同一人）
@@ -964,7 +1027,15 @@ async def export_contract_expiring(
         header_row = template.get("header_row", 3)
         template_headers = template.get(
             "headers",
-            ["序号", "姓名", "一级部门", "二级部门", "合同到期日期", "车间领导审批"],
+            [
+                "序号",
+                "姓名",
+                "一级部门",
+                "二级部门",
+                "合同到期日期",
+                "车间领导审批",
+                "分管领导审批",
+            ],
         )
         data_start_row = header_row + 1
         total_rows = template.get("total_rows", 35)
@@ -987,7 +1058,7 @@ async def export_contract_expiring(
         )
 
         # 标题行
-        ws.merge_cells("A1:F2")
+        ws.merge_cells("A1:G2")
         title_cell = ws["A1"]
         quarter_num = (start_date.month - 1) // 3 + 1
         title_cell.value = (
@@ -996,8 +1067,8 @@ async def export_contract_expiring(
         title_cell.font = title_font
         title_cell.alignment = center_align
 
-        # 表头（6 列：序号/姓名/一级部门/二级部门/合同到期日期/车间领导审批）
-        for col_idx, header in enumerate(template_headers[:6], 1):
+        # 表头（7 列：…/车间领导审批/分管领导审批）
+        for col_idx, header in enumerate(template_headers[:7], 1):
             cell = ws.cell(row=header_row, column=col_idx, value=header)
             cell.font = header_font
             cell.alignment = center_align
@@ -1029,34 +1100,38 @@ async def export_contract_expiring(
             )
             ws.cell(row=row, column=5, value=end_dt_str).alignment = center_align
             ws.cell(row=row, column=6, value="").alignment = center_align
+            ws.cell(row=row, column=7, value="").alignment = center_align
 
-            for col in range(1, 7):
+            for col in range(1, 8):
                 ws.cell(row=row, column=col).font = data_font
                 ws.cell(row=row, column=col).border = thin_border
 
             if dept != current_dept:
                 if current_dept != "" and dept_start_row < row - 1:
-                    ws.merge_cells(
-                        start_row=dept_start_row,
-                        start_column=6,
-                        end_row=row - 1,
-                        end_column=6,
-                    )
+                    # 车间领导审批 + 分管领导审批 两列均按部门合并单元格
+                    for col in (6, 7):
+                        ws.merge_cells(
+                            start_row=dept_start_row,
+                            start_column=col,
+                            end_row=row - 1,
+                            end_column=col,
+                        )
                 current_dept = dept
                 dept_start_row = row
 
         if dept_start_row < data_start_row + len(sorted_emps) - 1:
-            ws.merge_cells(
-                start_row=dept_start_row,
-                start_column=6,
-                end_row=data_start_row - 1 + len(sorted_emps),
-                end_column=6,
-            )
+            for col in (6, 7):
+                ws.merge_cells(
+                    start_row=dept_start_row,
+                    start_column=col,
+                    end_row=data_start_row - 1 + len(sorted_emps),
+                    end_column=col,
+                )
 
         # 填充空数据行（与导入模板一致）
         actual_total = max(data_start_row + len(sorted_emps), total_rows)
         for row in range(data_start_row + len(sorted_emps), actual_total):
-            for col in range(1, 7):
+            for col in range(1, 8):
                 cell = ws.cell(row=row, column=col, value=None)
                 cell.font = data_font
                 cell.alignment = center_align
@@ -1069,6 +1144,7 @@ async def export_contract_expiring(
         ws.column_dimensions["D"].width = 13.56
         ws.column_dimensions["E"].width = 21.44
         ws.column_dimensions["F"].width = 21.22
+        ws.column_dimensions["G"].width = 21.22
 
         # 行高 - 全部设为25磅
         for row in range(1, actual_total + 1):
@@ -1092,11 +1168,11 @@ async def export_contract_expiring(
                 ): f"attachment; filename*=UTF-8''{encoded_filename}"
             },
         )
-    except Exception as e:
-        logger.exception("Export error: %s", e)
-        from app.core.exceptions import AppException
-
-        raise AppException(status_code=500, message=f"导出失败: {str(e)}")
+    except AppException:
+        raise
+    except Exception:
+        logger.exception("Export error")
+        raise AppException(status_code=500, message="导出失败，请稍后重试")
 
 
 @router.post("/employees", summary="创建员工")
@@ -1151,8 +1227,11 @@ async def create_employee_public(
             result.feishu_record_id = rid
             result.feishu_synced_at = date.today()
             await emp_repo.update(result)
-    except Exception as e:
-        sync_status = f"failed: {str(e)}"
+    except Exception:
+        # 员工已创建、仅飞书同步失败：不回滚建档，异常详情只进日志，
+        # 不把原始异常文本暴露给免登录调用方
+        logger.exception("public 建档后的飞书同步失败")
+        sync_status = "failed"
 
     return success_response(
         data=EmployeeResponse.model_validate(result).model_dump(mode="json"),
@@ -1826,7 +1905,7 @@ async def create_offboarding_record(
         ),
         "offboarding_type": record.offboarding_type,
         "reason": record.reason,
-        "handover_status": record.handover_status,
+        "status": record.status,
         "notes": record.notes,
         "created_at": record.created_at.isoformat() if record.created_at else None,
         "updated_at": record.updated_at.isoformat() if record.updated_at else None,
@@ -2135,6 +2214,24 @@ async def export_position_transfer_pdf(
 # ─── Department-level Approval Config Routes ───
 
 
+@router.get(
+    "/dept-approval-configs/names",
+    summary="部门级审批人配置的部门名单（按配置粒度去重排序，供按部门配置办事员/接收人使用）",
+)
+async def list_dept_approval_config_names(
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> Any:
+    _require_user(current_user)
+    result = await db.execute(
+        select(HrDeptApprovalConfig.department_name)
+        .where(HrDeptApprovalConfig.is_deleted.is_(False))
+        .order_by(HrDeptApprovalConfig.department_name)
+    )
+    names = list(dict.fromkeys(r[0] for r in result.all() if r[0]))
+    return success_response(data=names)
+
+
 @router.get("/dept-approval-configs", summary="部门级审批人配置列表（自动合并部门表）")
 async def list_dept_approval_configs(
     db: AsyncSession = Depends(get_db),
@@ -2175,9 +2272,35 @@ async def list_dept_approval_configs(
     config_result = await db.execute(
         select(HrDeptApprovalConfig).where(HrDeptApprovalConfig.is_deleted.is_(False))
     )
-    config_map = {c.department_id: c for c in config_result.scalars().all()}
+    all_configs = config_result.scalars().all()
+    config_map = {c.department_id: c for c in all_configs}
 
     data = []
+    # 回退模式：部门表为空（如开发环境未同步部门）时，直接按配置行展示，
+    # 保证已迁移的审批人配置仍可见可编辑
+    if not display_depts and all_configs:
+        # 回退展示：无部门数据时按配置行自身字段输出
+        for cfg in all_configs:
+            data.append(
+                {
+                    "id": str(cfg.id),
+                    "department_id": (
+                        str(cfg.department_id) if cfg.department_id else None
+                    ),
+                    "department_name": cfg.department_name,
+                    "direct_leader_name": cfg.direct_leader_name,
+                    "direct_leader_open_id": cfg.direct_leader_open_id,
+                    "manager_name": cfg.manager_name,
+                    "manager_open_id": cfg.manager_open_id,
+                    "director_name": cfg.director_name,
+                    "director_open_id": cfg.director_open_id,
+                    "vp_name": cfg.vp_name,
+                    "vp_open_id": cfg.vp_open_id,
+                    "sort_order": cfg.sort_order,
+                }
+            )
+        return success_response(data=data)
+
     for dept in display_depts:
         cfg = config_map.get(dept.id)
         data.append(
@@ -2979,6 +3102,7 @@ _DEPT_LEDGER_HEADERS = [
     "部门/公司计划",
     "人药/兽药",
     "成绩汇总",
+    "是否呈现",
 ]
 _DEPT_LEDGER_FIELDS = [
     "training_datetime",
@@ -2995,6 +3119,7 @@ _DEPT_LEDGER_FIELDS = [
     "plan_source",
     "drug_category",
     "score_summary",
+    "is_presented",
 ]
 
 # 表头别名 → 字段名映射（兼容系统导出格式与各部门实际统计格式）
@@ -3024,6 +3149,7 @@ _DEPT_LEDGER_HEADER_ALIASES = {
     "部门/公司计划": "plan_source",
     "人药/兽药": "drug_category",
     "备注": "remarks",
+    "是否呈现": "is_presented",
 }
 
 
@@ -3056,6 +3182,25 @@ def _parse_excel_date(v: Any) -> date | None:
 
 
 _TIME_RANGE_RE = re.compile(r"(\d{1,2}):(\d{2})\s*[~～\-—至到]\s*(\d{1,2}):(\d{2})")
+
+
+def _parse_presented(v: Any) -> bool | None:
+    """解析"是否呈现"单元格值（是/否、TRUE/FALSE、1/0），解析不出返回 None。
+
+    None 时由 TrainingLedgerCreate 默认值兜底（默认呈现）。
+    """
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, (int, float)):
+        return v != 0
+    if not isinstance(v, str):
+        return None
+    text_val = v.strip()
+    if text_val.lower() in ("是", "y", "true", "1", "yes"):
+        return True
+    if text_val.lower() in ("否", "n", "false", "0", "no"):
+        return False
+    return None
 
 
 def _calc_duration_from_text(v: Any) -> float | None:
@@ -3460,7 +3605,7 @@ async def import_training_ledger_by_dept(
         allowed_extensions={".xlsx"},
         what="培训统计表",
     )
-    wb = load_workbook(BytesIO(content), data_only=True)
+    wb = load_workbook(BytesIO(content), data_only=True, read_only=True)
 
     # 扫描所有工作表，找出可识别表头的
     recognized: list[tuple[str, int, dict[int, str]]] = []
@@ -3544,8 +3689,10 @@ async def _import_rows_with_mapping(
     """按列映射导入工作表数据行，返回创建条数.
 
     AI 只做列映射，导入的每个值都来自 Excel 单元格原文。
+    收集整表后一次性批量写入（service.create_many），避免逐行 create_record
+    的 N 次 DB 往返拖垮导入（多 sheet 大文件尤其明显）。
     """
-    created = 0
+    data_list: list[TrainingLedgerCreate] = []
     for row in ws.iter_rows(min_row=header_row + 1, values_only=True):
         vals = {col_map[ci]: (row[ci] if ci < len(row) else None) for ci in col_map}
         content_text = _cell_text(vals.get("training_content")) or ""
@@ -3569,6 +3716,7 @@ async def _import_rows_with_mapping(
             duration_val = _calc_duration_from_text(
                 vals.get("training_datetime") or vals.get("training_date")
             )
+        presented = _parse_presented(vals.get("is_presented"))
         data = TrainingLedgerCreate(
             employee_number="",
             training_date=training_date or date.today(),
@@ -3595,11 +3743,14 @@ async def _import_rows_with_mapping(
             drug_category=_clip(_cell_text(vals.get("drug_category")), 32),
             score_summary=_cell_text(vals.get("score_summary")),
             remarks=_clip(_cell_text(vals.get("remarks")), 512),
+            **({} if presented is None else {"is_presented": presented}),
             source_type="manual",
         )
-        await service.create_record(data)
-        created += 1
-    return created
+        data_list.append(data)
+
+    if not data_list:
+        return 0
+    return await service.create_many(data_list)
 
 
 def _count_data_rows(
@@ -3669,9 +3820,12 @@ async def preview_training_import(
         allowed_extensions={".xlsx"},
         what="培训导入预览文件",
     )
-    wb = load_workbook(BytesIO(content), data_only=True)
+    wb = load_workbook(BytesIO(content), data_only=True, read_only=True)
     mapping_repo = _get_import_mapping_repo(session)
 
+    # AI 识别 sheet 数上限：多 sheet 文件（如 QC）避免逐 sheet 串行调 LLM 拖垮请求
+    max_ai_sheets = 2
+    ai_done = 0
     sheets_payload: list[ImportSheetPreview] = []
     for sname in wb.sheetnames:
         ws = wb[sname]
@@ -3710,13 +3864,17 @@ async def preview_training_import(
             if cand_row:
                 header_row, headers = cand_row, cand_headers
 
-        # ② AI 兜底（规则未命中时）
-        if source == "none" and headers:
+        # ② AI 兜底（规则未命中时；多 sheet 文件只对前 max_ai_sheets 个做 AI，
+        # 其余人工映射）
+        if source == "none" and headers and ai_done < max_ai_sheets:
             ai_result = await analyze_headers_by_llm(sname, headers)
             if ai_result["mapping"]:
                 mapping = ai_result["mapping"]
                 source = "ai"
             judgment = ai_result["judgment"] or None
+            ai_done += 1
+        elif source == "none" and headers:
+            judgment = "文件含多个未识别工作表，已跳过AI识别，请人工指定列映射"
 
         if header_row and mapping:
             col_map = {int(k): v for k, v in mapping.items()}
@@ -3794,9 +3952,16 @@ async def confirm_training_import(
         per_sheet.append(f"[{sheet_cfg.name}]{sheet_created}条")
 
         # 存入记忆表（表头指纹 → 映射）
+        # read_only 模式不支持 ws[行号] 随机访问，改用 iter_rows 定位表头行
+        header_row_values = next(
+            ws.iter_rows(
+                min_row=sheet_cfg.header_row,
+                max_row=sheet_cfg.header_row,
+                values_only=True,
+            )
+        )
         header_cells = [
-            str(c.value).strip() if c.value is not None else ""
-            for c in ws[sheet_cfg.header_row]
+            str(c).strip() if c is not None else "" for c in header_row_values
         ]
         fingerprint = header_fingerprint(header_cells)
         existing = await mapping_repo.get_by_dept_fingerprint(department, fingerprint)
@@ -4505,6 +4670,107 @@ async def upsert_training_session(
     return success_response(data={"id": str(sess.id)})
 
 
+@router.post(
+    "/training-sessions/from-ledger",
+    summary="从培训台账一键创建部门级二级培训会话（带入上级试卷）",
+)
+async def create_second_level_session_from_ledger(
+    body: TrainingSessionFromLedgerRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> Any:
+    """公司级（全厂性）培训入台账后按部门拆副本；各部门从自己的台账副本
+    一键创建部门级二级培训会话，并把上级会话的试卷草稿（笔试/口试/实操）
+    复制过来，供培训员微调后开展二级培训。
+
+    - 复制为快照：新会话修改题目不影响上级会话
+    - 返回新会话 id，前端跳转 ?session=新id 恢复
+    """
+    _require_user(current_user)
+    assert current_user is not None
+    import copy as _copy
+
+    ledger_service = TrainingLedgerService(db)
+    record = await ledger_service.get_record(body.record_id)
+    if record.session_id is None:
+        raise AppException(
+            status_code=400,
+            message="该台账记录未关联培训会话，无法创建二级培训",
+        )
+
+    parent = await db.get(TrainingSession, record.session_id)
+    if parent is None or parent.is_deleted:
+        raise AppException(status_code=400, message="上级培训会话不存在或已删除")
+
+    new_session = TrainingSession(
+        id=uuid4(),
+        training_level="部门级",
+        # 只带上级试卷 + 培训主题；部门/日期/授课人/计划等由各部门在培训资料页自行填写
+        department=None,
+        trainee_departments=None,
+        topic=parent.topic,
+        training_date=None,
+        training_method=None,
+        instructor=None,
+        plan_year=None,
+        plan_id=None,
+        plan_item_id=None,
+        parent_session_id=parent.id,
+        employee_names=None,
+        employee_dept_map=None,
+        created_by=current_user.id,
+        updated_by=current_user.id,
+    )
+    db.add(new_session)
+    await db.flush()
+
+    # 复制上级试卷草稿（默认笔试/口试/实操/评估表；评估表携带考核方式，
+    # 前端恢复时据此激活对应出题 Tab；父会话缺某类则跳过）
+    copy_types = body.copy_doc_types or [
+        "ai_written_exam",
+        "oral_exam",
+        "practical_exam",
+        "evaluation",
+    ]
+    parent_docs = (
+        (
+            await db.execute(
+                select(TrainingDocument).where(
+                    TrainingDocument.session_id == parent.id,
+                    TrainingDocument.is_deleted.is_(False),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    copied: list[str] = []
+    for doc in parent_docs:
+        if doc.doc_type not in copy_types:
+            continue
+        db.add(
+            TrainingDocument(
+                session_id=new_session.id,
+                doc_type=doc.doc_type,
+                title=doc.title,
+                payload=_copy.deepcopy(doc.payload or {}),
+                created_by=current_user.id,
+                updated_by=current_user.id,
+            )
+        )
+        copied.append(doc.doc_type)
+    await db.flush()
+
+    return success_response(
+        data={
+            "id": str(new_session.id),
+            "copied_doc_types": copied,
+            "parent_record_id": str(record.id),
+        },
+        message=f"已创建二级培训会话，并带入{len(copied)}类上级试卷",
+    )
+
+
 @router.get("/training-sessions/{session_id}", summary="培训会话详情")
 async def get_training_session(
     session_id: UUID,
@@ -4972,7 +5238,7 @@ async def send_offer_email(
     )
 
     if not success:
-        raise AppException(status_code=500, message="邮件发送失败")
+        raise AppException(status_code=502, message="邮件发送失败（SMTP 服务不可用）")
 
     return success_response(message="邮件发送成功")
 
@@ -5103,8 +5369,12 @@ if path:
         raise AppException(status_code=408, message="对话框超时（60秒）")
     except AppException:
         raise
-    except Exception as e:
-        raise AppException(status_code=500, message=f"打开文件夹对话框失败：{str(e)}")
+    except Exception:
+        logger.exception("打开文件夹对话框失败")
+        raise AppException(
+            status_code=500,
+            message="打开文件夹对话框失败，请检查服务器目录配置",
+        )
 
 
 # ─── 招聘管理（Recruitment）Routes ───
@@ -5334,11 +5604,11 @@ async def get_candidate_resume_file(
     try:
         feishu_client = FeishuClient()
         file_bytes = await feishu_client.download_file(file_token)
-    except Exception as e:
+    except Exception:
         logger.exception(
             "failed to download resume from feishu", extra={"record_id": record_id}
         )
-        raise AppException(status_code=500, message=f"下载简历失败：{str(e)}")
+        raise AppException(status_code=502, message="下载简历失败（飞书服务不可用）")
 
     # 返回文件
     import io
@@ -5445,18 +5715,6 @@ async def create_onboarding_from_interview(
     return success_response(data=result, message="入职记录创建成功", status_code=201)
 
 
-@router.get("/onboarding/dashboard", summary="入职看板统计")
-async def get_onboarding_dashboard(
-    db: AsyncSession = Depends(get_db),
-    service: RecruitmentOnboardingService = Depends(get_recruitment_onboarding_service),
-    current_user: CurrentUser = None,
-) -> Any:
-    """获取入职管理看板统计数据。飞书多维表格未配置时返回空统计。"""
-    alias_set = await _resolve_visible_scope(db, current_user)
-    result = await service.get_dashboard(dept_alias_set=alias_set)
-    return success_response(data=result)
-
-
 @router.get("/onboarding/{record_id}", summary="入职详情")
 @_handle_write_unconfigured
 async def get_onboarding_record_recruitment(
@@ -5474,7 +5732,7 @@ async def get_onboarding_record_recruitment(
 @_handle_write_unconfigured
 async def update_onboarding_record_recruitment(
     record_id: str,
-    payload: OnboardingCreate,
+    payload: OnboardingUpdate,
     service: RecruitmentOnboardingService = Depends(get_recruitment_onboarding_service),
     current_user: CurrentUser = None,
 ) -> Any:
@@ -5484,6 +5742,134 @@ async def update_onboarding_record_recruitment(
         record_id, payload.model_dump(exclude_none=True)
     )
     return success_response(data=result, message="入职信息更新成功")
+
+
+@router.delete("/onboarding/{record_id}", summary="删除入职记录（从飞书多维表格删除）")
+@_handle_write_unconfigured
+async def delete_onboarding_record_recruitment(
+    record_id: str,
+    service: RecruitmentOnboardingService = Depends(get_recruitment_onboarding_service),
+    current_user: CurrentUser = None,
+) -> Any:
+    """删除入职记录。不可恢复，前端需二次确认。"""
+    _require_user(current_user)
+    await service.delete_onboarding(record_id)
+    return success_response(message="入职记录已删除")
+
+
+@router.post(
+    "/onboarding/attachments",
+    summary="上传入职附件（写回飞书多维附件字段用）",
+)
+@_handle_write_unconfigured
+async def upload_onboarding_attachment(
+    file: UploadFile = File(...),
+    current_user: CurrentUser = None,
+) -> Any:
+    """上传文件到飞书多维，返回 file_token（用于编辑时写入附件字段）。"""
+    _require_user(current_user)
+    from app.core.config import get_settings
+    from app.core.upload_security import read_upload_secure
+
+    filename, content = await read_upload_secure(
+        file,
+        max_bytes=get_settings().MAX_UPLOAD_SIZE_MB * 1024 * 1024,
+        allowed_extensions={
+            ".pdf",
+            ".doc",
+            ".docx",
+            ".xls",
+            ".xlsx",
+            ".png",
+            ".jpg",
+            ".jpeg",
+        },
+        what="入职附件",
+    )
+    from app.modules.hr.recruitment_repository import RecruitmentBitableRepo
+
+    repo = RecruitmentBitableRepo()
+    client = await repo._get_client()
+    if not client:
+        raise AppException(status_code=503, message="飞书连接未配置")
+    try:
+        file_token = await client.upload_attachment(filename, content)
+    except Exception:
+        logger.exception("入职附件上传飞书失败")
+        raise AppException(
+            status_code=502,
+            message="附件上传失败（飞书应用可能缺少 drive 上传权限）",
+        )
+    if not file_token:
+        raise AppException(status_code=400, message="附件超过飞书 20MB 上限或上传失败")
+    return success_response(data={"file_token": file_token, "name": filename})
+
+
+@router.get(
+    "/onboarding/{record_id}/attachments/{file_token}/content",
+    summary="获取入职附件内容（预览/下载）",
+)
+async def get_onboarding_attachment_content(
+    record_id: str,
+    file_token: str,
+    service: RecruitmentOnboardingService = Depends(get_recruitment_onboarding_service),
+    current_user: CurrentUser = None,
+) -> Any:
+    """代理下载入职记录附件（图片内嵌预览 / PDF 等新标签打开）。
+
+    安全：仅允许下载属于该记录的附件（file_token 归属校验），
+    内容经后端携带飞书 tenant token 下载，不暴露直链。
+    """
+    _require_user(current_user)
+    import mimetypes
+
+    record = await service.get_onboarding(record_id)
+    # 归属校验：file_token 必须出现在该记录的附件字段中，防止任传 token 抓取
+    owned_tokens: set[str] = set()
+    attachment_names: dict[str, str] = {}
+    for key in (
+        "resignation_attachment",
+        "id_attachment",
+        "education_attachment",
+        "other_attachment",
+    ):
+        for att in record.get(key) or []:
+            if isinstance(att, dict) and att.get("file_token"):
+                owned_tokens.add(att["file_token"])
+                attachment_names[att["file_token"]] = att.get("name", "attachment")
+    if file_token not in owned_tokens:
+        raise AppException(status_code=403, message="附件不属于该记录")
+
+    from app.modules.hr.recruitment_repository import RecruitmentBitableRepo
+
+    repo = RecruitmentBitableRepo()
+    client = await repo._get_client()
+    if not client:
+        raise AppException(status_code=503, message="飞书连接未配置")
+    try:
+        content = await client.client.download_file(file_token)
+    except Exception:
+        logger.exception(
+            "入职附件下载失败", extra={"record_id": record_id, "hr_module": "hr"}
+        )
+        raise AppException(
+            status_code=502,
+            message="附件下载失败（飞书应用可能缺少 drive 下载/协作者权限）",
+        )
+
+    filename = attachment_names.get(file_token, "attachment")
+    content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+    # 中文文件名用 RFC 5987 filename* 编码，避免 latin-1 响应头崩溃
+    from urllib.parse import quote
+
+    from fastapi.responses import Response as _Response
+
+    encoded_name = quote(filename)
+    return _Response(
+        content=content,
+        media_type=content_type,
+        headers={"Content-Disposition": f"inline; filename*=UTF-8''{encoded_name}"},
+    )
 
 
 @router.post(
@@ -5527,7 +5913,7 @@ async def sync_onboarding_to_employee(
     repo = RecruitmentBitableRepo()
     client = await repo._get_client()
     if not client:
-        raise AppException(status_code=500, message="飞书连接未配置")
+        raise AppException(status_code=503, message="飞书连接未配置")
 
     # 搜索员工档案表，按姓名匹配
     records = await client.search_records(TBL_EMPLOYEE, page_size=500)

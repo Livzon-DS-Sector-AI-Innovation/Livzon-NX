@@ -119,6 +119,7 @@ async def test_feishu_client_health_and_request_outcomes(monkeypatch: Any) -> No
     auth.FeishuAuth.get_tenant_access_token.side_effect = None  # type: ignore[attr-defined]
 
     response: Any = SimpleNamespace(
+        status_code=200,
         raise_for_status=lambda: None,
         json=lambda: {"code": 0, "data": {"items": [1]}},
     )

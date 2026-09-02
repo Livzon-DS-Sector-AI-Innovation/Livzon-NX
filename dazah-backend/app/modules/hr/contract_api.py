@@ -304,6 +304,17 @@ async def _approval_callback_core(
 # ─── 两级审批处理辅助函数 ───
 
 
+def _fmt_contract_seq(value: str | None) -> str:
+    """合同次数展示：存储值已含"次"（首次/第二次…），避免重复加"第…次"包装。"""
+    if not value:
+        return ""
+    if isinstance(value, int):
+        return f"第{value}次"
+    if value == "首次" or value.endswith("次"):
+        return value
+    return f"第{value}次"
+
+
 def _compute_renew_seq(emp: Any) -> int:
     """从 Employee 表的 6 组合同日期中找出最晚非空到期日，确定当前合同次数。"""
     from datetime import date as date_type
@@ -551,12 +562,12 @@ async def _on_final_rejected(
         )
 
     if record:
+        # 拒绝时只记录拒绝人姓名，不写 approved_at（该字段语义是"同意时间"，
+        # 拒绝也写入会被审批结果页/导出误判为"该级同意"）
         if reject_by == "部门负责人":
             record.dept_leader_name = leader_name or record.dept_leader_name
-            record.dept_approved_at = datetime.now(UTC)
         else:
             record.supervisor_name = leader_name or record.supervisor_name
-            record.supervisor_approved_at = datetime.now(UTC)
         record.contract_opinion = "不同意续签"
         record.approval_status = "rejected"
         await db.flush()
@@ -661,7 +672,6 @@ async def _create_offboarding_record(
         offboarding_type="合同到期",
         offboarding_date=last_working_day,
         reason=f"{reject_by}{leader_name}审批不同意续签",
-        handover_status="待交接",
         **(
             {}
             if not emp
@@ -811,8 +821,21 @@ async def update_contract_approval_card(
     "素 / 分管领导卡整卡替换）。"
     import json
 
+    from app.core.database import async_session_factory
     from app.core.redis import cache_get
+    from app.modules.hr.feishu_settings_service import (
+        get_hr_feishu_app_credentials,
+    )
     from app.platform.integrations.feishu.notification import update_card
+
+    # 卡片由人事应用发送，必须由人事应用更新（卡片归属应用一致）
+    # 未配置时跳过置灰（回调仍返回 toast，不阻断审批结果提示）
+    try:
+        async with async_session_factory() as session:
+            app_id, app_secret = await get_hr_feishu_app_credentials(session)
+    except Exception as exc:
+        logger.warning("合同审批卡片置灰跳过: 人事飞书凭证未配置: %s", exc)
+        return
 
     result_text = "✅ 已同意续签" if action == "approve" else "❌ 已不同意（转离职）"
     try:
@@ -867,7 +890,7 @@ async def update_contract_approval_card(
                 },
                 "elements": elements,
             }
-            await update_card(message_id, card)
+            await update_card(message_id, card, app_id=app_id, app_secret=app_secret)
         else:
             # 分管领导单员工卡片：整卡替换为结果
             message_id = await cache_get(f"hr:contract:supervisor_card:{emp_no}:msgid")
@@ -895,7 +918,7 @@ async def update_contract_approval_card(
                     },
                 ],
             }
-            await update_card(message_id, card)
+            await update_card(message_id, card, app_id=app_id, app_secret=app_secret)
         logger.info(
             "合同审批卡片已置灰: emp=%s stage=%s action=%s", emp_no, stage, action
         )
@@ -937,7 +960,7 @@ async def _send_supervisor_card_task(employee_number: str) -> None:
             f"部门负责人 **{record.dept_leader_name or ''}** 已同意续签，请您审批：\n\n"
             f"- **{record.name}**（工号：{record.employee_number}）\n"
             f"- 部门：{record.dept_level1 or ''} / {record.dept_level2 or ''}\n"
-            f"- 第{record.contract_sequence or ''}次合同，到期日见合同管理台账"
+            f"- {_fmt_contract_seq(record.contract_sequence)}合同，到期日见合同管理台账"
         )
         elements = [
             build_contract_approval_actions(
@@ -949,15 +972,22 @@ async def _send_supervisor_card_task(employee_number: str) -> None:
             ),
         ]
         try:
+            # 卡片由人事应用发送，必须由人事应用发送（卡片归属应用一致）
+            from app.modules.hr.feishu_settings_service import (
+                get_hr_feishu_app_credentials,
+            )
             from app.platform.integrations.feishu.notification import (
                 send_user_card_with_message_id,
             )
 
+            app_id, app_secret = await get_hr_feishu_app_credentials(session)
             message_id = await send_user_card_with_message_id(
                 open_id=record.supervisor_open_id,
                 title=f"【{record.dept_level1 or ''}】合同续签审批（分管领导）",
                 content=content,
                 elements=elements,
+                app_id=app_id,
+                app_secret=app_secret,
             )
             if message_id:
                 # 保存 message_id 供审批后置灰卡片
@@ -1039,7 +1069,12 @@ async def _send_contract_result_task(employee_number: str) -> None:
             f"- 分管领导：{record.supervisor_name or '-'}"
         )
 
+        from app.modules.hr.feishu_settings_service import (
+            get_hr_feishu_app_credentials,
+        )
         from app.platform.integrations.feishu.notification import send_user_card
+
+        app_id, app_secret = await get_hr_feishu_app_credentials(session)
 
         # 1. HR 结果卡片
         for open_id in hr_open_ids:
@@ -1048,6 +1083,8 @@ async def _send_contract_result_task(employee_number: str) -> None:
                     open_id=open_id,
                     title=f"合同审批结果 - {record.name}",
                     content=content,
+                    app_id=app_id,
+                    app_secret=app_secret,
                 )
             except Exception:
                 logger.exception(
@@ -1075,7 +1112,7 @@ async def _send_contract_result_task(employee_number: str) -> None:
                 f"合同审批已通过，请通知员工到人事签署合同：\n\n"
                 f"- **{record.name}**（工号：{record.employee_number}）\n"
                 f"- 部门：{record.dept_level1 or ''} / {record.dept_level2 or ''}\n"
-                f"- 合同次数：第{record.contract_sequence or ''}次"
+                f"- 合同次数：{_fmt_contract_seq(record.contract_sequence)}"
             )
             for open_id in clerk_open_ids:
                 try:
@@ -1083,6 +1120,8 @@ async def _send_contract_result_task(employee_number: str) -> None:
                         open_id=open_id,
                         title=f"合同签署通知 - {record.name}",
                         content=sign_content,
+                        app_id=app_id,
+                        app_secret=app_secret,
                     )
                 except Exception:
                     logger.exception(
@@ -1375,9 +1414,11 @@ async def list_contract_approval_results(
         )
     elif department:
         stmt = stmt.where(ContractRecord.dept_level1.ilike(f"{department}%"))
-    # 审批完成时间 = 最后一级处理时间
+    # 审批完成时间 = 最后一级处理时间（拒绝记录不再写 approved_at，用 updated_at 兜底）
     completed_at = func.coalesce(
-        ContractRecord.supervisor_approved_at, ContractRecord.dept_approved_at
+        ContractRecord.supervisor_approved_at,
+        ContractRecord.dept_approved_at,
+        ContractRecord.updated_at,
     )
     if start_date:
         stmt = stmt.where(
@@ -1447,8 +1488,11 @@ async def export_contract_approval_results(
         )
     elif department:
         stmt = stmt.where(ContractRecord.dept_level1.ilike(f"{department}%"))
+    # 审批完成时间 = 最后一级处理时间（拒绝记录不再写 approved_at，用 updated_at 兜底）
     completed_at = func.coalesce(
-        ContractRecord.supervisor_approved_at, ContractRecord.dept_approved_at
+        ContractRecord.supervisor_approved_at,
+        ContractRecord.dept_approved_at,
+        ContractRecord.updated_at,
     )
     if start_date:
         stmt = stmt.where(
@@ -1635,12 +1679,14 @@ async def sync_contracts_from_feishu(
             ),
         )
     except Exception:
+        # 外部依赖（飞书）失败：502 + 统一错误响应，不伪造成功
         await db.rollback()
         import logging
 
         logging.getLogger(__name__).exception("合同同步飞书失败")
-        return success_response(
-            data={"error": "同步失败"}, message="合同同步飞书失败，请稍后重试"
+        raise AppException(
+            status_code=502,
+            message="合同同步飞书失败（飞书服务不可用），请稍后重试",
         )
 
 

@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, Mock
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
@@ -56,7 +56,6 @@ def _service() -> WarehouseService:
     service._page_cache = {}
     service._field_meta_cache = {}
     service._table_fields_cache = {}
-    service._bitable_clients = {}
     service._dashboard_cache = {}
     return service
 
@@ -168,12 +167,18 @@ def test_raw_mapping_and_filter_validation() -> None:
 
 
 @pytest.mark.asyncio
-async def test_config_and_table_error_boundaries() -> None:
+async def test_config_and_table_error_boundaries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     service = _service()
     service.repo.get_any_feishu_config.side_effect = RuntimeError("db")
     with pytest.raises(RuntimeError):
         await service._get_any_feishu_config_or_raise()
 
+    # 凭证 env 回退会兜底返回配置；屏蔽回退后验证原始"未配置"错误路径
+    monkeypatch.setattr(
+        type(service), "_env_fallback_feishu_config", staticmethod(lambda: None)
+    )
     service.repo.get_active_feishu_config.return_value = None
     with pytest.raises(AppException) as exc:
         await service._get_active_feishu_config_or_raise()
@@ -223,6 +228,9 @@ async def test_tenant_token_and_connectivity_results_are_sanitized(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     service = _service()
+    monkeypatch.setattr(
+        type(service), "_env_fallback_feishu_config", staticmethod(lambda: None)
+    )
     steps: list[object] = []
     assert (
         await service._test_tenant_token(
@@ -359,7 +367,8 @@ async def test_page_binding_and_dataset_compatibility(
     ]
     service.get_all_page_feishu_configs = AsyncMock(return_value=configs)
     data = await service.get_page_data("raw-summary")
-    assert data.bindings[0].table.table_id == "t1"
+    # 无存储绑定时返回空列表（对齐 energy 契约：未发布 → 前端原样渲染 legacy 页）
+    assert data.bindings == []
 
     binding = _binding("t1")
     service._binding_for_page = AsyncMock(return_value=binding)
@@ -629,13 +638,17 @@ async def test_material_record_edit_detail_and_delete_paths(
     monkeypatch.setattr(
         service, "_build_page_option_map", AsyncMock(return_value={"opt-1": "正常"})
     )
-    client = SimpleNamespace(
-        update_record=AsyncMock(
-            return_value={"record_id": "r1", "fields": {"名称": "新"}}
-        ),
-        delete_record=AsyncMock(),
+    # 写回走模块自有应用（_get_material_client）的通用 request
+    write_client = SimpleNamespace(
+        request=AsyncMock(
+            return_value={"record": {"record_id": "r1", "fields": {"名称": "新"}}}
+        )
     )
-    monkeypatch.setattr(service, "_get_bitable_client", Mock(return_value=client))
+
+    async def _fake_material_client(app_token: str) -> SimpleNamespace:
+        return write_client
+
+    monkeypatch.setattr(service, "_get_material_client", _fake_material_client)
     service.feishu_client = SimpleNamespace(
         request=AsyncMock(
             return_value={
@@ -669,17 +682,19 @@ async def test_material_record_edit_detail_and_delete_paths(
         },
     )
     assert updated["record_id"] == "r1"
-    payload = client.update_record.await_args.args[2]
-    assert payload["数量"] == 1200.0
-    assert "公式" not in payload
-    assert "附件" not in payload
+    put_body = write_client.request.await_args.kwargs["json_body"]
+    assert put_body["fields"]["数量"] == 1200.0
+    assert "公式" not in put_body["fields"]
+    assert "附件" not in put_body["fields"]
+    put_path = write_client.request.await_args.args[1]
+    assert put_path.endswith("/records/r1")
     with pytest.raises(Exception):
         await service.update_material_page_record("raw-summary", "r1", {"未知": "x"})
     with pytest.raises(Exception):
         await service.update_material_page_record("raw-summary", "r1", {"公式": "x"})
 
     await service.delete_material_page_record("raw-summary", "r1")
-    client.delete_record.side_effect = RuntimeError("provider")
+    write_client.request.side_effect = RuntimeError("provider")
     with pytest.raises(Exception):
         await service.delete_material_page_record("raw-summary", "r1")
 

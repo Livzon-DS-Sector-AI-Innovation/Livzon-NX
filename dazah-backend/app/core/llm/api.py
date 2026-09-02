@@ -33,6 +33,19 @@ class LLMConfigCreate(BaseModel):
     temperature: float = Field(default=0.1, ge=0, le=2)
     timeout_seconds: int = Field(default=120, ge=10, le=600)
     is_active: bool = False
+    enable_thinking: bool = Field(
+        default=False, description="是否开启思考模式（返回 reasoning_content）"
+    )
+    custom_context: str | None = Field(
+        default=None, description="自定义上下文提示词（追加到系统提示词末尾）"
+    )
+    context_window_tokens: int = Field(
+        default=200000, ge=1000, le=4000000, description="上下文窗口大小（token）"
+    )
+    compress_threshold: float = Field(
+        default=0.8, ge=0.1, le=1.0, description="上下文压缩阈值（比例）"
+    )
+    stream_output: bool = Field(default=True, description="是否流式输出")
     notes: str | None = None
 
 
@@ -46,6 +59,11 @@ class LLMConfigUpdate(BaseModel):
     temperature: float | None = Field(None, ge=0, le=2)
     timeout_seconds: int | None = Field(None, ge=10, le=600)
     is_active: bool | None = None
+    enable_thinking: bool | None = None
+    custom_context: str | None = None
+    context_window_tokens: int | None = Field(None, ge=1000, le=4000000)
+    compress_threshold: float | None = Field(None, ge=0.1, le=1.0)
+    stream_output: bool | None = None
     notes: str | None = None
 
 
@@ -62,6 +80,11 @@ class LLMConfigResponse(BaseModel):
     temperature: float
     timeout_seconds: int
     is_active: bool
+    enable_thinking: bool
+    custom_context: str | None
+    context_window_tokens: int
+    compress_threshold: float
+    stream_output: bool
     notes: str | None
     created_at: str
     updated_at: str
@@ -132,6 +155,11 @@ def _to_response(config: LLMConfigModel) -> LLMConfigResponse:
         temperature=config.temperature,
         timeout_seconds=config.timeout_seconds,
         is_active=config.is_active,
+        enable_thinking=config.enable_thinking,
+        custom_context=config.custom_context,
+        context_window_tokens=config.context_window_tokens,
+        compress_threshold=config.compress_threshold,
+        stream_output=config.stream_output,
         notes=config.notes,
         created_at=config.created_at.isoformat(),
         updated_at=config.updated_at.isoformat(),
@@ -221,6 +249,11 @@ async def create_config(
         temperature=data.temperature,
         timeout_seconds=data.timeout_seconds,
         is_active=data.is_active,
+        enable_thinking=data.enable_thinking,
+        custom_context=data.custom_context,
+        context_window_tokens=data.context_window_tokens,
+        compress_threshold=data.compress_threshold,
+        stream_output=data.stream_output,
         notes=data.notes,
         created_by=current_user.id if current_user else None,
         updated_by=current_user.id if current_user else None,

@@ -26,6 +26,7 @@ import {
   CreateFeishuDeviationLedgerRecordRequest,
   UpdateFeishuDeviationLedgerRecordRequest,
   DepartmentContactListResponse,
+  UpdateFeishuDepartmentContactRequest,
   QualityAiAnalysisLog,
   CreateSupplierQualificationRequest,
   UpdateSupplierQualificationRequest,
@@ -397,6 +398,22 @@ export async function fetchFeishuDepartmentContactsAction(page = 1, page_size = 
     ),
     '未收到部门联系人数据',
   )
+}
+
+export async function updateDepartmentContactFeishu(
+  recordId: string,
+  data: UpdateFeishuDepartmentContactRequest
+) {
+  const result = await actionFetch(
+    `${API_BASE_URL}/api/v1/quality/department-contacts/feishu/${recordId}`,
+    {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }
+  )
+  revalidatePath('/quality')
+  revalidatePath('/quality/department-contacts')
+  return result
 }
 
 export async function createFeishuCapa(data: UntypedFeishuPayload) {

@@ -10,6 +10,8 @@ export default function ItemsInboundPage() {
         title="入库明细"
         listApi="/api/v1/quality/items/inbound"
         pullApi="/api/v1/quality/items/inbound/pull"
+        entityCode="qc_items_inbound"
+        editable
       />
     </QualityQueryProvider>
   )

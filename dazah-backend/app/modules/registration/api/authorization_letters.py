@@ -14,7 +14,7 @@ from starlette.background import BackgroundTask
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.deps import CurrentUser
-from app.core.exceptions import NotFoundException
+from app.core.exceptions import AppException, NotFoundException
 from app.core.response import paginated_response, success_response
 from app.core.upload_security import read_upload_secure
 from app.modules.registration.api._common import require_user as _require_user
@@ -426,7 +426,14 @@ async def generate_authorization_letter(
             rules = json.loads(replacements)
             template_placeholders = {r["old"]: r["new"] for r in rules}
         except (json.JSONDecodeError, KeyError, TypeError) as e:
-            logger.warning("解析 replacements JSON 失败，将忽略替换规则: %s", e)
+            # 参数非法必须显式失败，静默忽略会让用户拿到与预期不符的生成结果
+            raise AppException(
+                status_code=422,
+                message=(
+                    'replacements 格式错误，应为 '
+                    '[{"old": "原文本", "new": "新文本"}]'
+                ),
+            ) from e
 
     data = AuthorizationLetterCreate(
         product_name=product_name,

@@ -35,10 +35,17 @@ class BitableDataSource:
         await ds.delete(record_id="recXxx")
     """
 
-    def __init__(self, app_token: str, table_id: str) -> None:
-        self.client = BitableClient()
-        # 覆盖 app_token，支持操作任意表格（不仅限于配置中的默认表格）
-        self.client.app_token = app_token
+    def __init__(
+        self,
+        app_token: str,
+        table_id: str,
+        *,
+        app_id: str | None = None,
+        app_secret: str | None = None,
+    ) -> None:
+        self.client = BitableClient(
+            app_token=app_token, app_id=app_id, app_secret=app_secret
+        )
         self.table_id = table_id
         self.app_token = app_token
 

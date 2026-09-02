@@ -37,7 +37,9 @@ function buildKeyPathMap(items: SubMenuItem[]): Map<string, string> {
     if (item.children && item.children.length > 0) {
       const childMap = buildKeyPathMap(item.children)
       childMap.forEach((v, k) => map.set(k, v))
-    } else if (item.path) {
+    }
+    // 叶子与带 path 的父级（如仓储三个仪表盘入口）均可点击导航
+    if (item.path) {
       map.set(item.key, item.path)
     }
   }
@@ -48,13 +50,30 @@ function buildKeyPathMap(items: SubMenuItem[]): Map<string, string> {
 function buildMenuItems(
   items: SubMenuItem[],
   prefetchPath?: (path: string) => void,
+  onParentNavigate?: (path: string) => void,
 ): MenuItem[] {
   return items.map((item) => {
     if (item.children && item.children.length > 0) {
+      const label =
+        item.path && !item.disabled ? (
+          <span
+            className="w-full"
+            onClick={(event) => {
+              // 点击父级标签导航到其仪表盘/落地页（不触发展开切换）
+              event.stopPropagation()
+              onParentNavigate?.(item.path)
+            }}
+            onMouseEnter={() => prefetchPath?.(item.path)}
+          >
+            {item.label}
+          </span>
+        ) : (
+          item.label
+        )
       return {
         key: item.key,
-        label: item.label,
-        children: buildMenuItems(item.children, prefetchPath),
+        label,
+        children: buildMenuItems(item.children, prefetchPath, onParentNavigate),
       }
     }
     const leaf: MenuItem = {
@@ -78,26 +97,39 @@ function buildMenuItems(
   })
 }
 
-// ── 收集所有可用的叶子节点（跳过 disabled 和空 path）──
-function collectLeaves(items: SubMenuItem[]): SubMenuItem[] {
+// ── 收集所有可导航节点（叶子 + 带 path 的父级，跳过 disabled 和空 path）──
+function collectNavigableItems(items: SubMenuItem[]): SubMenuItem[] {
   return items.flatMap((item) => {
     if (item.children && item.children.length > 0) {
-      return collectLeaves(item.children)
+      const parents = !item.disabled && item.path ? [item] : []
+      return [...parents, ...collectNavigableItems(item.children)]
     }
     if (item.disabled || !item.path) return []
     return [item]
   })
 }
 
-// ── 递归查找当前路径匹配的叶子节点 ──
+// ── 查找当前路径匹配的可导航节点（叶子优先，父级落地页精确匹配）──
 function findSelectedKey(
   items: SubMenuItem[],
   pathname: string,
   query: URLSearchParams,
 ): string | undefined {
-  const leaves = collectLeaves(items)
-  const sorted = leaves.sort((a, b) => b.path.length - a.path.length)
-  const match = sorted.find((item) => matchesMenuPath(item.path, pathname, query))
+  const navigable = collectNavigableItems(items)
+  const sorted = navigable.sort((a, b) => {
+    const aIsParent = Boolean(a.children && a.children.length > 0)
+    const bIsParent = Boolean(b.children && b.children.length > 0)
+    if (aIsParent !== bIsParent) return aIsParent ? 1 : -1
+    return b.path.length - a.path.length
+  })
+  const match = sorted.find((item) => {
+    if (item.children && item.children.length > 0) {
+      // 父级落地页仅精确匹配，避免其前缀吞掉叶子高亮
+      const parsed = item.path.split("?")
+      return pathname === parsed[0]
+    }
+    return matchesMenuPath(item.path, pathname, query)
+  })
   return match?.key
 }
 
@@ -201,8 +233,11 @@ export function Sidebar({ user, modules }: SidebarProps) {
     const nextQuery = params.toString()
     return `${pathname}${nextQuery ? `?${nextQuery}` : ""}`
   }
-  const menuItems = buildMenuItems(mainItems, prefetchPath)
-  const bottomMenuItems = buildMenuItems(bottomItems, prefetchPath)
+  const navigateParent = (path: string) => {
+    router.push(withAuthToken(path))
+  }
+  const menuItems = buildMenuItems(mainItems, prefetchPath, navigateParent)
+  const bottomMenuItems = buildMenuItems(bottomItems, prefetchPath, navigateParent)
   const keyPathMap = buildKeyPathMap(moduleChildren)
   const selectedKey = currentModule
     ? findSelectedKey(moduleChildren, pathname, query)

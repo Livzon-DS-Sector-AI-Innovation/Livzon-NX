@@ -9,6 +9,21 @@ from uuid import uuid4
 import pytest
 
 
+class _Result:
+    def __init__(self, one: object | None = None) -> None:
+        self.one = one
+
+    def scalar_one_or_none(self) -> object | None:
+        return self.one
+
+
+def _app_credentials_row() -> SimpleNamespace:
+    """测试用 HrFeishuAppSettings 行（已启用 + 有效凭证）。"""
+    return SimpleNamespace(
+        app_id="cli_hr_test", app_secret="enc-hr-secret", is_enabled=True
+    )
+
+
 def _contract_record(**overrides: object) -> SimpleNamespace:
     values: dict[str, object] = {
         "id": uuid4(),
@@ -254,6 +269,24 @@ async def test_update_contract_approval_card_covers_department_and_supervisor_ca
 ) -> None:
     from app.modules.hr import contract_api
 
+    # 凭证解析（P5 后 update_contract_approval_card 内部开库查人事凭证）：
+    # 隔离为固定凭证，避免依赖测试库中 HrFeishuAppSettings 的实际状态
+    class _Ctx:
+        def __init__(self) -> None:
+            self.execute = AsyncMock(return_value=_Result(one=_app_credentials_row()))
+
+        async def __aenter__(self) -> "_Ctx":
+            return self
+
+        async def __aexit__(self, *_args: object) -> None:
+            return None
+
+    monkeypatch.setattr("app.core.database.async_session_factory", lambda: _Ctx())
+    monkeypatch.setattr(
+        "app.modules.hr.feishu_settings_service.decrypt_api_key",
+        lambda _value: "hr-secret-plain",
+    )
+
     cache_values = {
         "hr:contract:card:质量部:msgid": "msg-dept",
         "hr:contract:card:质量部:emps": (
@@ -298,6 +331,12 @@ async def test_contract_background_tasks_notify_hr_and_supervisor(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from app.modules.hr import contract_api
+
+    # 结果/签署卡片改由人事专属应用发送：隔离 DB 凭证解析
+    monkeypatch.setattr(
+        "app.modules.hr.feishu_settings_service.get_hr_feishu_app_credentials",
+        AsyncMock(return_value=("cli_hr_test", "hr_secret_plain")),
+    )
 
     record = _contract_record(
         approval_status="approved", supervisor_open_id="ou-supervisor"

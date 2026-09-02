@@ -11,7 +11,7 @@
 
 ## 密钥配置与轮换
 
-开发环境可执行 `uv run python scripts/configure_local_memory_security.py --require-policy`；脚本只把密钥写入工作区根目录、被 Git 忽略的 `.env.local`，不会打印密钥。生产环境必须使用部署平台的密钥管理能力，不能运行该本地脚本。
+开发环境可执行 `uv run python scripts/configure_local_memory_security.py --require-policy`；脚本只把密钥写入被 Git 忽略的本地 `.env`，不会打印密钥。生产环境必须使用部署平台的密钥管理能力，不能运行该本地脚本。
 
 1. 生成独立 Fernet 密钥，不得复用飞书凭证、JWT 或其他业务密钥。
 2. 将当前密钥放在 `HERMES_USER_MEMORY_KEYS` 的第一位；旧密钥依次放在后面并用逗号分隔。

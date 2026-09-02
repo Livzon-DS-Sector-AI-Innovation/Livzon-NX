@@ -37,6 +37,7 @@ from app.modules.quality.service import (
     ensure_material_entity_in_group,
     get_bbas_dashboard_data,
     get_dls_dashboard_data,
+    get_finished_display_fields,
     get_formulations_dashboard_data,
     get_lft_dashboard_data,
     get_lkms_dashboard_data,
@@ -900,15 +901,33 @@ async def api_list_finished_records(
         ensure_finished_entity_in_group(product_group, entity_code)
     except KeyError:
         raise AppException(message=f"未知产品分组: {product_group}", status_code=404)
-    return await _safe_list(
-        list_finished_by_entity,
-        db,
-        entity_code,
-        keyword=keyword,
-        page=page,
-        page_size=page_size,
-        filters=_parse_filter_params(request),
+    try:
+        result = await list_finished_by_entity(
+            db,
+            entity_code,
+            keyword=keyword,
+            page=page,
+            page_size=page_size,
+            filters=_parse_filter_params(request),
+        )
+    except AppException as e:
+        logger.info("Feishu not configured: %s", e)
+        return _empty_meta(page, page_size)
+    except Exception as e:
+        logger.warning("Feishu error: %s", e)
+        return _empty_meta(page, page_size)
+    response_meta = {
+        "total": result["total"],
+        "page": result["page"],
+        "page_size": result["page_size"],
+    }
+    field_names = result.get("fields") or []
+    if field_names:
+        response_meta["fields"] = field_names
+    response_meta["display_fields"] = get_finished_display_fields(
+        entity_code, field_names
     )
+    return success_response(data=result["items"], meta=response_meta)
 
 
 @router.post(

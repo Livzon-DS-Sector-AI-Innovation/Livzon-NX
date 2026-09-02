@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { App, Avatar, Button, Card, Divider, Form, Input, List, Space, Tag, Typography, Upload } from 'antd'
+import { App, Avatar, Button, Card, Divider, Form, Input, List, Space, Tag, Typography, Upload, Popconfirm } from 'antd'
 import { ArrowLeftOutlined, DeleteOutlined, DownloadOutlined, EyeOutlined, FileOutlined, MessageOutlined, ThunderboltOutlined, LinkOutlined, UploadOutlined } from '@ant-design/icons'
 import { useRouter } from 'next/navigation'
 import ReactMarkdown from 'react-markdown'
@@ -15,12 +15,12 @@ const { Title, Text, Link } = Typography
 // 安全的 Markdown 渲染样式映射（替代手写正则拼 HTML，避免 XSS）
 const markdownComponents: Components = {
   h2: ({ children }) => (
-    <h2 style={{ color: '#5645d4', marginTop: 24, marginBottom: 12, fontSize: 20, fontWeight: 600 }}>{children}</h2>
+    <h2 style={{ color: 'var(--color-primary)', marginTop: 24, marginBottom: 12, fontSize: 20, fontWeight: 600 }}>{children}</h2>
   ),
   h3: ({ children }) => (
-    <h3 style={{ color: '#37352f', marginTop: 20, marginBottom: 8, fontSize: 16, fontWeight: 600 }}>{children}</h3>
+    <h3 style={{ color: 'var(--color-charcoal)', marginTop: 20, marginBottom: 8, fontSize: 16, fontWeight: 600 }}>{children}</h3>
   ),
-  strong: ({ children }) => <strong style={{ color: '#37352f' }}>{children}</strong>,
+  strong: ({ children }) => <strong style={{ color: 'var(--color-charcoal)' }}>{children}</strong>,
   ul: ({ children }) => <ul style={{ listStyle: 'disc', paddingLeft: 20 }}>{children}</ul>,
   li: ({ children }) => <li style={{ marginBottom: 4 }}>{children}</li>,
 }
@@ -132,7 +132,7 @@ export default function KnowledgeArticleDetail({ article }: KnowledgeArticleDeta
 
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
             <Tag color="purple" style={{ borderRadius: 6, padding: '2px 12px', fontSize: 13 }}>{article.category_name}</Tag>
-            {tags.map(tag => <Tag key={tag} style={{ borderRadius: 6, padding: '2px 12px', fontSize: 13, background: '#e6e0f5', border: 'none', color: '#5645d4' }}>{tag}</Tag>)}
+            {tags.map(tag => <Tag key={tag} style={{ borderRadius: 6, padding: '2px 12px', fontSize: 13, background: '#e6e0f5', border: 'none', color: 'var(--color-primary)' }}>{tag}</Tag>)}
             {article.country && <Tag color="green" style={{ borderRadius: 6, padding: '2px 12px', fontSize: 13 }}>{article.country}</Tag>}
           </div>
 
@@ -151,7 +151,7 @@ export default function KnowledgeArticleDetail({ article }: KnowledgeArticleDeta
         <Divider style={{ margin: '20px 0', borderColor: '#ede9e4' }} />
 
         {/* Content */}
-        <div style={{ lineHeight: 1.9, fontSize: 15, color: '#37352f' }}>
+        <div style={{ lineHeight: 1.9, fontSize: 15, color: 'var(--color-charcoal)' }}>
           <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
             {article.content}
           </ReactMarkdown>
@@ -161,7 +161,7 @@ export default function KnowledgeArticleDetail({ article }: KnowledgeArticleDeta
         <Divider style={{ margin: '32px 0 20px', borderColor: '#ede9e4' }} />
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <Title level={4} style={{ margin: 0, color: '#1a1a1a' }}>
-            <FileOutlined style={{ color: '#5645d4' }} /> 附件 ({article.attachments.length})
+            <FileOutlined style={{ color: 'var(--color-primary)' }} /> 附件 ({article.attachments.length})
           </Title>
           <Upload
             showUploadList={false}
@@ -173,7 +173,7 @@ export default function KnowledgeArticleDetail({ article }: KnowledgeArticleDeta
               ghost
               icon={<UploadOutlined />}
               loading={uploading}
-              style={{ borderRadius: 6, borderColor: '#5645d4', color: '#5645d4' }}
+              style={{ borderRadius: 6, borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}
             >
               上传附件
             </Button>
@@ -184,7 +184,7 @@ export default function KnowledgeArticleDetail({ article }: KnowledgeArticleDeta
           <List
             dataSource={article.attachments}
             renderItem={item => (
-              <List.Item style={{ borderBottom: '1px solid #f0eeec', padding: '16px 0' }}>
+              <List.Item style={{ borderBottom: '1px solid var(--color-hairline)', padding: '16px 0' }}>
                 <div style={{ width: '100%' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -193,7 +193,7 @@ export default function KnowledgeArticleDetail({ article }: KnowledgeArticleDeta
                         background: 'linear-gradient(135deg, #e6e0f5 0%, #dcecfa 100%)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                       }}>
-                        <FileOutlined style={{ fontSize: 18, color: '#5645d4' }} />
+                        <FileOutlined style={{ fontSize: 18, color: 'var(--color-primary)' }} />
                       </div>
                       <div>
                         <div style={{ fontWeight: 600, color: '#1a1a1a' }}>{item.file_name}</div>
@@ -228,13 +228,17 @@ export default function KnowledgeArticleDetail({ article }: KnowledgeArticleDeta
                         icon={<DownloadOutlined />}
                         onClick={() => window.open(`/api/v1/registration/knowledge/attachments/${item.id}`, '_blank')}
                       />
-                      <Button
-                        type="text"
-                        size="small"
-                        danger
-                        icon={<DeleteOutlined />}
-                        onClick={() => handleDeleteAttachment(item.id)}
-                      />
+                      <Popconfirm
+                        key="del"
+                        title="删除附件"
+                        description="确定删除该附件吗？删除后不可恢复。"
+                        okText="删除"
+                        okButtonProps={{ danger: true }}
+                        cancelText="取消"
+                        onConfirm={() => handleDeleteAttachment(item.id)}
+                      >
+                        <Button type="text" size="small" danger icon={<DeleteOutlined />} />
+                      </Popconfirm>
                     </Space>
                   </div>
 
@@ -247,9 +251,9 @@ export default function KnowledgeArticleDetail({ article }: KnowledgeArticleDeta
                         background: 'linear-gradient(135deg, #fafaf9 0%, #f8f5e8 100%)',
                         border: '1px solid #ede9e4',
                       }}
-                      title={<span style={{ fontSize: 13, color: '#5645d4' }}><ThunderboltOutlined /> AI 结构化摘要</span>}
+                      title={<span style={{ fontSize: 13, color: 'var(--color-primary)' }}><ThunderboltOutlined /> AI 结构化摘要</span>}
                     >
-                      <div style={{ fontSize: 14, lineHeight: 1.8, color: '#37352f' }}>
+                      <div style={{ fontSize: 14, lineHeight: 1.8, color: 'var(--color-charcoal)' }}>
                         <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
                           {item.ai_summary}
                         </ReactMarkdown>
@@ -270,7 +274,7 @@ export default function KnowledgeArticleDetail({ article }: KnowledgeArticleDeta
         {/* Comments */}
         <Divider style={{ margin: '32px 0 20px', borderColor: '#ede9e4' }} />
         <Title level={4} style={{ marginBottom: 16, color: '#1a1a1a' }}>
-          <MessageOutlined style={{ color: '#5645d4' }} /> 评论 ({article.comments.length})
+          <MessageOutlined style={{ color: 'var(--color-primary)' }} /> 评论 ({article.comments.length})
         </Title>
 
         <List
@@ -278,18 +282,28 @@ export default function KnowledgeArticleDetail({ article }: KnowledgeArticleDeta
           locale={{ emptyText: '暂无评论' }}
           renderItem={comment => (
             <List.Item
-              style={{ borderBottom: '1px solid #f0eeec', padding: '12px 0' }}
+              style={{ borderBottom: '1px solid var(--color-hairline)', padding: '12px 0' }}
               actions={[
-                <Button key="delete" type="text" danger icon={<DeleteOutlined />} onClick={() => handleDeleteComment(comment.id)} />
+                <Popconfirm
+                  key="delete"
+                  title="删除评论"
+                  description="确定删除该评论吗？"
+                  okText="删除"
+                  okButtonProps={{ danger: true }}
+                  cancelText="取消"
+                  onConfirm={() => handleDeleteComment(comment.id)}
+                >
+                  <Button type="text" danger icon={<DeleteOutlined />} />
+                </Popconfirm>
               ]}
             >
               <List.Item.Meta
-                avatar={<Avatar style={{ background: '#5645d4' }}>{comment.author?.[0] || '匿'}</Avatar>}
+                avatar={<Avatar style={{ background: 'var(--color-primary)' }}>{comment.author?.[0] || '匿'}</Avatar>}
                 title={<Text strong>{comment.author || '匿名用户'}</Text>}
                 description={
                   <div>
-                    <div style={{ margin: '6px 0', color: '#37352f' }}>{comment.content}</div>
-                    <Text type="secondary" style={{ fontSize: 12 }}>{new Date(comment.created_at).toLocaleString('zh-CN')}</Text>
+                    <div style={{ margin: '6px 0', color: 'var(--color-charcoal)' }}>{comment.content}</div>
+                    <Text type="secondary" style={{ fontSize: 12 }}>{comment.created_at ? new Date(comment.created_at).toLocaleString('zh-CN') : ''}</Text>
                   </div>
                 }
               />
@@ -304,7 +318,7 @@ export default function KnowledgeArticleDetail({ article }: KnowledgeArticleDeta
             <Input.TextArea rows={3} placeholder="分享你的想法..." style={{ borderRadius: 8 }} />
           </Form.Item>
           <Form.Item>
-            <Button type="primary" htmlType="submit" loading={submitting} style={{ borderRadius: 6, background: '#5645d4' }}>
+            <Button type="primary" htmlType="submit" loading={submitting} style={{ borderRadius: 6, background: 'var(--color-primary)' }}>
               提交评论
             </Button>
           </Form.Item>

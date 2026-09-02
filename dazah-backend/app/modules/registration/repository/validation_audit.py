@@ -3,7 +3,7 @@
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import asc, desc, func, select
+from sqlalchemy import asc, delete, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.registration.models.validation_audit import (
@@ -202,6 +202,14 @@ class ValidationAuditIssueRepository:
         stmt = stmt.order_by(ValidationAuditIssue.issue_no)
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
+
+    async def delete_by_task_id(self, task_id: UUID) -> None:
+        """硬删该任务全部问题记录（含已软删行），供重新审核幂等重建使用。"""
+        await self.session.execute(
+            delete(ValidationAuditIssue).where(
+                ValidationAuditIssue.task_id == task_id
+            )
+        )
 
     async def create_batch(
         self, issues: list[ValidationAuditIssue]

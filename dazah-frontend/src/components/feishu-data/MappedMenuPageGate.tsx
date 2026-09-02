@@ -24,7 +24,9 @@ type LookupState =
   | { status: 'ready'; targetKey: string; data: WarehouseFeishuPageData }
   | { status: 'error'; targetKey: string; message: string; data?: undefined }
 
-const FEISHU_MODULES = new Set<FeishuModuleCode>(['production', 'energy', 'warehouse'])
+// production 暂不启用：后端尚无 page-data 路由，激活只会产生错误横幅；
+// 待生产模块提供该路由后再加入
+const FEISHU_MODULES = new Set<FeishuModuleCode>(['energy', 'warehouse'])
 
 function isFeishuModuleCode(value: string | undefined): value is FeishuModuleCode {
   return Boolean(value && FEISHU_MODULES.has(value as FeishuModuleCode))
@@ -89,7 +91,7 @@ export function MappedMenuPageGate({ children, moduleCode }: MappedMenuPageGateP
         <Alert
           type="warning"
           showIcon
-          message="读取页面数据映射失败，当前显示原页面内容"
+          title="读取页面数据映射失败，当前显示原页面内容"
           description={currentLookup.message}
         />
         {children}
@@ -100,7 +102,7 @@ export function MappedMenuPageGate({ children, moduleCode }: MappedMenuPageGateP
   if (!currentLookup || currentLookup.status !== 'ready') {
     return (
       <div className="flex min-h-[320px] items-center justify-center">
-        <Spin tip="正在读取页面数据映射" size="large" />
+        <Spin description="正在读取页面数据映射" size="large" />
       </div>
     )
   }

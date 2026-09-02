@@ -4,18 +4,18 @@
 """
 import logging
 import re
+from pathlib import Path
 from typing import Any
 
 import httpx
+from dotenv import load_dotenv
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import load_workspace_env
 from app.core.secrets import decrypt_secret
 from app.modules.production.production_feishu_models import ProductionFeishuConfig
 
-# 定时任务也使用根目录环境文件。
-load_workspace_env()
+load_dotenv(Path(__file__).resolve().parents[3] / ".env")
 logger = logging.getLogger(__name__)
 
 BASE_URL = "https://open.feishu.cn/open-apis"

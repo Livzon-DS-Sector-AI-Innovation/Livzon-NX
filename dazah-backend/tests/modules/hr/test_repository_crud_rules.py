@@ -255,16 +255,18 @@ async def test_employee_repository_upsert_delete_maps_groups_and_distinct_values
     None
 ):
     employee: Any = SimpleNamespace(
-        employee_number="E001", name="旧姓名", is_deleted=False
+        employee_number="E001", name="旧姓名", is_deleted=False, status="在职"
     )
     session = _session(employee)
     repo = repository.EmployeeRepository(session)
-    repo.get_by_employee_number = AsyncMock(return_value=employee)  # type: ignore[method-assign]
+    repo.get_by_employee_number_include_deleted = AsyncMock(  # type: ignore[method-assign]
+        return_value=employee
+    )
     updated = await repo.upsert_by_employee_number(
         {"employee_number": "E001", "name": "新姓名"}
     )
     assert updated.name == "新姓名"
-    repo.get_by_employee_number.return_value = None
+    repo.get_by_employee_number_include_deleted.return_value = None  # type: ignore[attr-defined]
     created = await repo.upsert_by_employee_number(
         {"employee_number": "E002", "name": "李四"}
     )
@@ -289,16 +291,26 @@ async def test_employee_repository_upsert_delete_maps_groups_and_distinct_values
 
 @pytest.mark.anyio
 async def test_employee_statistics_assemble_all_distributions() -> None:
+    emp = SimpleNamespace(
+        employee_number="E001",
+        name="张三",
+        department="质量部",
+        position="QA",
+        status="在职",
+        is_deleted=False,
+        contract_end_date=date(2026, 9, 1),
+        contract_end_2=None,
+        contract_end_3=None,
+        contract_end_4=None,
+        contract_end_5=None,
+        contract_end_6=None,
+    )
     results = [
         SimpleNamespace(scalar=lambda: 5),
         SimpleNamespace(all=lambda: [("在职", 4), ("离职", 1)]),
-        SimpleNamespace(all=lambda: [("质量部",)]),
         SimpleNamespace(all=lambda: [("质量部", 5)]),
         SimpleNamespace(all=lambda: [("本科", 3)]),
-        SimpleNamespace(scalar=lambda: 1),
-        SimpleNamespace(
-            all=lambda: [("E001", "张三", "质量部", "QA", date(2026, 9, 1))]
-        ),
+        SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [emp])),
     ]
     session: Any = SimpleNamespace(execute=AsyncMock(side_effect=results))
     stats = await repository.EmployeeRepository(session).get_stats({"质量部"})
@@ -308,6 +320,37 @@ async def test_employee_statistics_assemble_all_distributions() -> None:
     assert stats["education_distribution"] == {"本科": 3}
     assert stats["contract_expiring_count"] == 1
     assert stats["contract_expiring_list"][0]["employee_number"] == "E001"
+
+
+@pytest.mark.anyio
+async def test_employee_statistics_parses_string_contract_end_5() -> None:
+    """合同到期取 6 个合同字段最晚非空日期：contract_end_5 为字符串时需解析。"""
+    emp = SimpleNamespace(
+        employee_number="E002",
+        name="李四",
+        department="质量部",
+        position="QA",
+        status="在职",
+        is_deleted=False,
+        contract_end_date=date(2026, 8, 1),
+        contract_end_2=None,
+        contract_end_3=None,
+        contract_end_4=None,
+        contract_end_5="2026/09/15",
+        contract_end_6=None,
+    )
+    results = [
+        SimpleNamespace(scalar=lambda: 1),
+        SimpleNamespace(all=lambda: []),
+        SimpleNamespace(all=lambda: [("质量部", 1)]),
+        SimpleNamespace(all=lambda: []),
+        SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [emp])),
+    ]
+    session: Any = SimpleNamespace(execute=AsyncMock(side_effect=results))
+    stats = await repository.EmployeeRepository(session).get_stats({"质量部"})
+    assert stats["contract_expiring_count"] == 1
+    assert stats["contract_expiring_list"][0]["employee_number"] == "E002"
+    assert stats["contract_expiring_list"][0]["contract_end_date"] == "2026-09-15"
 
 
 @pytest.mark.anyio

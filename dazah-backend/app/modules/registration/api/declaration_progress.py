@@ -2,16 +2,23 @@
 
 import logging
 import uuid
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.background import BackgroundTask
 
 from app.core.database import get_db
 from app.core.deps import CurrentUser
 from app.core.response import success_response
-from app.modules.registration.api._common import require_user as _require_user
+from app.modules.registration.api._common import (
+    cleanup_export_dir,
+)
+from app.modules.registration.api._common import (
+    require_user as _require_user,
+)
 from app.modules.registration.schemas.declaration_progress import (
     DeclarationProgressEntryInput,
     DeclarationProgressEntryResponse,
@@ -87,6 +94,7 @@ async def export_declaration_progress_workbook(
         path=file_path,
         filename=download_name,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        background=BackgroundTask(cleanup_export_dir, str(Path(file_path).parent)),
     )
 
 

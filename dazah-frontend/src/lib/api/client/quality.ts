@@ -1,6 +1,11 @@
 import type {
   CapaDashboardStats,
   DeviationAiSession,
+  DeviationWorkbenchReportDetail,
+  DeviationWorkbenchReportListItem,
+  DeviationWorkbenchSettings,
+  HistoricalDeviationDetail,
+  HistoricalDeviationListItem,
   CapaPlanTrackItem,
   ChangeDashboardStats,
   ChangeActionPlanDetail,
@@ -13,6 +18,8 @@ import type {
   FeishuDeviationReportRecordItem,
   FeishuValidationItem,
   FeishuValidationPullResult,
+  InspectionFeishuFieldMeta,
+  InspectionFeishuFieldsResult,
   QualityPullSyncResult,
   QualitySyncConflictItem,
   QualityFeishuAppSettingsDetail,
@@ -1309,6 +1316,123 @@ export async function fetchDocumentEntryAttachmentContent(
   const res = await fetch(
     `/api/v1/quality/document-entries/${entryId}/attachments/${encodedKey}/content`
   )
+  if (!res.ok) throw new Error(`获取附件内容失败: ${res.statusText}`)
+  const contentType = res.headers.get('content-type') || ''
+  if (!contentType || contentType.includes('markdown') || contentType.startsWith('text/')) {
+    return { text: await res.text(), blobUrl: '', contentType }
+  }
+  const blob = await res.blob()
+  return { text: '', blobUrl: URL.createObjectURL(blob), contentType }
+}
+
+/** 获取检验实体字段元数据（供动态表单渲染）。 */
+export async function fetchInspectionFeishuFields(
+  entityCode: string
+): Promise<InspectionFeishuFieldsResult | null> {
+  const res = await fetch(`/api/v1/quality/inspection/feishu/${encodeURIComponent(entityCode)}/fields`)
+  if (!res.ok) return null
+  const json = await res.json()
+  return json.data as InspectionFeishuFieldsResult
+}
+
+// ---- 历史偏差 ----
+
+export async function fetchHistoricalDeviations(params?: {
+  keyword?: string
+  page?: number
+  page_size?: number
+}): Promise<{ items: HistoricalDeviationListItem[]; total: number; page?: number; page_size?: number }> {
+  const searchParams = new URLSearchParams()
+  if (params?.keyword) searchParams.set('keyword', params.keyword)
+  if (params?.page) searchParams.set('page', String(params.page))
+  if (params?.page_size) searchParams.set('page_size', String(params.page_size))
+  const query = searchParams.toString()
+  const res = await fetch(`/api/v1/quality/historical-deviations${query ? `?${query}` : ''}`)
+  if (!res.ok) throw await parseError(res)
+  const json = await res.json()
+  return {
+    items: json.data || [],
+    total: json.meta?.total || 0,
+    page: json.meta?.page,
+    page_size: json.meta?.page_size,
+  }
+}
+
+export async function fetchHistoricalDeviation(id: string): Promise<HistoricalDeviationDetail | null> {
+  const res = await fetch(`/api/v1/quality/historical-deviations/${id}`)
+  if (!res.ok) throw await parseError(res)
+  const json = await res.json()
+  return json.data ?? null
+}
+
+/** 历史偏差附件预览内容：word 返回标准 MD；图片/PDF 返回原文件 */
+export async function fetchHistoricalDeviationAttachmentContent(
+  recordId: string,
+  storageKey: string
+): Promise<{ text: string; blobUrl: string; contentType: string }> {
+  const encodedKey = storageKey.split('/').map(encodeURIComponent).join('/')
+  const res = await fetch(
+    `/api/v1/quality/historical-deviations/${recordId}/attachments/${encodedKey}/content`
+  )
+  if (!res.ok) throw new Error(`获取附件内容失败: ${res.statusText}`)
+  const contentType = res.headers.get('content-type') || ''
+  if (!contentType || contentType.includes('markdown') || contentType.startsWith('text/')) {
+    return { text: await res.text(), blobUrl: '', contentType }
+  }
+  const blob = await res.blob()
+  return { text: '', blobUrl: URL.createObjectURL(blob), contentType }
+}
+
+// ---- 偏差工作台 ----
+
+export async function fetchDeviationWorkbenchSettings(): Promise<DeviationWorkbenchSettings | null> {
+  const res = await fetch('/api/v1/quality/deviation-workbench/settings')
+  if (!res.ok) throw await parseError(res)
+  const json = await res.json()
+  return json.data ?? null
+}
+
+export async function fetchDeviationWorkbenchReports(params?: {
+  keyword?: string
+  source_type?: string
+  status?: string
+  date_from?: string
+  date_to?: string
+  page?: number
+  page_size?: number
+}): Promise<{ items: DeviationWorkbenchReportListItem[]; total: number; page?: number; page_size?: number }> {
+  const searchParams = new URLSearchParams()
+  if (params?.keyword) searchParams.set('keyword', params.keyword)
+  if (params?.source_type) searchParams.set('source_type', params.source_type)
+  if (params?.status) searchParams.set('status', params.status)
+  if (params?.date_from) searchParams.set('date_from', params.date_from)
+  if (params?.date_to) searchParams.set('date_to', params.date_to)
+  if (params?.page) searchParams.set('page', String(params.page))
+  if (params?.page_size) searchParams.set('page_size', String(params.page_size))
+  const query = searchParams.toString()
+  const res = await fetch(`/api/v1/quality/deviation-workbench/reports${query ? `?${query}` : ''}`)
+  if (!res.ok) throw await parseError(res)
+  const json = await res.json()
+  return {
+    items: json.data || [],
+    total: json.meta?.total || 0,
+    page: json.meta?.page,
+    page_size: json.meta?.page_size,
+  }
+}
+
+export async function fetchDeviationWorkbenchReport(id: string): Promise<DeviationWorkbenchReportDetail | null> {
+  const res = await fetch(`/api/v1/quality/deviation-workbench/reports/${id}`)
+  if (!res.ok) throw await parseError(res)
+  const json = await res.json()
+  return json.data ?? null
+}
+
+/** 偏差工作台附件预览内容 */
+export async function fetchDeviationWorkbenchAttachmentContent(
+  url: string
+): Promise<{ text: string; blobUrl: string; contentType: string }> {
+  const res = await fetch(url)
   if (!res.ok) throw new Error(`获取附件内容失败: ${res.statusText}`)
   const contentType = res.headers.get('content-type') || ''
   if (!contentType || contentType.includes('markdown') || contentType.startsWith('text/')) {

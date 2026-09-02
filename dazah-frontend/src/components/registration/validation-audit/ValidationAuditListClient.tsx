@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { Table, Button, Space, Tag, App } from 'antd'
 import {
   PlusOutlined, EyeOutlined, DeleteOutlined,
@@ -11,7 +11,7 @@ import type { ValidationAuditTaskListItem, TaskStatus, AuditMode } from '@/types
 import {
   AUDIT_MODE_LABELS, STATUS_LABELS, CONCLUSION_LABELS,
 } from '@/types/validation-audit'
-import { deleteValidationAuditTask } from '@/actions/validation-audit'
+import { fetchTasksServer, deleteValidationAuditTask } from '@/actions/validation-audit'
 
 interface Props {
   initialTasks: ValidationAuditTaskListItem[]
@@ -21,11 +21,36 @@ interface Props {
 export default function ValidationAuditListClient({ initialTasks, initialTotal }: Props) {
   const { message, modal } = App.useApp()
   const router = useRouter()
-  const [tasks, setTasks] = useState(initialTasks)
+  const [tasks, setTasks] = useState(initialTasks ?? [])
   const [total, setTotal] = useState(initialTotal)
   const [loading, setLoading] = useState(false)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
+  // 首屏数据来自服务端预取，跳过首次拉取，仅在翻页/删除后重新请求
+  const skipFirstFetchRef = useRef(true)
+
+  const loadData = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await fetchTasksServer({ page, page_size: pageSize })
+      if (res?.data) {
+        setTasks(res.data.items)
+        setTotal(res.data.total)
+      }
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '加载任务列表失败')
+    } finally {
+      setLoading(false)
+    }
+  }, [page, pageSize, message])
+
+  useEffect(() => {
+    if (skipFirstFetchRef.current) {
+      skipFirstFetchRef.current = false
+      return
+    }
+    void loadData()
+  }, [loadData])
 
   const handleDelete = useCallback((taskId: string, taskName: string) => {
     modal.confirm({
@@ -38,14 +63,19 @@ export default function ValidationAuditListClient({ initialTasks, initialTotal }
         const result = await deleteValidationAuditTask(taskId)
         if (result.success) {
           message.success(result.message)
-          setTasks(prev => prev.filter(t => t.id !== taskId))
-          setTotal(prev => prev - 1)
+          // 当前页仅剩一条且不是第一页时回退一页，否则原地刷新
+          if (tasks.length === 1 && page > 1) {
+            setPage(page - 1)
+          } else {
+            await loadData()
+          }
+          router.refresh()
         } else {
           message.error(result.message)
         }
       },
     })
-  }, [modal, message])
+  }, [modal, message, tasks.length, page, loadData, router])
 
   const columns = [
     {

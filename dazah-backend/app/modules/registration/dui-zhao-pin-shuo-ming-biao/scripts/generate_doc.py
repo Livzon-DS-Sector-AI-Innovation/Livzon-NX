@@ -3,6 +3,7 @@
 根据COA数据生成对照物质说明表Word文档
 """
 
+import os
 import sys
 from typing import Any
 
@@ -12,11 +13,11 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
 from docx.oxml.ns import qn
 from docx.shared import Pt
 
-# 固定信息
+# 固定信息（由部署方通过环境变量提供，禁止在代码中写死个人隐私信息）
 FIXED_INFO = {
-    "提供单位": "珠海保税区丽珠合成制药有限公司",
-    "经办人": "魏永红",
-    "联系方式": "13570680132",
+    "提供单位": os.environ.get("DOC_PROVIDER_NAME", "（提供单位名称）"),
+    "经办人": os.environ.get("DOC_HANDLER_NAME", "（经办人姓名）"),
+    "联系方式": os.environ.get("DOC_HANDLER_PHONE", "（联系电话）"),
 }
 
 # 模板路径

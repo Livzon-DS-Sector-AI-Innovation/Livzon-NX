@@ -50,10 +50,15 @@ async def _retry_api_call(
 
 
 class FeishuContact:
-    """飞书通讯录 API 封装"""
+    """飞书通讯录 API 封装
 
-    def __init__(self) -> None:
-        self.client = FeishuClient()
+    凭证由调用方显式传入（人事模块 DB 配置）；不传时回退 env（兼容历史调用）。
+    """
+
+    def __init__(
+        self, app_id: str | None = None, app_secret: str | None = None,
+    ) -> None:
+        self.client = FeishuClient(app_id=app_id, app_secret=app_secret)
 
     async def _make_request(
         self, url: str, params: dict[str, Any] | None = None
@@ -69,7 +74,9 @@ class FeishuContact:
         """实际执行 HTTP 请求。"""
         from app.modules.hr.feishu.auth import FeishuAuth
 
-        token = await FeishuAuth.get_tenant_access_token()
+        token = await FeishuAuth.get_tenant_access_token(
+            app_id=self.client.app_id, app_secret=self.client.app_secret
+        )
         headers = {"Authorization": f"Bearer {token}"}
         resp = await self.client._get_client()
         response = await resp.get(url, headers=headers, params=params or {})

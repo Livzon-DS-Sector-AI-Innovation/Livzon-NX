@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.database import get_db
+from app.core.exceptions import AppException
 from app.core.response import error_response, success_response
 from app.core.upload_security import MAX_UPLOAD_FILES, read_upload_secure
 from app.modules.registration.schemas.validation_audit import (
@@ -205,8 +206,9 @@ async def parse_files(
             data=ValidationAuditTaskResponse.model_validate(task),
             message="文件解析完成",
         )
-    except RuntimeError as e:
-        return error_response(message=str(e))
+    except AppException as e:
+        await service.mark_failed(task)
+        raise e
 
 
 @router.post("/tasks/{task_id}/audit", response_model=dict, summary="执行审核")
@@ -230,8 +232,11 @@ async def run_audit(
             data=ValidationAuditTaskResponse.model_validate(task),
             message="审核完成",
         )
-    except RuntimeError as e:
-        return error_response(message=str(e))
+    except AppException:
+        # 保存问题/生成报告任一环节失败：任务标记失败，
+        # 避免停留 COMPLETED 却没有报告，重试也不会重复插入问题。
+        await service.mark_failed(task)
+        raise
 
 
 # ── 问题与报告 ────────────────────────────────────────────

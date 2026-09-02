@@ -129,10 +129,16 @@ async def test_email_and_feishu_retry_paths(monkeypatch: pytest.MonkeyPatch) -> 
     )
     monkeypatch.setattr(
         "app.modules.hr.feishu.im.FeishuIM",
-        lambda: im,
+        lambda app_id=None, app_secret=None: im,
+    )
+    monkeypatch.setattr(
+        "app.modules.hr.feishu_settings_service.get_hr_feishu_app_credentials",
+        AsyncMock(return_value=("cli_hr_test", "hr_secret_plain")),
     )
     monkeypatch.setattr(push_settings_service.asyncio, "sleep", AsyncMock())
-    await push_settings_service._send_feishu_with_retry("open-1", "消息")
+    await push_settings_service._send_feishu_with_retry(
+        SimpleNamespace(), "open-1", "消息"
+    )
     assert im.send_text_message.await_count == 2
 
 

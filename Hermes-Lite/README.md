@@ -619,10 +619,8 @@ Hermes-Lite
 安装依赖：
 
 ```bash
-# From the workspace root; development uses the root .env.local.
-cp .env.local.example .env.local
-cd Hermes-Lite
 pip install -r requirements.txt
+cp .env.example .env
 ```
 
 本地启动 Hermes 适配服务：
@@ -634,8 +632,7 @@ uvicorn services.dazah_agent_service:app --host 0.0.0.0 --port 8100
 Docker 开发环境启动：
 
 ```bash
-cd ..
-docker compose --env-file .env.local -f Hermes-Lite/docker-compose.dev.yml up -d --build
+docker compose -f docker-compose.dev.yml up -d --build
 ```
 
 健康检查：

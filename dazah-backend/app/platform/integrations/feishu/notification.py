@@ -17,22 +17,29 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 
-async def _get_client() -> Any:
-    """获取 lark-oapi 客户端实例"""
+async def _get_client(
+    app_id: str | None = None,
+    app_secret: str | None = None,
+) -> Any:
+    """获取 lark-oapi 客户端实例（未传凭证时回退平台 env 配置）"""
     import lark_oapi as lark  # type: ignore[import-untyped]
 
     return (
         lark.Client.builder()
-        .app_id(settings.FEISHU_APP_ID)
-        .app_secret(settings.FEISHU_APP_SECRET)
+        .app_id(app_id or settings.FEISHU_APP_ID)
+        .app_secret(app_secret or settings.FEISHU_APP_SECRET)
         .domain(lark.FEISHU_DOMAIN)
         .app_type(lark.AppType.SELF)
         .build()
     )
 
 
-async def _get_tenant_token(client: Any) -> str:
-    """获取 tenant_access_token"""
+async def _get_tenant_token(
+    client: Any,
+    app_id: str | None = None,
+    app_secret: str | None = None,
+) -> str:
+    """获取 tenant_access_token（未传凭证时回退平台 env 配置）"""
     import json as _json
 
     from lark_oapi.api.auth.v3 import (  # type: ignore[import-untyped]
@@ -44,8 +51,8 @@ async def _get_tenant_token(client: Any) -> str:
         InternalTenantAccessTokenRequest.builder()
         .request_body(
             InternalTenantAccessTokenRequestBody.builder()
-            .app_id(settings.FEISHU_APP_ID)
-            .app_secret(settings.FEISHU_APP_SECRET)
+            .app_id(app_id or settings.FEISHU_APP_ID)
+            .app_secret(app_secret or settings.FEISHU_APP_SECRET)
             .build()
         )
         .build()
@@ -77,6 +84,8 @@ async def send_user_card(
     content: str,
     elements: list[dict[str, Any]] | None = None,
     receive_id_type: str = "open_id",
+    app_id: str | None = None,
+    app_secret: str | None = None,
 ) -> bool:
     """发送卡片消息给单个用户（DM）。
 
@@ -85,14 +94,16 @@ async def send_user_card(
         title: 卡片标题
         content: 卡片正文（支持 markdown）
         elements: 额外的卡片元素（按钮、分割线等）
+        app_id/app_secret: 调用方模块自己的飞书应用凭证（模块独立）；
+            未传时保持旧行为（平台 env 配置）
 
     Returns:
         True 表示发送成功，False 表示失败（不抛异常）
     """
     logger.info("send_user_card: attempting to send to open_id=%s", open_id)
     try:
-        client = await _get_client()
-        token = await _get_tenant_token(client)
+        client = await _get_client(app_id, app_secret)
+        token = await _get_tenant_token(client, app_id, app_secret)
 
         from lark_oapi.api.im.v1 import (  # type: ignore[import-untyped]
             CreateMessageRequest,
@@ -156,16 +167,19 @@ async def send_user_card_with_message_id(
     content: str,
     elements: list[dict[str, Any]] | None = None,
     receive_id_type: str = "open_id",
+    app_id: str | None = None,
+    app_secret: str | None = None,
 ) -> str | None:
     """Send a card and return Feishu's message id when available.
 
     This compatibility entry point shares the current platform credential
     resolution and does not expose response bodies or credentials to callers.
+    传入 app_id/app_secret 时使用调用方模块自己的飞书应用凭证（模块独立）。
     """
     logger.info("send_user_card_with_message_id: attempting to send to %s", open_id)
     try:
-        client = await _get_client()
-        token = await _get_tenant_token(client)
+        client = await _get_client(app_id, app_secret)
+        token = await _get_tenant_token(client, app_id, app_secret)
 
         from lark_oapi.api.im.v1 import (
             CreateMessageRequest,
@@ -236,12 +250,21 @@ async def build_card(
     return json.dumps(card, ensure_ascii=False)
 
 
-async def update_card(message_id: str, card: dict[str, Any]) -> bool:
-    """Update an existing Feishu interactive card."""
+async def update_card(
+    message_id: str,
+    card: dict[str, Any],
+    *,
+    app_id: str | None = None,
+    app_secret: str | None = None,
+) -> bool:
+    """Update an existing Feishu interactive card.
+
+    传入 app_id/app_secret 时使用调用方模块自己的飞书应用凭证（模块独立）。
+    """
     logger.info("update_card: attempting to patch message_id=%s", message_id)
     try:
-        client = await _get_client()
-        token = await _get_tenant_token(client)
+        client = await _get_client(app_id, app_secret)
+        token = await _get_tenant_token(client, app_id, app_secret)
 
         from lark_oapi.api.im.v1 import PatchMessageRequest, PatchMessageRequestBody
 

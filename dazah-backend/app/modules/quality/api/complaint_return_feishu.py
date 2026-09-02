@@ -14,6 +14,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.deps import CurrentUser
 from app.core.response import paginated_response, success_response
+from app.modules.quality.api.deps import (
+    QUALITY_QA_SCOPE_PERMISSIONS,
+)
+from app.modules.quality.api.deps import (
+    assert_quality_edit_scope as _assert_quality_edit_scope,
+)
 from app.modules.quality.api.deps import require_user as _require_user
 from app.modules.quality.service.quality_feishu_pages_complaint_return import (
     create_complaint_ledger_record,
@@ -95,6 +101,11 @@ async def api_update_complaint_ledger(
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     _require_user(current_user)
+    await _assert_quality_edit_scope(
+        db,
+        current_user,
+        scope_permission=QUALITY_QA_SCOPE_PERMISSIONS["system_qa"],
+    )
     result = await update_complaint_ledger_record(db, record_id, data)
     return success_response(data=result)
 
@@ -110,6 +121,11 @@ async def api_delete_complaint_ledger(
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     _require_user(current_user)
+    await _assert_quality_edit_scope(
+        db,
+        current_user,
+        scope_permission=QUALITY_QA_SCOPE_PERMISSIONS["system_qa"],
+    )
     await delete_complaint_ledger_record(db, record_id)
     return success_response(message="已删除")
 
@@ -182,6 +198,7 @@ async def api_update_return_application(
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     _require_user(current_user)
+    await _assert_quality_edit_scope(db, current_user)
     result = await update_return_application_record(db, record_id, data)
     return success_response(data=result)
 
@@ -197,6 +214,7 @@ async def api_delete_return_application(
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     _require_user(current_user)
+    await _assert_quality_edit_scope(db, current_user)
     await delete_return_application_record(db, record_id)
     return success_response(message="已删除")
 
@@ -269,6 +287,7 @@ async def api_update_return_ledger(
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     _require_user(current_user)
+    await _assert_quality_edit_scope(db, current_user)
     result = await update_return_ledger_record(db, record_id, data)
     return success_response(data=result)
 
@@ -284,6 +303,7 @@ async def api_delete_return_ledger(
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     _require_user(current_user)
+    await _assert_quality_edit_scope(db, current_user)
     await delete_return_ledger_record(db, record_id)
     return success_response(message="已删除")
 

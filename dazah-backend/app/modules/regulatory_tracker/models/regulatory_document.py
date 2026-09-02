@@ -10,6 +10,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
     String,
     Text,
     UniqueConstraint,
@@ -29,6 +30,10 @@ class RegulatoryDocument(BaseModel):
         UniqueConstraint(
             "source_id", "channel_id", "document_id", name="uq_reg_docs_src_ch_doc"
         ),
+        Index("ix_regulatory_documents_source_site_code", "source_site_code"),
+        Index("ix_regulatory_documents_capture_date", "capture_date"),
+        Index("ix_regulatory_documents_filter_status", "filter_status"),
+        Index("ix_regulatory_documents_content_hash", "content_hash"),
         {"schema": "regulatory_tracker"},
     )
 
@@ -52,6 +57,36 @@ class RegulatoryDocument(BaseModel):
     )
     classification: Mapped[str | None] = mapped_column(
         String(200), nullable=True, comment="分类，如 生物制品、化学药品"
+    )
+    source_site_code: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, comment="来源网站编码"
+    )
+    source_site_name: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, comment="来源网站名称"
+    )
+    source_url: Mapped[str | None] = mapped_column(
+        String(1000), nullable=True, comment="来源页面原始链接"
+    )
+    version_text: Mapped[str | None] = mapped_column(
+        String(200), nullable=True, comment="版本号文本"
+    )
+    effective_date: Mapped[date | None] = mapped_column(
+        Date, nullable=True, comment="生效日期"
+    )
+    summary_text: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="法规内容总结"
+    )
+    capture_date: Mapped[date | None] = mapped_column(
+        Date, nullable=True, comment="抓取日期"
+    )
+    content_hash: Mapped[str | None] = mapped_column(
+        String(128), nullable=True, comment="正文内容哈希"
+    )
+    filter_status: Mapped[str | None] = mapped_column(
+        String(50), nullable=True, comment="过滤状态"
+    )
+    filter_reason: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="过滤原因"
     )
     original_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     is_new: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")

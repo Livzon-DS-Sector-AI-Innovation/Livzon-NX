@@ -3,15 +3,15 @@ import asyncio
 import logging
 import os
 import re
+from pathlib import Path
 from typing import Any
 
 import httpx
+from dotenv import load_dotenv
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.core.config import load_workspace_env
-
-load_workspace_env()
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 logger = logging.getLogger(__name__)
 
 BASE_URL = "https://open.feishu.cn/open-apis"

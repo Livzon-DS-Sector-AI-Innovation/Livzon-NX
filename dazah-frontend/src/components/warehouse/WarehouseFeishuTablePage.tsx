@@ -214,6 +214,20 @@ const PAGE_COLUMN_RULES: Partial<Record<string, ColumnDisplayRule[]>> = {
     { sourceKey: '计量单位' },
     { sourceKey: '入库数量' },
   ],
+  // 成品入库明细：列表只展示「入库日期 → 入库车间」之间的业务列，
+  // 其余字段（QC确认人、入库确认、仓库确认人等）在详情弹窗查看
+  'product-inbound-detail': [
+    { sourceKey: '入库日期' },
+    { sourceKey: '产品名称' },
+    { sourceKey: '包装规格' },
+    { sourceKey: '对应前台批号' },
+    { sourceKey: '入库标签批号' },
+    { sourceKey: '入库量' },
+    { sourceKey: '客户' },
+    { sourceKey: '包装桶UN信息' },
+    { sourceKey: '备注（填写实物批号）' },
+    { sourceKey: '入库车间' },
+  ],
   'product-inbound-ledger': [
     { sourceKey: '入库日期' },
     { sourceKey: '产品名称' },
@@ -263,6 +277,7 @@ const DATE_SORT_DESC_PAGES: Record<string, string> = {
   'hardware-inbound-ledger': '日期',
   'hardware-outbound-ledger': '日期',
   'product-inbound-ledger': '入库日期',
+  'product-inbound-detail': '入库日期',
   'product-outbound-ledger': '出库日期',
   'product-shipping': '日期',
   // 五金库存明细页：按业务/入库日期倒序，保证每天最新记录在前。
@@ -289,13 +304,22 @@ const DATE_SORT_DESC_PAGES: Record<string, string> = {
 // 部分页面列宽覆盖（单位 px）：入库台账规格列收紧、入库日期列放宽
 const PAGE_COLUMN_WIDTH_OVERRIDES: Partial<Record<string, Record<string, number>>> = {
   'inbound-ledger': { 规格: 150, 入库日期: 120 },
+  // 成品入库明细：包装桶UN信息内容较长，收紧列宽并自动换行展示；
+  // 入库日期列加宽，保证日期完整单行显示（配合 NOWRAP_COLUMNS_PER_PAGE）
+  'product-inbound-detail': { 包装桶UN信息: 130, 入库日期: 200 },
+}
+
+// 指定页面中需单行完整显示、禁止换行的列（如日期列，配合列宽覆盖使用）
+const NOWRAP_COLUMNS_PER_PAGE: Partial<Record<string, string[]>> = {
+  'product-inbound-detail': ['入库日期'],
 }
 
 // 出入库登记入口：仅语义对应的台账页面显示，新窗口打开飞书表单填写（飞书写入后系统刷新可见）。
-// outboundLabel 可定制出库按钮文案（如发货情况显示「新增发货」），缺省回落「出库登记」。
+// outboundLabel/inboundLabel 可定制按钮文案（如发货情况「新增发货」、入库明细「新增」），
+// 缺省分别回落「出库登记」「入库登记」。
 const WAREHOUSE_INOUT_LINKS: Record<
   string,
-  { inbound?: string; outbound?: string; outboundLabel?: string }
+  { inbound?: string; outbound?: string; outboundLabel?: string; inboundLabel?: string }
 > = {
   // 入库总账（原辅料/包材共用）→ 原辅料入库表单
   'inbound-ledger': {
@@ -309,6 +333,11 @@ const WAREHOUSE_INOUT_LINKS: Record<
   // 包材出库总账 → 包材出库表单
   'packaging-ledger': {
     outbound: 'https://j0eukrlohu.feishu.cn/share/base/form/shrcneDAUnAAhPs1yFMfOq0Uhkf',
+  },
+  // 成品入库明细 → 成品入库表单（按钮「新增」）
+  'product-inbound-detail': {
+    inbound: 'https://j0eukrlohu.feishu.cn/share/base/form/shrcnDSOkJ2pyfcd3azP25WHJ9f',
+    inboundLabel: '新增',
   },
   // 成品入库总账 → 成品入库表单
   'product-inbound-ledger': {
@@ -330,7 +359,12 @@ const NO_STAT_CARD_PAGE_KEYS = new Set(['qualified-suppliers', 'material-name-co
 
 export function resolveInoutLinks(
   pageKey: string
-): { inbound?: string; outbound?: string; outboundLabel?: string } | null {
+): {
+  inbound?: string
+  outbound?: string
+  outboundLabel?: string
+  inboundLabel?: string
+} | null {
   return WAREHOUSE_INOUT_LINKS[pageKey] ?? null
 }
 
@@ -707,7 +741,23 @@ export function formatSyncTime(time: string | undefined): string {
   if (!time) {
     return '-'
   }
-  return dayjs(time).format('YYYY-MM-DD HH:mm:ss')
+  const date = new Date(time)
+  if (Number.isNaN(date.getTime())) {
+    return '-'
+  }
+  // 后端同步时间为 UTC 时间戳，固定按北京时间（Asia/Shanghai）展示，
+  // 保证 SSR 与客户端渲染一致，避免时区导致的 hydration 不匹配
+  const formatter = new Intl.DateTimeFormat('zh-CN', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  })
+  return formatter.format(date).replace(/\//g, '-')
 }
 
 // 人员字段渲染：头像 + 姓名（类似飞书联系人展示）。
@@ -846,6 +896,9 @@ interface WarehouseGroupRow {
   __group_level: number
   __group_value: string
   __group_count: number
+  // 从根分组到当前分组的完整值路径，用于生成全局唯一 key；
+  // 不同父组下的同名子组因此不会产生重复 key
+  __group_path: string[]
 }
 
 type WarehouseTableRow = WarehouseFeishuRow | WarehouseGroupRow
@@ -862,7 +915,7 @@ export function buildGroupedRows(
     return rows
   }
   const result: WarehouseTableRow[] = []
-  const groupRecursive = (items: WarehouseFeishuRow[], level: number) => {
+  const groupRecursive = (items: WarehouseFeishuRow[], level: number, parentPath: string[]) => {
     if (level >= groupKeys.length) {
       result.push(...items)
       return
@@ -886,16 +939,18 @@ export function buildGroupedRows(
     })
     sortedKeys.forEach((value) => {
       const groupItems = buckets.get(value)!
+      const path = [...parentPath, value]
       result.push({
         __group_row: true,
         __group_level: level,
         __group_value: value,
         __group_count: groupItems.length,
+        __group_path: path,
       })
-      groupRecursive(groupItems, level + 1)
+      groupRecursive(groupItems, level + 1, path)
     })
   }
-  groupRecursive(rows, 0)
+  groupRecursive(rows, 0, [])
   return result
 }
 
@@ -1160,10 +1215,11 @@ export function WarehouseFeishuTablePage({
             },
           } as React.HTMLAttributes<HTMLElement>),
         onCell: (record: WarehouseTableRow) => {
+          const nowrap = NOWRAP_COLUMNS_PER_PAGE[resolvedPageKey]?.includes(column.key)
           const baseStyle = {
             style: {
-              whiteSpace: 'normal',
-              wordBreak: 'break-word',
+              whiteSpace: nowrap ? ('nowrap' as const) : ('normal' as const),
+              wordBreak: nowrap ? ('normal' as const) : ('break-word' as const),
               paddingInline: 8,
               fontSize: isCompactPage ? 12 : 13,
               lineHeight: 1.2,
@@ -1328,7 +1384,7 @@ export function WarehouseFeishuTablePage({
           ...buildQueryParams(),
           force,
         },
-        30000 // 30 秒超时，避免无限等待
+        60000 // 60 秒超时：后端已支持按日期增量拉取（秒级），首次全量/异常时留足余量
       ),
     onSuccess: (latest) => {
       setLocalData(latest)
@@ -1635,6 +1691,21 @@ export function WarehouseFeishuTablePage({
   // 出入库登记链接（按页面前缀映射飞书视图）
   const inoutLinks = useMemo(() => resolveInoutLinks(resolvedPageKey), [resolvedPageKey])
 
+  // 本地快照新鲜度：15 分钟内同步过视为新鲜（增量同步每 10 分钟一轮）
+  const [snapshotNow, setSnapshotNow] = useState(() => Date.now())
+  useEffect(() => {
+    const timer = window.setInterval(() => setSnapshotNow(Date.now()), 60_000)
+    return () => window.clearInterval(timer)
+  }, [])
+  const isSnapshotFresh = useMemo(() => {
+    if (localData.source !== 'local_snapshot' || !localData.last_sync_time) {
+      return false
+    }
+    const syncTime = new Date(localData.last_sync_time)
+    const minutesAgo = (snapshotNow - syncTime.getTime()) / (1000 * 60)
+    return minutesAgo < 15
+  }, [localData.source, localData.last_sync_time, snapshotNow])
+
   const groupedRows = useMemo(
     () => buildGroupedRows(visibleData.rows, groupKeys),
     [visibleData.rows, groupKeys]
@@ -1727,7 +1798,13 @@ export function WarehouseFeishuTablePage({
         </h1>
         <Space wrap size={8}>
           {localData.source === 'local_snapshot' ? (
-            <Tag color="orange">本地快照（飞书暂不可达，数据可能滞后）</Tag>
+            isSnapshotFresh ? (
+              <Tag color="blue" icon={<DatabaseOutlined />}>
+                本地缓存（定时同步中，数据最新）
+              </Tag>
+            ) : (
+              <Tag color="orange">本地快照（飞书暂不可达，数据可能滞后）</Tag>
+            )
           ) : (
             <Tag color="blue" icon={<DatabaseOutlined />}>
               {localData.base_name ? `${localData.base_name}多维表格` : '飞书多维表格'}
@@ -1743,7 +1820,7 @@ export function WarehouseFeishuTablePage({
               href={inoutLinks.inbound}
               target="_blank"
             >
-              入库登记
+              {inoutLinks.inboundLabel ?? '入库登记'}
             </Button>
           ) : null}
           {canEditThisPage && inoutLinks?.outbound ? (
@@ -2014,7 +2091,7 @@ export function WarehouseFeishuTablePage({
             dataSource={groupedRows}
             rowKey={(record) =>
               isGroupRow(record)
-                ? `group-${record.__group_level}-${record.__group_value}`
+                ? `group-${JSON.stringify(record.__group_path)}`
                 : (record as WarehouseFeishuRow).__record_id || JSON.stringify(record)
             }
             rowClassName={(record, index) =>

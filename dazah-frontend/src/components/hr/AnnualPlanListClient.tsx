@@ -18,7 +18,8 @@ export default function AnnualPlanListClient() {
 
   const [plans, setPlans] = useState<AnnualTrainingPlan[]>([])
   const [loading, setLoading] = useState(true)
-  const [selectedYear, setSelectedYear] = useState<number | undefined>(2026)
+  // 默认选中当前年份（此前硬编码 2026，跨年后默认筛选失效）
+  const [selectedYear, setSelectedYear] = useState<number | undefined>(CURRENT_YEAR)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [form] = Form.useForm()
   const [departments, setDepartments] = useState<string[]>([])

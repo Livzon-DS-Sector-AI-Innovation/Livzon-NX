@@ -49,7 +49,9 @@ class ReferenceSubstance(BaseModel):
         default="珠海保税区丽珠合成制药有限公司",
         comment="提供单位",
     )
-    handler: Mapped[str] = mapped_column(String(50), default="魏永红", comment="经办人")
-    contact: Mapped[str] = mapped_column(
-        String(50), default="13570680132", comment="联系方式"
+    handler: Mapped[str | None] = mapped_column(
+        String(50), nullable=True, comment="经办人"
+    )
+    contact: Mapped[str | None] = mapped_column(
+        String(50), nullable=True, comment="联系方式"
     )

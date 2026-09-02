@@ -220,7 +220,9 @@ def test_warehouse_field_filter_failures(
 
 
 @pytest.mark.asyncio
-async def test_warehouse_repository_errors_are_mapped_at_service_boundary() -> Any:
+async def test_warehouse_repository_errors_are_mapped_at_service_boundary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> Any:
     service = WarehouseService.__new__(WarehouseService)
     service.repo = AsyncMock()
     service.repo.get_any_feishu_config.side_effect = SQLAlchemyError("db")
@@ -237,6 +239,13 @@ async def test_warehouse_repository_errors_are_mapped_at_service_boundary() -> A
 
     service.repo.get_active_feishu_config.side_effect = None
     service.repo.get_active_feishu_config.return_value = None
+    # 本机 settings 配有平台 FEISHU_APP_ID/SECRET 时会走 env 兜底而不抛错；
+    # 显式禁用兜底以锁定"无任何配置"分支
+    monkeypatch.setattr(
+        WarehouseService,
+        "_env_fallback_feishu_config",
+        staticmethod(lambda: None),
+    )
     with pytest.raises(AppException, match="请先启用"):
         await service._get_active_feishu_config_or_raise()
 

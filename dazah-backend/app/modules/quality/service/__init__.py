@@ -44,7 +44,18 @@ from app.modules.quality.service.department_contacts import (
     get_department_contact_list,
     get_department_contact_list_from_feishu,
     update_department_contact,
+    update_department_contact_from_feishu,
     upsert_department_contact,
+)
+from app.modules.quality.service.deviation_workbench import (
+    analyze_workbench,
+    delete_workbench_attachment_files,
+    delete_workbench_report,
+    get_workbench_report_detail,
+    get_workbench_settings,
+    list_workbench_reports,
+    update_workbench_settings,
+    upload_workbench_attachment,
 )
 from app.modules.quality.service.feishu_capa import (
     create_capa_ledger_record,
@@ -57,6 +68,17 @@ from app.modules.quality.service.feishu_capa import (
     list_capa_plan_tracks,
     update_capa_ledger_record,
     update_capa_plan_track_record,
+)
+from app.modules.quality.service.historical_deviation import (
+    ai_extract_historical_deviation,
+    create_historical_deviation,
+    delete_historical_deviation,
+    delete_historical_deviation_attachment,
+    get_historical_deviation_attachment_content,
+    get_historical_deviation_detail,
+    get_historical_deviation_list,
+    update_historical_deviation,
+    upload_historical_deviation_attachment,
 )
 from app.modules.quality.service.inspection_dashboard_entry import (
     get_bbas_dashboard_data,
@@ -73,6 +95,7 @@ from app.modules.quality.service.inspection_finished_material import (
     ensure_finished_entity_in_group,
     ensure_material_entity_in_group,
     get_finished_by_entity,
+    get_finished_display_fields,
     get_finished_entity_codes,
     get_finished_fields,
     get_material_entity_codes,
@@ -318,6 +341,7 @@ __all__ = [
     "ensure_quality_feishu_entity_settings",
     # Department contacts
     "get_department_contact_list",
+    "update_department_contact_from_feishu",
     "resolve_department_personnel_by_department",
     "upsert_department_contact",
     "update_department_contact",
@@ -365,6 +389,25 @@ __all__ = [
     "delete_deviation_ai_session_attachment",
     "regenerate_deviation_ai_session",
     "apply_deviation_ai_session",
+    # Historical Deviations
+    "get_historical_deviation_list",
+    "get_historical_deviation_detail",
+    "create_historical_deviation",
+    "update_historical_deviation",
+    "delete_historical_deviation",
+    "upload_historical_deviation_attachment",
+    "delete_historical_deviation_attachment",
+    "get_historical_deviation_attachment_content",
+    "ai_extract_historical_deviation",
+    # Deviation Workbench
+    "get_workbench_settings",
+    "update_workbench_settings",
+    "upload_workbench_attachment",
+    "delete_workbench_attachment_files",
+    "analyze_workbench",
+    "list_workbench_reports",
+    "get_workbench_report_detail",
+    "delete_workbench_report",
     # CPV
     "create_product",
     "get_product_by_id",
@@ -439,6 +482,7 @@ __all__ = [
     "pull_finished_by_entity",
     "get_finished_entity_codes",
     "get_finished_fields",
+    "get_finished_display_fields",
     "ensure_material_entity_in_group",
     "list_material_subtables",
     "get_material_entity_codes",

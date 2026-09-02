@@ -57,12 +57,28 @@ class EmployeeRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_by_id_include_deleted(self, employee_id: UUID) -> Employee | None:
+        """按 ID 查员工，不区分是否软删（离职台账转抄员工档案时需要）。"""
+        result = await self.session.execute(
+            select(Employee).where(Employee.id == employee_id)
+        )
+        return result.scalar_one_or_none()
+
     async def get_by_employee_number(self, employee_number: str) -> Employee | None:
         result = await self.session.execute(
             select(Employee).where(
                 Employee.employee_number == employee_number,
                 Employee.is_deleted.is_(False),
             )
+        )
+        return result.scalar_one_or_none()
+
+    async def get_by_employee_number_include_deleted(
+        self, employee_number: str
+    ) -> Employee | None:
+        """按工号查员工，不区分是否软删（离职台账转抄员工档案时需要）。"""
+        result = await self.session.execute(
+            select(Employee).where(Employee.employee_number == employee_number)
         )
         return result.scalar_one_or_none()
 
@@ -291,14 +307,23 @@ class EmployeeRepository:
         await self.session.refresh(employee)
         return employee
 
-    async def upsert_by_employee_number(self, data: dict[str, Any]) -> Employee:
+    async def upsert_by_employee_number(self, data: dict[str, Any]) -> Employee | None:
         """Create or update employee by employee_number (used for Feishu sync).
 
         以飞书为主：data 中显式携带的字段（含 None/空值）都会覆盖本地，
         保证"飞书没有的字段，本地也清空"。
+        已离职（软删或状态=离职）的员工不被同步复活：即使飞书员工档案表里还有
+        该记录，也跳过（保持离职状态），避免离职后又被拉回员工管理。
         """
-        emp = await self.get_by_employee_number(data["employee_number"])
+        emp = await self.get_by_employee_number_include_deleted(
+            data["employee_number"]
+        )
         if emp:
+            if getattr(emp, "is_deleted", False) or (
+                getattr(emp, "status", None) == "离职"
+            ):
+                # 本地已离职/已软删 → 跳过，不复活、不更新
+                return None
             for key, value in data.items():
                 if key != "id":
                     setattr(emp, key, value)
@@ -398,35 +423,21 @@ class EmployeeRepository:
         )
         status_distribution = {row[0]: row[1] for row in status_result.all()}
 
-        # Department distribution - 只统计一级部门
-        from app.modules.hr.models import HrDepartment
-
-        top_dept_result = await self.session.execute(
-            select(HrDepartment.name).where(
-                HrDepartment.parent_id.is_(None),
-                HrDepartment.is_deleted.is_(False),
-            )
-        )
-        top_dept_names = {row[0] for row in top_dept_result.all()}
-
+        # Department distribution - 直接按员工一级部门（department 字段）分组统计。
+        # 不依赖部门表名字匹配（部门表用"XX一车间"、员工用"XX车间"，名字不一致）。
         dept_stmt = select(Employee.department, func.count()).where(
             Employee.is_deleted.is_(False),
             Employee.department.isnot(None),
             Employee.department != "",
         )
-        if top_dept_names:
-            dept_stmt = dept_stmt.where(Employee.department.in_(top_dept_names))
         if dept_scope is not None:
             dept_stmt = dept_stmt.where(dept_scope)
         dept_result = await self.session.execute(
             dept_stmt.group_by(Employee.department).order_by(func.count().desc())
         )
-        if top_dept_names:
-            department_distribution = [
-                {"department": row[0], "count": row[1]} for row in dept_result.all()
-            ]
-        else:
-            department_distribution = []
+        department_distribution = [
+            {"department": row[0], "count": row[1]} for row in dept_result.all()
+        ]
 
         # Education distribution
         edu_stmt = select(Employee.education, func.count()).where(
@@ -439,48 +450,66 @@ class EmployeeRepository:
         edu_result = await self.session.execute(edu_stmt.group_by(Employee.education))
         education_distribution = {row[0]: row[1] for row in edu_result.all()}
 
-        # Contract expiring (within 90 days)
-        from datetime import timedelta
+        # Contract expiring（当前季度，与员工档案「合同到期提醒」口径完全一致：
+        # 全公司在职员工，取 6 个合同字段中最晚的非空日期，判断是否在本季度内到期；
+        # 不按部门可见范围过滤，避免与员工档案季度提醒结果不一致）
+        from datetime import date as _date
+        from datetime import datetime as _dt
+        from datetime import timedelta as _timedelta
 
-        today = date.today()
-        deadline = today + timedelta(days=90)
-        expiring_cond = (
+        today = _date.today()
+        q_start_month = ((today.month - 1) // 3) * 3 + 1
+        q_start = _date(today.year, q_start_month, 1)
+        if q_start_month == 10:
+            q_end = _date(today.year, 12, 31)
+        else:
+            # 下季度首月 1 日减一天 = 本季度最后一天（如 7 月季度 → 9-30）
+            q_end = _date(today.year, q_start_month + 3, 1) + _timedelta(days=-1)
+
+        emp_query = select(Employee).where(
             Employee.is_deleted.is_(False),
             Employee.status == "在职",
-            Employee.contract_end_date.isnot(None),
-            Employee.contract_end_date <= deadline,
-            Employee.contract_end_date >= today,
         )
-        expiring_result = await self.session.execute(
-            select(func.count()).where(*expiring_cond)
-            if dept_scope is None
-            else select(func.count()).where(*expiring_cond, dept_scope)
-        )
-        contract_expiring_count = expiring_result.scalar() or 0
+        all_emps = (await self.session.execute(emp_query)).scalars().all()
 
-        # Contract expiring detail list
-        expiring_detail_stmt = select(
-            Employee.employee_number,
-            Employee.name,
-            Employee.department,
-            Employee.position,
-            Employee.contract_end_date,
-        ).where(*expiring_cond)
-        if dept_scope is not None:
-            expiring_detail_stmt = expiring_detail_stmt.where(dept_scope)
-        expiring_detail_result = await self.session.execute(
-            expiring_detail_stmt.order_by(Employee.contract_end_date.asc())
-        )
-        contract_expiring_list = [
-            {
-                "employee_number": row[0],
-                "name": row[1],
-                "department": row[2],
-                "position": row[3],
-                "contract_end_date": str(row[4]) if row[4] else None,
-            }
-            for row in expiring_detail_result.all()
-        ]
+        def _max_contract_date(emp: Employee) -> date | None:
+            dates: list[date] = []
+            for attr in (
+                "contract_end_date",
+                "contract_end_2",
+                "contract_end_3",
+                "contract_end_4",
+            ):
+                val = getattr(emp, attr, None)
+                if isinstance(val, date):
+                    dates.append(val)
+            for attr in ("contract_end_5", "contract_end_6"):
+                val = getattr(emp, attr, None)
+                if isinstance(val, str) and val.strip():
+                    for fmt in ("%Y/%m/%d", "%Y-%m-%d", "%Y%m%d"):
+                        try:
+                            dates.append(_dt.strptime(val.strip(), fmt).date())
+                            break
+                        except ValueError:
+                            continue
+            return max(dates) if dates else None
+
+        expiring: list[dict[str, Any]] = []
+        for emp in all_emps:
+            max_date = _max_contract_date(emp)
+            if max_date and q_start <= max_date <= q_end:
+                expiring.append(
+                    {
+                        "employee_number": emp.employee_number,
+                        "name": emp.name,
+                        "department": emp.department,
+                        "position": emp.position,
+                        "contract_end_date": str(max_date),
+                    }
+                )
+        expiring.sort(key=lambda item: item["contract_end_date"])
+        contract_expiring_count = len(expiring)
+        contract_expiring_list = expiring
 
         return {
             "total": total,
@@ -1288,10 +1317,13 @@ class TrainingLedgerRepository:
         return list(data_result.scalars().all()), total
 
     async def list_all_for_employee_list(self) -> list[TrainingLedger]:
-        """全部未删除台账，按培训日期/时间升序（员工培训清单按姓名全量匹配用）."""
+        """全部未删除且呈现中的台账，按培训日期/时间升序（员工培训清单按姓名全量匹配用）."""
         result = await self.session.execute(
             select(TrainingLedger)
-            .where(TrainingLedger.is_deleted.is_(False))
+            .where(
+                TrainingLedger.is_deleted.is_(False),
+                TrainingLedger.is_presented.is_(True),
+            )
             .order_by(
                 TrainingLedger.training_date.asc(),
                 TrainingLedger.training_datetime.asc(),
@@ -1314,6 +1346,13 @@ class TrainingLedgerRepository:
         await self.session.flush()
         # INSERT 后 PostgreSQL RETURNING 自动回填 id/created_at/updated_at
         return record
+
+    async def add_all(self, records: list[TrainingLedger]) -> None:
+        """批量新增并一次 flush（导入大批量记录时避免逐行 DB 往返）。"""
+        if not records:
+            return
+        self.session.add_all(records)
+        await self.session.flush()
 
     async def update(self, record: TrainingLedger) -> TrainingLedger:
         await self.session.flush()
@@ -1865,8 +1904,13 @@ class TrainingPersonnelConfigRepository:
         *,
         level: str | None = None,
         department: str | None = None,
+        owner_id: str | None = None,
     ) -> list[TrainingPersonnelConfig]:
-        """列出该级别+部门下所有配置（如 201车间→A班/B班/C班）"""
+        """列出该级别+部门下配置（如 201车间→A班/B班/C班）。
+
+        owner_id 非空时按创建人隔离（只返回该用户创建的配置）；
+        为空（超管）返回全部（含 created_by 为空的历史公共配置）。
+        """
         stmt = select(TrainingPersonnelConfig).where(
             TrainingPersonnelConfig.is_deleted.is_(False)
         )
@@ -1874,13 +1918,24 @@ class TrainingPersonnelConfigRepository:
             stmt = stmt.where(TrainingPersonnelConfig.level == level)
         if department:
             stmt = stmt.where(TrainingPersonnelConfig.department == department)
+        if owner_id:
+            stmt = stmt.where(TrainingPersonnelConfig.created_by == owner_id)
         stmt = stmt.order_by(TrainingPersonnelConfig.updated_at.desc())
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
     async def get_by_key(
-        self, level: str, department: str | None, config_name: str
+        self,
+        level: str,
+        department: str | None,
+        config_name: str,
+        owner_id: str | None = None,
     ) -> TrainingPersonnelConfig | None:
+        """按 (level, department, config_name, created_by) 查找。
+
+        owner_id 非空时限定创建人（同人同名才复用，不同人可各自建同名）；
+        为空需显式 created_by IS NULL（历史公共配置），避免误命中他人配置。
+        """
         stmt = select(TrainingPersonnelConfig).where(
             TrainingPersonnelConfig.level == level,
             TrainingPersonnelConfig.config_name == config_name,
@@ -1890,6 +1945,10 @@ class TrainingPersonnelConfigRepository:
             stmt = stmt.where(TrainingPersonnelConfig.department.is_(None))
         else:
             stmt = stmt.where(TrainingPersonnelConfig.department == department)
+        if owner_id:
+            stmt = stmt.where(TrainingPersonnelConfig.created_by == owner_id)
+        else:
+            stmt = stmt.where(TrainingPersonnelConfig.created_by.is_(None))
         result = await self.session.execute(stmt)
         return result.scalars().first()
 

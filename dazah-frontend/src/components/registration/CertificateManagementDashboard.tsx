@@ -207,7 +207,7 @@ export default function CertificateManagementDashboard({
           <RegistrationChartCard
             title="整体到期风险分布"
             subtitle="汇总全台账证书有效、预警与过期状态"
-            option={buildDonutOption(expiryStatusData, ['#22c55e', '#f59e0b', '#ef4444'])}
+            option={buildDonutOption(expiryStatusData, ['#1aae39', '#dd5b00', '#e03131'])}
             hasData={expiryStatusData.length > 0}
             height={300}
           />
@@ -217,9 +217,9 @@ export default function CertificateManagementDashboard({
             title="各板块到期结构"
             subtitle="对比各子表的过期、90天内到期和有效证书结构"
             option={buildStackedBarOption(riskStructureData, [
-              { key: 'expired', label: '已过期', color: '#ef4444' },
-              { key: 'dueSoon', label: '90天内到期', color: '#f59e0b' },
-              { key: 'valid', label: '有效', color: '#22c55e' },
+              { key: 'expired', label: '已过期', color: '#e03131' },
+              { key: 'dueSoon', label: '90天内到期', color: '#dd5b00' },
+              { key: 'valid', label: '有效', color: '#1aae39' },
             ])}
             hasData={riskStructureData.length > 0}
             height={320}
@@ -274,20 +274,20 @@ export default function CertificateManagementDashboard({
 
                     <Row gutter={[12, 12]}>
                       <Col span={12}>
-                        <div style={{ fontSize: 12, color: '#64748b' }}>证书数</div>
-                        <div style={{ fontSize: 24, fontWeight: 700, color: '#0f172a' }}>{sheet.total_records}</div>
+                        <div style={{ fontSize: 12, color: 'var(--color-steel)' }}>证书数</div>
+                        <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--color-charcoal)' }}>{sheet.total_records}</div>
                       </Col>
                       <Col span={12}>
-                        <div style={{ fontSize: 12, color: '#64748b' }}>发证机构</div>
-                        <div style={{ fontSize: 24, fontWeight: 700, color: '#0f172a' }}>{sheet.issuer_count}</div>
+                        <div style={{ fontSize: 12, color: 'var(--color-steel)' }}>发证机构</div>
+                        <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--color-charcoal)' }}>{sheet.issuer_count}</div>
                       </Col>
                       <Col span={12}>
-                        <div style={{ fontSize: 12, color: '#64748b' }}>已过期</div>
-                        <div style={{ fontSize: 24, fontWeight: 700, color: '#dc2626' }}>{sheet.expired_count}</div>
+                        <div style={{ fontSize: 12, color: 'var(--color-steel)' }}>已过期</div>
+                        <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--color-error, #e03131)' }}>{sheet.expired_count}</div>
                       </Col>
                       <Col span={12}>
-                        <div style={{ fontSize: 12, color: '#64748b' }}>90天内到期</div>
-                        <div style={{ fontSize: 24, fontWeight: 700, color: '#d97706' }}>{sheet.due_90_count}</div>
+                        <div style={{ fontSize: 12, color: 'var(--color-steel)' }}>90天内到期</div>
+                        <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--color-warning, #dd5b00)' }}>{sheet.due_90_count}</div>
                       </Col>
                     </Row>
                     <Link href={`/registration/certificate-management/${sheet.sheet_key}`}>

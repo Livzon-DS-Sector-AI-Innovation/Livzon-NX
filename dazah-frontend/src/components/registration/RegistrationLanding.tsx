@@ -20,7 +20,7 @@ export function RegistrationLanding() {
           <Link href="/registration/project">
             <Card hoverable>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <FileSearchOutlined style={{ fontSize: 32, color: '#1677ff' }} />
+                <FileSearchOutlined style={{ fontSize: 32, color: '#5645d4' }} />
                 <div>
                   <div style={{ fontSize: 16, fontWeight: 600 }}>申报项目</div>
                   <div style={{ fontSize: 13, color: '#787671' }}>进入申报项目父级页，查看申报台账及对应入口</div>
@@ -59,7 +59,7 @@ export function RegistrationLanding() {
           <Link href="/registration/regulation">
             <Card hoverable>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <AuditOutlined style={{ fontSize: 32, color: '#d46b08' }} />
+                <AuditOutlined style={{ fontSize: 32, color: '#dd5b00' }} />
                 <div>
                   <div style={{ fontSize: 16, fontWeight: 600 }}>法规跟踪</div>
                   <div style={{ fontSize: 13, color: '#787671' }}>跟踪近期开启抓取的国内外法规更新信息</div>
@@ -72,7 +72,7 @@ export function RegistrationLanding() {
           <Link href="/registration/fees">
             <Card hoverable>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <DollarOutlined style={{ fontSize: 32, color: '#cf1322' }} />
+                <DollarOutlined style={{ fontSize: 32, color: '#e03131' }} />
                 <div>
                   <div style={{ fontSize: 16, fontWeight: 600 }}>注册费用</div>
                   <div style={{ fontSize: 13, color: '#787671' }}>管理注册费、检验费、代理费等费用台账</div>

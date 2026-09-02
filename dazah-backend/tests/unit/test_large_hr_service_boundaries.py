@@ -271,7 +271,14 @@ async def test_employee_approval_notification_and_sync_paths(monkeypatch: Any) -
     im.send_text_message.side_effect = RuntimeError("send failed")
     import app.modules.hr.feishu.im as im_module
 
-    monkeypatch.setattr(im_module, "FeishuIM", lambda: im)
+    # notify_training 现按 HR 专属应用凭证构造 FeishuIM（需 session + 凭据 helper）
+    monkeypatch.setattr(im_module, "FeishuIM", lambda *creds: im)
+    monkeypatch.setattr(
+        hr_service,
+        "get_hr_feishu_app_credentials",
+        AsyncMock(return_value=("cli_hr_app", "hr_secret")),
+    )
+    service.session = AsyncMock()
     result = await service.notify_training(
         cast(Any, Dump)(
             employee_numbers=["E001", "E002", "E003"],
@@ -284,6 +291,8 @@ async def test_employee_approval_notification_and_sync_paths(monkeypatch: Any) -
             content="内容",
         )
     )
+    # sync_from_feishu 的 legacy bitable 分支以“无 session”为路由条件
+    del service.session
     assert result["sent"] == 0
     assert result["failed"] == 3
     assert {item["reason"] for item in result["details"]} >= {

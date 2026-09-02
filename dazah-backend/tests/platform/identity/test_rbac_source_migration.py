@@ -41,12 +41,16 @@ TEST_USER_ID = "00000000-0000-0000-0000-0000000000aa"
 def test_catalog_count() -> None:
     catalog = build_permission_catalog()
     # 16 模块 x 2 + identity:admin + 仓储细分编辑 3（product/hardware/raw:write）
-    # + HR 员工档案细分 1（employee:read）= 37
-    assert len(catalog) == 37
+    # + HR 员工档案细分 1（employee:read）
+    # + 质量子域编辑 6（qc/product_qa/change_qa/validation_qa/
+    #   system_qa/material_qa:write）= 43
+    assert len(catalog) == 43
     codes = {c["code"] for c in catalog}
     assert "hr:read" in codes and "hr:write" in codes
     assert "identity:admin" in codes
     assert "quality:read" in codes
+    assert "quality:qc:write" in codes
+    assert "quality:system_qa:write" in codes
     # 仓储细分编辑权限（按飞书部门映射的子领域）
     for scope_code in (
         "warehouse:product:write",

@@ -1,9 +1,11 @@
 """AI 分析服务 - 使用 LLM 分析法规文档。"""
 
 import logging
+import uuid
 from datetime import UTC, datetime
 from typing import Any
 
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.llm import LLMError, llm_client
@@ -13,17 +15,35 @@ from app.modules.regulatory_tracker.models.regulatory_document import Regulatory
 logger = logging.getLogger(__name__)
 
 
-def build_analysis_prompt(
-    document: RegulatoryDocument,
-) -> list[dict[str, Any]]:
+def _build_analysis_source_text(document: RegulatoryDocument) -> str:
+    raw_data = document.raw_data or {}
+
+    candidates: list[str] = [
+        document.summary_text or "",
+        raw_data.get("contentSummary", "") or "",
+        raw_data.get("summary", "") or "",
+        raw_data.get("detail_excerpt", "") or "",
+        raw_data.get("detail_content", "") or "",
+    ]
+
+    detail_paragraphs = raw_data.get("detail_paragraphs")
+    if isinstance(detail_paragraphs, list):
+        candidates.extend(
+            item for item in detail_paragraphs if isinstance(item, str) and item.strip()
+        )
+
+    merged = " ".join(
+        part.strip() for part in candidates if isinstance(part, str) and part.strip()
+    )
+    return merged[:1200] if merged else ""
+
+
+def build_analysis_prompt(document: RegulatoryDocument) -> list[dict[str, Any]]:
     """构建文档分析 prompt。"""
     title = document.title or ""
     classification = document.classification or "未知"
     status_text = document.status_text or "未知"
-
-    # 从 raw_data 提取更多信息
-    raw_data = document.raw_data or {}
-    content_summary = raw_data.get("contentSummary", "") or raw_data.get("summary", "")
+    content_summary = _build_analysis_source_text(document)
 
     prompt = f"""你是一个制药法规分析专家。请分析以下法规文档并提供结构化分析结果。
 
@@ -53,6 +73,7 @@ def build_analysis_prompt(
   "relevance_score": 0.85
 }}
 
+无论原文是中文还是英文，`summary` 和 `key_points` 都必须使用中文输出。
 请只返回 JSON，不要其他内容。"""
 
     return [
@@ -162,7 +183,7 @@ async def analyze_and_update(
     await db.commit()
 
     logger.info(f"AI 分析完成: {document.title[:50]}... (状态: {result['status']})")
-    return bool(result.get("status") == "completed")
+    return result.get("status") == "completed"
 
 
 async def analyze_new_documents(
@@ -180,12 +201,10 @@ async def analyze_new_documents(
     Returns:
         统计信息 {"analyzed": int, "failed": int, "skipped": int}
     """
-    from sqlalchemy import and_, select
-
     # 查询未分析的文档
     stmt = select(RegulatoryDocument).where(
         and_(
-            RegulatoryDocument.is_deleted.is_(False),
+            ~RegulatoryDocument.is_deleted,
             RegulatoryDocument.ai_analysis_status.is_(None),
         )
     )
@@ -208,4 +227,43 @@ async def analyze_new_documents(
             stats["failed"] += 1
 
     logger.info(f"批量分析完成: {stats}")
+    return stats
+
+
+async def analyze_documents_by_ids(
+    db: AsyncSession,
+    document_ids: list[uuid.UUID],
+) -> dict[str, int]:
+    """按指定文档列表执行分析。"""
+    if not document_ids:
+        return {"analyzed": 0, "failed": 0, "skipped": 0}
+
+    stmt = (
+        select(RegulatoryDocument)
+        .where(
+            and_(
+                RegulatoryDocument.id.in_(document_ids),
+                RegulatoryDocument.is_deleted == False,  # noqa: E712
+            )
+        )
+        .order_by(RegulatoryDocument.first_found_at.desc())
+    )
+    result = await db.execute(stmt)
+    documents = list(result.scalars().all())
+
+    stats = {"analyzed": 0, "failed": 0, "skipped": 0}
+    for document in documents:
+        if (
+            document.ai_analysis_status == "completed"
+            and (document.ai_summary or "").strip()
+        ):
+            stats["skipped"] += 1
+            continue
+
+        success = await analyze_and_update(db, document)
+        if success:
+            stats["analyzed"] += 1
+        else:
+            stats["failed"] += 1
+    logger.info("指定文档分析完成: %s", stats)
     return stats

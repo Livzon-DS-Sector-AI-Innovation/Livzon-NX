@@ -1775,7 +1775,7 @@ class SupplementaryReplyService:
             parse_cde_notice,
         )
 
-        parsed = parse_cde_notice(notice_data)
+        parsed = await asyncio.to_thread(parse_cde_notice, notice_data)
         metadata = parsed["metadata"]
         questions = parsed["questions"]
         drug_info = {
@@ -1795,7 +1795,9 @@ class SupplementaryReplyService:
             "related_no": "/",
             "email": "",
         }
-        output_data = generate_reply_document(drug_info, questions)
+        output_data = await asyncio.to_thread(
+            generate_reply_document, drug_info, questions
+        )
 
         file_id = uuid.uuid4().hex
         output_file_name = f"发补回复-{drug_info['drug_name']}.docx"

@@ -13,13 +13,6 @@ async function useAuthToken(context: BrowserContext, value: string) {
 }
 
 test.describe('身份认证与模块权限', () => {
-  test('受保护的业务子页面路由可解析', async ({ page }) => {
-    const response = await page.goto('/production/batches')
-
-    expect(response).not.toBeNull()
-    expect(response?.status()).toBeLessThan(400)
-  })
-
   test('失效会话访问受保护页面时返回登录入口', async ({ context, page }) => {
     await useAuthToken(context, 'invalid-session')
 

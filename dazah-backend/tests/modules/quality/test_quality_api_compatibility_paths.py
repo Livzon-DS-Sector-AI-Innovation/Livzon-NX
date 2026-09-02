@@ -31,7 +31,9 @@ async def test_quality_deviation_api_compatibility_success_paths(
         AsyncMock(return_value=None),
     )
     monkeypatch.setattr(
-        deviation_api, "resolve_user_department_scope", AsyncMock(return_value=None)
+        deviation_api,
+        "_resolve_quality_list_scope",
+        AsyncMock(return_value=None),
     )
 
     monkeypatch.setattr(

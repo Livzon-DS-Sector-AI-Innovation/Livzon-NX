@@ -31,6 +31,8 @@ export default async function Page() {
         recipient_open_id: null,
         recipient_name: null,
         recipient_department: null,
+        // schedule_time 语义为"每日推送时刻"（后端固定 10:00），非抓取时刻
+        // schedule_time 语义为"每日推送时刻"（后端固定 10:00），非抓取时刻
         schedule_time: '10:00',
         pending_count: 0,
       }

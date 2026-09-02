@@ -5,6 +5,7 @@ import { App, Table, Button, Space, Popconfirm, Tooltip } from 'antd'
 import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons'
 import { Employee } from '@/types/hr'
 import { deleteEmployee } from '@/actions/hr'
+import { maskPhone } from '@/lib/mask'
 
 interface EmployeeTableProps {
   employees: Employee[]
@@ -102,7 +103,8 @@ export default function EmployeeTable({
       title: '联系电话',
       dataIndex: 'phone',
       key: 'phone',
-      width: 130 },
+      width: 130,
+      render: (v: string) => maskPhone(v) },
     {
       title: '电子邮箱',
       dataIndex: 'email',

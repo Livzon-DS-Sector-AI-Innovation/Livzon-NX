@@ -18,6 +18,12 @@ from app.core.database import get_db
 from app.core.deps import CurrentUser
 from app.core.exceptions import AppException, NotFoundException
 from app.core.response import paginated_response, success_response
+from app.modules.quality.api.deps import (
+    QUALITY_QA_SCOPE_PERMISSIONS,
+)
+from app.modules.quality.api.deps import (
+    assert_quality_edit_scope as _assert_quality_edit_scope,
+)
 from app.modules.quality.api.deps import require_user as _require_user
 from app.modules.quality.models.finished_product_inspection import (
     FinishedProductInspection,
@@ -105,14 +111,16 @@ def _make_crud_routes(
     ) -> Any:
         _require_user(current_user)
         assert current_user is not None
-        # 部门数据隔离（后台可配置可见部门范围）
+        # 部门数据隔离（后台可配置可见部门范围）；QA 角色在质量模块内全部可见
         if dept_field:
+            from app.modules.quality.api.deps import (
+                resolve_quality_list_scope as _resolve_quality_list_scope,
+            )
             from app.platform.identity.data_scope import (
                 department_in_clause,
-                resolve_user_department_scope,
             )
 
-            scope = await resolve_user_department_scope(db, current_user)
+            scope = await _resolve_quality_list_scope(db, current_user)
             scope_clause = department_in_clause(getattr(model_cls, dept_field), scope)
         else:
             scope_clause = None
@@ -233,6 +241,12 @@ def _make_crud_routes(
         item = result.scalar_one_or_none()
         if item is None:
             raise NotFoundException(resource_label, str(record_id))
+        await _assert_quality_edit_scope(
+            db,
+            current_user,
+            scope_permission=QUALITY_QA_SCOPE_PERMISSIONS["qc"],
+            record=item,
+        )
 
         update_data = data.model_dump(exclude_unset=True)
         for key, value in update_data.items():
@@ -272,6 +286,12 @@ def _make_crud_routes(
         item = result.scalar_one_or_none()
         if item is None:
             raise NotFoundException(resource_label, str(record_id))
+        await _assert_quality_edit_scope(
+            db,
+            current_user,
+            scope_permission=QUALITY_QA_SCOPE_PERMISSIONS["qc"],
+            record=item,
+        )
 
         item.is_deleted = True
         await db.flush()

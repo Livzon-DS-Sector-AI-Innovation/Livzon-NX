@@ -1,5 +1,6 @@
 """对照物质说明表生成业务逻辑"""
 
+import asyncio
 import logging
 import uuid
 from pathlib import Path
@@ -104,7 +105,9 @@ class ReferenceStandardService:
         }
 
         # 3. 生成 Word 文档
-        output_data = generate_reference_standard_document(coa_info, template_data)
+        output_data = await asyncio.to_thread(
+            generate_reference_standard_document, coa_info, template_data
+        )
 
         # 4. 保存文件
         file_id = uuid.uuid4().hex[:12]

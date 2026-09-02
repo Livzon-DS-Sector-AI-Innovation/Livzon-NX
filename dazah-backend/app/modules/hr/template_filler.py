@@ -50,13 +50,16 @@ def _append_clone_run(paragraph: Any, source_run: Any, text: str) -> Any:
     return new_run
 
 
-def _apply_std_font(run: Any) -> None:
-    """统一填值字体：中文宋体、数字/英文 Times New Roman、5号(10.5pt=sz21)、不加粗。
+def _apply_std_font(run: Any, size_half_points: str = "21") -> None:
+    """统一填值字体：中文宋体、数字/英文 Times New Roman、默认5号(10.5pt=sz21)、不加粗。
 
     填写的值（姓名/部门/日期/题目/授课人/说明等）统一用模板正文字体，
     避免克隆到标题行（如 APP10 标题 sz=36）导致字号异常。
     模板填写区 run 常继承标签的加粗格式（如培训通知填写段 w:b），
     填写内容为正文，必须显式去除加粗。
+
+    size_half_points 为半磅值：5号=21、小三=30。培训通知等正文为小三的
+    模板传 "30"，使填写值与模板正文字号一致。
     """
     rpr = run._r.get_or_add_rPr()
     rfonts = rpr.get_or_add_rFonts()
@@ -69,7 +72,7 @@ def _apply_std_font(run: Any) -> None:
         if el is None:
             el = rpr.makeelement(qn(tag), {})
             rpr.append(el)
-        el.set(qn("w:val"), "21")
+        el.set(qn("w:val"), size_half_points)
     # 去除加粗：填写内容为正文样式，不继承模板标签/标题的粗体
     for tag in ("w:b", "w:bCs"):
         el = rpr.find(qn(tag))
@@ -118,12 +121,17 @@ def fill_after_label(cell: Any, value: Any) -> None:
         _clear_paragraph_except(p)
 
 
-def fill_after_phrase(cell: Any, phrase: str, value: Any) -> None:
+def fill_after_phrase(
+    cell: Any, phrase: str, value: Any, center: bool = False
+) -> None:
     """在匹配 ``phrase`` 的 run 之后的空白 run 写入值（一格内多处填写/跨段落的场景）。
 
     如 APP3 ``实际受训人数合计：___人``、APP4 ``应到：__人 实到：__人``。
     按段落逐个查找短语所在 run，写入其后的空白 run；无空白 run 时克隆该 run
     格式追加。**未找到短语时不做任何修改**（避免破坏单元格内其他勾选/文本）。
+
+    center=True 时把值写入短语后连续空白 run 的中间一个，使填写值在空白区
+    居中显示（如 APP3 应受训人数），而不是紧贴短语左侧。
     """
     if value is None:
         value = ""
@@ -132,12 +140,21 @@ def fill_after_phrase(cell: Any, phrase: str, value: Any) -> None:
         runs = para.runs
         for i, r in enumerate(runs):
             if phrase in r.text:
-                # 优先写该 run 之后的空白 run（跳过复选框 w:sym）
+                # 收集该 run 之后第一组连续空白 run（先跳过"："等非空白，
+                # 遇到"人"等非空白后缀即止）
+                blanks: list[int] = []
+                started = False
                 for j in range(i + 1, len(runs)):
                     if _is_blank_run(runs[j]):
-                        runs[j].text = value
-                        _apply_std_font(runs[j])
-                        return
+                        started = True
+                        blanks.append(j)
+                    elif started:
+                        break
+                if blanks:
+                    target = blanks[len(blanks) // 2] if center else blanks[0]
+                    runs[target].text = value
+                    _apply_std_font(runs[target])
+                    return
                 # 无空白 run：克隆当前 run 格式追加
                 _append_clone_run(para, r, value)
                 return
@@ -239,18 +256,21 @@ def replace_text_in_cell(cell: Any, old: str, new: str) -> None:
                 r.text = r.text.replace(old, new)
 
 
-def set_paragraph_value(paragraph: Any, value: Any) -> None:
+def set_paragraph_value(
+    paragraph: Any, value: Any, size_half_points: str = "21"
+) -> None:
     """独立空格段填写（培训通知的内容/时间/地点/落款单位段）。"""
     if value is None:
         value = ""
     runs = paragraph.runs
     if runs:
         runs[0].text = str(value)
-        _apply_std_font(runs[0])
+        _apply_std_font(runs[0], size_half_points)
         for r in runs[1:]:
             r.text = ""
     else:
-        paragraph.add_run(str(value))
+        new_run = paragraph.add_run(str(value))
+        _apply_std_font(new_run, size_half_points)
 
 
 def fill_date_paragraph(paragraph: Any, year: Any, month: Any, day: Any) -> None:

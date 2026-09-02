@@ -16,6 +16,9 @@ from app.core.deps import CurrentUser
 from app.core.exceptions import AppException, NotFoundException
 from app.core.response import paginated_response, success_response
 from app.modules.quality.api.deps import require_user as _require_user
+from app.modules.quality.api.deps import (
+    resolve_quality_list_scope as _resolve_quality_list_scope,
+)
 from app.modules.quality.models.inspection import InspectionRecord
 from app.modules.quality.schemas.inspection import (
     CreateInspectionRequest,
@@ -50,12 +53,9 @@ async def list_inspections(
 ) -> Any:
     _require_user(current_user)
     assert current_user is not None
-    from app.platform.identity.data_scope import (
-        department_in_clause,
-        resolve_user_department_scope,
-    )
+    from app.platform.identity.data_scope import department_in_clause
 
-    scope = await resolve_user_department_scope(db, current_user)
+    scope = await _resolve_quality_list_scope(db, current_user)
     base_query = select(InspectionRecord).where(InspectionRecord.is_deleted.is_(False))
     count_query = (
         select(func.count())

@@ -319,6 +319,26 @@ describe('WarehouseFeishuTablePage', () => {
     expect(formatSyncTime('2026-08-25T08:00:00Z')).toContain('2026-08-25')
   })
 
+  it('keeps group row keys unique when the same subgroup value appears under different parents', () => {
+    const grouped = buildGroupedRows(
+      [
+        { __record_id: 'a1', 库区: '一号库', 物料名称: '磷酸氢二钾' },
+        { __record_id: 'a2', 库区: '二号库', 物料名称: '磷酸氢二钾' },
+      ] as never,
+      ['库区', '物料名称']
+    )
+    const keys = grouped.map((row) =>
+      '__group_row' in row ? `group-${JSON.stringify(row.__group_path)}` : row.__record_id
+    )
+    expect(new Set(keys).size).toBe(keys.length)
+    // 不同父组下的同名二级分组应各自独立存在且 key 不同
+    expect(
+      grouped.filter(
+        (row) => '__group_row' in row && row.__group_level === 1 && row.__group_value === '磷酸氢二钾'
+      )
+    ).toHaveLength(2)
+  })
+
   it('renders filters, stats, person/status cells, details, edit, save, and delete flows', async () => {
     await mount(tableData, 'product-summary')
 
@@ -419,5 +439,98 @@ describe('WarehouseFeishuTablePage', () => {
     await act(async () => findButton('详情')?.click())
     await act(async () => { await Promise.resolve(); await Promise.resolve() })
     expect(mocks.message.error).toHaveBeenCalledWith(expect.stringContaining('详情加载失败'))
+  })
+
+  it('renders product inbound detail with projected columns, date-desc order, and 新增 button', async () => {
+    mocks.searchParams = new URLSearchParams()
+    expect(resolveInoutLinks('product-inbound-detail')?.inboundLabel).toBe('新增')
+
+    const detailData = {
+      page_key: 'product-inbound-detail',
+      page_title: '成品入库明细',
+      table_name: '成品入库明细',
+      source: 'feishu_bitable',
+      last_sync_time: '2026-08-25T08:00:00Z',
+      page: 1,
+      page_size: 200,
+      total: 2,
+      columns: [
+        { key: '入库日期', title: '入库日期', field_type: 5 },
+        { key: '产品名称', title: '产品名称', field_type: 1 },
+        { key: '包装规格', title: '包装规格', field_type: 1 },
+        { key: '对应前台批号', title: '对应前台批号', field_type: 1 },
+        { key: '入库标签批号', title: '入库标签批号', field_type: 1 },
+        { key: '入库量', title: '入库量', field_type: 2 },
+        { key: '客户', title: '客户', field_type: 1 },
+        { key: '包装桶UN信息', title: '包装桶UN信息', field_type: 1 },
+        { key: '备注（填写实物批号）', title: '备注（填写实物批号）', field_type: 1 },
+        { key: '入库车间', title: '入库车间', field_type: 3, options: [{ name: '201一车间' }] },
+        { key: 'QC确认人', title: 'QC确认人', field_type: 11 },
+        { key: '入库确认', title: '入库确认', field_type: 1 },
+        { key: '仓库确认人', title: '仓库确认人', field_type: 11 },
+      ],
+      rows: [
+        {
+          __record_id: 'pd-1',
+          入库日期: 1_756_080_000_000,
+          产品名称: 'L-苯丙氨酸',
+          包装规格: '25kg/桶',
+          对应前台批号: 'B-1024',
+          入库标签批号: 'R-1024',
+          入库量: 300,
+          客户: '客户甲',
+          包装桶UN信息: 'UN1A/Y1.4/150',
+          '备注（填写实物批号）': '',
+          入库车间: '201一车间',
+          QC确认人: [{ name: '张三' }],
+          入库确认: '已确认',
+          仓库确认人: [{ name: '李四' }],
+        },
+        {
+          __record_id: 'pd-2',
+          入库日期: 1_757_080_000_000,
+          产品名称: 'L-色氨酸',
+          包装规格: '10kg/桶',
+          对应前台批号: 'B-1026',
+          入库标签批号: 'R-1026',
+          入库量: 150,
+          客户: '客户乙',
+          包装桶UN信息: 'UN1A/Y1.4/100',
+          '备注（填写实物批号）': '实物批号备注',
+          入库车间: '201一车间',
+          QC确认人: [{ name: '王五' }],
+          入库确认: '待确认',
+          仓库确认人: [{ name: '赵六' }],
+        },
+      ],
+      stats: { month_count: 2, today_count: 1, stock_count: 2 },
+    } as never
+    mocks.fetchWarehouseMaterialPage.mockResolvedValue(detailData)
+    await mount(detailData, 'product-inbound-detail')
+
+    const headerText = Array.from(container.querySelectorAll('thead th'))
+      .map((th) => th.textContent ?? '')
+      .join('|')
+    expect(headerText).toContain('入库日期')
+    expect(headerText).toContain('包装桶UN信息')
+    // 列表不展示低频字段（QC确认人、入库确认、仓库确认人在详情弹窗查看）
+    expect(headerText).not.toContain('QC确认人')
+    expect(headerText).not.toContain('入库确认')
+    expect(headerText).not.toContain('仓库确认人')
+    expect(container.textContent).not.toContain('张三')
+
+    // 按入库日期倒序：最新记录（2026-08-26，pd-2）在第一行业务行
+    const bodyRows = Array.from(container.querySelectorAll('tbody tr'))
+    const firstBusinessRow = bodyRows.find((row) => row.textContent?.includes('L-色氨酸'))
+    expect(firstBusinessRow).toBeDefined()
+    const firstRowIndex = bodyRows.indexOf(firstBusinessRow!)
+    const laterRow = bodyRows.find((row) => row.textContent?.includes('L-苯丙氨酸'))
+    expect(laterRow).toBeDefined()
+    expect(firstRowIndex).toBeLessThan(bodyRows.indexOf(laterRow!))
+
+    // 入库登记按钮按 inboundLabel 显示为「新增」
+    const buttons = Array.from(container.querySelectorAll('button'))
+    expect(buttons.some((button) => button.textContent === '新增')).toBe(true)
+    expect(buttons.some((button) => button.textContent === '入库登记')).toBe(false)
   })
 })

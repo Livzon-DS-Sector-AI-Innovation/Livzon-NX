@@ -102,9 +102,17 @@ def _fake_user(open_id: str, name: str) -> dict:
 
 
 @pytest.mark.asyncio
-async def test_sync_keeps_existing_data_when_dept_fails():
+async def test_sync_keeps_existing_data_when_dept_fails(
+    monkeypatch: pytest.MonkeyPatch,
+):
     """某部门拉取失败时不重写全表，抛异常让任务标记失败"""
     from app.modules.hr import contract_settings_api as api
+
+    # 成员同步改由人事专属应用拉取：隔离 DB 凭证解析
+    monkeypatch.setattr(
+        "app.modules.hr.feishu_settings_service.get_hr_feishu_app_credentials",
+        AsyncMock(return_value=("cli_hr_test", "hr_secret_plain")),
+    )
 
     db = _mock_db()
 
@@ -134,9 +142,15 @@ async def test_sync_keeps_existing_data_when_dept_fails():
 
 
 @pytest.mark.asyncio
-async def test_sync_rewrites_when_all_depts_succeed():
+async def test_sync_rewrites_when_all_depts_succeed(monkeypatch: pytest.MonkeyPatch):
     """全部部门成功时清空旧数据并写入新数据"""
     from app.modules.hr import contract_settings_api as api
+
+    # 成员同步改由人事专属应用拉取：隔离 DB 凭证解析
+    monkeypatch.setattr(
+        "app.modules.hr.feishu_settings_service.get_hr_feishu_app_credentials",
+        AsyncMock(return_value=("cli_hr_test", "hr_secret_plain")),
+    )
 
     db = _mock_db()
 
@@ -164,3 +178,49 @@ async def test_sync_rewrites_when_all_depts_succeed():
     db.execute.assert_called()  # select(HrFeishuMember) + delete(HrFeishuMember)
     assert db.add.call_count == 2  # open_id+部门 去重后 2 条
     db.commit.assert_awaited()
+
+
+@pytest.mark.asyncio
+async def test_sync_backfills_department_headcount_excluding_public_accounts(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """同步成功后按联系人回填部门在职人数（排除无工号公用账号）。
+
+    人事应用通讯录权限下飞书部门接口 member_count 恒为 0，
+    部门在职人数必须以本地联系人真实人员统计为准。
+    """
+    from app.modules.hr import contract_settings_api as api
+
+    monkeypatch.setattr(
+        "app.modules.hr.feishu_settings_service.get_hr_feishu_app_credentials",
+        AsyncMock(return_value=("cli_hr_test", "hr_secret_plain")),
+    )
+
+    db = _mock_db()
+    departments = [{"open_department_id": "od_a", "name": "201一车间"}]
+
+    async def fake_fetch(contact, dept_id):
+        return [
+            _fake_user("ou_real", "真实员工"),
+            _fake_user("ou_pub", "201一车间公用账号"),
+        ]
+
+    with (
+        patch.object(
+            api.FeishuContact,
+            "get_all_departments",
+            new_callable=AsyncMock,
+            return_value=departments,
+        ),
+        patch.object(api, "_fetch_dept_users_with_retry", side_effect=fake_fetch),
+    ):
+        await api._sync_feishu_members(db)
+
+    backfill_sqls = [
+        str(call.args[0])
+        for call in db.execute.await_args_list
+        if call.args and "UPDATE hr.departments" in str(call.args[0])
+    ]
+    assert backfill_sqls, "联系人同步成功后必须回填部门在职人数"
+    assert "employee_no IS NOT NULL" in backfill_sqls[0]
+    assert "m.status = '1'" in backfill_sqls[0]

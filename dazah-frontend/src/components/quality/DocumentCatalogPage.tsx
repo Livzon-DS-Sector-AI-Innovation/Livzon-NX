@@ -181,20 +181,34 @@ export default function DocumentCatalogPage({ initialDepartments = [] }: Documen
   }
 
   const handleDeleteEntry = (entry: DocumentEntryItem) => {
+    const attachmentCount = entry.attachments?.length ?? 0
+    // 双重确认：整条目录删除影响范围大（历史上有误把"删条目"当"删附件"的情况）
     modal.confirm({
-      title: '删除文件条目',
-      content: `确定删除「${entry.name}」吗？`,
-      okText: '删除',
-      okButtonProps: { danger: true },
+      title: '删除整个文件目录条目（第 1 次确认）',
+      content: `将删除目录条目「${entry.name}」（编码 ${entry.code ?? '无'}）${
+        attachmentCount > 0 ? `及其 ${attachmentCount} 个附件的绑定关系` : ''
+      }。此操作删除的是整条目录，不是单个附件；如仅需删除附件，请通过「管理」在附件列表中操作。`,
+      okText: '继续删除条目',
       cancelText: '取消',
-      onOk: async () => {
-        try {
-          await deleteDocumentEntry(entry.id)
-          message.success('已删除')
-          refresh()
-        } catch (error) {
-          message.error(error instanceof Error ? error.message : '删除失败')
-        }
+      onOk: () => {
+        modal.confirm({
+          title: '删除整个文件目录条目（第 2 次确认）',
+          content: `再次确认：要删除目录条目「${entry.name}」（编码 ${
+            entry.code ?? '无'
+          }）吗？删除后该条目将从文件目录中移除。`,
+          okText: '确认删除条目',
+          okButtonProps: { danger: true },
+          cancelText: '再想想',
+          onOk: async () => {
+            try {
+              await deleteDocumentEntry(entry.id)
+              message.success('已删除')
+              refresh()
+            } catch (error) {
+              message.error(error instanceof Error ? error.message : '删除失败')
+            }
+          },
+        })
       },
     })
   }
@@ -289,16 +303,35 @@ export default function DocumentCatalogPage({ initialDepartments = [] }: Documen
       fileList.forEach((file) => formData.append('files', file))
       const result = await batchImportDocumentAttachments(formData)
       if (result) {
-        const unmatched = result.results.filter((item) => !item.matched)
-        if (unmatched.length === 0) {
-          message.success(`附件导入完成：${result.bound} 个全部自动绑定`)
-        } else {
-          message.warning(
-            `附件导入：成功 ${result.bound} 个，未匹配 ${unmatched.length} 个（${unmatched
-              .slice(0, 3)
-              .map((item) => item.file_name)
-              .join('、')}${unmatched.length > 3 ? ' 等' : ''}）`
+        const importResults = result.results ?? []
+        const unmatched = importResults.filter((item) => !item.matched)
+        const upgraded = importResults.filter((item) => item.version_updated)
+        const baseText =
+          unmatched.length === 0
+            ? `附件导入完成：${result.bound} 个全部自动绑定`
+            : `附件导入：成功 ${result.bound} 个，未匹配 ${unmatched.length} 个（${unmatched
+                .slice(0, 3)
+                .map((item) => item.file_name)
+                .join('、')}${unmatched.length > 3 ? ' 等' : ''}）`
+        if (upgraded.length > 0) {
+          const detail = upgraded
+            .slice(0, 3)
+            .map(
+              (item) =>
+                `${item.entry_code ?? item.new_code ?? ''}（${item.old_code ?? ''} → ${item.new_code ?? ''}）`
+            )
+            .join('、')
+          message.success(
+            `${baseText}；其中 ${result.version_updated_count} 个文件编号已自动升级：${detail}${
+              upgraded.length > 3 ? ' 等' : ''
+            }`
           )
+        } else {
+          if (unmatched.length === 0) {
+            message.success(baseText)
+          } else {
+            message.warning(baseText)
+          }
         }
       }
       refresh()
@@ -441,7 +474,13 @@ export default function DocumentCatalogPage({ initialDepartments = [] }: Documen
           <Button type="link" size="small" onClick={() => openEditEntry(record)}>
             编辑
           </Button>
-          <Button type="link" size="small" danger onClick={() => handleDeleteEntry(record)}>
+          <Button
+            type="link"
+            size="small"
+            danger
+            title="删除整个目录条目（删除附件请用「管理」）"
+            onClick={() => handleDeleteEntry(record)}
+          >
             删除
           </Button>
         </Space>
@@ -526,7 +565,7 @@ export default function DocumentCatalogPage({ initialDepartments = [] }: Documen
               </Button>
             </Upload>
             <Upload
-              accept=".doc,.docx,.pdf,.png,.jpg,.jpeg,.md"
+              accept=".doc,.docx,.wps,.pdf,.png,.jpg,.jpeg,.md"
               multiple
               showUploadList={false}
               beforeUpload={(file, all) => {

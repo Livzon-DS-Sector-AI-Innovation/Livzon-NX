@@ -8,7 +8,6 @@ from uuid import uuid4
 
 import pytest
 
-from app.core.exceptions import NotFoundException
 from app.modules.hr import service
 from app.modules.hr.schemas import EmployeeCreate, OffboardingRecordCreate
 
@@ -60,6 +59,11 @@ async def test_offboarding_create_updates_employee_and_sends_materials(
     monkeypatch.setattr(
         "app.platform.integrations.feishu.notification.send_user_card", notification
     )
+    # 离职材料卡片改由人事专属应用发送：隔离 DB 凭证解析
+    monkeypatch.setattr(
+        "app.modules.hr.service.get_hr_feishu_app_credentials",
+        AsyncMock(return_value=("cli_hr_test", "hr_secret_plain")),
+    )
 
     result = await instance.create_record(
         OffboardingRecordCreate(
@@ -71,9 +75,32 @@ async def test_offboarding_create_updates_employee_and_sends_materials(
         )
     )
     assert result.employee_id == employee.id
-    assert employee.status == "离职"
+    # 离职语义重构：创建「在职」状态的离职台账不联动改员工状态；
+    # 仅当 status=离职 时才转抄员工档案并软删员工
+    assert employee.status == "在职"
     assert notification.await_count == 1
     assert result.materials_sent is True
+
+    # 离职联动分支：status=离职 → 员工同步离职 + 软删
+    employee_repo.soft_delete = AsyncMock()
+    employee2 = SimpleNamespace(
+        id=uuid4(), status="在职", name="李四", feishu_open_id="ou-2"
+    )
+    employee_repo.get_by_id.return_value = employee2
+    instance._snapshot_employee = AsyncMock()
+    departed = await instance.create_record(
+        OffboardingRecordCreate(
+            employee_id=employee2.id,
+            name="李四",
+            employee_number="E002",
+            offboarding_date=date(2026, 8, 26),
+            offboarding_type="辞职",
+            status="离职",
+        )
+    )
+    assert departed.status == "离职"
+    assert employee2.status == "离职"
+    employee_repo.soft_delete.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -81,7 +108,8 @@ async def test_termination_certificate_upload_and_missing_employee(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     record = SimpleNamespace(
-        employee_id=uuid4(), completed_date=None, handover_status=None
+        employee_id=uuid4(), completed_date=None, status=None, hire_date=None,
+        name="张三", employee_number="E001",
     )
     employee = SimpleNamespace(
         name="张三",
@@ -95,7 +123,10 @@ async def test_termination_certificate_upload_and_missing_employee(
         service.OffboardingRecordService
     )
     instance.repo = repo
-    instance.employee_repo = SimpleNamespace(get_by_id=AsyncMock(return_value=employee))
+    instance.employee_repo = SimpleNamespace(
+        get_by_id_include_deleted=AsyncMock(return_value=employee),
+        get_by_employee_number_include_deleted=AsyncMock(return_value=None),
+    )
     instance.get_record = AsyncMock(return_value=record)
     monkeypatch.setattr(
         "app.modules.hr.offboarding_document_generator.generate_termination_notice",
@@ -108,12 +139,17 @@ async def test_termination_certificate_upload_and_missing_employee(
     output, filename, updated = await instance.generate_termination_certificate(uuid4())
     assert output.getvalue() == b"docx"
     assert filename.startswith("张三_")
-    assert updated.handover_status == "已完成"
+    # 离职语义重构：完成通知单不再回写交接状态，仅记录完成日期
+    assert updated.completed_date is not None
     upload.assert_called_once()
 
-    instance.employee_repo.get_by_id.return_value = None
-    with pytest.raises(NotFoundException):
-        await instance.generate_termination_certificate(uuid4())
+    # 离职语义重构：员工已软删/未关联时回退离职台账快照字段，仍可生成通知单
+    instance.employee_repo.get_by_id_include_deleted.return_value = None
+    output2, filename2, updated2 = await instance.generate_termination_certificate(
+        uuid4()
+    )
+    assert output2.getvalue() == b"docx"
+    assert filename2.startswith("张三_")
 
 
 @pytest.mark.asyncio
@@ -124,6 +160,11 @@ async def test_position_transfer_notifications_and_approval_filters(
         service.PositionTransferRecordService
     )
     instance.session = SimpleNamespace()
+    # 岗位调动审批卡片改由人事专属应用发送：隔离 DB 凭证解析
+    monkeypatch.setattr(
+        "app.modules.hr.service.get_hr_feishu_app_credentials",
+        AsyncMock(return_value=("cli_hr_test", "hr_secret_plain")),
+    )
     record = SimpleNamespace(
         id=uuid4(),
         employee_name="张三",

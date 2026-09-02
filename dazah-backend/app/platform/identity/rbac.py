@@ -35,6 +35,49 @@ SUPER_ADMIN_ROLE_CODE = "super_admin"
 # 视为管理员，拥有全部权限（通配），不受部门级数据隔离限制
 DEV_BYPASS_OPEN_ID = "dev-bypass-open-id"
 
+# ─── 质量 QA 系统角色种子 ────────────────────────────────────────────
+# 六个子域角色：质量管理全部可见，编辑范围限定各自子域（端点内精校验）
+QUALITY_QA_ROLE_SEEDS: list[dict[str, Any]] = [
+    {
+        "code": "quality_qc",
+        "name": "质量检验员",
+        "description": (
+            "质量管理全部可见，可编辑质量检测全部内容（检验/物品/仪器/成品/物料检验）"
+        ),
+        "permissions": ["quality:read", "quality:qc:write"],
+    },
+    {
+        "code": "product_qa",
+        "name": "产品QA",
+        "description": "质量管理全部可见，可编辑产品质量全部内容",
+        "permissions": ["quality:read", "quality:product_qa:write"],
+    },
+    {
+        "code": "change_qa",
+        "name": "变更QA",
+        "description": "质量管理全部可见，可编辑变更全部内容（变更控制/变更计划）",
+        "permissions": ["quality:read", "quality:change_qa:write"],
+    },
+    {
+        "code": "validation_qa",
+        "name": "验证QA",
+        "description": "质量管理全部可见，可编辑验证全部内容（验证与确认）",
+        "permissions": ["quality:read", "quality:validation_qa:write"],
+    },
+    {
+        "code": "system_qa",
+        "name": "体系QA",
+        "description": "质量管理全部可见，可编辑偏差/CAPA/投诉/OOS-OOT全部内容",
+        "permissions": ["quality:read", "quality:system_qa:write"],
+    },
+    {
+        "code": "material_qa",
+        "name": "物料QA",
+        "description": "质量管理全部可见，可编辑供应商全部内容",
+        "permissions": ["quality:read", "quality:material_qa:write"],
+    },
+]
+
 # ─── 业务模块清单（生成权限点）───────────────────────────────────────
 # 与 app/api/router.py 实际挂载前缀对齐；ai_parser/product 未挂载，不生成权限点
 PERMISSION_MODULES: list[str] = [
@@ -73,6 +116,17 @@ MODULE_ACTIONS["warehouse"] += [
 # 其他部门通过“人事查看员”角色（hr:read）只读其余人事页面
 MODULE_ACTIONS["hr"] += [
     "employee:read",
+]
+# 质量模块细分编辑权限（按 QA 角色子域，端点内精校验）：
+# QC 质量检测 / 产品QA 产品质量 / 变更QA 变更控制 / 验证QA 验证与确认
+# 体系QA 偏差+CAPA+投诉+OOS-OOT / 物料QA 供应商
+MODULE_ACTIONS["quality"] += [
+    "qc:write",
+    "product_qa:write",
+    "change_qa:write",
+    "validation_qa:write",
+    "system_qa:write",
+    "material_qa:write",
 ]
 
 # ─── 路径前缀 → 模块映射表（权限中间件单一来源）──────────────────────
@@ -473,7 +527,56 @@ async def seed_permissions(db: AsyncSession) -> None:
         if perm.id not in bound_ids:
             db.add(RolePermission(role_id=role.id, permission_id=perm.id))
     await db.flush()
+
+    await _seed_quality_qa_roles(db)
     await db.commit()
+
+
+async def _seed_quality_qa_roles(db: AsyncSession) -> None:
+    """质量 QA 系统角色种子（幂等）：按 code 查重，缺则建 is_system 角色并预绑权限。"""
+    code_by_perm: dict[str, Permission] = {}
+    perm_stmt = select(Permission).where(
+        Permission.is_deleted == False  # noqa: E712
+    )
+    perm_result = await db.execute(perm_stmt)
+    for perm in perm_result.scalars().all():
+        code_by_perm[perm.code] = perm
+
+    role_result = await db.execute(
+        select(Role).where(
+            Role.code.in_([seed["code"] for seed in QUALITY_QA_ROLE_SEEDS]),
+            Role.is_deleted == False,  # noqa: E712
+        )
+    )
+    existing_by_code = {role.code: role for role in role_result.scalars().all()}
+
+    for seed in QUALITY_QA_ROLE_SEEDS:
+        role = existing_by_code.get(seed["code"])
+        if role is None:
+            role = Role(
+                name=seed["name"],
+                code=seed["code"],
+                description=seed.get("description"),
+                is_system=True,
+            )
+            db.add(role)
+            await db.flush()
+            existing_by_code[seed["code"]] = role
+
+        rp_stmt = select(RolePermission.permission_id).where(
+            RolePermission.role_id == role.id,
+            RolePermission.is_deleted == False,  # noqa: E712
+        )
+        rp_result = await db.execute(rp_stmt)
+        bound_ids = set(rp_result.scalars().all())
+
+        for perm_code in seed["permissions"]:
+            perm_record = code_by_perm.get(perm_code)
+            if perm_record is None or perm_record.id in bound_ids:
+                continue
+            db.add(RolePermission(role_id=role.id, permission_id=perm_record.id))
+            bound_ids.add(perm_record.id)
+        await db.flush()
 
 
 # ─── 菜单种子 ─────────────────────────────────────────────────────────

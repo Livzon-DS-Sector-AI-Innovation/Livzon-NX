@@ -104,6 +104,9 @@ function mappedMenuTargets(moduleCode: FeishuModuleCode): FeishuMappedMenuTarget
       const isNavigablePage = Boolean(item.path && item.path !== '#' && !item.disabled && !isConfigPage)
 
       if (isNavigablePage) {
+        // feishuPageKey 为空串表示显式不映射（如 AI 分析/设置页），跳过；
+        // 否则优先用显式 key，再回退「模块.菜单链」拼接
+        if (item.feishuPageKey === '') return
         pages.push({
           label: labels.join(' / '),
           value: item.feishuPageKey || `${moduleCode}.${keys.map(normalizeKey).join('.')}`,
@@ -193,8 +196,11 @@ export const feishuDataSourceApi = {
       { method: 'POST', body: moduleCode === 'energy' ? undefined : JSON.stringify(values) },
     ),
 
-  listRoots: (moduleCode: FeishuModuleCode, configId?: string | null) =>
-    api<FeishuSourceRoot[]>(moduleCode, `${rootsPath(moduleCode)}${moduleCode === 'production' && configId ? `?config_id=${encodeURIComponent(configId)}` : ''}`),
+  listRoots: async (moduleCode: FeishuModuleCode, configId?: string | null) =>
+    (await api<FeishuSourceRoot[]>(
+      moduleCode,
+      `${rootsPath(moduleCode)}${moduleCode === 'production' && configId ? `?config_id=${encodeURIComponent(configId)}` : ''}`,
+    )) ?? [],
 
   createRoot: (
     moduleCode: FeishuModuleCode,
@@ -220,7 +226,7 @@ export const feishuDataSourceApi = {
     const path = moduleCode === 'production'
       ? '/feishu-read/resources'
       : moduleCode === 'warehouse' ? '/feishu/tables' : '/sources'
-    const items = await api<Array<Record<string, unknown>>>(moduleCode, path)
+    const items = (await api<Array<Record<string, unknown>>>(moduleCode, path)) ?? []
     return items.map(normalizeResource)
   },
 

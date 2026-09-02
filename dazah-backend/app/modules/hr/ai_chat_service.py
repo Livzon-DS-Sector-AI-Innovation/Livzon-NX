@@ -58,6 +58,8 @@ end_date, department)** — 查询某期间合同到期人员
 ### 🔄 异动工具
 - **hr_query_offboarding(keyword)** — 查询离职记录（不传参数则查全部）
 - **hr_query_position_transfers(keyword)** — 查询岗位调动（不传参数则查全部）
+- **hr_query_onboarding(keyword)** — 查询入职记录（最近入职员工，
+    不传参数则按入职日期倒序）
 
 ### ✏️ 写入工具
 - **hr_create_training_record(employee_number, training_date, training_subject, ...)** —
@@ -109,7 +111,7 @@ def build_welcome_message() -> str:
         "• 👤 查询员工、部门、班组、培训师\n"
         "• 📋 合同管理：到期提醒、合同查询\n"
         "• 📝 培训管理：计划、台账、评估、考核、跟踪\n"
-        "• 🔄 异动管理：离职记录、岗位调动\n"
+        "• 🔄 异动管理：离职记录、岗位调动、入职记录\n"
         "• ✏️ 数据写入：创建培训记录、离职记录、更新联系方式\n\n"
         "直接输入你的问题！"
     )

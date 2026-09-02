@@ -1,6 +1,6 @@
 """Registration knowledge repository."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import asc, desc, func, or_, select, update
@@ -191,7 +191,7 @@ class RegistrationKnowledgeRepository:
 
     async def publish_article(self, article: KnowledgeArticle) -> KnowledgeArticle:
         article.is_published = True
-        article.published_at = datetime.now(tz=None)
+        article.published_at = datetime.now(UTC)
         await self.session.flush()
         result = await self.session.execute(
             select(KnowledgeArticle).where(KnowledgeArticle.id == article.id)

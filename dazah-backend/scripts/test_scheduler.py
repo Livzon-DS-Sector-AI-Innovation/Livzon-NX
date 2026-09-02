@@ -8,9 +8,10 @@ from typing import Any
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from app.modules.regulatory_tracker.tasks.sync_tasks import daily_sync_job
+
 from app.core.database import async_session_factory
 from app.modules.regulatory_tracker import repository as repo
-from app.modules.regulatory_tracker.tasks.sync_tasks import daily_sync_job
 from app.platform.identity.models import User  # noqa: F401
 
 logging.basicConfig(

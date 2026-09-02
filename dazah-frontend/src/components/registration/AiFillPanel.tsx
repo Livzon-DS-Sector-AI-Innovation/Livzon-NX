@@ -37,6 +37,8 @@ export function AiFillPanel({ chapterId, chapterCode, assets, onAssetsChange, on
   const [previewLoading, setPreviewLoading] = useState(false)
   const [previewResult, setPreviewResult] = useState<AIPreviewResult | null>(null)
   const [editedFields, setEditedFields] = useState<AIFieldResult[]>([])
+  // Get image fields that need pages
+  const imageFields = editedFields.filter(f => f.field_type === 'image_appendix')
 
   // Page split
   const [splitModalOpen, setSplitModalOpen] = useState(false)
@@ -239,8 +241,6 @@ export function AiFillPanel({ chapterId, chapterCode, assets, onAssetsChange, on
     }
   }
 
-  // Get image fields that need pages
-  const imageFields = editedFields.filter(f => f.field_type === 'image_appendix')
   const hasUncategorized = uncategorizedAssets.length > 0
 
   return (

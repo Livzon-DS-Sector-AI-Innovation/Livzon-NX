@@ -13,6 +13,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.deps import CurrentUser
 from app.core.response import error_response, paginated_response, success_response
+from app.modules.quality.api.deps import (
+    QUALITY_QA_SCOPE_PERMISSIONS,
+)
+from app.modules.quality.api.deps import (
+    assert_quality_edit_scope as _assert_quality_edit_scope,
+)
 from app.modules.quality.api.deps import require_user as _require_user
 from app.modules.quality.models.product_quality import ProductQualityRecord
 from app.modules.quality.schemas.product_quality import (
@@ -169,6 +175,11 @@ async def update_product_quality(
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
+    await _assert_quality_edit_scope(
+        db,
+        current_user,
+        scope_permission=QUALITY_QA_SCOPE_PERMISSIONS["product_qa"],
+    )
     try:
         result = await db.execute(
             select(ProductQualityRecord).where(
@@ -209,6 +220,11 @@ async def delete_product_quality(
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
+    await _assert_quality_edit_scope(
+        db,
+        current_user,
+        scope_permission=QUALITY_QA_SCOPE_PERMISSIONS["product_qa"],
+    )
     try:
         result = await db.execute(
             select(ProductQualityRecord).where(

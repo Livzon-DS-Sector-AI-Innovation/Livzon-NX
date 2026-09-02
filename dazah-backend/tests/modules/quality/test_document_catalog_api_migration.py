@@ -10,6 +10,7 @@ from uuid import uuid4
 import pytest
 from fastapi import UploadFile
 
+from app.core.exceptions import AppException
 from app.modules.quality.api import document_catalog as api
 from app.modules.quality.models.document_catalog import (
     DocumentDepartment,
@@ -143,10 +144,11 @@ async def test_department_crud_handles_create_restore_duplicate_update_and_delet
 
     active = _department()
     db = _Db(_Result(active))
-    duplicate = await api.create_document_department(
-        CreateDocumentDepartmentRequest(name="质量部"), db, user
-    )
-    assert duplicate.status_code == 400
+    with pytest.raises(AppException) as exc:
+        await api.create_document_department(
+            CreateDocumentDepartmentRequest(name="质量部"), db, user
+        )
+    assert exc.value.status_code == 400
 
     db = _Db(_Result(department), _Result(None), _Result(department))
     updated = await api.update_document_department(
@@ -159,13 +161,14 @@ async def test_department_crud_handles_create_restore_duplicate_update_and_delet
     assert department.name == "质量管理部"
 
     db = _Db(_Result(department), _Result(_department("质量管理部")))
-    duplicate_update = await api.update_document_department(
-        department.id,
-        UpdateDocumentDepartmentRequest(name="质量管理部"),
-        db,
-        user,
-    )
-    assert duplicate_update.status_code == 400
+    with pytest.raises(AppException) as exc:
+        await api.update_document_department(
+            department.id,
+            UpdateDocumentDepartmentRequest(name="质量管理部"),
+            db,
+            user,
+        )
+    assert exc.value.status_code == 400
 
     db = _Db(_Result(department), _Result(rows=[]))
     deleted = await api.delete_document_department(department.id, db, user)
@@ -193,7 +196,7 @@ async def test_document_lookup_and_content_resolution_choose_latest_revision(
     assert _response_body(empty)["data"] is None
 
     monkeypatch.setattr(
-        api, "_find_latest_entry_by_name", AsyncMock(side_effect=[latest, None])
+        api.crud, "find_latest_entry_by_name", AsyncMock(side_effect=[latest, None])
     )
     monkeypatch.setattr(
         api,

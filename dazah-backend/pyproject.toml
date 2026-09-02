@@ -61,6 +61,12 @@ line-length = 88
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]
 
+[tool.ruff.lint.per-file-ignores]
+# 法规站点爬虫/测试嵌入浏览器自动化 JS 脚本与 HTML 夹具（多行字符串内），
+# 物理行无法折行且折行会改变嵌入内容语义；仅豁免这两类文件的 E501
+"app/modules/regulatory_tracker/crawler/cde_crawler.py" = ["E501"]
+"tests/modules/regulatory_tracker/test_international_adapters.py" = ["E501"]
+
 [tool.mypy]
 python_version = "3.12"
 strict = true
@@ -86,6 +92,14 @@ disallow_incomplete_defs = false
 disable_error_code = ["assignment"]
 
 [[tool.mypy.overrides]]
+module = "app.modules.regulatory_tracker.crawler.cde_crawler"
+# 嵌入 playwright 浏览器自动化脚本：动态 API 调用与无类型第三方交互
+# 属既有过渡代码，strict 校验不适用于此嵌入脚本模块
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+disable_error_code = ["attr-defined", "assignment", "no-untyped-call", "arg-type", "union-attr", "type-arg"]
+
+[[tool.mypy.overrides]]
 module = "app.platform.identity.api"
 # FastAPI dependency aliases are non-optional at runtime but historically use
 # ``= None`` so FastAPI can inject them. Keep every strict check except this
@@ -106,3 +120,10 @@ dev = [
     "pytest-asyncio>=1.3.0",
     "pytest-cov>=7.0.0",
 ]
+
+[tool.uv]
+# 国内默认索引：uv lock / uv sync 全部走清华源，摆脱对境外代理的依赖。
+# 生成 uv.lock 时必须保持此配置，锁内 registry 才会指向国内镜像。
+[[tool.uv.index]]
+url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+default = true

@@ -7,7 +7,9 @@ import {
   SearchOutlined,
   PlusOutlined,
   ThunderboltOutlined,
-  ImportOutlined } from '@ant-design/icons'
+  ImportOutlined,
+  GlobalOutlined,
+  LinkOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { fetchCandidates, type JobPostingVM } from '@/lib/api/client/hr'
 import {
@@ -202,6 +204,9 @@ export default function RecruitmentClient({ initialJobs }: RecruitmentClientProp
         {canEditHr ? (
           <Button icon={<ThunderboltOutlined />} onClick={handleBatchAnalyze} loading={analyzing}>AI 筛选</Button>
         ) : null}
+        {/* 外部招聘渠道入口：新窗口打开，全员可见 */}
+        <Button icon={<GlobalOutlined />} href="https://www.zhipin.com/" target="_blank" rel="noopener noreferrer">BOSS直聘</Button>
+        <Button icon={<LinkOutlined />} href="https://www.zhaopin.com/" target="_blank" rel="noopener noreferrer">智联招聘</Button>
         <div className="flex-1" />
         <Select
           placeholder="符合程度·全部"

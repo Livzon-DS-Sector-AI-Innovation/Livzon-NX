@@ -1,5 +1,7 @@
 """HR Feishu settings API routes."""
 
+import asyncio
+import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query
@@ -15,12 +17,24 @@ from app.modules.hr.schemas import (
     UpdateHrFeishuEntitySettingRequest,
 )
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/feishu-settings", tags=["人事-飞书设置"])
 
 
 def _require_user(current_user: CurrentUser) -> None:
     if current_user is None:
         raise AppException(status_code=401, message="请先登录")
+
+
+async def _restart_hr_ws_safely() -> None:
+    """人事凭证变更后热重启人事飞书长连接（失败仅记录日志）。"""
+    try:
+        from app.modules.hr.feishu.ws_client import start_hr_ws_if_configured
+
+        await start_hr_ws_if_configured()
+    except Exception:
+        logger.exception("人事飞书长连接热重启失败")
 
 
 @router.get("/app", summary="获取人事模块飞书应用配置")
@@ -41,6 +55,7 @@ async def save_hr_feishu_app_settings(
 ) -> Any:
     _require_user(current_user)
     result = await service.update_hr_feishu_app_settings(db, data)
+    asyncio.create_task(_restart_hr_ws_safely())
     return success_response(
         data=result.model_dump(mode="json"), message="飞书应用配置已保存"
     )

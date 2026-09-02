@@ -12,11 +12,10 @@ import {
   fetchTrainingDepartments,
   fetchCustomTrainingDepartments,
   fetchFeishuMembers,
-  saveDeptScope,
-  clearDeptScope,
   type DeptScopeItem,
   type FeishuContactVM,
 } from '@/lib/api/client/hr'
+import { saveDeptScopeAction, clearDeptScopeAction } from '@/actions/hr'
 
 /** 拼音增强成员：预计算全拼/首字母 */
 interface EnrichedMember extends FeishuContactVM {
@@ -157,7 +156,7 @@ export default function DeptScopeSettingsClient() {
   const handleSave = useCallback(async (row: DeptScopeItem) => {
     setSavingIds((prev) => new Set(prev).add(row.user_id))
     try {
-      const saved = await saveDeptScope(row.user_id, localScopes[row.user_id] || [], {
+      const saved = await saveDeptScopeAction(row.user_id, localScopes[row.user_id] || [], {
         user_name: row.user_name,
         user_department: row.user_department,
       })
@@ -184,7 +183,7 @@ export default function DeptScopeSettingsClient() {
   const handleClear = useCallback(async (row: DeptScopeItem) => {
     setSavingIds((prev) => new Set(prev).add(row.user_id))
     try {
-      const saved = await saveDeptScope(row.user_id, [])
+      const saved = await saveDeptScopeAction(row.user_id, [])
       setRows((prev) => prev.map((r) =>
         r.user_id === row.user_id
           ? { ...r, visible_depts: saved.visible_depts || [] }
@@ -207,7 +206,7 @@ export default function DeptScopeSettingsClient() {
   const handleRemove = useCallback(async (row: DeptScopeItem) => {
     setSavingIds((prev) => new Set(prev).add(row.user_id))
     try {
-      await clearDeptScope(row.user_id)
+      await clearDeptScopeAction(row.user_id)
       setRows((prev) => prev.filter((r) => r.user_id !== row.user_id))
       setLocalScopes((prev) => {
         const next = { ...prev }

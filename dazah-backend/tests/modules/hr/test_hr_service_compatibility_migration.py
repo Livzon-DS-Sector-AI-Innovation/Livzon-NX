@@ -107,6 +107,23 @@ def _employee(**overrides: object) -> SimpleNamespace:
     return SimpleNamespace(**values)
 
 
+class _NestedTransaction:
+    async def __aenter__(self) -> "_NestedTransaction":
+        return self
+
+    async def __aexit__(self, *_args: object) -> None:
+        return None
+
+    def __await__(self):
+        # 立即完成的生成器：await 直接得到 self，无事件循环依赖
+        if False:
+            yield
+        return self
+
+    commit = AsyncMock()
+    rollback = AsyncMock()
+
+
 def _employee_service() -> service.EmployeeService:
     instance = service.EmployeeService.__new__(service.EmployeeService)
     instance.session = SimpleNamespace()
@@ -248,7 +265,15 @@ async def test_employee_crud_sync_and_status_compatibility() -> None:
 async def test_employee_sync_and_notification_failure_paths(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # 飞书 IM/同步改由人事专属应用执行：隔离 DB 凭证解析
+    monkeypatch.setattr(
+        "app.modules.hr.service.get_hr_feishu_app_credentials",
+        AsyncMock(return_value=("cli_hr_test", "hr_secret_plain")),
+    )
     instance = _employee_service()
+    instance.session = SimpleNamespace(
+        begin_nested=lambda: _NestedTransaction(),
+    )
     employee = _employee(feishu_record_id=None)
     instance.bitable = SimpleNamespace(
         table_id="tbl",
@@ -260,6 +285,10 @@ async def test_employee_sync_and_notification_failure_paths(
     assert result["total"] == 0
 
     instance = _employee_service()
+    instance.session = SimpleNamespace(
+        begin_nested=lambda: _NestedTransaction(),
+    )
+    instance.session.rollback = AsyncMock()
     employee.created_at = datetime(2026, 8, 20)
     current_bitable = SimpleNamespace(
         table_id="tbl",
@@ -304,7 +333,7 @@ async def test_employee_sync_and_notification_failure_paths(
     employee.feishu_open_id = None
     monkeypatch.setattr(
         "app.modules.hr.feishu.im.FeishuIM",
-        lambda: SimpleNamespace(),
+        lambda *args, **kwargs: SimpleNamespace(),
     )
     instance.repo.get_by_employee_number.side_effect = [employee, None]
     result = await instance.notify_training(payload)
@@ -352,6 +381,11 @@ def _department_service() -> service.DepartmentService:
 async def test_department_tree_crud_and_org_compatibility(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # 部门树/飞书通讯录改由人事专属应用执行：隔离 DB 凭证解析
+    monkeypatch.setattr(
+        "app.modules.hr.service.get_hr_feishu_app_credentials",
+        AsyncMock(return_value=("cli_hr_test", "hr_secret_plain")),
+    )
     instance = _department_service()
     feishu = SimpleNamespace(
         sync_department_created=AsyncMock(),
@@ -397,7 +431,10 @@ async def test_department_tree_crud_and_org_compatibility(
             ]
         )
     )
-    monkeypatch.setattr("app.modules.hr.feishu.contact.FeishuContact", lambda: contact)
+    monkeypatch.setattr(
+        "app.modules.hr.feishu.contact.FeishuContact",
+        lambda *args, **kwargs: contact,
+    )
     org = await instance.get_org_tree()
     assert org[0]["children"]
     assert org[0]["children"][0]["children"][0]["type"] == "employee"

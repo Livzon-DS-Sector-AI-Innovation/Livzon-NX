@@ -258,7 +258,8 @@ async def test_permission_simulate_allowed(db_session) -> None:
         assert data["allowed"] is True
         assert "quality:read" in data["reason"]
         assert data["required"] is None
-        assert data["note"] is None
+        # 质量路径已登记端点内精校验，允许与拒绝判定均附带标注
+        assert data["note"] is not None and "精校验" in data["note"]
     finally:
         await _cleanup_user(db_session, user.id)
 
@@ -282,7 +283,7 @@ async def test_permission_simulate_denied_required(db_session) -> None:
         data = json.loads(resp.body)["data"]
         assert data["allowed"] is False
         assert data["required"] == "quality:write"
-        assert data["note"] is None
+        assert data["note"] is not None and "精校验" in data["note"]
     finally:
         await _cleanup_user(db_session, user.id)
 

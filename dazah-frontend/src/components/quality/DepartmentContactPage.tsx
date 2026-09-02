@@ -1,5 +1,14 @@
-import { Button, Space, Table } from 'antd'
-import { DepartmentContact } from '@/types/quality'
+'use client'
+
+import { qualityTokens } from './themeTokens'
+import { useCallback, useMemo, useRef, useState } from 'react'
+import { App, Avatar, Button, Input, Modal, Select, Space, Table } from 'antd'
+import type { ColumnsType } from 'antd/es/table'
+import { useRouter } from 'next/navigation'
+import { updateDepartmentContactFeishu } from '@/actions/quality'
+import { PersonCell } from './index'
+import type { DepartmentContact, UpdateFeishuDepartmentContactRequest } from '@/types/quality'
+import { searchFeishuMembers, type FeishuContactVM } from '@/lib/api/client/hr'
 
 interface DepartmentContactPageProps {
   items: DepartmentContact[]
@@ -15,6 +24,27 @@ interface DepartmentContactTableRow extends DepartmentContact {
   department_display: string
   enterprise_email_display: string
   department_head_name_display: string
+}
+
+interface EditFormValues {
+  open_id: string | undefined
+  department_head_open_id: string | undefined
+  department: string
+  enterprise_email: string
+}
+
+interface PersonPickOption {
+  value: string
+  label: string
+  avatarUrl: string | null
+}
+
+interface PersonPickerSelectProps {
+  value?: string
+  onChange?: (value?: string) => void
+  placeholder?: string
+  allowClear?: boolean
+  currentPerson?: { open_id?: string | null; name?: string | null; avatar_url?: string | null }
 }
 
 function buildDepartmentContactsHref(params: {
@@ -49,6 +79,86 @@ function getVisiblePages(page: number, totalPages: number): number[] {
     .sort((a, b) => a - b)
 }
 
+function getErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message ? error.message : fallback
+}
+
+function toPickOption(item: FeishuContactVM): PersonPickOption | null {
+  if (!item.open_id) return null
+  return {
+    value: item.open_id,
+    label: item.name || '-',
+    avatarUrl: item.avatar_url || null,
+  }
+}
+
+function PersonPickerSelect({
+  value,
+  onChange,
+  placeholder,
+  allowClear,
+  currentPerson,
+}: PersonPickerSelectProps) {
+  const [options, setOptions] = useState<PersonPickOption[]>([])
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const runSearch = useCallback((keyword: string) => {
+    if (searchTimer.current) clearTimeout(searchTimer.current)
+    searchTimer.current = setTimeout(() => {
+      void (async () => {
+        if (!keyword || keyword.trim().length < 1) {
+          setOptions([])
+          return
+        }
+        const members = await searchFeishuMembers(keyword.trim())
+        setOptions(members.map(toPickOption).filter((o): o is PersonPickOption => o !== null))
+      })()
+    }, 250)
+  }, [])
+
+  // 把当前人员注入为已知选项，保证已选值能回显姓名而非裸 open_id
+  const mergedOptions = useMemo(() => {
+    const merged: PersonPickOption[] = [...options]
+    if (currentPerson?.open_id && (currentPerson.name || currentPerson.avatar_url)) {
+      const exists = merged.some((o) => o.value === currentPerson.open_id)
+      if (!exists) {
+        merged.unshift({
+          value: currentPerson.open_id,
+          label: currentPerson.name || '-',
+          avatarUrl: currentPerson.avatar_url || null,
+        })
+      }
+    }
+    return merged
+  }, [options, currentPerson])
+
+  return (
+    <Select
+      style={{ width: '100%' }}
+      placeholder={placeholder}
+      allowClear={allowClear}
+      showSearch
+      filterOption={false}
+      onSearch={runSearch}
+      value={value}
+      onChange={(val?: string) => onChange?.(val)}
+      options={mergedOptions}
+      optionRender={(option) => (
+        <Space size={6}>
+          <Avatar
+            size={20}
+            src={option.data.avatarUrl || undefined}
+            style={{ background: qualityTokens.brand, flexShrink: 0 }}
+          >
+            {String(option.data.label || '?').slice(0, 1)}
+          </Avatar>
+          <span>{option.data.label}</span>
+        </Space>
+      )}
+    />
+  )
+}
+
 export function DepartmentContactPage({
   items,
   total,
@@ -57,6 +167,18 @@ export function DepartmentContactPage({
   activeDepartment,
   departmentOptions,
 }: DepartmentContactPageProps) {
+  const { message } = App.useApp()
+  const router = useRouter()
+  const [modalOpen, setModalOpen] = useState(false)
+  const [editingRecord, setEditingRecord] = useState<DepartmentContact | null>(null)
+  const [formValues, setFormValues] = useState<EditFormValues>({
+    open_id: undefined,
+    department_head_open_id: undefined,
+    department: '',
+    enterprise_email: '',
+  })
+  const [saving, setSaving] = useState(false)
+
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
   const visiblePages = getVisiblePages(page, totalPages)
   const tableData: DepartmentContactTableRow[] = items.map((item) => ({
@@ -67,12 +189,52 @@ export function DepartmentContactPage({
     department_head_name_display: item.department_head_name || '-',
   }))
 
-  const columns = [
+  const openEdit = (record: DepartmentContact) => {
+    setEditingRecord(record)
+    setFormValues({
+      open_id: record.open_id || undefined,
+      department_head_open_id: record.department_head_open_id || undefined,
+      department: record.department || '',
+      enterprise_email: record.enterprise_email || '',
+    })
+    setModalOpen(true)
+  }
+
+  const closeModal = () => {
+    setModalOpen(false)
+    setEditingRecord(null)
+  }
+
+  const handleSubmit = async () => {
+    if (!editingRecord) return
+    const payload: UpdateFeishuDepartmentContactRequest = {
+      open_id: formValues.open_id || null,
+      department_head_open_id: formValues.department_head_open_id || null,
+      department: formValues.department.trim() || null,
+      enterprise_email: formValues.enterprise_email.trim() || null,
+    }
+    try {
+      setSaving(true)
+      await updateDepartmentContactFeishu(editingRecord.id, payload)
+      message.success('部门联系人已更新')
+      closeModal()
+      router.refresh()
+    } catch (error) {
+      message.error(getErrorMessage(error, '更新部门联系人失败'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const columns: ColumnsType<DepartmentContactTableRow> = [
     {
       title: '姓名',
       dataIndex: 'name_display',
       key: 'name',
       width: 220,
+      render: (value: string, record) => (
+        <PersonCell name={record.name} avatarUrl={record.avatar_url} />
+      ),
     },
     {
       title: '部门',
@@ -91,6 +253,20 @@ export function DepartmentContactPage({
       dataIndex: 'department_head_name_display',
       key: 'department_head_name',
       width: 240,
+      render: (value: string, record) => (
+        <PersonCell name={record.department_head_name} avatarUrl={record.department_head_avatar_url} />
+      ),
+    },
+    {
+      title: '操作',
+      key: 'action',
+      width: 90,
+      fixed: 'right',
+      render: (_, record) => (
+        <Button type="link" size="small" onClick={() => openEdit(record)}>
+          修改
+        </Button>
+      ),
     },
   ]
 
@@ -123,7 +299,7 @@ export function DepartmentContactPage({
                     padding: '0 12px',
                     borderRadius: 999,
                     border: active ? '1px solid #6f5ef9' : '1px solid #d9d9d9',
-                    background: active ? '#6f5ef9' : '#fff',
+                    background: active ? qualityTokens.brand : '#fff',
                     color: active ? '#fff' : '#262626',
                     fontSize: 12,
                     fontWeight: active ? 600 : 400,
@@ -149,7 +325,7 @@ export function DepartmentContactPage({
             dataSource={tableData}
             rowKey="id"
             size="middle"
-            scroll={{ x: 1200 }}
+            scroll={{ x: 1400 }}
             pagination={false}
           />
           <div
@@ -178,7 +354,7 @@ export function DepartmentContactPage({
                       borderRadius: 999,
                       border: active ? '1px solid #6f5ef9' : '1px solid #d9d9d9',
                       background: active ? '#f3f0ff' : '#fff',
-                      color: active ? '#6f5ef9' : '#595959',
+                      color: active ? qualityTokens.brand : '#595959',
                       fontSize: 12,
                     }}
                   >
@@ -211,7 +387,7 @@ export function DepartmentContactPage({
                     })}
                     size="small"
                     type={active ? 'primary' : 'default'}
-                    style={active ? { background: '#6f5ef9', borderColor: '#6f5ef9' } : undefined}
+                    style={active ? { background: qualityTokens.brand, borderColor: qualityTokens.brand } : undefined}
                   >
                     {pageNumber}
                   </Button>
@@ -232,6 +408,64 @@ export function DepartmentContactPage({
           </div>
         </div>
       </div>
+
+      <Modal
+        title={`修改联系人：${editingRecord?.name || '-'}`}
+        open={modalOpen}
+        onOk={() => void handleSubmit()}
+        onCancel={closeModal}
+        confirmLoading={saving}
+        okText="保存"
+        cancelText="取消"
+        destroyOnHidden
+        width={560}
+      >
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 16, marginTop: 8 }}>
+          <div>
+            <div style={{ marginBottom: 6, color: '#262626', fontSize: 14, fontWeight: 500 }}>姓名</div>
+            <PersonPickerSelect
+              placeholder="搜索选择人员"
+              value={formValues.open_id}
+              onChange={(value) => setFormValues((prev) => ({ ...prev, open_id: value }))}
+              currentPerson={{
+                open_id: editingRecord?.open_id,
+                name: editingRecord?.name,
+                avatar_url: editingRecord?.avatar_url,
+              }}
+            />
+          </div>
+          <div>
+            <div style={{ marginBottom: 6, color: '#262626', fontSize: 14, fontWeight: 500 }}>上级负责人</div>
+            <PersonPickerSelect
+              placeholder="搜索选择上级负责人"
+              allowClear
+              value={formValues.department_head_open_id}
+              onChange={(value) => setFormValues((prev) => ({ ...prev, department_head_open_id: value }))}
+              currentPerson={{
+                open_id: editingRecord?.department_head_open_id,
+                name: editingRecord?.department_head_name,
+                avatar_url: editingRecord?.department_head_avatar_url,
+              }}
+            />
+          </div>
+          <div>
+            <div style={{ marginBottom: 6, color: '#262626', fontSize: 14, fontWeight: 500 }}>部门</div>
+            <Input
+              placeholder="请输入部门"
+              value={formValues.department}
+              onChange={(e) => setFormValues((prev) => ({ ...prev, department: e.target.value }))}
+            />
+          </div>
+          <div>
+            <div style={{ marginBottom: 6, color: '#262626', fontSize: 14, fontWeight: 500 }}>企业邮箱</div>
+            <Input
+              placeholder="请输入企业邮箱"
+              value={formValues.enterprise_email}
+              onChange={(e) => setFormValues((prev) => ({ ...prev, enterprise_email: e.target.value }))}
+            />
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }
