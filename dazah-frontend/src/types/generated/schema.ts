@@ -18313,6 +18313,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/quality/validation-qc/records/share-links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 批量生成QC验证记录分享链接（跳转飞书对应行） */
+        post: operations["api_batch_create_qc_validation_share_links_api_v1_quality_validation_qc_records_share_links_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/quality/validation-qc/records/{record_id}": {
         parameters: {
             query?: never;
@@ -54633,10 +54650,9 @@ export interface components {
             training_content?: string | null;
             /**
              * Training Date
-             * Format: date
              * @description 培训日期
              */
-            training_date: string;
+            training_date?: string | null;
             /**
              * Training Datetime
              * @description 培训时间（日期+时间）
@@ -54651,7 +54667,7 @@ export interface components {
              * Training Subject
              * @description 培训课程/主题
              */
-            training_subject: string;
+            training_subject?: string | null;
             /**
              * Training Type
              * @description 培训类型
@@ -106596,6 +106612,44 @@ export interface operations {
         };
     };
     api_create_qc_validation_record_api_v1_quality_validation_qc_records_post: {
+        parameters: {
+            query?: {
+                /** @description QC验证年度 */
+                year?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InspectionFeishuRecordBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_batch_create_qc_validation_share_links_api_v1_quality_validation_qc_records_share_links_post: {
         parameters: {
             query?: {
                 /** @description QC验证年度 */

@@ -35715,7 +35715,7 @@
           },
           "training_name": {
             "description": "培训名称",
-            "maxLength": 512,
+            "maxLength": 4096,
             "title": "Training Name",
             "type": "string"
           },
@@ -35912,7 +35912,7 @@
           "training_name": {
             "anyOf": [
               {
-                "maxLength": 512,
+                "maxLength": 4096,
                 "type": "string"
               },
               {
@@ -55033,7 +55033,7 @@
           "training_content": {
             "anyOf": [
               {
-                "maxLength": 512,
+                "maxLength": 4096,
                 "type": "string"
               },
               {
@@ -55255,7 +55255,7 @@
           "training_content": {
             "anyOf": [
               {
-                "maxLength": 512,
+                "maxLength": 4096,
                 "type": "string"
               },
               {
@@ -71202,7 +71202,7 @@
           "training_content": {
             "anyOf": [
               {
-                "maxLength": 512,
+                "maxLength": 4096,
                 "type": "string"
               },
               {
@@ -72314,7 +72314,7 @@
           "training_content": {
             "anyOf": [
               {
-                "maxLength": 512,
+                "maxLength": 4096,
                 "type": "string"
               },
               {
@@ -72627,7 +72627,7 @@
           "training_content": {
             "anyOf": [
               {
-                "maxLength": 512,
+                "maxLength": 4096,
                 "type": "string"
               },
               {
@@ -72638,10 +72638,17 @@
             "title": "Training Content"
           },
           "training_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "description": "培训日期",
-            "format": "date",
-            "title": "Training Date",
-            "type": "string"
+            "title": "Training Date"
           },
           "training_datetime": {
             "anyOf": [
@@ -72670,10 +72677,17 @@
             "title": "Training Method"
           },
           "training_subject": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "description": "培训课程/主题",
-            "maxLength": 256,
-            "title": "Training Subject",
-            "type": "string"
+            "title": "Training Subject"
           },
           "training_type": {
             "anyOf": [
@@ -72689,10 +72703,6 @@
             "title": "Training Type"
           }
         },
-        "required": [
-          "training_date",
-          "training_subject"
-        ],
         "title": "TrainingLedgerCreate",
         "type": "object"
       },
@@ -72983,7 +72993,7 @@
           "training_content": {
             "anyOf": [
               {
-                "maxLength": 512,
+                "maxLength": 4096,
                 "type": "string"
               },
               {
@@ -181041,6 +181051,78 @@
           }
         },
         "summary": "新增QC验证记录（同步到多维表格）",
+        "tags": [
+          "质量管理",
+          "Quality-Validation-QC"
+        ]
+      }
+    },
+    "/api/v1/quality/validation-qc/records/share-links": {
+      "post": {
+        "operationId": "api_batch_create_qc_validation_share_links_api_v1_quality_validation_qc_records_share_links_post",
+        "parameters": [
+          {
+            "description": "QC验证年度",
+            "in": "query",
+            "name": "year",
+            "required": false,
+            "schema": {
+              "default": 2026,
+              "description": "QC验证年度",
+              "title": "Year",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InspectionFeishuRecordBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Api Batch Create Qc Validation Share Links Api V1 Quality Validation Qc Records Share Links Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "批量生成QC验证记录分享链接（跳转飞书对应行）",
         "tags": [
           "质量管理",
           "Quality-Validation-QC"

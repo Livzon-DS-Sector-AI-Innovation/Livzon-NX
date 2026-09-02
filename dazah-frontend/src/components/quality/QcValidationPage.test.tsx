@@ -102,6 +102,8 @@ describe('QcValidationPage', () => {
   afterEach(() => {
     act(() => root.unmount())
     container.remove()
+    // antd Modal/confirm/Select 下拉等 portal 直接挂到 document.body，逐个清理避免跨用例残留
+    document.body.querySelectorAll('.ant-modal-root, .ant-select-dropdown, .ant-message, .ant-drawer').forEach((node) => node.remove())
     vi.clearAllMocks()
   })
 
@@ -212,4 +214,263 @@ describe('QcValidationPage', () => {
       'noopener,noreferrer',
     )
   })
+
+  it('surfaces the backend message when the list query fails', async () => {
+    apiClient.fetchQcValidationRecords.mockRejectedValue(new Error('飞书连接超时'))
+    await renderPage()
+    expect(document.body.textContent).toContain('飞书连接超时')
+  })
+
+  it('warns without opening when the row share link is missing', async () => {
+    apiClient.fetchQcValidationShareLinks.mockResolvedValue({})
+    const openMock = vi.fn()
+    vi.stubGlobal('open', openMock)
+    await renderPage()
+    const rowButton = Array.from(container.querySelectorAll('button')).find(
+      (btn) => btn.getAttribute('title') === '打开飞书对应行',
+    )
+    await act(async () => {
+      rowButton?.click()
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    })
+    expect(document.body.textContent).toContain('该记录未生成飞书链接（可能无权限或记录不存在）')
+    expect(openMock).not.toHaveBeenCalled()
+  })
+
+  it('falls back to the generic message when the share link request fails', async () => {
+    apiClient.fetchQcValidationShareLinks.mockRejectedValue('boom')
+    await renderPage()
+    const rowButton = Array.from(container.querySelectorAll('button')).find(
+      (btn) => btn.getAttribute('title') === '打开飞书对应行',
+    )
+    await act(async () => {
+      rowButton?.click()
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    })
+    expect(document.body.textContent).toContain('生成飞书记录链接失败')
+  })
+
+  it('downloads drawer attachments through the page proxy builder', async () => {
+    const blob = new Blob(['x'], { type: 'image/jpeg' })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, blob: async () => blob }))
+    Object.defineProperty(URL, 'createObjectURL', {
+      value: vi.fn(() => 'blob:proxy'),
+      configurable: true,
+    })
+    const openMock = vi.fn()
+    vi.stubGlobal('open', openMock)
+    await renderPage()
+    const titleLink = Array.from(container.querySelectorAll('a')).find((anchor) =>
+      (anchor.textContent || '').includes('生化培养箱'),
+    )
+    await act(async () => {
+      titleLink?.click()
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    })
+    const attachmentButton = Array.from(document.body.querySelectorAll('button')).find(
+      (button) => (button.textContent || '') === 'cover.jpeg',
+    )
+    expect(attachmentButton).toBeTruthy()
+    await act(async () => {
+      attachmentButton?.click()
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    })
+    expect(fetchMockHits(fetch)).toContain(
+      '/api/v1/quality/validation-qc/records/rec-1/attachments/ft-1/content?year=2026',
+    )
+    expect(openMock).toHaveBeenCalledWith('blob:proxy', '_blank')
+  })
+
+  it('confirms, deletes and invalidates the list', async () => {
+    qcActions.deleteQcValidationRecord.mockResolvedValue({ success: true })
+    await renderPage()
+    const deleteButton = container.querySelector('.anticon-delete')?.closest('button')
+    expect(deleteButton).toBeTruthy()
+    await act(async () => {
+      deleteButton?.click()
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    })
+    const confirmOk = document.body.querySelector('.ant-modal-confirm .ant-btn-primary')
+    expect(confirmOk).toBeTruthy()
+    const requestCount = apiClient.fetchQcValidationRecords.mock.calls.length
+    await act(async () => {
+      confirmOk?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 80))
+    })
+    expect(qcActions.deleteQcValidationRecord).toHaveBeenCalledWith(2026, 'rec-1')
+    expect(document.body.textContent).toContain('删除成功')
+    // invalidateQueries 触发列表重新拉取
+    expect(apiClient.fetchQcValidationRecords.mock.calls.length).toBeGreaterThan(requestCount)
+  })
+
+  it('surfaces delete failures via toast', async () => {
+    qcActions.deleteQcValidationRecord.mockRejectedValue(new Error('无删除权限'))
+    await renderPage()
+    const deleteButton = container.querySelector('.anticon-delete')?.closest('button')
+    expect(deleteButton).toBeTruthy()
+    await act(async () => {
+      deleteButton?.click()
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    })
+    const confirmOk = document.body.querySelector('.ant-modal-confirm .ant-btn-primary')
+    expect(confirmOk).toBeTruthy()
+    await act(async () => {
+      confirmOk?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 80))
+    })
+    expect(document.body.textContent).toContain('无删除权限')
+  })
+
+  it('creates a record through the editor modal', async () => {
+    qcActions.createQcValidationRecord.mockResolvedValue({ success: true })
+    await renderPage()
+    const createButton = Array.from(container.querySelectorAll('button')).find((btn) =>
+      (btn.textContent || '').includes('新增'),
+    )
+    expect(createButton).toBeTruthy()
+    await act(async () => {
+      createButton?.click()
+      await new Promise((resolve) => setTimeout(resolve, 60))
+    })
+    expect(document.body.textContent).toContain('新增QC验证记录（2026年）')
+    const nameItem = Array.from(document.body.querySelectorAll('.ant-form-item')).find(
+      (item) => (item.querySelector('.ant-form-item-label')?.textContent || '').includes('方案名称'),
+    )
+    const nameInput = nameItem?.querySelector('input') as HTMLInputElement | null
+    expect(nameInput).toBeTruthy()
+    await act(async () => {
+      if (nameInput) {
+        // antd Input 是受控组件：须经由原生 value setter 赋值才能触发 React onChange
+        Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set?.call(
+          nameInput,
+          '新增确认方案',
+        )
+        nameInput.dispatchEvent(new Event('input', { bubbles: true }))
+      }
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    })
+    const confirmOk = document.body.querySelector('.ant-modal-footer .ant-btn-primary')
+    expect(confirmOk).toBeTruthy()
+    await act(async () => {
+      confirmOk?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 80))
+    })
+    expect(qcActions.createQcValidationRecord).toHaveBeenCalledWith(
+      2026,
+      expect.objectContaining({ 方案名称: '新增确认方案' }),
+    )
+    expect(document.body.textContent).toContain('QC验证记录已创建')
+  })
+
+  it('edits an existing record with mapped typed field values', async () => {
+    qcActions.updateQcValidationRecord.mockResolvedValue({ success: true })
+    await renderPage()
+    const editButton = container.querySelector('.anticon-edit')?.closest('button')
+    expect(editButton).toBeTruthy()
+    await act(async () => {
+      editButton?.click()
+      await new Promise((resolve) => setTimeout(resolve, 60))
+    })
+    expect(document.body.textContent).toContain('编辑QC验证记录（2026年）')
+    // 编辑模式远离必需校验：表单已由 initialRecord 预填 DateTime/Checkbox/User 分支
+    const confirmOk = document.body.querySelector('.ant-modal-footer .ant-btn-primary')
+    expect(confirmOk).toBeTruthy()
+    await act(async () => {
+      confirmOk?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 80))
+    })
+    expect(qcActions.updateQcValidationRecord).toHaveBeenCalledWith(
+      2026,
+      'rec-1',
+      expect.objectContaining({
+        方案批准时间: expect.any(Number),
+        方案提交: true,
+        人员: expect.any(Array),
+      }),
+    )
+    expect(document.body.textContent).toContain('QC验证记录已更新')
+  })
+
+  it('filters the list by keyword and refetches', async () => {
+    await renderPage()
+    const searchInput = Array.from(container.querySelectorAll('input')).find(
+      (input) => (input as HTMLInputElement).placeholder === '方案名称/编码等关键词',
+    ) as HTMLInputElement | null
+    expect(searchInput).toBeTruthy()
+    await act(async () => {
+      if (searchInput) {
+        Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set?.call(
+          searchInput,
+          '生化培养箱',
+        )
+        searchInput.dispatchEvent(new Event('input', { bubbles: true }))
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100))
+    })
+    expect(apiClient.fetchQcValidationRecords).toHaveBeenLastCalledWith(2026, {
+      keyword: '生化培养箱',
+      page: 1,
+      page_size: 20,
+    })
+  })
+
+  it('switches year through the selector and reloads the list', async () => {
+    await renderPage()
+    const wrapper = container.querySelector('.ant-select') as HTMLElement | null
+    expect(wrapper).toBeTruthy()
+    await act(async () => {
+      wrapper?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+      wrapper?.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    })
+    const option = Array.from(document.body.querySelectorAll('.ant-select-item-option')).find(
+      (item) => (item.textContent || '').includes('2025年'),
+    ) as HTMLElement | null
+    expect(option).toBeTruthy()
+    await act(async () => {
+      option?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 100))
+    })
+    expect(apiClient.fetchQcValidationRecords).toHaveBeenLastCalledWith(2025, {
+      keyword: undefined,
+      page: 1,
+      page_size: 20,
+    })
+  })
+
+  it('warns when the configured year has no Feishu table URL', async () => {
+    apiClient.fetchQcValidationYears.mockResolvedValue([
+      { year: 2026, entity_code: 'validation_qc_2026', table_configured: true, feishu_url: null },
+    ])
+    const openMock = vi.fn()
+    vi.stubGlobal('open', openMock)
+    await renderPage()
+    const button = Array.from(container.querySelectorAll('button')).find(
+      (btn) => (btn.textContent || '').includes('打开飞书表格'),
+    )
+    expect(button).toBeTruthy()
+    await act(async () => {
+      button?.click()
+    })
+    expect(document.body.textContent).toContain('当前年度飞书表未配置，无法打开')
+    expect(openMock).not.toHaveBeenCalled()
+  })
+
+  it('refreshes the page data through the toolbar button', async () => {
+    await renderPage()
+    const before = apiClient.fetchQcValidationRecords.mock.calls.length
+    const refreshButton = Array.from(container.querySelectorAll('button')).find((btn) =>
+      (btn.textContent || '').includes('刷新'),
+    )
+    expect(refreshButton).toBeTruthy()
+    await act(async () => {
+      refreshButton?.click()
+      await new Promise((resolve) => setTimeout(resolve, 60))
+    })
+    expect(apiClient.fetchQcValidationRecords.mock.calls.length).toBeGreaterThan(before)
+  })
 })
+
+function fetchMockHits(fetchMock: unknown): string[] {
+  return (fetchMock as ReturnType<typeof vi.fn>).mock.calls.map((call) => String(call[0]))
+}
