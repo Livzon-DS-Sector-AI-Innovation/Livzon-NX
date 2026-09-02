@@ -225,9 +225,10 @@ describe('renderFeishuValue', () => {
   })
 
   it('formats string ms timestamps to date for DateTime fields', () => {
-    // 飞书 DateTime 可能返回字符串毫秒时间戳，须转成日期而非显示原始时间戳
+    // 飞书 DateTime 可能返回字符串毫秒时间戳，须转成日期而非显示原始时间戳。
+    // 使用 UTC 正午的时间戳，避免格式化结果随测试环境时区漂移（本地东八区 vs CI UTC）。
     renderValue(
-      renderFeishuValue('1769702400000', {}, undefined, makeMessage() as never, {
+      renderFeishuValue('1769774400000', {}, undefined, makeMessage() as never, {
         uiType: 'DateTime',
       }),
     )
