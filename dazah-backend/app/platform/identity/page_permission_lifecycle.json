@@ -1,0 +1,2875 @@
+{
+  "version": 1,
+  "pages": {
+    "production:batches": {
+      "status": "active",
+      "module_code": "production",
+      "route_path": "/production/batches",
+      "actions": {}
+    },
+    "production:plan": {
+      "status": "active",
+      "module_code": "production",
+      "route_path": "/production/plan",
+      "actions": {}
+    },
+    "production:cost": {
+      "status": "active",
+      "module_code": "production",
+      "route_path": "/production/cost",
+      "actions": {}
+    },
+    "equipment:stats": {
+      "status": "active",
+      "module_code": "equipment",
+      "route_path": "/equipment/stats",
+      "actions": {}
+    },
+    "equipment:assets": {
+      "status": "active",
+      "module_code": "equipment",
+      "route_path": "/equipment/assets",
+      "actions": {}
+    },
+    "equipment:maintenance": {
+      "status": "active",
+      "module_code": "equipment",
+      "route_path": "/equipment/maintenance",
+      "actions": {}
+    },
+    "equipment:inspection": {
+      "status": "active",
+      "module_code": "equipment",
+      "route_path": "/equipment/inspection",
+      "actions": {}
+    },
+    "equipment:spare-parts": {
+      "status": "active",
+      "module_code": "equipment",
+      "route_path": "/equipment/spare-parts",
+      "actions": {}
+    },
+    "equipment:personnel": {
+      "status": "active",
+      "module_code": "equipment",
+      "route_path": "/equipment/personnel",
+      "actions": {}
+    },
+    "energy:overview": {
+      "status": "active",
+      "module_code": "energy",
+      "route_path": "/energy",
+      "actions": {}
+    },
+    "energy:devices": {
+      "status": "active",
+      "module_code": "energy",
+      "route_path": "/energy/devices",
+      "actions": {}
+    },
+    "energy:alerts": {
+      "status": "active",
+      "module_code": "energy",
+      "route_path": "/energy/alerts",
+      "actions": {}
+    },
+    "energy:collect-logs": {
+      "status": "active",
+      "module_code": "energy",
+      "route_path": "/energy/collect-logs",
+      "actions": {}
+    },
+    "safety:system-config:ai-workflow": {
+      "status": "active",
+      "module_code": "safety",
+      "route_path": "/safety/ai-workflow-config",
+      "actions": {
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
+    },
+    "safety:system-config:scheduled-tasks": {
+      "status": "active",
+      "module_code": "safety",
+      "route_path": "/safety/scheduled-tasks",
+      "actions": {
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
+    },
+    "safety:ops-safety:special-ops-mgmt": {
+      "status": "active",
+      "module_code": "safety",
+      "route_path": "/safety/special-ops",
+      "actions": {}
+    },
+    "safety:ops-safety:daily-risk-report": {
+      "status": "active",
+      "module_code": "safety",
+      "route_path": "/safety/risk-reporting",
+      "actions": {}
+    },
+    "safety:risk-hazard:risk-grading:hazard-identification": {
+      "status": "active",
+      "module_code": "safety",
+      "route_path": "/safety/hazard-identification",
+      "actions": {}
+    },
+    "safety:risk-hazard:risk-grading:hazard-ledger": {
+      "status": "active",
+      "module_code": "safety",
+      "route_path": "/safety/hazard-identification/ledger",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        },
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        }
+      }
+    },
+    "safety:risk-hazard:hazard-inspection:hazard-inspection-ledger": {
+      "status": "active",
+      "module_code": "safety",
+      "route_path": "/safety/hazard-ledger",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        },
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        }
+      }
+    },
+    "safety:risk-hazard:regulation:regulation-list": {
+      "status": "active",
+      "module_code": "safety",
+      "route_path": "/safety/regulation",
+      "actions": {}
+    },
+    "safety:risk-hazard:regulation:regulation-generator": {
+      "status": "active",
+      "module_code": "safety",
+      "route_path": "/safety/regulation/generator",
+      "actions": {}
+    },
+    "safety:risk-hazard:ehs-change:ehs-change-apply": {
+      "status": "active",
+      "module_code": "safety",
+      "route_path": "/safety/ehs-change",
+      "actions": {}
+    },
+    "safety:emergency-accident:accident-ledger": {
+      "status": "active",
+      "module_code": "safety",
+      "route_path": "/safety/accident",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        },
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        }
+      }
+    },
+    "safety:training-check:safety-check": {
+      "status": "active",
+      "module_code": "safety",
+      "route_path": "/safety/check",
+      "actions": {
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        }
+      }
+    },
+    "safety:training-check:safety-training": {
+      "status": "active",
+      "module_code": "safety",
+      "route_path": "/safety/training",
+      "actions": {
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        }
+      }
+    },
+    "safety:training-check:contractor": {
+      "status": "active",
+      "module_code": "safety",
+      "route_path": "/safety/contractor",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        },
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        }
+      }
+    },
+    "safety:occupational-health-group:oh-monitor": {
+      "status": "active",
+      "module_code": "safety",
+      "route_path": "/safety/occupational-health",
+      "actions": {}
+    },
+    "safety:regulation-info:knowledge-base": {
+      "status": "active",
+      "module_code": "safety",
+      "route_path": "/safety/knowledge-base",
+      "actions": {}
+    },
+    "rd:route-development": {
+      "status": "active",
+      "module_code": "research",
+      "route_path": "/rd/route-development",
+      "actions": {}
+    },
+    "rd:process-optimization": {
+      "status": "active",
+      "module_code": "research",
+      "route_path": "/rd/process-optimization",
+      "actions": {}
+    },
+    "rd:pilot-workflow": {
+      "status": "active",
+      "module_code": "research",
+      "route_path": "/rd/pilot-workflow",
+      "actions": {}
+    },
+    "rd:ich-analysis": {
+      "status": "active",
+      "module_code": "research",
+      "route_path": "/rd/ich-analysis",
+      "actions": {}
+    },
+    "registration:project:project-ledger:international-associated-review": {
+      "status": "active",
+      "module_code": "registration",
+      "route_path": "/registration/project-ledger/international-associated-review",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        },
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        }
+      }
+    },
+    "registration:project:project-ledger:international-standalone-review": {
+      "status": "active",
+      "module_code": "registration",
+      "route_path": "/registration/project-ledger/international-standalone-review",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        },
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        }
+      }
+    },
+    "registration:project:project-ledger:domestic-associated-review": {
+      "status": "active",
+      "module_code": "registration",
+      "route_path": "/registration/project-ledger/domestic-associated-review",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        },
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        }
+      }
+    },
+    "registration:project:project-ledger:domestic-standalone-review": {
+      "status": "active",
+      "module_code": "registration",
+      "route_path": "/registration/project-ledger/domestic-standalone-review",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        },
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        }
+      }
+    },
+    "registration:project:declaration-progress:international-planned-in-progress": {
+      "status": "active",
+      "module_code": "registration",
+      "route_path": "/registration/declaration-progress/international-planned-in-progress",
+      "actions": {}
+    },
+    "registration:project:declaration-progress:domestic-planned-in-progress": {
+      "status": "active",
+      "module_code": "registration",
+      "route_path": "/registration/declaration-progress/domestic-planned-in-progress",
+      "actions": {}
+    },
+    "registration:project:declaration-progress:new-product-projects": {
+      "status": "active",
+      "module_code": "registration",
+      "route_path": "/registration/declaration-progress/new-product-projects",
+      "actions": {}
+    },
+    "registration:project:declaration-progress:international-completed": {
+      "status": "active",
+      "module_code": "registration",
+      "route_path": "/registration/declaration-progress/international-completed",
+      "actions": {}
+    },
+    "registration:project:declaration-progress:domestic-completed": {
+      "status": "active",
+      "module_code": "registration",
+      "route_path": "/registration/declaration-progress/domestic-completed",
+      "actions": {}
+    },
+    "registration:project:declaration-progress:gmp-projects": {
+      "status": "active",
+      "module_code": "registration",
+      "route_path": "/registration/declaration-progress/gmp-projects",
+      "actions": {}
+    },
+    "registration:project:declaration-progress:us-fda-progress": {
+      "status": "active",
+      "module_code": "registration",
+      "route_path": "/registration/declaration-progress/us-fda-progress",
+      "actions": {}
+    },
+    "registration:authorization-letter": {
+      "status": "active",
+      "module_code": "registration",
+      "route_path": "/registration/authorization-letter",
+      "actions": {}
+    },
+    "registration:certificate-management:international-registration": {
+      "status": "active",
+      "module_code": "registration",
+      "route_path": "/registration/certificate-management/international-registration",
+      "actions": {}
+    },
+    "registration:certificate-management:domestic-registration": {
+      "status": "active",
+      "module_code": "registration",
+      "route_path": "/registration/certificate-management/domestic-registration",
+      "actions": {}
+    },
+    "registration:certificate-management:domestic-gmp": {
+      "status": "active",
+      "module_code": "registration",
+      "route_path": "/registration/certificate-management/domestic-gmp",
+      "actions": {}
+    },
+    "registration:certificate-management:international-gmp": {
+      "status": "active",
+      "module_code": "registration",
+      "route_path": "/registration/certificate-management/international-gmp",
+      "actions": {}
+    },
+    "registration:regulation": {
+      "status": "active",
+      "module_code": "registration",
+      "route_path": "/registration/regulation",
+      "actions": {}
+    },
+    "registration:fees:fee-ledger": {
+      "status": "active",
+      "module_code": "registration",
+      "route_path": "/registration/fees/ledger",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        },
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        }
+      }
+    },
+    "registration:fees:inspection-contacts": {
+      "status": "active",
+      "module_code": "registration",
+      "route_path": "/registration/fees/contacts",
+      "actions": {}
+    },
+    "registration:knowledge": {
+      "status": "active",
+      "module_code": "registration",
+      "route_path": "/registration/knowledge",
+      "actions": {}
+    },
+    "quality:feishu-settings": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/feishu-settings",
+      "actions": {
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
+    },
+    "quality:documents": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/documents",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        }
+      }
+    },
+    "quality:deviations:deviation-records": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/deviations/records",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        }
+      }
+    },
+    "quality:deviations:deviation-investigations": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/deviations/investigations",
+      "actions": {}
+    },
+    "quality:deviations:deviation-ledger": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/deviations/ledger",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        },
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        }
+      }
+    },
+    "quality:capas:capa-ledger": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/capas/ledger",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        },
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        }
+      }
+    },
+    "quality:capas:capa-plans": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/capas/plans",
+      "actions": {}
+    },
+    "quality:complaints:complaint-ledger": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/complaints/ledger",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        },
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        }
+      }
+    },
+    "quality:department-contacts": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/department-contacts",
+      "actions": {}
+    },
+    "quality:inspection:inspection-items:inspection-items-inventory": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/inspection/items/inventory",
+      "actions": {}
+    },
+    "quality:inspection:inspection-items:inspection-items-inbound": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/inspection/items/inbound",
+      "actions": {}
+    },
+    "quality:inspection:inspection-items:inspection-items-outbound": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/inspection/items/outbound",
+      "actions": {}
+    },
+    "quality:inspection:inspection-instruments:inspection-instruments-equipment": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/inspection/instruments/equipment",
+      "actions": {}
+    },
+    "quality:inspection:inspection-instruments:inspection-instruments-assets": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/inspection/instruments/assets",
+      "actions": {}
+    },
+    "quality:inspection:inspection-instruments:inspection-instruments-calibration": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/inspection/instruments/calibration",
+      "actions": {}
+    },
+    "quality:inspection:inspection-instruments:inspection-instruments-maintenance": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/inspection/instruments/maintenance",
+      "actions": {}
+    },
+    "quality:inspection:inspection-instruments:inspection-instruments-repair": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/inspection/instruments/repair",
+      "actions": {}
+    },
+    "quality:inspection:inspection-instruments:inspection-instruments-change": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/inspection/instruments/change",
+      "actions": {}
+    },
+    "quality:inspection:inspection-instruments:inspection-instruments-contracts": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/inspection/instruments/contracts",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        }
+      }
+    },
+    "quality:inspection:inspection-instruments:inspection-instruments-plans": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/inspection/instruments/plans",
+      "actions": {}
+    },
+    "quality:inspection:inspection-finished:inspection-finished-mpa": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/inspection/finished/mpa",
+      "actions": {}
+    },
+    "quality:inspection:inspection-finished:inspection-finished-mvt": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/inspection/finished/mvt",
+      "actions": {}
+    },
+    "quality:inspection:inspection-finished:inspection-finished-lft": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/inspection/finished/lft",
+      "actions": {}
+    },
+    "quality:inspection:inspection-finished:inspection-finished-dls": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/inspection/finished/dls",
+      "actions": {}
+    },
+    "quality:inspection:inspection-finished:inspection-finished-lkms": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/inspection/finished/lkms",
+      "actions": {}
+    },
+    "quality:inspection:inspection-finished:inspection-finished-bbas": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/inspection/finished/bbas",
+      "actions": {}
+    },
+    "quality:inspection:inspection-finished:inspection-finished-formulations": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/inspection/finished/formulations",
+      "actions": {}
+    },
+    "quality:inspection:inspection-finished:inspection-finished-tryptophan": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/inspection/finished/tryptophan",
+      "actions": {}
+    },
+    "quality:inspection:inspection-finished:inspection-finished-water": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/inspection/finished/water",
+      "actions": {}
+    },
+    "quality:inspection:inspection-solid:inspection-solid-raw": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/inspection/solid/raw-inspection",
+      "actions": {}
+    },
+    "quality:inspection:inspection-solid:inspection-solid-ys-000": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/inspection/solid/ys-000",
+      "actions": {}
+    },
+    "quality:inspection:inspection-solid:inspection-solid-ys-100": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/inspection/solid/ys-100",
+      "actions": {}
+    },
+    "quality:inspection:inspection-solid:inspection-solid-ys-200": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/inspection/solid/ys-200",
+      "actions": {}
+    },
+    "quality:inspection:inspection-solid:inspection-solid-ys-300": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/inspection/solid/ys-300",
+      "actions": {}
+    },
+    "quality:inspection:inspection-solid:inspection-solid-ys-400": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/inspection/solid/ys-400",
+      "actions": {}
+    },
+    "quality:inspection:inspection-solid:inspection-solid-ys-500": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/inspection/solid/ys-500",
+      "actions": {}
+    },
+    "quality:inspection:inspection-solid:inspection-solid-ys-600": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/inspection/solid/ys-600",
+      "actions": {}
+    },
+    "quality:inspection:inspection-solid:inspection-solid-ys-700": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/inspection/solid/ys-700",
+      "actions": {}
+    },
+    "quality:inspection:inspection-solid:inspection-solid-ys-800": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/inspection/solid/ys-800",
+      "actions": {}
+    },
+    "quality:inspection:inspection-solid:inspection-solid-manual": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/inspection/solid/manual",
+      "actions": {}
+    },
+    "quality:inspection:inspection-liquid:inspection-liquid-raw": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/inspection/liquid/raw-inspection",
+      "actions": {}
+    },
+    "quality:inspection:inspection-liquid:inspection-liquid-yl-0xx": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/inspection/liquid/yl-0xx",
+      "actions": {}
+    },
+    "quality:inspection:inspection-liquid:inspection-liquid-yl-1xx": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/inspection/liquid/yl-1xx",
+      "actions": {}
+    },
+    "quality:inspection:inspection-liquid:inspection-liquid-yl-2xx": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/inspection/liquid/yl-2xx",
+      "actions": {}
+    },
+    "quality:inspection:inspection-liquid:inspection-liquid-yl-3xx": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/inspection/liquid/yl-3xx",
+      "actions": {}
+    },
+    "quality:inspection:inspection-liquid:inspection-liquid-yl-4xx": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/inspection/liquid/yl-4xx",
+      "actions": {}
+    },
+    "quality:inspection:inspection-liquid:inspection-liquid-yl-5xx": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/inspection/liquid/yl-5xx",
+      "actions": {}
+    },
+    "quality:inspection:inspection-liquid:inspection-liquid-yl-6xx": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/inspection/liquid/yl-6xx",
+      "actions": {}
+    },
+    "quality:inspection:inspection-liquid:inspection-liquid-yl-7xx": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/inspection/liquid/yl-7xx",
+      "actions": {}
+    },
+    "quality:inspection:inspection-liquid:inspection-liquid-yl-8xx": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/inspection/liquid/yl-8xx",
+      "actions": {}
+    },
+    "quality:oos-oot:oos-oot-report-records": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/oos-oot/report-records",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        }
+      }
+    },
+    "quality:oos-oot:oos-oot-investigation-push": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/oos-oot/investigation-push",
+      "actions": {}
+    },
+    "quality:oos-oot:oos-ledger": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/oos-oot/oos-ledger",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        },
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        }
+      }
+    },
+    "quality:oos-oot:oot-ledger": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/oos-oot/oot-ledger",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        },
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        }
+      }
+    },
+    "quality:oos-oot:oot-limits": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/oos-oot/oot-limits",
+      "actions": {}
+    },
+    "quality:oos-oot:product-departments": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/oos-oot/product-departments",
+      "actions": {}
+    },
+    "quality:product-quality": {
+      "status": "retired",
+      "module_code": "quality",
+      "route_path": "/quality/product-quality",
+      "actions": {}
+    },
+    "quality:return-recalls:return-application": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/return-recalls/return-application",
+      "actions": {}
+    },
+    "quality:return-recalls:return-ledger": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/return-recalls/return-ledger",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        },
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        }
+      }
+    },
+    "quality:suppliers:supplier-qualification": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/suppliers/qualification",
+      "actions": {}
+    },
+    "quality:change:change-ledger": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/change/ledger",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        },
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        }
+      }
+    },
+    "quality:change:file-change-ledger": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/file-change/ledger",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        },
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        }
+      }
+    },
+    "quality:change:change-action-plans": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/change/action-plans",
+      "actions": {}
+    },
+    "quality:validation:validation-plans": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/validation/plans",
+      "actions": {}
+    },
+    "quality:validation:equipment-qualification": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/validation/equipment-qualification",
+      "actions": {}
+    },
+    "quality:validation:process-validation": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/validation/process-validation",
+      "actions": {}
+    },
+    "quality:validation:cleaning-validation": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/validation/cleaning-validation",
+      "actions": {}
+    },
+    "quality:validation:other-validations": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/validation/other-validations",
+      "actions": {}
+    },
+    "hr:departments": {
+      "status": "active",
+      "module_code": "hr",
+      "route_path": "/hr/departments",
+      "actions": {}
+    },
+    "hr:employee-management": {
+      "status": "retired",
+      "module_code": "hr",
+      "route_path": "/hr/employee-management",
+      "actions": {
+        "sync_config": {
+          "status": "retired",
+          "category": "integration_admin"
+        },
+        "delete": {
+          "status": "retired",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "retired",
+          "category": "sensitive_export"
+        },
+        "bulk_import": {
+          "status": "retired",
+          "category": "bulk_change"
+        }
+      }
+    },
+    "hr:recruitment": {
+      "status": "active",
+      "module_code": "hr",
+      "route_path": "/hr/recruitment",
+      "actions": {}
+    },
+    "hr:onboarding": {
+      "status": "active",
+      "module_code": "hr",
+      "route_path": "/hr/onboarding",
+      "actions": {}
+    },
+    "hr:offboarding": {
+      "status": "active",
+      "module_code": "hr",
+      "route_path": "/hr/offboarding",
+      "actions": {}
+    },
+    "hr:position-transfer": {
+      "status": "active",
+      "module_code": "hr",
+      "route_path": "/hr/position-transfer",
+      "actions": {}
+    },
+    "hr:contracts": {
+      "status": "retired",
+      "module_code": "hr",
+      "route_path": "/hr/contracts",
+      "actions": {
+        "delete": {
+          "status": "retired",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "retired",
+          "category": "sensitive_export"
+        }
+      }
+    },
+    "hr:training": {
+      "status": "retired",
+      "module_code": "hr",
+      "route_path": "/hr/training",
+      "actions": {
+        "bulk_import": {
+          "status": "retired",
+          "category": "bulk_change"
+        }
+      }
+    },
+    "hr:hr-settings": {
+      "status": "retired",
+      "module_code": "hr",
+      "route_path": "/hr/settings/feishu",
+      "actions": {
+        "sync_config": {
+          "status": "retired",
+          "category": "integration_admin"
+        }
+      }
+    },
+    "warehouse:ai-analysis": {
+      "status": "active",
+      "module_code": "warehouse",
+      "route_path": "/warehouse/ai-analysis",
+      "actions": {}
+    },
+    "warehouse:materials:raw-summary": {
+      "status": "active",
+      "module_code": "warehouse",
+      "route_path": "/warehouse/materials/raw-summary",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
+    },
+    "warehouse:materials:raw-detail": {
+      "status": "active",
+      "module_code": "warehouse",
+      "route_path": "/warehouse/materials/raw-detail",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
+    },
+    "warehouse:materials:raw-ledger": {
+      "status": "active",
+      "module_code": "warehouse",
+      "route_path": "/warehouse/materials/raw-ledger",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        },
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        }
+      }
+    },
+    "warehouse:materials:packaging-summary": {
+      "status": "active",
+      "module_code": "warehouse",
+      "route_path": "/warehouse/materials/packaging-summary",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
+    },
+    "warehouse:materials:packaging-detail": {
+      "status": "active",
+      "module_code": "warehouse",
+      "route_path": "/warehouse/materials/packaging-detail",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
+    },
+    "warehouse:materials:packaging-ledger": {
+      "status": "active",
+      "module_code": "warehouse",
+      "route_path": "/warehouse/materials/packaging-ledger",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        },
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        }
+      }
+    },
+    "warehouse:materials:inbound-ledger": {
+      "status": "active",
+      "module_code": "warehouse",
+      "route_path": "/warehouse/materials/inbound-ledger",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        },
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        }
+      }
+    },
+    "warehouse:materials:qualified-suppliers": {
+      "status": "active",
+      "module_code": "warehouse",
+      "route_path": "/warehouse/materials/qualified-suppliers",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
+    },
+    "warehouse:materials:material-name-code-map": {
+      "status": "active",
+      "module_code": "warehouse",
+      "route_path": "/warehouse/materials/material-name-code-map",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
+    },
+    "warehouse:hardware:hardware-hardware-summary": {
+      "status": "active",
+      "module_code": "warehouse",
+      "route_path": "/warehouse/hardware/summary",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
+    },
+    "warehouse:hardware:hardware-hardware-electrical": {
+      "status": "active",
+      "module_code": "warehouse",
+      "route_path": "/warehouse/hardware/electrical",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
+    },
+    "warehouse:hardware:hardware-hardware-101-1-workshop": {
+      "status": "active",
+      "module_code": "warehouse",
+      "route_path": "/warehouse/hardware/101-1-workshop",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
+    },
+    "warehouse:hardware:hardware-hardware-101-2-workshop": {
+      "status": "active",
+      "module_code": "warehouse",
+      "route_path": "/warehouse/hardware/101-2-workshop",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
+    },
+    "warehouse:hardware:hardware-hardware-102-workshop": {
+      "status": "active",
+      "module_code": "warehouse",
+      "route_path": "/warehouse/hardware/102-workshop",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
+    },
+    "warehouse:hardware:hardware-hardware-103-workshop": {
+      "status": "active",
+      "module_code": "warehouse",
+      "route_path": "/warehouse/hardware/103-workshop",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
+    },
+    "warehouse:hardware:hardware-hardware-201-1-workshop": {
+      "status": "active",
+      "module_code": "warehouse",
+      "route_path": "/warehouse/hardware/201-1-workshop",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
+    },
+    "warehouse:hardware:hardware-hardware-201-2-workshop": {
+      "status": "active",
+      "module_code": "warehouse",
+      "route_path": "/warehouse/hardware/201-2-workshop",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
+    },
+    "warehouse:hardware:hardware-hardware-201-3-workshop": {
+      "status": "active",
+      "module_code": "warehouse",
+      "route_path": "/warehouse/hardware/201-3-workshop",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
+    },
+    "warehouse:hardware:hardware-hardware-202-workshop": {
+      "status": "active",
+      "module_code": "warehouse",
+      "route_path": "/warehouse/hardware/202-workshop",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
+    },
+    "warehouse:hardware:hardware-hardware-203-workshop": {
+      "status": "active",
+      "module_code": "warehouse",
+      "route_path": "/warehouse/hardware/203-workshop",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
+    },
+    "warehouse:hardware:hardware-hardware-203-3-workshop": {
+      "status": "active",
+      "module_code": "warehouse",
+      "route_path": "/warehouse/hardware/203-3-workshop",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
+    },
+    "warehouse:hardware:hardware-hardware-thermal-station": {
+      "status": "active",
+      "module_code": "warehouse",
+      "route_path": "/warehouse/hardware/thermal-station",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
+    },
+    "warehouse:hardware:hardware-hardware-power-department": {
+      "status": "active",
+      "module_code": "warehouse",
+      "route_path": "/warehouse/hardware/power-department",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
+    },
+    "warehouse:hardware:hardware-hardware-wastewater": {
+      "status": "active",
+      "module_code": "warehouse",
+      "route_path": "/warehouse/hardware/wastewater",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
+    },
+    "warehouse:hardware:hardware-hardware-warehouse": {
+      "status": "active",
+      "module_code": "warehouse",
+      "route_path": "/warehouse/hardware/warehouse",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
+    },
+    "warehouse:hardware:hardware-hardware-rd-center": {
+      "status": "active",
+      "module_code": "warehouse",
+      "route_path": "/warehouse/hardware/rd-center",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
+    },
+    "warehouse:hardware:hardware-hardware-others": {
+      "status": "active",
+      "module_code": "warehouse",
+      "route_path": "/warehouse/hardware/others",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
+    },
+    "warehouse:hardware:hardware-hardware-inbound-ledger": {
+      "status": "active",
+      "module_code": "warehouse",
+      "route_path": "/warehouse/hardware/inbound-ledger",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        },
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        }
+      }
+    },
+    "warehouse:hardware:hardware-hardware-outbound-ledger": {
+      "status": "active",
+      "module_code": "warehouse",
+      "route_path": "/warehouse/hardware/outbound-ledger",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        },
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        }
+      }
+    },
+    "warehouse:product-inventory:product-summary": {
+      "status": "active",
+      "module_code": "warehouse",
+      "route_path": "/warehouse/product/summary",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
+    },
+    "warehouse:product-inventory:product-inbound-ledger": {
+      "status": "active",
+      "module_code": "warehouse",
+      "route_path": "/warehouse/product/inbound-ledger",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        },
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        }
+      }
+    },
+    "warehouse:product-inventory:product-outbound-ledger": {
+      "status": "active",
+      "module_code": "warehouse",
+      "route_path": "/warehouse/product/outbound-ledger",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        },
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        }
+      }
+    },
+    "warehouse:product-inventory:product-shipping": {
+      "status": "active",
+      "module_code": "warehouse",
+      "route_path": "/warehouse/product/shipping",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
+    },
+    "warehouse:warehouse-settings": {
+      "status": "active",
+      "module_code": "warehouse",
+      "route_path": "/warehouse/settings",
+      "actions": {
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
+    },
+    "purchasing:request:request-hardware": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/request/hardware",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        },
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        }
+      }
+    },
+    "purchasing:request:request-computer": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/request/computer",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        },
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        }
+      }
+    },
+    "purchasing:request:request-office": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/request/office",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        },
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        }
+      }
+    },
+    "purchasing:request:request-raw-auxiliary": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/request/raw-auxiliary",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        },
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        }
+      }
+    },
+    "purchasing:request:request-chemical-glass": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/request/chemical-glass",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        },
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        }
+      }
+    },
+    "purchasing:request:request-electrical": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/request/electrical",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        },
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        }
+      }
+    },
+    "purchasing:request:request-advertising-printing": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/request/advertising-printing",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        },
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        }
+      }
+    },
+    "purchasing:request:request-fire": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/request/fire",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        },
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        }
+      }
+    },
+    "purchasing:request:request-packaging": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/request/packaging",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        },
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        }
+      }
+    },
+    "purchasing:request:request-labor:request-labor-special": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/request/labor-special",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        },
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        }
+      }
+    },
+    "purchasing:request:request-labor:request-labor-miscellaneous": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/request/labor-miscellaneous",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        },
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        }
+      }
+    },
+    "purchasing:request:request-urgent": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/request/urgent",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        },
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        }
+      }
+    },
+    "purchasing:material-library": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/material-library",
+      "actions": {}
+    },
+    "purchasing:approval:approval-hardware:approval-hardware-hardware-warehouse": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/approval/hardware/hardware-warehouse",
+      "actions": {
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "active",
+          "category": "decision"
+        }
+      }
+    },
+    "purchasing:approval:approval-hardware:approval-hardware-department-head": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/approval/hardware/department-head",
+      "actions": {
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "active",
+          "category": "decision"
+        }
+      }
+    },
+    "purchasing:approval:approval-hardware:approval-hardware-responsible-leader": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/approval/hardware/responsible-leader",
+      "actions": {
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "active",
+          "category": "decision"
+        }
+      }
+    },
+    "purchasing:approval:approval-hardware:approval-hardware-supervising-leader": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/approval/hardware/supervising-leader",
+      "actions": {
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "active",
+          "category": "decision"
+        }
+      }
+    },
+    "purchasing:approval:approval-hardware:approval-hardware-general-manager": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/approval/hardware/general-manager",
+      "actions": {
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "active",
+          "category": "decision"
+        }
+      }
+    },
+    "purchasing:approval:approval-computer:approval-computer-department-head": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/approval/computer/department-head",
+      "actions": {
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "active",
+          "category": "decision"
+        }
+      }
+    },
+    "purchasing:approval:approval-computer:approval-computer-responsible-leader": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/approval/computer/responsible-leader",
+      "actions": {
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "active",
+          "category": "decision"
+        }
+      }
+    },
+    "purchasing:approval:approval-computer:approval-computer-supervising-leader": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/approval/computer/supervising-leader",
+      "actions": {
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "active",
+          "category": "decision"
+        }
+      }
+    },
+    "purchasing:approval:approval-office:approval-office-department-head": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/approval/office/department-head",
+      "actions": {
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "active",
+          "category": "decision"
+        }
+      }
+    },
+    "purchasing:approval:approval-office:approval-office-responsible-leader": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/approval/office/responsible-leader",
+      "actions": {
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "active",
+          "category": "decision"
+        }
+      }
+    },
+    "purchasing:approval:approval-office:approval-office-supervising-leader": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/approval/office/supervising-leader",
+      "actions": {
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "active",
+          "category": "decision"
+        }
+      }
+    },
+    "purchasing:approval:approval-raw-auxiliary:approval-raw-auxiliary-department-head": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/approval/raw-auxiliary/department-head",
+      "actions": {
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "active",
+          "category": "decision"
+        }
+      }
+    },
+    "purchasing:approval:approval-raw-auxiliary:approval-raw-auxiliary-responsible-leader": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/approval/raw-auxiliary/responsible-leader",
+      "actions": {
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "active",
+          "category": "decision"
+        }
+      }
+    },
+    "purchasing:approval:approval-raw-auxiliary:approval-raw-auxiliary-supervising-leader": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/approval/raw-auxiliary/supervising-leader",
+      "actions": {
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "active",
+          "category": "decision"
+        }
+      }
+    },
+    "purchasing:approval:approval-chemical-glass:approval-chemical-glass-department-head": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/approval/chemical-glass/department-head",
+      "actions": {
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "active",
+          "category": "decision"
+        }
+      }
+    },
+    "purchasing:approval:approval-chemical-glass:approval-chemical-glass-responsible-leader": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/approval/chemical-glass/responsible-leader",
+      "actions": {
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "active",
+          "category": "decision"
+        }
+      }
+    },
+    "purchasing:approval:approval-chemical-glass:approval-chemical-glass-supervising-leader": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/approval/chemical-glass/supervising-leader",
+      "actions": {
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "active",
+          "category": "decision"
+        }
+      }
+    },
+    "purchasing:approval:approval-electrical:approval-electrical-hardware-warehouse": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/approval/electrical/hardware-warehouse",
+      "actions": {
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "active",
+          "category": "decision"
+        }
+      }
+    },
+    "purchasing:approval:approval-electrical:approval-electrical-equipment-power": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/approval/electrical/equipment-power",
+      "actions": {
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "active",
+          "category": "decision"
+        }
+      }
+    },
+    "purchasing:approval:approval-electrical:approval-electrical-department-head": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/approval/electrical/department-head",
+      "actions": {
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "active",
+          "category": "decision"
+        }
+      }
+    },
+    "purchasing:approval:approval-electrical:approval-electrical-responsible-leader": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/approval/electrical/responsible-leader",
+      "actions": {
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "active",
+          "category": "decision"
+        }
+      }
+    },
+    "purchasing:approval:approval-electrical:approval-electrical-supervising-leader": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/approval/electrical/supervising-leader",
+      "actions": {
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "active",
+          "category": "decision"
+        }
+      }
+    },
+    "purchasing:approval:approval-advertising-printing:approval-advertising-printing-department-head": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/approval/advertising-printing/department-head",
+      "actions": {
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "active",
+          "category": "decision"
+        }
+      }
+    },
+    "purchasing:approval:approval-advertising-printing:approval-advertising-printing-responsible-leader": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/approval/advertising-printing/responsible-leader",
+      "actions": {
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "active",
+          "category": "decision"
+        }
+      }
+    },
+    "purchasing:approval:approval-advertising-printing:approval-advertising-printing-supervising-leader": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/approval/advertising-printing/supervising-leader",
+      "actions": {
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "active",
+          "category": "decision"
+        }
+      }
+    },
+    "purchasing:approval:approval-fire:approval-fire-department-head": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/approval/fire/department-head",
+      "actions": {
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "active",
+          "category": "decision"
+        }
+      }
+    },
+    "purchasing:approval:approval-fire:approval-fire-responsible-leader": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/approval/fire/responsible-leader",
+      "actions": {
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "active",
+          "category": "decision"
+        }
+      }
+    },
+    "purchasing:approval:approval-fire:approval-fire-supervising-leader": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/approval/fire/supervising-leader",
+      "actions": {
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "active",
+          "category": "decision"
+        }
+      }
+    },
+    "purchasing:approval:approval-packaging:approval-packaging-department-head": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/approval/packaging/department-head",
+      "actions": {
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "active",
+          "category": "decision"
+        }
+      }
+    },
+    "purchasing:approval:approval-packaging:approval-packaging-responsible-leader": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/approval/packaging/responsible-leader",
+      "actions": {
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "active",
+          "category": "decision"
+        }
+      }
+    },
+    "purchasing:approval:approval-packaging:approval-packaging-supervising-leader": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/approval/packaging/supervising-leader",
+      "actions": {
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "active",
+          "category": "decision"
+        }
+      }
+    },
+    "purchasing:approval:approval-labor:approval-labor-special:approval-labor-special-safety-officer": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/approval/labor-special/safety-officer",
+      "actions": {
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "active",
+          "category": "decision"
+        }
+      }
+    },
+    "purchasing:approval:approval-labor:approval-labor-special:approval-labor-special-department-head": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/approval/labor-special/department-head",
+      "actions": {
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "active",
+          "category": "decision"
+        }
+      }
+    },
+    "purchasing:approval:approval-labor:approval-labor-special:approval-labor-special-responsible-leader": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/approval/labor-special/responsible-leader",
+      "actions": {
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "active",
+          "category": "decision"
+        }
+      }
+    },
+    "purchasing:approval:approval-labor:approval-labor-miscellaneous:approval-labor-miscellaneous-department-head": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/approval/labor-miscellaneous/department-head",
+      "actions": {
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "active",
+          "category": "decision"
+        }
+      }
+    },
+    "purchasing:approval:approval-labor:approval-labor-miscellaneous:approval-labor-miscellaneous-responsible-leader": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/approval/labor-miscellaneous/responsible-leader",
+      "actions": {
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "active",
+          "category": "decision"
+        }
+      }
+    },
+    "purchasing:approval:approval-labor:approval-labor-miscellaneous:approval-labor-miscellaneous-supervising-leader": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/approval/labor-miscellaneous/supervising-leader",
+      "actions": {
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "active",
+          "category": "decision"
+        }
+      }
+    },
+    "purchasing:approval:approval-urgent:approval-urgent-hardware-warehouse": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/approval/urgent/hardware-warehouse",
+      "actions": {
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "active",
+          "category": "decision"
+        }
+      }
+    },
+    "purchasing:approval:approval-urgent:approval-urgent-department-head": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/approval/urgent/department-head",
+      "actions": {
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "active",
+          "category": "decision"
+        }
+      }
+    },
+    "purchasing:approval:approval-urgent:approval-urgent-responsible-leader": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/approval/urgent/responsible-leader",
+      "actions": {
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "active",
+          "category": "decision"
+        }
+      }
+    },
+    "purchasing:approval:approval-urgent:approval-urgent-supervising-leader": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/approval/urgent/supervising-leader",
+      "actions": {
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "active",
+          "category": "decision"
+        }
+      }
+    },
+    "purchasing:approval:approval-urgent:approval-urgent-finance-director": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/approval/urgent/finance-director",
+      "actions": {
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "active",
+          "category": "decision"
+        }
+      }
+    },
+    "purchasing:approval:approval-urgent:approval-urgent-general-manager": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/approval/urgent/general-manager",
+      "actions": {
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "active",
+          "category": "decision"
+        }
+      }
+    },
+    "purchasing:supplier": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/supplier",
+      "actions": {
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        }
+      }
+    },
+    "purchasing:order": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/order",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        }
+      }
+    },
+    "purchasing:invoice-recognition": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/invoice-recognition",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        }
+      }
+    },
+    "purchasing:contract-summary": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/contract-summary",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        }
+      }
+    },
+    "purchasing:contract-generation:contract-generation-fixed-assets": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/contract-generation/fixed-assets",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        }
+      }
+    },
+    "purchasing:contract-generation:contract-generation-consumables": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/contract-generation/consumables",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        }
+      }
+    },
+    "purchasing:contract-generation:contract-generation-hardware": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/contract-generation/hardware",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        }
+      }
+    },
+    "purchasing:contract-generation:contract-generation-raw-materials": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/contract-generation/raw-materials",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        }
+      }
+    },
+    "purchasing:settings": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/settings",
+      "actions": {
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
+    },
+    "quality:deviations:deviation-history": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/deviations/history",
+      "actions": {}
+    },
+    "quality:deviations:deviation-workbench": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/deviations/workbench",
+      "actions": {}
+    },
+    "quality:product-quality:product-quality-mfn": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/product-quality/mfn",
+      "actions": {}
+    },
+    "quality:product-quality:product-quality-dljs": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/product-quality/dljs",
+      "actions": {}
+    },
+    "quality:product-quality:product-quality-lftt": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/product-quality/lftt",
+      "actions": {}
+    },
+    "quality:product-quality:product-quality-mftt": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/product-quality/mftt",
+      "actions": {}
+    },
+    "quality:product-quality:product-quality-yslkms": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/product-quality/yslkms",
+      "actions": {}
+    },
+    "quality:product-quality:product-quality-bbas": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/product-quality/bbas",
+      "actions": {}
+    },
+    "quality:product-quality:product-quality-sas": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/product-quality/sas",
+      "actions": {}
+    },
+    "hr:employee-management:profile": {
+      "status": "active",
+      "module_code": "hr",
+      "route_path": "/hr/profile",
+      "actions": {
+        "delete": { "status": "active", "category": "destructive" },
+        "sensitive_export": { "status": "active", "category": "sensitive_export" },
+        "bulk_import": { "status": "active", "category": "bulk_change" },
+        "sync_config": { "status": "active", "category": "integration_admin" }
+      }
+    },
+    "hr:employee-management:feishu-contacts": {
+      "status": "active",
+      "module_code": "hr",
+      "route_path": "/hr/feishu-contacts",
+      "actions": {
+        "delete": { "status": "active", "category": "destructive" },
+        "sensitive_export": { "status": "active", "category": "sensitive_export" },
+        "bulk_import": { "status": "active", "category": "bulk_change" },
+        "sync_config": { "status": "active", "category": "integration_admin" }
+      }
+    },
+    "hr:contracts:contracts-ledger": {
+      "status": "active",
+      "module_code": "hr",
+      "route_path": "/hr/contracts",
+      "actions": {
+        "delete": { "status": "active", "category": "destructive" },
+        "sensitive_export": { "status": "active", "category": "sensitive_export" },
+        "bulk_import": { "status": "active", "category": "bulk_change" }
+      }
+    },
+    "hr:contracts:contract-approval-results": {
+      "status": "active",
+      "module_code": "hr",
+      "route_path": "/hr/contracts/approval-results",
+      "actions": {
+        "approve": { "status": "active", "category": "decision" },
+        "reject": { "status": "active", "category": "decision" },
+        "delete": { "status": "active", "category": "destructive" },
+        "sensitive_export": { "status": "active", "category": "sensitive_export" }
+      }
+    },
+    "hr:training:annual-plan": {
+      "status": "active", "module_code": "hr", "route_path": "/hr/training/annual-plan",
+      "actions": { "bulk_import": { "status": "active", "category": "bulk_change" } }
+    },
+    "hr:training:sign-in-sheet": {
+      "status": "active", "module_code": "hr", "route_path": "/hr/training/sign-in",
+      "actions": { "bulk_import": { "status": "active", "category": "bulk_change" } }
+    },
+    "hr:training:new-employee-training": {
+      "status": "active", "module_code": "hr", "route_path": "/hr/training/new-employee",
+      "actions": {
+        "delete": { "status": "active", "category": "destructive" },
+        "sensitive_export": { "status": "active", "category": "sensitive_export" },
+        "bulk_import": { "status": "active", "category": "bulk_change" }
+      }
+    },
+    "hr:training:training-ledger": {
+      "status": "active", "module_code": "hr", "route_path": "/hr/training/ledger",
+      "actions": {
+        "delete": { "status": "active", "category": "destructive" },
+        "sensitive_export": { "status": "active", "category": "sensitive_export" },
+        "bulk_import": { "status": "active", "category": "bulk_change" }
+      }
+    },
+    "hr:training:employee-training-list": {
+      "status": "active", "module_code": "hr", "route_path": "/hr/training/employee-training-list",
+      "actions": {
+        "delete": { "status": "active", "category": "destructive" },
+        "sensitive_export": { "status": "active", "category": "sensitive_export" },
+        "bulk_import": { "status": "active", "category": "bulk_change" }
+      }
+    },
+    "hr:training:trainer": {
+      "status": "active", "module_code": "hr", "route_path": "/hr/training/trainer",
+      "actions": { "bulk_import": { "status": "active", "category": "bulk_change" } }
+    },
+    "hr:training:position-training": {
+      "status": "active", "module_code": "hr", "route_path": "/hr/training/position-training",
+      "actions": { "bulk_import": { "status": "active", "category": "bulk_change" } }
+    },
+    "hr:training:plan-tracking": {
+      "status": "active", "module_code": "hr", "route_path": "/hr/training/plan-tracking",
+      "actions": { "bulk_import": { "status": "active", "category": "bulk_change" } }
+    },
+    "hr:hr-settings:hr-settings-feishu": {
+      "status": "active", "module_code": "hr", "route_path": "/hr/settings/feishu",
+      "actions": { "sync_config": { "status": "active", "category": "integration_admin" } }
+    },
+    "hr:hr-settings:hr-settings-reminder": {
+      "status": "active", "module_code": "hr", "route_path": "/hr/settings/reminder",
+      "actions": { "sync_config": { "status": "active", "category": "integration_admin" } }
+    },
+    "hr:hr-settings:hr-settings-approval": {
+      "status": "active", "module_code": "hr", "route_path": "/hr/settings/approval",
+      "actions": {
+        "approve": { "status": "active", "category": "decision" },
+        "reject": { "status": "active", "category": "decision" },
+        "sync_config": { "status": "active", "category": "integration_admin" }
+      }
+    },
+    "hr:hr-settings:hr-settings-dept-mapping": {
+      "status": "active", "module_code": "hr", "route_path": "/hr/settings/dept-mapping",
+      "actions": { "sync_config": { "status": "active", "category": "integration_admin" } }
+    },
+    "hr:hr-settings:hr-settings-dept-scopes": {
+      "status": "active", "module_code": "hr", "route_path": "/hr/settings/dept-scopes",
+      "actions": { "sync_config": { "status": "active", "category": "integration_admin" } }
+    },
+    "warehouse:product-inventory:product-details:product-detail-l-phenylalanine": {
+      "status": "active", "module_code": "warehouse", "route_path": "/warehouse/product/details/l-phenylalanine", "actions": {}
+    },
+    "warehouse:product-inventory:product-details:product-detail-fumaric-acid": {
+      "status": "active", "module_code": "warehouse", "route_path": "/warehouse/product/details/fumaric-acid", "actions": {}
+    },
+    "warehouse:product-inventory:product-details:product-detail-l-tryptophan": {
+      "status": "active", "module_code": "warehouse", "route_path": "/warehouse/product/details/l-tryptophan", "actions": {}
+    },
+    "warehouse:product-inventory:product-details:product-detail-mevastatin": {
+      "status": "active", "module_code": "warehouse", "route_path": "/warehouse/product/details/mevastatin", "actions": {}
+    },
+    "warehouse:product-inventory:product-details:product-detail-kitasamycin-hcl": {
+      "status": "active", "module_code": "warehouse", "route_path": "/warehouse/product/details/kitasamycin-hcl", "actions": {}
+    },
+    "warehouse:product-inventory:product-details:product-detail-doramectin": {
+      "status": "active", "module_code": "warehouse", "route_path": "/warehouse/product/details/doramectin", "actions": {}
+    },
+    "warehouse:product-inventory:product-details:product-detail-lovastatin": {
+      "status": "active", "module_code": "warehouse", "route_path": "/warehouse/product/details/lovastatin", "actions": {}
+    },
+    "warehouse:product-inventory:product-details:product-detail-florfenicol-premix": {
+      "status": "active", "module_code": "warehouse", "route_path": "/warehouse/product/details/florfenicol-premix", "actions": {}
+    },
+    "warehouse:product-inventory:product-details:product-detail-demeclocycline-hcl": {
+      "status": "active", "module_code": "warehouse", "route_path": "/warehouse/product/details/demeclocycline-hcl", "actions": {}
+    },
+    "warehouse:product-inventory:product-details:product-detail-fenbendazole-powder": {
+      "status": "active", "module_code": "warehouse", "route_path": "/warehouse/product/details/fenbendazole-powder", "actions": {}
+    },
+    "warehouse:product-inventory:product-inbound-detail": {
+      "status": "active", "module_code": "warehouse", "route_path": "/warehouse/product/inbound-detail", "actions": {}
+    }
+  }
+}

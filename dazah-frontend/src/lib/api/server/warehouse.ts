@@ -2,7 +2,7 @@
  * 仓储模块 - 服务器端 API（Server Component / Server Action 使用 API_BASE_URL）
  */
 
-import { cookies } from 'next/headers'
+import { getAuthHeaders as getPageAwareAuthHeaders } from '@/lib/auth'
 import type {
   PackagingMaterial,
   ProductInventory,
@@ -19,9 +19,7 @@ const API_BASE = process.env.API_BASE_URL || 'http://dazah-backend-app-1:8000'
 
 /** 服务端读取 auth_token cookie，供请求后端时携带 Bearer 认证头 */
 async function getAuthHeaders(): Promise<Record<string, string> | undefined> {
-  const cookieStore = await cookies()
-  const token = cookieStore.get('auth_token')?.value
-  return token ? { Authorization: `Bearer ${token}` } : undefined
+  return getPageAwareAuthHeaders()
 }
 
 export async function fetchWarehouseDashboard(

@@ -29,6 +29,15 @@ def test_backend_openapi_exposes_progressive_tool_contract() -> None:
     assert "post" in paths["/api/v1/agent/tools/execute"]
 
 
+def test_backend_openapi_exposes_page_permission_execution_contract() -> None:
+    openapi_path = Path(__file__).parents[2] / "dazah-backend" / "openapi.json"
+    document = json.loads(openapi_path.read_text(encoding="utf-8"))
+    paths = document["paths"]
+
+    assert "/api/v1/identity/admin/page-permissions/modules" in paths
+    assert "/api/v1/warehouse/page-data/{page_key}" in paths
+
+
 def test_backend_openapi_exposes_runtime_overview_contract() -> None:
     openapi_path = Path(__file__).parents[2] / "dazah-backend" / "openapi.json"
     document = json.loads(openapi_path.read_text(encoding="utf-8"))

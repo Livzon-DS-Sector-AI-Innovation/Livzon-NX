@@ -5,6 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import dayjs from 'dayjs'
+import { useAuthStore } from '@/stores/auth'
 
 const mocks = vi.hoisted(() => ({
   message: { error: vi.fn(), success: vi.fn(), warning: vi.fn() },
@@ -101,8 +102,16 @@ vi.mock('antd', async () => {
   const Avatar = ({ children }: { children?: ReactNode }) => React.createElement('span', null, children)
   const Tag = ({ children }: { children?: ReactNode }) => React.createElement('span', null, children)
   const Statistic = ({ title, value, prefix }: { title?: ReactNode; value?: ReactNode; prefix?: ReactNode }) => React.createElement('div', null, [title, prefix, value])
+  const Popconfirm = ({ children, onConfirm, okText }: { children?: ReactNode; onConfirm?: () => void; okText?: string }) => {
+    const [open, setOpen] = React.useState(false)
+    return React.createElement('div', null,
+      React.createElement('span', { onClick: () => setOpen(true) }, children),
+      open ? React.createElement('button', { onClick: () => { onConfirm?.(); setOpen(false) } }, `确认${okText ?? ''}`) : null,
+    )
+  }
   return {
     App: { useApp: () => ({ message: mocks.message }) },
+    Alert: ({ title, description }: { title?: ReactNode; description?: ReactNode }) => React.createElement('div', { role: 'alert' }, title, description),
     Avatar,
     Button,
     Card,
@@ -112,7 +121,7 @@ vi.mock('antd', async () => {
     Input,
     InputNumber,
     Modal,
-    Popconfirm: Wrapper,
+    Popconfirm,
     Select,
     Space: Wrapper,
     Spin: Wrapper,
@@ -219,6 +228,7 @@ describe('WarehouseFeishuTablePage', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    useAuthStore.getState().clearUser()
     mocks.hasAny.mockReturnValue(true)
     mocks.fetchWarehouseMaterialPage.mockImplementation(async () => tableData)
     mocks.fetchWarehouseRecordDetail.mockResolvedValue(detail)
@@ -233,6 +243,7 @@ describe('WarehouseFeishuTablePage', () => {
 
   afterEach(() => {
     act(() => root.unmount())
+    useAuthStore.getState().clearUser()
     client.clear()
     container.remove()
     vi.restoreAllMocks()
@@ -249,6 +260,52 @@ describe('WarehouseFeishuTablePage', () => {
       await Promise.resolve()
     })
   }
+
+  function authorize(level: 'access' | 'query' | 'operate', actions: string[] = []) {
+    useAuthStore.getState().setUser({
+      id: 'page-user', name: '页面用户', permissions: ['*'],
+      page_permission_rollouts: { warehouse: 'enforced' },
+      page_permissions: [{
+        page_key: 'warehouse:materials:raw-summary', module_code: 'warehouse',
+        permissions: level === 'operate' ? ['access', 'query', 'operate'] : level === 'query' ? ['access', 'query'] : ['access'],
+        sensitive_actions: actions, data_scope: { scope_type: 'not_applicable' }, source: 'user',
+      }],
+    })
+  }
+
+  it('does not fetch or show records with access-only permission', async () => {
+    authorize('access')
+    await mount()
+    expect(container.textContent).toContain('此页面未获得查询数据权限')
+    expect(container.querySelector('table')).toBeNull()
+    expect(mocks.fetchWarehouseMaterialPage).not.toHaveBeenCalled()
+  })
+
+  it.each(['query', 'operate'] as const)('uses page %s permission instead of legacy wildcard and separates delete', async (level) => {
+    authorize(level)
+    await mount()
+    const button = (label: string) => Array.from(container.querySelectorAll('button')).find((item) => item.textContent === label)
+    await act(async () => button('详情')?.click())
+    expect(container.textContent).toContain('记录详情')
+    expect(Boolean(button('编辑'))).toBe(level === 'operate')
+    expect(button('删除记录')).toBeUndefined()
+    expect(button('同步最新数据')).toBeUndefined()
+    await act(async () => button('刷新')?.click())
+    expect(mocks.fetchWarehouseMaterialPage).toHaveBeenLastCalledWith('raw-summary', expect.objectContaining({ force: false }), 60000)
+  })
+
+  it('requires explicit confirmation before authorized remote synchronization', async () => {
+    authorize('operate', ['sync_config', 'delete'])
+    await mount()
+    const button = (label: string) => Array.from(container.querySelectorAll('button')).find((item) => item.textContent === label)
+    mocks.fetchWarehouseMaterialPage.mockClear()
+    await act(async () => button('同步最新数据')?.click())
+    expect(mocks.fetchWarehouseMaterialPage).not.toHaveBeenCalled()
+    await act(async () => button('确认同步')?.click())
+    expect(mocks.fetchWarehouseMaterialPage).toHaveBeenCalledWith('raw-summary', expect.objectContaining({ force: true }), 60000)
+    await act(async () => button('详情')?.click())
+    expect(button('删除记录')).toBeDefined()
+  })
 
   it('covers warehouse filter, projection, grouping, and display helpers', () => {
     expect(resolveInoutLinks('raw-ledger')?.inbound).toContain('feishu.cn')

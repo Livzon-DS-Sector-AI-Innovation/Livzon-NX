@@ -1,13 +1,15 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
+import { PAGE_DATA_SCOPE_VISIBLE } from "@/lib/page-permission-editor"
 import { App, Button, Checkbox, Drawer, Input, Popconfirm, Table, Tag } from "antd"
-import { PlusOutlined } from "@ant-design/icons"
+import { AppstoreOutlined, PlusOutlined } from "@ant-design/icons"
 import type { AdminUserItem, RoleItem } from "@/lib/api/client/admin"
 import { fetchAdminUsers, fetchDataScopes } from "@/lib/api/client/admin"
 import type { DepartmentItem } from "@/lib/api/server/admin"
 import { DataScopeConfig, type DataScopeSelection } from "./DataScopeConfig"
 import { assignUserRoles, deleteDataScope, removeUserRole, saveUserDataScope } from "@/actions/admin"
+import UserModuleAccessDrawer, { type ModuleAccessUser } from "./UserModuleAccessDrawer"
 
 interface UserRoleManagerProps {
   initialRoles: RoleItem[]
@@ -28,8 +30,9 @@ export function UserRoleManager({ initialRoles, initialDepartments }: UserRoleMa
   })
   const [dataScopeRuleId, setDataScopeRuleId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [moduleAccessUser, setModuleAccessUser] = useState<ModuleAccessUser | null>(null)
 
-  const loadUsers = async (kw = "") => {
+  const loadUsers = useCallback(async (kw = "") => {
     setLoading(true)
     try {
       const data = await fetchAdminUsers()
@@ -44,11 +47,11 @@ export function UserRoleManager({ initialRoles, initialDepartments }: UserRoleMa
     } finally {
       setLoading(false)
     }
-  }
+  }, [message])
 
   useEffect(() => {
     queueMicrotask(loadUsers)
-  }, [])
+  }, [loadUsers])
 
   const openAssign = async (user: AdminUserItem) => {
     setEditingUser(user)
@@ -56,6 +59,7 @@ export function UserRoleManager({ initialRoles, initialDepartments }: UserRoleMa
     setDataScope({ scopeType: null, departmentNames: [] })
     setDataScopeRuleId(null)
     setDrawerOpen(true)
+    if (!PAGE_DATA_SCOPE_VISIBLE) return
     try {
       const scopeRules = await fetchDataScopes()
       const rule = scopeRules.find((r) => r.user_id === user.id)
@@ -77,9 +81,9 @@ export function UserRoleManager({ initialRoles, initialDepartments }: UserRoleMa
     try {
       await assignUserRoles(editingUser.id, selectedRoleIds)
       // 保存用户级可见部门配置（个例覆盖，如高管看全厂）
-      if (dataScope.scopeType === null) {
+      if (PAGE_DATA_SCOPE_VISIBLE && dataScope.scopeType === null) {
         if (dataScopeRuleId) await deleteDataScope(dataScopeRuleId)
-      } else {
+      } else if (PAGE_DATA_SCOPE_VISIBLE && dataScope.scopeType !== null) {
         await saveUserDataScope(
           editingUser.id,
           dataScope.scopeType,
@@ -127,10 +131,25 @@ export function UserRoleManager({ initialRoles, initialDepartments }: UserRoleMa
     {
       title: "操作",
       key: "actions",
+      width: 240,
+      fixed: "right" as const,
       render: (_: unknown, record: AdminUserItem) => (
-        <Button size="small" icon={<PlusOutlined />} onClick={() => openAssign(record)}>
-          分配角色
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button size="small" icon={<PlusOutlined />} onClick={() => openAssign(record)}>
+            分配角色
+          </Button>
+          <Button
+            size="small"
+            icon={<AppstoreOutlined />}
+            onClick={() => setModuleAccessUser({
+              id: record.id,
+              name: record.name,
+              isSystemAdmin: record.roles.some((role) => role.code === "super_admin"),
+            })}
+          >
+            模块访问
+          </Button>
+        </div>
       ),
     },
   ]
@@ -154,6 +173,7 @@ export function UserRoleManager({ initialRoles, initialDepartments }: UserRoleMa
         loading={loading}
         pagination={false}
         size="middle"
+        scroll={{ x: 900 }}
       />
 
       <Drawer
@@ -172,13 +192,13 @@ export function UserRoleManager({ initialRoles, initialDepartments }: UserRoleMa
           value={selectedRoleIds}
           onChange={(vals) => setSelectedRoleIds(vals as string[])}
           options={initialRoles.map((r) => ({
-            label: `${r.name}（${r.code}）`,
+            label: r.code === 'super_admin' ? '系统管理员（全部权限）' : r.name,
             value: r.id,
           }))}
           className="flex flex-col gap-2"
         />
 
-        <div className="mt-4">
+        {PAGE_DATA_SCOPE_VISIBLE && <div className="mt-4">
           <div className="text-sm font-medium mb-2">可见部门（用户级覆盖，可选）</div>
           <div className="border rounded-md p-3">
             <DataScopeConfig
@@ -187,13 +207,20 @@ export function UserRoleManager({ initialRoles, initialDepartments }: UserRoleMa
               onChange={setDataScope}
             />
           </div>
-        </div>
+        </div>}
         <Popconfirm title="注意" description="保存将全量替换该用户角色，确认？" onConfirm={handleSave}>
           <Button type="primary" className="mt-4">
             保存
           </Button>
         </Popconfirm>
       </Drawer>
+
+      <UserModuleAccessDrawer
+        user={moduleAccessUser}
+        open={Boolean(moduleAccessUser)}
+        onClose={() => setModuleAccessUser(null)}
+      />
+
     </div>
   )
 }

@@ -1,6 +1,7 @@
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace as _SimpleNamespace
 from typing import Any, cast
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
@@ -11,10 +12,22 @@ from app.core.config import Settings, get_settings
 from app.core.database import get_db
 from app.main import app
 from app.platform.identity import deps
-from app.platform.identity.models import FeishuUserToken
-from app.platform.identity.service import generate_state_token
+from app.platform.identity.models import FeishuUserToken, User
+from app.platform.identity.service import (
+    _matches_admin_whitelist,
+    generate_state_token,
+)
 
 SimpleNamespace: Any = _SimpleNamespace
+
+
+@pytest.fixture(autouse=True)
+def isolate_login_rate_limit(monkeypatch: Any) -> None:
+    # Authentication unit tests must not share the development Redis IP counter.
+    monkeypatch.setattr(
+        "app.platform.identity.permission_middleware._check_login_rate_limit",
+        AsyncMock(return_value=True),
+    )
 
 
 def make_request(authorization: str | None = None) -> Request:
@@ -87,7 +100,7 @@ def test_production_accepts_a_configured_sso_administrator() -> None:
     settings.check()
 
 
-def test_module_access_mode_defaults_to_all() -> None:
+def test_module_access_mode_defaults_to_explicit_grants() -> None:
     development = Settings.model_construct(
         APP_ENV="development",
         MODULE_ACCESS_MODE=None,
@@ -101,9 +114,9 @@ def test_module_access_mode_defaults_to_all() -> None:
         MODULE_ACCESS_MODE=None,
     )
 
-    assert development.effective_module_access_mode == "all"
-    assert production.effective_module_access_mode == "all"
-    assert test.effective_module_access_mode == "all"
+    assert development.effective_module_access_mode == "roles"
+    assert production.effective_module_access_mode == "roles"
+    assert test.effective_module_access_mode == "roles"
 
 
 def test_module_access_mode_accepts_explicit_override() -> None:
@@ -118,6 +131,13 @@ def test_module_access_mode_accepts_explicit_override() -> None:
 
     assert development.effective_module_access_mode == "roles"
     assert production.effective_module_access_mode == "all"
+
+
+def test_sso_admin_whitelist_matches_feishu_union_id_and_delimiters() -> None:
+    user = User(feishu_union_id="On_Admin")
+
+    assert _matches_admin_whitelist(user, "other; on_admin\nsecond") is True
+    assert _matches_admin_whitelist(user, "other") is False
 
 
 @pytest.mark.anyio
@@ -178,6 +198,27 @@ async def test_feishu_login_redirects_and_sets_state_cookie() -> None:
     assert "client_id=cli_test" in response.headers["location"]
     assert "feishu_oauth_state=" in response.headers["set-cookie"]
     assert "HttpOnly" in response.headers["set-cookie"]
+
+
+@pytest.mark.anyio
+async def test_production_http_login_keeps_oauth_state_cookie_usable() -> None:
+    settings = make_settings()
+    settings.is_production = True
+    app.dependency_overrides[get_settings] = lambda: settings
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.get(
+                "/api/v1/identity/auth/login?next=/quality",
+                headers={"x-forwarded-proto": "http"},
+                follow_redirects=False,
+            )
+    finally:
+        app.dependency_overrides.pop(get_settings, None)
+
+    assert response.status_code == 302
+    assert "feishu_oauth_state=" in response.headers["set-cookie"]
+    assert "Secure" not in response.headers["set-cookie"]
 
 
 @pytest.mark.anyio
@@ -490,7 +531,7 @@ async def test_oauth_callback_saves_encrypted_feishu_user_tokens(
         lambda: SimpleNamespace(
             SECRET_KEY="test-secret",
             JWT_EXPIRE_SECONDS=86400,
-            SSO_ADMIN_IDENTIFIERS="",
+            SSO_ADMIN_IDENTIFIERS="on_test",
         ),
     )
 
@@ -500,7 +541,7 @@ async def test_oauth_callback_saves_encrypted_feishu_user_tokens(
     assert user.id == user_id
     assert jwt_token
     assert db.commits == 1
-    assert user.role == "user"
+    assert user.role == "admin"
     assert fake_user_repo.created_kwargs is not None
     assert fake_user_repo.created_kwargs["department"] == "质量管理部"
     assert fake_user_repo.created_kwargs["position"] == "质量工程师"

@@ -1,13 +1,11 @@
-import { serverFetchDepartments, serverFetchMenus, serverFetchPermissions, serverFetchRoles } from "@/lib/api/server/admin"
+import { serverFetchDepartments, serverFetchRoles } from "@/lib/api/server/admin"
 import { RoleManager } from "@/components/system/RoleManager"
 
 export const dynamic = "force-dynamic"
 
 export default async function RolesPage() {
-  const [roles, permissions, menus, departments] = await Promise.all([
+  const [roles, departments] = await Promise.all([
     serverFetchRoles(),
-    serverFetchPermissions(),
-    serverFetchMenus(),
     serverFetchDepartments(),
   ])
 
@@ -16,13 +14,11 @@ export default async function RolesPage() {
       <div>
         <h1 className="text-xl font-semibold text-[var(--color-charcoal)]">角色管理</h1>
         <p className="text-sm text-[var(--color-stone)] mt-1">
-          创建、编辑、删除角色，并为角色绑定模块权限点（读/写）、菜单权限（菜单/按钮）与可见部门（数据范围）。
+          创建、编辑角色，并按菜单页面配置访问、查询、操作、高风险业务动作与数据范围。
         </p>
       </div>
       <RoleManager
         initialRoles={roles}
-        initialPermissions={permissions}
-        initialMenus={menus}
         initialDepartments={departments}
       />
     </div>

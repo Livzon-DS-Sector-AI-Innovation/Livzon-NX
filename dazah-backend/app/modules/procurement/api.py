@@ -997,6 +997,9 @@ async def list_contract_generation_records(
     response_model=ContractTemplateMetadata,
 )
 async def get_contract_template(category: ContractCategory) -> Any:
+    from app.modules.procurement.page_access import constrain_contract_category
+
+    constrain_contract_category(category.value)
     metadata = get_contract_template_metadata(category)
     return success_response(data=metadata.model_dump(mode="json"))
 

@@ -1,13 +1,19 @@
 'use client'
 
 import type { Dayjs } from 'dayjs'
+import { useEffect, useRef, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import type { components } from '@/types/generated/schema'
+import { fetchDeviationReporters } from '@/lib/api/client/deviation-reporters'
 import { useRouter } from 'next/navigation'
-import { App, Button, Card, DatePicker, Form, Input, Select, Space } from 'antd'
+import { Alert, App, Button, Card, DatePicker, Form, Input, Select, Space } from 'antd'
 import { ArrowLeftOutlined } from '@ant-design/icons'
 import { createDeviation } from '@/actions/quality-deviation'
 import type { DeviationLevel } from '@/types/quality'
+import { useDeviationPermissions } from './useDeviationPermissions'
 
 interface CreateDeviationFormValues {
+  reporter_open_id: string
   department: string
   level?: DeviationLevel
   description: string
@@ -37,12 +43,41 @@ export function CreateDeviation() {
   const { message } = App.useApp()
   const [form] = Form.useForm<CreateDeviationFormValues>()
   const isClosed = Form.useWatch('is_closed', form)
+  const { canOperate, workflowFieldsReadOnly, authorizationKey } = useDeviationPermissions()
+  const [keyword, setKeyword] = useState('')
+  const [search, setSearch] = useState('')
+  const [selected, setSelected] = useState<{ authorizationKey: string; reporter: components['schemas']['DeviationReporterOption'] } | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+  const submitLock = useRef(false)
+  const reporters = useQuery({
+    queryKey: ['quality-deviation', 'reporter-options', authorizationKey, search],
+    queryFn: ({ signal }) => fetchDeviationReporters(search, signal),
+    enabled: canOperate,
+    retry: false,
+  })
+  useEffect(() => {
+    const timer = setTimeout(() => setSearch(keyword), 250)
+    return () => clearTimeout(timer)
+  }, [keyword])
+  useEffect(() => { form.resetFields(['reporter_open_id', 'department']) }, [authorizationKey, form])
+  const selectedReporter = selected?.authorizationKey === authorizationKey ? selected.reporter : undefined
+  const candidates = reporters.data?.data ?? []
+  const options = selectedReporter && !candidates.some((item) => item.open_id === selectedReporter.open_id)
+    ? [selectedReporter, ...candidates] : candidates
 
   const handleSubmit = async (values: CreateDeviationFormValues) => {
+    if (!canOperate || submitLock.current) return
+    if (!selectedReporter || selectedReporter.open_id !== values.reporter_open_id) {
+      message.error('请重新选择有效的报告人')
+      return
+    }
+    submitLock.current = true
+    setSubmitting(true)
     try {
       await createDeviation({
         title: values.description.trim(),
-        department: values.department.trim(),
+        reporter_open_id: selectedReporter.open_id,
+        department: selectedReporter.department,
         description: values.description.trim(),
         affected_items: values.affected_items.trim(),
         level: values.level ?? null,
@@ -53,8 +88,8 @@ export function CreateDeviation() {
           : null,
         corrective_actions: values.corrective_actions?.trim() || null,
         material_disposition: values.material_disposition?.trim() || null,
-        is_closed: values.is_closed ?? false,
-        close_time: values.is_closed && values.close_time
+        is_closed: workflowFieldsReadOnly ? false : values.is_closed ?? false,
+        close_time: !workflowFieldsReadOnly && values.is_closed && values.close_time
           ? values.close_time.toISOString()
           : null,
         needs_cross_dept_review: true,
@@ -63,7 +98,14 @@ export function CreateDeviation() {
       router.push('/quality/deviations/ledger')
     } catch (error) {
       message.error((error instanceof Error ? error.message : '') || '创建失败')
+    } finally {
+      submitLock.current = false
+      setSubmitting(false)
     }
+  }
+
+  if (!canOperate) {
+    return <Alert type="info" showIcon title="尚未获得新增偏差记录的操作权限，请联系系统管理员。" />
   }
 
   return (
@@ -76,9 +118,11 @@ export function CreateDeviation() {
       </div>
 
       <Card>
+        {reporters.isError && <Alert type="error" showIcon title={reporters.error.message} action={<Button onClick={() => reporters.refetch()}>重试</Button>} />}
         <Form
           form={form}
           layout="vertical"
+          disabled={submitting}
           onFinish={handleSubmit}
           onValuesChange={(changedValues, allValues) => {
             if ('is_closed' in changedValues && allValues.is_closed !== true) {
@@ -94,12 +138,36 @@ export function CreateDeviation() {
           </Form.Item>
 
           <Form.Item
+            name="reporter_open_id"
+            label="报告人"
+            rules={[{ required: true, message: '请选择报告人' }]}
+            extra="选择报告人后自动关联部门；最多显示50人，可输入姓名或部门缩小范围。"
+          >
+            <Select
+              placeholder="输入姓名或部门搜索报告人"
+              showSearch
+              filterOption={false}
+              onSearch={setKeyword}
+              loading={reporters.isFetching}
+              allowClear
+              notFoundContent={reporters.isFetching ? '正在加载报告人' : reporters.isError ? '报告人加载失败，请重试' : '没有匹配的可选报告人'}
+              options={options.map((item) => ({ value: item.open_id, label: `${item.name}（${item.department}）` }))}
+              onChange={(value: string | undefined) => {
+                const reporter = options.find((item) => item.open_id === value)
+                setSelected(reporter ? { authorizationKey, reporter } : null)
+                form.setFieldValue('department', reporter?.department)
+              }}
+            />
+          </Form.Item>
+
+          <Form.Item
             name="department"
             label="部门"
             rules={[{ required: true, message: '请输入部门' }]}
           >
             <Input
-              placeholder="请输入部门"
+              placeholder="选择报告人后自动关联"
+              readOnly
               maxLength={255}
             />
           </Form.Item>
@@ -162,8 +230,8 @@ export function CreateDeviation() {
             <Input.TextArea rows={4} placeholder="请输入产品/物料处理结果" />
           </Form.Item>
 
-          <Form.Item name="is_closed" label="是否关闭">
-            <Select placeholder="请选择" options={booleanOptions} />
+          <Form.Item name="is_closed" label="是否关闭" extra={workflowFieldsReadOnly ? '新记录默认为草稿，关闭状态由业务流程维护。' : undefined}>
+            <Select placeholder="请选择" options={booleanOptions} disabled={workflowFieldsReadOnly} />
           </Form.Item>
 
           <Form.Item
@@ -183,13 +251,13 @@ export function CreateDeviation() {
               showTime
               format="YYYY-MM-DD HH:mm"
               style={{ width: '100%' }}
-              disabled={!isClosed}
+              disabled={workflowFieldsReadOnly || !isClosed}
             />
           </Form.Item>
 
           <Form.Item>
             <Space>
-              <Button type="primary" htmlType="submit">
+              <Button type="primary" htmlType="submit" loading={submitting} disabled={reporters.isError || !selectedReporter}>
                 保存台账
               </Button>
               <Button onClick={() => router.push('/quality/deviations/ledger')}>

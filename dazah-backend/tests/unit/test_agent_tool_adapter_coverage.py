@@ -147,6 +147,7 @@ async def test_quality_agent_tool_adapters_forward_validated_inputs(
         "feishu_capa",
         "inspection",
         "oos_oot",
+        "quality_deviation",
         "quality_feishu_pages",
         "quality_feishu_sync",
         "quality_management",

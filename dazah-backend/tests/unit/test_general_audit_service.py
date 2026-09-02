@@ -28,6 +28,15 @@ def _log(
 
 
 def test_audit_category_of_covers_general_audit_tabs() -> None:
+    for resource in (
+        "identity.user_page_permissions",
+        "identity.role_page_permissions",
+        "identity.permission_module_rollout",
+    ):
+        assert (
+            audit_category_of(_log(action="页面授权调整", resource_type=resource))
+            == "permissions"
+        )
     assert (
         audit_category_of(
             _log(
@@ -94,6 +103,8 @@ def test_category_filters_compile_for_postgresql() -> None:
     }
 
     assert "user_module_permissions" in statements["permissions"]
+    assert "identity.user_page_permissions" in statements["permissions"]
+    assert "identity.permission_module_rollout" in statements["permissions"]
     assert "agent_tool" in statements["agent_tools"]
     assert "agent_automation" in statements["automations"]
     assert "feishu" in statements["feishu"]

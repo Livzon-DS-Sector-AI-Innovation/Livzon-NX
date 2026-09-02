@@ -5,7 +5,15 @@ const mocks = vi.hoisted(() => ({
   revalidatePath: vi.fn(),
 }))
 
-vi.mock('@/lib/auth', () => ({ getServerToken: mocks.getServerToken }))
+vi.mock('@/lib/auth', () => ({
+  getServerToken: mocks.getServerToken,
+  getAuthHeaders: vi.fn(async () => {
+    const token = await mocks.getServerToken()
+    return { ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      'Content-Type': 'application/json', 'X-Dazah-Page-Path': '/purchasing/request/hardware',
+    }
+  }),
+}))
 vi.mock('@/lib/server-api', () => ({
   getServerApiBaseUrl: () => 'http://backend.test',
 }))
@@ -56,7 +64,9 @@ describe('procurement material source actions', () => {
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify(payload),
-        headers: expect.objectContaining({ Authorization: 'Bearer server-token' }),
+        headers: expect.objectContaining({ Authorization: 'Bearer server-token',
+          'X-Dazah-Page-Path': '/purchasing/request/hardware',
+        }),
       }),
     )
     expect(fetchMock).toHaveBeenNthCalledWith(

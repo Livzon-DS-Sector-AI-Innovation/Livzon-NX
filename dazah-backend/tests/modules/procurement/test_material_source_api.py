@@ -587,10 +587,11 @@ async def test_material_option_external_failures_have_stable_status(
 
     monkeypatch.setattr(procurement_api, "list_material_options", list_options)
     response = await admin_client.get(
-        "/api/v1/procurement/material-options?keyword=MAT"
+        "/api/v1/procurement/material-options?keyword=MAT",
+        headers={"X-Dazah-Page-Key": "purchasing:request:request-hardware"},
     )
 
-    assert response.status_code == status_code
+    assert response.status_code == status_code, response.text
     assert response.json()["message"] in {
         "飞书多维表格访问失败",
         "飞书多维表格请求超时",
@@ -607,10 +608,11 @@ async def test_material_options_timeout_returns_504(
 
     monkeypatch.setattr(procurement_api, "list_material_options", list_options)
     response = await admin_client.get(
-        "/api/v1/procurement/material-options?keyword=MAT"
+        "/api/v1/procurement/material-options?keyword=MAT",
+        headers={"X-Dazah-Page-Key": "purchasing:request:request-hardware"},
     )
 
-    assert response.status_code == 504
+    assert response.status_code == 504, response.text
     assert response.json()["message"] == "飞书物料数据源请求超时"
 
 

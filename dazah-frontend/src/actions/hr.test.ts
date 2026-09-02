@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }))
 vi.mock('next/headers', () => ({
   cookies: vi.fn(async () => ({ get: vi.fn(() => undefined) })),
+  headers: vi.fn(async () => new Headers({ 'X-Dazah-Page-Path': '/hr/employee-management' })),
 }))
 
 import {
@@ -39,7 +40,9 @@ describe('hr actions', () => {
     await fetchEmployeesAction({ department: '102一车间', page: 2, page_size: 50 })
     expect(fetchMock).toHaveBeenCalledWith(
       `${API_BASE}/api/v1/hr/employees?department=102%E4%B8%80%E8%BD%A6%E9%97%B4&page=2&page_size=50`,
-      expect.objectContaining({ cache: 'no-store' }),
+      expect.objectContaining({ cache: 'no-store', headers: expect.objectContaining({
+        'X-Dazah-Page-Path': '/hr/employee-management',
+      }) }),
     )
   })
 

@@ -4,6 +4,7 @@ import { getServerApiBaseUrl } from '@/lib/server-api'
 import { getAuthHeaders } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 import type { components } from '@/types/generated/schema'
+import { permissionActionResult } from '@/lib/permission-action-result'
 
 const API_BASE = getServerApiBaseUrl()
 
@@ -28,6 +29,26 @@ export type LivzonAccessScopeOut = components['schemas']['LivzonAccessScopeOut']
 export type ModulePermissionKey = NonNullable<
   ModulePermissionGrantInput['permissions']
 >[number]
+export type PageGrantInput = components['schemas']['PageGrantInput']
+export type PagePermissionDefinitionOut =
+  components['schemas']['PagePermissionDefinitionOut']
+export type EffectivePageGrantOut =
+  components['schemas']['EffectivePageGrantOut']
+export type UserPagePermissionsOut =
+  components['schemas']['UserPagePermissionsOut']
+export type UserPagePermissionsUpdate =
+  components['schemas']['UserPagePermissionsUpdate']
+export type DepartmentResponse = {
+  id: string
+  feishu_department_id: string
+  name: string
+  parent_feishu_department_id?: string | null
+}
+
+export type FeishuUserSyncResult = {
+  status: 'ok' | 'warning'
+  message: string
+}
 
 interface ApiEnvelope<T> {
   code?: number
@@ -71,6 +92,14 @@ export async function getUsers(params?: {
   return fetchIdentity<UserManagementListResponse>(
     `/users${query ? `?${query}` : ''}`
   )
+}
+
+export async function syncFeishuUsers() {
+  const result = await fetchIdentity<FeishuUserSyncResult>('/users/sync-feishu', {
+    method: 'POST',
+  })
+  revalidatePath('/settings')
+  return result
 }
 
 export async function createUser(data: LocalUserCreate) {
@@ -125,6 +154,35 @@ export async function replaceUserModulePermissions(
   )
   revalidatePath('/settings')
   return result
+}
+
+export async function getUserPagePermissions(id: string) {
+  return fetchIdentity<UserPagePermissionsOut>(
+    `/admin/users/${id}/page-permissions`
+  )
+}
+
+export async function replaceUserPagePermissions(
+  id: string,
+  data: UserPagePermissionsUpdate
+) {
+  const result = await permissionActionResult<UserPagePermissionsOut>(async () => fetch(
+    `${API_BASE}/api/v1/identity/admin/users/${id}/page-permissions`, {
+      method: 'PUT',
+      headers: {
+        ...await getAuthHeaders(),
+        'Content-Type': 'application/json',
+        'If-Match': String(data.expected_grant_version),
+      },
+      body: JSON.stringify(data),
+    }
+  ))
+  if (result.ok) revalidatePath('/settings')
+  return result
+}
+
+export async function getPermissionDepartments() {
+  return fetchIdentity<DepartmentResponse[]>('/departments')
 }
 
 export async function getUserLivzonAccessScope(id: string) {

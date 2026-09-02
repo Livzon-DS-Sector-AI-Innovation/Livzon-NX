@@ -13,8 +13,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.agent.models import AgentAccessScopeSnapshot
 from app.modules.agent.schemas import AgentAccessScopeOut, AgentModuleScopeOut
 from app.platform.identity.models import User
+from app.platform.identity.page_permission_repository import PagePermissionRepository
+from app.platform.identity.page_permissions import PagePermissionService
 from app.platform.identity.permission_repository import PermissionGrantRepository
-from app.platform.identity.permissions import ADMIN_DEFAULT_MODULE_PERMISSIONS
 from app.shared.module_registry import BUSINESS_MODULES, MODULES_BY_CODE
 
 
@@ -48,58 +49,105 @@ class AgentAccessScopeService:
         registry_version = self._registry_version(
             [spec.public_dict() for spec in specs]
         )
-        is_admin = user.role == "admin"
-        if is_admin:
+        rollouts = {
+            item.module_code: item.status
+            for item in await PagePermissionRepository().list_rollouts(db)
+        }
+        page_grants = await PagePermissionService().effective_grants(db, user=user)
+        page_grants_by_key = {grant.page_key: grant for grant in page_grants}
+        enforced_modules = {
+            module_code
+            for module_code, state in rollouts.items()
+            if state == "enforced"
+        }
+        modules = [
+            {
+                "module_code": module_code,
+                "module_name": MODULES_BY_CODE[module_code].name,
+                "permissions": sorted(set(grant.permissions or [])),
+                "data_scope": dict(grant.data_scope or {}),
+            }
+            for module_code, grant in sorted(grants_by_module.items())
+            if module_code not in enforced_modules
+            and "module.view" in set(grant.permissions or [])
+        ]
+        for module in BUSINESS_MODULES:
+            if module.code not in enforced_modules:
+                continue
+            module_page_grants = [
+                grant
+                for grant in page_grants
+                if grant.module_code == module.code and "access" in grant.permissions
+            ]
+            if not module_page_grants:
+                continue
+            modules.append(
+                {
+                    "module_code": module.code,
+                    "module_name": module.name,
+                    "permissions": ["page.access"],
+                    "data_scope": {
+                        "pages": {
+                            grant.page_key: grant.data_scope.model_dump()
+                            for grant in module_page_grants
+                        }
+                    },
+                }
+            )
+        if user.role == "admin":
             modules = [
                 {
                     "module_code": module.code,
                     "module_name": module.name,
-                    "permissions": sorted(ADMIN_DEFAULT_MODULE_PERMISSIONS),
-                    "data_scope": {},
+                    "permissions": [
+                        "module.view",
+                        "page.access",
+                        "page.query",
+                        "page.operate",
+                    ],
+                    "data_scope": {"scope_type": "all"},
                 }
                 for module in BUSINESS_MODULES
-            ]
-        else:
-            modules = [
-                {
-                    "module_code": module_code,
-                    "module_name": MODULES_BY_CODE[module_code].name,
-                    "permissions": sorted(set(grant.permissions or [])),
-                    "data_scope": dict(grant.data_scope or {}),
-                }
-                for module_code, grant in sorted(grants_by_module.items())
-                if "module.view" in set(grant.permissions or [])
             ]
         tool_names: list[str] = []
         workflow_tool_names: list[str] = []
         for spec in specs:
-            if spec.required_roles and user.role not in spec.required_roles:
+            if (
+                user.role != "admin"
+                and spec.required_roles
+                and user.role not in spec.required_roles
+            ):
                 continue
-            if spec.module is None:
+            if spec.module is None or user.role == "admin":
                 tool_names.append(spec.name)
                 if spec.workflow_allowed and not spec.human_decision_required:
                     workflow_tool_names.append(spec.name)
                 continue
-            grant = grants_by_module.get(spec.module)
-            if grant is None and not is_admin:
+            if spec.module in enforced_modules:
+                if not spec.page_keys:
+                    continue
+                required_permission = (
+                    "operate" if spec.write or spec.sensitive_action else "query"
+                )
+                matching_grants = [
+                    page_grants_by_key.get(page_key) for page_key in spec.page_keys
+                ]
+                allowed_by_page = any(
+                    grant is not None
+                    and required_permission in grant.permissions
+                    and (
+                        spec.sensitive_action is None
+                        or spec.sensitive_action in grant.sensitive_actions
+                    )
+                    for grant in matching_grants
+                )
+                if not allowed_by_page:
+                    continue
+                tool_names.append(spec.name)
+                if spec.workflow_allowed and not spec.human_decision_required:
+                    workflow_tool_names.append(spec.name)
                 continue
-            if is_admin:
-                permissions = set(ADMIN_DEFAULT_MODULE_PERMISSIONS)
-            elif grant is not None:
-                permissions = set(grant.permissions or [])
-            else:
-                continue
-            if "module.view" not in permissions:
-                continue
-            if spec.permission_key and spec.permission_key not in permissions:
-                continue
-            tool_names.append(spec.name)
-            if (
-                "module.agent.automate" in permissions
-                and spec.workflow_allowed
-                and not spec.human_decision_required
-            ):
-                workflow_tool_names.append(spec.name)
+            # 平台页面在草稿期可兼容旧规则，业务工具不可绕过页面发布门禁。
 
         snapshot = await self.get_snapshot(db, user_id=user_id, for_update=True)
         now = datetime.now(UTC)
@@ -146,22 +194,11 @@ class AgentAccessScopeService:
             raise HTTPException(status.HTTP_403_FORBIDDEN, "账户当前不可用")
         snapshot = await self.get_snapshot(db, user_id=user.id)
         current_registry_version = self.current_registry_version()
-        admin_scope_incomplete = (
-            user.role == "admin"
-            and snapshot is not None
-            and {
-                str(item.get("module_code"))
-                for item in (snapshot.modules or [])
-                if isinstance(item, dict)
-            }
-            != set(MODULES_BY_CODE)
-        )
         is_stale = (
             snapshot is None
             or snapshot.sync_status != "synced"
             or snapshot.source_grant_version != user.grant_version
             or snapshot.registry_version != current_registry_version
-            or admin_scope_incomplete
         )
         if is_stale and rebuild_if_stale:
             try:
@@ -180,6 +217,7 @@ class AgentAccessScopeService:
             snapshot is None
             or snapshot.sync_status != "synced"
             or snapshot.source_grant_version != user.grant_version
+            or snapshot.registry_version != current_registry_version
         ):
             raise HTTPException(
                 status.HTTP_403_FORBIDDEN,
@@ -203,7 +241,7 @@ class AgentAccessScopeService:
                 status.HTTP_403_FORBIDDEN,
                 "业务能力必须使用已登录责任主体执行",
             )
-        snapshot = await self.get_current_scope(db, user=user)
+        snapshot = await self.get_current_scope(db, user=user, rebuild_if_stale=False)
         allowed = snapshot.workflow_tool_names if for_workflow else snapshot.tool_names
         if tool_name not in set(allowed or []):
             raise HTTPException(
@@ -273,8 +311,22 @@ class AgentAccessScopeService:
 
     @staticmethod
     def _registry_version(public_specs: list[dict[str, Any]]) -> str:
+        from dataclasses import asdict
+
+        from app.platform.identity.page_lifecycle import load_ledger
+        from app.platform.identity.page_policy import (
+            PAGE_API_BINDINGS,
+            PAGE_DEFINITIONS,
+        )
+
         payload = json.dumps(
-            public_specs,
+            {
+                "page_policy_version": 2,
+                "tools": public_specs,
+                "pages": [asdict(page) for page in PAGE_DEFINITIONS],
+                "api_bindings": [asdict(binding) for binding in PAGE_API_BINDINGS],
+                "lifecycle": load_ledger(),
+            },
             ensure_ascii=True,
             sort_keys=True,
             separators=(",", ":"),

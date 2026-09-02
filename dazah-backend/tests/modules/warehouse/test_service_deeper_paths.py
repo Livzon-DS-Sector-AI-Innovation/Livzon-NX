@@ -134,6 +134,7 @@ async def test_warehouse_feishu_pagination_and_material_page_scope_paths() -> No
             ]
         )
     )
+    instance._get_material_client = AsyncMock(return_value=instance.feishu_client)
     fields = await instance.fetch_feishu_table_fields(app_token="app", table_id="tbl")
     records = await instance.fetch_feishu_table_records(
         app_token="app", table_id="tbl", page_size=50

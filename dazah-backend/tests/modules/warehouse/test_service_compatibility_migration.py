@@ -175,10 +175,6 @@ async def test_config_and_table_error_boundaries(
     with pytest.raises(RuntimeError):
         await service._get_any_feishu_config_or_raise()
 
-    # 凭证 env 回退会兜底返回配置；屏蔽回退后验证原始"未配置"错误路径
-    monkeypatch.setattr(
-        type(service), "_env_fallback_feishu_config", staticmethod(lambda: None)
-    )
     service.repo.get_active_feishu_config.return_value = None
     with pytest.raises(AppException) as exc:
         await service._get_active_feishu_config_or_raise()
@@ -228,9 +224,6 @@ async def test_tenant_token_and_connectivity_results_are_sanitized(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     service = _service()
-    monkeypatch.setattr(
-        type(service), "_env_fallback_feishu_config", staticmethod(lambda: None)
-    )
     steps: list[object] = []
     assert (
         await service._test_tenant_token(
@@ -665,6 +658,7 @@ async def test_material_record_edit_detail_and_delete_paths(
             }
         )
     )
+    service._get_feishu_client = AsyncMock(return_value=service.feishu_client)
 
     detail = await service.get_material_page_record_detail("raw-summary", "r1")
     assert detail["record_id"] == "r1"
@@ -705,6 +699,7 @@ async def test_feishu_fetch_sync_inventory_and_dashboard_paths(
 ) -> None:
     service = _service()
     service.feishu_client = SimpleNamespace(request=AsyncMock())
+    service._get_material_client = AsyncMock(return_value=service.feishu_client)
     service.feishu_client.request.side_effect = [
         {"items": [{"field_name": "名称"}], "has_more": True, "page_token": "next"},
         {"items": [{"field_name": "数量"}], "has_more": False},

@@ -175,9 +175,29 @@ async function streamAgentReply(request, response) {
   }, runKey))
 }
 
+const pageBusinessRequests = new Map()
+const ledgerLastWrites = new Map()
+const ledgerDeleted = new Set()
 const server = createServer(async (request, response) => {
   response.setHeader('Content-Type', 'application/json; charset=utf-8')
   const authorization = request.headers.authorization || ''
+  const pageTestToken = authorization.replace('Bearer ', '')
+  if (pageTestToken.startsWith('page-') && request.url?.startsWith('/api/v1/procurement/')) {
+    pageBusinessRequests.set(pageTestToken, (pageBusinessRequests.get(pageTestToken) || 0) + 1)
+  }
+  if (pageTestToken.startsWith('ledger-') && request.url?.startsWith('/api/v1/quality/')) {
+    pageBusinessRequests.set(pageTestToken, (pageBusinessRequests.get(pageTestToken) || 0) + 1)
+  }
+  if (request.url?.startsWith('/__test/page-requests?')) {
+    const token = new URL(request.url, 'http://localhost').searchParams.get('token')
+    response.end(JSON.stringify({ count: pageBusinessRequests.get(token) || 0 }))
+    return
+  }
+  if (request.url?.startsWith('/__test/ledger-write?')) {
+    const token = new URL(request.url, 'http://localhost').searchParams.get('token')
+    response.end(JSON.stringify(ledgerLastWrites.get(token) || null))
+    return
+  }
 
   if (request.url === '/health') {
     response.end(JSON.stringify({ status: 'ok' }))
@@ -185,6 +205,34 @@ const server = createServer(async (request, response) => {
   }
 
   if (request.url?.startsWith('/api/v1/identity/me')) {
+    if (pageTestToken === 'admin-no-page-grants') {
+      response.end(JSON.stringify({ code: 200, data: { ...currentUser,
+        module_codes: [], page_permissions: [],
+        page_permission_rollouts: { procurement: 'enforced', quality: 'enforced' },
+      } }))
+      return
+    }
+    if (pageTestToken.startsWith('ledger-')) {
+      const write = ['ledger-create', 'ledger-delete'].includes(pageTestToken)
+      const permissions = write ? ['access', 'query', 'operate'] : pageTestToken === 'ledger-query' ? ['access', 'query']
+        : pageTestToken === 'ledger-access' ? ['access'] : []
+      response.end(JSON.stringify({ code: 200, data: { ...currentUser, role: 'user',
+        module_codes: ['quality'], page_permission_rollouts: { quality: 'enforced' },
+        page_permissions: [{ page_key: 'quality:deviations:deviation-ledger', module_code: 'quality', permissions,
+          sensitive_actions: pageTestToken === 'ledger-delete' ? ['delete'] : [], source: 'user', data_scope: { scope_type: 'all' } }],
+      } }))
+      return
+    }
+    if (pageTestToken.startsWith('page-')) {
+      const permissions = pageTestToken === 'page-query' ? ['access', 'query']
+        : pageTestToken === 'page-access' ? ['access'] : []
+      response.end(JSON.stringify({ code: 200, data: { ...currentUser, role: 'user',
+        module_codes: ['procurement'], page_permission_rollouts: { procurement: 'enforced' },
+        page_permissions: [{ page_key: 'purchasing:supplier', module_code: 'procurement', permissions,
+          sensitive_actions: [], source: 'user', data_scope: { scope_type: 'not_applicable' } }],
+      } }))
+      return
+    }
     if (authorization.includes('invalid-session')) {
       response.statusCode = 401
       response.end(JSON.stringify({ code: 401, message: 'authentication required', data: null }))
@@ -197,6 +245,54 @@ const server = createServer(async (request, response) => {
         ? { ...currentUser, module_codes: ['procurement'] }
         : currentUser
     response.end(JSON.stringify({ code: 200, message: 'success', data: user }))
+    return
+  }
+
+  if (pageTestToken.startsWith('ledger-') && request.url?.startsWith('/api/v1/quality/deviations')) {
+    if (request.url.includes('/reporter-options')) {
+      response.end(JSON.stringify({ code: 200, data: [{ open_id: 'test-reporter', name: '王报告', department: '质量部' }], meta: { total: 1, page: 1, page_size: 50 } }))
+      return
+    }
+    if (request.method === 'POST') {
+      const body = await readJsonBody(request)
+      ledgerLastWrites.set(pageTestToken, body)
+      if (request.url.endsWith('/batch-delete')) {
+        ledgerDeleted.add(pageTestToken)
+        response.end(JSON.stringify({ code: 200, data: { deleted: body.ids.length, failed: [] } }))
+      } else {
+        response.end(JSON.stringify({ code: 200, data: { id: '00000000-0000-0000-0000-000000000010', code: 'PC-CREATED' } }))
+      }
+      return
+    }
+    if (pageTestToken === 'ledger-delete' && !ledgerDeleted.has(pageTestToken)) {
+      response.end(JSON.stringify({ code: 200, data: [{ id: '00000000-0000-0000-0000-000000000011', deviation_code: 'PC-BATCH', title: '测试偏差', status: 'draft' }], meta: { total: 1, page: 1, page_size: 20 } }))
+      return
+    }
+    response.end(JSON.stringify({ code: 200, data: [], meta: { total: 0, page: 1, page_size: 20 } }))
+    return
+  }
+
+  if (authorization === 'Bearer matrix-admin' && request.url?.startsWith('/api/v1/identity/admin/roles')) {
+    if (request.url.endsWith('/page-permissions')) {
+      if (request.method === 'PUT') {
+        response.statusCode = 409
+        response.end(JSON.stringify({ message: '授权版本冲突，请刷新后重试' }))
+      } else {
+        response.end(JSON.stringify({ code: 200, data: { role_id: 'role-matrix', grant_version: 1, grants: [],
+          definitions: [
+            ['production', '生产批次'], ['equipment', '设备台账'], ['energy', '能源数据'],
+            ['safety', '安全检查'], ['research', '研发项目'], ['registration', '注册项目'],
+            ['quality', '偏差记录'], ['administration', '行政管理'], ['hr', '员工管理'],
+            ['warehouse', '库存清单'], ['procurement', '采购申请'],
+          ].map(([module_code, page_name]) => ({ module_code, page_name, page_key: `${module_code}:test`,
+            route_path: `/${module_code}/test`, supported_scope_types: ['not_applicable'], sensitive_actions: module_code === 'production'
+              ? [{ key: 'delete', name: '作废生产批次', description: '作废批次记录', category: 'destructive' }] : [] })),
+        } }))
+      }
+    } else {
+      response.end(JSON.stringify({ code: 200, data: [{ id: 'role-matrix', name: '页面授权测试角色',
+        code: 'matrix_role', is_system: false, permissions: [], grant_version: 1 }] }))
+    }
     return
   }
 

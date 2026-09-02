@@ -1,0 +1,2323 @@
+[
+  {
+    "key": "quality",
+    "name": "质量管理",
+    "path": "/quality",
+    "icon": "check-circle",
+    "permission_code": null,
+    "disabled": false,
+    "children": [
+      {
+        "key": "feishu-settings",
+        "name": "飞书设置",
+        "path": "/quality/feishu-settings",
+        "icon": null,
+        "permission_code": null,
+        "disabled": false,
+        "children": null
+      },
+      {
+        "key": "documents",
+        "name": "文件管理",
+        "path": "/quality/documents",
+        "icon": null,
+        "permission_code": null,
+        "disabled": false,
+        "children": null
+      },
+      {
+        "key": "deviations",
+        "name": "偏差管理",
+        "path": "/quality/deviations",
+        "icon": null,
+        "permission_code": null,
+        "disabled": false,
+        "children": [
+          {
+            "key": "deviation-records",
+            "name": "报告记录",
+            "path": "/quality/deviations/records",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "deviation-investigations",
+            "name": "调查推送",
+            "path": "/quality/deviations/investigations",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "deviation-ledger",
+            "name": "偏差台账",
+            "path": "/quality/deviations/ledger",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "deviation-history",
+            "name": "历史偏差",
+            "path": "/quality/deviations/history",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "deviation-workbench",
+            "name": "偏差工作台",
+            "path": "/quality/deviations/workbench",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          }
+        ]
+      },
+      {
+        "key": "capas",
+        "name": "CAPA管理",
+        "path": "/quality/capas",
+        "icon": null,
+        "permission_code": null,
+        "disabled": false,
+        "children": [
+          {
+            "key": "capa-ledger",
+            "name": "CAPA台账",
+            "path": "/quality/capas/ledger",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "capa-plans",
+            "name": "计划跟踪",
+            "path": "/quality/capas/plans",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          }
+        ]
+      },
+      {
+        "key": "complaints",
+        "name": "投诉管理",
+        "path": "/quality/complaints",
+        "icon": null,
+        "permission_code": null,
+        "disabled": false,
+        "children": [
+          {
+            "key": "complaint-ledger",
+            "name": "投诉台账",
+            "path": "/quality/complaints/ledger",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          }
+        ]
+      },
+      {
+        "key": "department-contacts",
+        "name": "部门联系人",
+        "path": "/quality/department-contacts",
+        "icon": null,
+        "permission_code": null,
+        "disabled": false,
+        "children": null
+      },
+      {
+        "key": "inspection",
+        "name": "质量检验",
+        "path": "/quality/inspection",
+        "icon": null,
+        "permission_code": null,
+        "disabled": false,
+        "children": [
+          {
+            "key": "inspection-items",
+            "name": "物品管理",
+            "path": "/quality/inspection/items",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": [
+              {
+                "key": "inspection-items-inventory",
+                "name": "库存台账",
+                "path": "/quality/inspection/items/inventory",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "inspection-items-inbound",
+                "name": "入库记录",
+                "path": "/quality/inspection/items/inbound",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "inspection-items-outbound",
+                "name": "出库记录",
+                "path": "/quality/inspection/items/outbound",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              }
+            ]
+          },
+          {
+            "key": "inspection-instruments",
+            "name": "仪器管理",
+            "path": "/quality/inspection/instruments",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": [
+              {
+                "key": "inspection-instruments-equipment",
+                "name": "仪器设备",
+                "path": "/quality/inspection/instruments/equipment",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "inspection-instruments-assets",
+                "name": "资产台账",
+                "path": "/quality/inspection/instruments/assets",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "inspection-instruments-calibration",
+                "name": "校准计划",
+                "path": "/quality/inspection/instruments/calibration",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "inspection-instruments-maintenance",
+                "name": "维护保养",
+                "path": "/quality/inspection/instruments/maintenance",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "inspection-instruments-repair",
+                "name": "维修记录",
+                "path": "/quality/inspection/instruments/repair",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "inspection-instruments-change",
+                "name": "变更记录",
+                "path": "/quality/inspection/instruments/change",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "inspection-instruments-contracts",
+                "name": "外协合同",
+                "path": "/quality/inspection/instruments/contracts",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "inspection-instruments-plans",
+                "name": "年度计划",
+                "path": "/quality/inspection/instruments/plans",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              }
+            ]
+          },
+          {
+            "key": "inspection-finished",
+            "name": "成品检验",
+            "path": "/quality/inspection/finished",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": [
+              {
+                "key": "inspection-finished-mpa",
+                "name": "霉酚酸",
+                "path": "/quality/inspection/finished/mpa",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "inspection-finished-mvt",
+                "name": "美伐他汀",
+                "path": "/quality/inspection/finished/mvt",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "inspection-finished-lft",
+                "name": "洛伐他汀",
+                "path": "/quality/inspection/finished/lft",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "inspection-finished-dls",
+                "name": "多拉菌素",
+                "path": "/quality/inspection/finished/dls",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "inspection-finished-lkms",
+                "name": "林可霉素",
+                "path": "/quality/inspection/finished/lkms",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "inspection-finished-bbas",
+                "name": "L-苯丙氨酸",
+                "path": "/quality/inspection/finished/bbas",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "inspection-finished-formulations",
+                "name": "预混剂",
+                "path": "/quality/inspection/finished/formulations",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "inspection-finished-tryptophan",
+                "name": "色氨酸",
+                "path": "/quality/inspection/finished/tryptophan",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "inspection-finished-water",
+                "name": "纯化水",
+                "path": "/quality/inspection/finished/water",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              }
+            ]
+          },
+          {
+            "key": "inspection-solid",
+            "name": "固体物料检验",
+            "path": "/quality/inspection/solid",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": [
+              {
+                "key": "inspection-solid-raw",
+                "name": "原料检验",
+                "path": "/quality/inspection/solid/raw-inspection",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "inspection-solid-ys-000",
+                "name": "YS000",
+                "path": "/quality/inspection/solid/ys-000",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "inspection-solid-ys-100",
+                "name": "YS100",
+                "path": "/quality/inspection/solid/ys-100",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "inspection-solid-ys-200",
+                "name": "YS200",
+                "path": "/quality/inspection/solid/ys-200",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "inspection-solid-ys-300",
+                "name": "YS300",
+                "path": "/quality/inspection/solid/ys-300",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "inspection-solid-ys-400",
+                "name": "YS400",
+                "path": "/quality/inspection/solid/ys-400",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "inspection-solid-ys-500",
+                "name": "YS500",
+                "path": "/quality/inspection/solid/ys-500",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "inspection-solid-ys-600",
+                "name": "YS600",
+                "path": "/quality/inspection/solid/ys-600",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "inspection-solid-ys-700",
+                "name": "YS700",
+                "path": "/quality/inspection/solid/ys-700",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "inspection-solid-ys-800",
+                "name": "YS800",
+                "path": "/quality/inspection/solid/ys-800",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "inspection-solid-manual",
+                "name": "待人工归组",
+                "path": "/quality/inspection/solid/manual",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              }
+            ]
+          },
+          {
+            "key": "inspection-liquid",
+            "name": "液体物料检验",
+            "path": "/quality/inspection/liquid",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": [
+              {
+                "key": "inspection-liquid-raw",
+                "name": "原料检验",
+                "path": "/quality/inspection/liquid/raw-inspection",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "inspection-liquid-yl-0xx",
+                "name": "YL0xx",
+                "path": "/quality/inspection/liquid/yl-0xx",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "inspection-liquid-yl-1xx",
+                "name": "YL1xx",
+                "path": "/quality/inspection/liquid/yl-1xx",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "inspection-liquid-yl-2xx",
+                "name": "YL2xx",
+                "path": "/quality/inspection/liquid/yl-2xx",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "inspection-liquid-yl-3xx",
+                "name": "YL3xx",
+                "path": "/quality/inspection/liquid/yl-3xx",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "inspection-liquid-yl-4xx",
+                "name": "YL4xx",
+                "path": "/quality/inspection/liquid/yl-4xx",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "inspection-liquid-yl-5xx",
+                "name": "YL5xx",
+                "path": "/quality/inspection/liquid/yl-5xx",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "inspection-liquid-yl-6xx",
+                "name": "YL6xx",
+                "path": "/quality/inspection/liquid/yl-6xx",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "inspection-liquid-yl-7xx",
+                "name": "YL7xx",
+                "path": "/quality/inspection/liquid/yl-7xx",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "inspection-liquid-yl-8xx",
+                "name": "YL8xx",
+                "path": "/quality/inspection/liquid/yl-8xx",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "oos-oot",
+        "name": "OOS/OOT管理",
+        "path": "/quality/oos-oot",
+        "icon": null,
+        "permission_code": null,
+        "disabled": false,
+        "children": [
+          {
+            "key": "oos-oot-report-records",
+            "name": "报告记录",
+            "path": "/quality/oos-oot/report-records",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "oos-oot-investigation-push",
+            "name": "调查推送",
+            "path": "/quality/oos-oot/investigation-push",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "oos-ledger",
+            "name": "OOS台账",
+            "path": "/quality/oos-oot/oos-ledger",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "oot-ledger",
+            "name": "OOT台账",
+            "path": "/quality/oos-oot/oot-ledger",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "oot-limits",
+            "name": "各产品OOT限度",
+            "path": "/quality/oos-oot/oot-limits",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "product-departments",
+            "name": "产品涉及部门",
+            "path": "/quality/oos-oot/product-departments",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          }
+        ]
+      },
+      {
+        "key": "product-quality",
+        "name": "产品质量回顾",
+        "path": "/quality/product-quality",
+        "icon": null,
+        "permission_code": null,
+        "disabled": false,
+        "children": [
+          {
+            "key": "product-quality-mfn",
+            "name": "霉酚酸",
+            "path": "/quality/product-quality/mfn",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "product-quality-dljs",
+            "name": "多拉菌素",
+            "path": "/quality/product-quality/dljs",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "product-quality-lftt",
+            "name": "洛伐他汀",
+            "path": "/quality/product-quality/lftt",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "product-quality-mftt",
+            "name": "美伐他汀",
+            "path": "/quality/product-quality/mftt",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "product-quality-yslkms",
+            "name": "盐酸林可霉素",
+            "path": "/quality/product-quality/yslkms",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "product-quality-bbas",
+            "name": "L-苯丙氨酸",
+            "path": "/quality/product-quality/bbas",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "product-quality-sas",
+            "name": "L-色氨酸",
+            "path": "/quality/product-quality/sas",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          }
+        ]
+      },
+      {
+        "key": "return-recalls",
+        "name": "退货召回",
+        "path": "/quality/return-recalls",
+        "icon": null,
+        "permission_code": null,
+        "disabled": false,
+        "children": [
+          {
+            "key": "return-application",
+            "name": "退货申请",
+            "path": "/quality/return-recalls/return-application",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "return-ledger",
+            "name": "退货台账",
+            "path": "/quality/return-recalls/return-ledger",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          }
+        ]
+      },
+      {
+        "key": "suppliers",
+        "name": "供应商管理",
+        "path": "/quality/suppliers",
+        "icon": null,
+        "permission_code": null,
+        "disabled": false,
+        "children": [
+          {
+            "key": "supplier-qualification",
+            "name": "供应商资质台账",
+            "path": "/quality/suppliers/qualification",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          }
+        ]
+      },
+      {
+        "key": "change",
+        "name": "变更控制",
+        "path": "/quality/change",
+        "icon": null,
+        "permission_code": null,
+        "disabled": false,
+        "children": [
+          {
+            "key": "change-ledger",
+            "name": "技术变更台账",
+            "path": "/quality/change/ledger",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "file-change-ledger",
+            "name": "文件变更台账",
+            "path": "/quality/file-change/ledger",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "change-action-plans",
+            "name": "变更计划",
+            "path": "/quality/change/action-plans",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          }
+        ]
+      },
+      {
+        "key": "validation",
+        "name": "验证与确认",
+        "path": "/quality/validation",
+        "icon": null,
+        "permission_code": null,
+        "disabled": false,
+        "children": [
+          {
+            "key": "validation-plans",
+            "name": "验证主计划",
+            "path": "/quality/validation/plans",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "equipment-qualification",
+            "name": "设备确认",
+            "path": "/quality/validation/equipment-qualification",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "process-validation",
+            "name": "工艺验证",
+            "path": "/quality/validation/process-validation",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "cleaning-validation",
+            "name": "清洁验证",
+            "path": "/quality/validation/cleaning-validation",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "other-validations",
+            "name": "其他验证",
+            "path": "/quality/validation/other-validations",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "key": "hr",
+    "name": "人事管理",
+    "path": "/hr",
+    "icon": "users",
+    "permission_code": null,
+    "disabled": false,
+    "children": [
+      {
+        "key": "departments",
+        "name": "部门管理",
+        "path": "/hr/departments",
+        "icon": null,
+        "permission_code": null,
+        "disabled": false,
+        "children": null
+      },
+      {
+        "key": "employee-management",
+        "name": "员工管理",
+        "path": "/hr/employee-management",
+        "icon": null,
+        "permission_code": null,
+        "disabled": false,
+        "children": [
+          {
+            "key": "profile",
+            "name": "员工档案",
+            "path": "/hr/profile",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "feishu-contacts",
+            "name": "飞书联系人",
+            "path": "/hr/feishu-contacts",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          }
+        ]
+      },
+      {
+        "key": "recruitment",
+        "name": "招聘管理",
+        "path": "/hr/recruitment",
+        "icon": null,
+        "permission_code": null,
+        "disabled": false,
+        "children": null
+      },
+      {
+        "key": "onboarding",
+        "name": "入职台账",
+        "path": "/hr/onboarding",
+        "icon": null,
+        "permission_code": null,
+        "disabled": false,
+        "children": null
+      },
+      {
+        "key": "offboarding",
+        "name": "离职管理",
+        "path": "/hr/offboarding",
+        "icon": null,
+        "permission_code": null,
+        "disabled": false,
+        "children": null
+      },
+      {
+        "key": "position-transfer",
+        "name": "岗位调动管理",
+        "path": "/hr/position-transfer",
+        "icon": null,
+        "permission_code": null,
+        "disabled": false,
+        "children": null
+      },
+      {
+        "key": "contracts",
+        "name": "合同管理",
+        "path": "/hr/contracts",
+        "icon": null,
+        "permission_code": null,
+        "disabled": false,
+        "children": [
+          {
+            "key": "contracts-ledger",
+            "name": "合同台账",
+            "path": "/hr/contracts",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "contract-approval-results",
+            "name": "合同到期审批结果",
+            "path": "/hr/contracts/approval-results",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          }
+        ]
+      },
+      {
+        "key": "training",
+        "name": "培训管理",
+        "path": "/hr/training",
+        "icon": null,
+        "permission_code": null,
+        "disabled": false,
+        "children": [
+          {
+            "key": "annual-plan",
+            "name": "年度培训计划",
+            "path": "/hr/training/annual-plan",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "sign-in-sheet",
+            "name": "培训资料",
+            "path": "/hr/training/sign-in",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "new-employee-training",
+            "name": "新员工培训",
+            "path": "/hr/training/new-employee",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "training-ledger",
+            "name": "培训台账",
+            "path": "/hr/training/ledger",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "employee-training-list",
+            "name": "员工培训清单",
+            "path": "/hr/training/employee-training-list",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "trainer",
+            "name": "培训师管理",
+            "path": "/hr/training/trainer",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "position-training",
+            "name": "岗位培训清单",
+            "path": "/hr/training/position-training",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "plan-tracking",
+            "name": "培训计划跟踪",
+            "path": "/hr/training/plan-tracking",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          }
+        ]
+      },
+      {
+        "key": "hr-settings",
+        "name": "HR设置",
+        "path": "/hr/settings/feishu",
+        "icon": null,
+        "permission_code": null,
+        "disabled": false,
+        "children": [
+          {
+            "key": "hr-settings-feishu",
+            "name": "飞书设置",
+            "path": "/hr/settings/feishu",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "hr-settings-reminder",
+            "name": "提醒设置",
+            "path": "/hr/settings/reminder",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "hr-settings-approval",
+            "name": "审批流程设置",
+            "path": "/hr/settings/approval",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "hr-settings-dept-mapping",
+            "name": "培训部门映射",
+            "path": "/hr/settings/dept-mapping",
+            "icon": null,
+            "permission_code": "hr:write",
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "hr-settings-dept-scopes",
+            "name": "部门权限配置",
+            "path": "/hr/settings/dept-scopes",
+            "icon": null,
+            "permission_code": "hr:write",
+            "disabled": false,
+            "children": null
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "key": "warehouse",
+    "name": "仓储管理",
+    "path": "/warehouse",
+    "icon": "archive",
+    "permission_code": null,
+    "disabled": false,
+    "children": [
+      {
+        "key": "ai-analysis",
+        "name": "AI分析",
+        "path": "/warehouse/ai-analysis",
+        "icon": null,
+        "permission_code": null,
+        "disabled": false,
+        "children": null
+      },
+      {
+        "key": "materials",
+        "name": "原辅料及包材",
+        "path": "/warehouse/materials/dashboard",
+        "icon": null,
+        "permission_code": null,
+        "disabled": false,
+        "children": [
+          {
+            "key": "raw-summary",
+            "name": "原辅料库存总表",
+            "path": "/warehouse/materials/raw-summary",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "raw-detail",
+            "name": "原辅料库存明细表",
+            "path": "/warehouse/materials/raw-detail",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "raw-ledger",
+            "name": "原辅料出库总账",
+            "path": "/warehouse/materials/raw-ledger",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "packaging-summary",
+            "name": "包材库存总表",
+            "path": "/warehouse/materials/packaging-summary",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "packaging-detail",
+            "name": "包材库存明细表",
+            "path": "/warehouse/materials/packaging-detail",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "packaging-ledger",
+            "name": "包材出库总账",
+            "path": "/warehouse/materials/packaging-ledger",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "inbound-ledger",
+            "name": "入库总账",
+            "path": "/warehouse/materials/inbound-ledger",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "qualified-suppliers",
+            "name": "原辅材料合格供应商一览表",
+            "path": "/warehouse/materials/qualified-suppliers",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "material-name-code-map",
+            "name": "物料名称及代码对应表",
+            "path": "/warehouse/materials/material-name-code-map",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          }
+        ]
+      },
+      {
+        "key": "hardware",
+        "name": "五金",
+        "path": "/warehouse/hardware/dashboard",
+        "icon": null,
+        "permission_code": null,
+        "disabled": false,
+        "children": [
+          {
+            "key": "hardware-hardware-summary",
+            "name": "五金",
+            "path": "/warehouse/hardware/summary",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "hardware-hardware-electrical",
+            "name": "电仪",
+            "path": "/warehouse/hardware/electrical",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "hardware-hardware-101-1-workshop",
+            "name": "101-1车间",
+            "path": "/warehouse/hardware/101-1-workshop",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "hardware-hardware-101-2-workshop",
+            "name": "101-2车间",
+            "path": "/warehouse/hardware/101-2-workshop",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "hardware-hardware-102-workshop",
+            "name": "102车间",
+            "path": "/warehouse/hardware/102-workshop",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "hardware-hardware-103-workshop",
+            "name": "103车间",
+            "path": "/warehouse/hardware/103-workshop",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "hardware-hardware-201-1-workshop",
+            "name": "201-1车间",
+            "path": "/warehouse/hardware/201-1-workshop",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "hardware-hardware-201-2-workshop",
+            "name": "201-2车间",
+            "path": "/warehouse/hardware/201-2-workshop",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "hardware-hardware-201-3-workshop",
+            "name": "201-3车间",
+            "path": "/warehouse/hardware/201-3-workshop",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "hardware-hardware-202-workshop",
+            "name": "202车间",
+            "path": "/warehouse/hardware/202-workshop",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "hardware-hardware-203-workshop",
+            "name": "203车间",
+            "path": "/warehouse/hardware/203-workshop",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "hardware-hardware-203-3-workshop",
+            "name": "203-3车间",
+            "path": "/warehouse/hardware/203-3-workshop",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "hardware-hardware-thermal-station",
+            "name": "热动站",
+            "path": "/warehouse/hardware/thermal-station",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "hardware-hardware-power-department",
+            "name": "动力部",
+            "path": "/warehouse/hardware/power-department",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "hardware-hardware-wastewater",
+            "name": "污水处理",
+            "path": "/warehouse/hardware/wastewater",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "hardware-hardware-warehouse",
+            "name": "仓库",
+            "path": "/warehouse/hardware/warehouse",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "hardware-hardware-rd-center",
+            "name": "研发中心",
+            "path": "/warehouse/hardware/rd-center",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "hardware-hardware-others",
+            "name": "其它",
+            "path": "/warehouse/hardware/others",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "hardware-hardware-inbound-ledger",
+            "name": "入库记录",
+            "path": "/warehouse/hardware/inbound-ledger",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "hardware-hardware-outbound-ledger",
+            "name": "出库记录",
+            "path": "/warehouse/hardware/outbound-ledger",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          }
+        ]
+      },
+      {
+        "key": "product-inventory",
+        "name": "成品库存",
+        "path": "/warehouse/product/dashboard",
+        "icon": null,
+        "permission_code": null,
+        "disabled": false,
+        "children": [
+          {
+            "key": "product-summary",
+            "name": "产品汇总",
+            "path": "/warehouse/product/summary",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "product-details",
+            "name": "产品明细",
+            "path": "",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": [
+              {
+                "key": "product-detail-l-phenylalanine",
+                "name": "L-苯丙氨酸库存明细",
+                "path": "/warehouse/product/details/l-phenylalanine",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "product-detail-fumaric-acid",
+                "name": "霉酚酸库存明细",
+                "path": "/warehouse/product/details/fumaric-acid",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "product-detail-l-tryptophan",
+                "name": "L-色氨酸库存明细",
+                "path": "/warehouse/product/details/l-tryptophan",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "product-detail-mevastatin",
+                "name": "美伐他汀库存明细",
+                "path": "/warehouse/product/details/mevastatin",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "product-detail-kitasamycin-hcl",
+                "name": "盐酸林可霉素库存明细",
+                "path": "/warehouse/product/details/kitasamycin-hcl",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "product-detail-doramectin",
+                "name": "多拉菌素库存明细",
+                "path": "/warehouse/product/details/doramectin",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "product-detail-lovastatin",
+                "name": "洛伐他汀库存明细",
+                "path": "/warehouse/product/details/lovastatin",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "product-detail-florfenicol-premix",
+                "name": "氟苯尼考预混剂库存明细",
+                "path": "/warehouse/product/details/florfenicol-premix",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "product-detail-demeclocycline-hcl",
+                "name": "盐酸去甲金霉素库存明细",
+                "path": "/warehouse/product/details/demeclocycline-hcl",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "product-detail-fenbendazole-powder",
+                "name": "芬苯达唑粉剂库存明细",
+                "path": "/warehouse/product/details/fenbendazole-powder",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              }
+            ]
+          },
+          {
+            "key": "product-inbound-detail",
+            "name": "成品入库明细",
+            "path": "/warehouse/product/inbound-detail",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "product-inbound-ledger",
+            "name": "入库总账",
+            "path": "/warehouse/product/inbound-ledger",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "product-outbound-ledger",
+            "name": "出库台账",
+            "path": "/warehouse/product/outbound-ledger",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "product-shipping",
+            "name": "发货情况",
+            "path": "/warehouse/product/shipping",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          }
+        ]
+      },
+      {
+        "key": "warehouse-settings",
+        "name": "仓储设置",
+        "path": "/warehouse/settings",
+        "icon": null,
+        "permission_code": null,
+        "disabled": false,
+        "children": null
+      }
+    ]
+  },
+  {
+    "key": "purchasing",
+    "name": "采购管理",
+    "path": "/purchasing",
+    "icon": "cart",
+    "permission_code": null,
+    "disabled": false,
+    "children": [
+      {
+        "key": "request",
+        "name": "采购申请",
+        "path": "",
+        "icon": null,
+        "permission_code": null,
+        "disabled": false,
+        "children": [
+          {
+            "key": "request-hardware",
+            "name": "五金材料",
+            "path": "/purchasing/request/hardware",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "request-computer",
+            "name": "电脑材料",
+            "path": "/purchasing/request/computer",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "request-office",
+            "name": "办公用品",
+            "path": "/purchasing/request/office",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "request-raw-auxiliary",
+            "name": "原辅料",
+            "path": "/purchasing/request/raw-auxiliary",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "request-chemical-glass",
+            "name": "化玻",
+            "path": "/purchasing/request/chemical-glass",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "request-electrical",
+            "name": "电气",
+            "path": "/purchasing/request/electrical",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "request-advertising-printing",
+            "name": "广告/印刷",
+            "path": "/purchasing/request/advertising-printing",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "request-fire",
+            "name": "消防",
+            "path": "/purchasing/request/fire",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "request-packaging",
+            "name": "包材",
+            "path": "/purchasing/request/packaging",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "request-labor",
+            "name": "劳保",
+            "path": "",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": [
+              {
+                "key": "request-labor-special",
+                "name": "特防",
+                "path": "/purchasing/request/labor-special",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "request-labor-miscellaneous",
+                "name": "杂品",
+                "path": "/purchasing/request/labor-miscellaneous",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              }
+            ]
+          },
+          {
+            "key": "request-urgent",
+            "name": "加急单",
+            "path": "/purchasing/request/urgent",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          }
+        ]
+      },
+      {
+        "key": "material-library",
+        "name": "物料编码库",
+        "path": "/purchasing/material-library",
+        "icon": null,
+        "permission_code": null,
+        "disabled": false,
+        "children": null
+      },
+      {
+        "key": "approval",
+        "name": "采购审批",
+        "path": "",
+        "icon": null,
+        "permission_code": null,
+        "disabled": false,
+        "children": [
+          {
+            "key": "approval-hardware",
+            "name": "五金材料",
+            "path": "",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": [
+              {
+                "key": "approval-hardware-hardware-warehouse",
+                "name": "五金库",
+                "path": "/purchasing/approval/hardware/hardware-warehouse",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "approval-hardware-department-head",
+                "name": "部门负责人",
+                "path": "/purchasing/approval/hardware/department-head",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "approval-hardware-responsible-leader",
+                "name": "分管领导",
+                "path": "/purchasing/approval/hardware/responsible-leader",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "approval-hardware-supervising-leader",
+                "name": "主管领导",
+                "path": "/purchasing/approval/hardware/supervising-leader",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "approval-hardware-general-manager",
+                "name": "总经理",
+                "path": "/purchasing/approval/hardware/general-manager",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              }
+            ]
+          },
+          {
+            "key": "approval-computer",
+            "name": "电脑材料",
+            "path": "",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": [
+              {
+                "key": "approval-computer-department-head",
+                "name": "部门负责人",
+                "path": "/purchasing/approval/computer/department-head",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "approval-computer-responsible-leader",
+                "name": "分管领导",
+                "path": "/purchasing/approval/computer/responsible-leader",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "approval-computer-supervising-leader",
+                "name": "主管领导",
+                "path": "/purchasing/approval/computer/supervising-leader",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              }
+            ]
+          },
+          {
+            "key": "approval-office",
+            "name": "办公用品",
+            "path": "",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": [
+              {
+                "key": "approval-office-department-head",
+                "name": "部门负责人",
+                "path": "/purchasing/approval/office/department-head",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "approval-office-responsible-leader",
+                "name": "分管领导",
+                "path": "/purchasing/approval/office/responsible-leader",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "approval-office-supervising-leader",
+                "name": "主管领导",
+                "path": "/purchasing/approval/office/supervising-leader",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              }
+            ]
+          },
+          {
+            "key": "approval-raw-auxiliary",
+            "name": "原辅料",
+            "path": "",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": [
+              {
+                "key": "approval-raw-auxiliary-department-head",
+                "name": "部门负责人",
+                "path": "/purchasing/approval/raw-auxiliary/department-head",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "approval-raw-auxiliary-responsible-leader",
+                "name": "分管领导",
+                "path": "/purchasing/approval/raw-auxiliary/responsible-leader",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "approval-raw-auxiliary-supervising-leader",
+                "name": "主管领导",
+                "path": "/purchasing/approval/raw-auxiliary/supervising-leader",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              }
+            ]
+          },
+          {
+            "key": "approval-chemical-glass",
+            "name": "化玻",
+            "path": "",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": [
+              {
+                "key": "approval-chemical-glass-department-head",
+                "name": "部门负责人",
+                "path": "/purchasing/approval/chemical-glass/department-head",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "approval-chemical-glass-responsible-leader",
+                "name": "分管领导",
+                "path": "/purchasing/approval/chemical-glass/responsible-leader",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "approval-chemical-glass-supervising-leader",
+                "name": "主管领导",
+                "path": "/purchasing/approval/chemical-glass/supervising-leader",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              }
+            ]
+          },
+          {
+            "key": "approval-electrical",
+            "name": "电气",
+            "path": "",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": [
+              {
+                "key": "approval-electrical-hardware-warehouse",
+                "name": "五金库",
+                "path": "/purchasing/approval/electrical/hardware-warehouse",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "approval-electrical-equipment-power",
+                "name": "设备动力部会签",
+                "path": "/purchasing/approval/electrical/equipment-power",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "approval-electrical-department-head",
+                "name": "部门负责人",
+                "path": "/purchasing/approval/electrical/department-head",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "approval-electrical-responsible-leader",
+                "name": "分管领导",
+                "path": "/purchasing/approval/electrical/responsible-leader",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "approval-electrical-supervising-leader",
+                "name": "主管领导",
+                "path": "/purchasing/approval/electrical/supervising-leader",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              }
+            ]
+          },
+          {
+            "key": "approval-advertising-printing",
+            "name": "广告/印刷",
+            "path": "",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": [
+              {
+                "key": "approval-advertising-printing-department-head",
+                "name": "部门负责人",
+                "path": "/purchasing/approval/advertising-printing/department-head",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "approval-advertising-printing-responsible-leader",
+                "name": "分管领导",
+                "path": "/purchasing/approval/advertising-printing/responsible-leader",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "approval-advertising-printing-supervising-leader",
+                "name": "主管领导",
+                "path": "/purchasing/approval/advertising-printing/supervising-leader",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              }
+            ]
+          },
+          {
+            "key": "approval-fire",
+            "name": "消防",
+            "path": "",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": [
+              {
+                "key": "approval-fire-department-head",
+                "name": "部门负责人",
+                "path": "/purchasing/approval/fire/department-head",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "approval-fire-responsible-leader",
+                "name": "分管领导",
+                "path": "/purchasing/approval/fire/responsible-leader",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "approval-fire-supervising-leader",
+                "name": "主管领导",
+                "path": "/purchasing/approval/fire/supervising-leader",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              }
+            ]
+          },
+          {
+            "key": "approval-packaging",
+            "name": "包材",
+            "path": "",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": [
+              {
+                "key": "approval-packaging-department-head",
+                "name": "部门负责人",
+                "path": "/purchasing/approval/packaging/department-head",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "approval-packaging-responsible-leader",
+                "name": "分管领导",
+                "path": "/purchasing/approval/packaging/responsible-leader",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "approval-packaging-supervising-leader",
+                "name": "主管领导",
+                "path": "/purchasing/approval/packaging/supervising-leader",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              }
+            ]
+          },
+          {
+            "key": "approval-labor",
+            "name": "劳保",
+            "path": "",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": [
+              {
+                "key": "approval-labor-special",
+                "name": "特防",
+                "path": "",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": [
+                  {
+                    "key": "approval-labor-special-safety-officer",
+                    "name": "安全员",
+                    "path": "/purchasing/approval/labor-special/safety-officer",
+                    "icon": null,
+                    "permission_code": null,
+                    "disabled": false,
+                    "children": null
+                  },
+                  {
+                    "key": "approval-labor-special-department-head",
+                    "name": "部门负责人",
+                    "path": "/purchasing/approval/labor-special/department-head",
+                    "icon": null,
+                    "permission_code": null,
+                    "disabled": false,
+                    "children": null
+                  },
+                  {
+                    "key": "approval-labor-special-responsible-leader",
+                    "name": "分管领导",
+                    "path": "/purchasing/approval/labor-special/responsible-leader",
+                    "icon": null,
+                    "permission_code": null,
+                    "disabled": false,
+                    "children": null
+                  }
+                ]
+              },
+              {
+                "key": "approval-labor-miscellaneous",
+                "name": "杂品",
+                "path": "",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": [
+                  {
+                    "key": "approval-labor-miscellaneous-department-head",
+                    "name": "部门负责人",
+                    "path": "/purchasing/approval/labor-miscellaneous/department-head",
+                    "icon": null,
+                    "permission_code": null,
+                    "disabled": false,
+                    "children": null
+                  },
+                  {
+                    "key": "approval-labor-miscellaneous-responsible-leader",
+                    "name": "分管领导",
+                    "path": "/purchasing/approval/labor-miscellaneous/responsible-leader",
+                    "icon": null,
+                    "permission_code": null,
+                    "disabled": false,
+                    "children": null
+                  },
+                  {
+                    "key": "approval-labor-miscellaneous-supervising-leader",
+                    "name": "主管领导",
+                    "path": "/purchasing/approval/labor-miscellaneous/supervising-leader",
+                    "icon": null,
+                    "permission_code": null,
+                    "disabled": false,
+                    "children": null
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "key": "approval-urgent",
+            "name": "加急单",
+            "path": "",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": [
+              {
+                "key": "approval-urgent-hardware-warehouse",
+                "name": "五金库",
+                "path": "/purchasing/approval/urgent/hardware-warehouse",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "approval-urgent-department-head",
+                "name": "部门负责人",
+                "path": "/purchasing/approval/urgent/department-head",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "approval-urgent-responsible-leader",
+                "name": "分管领导",
+                "path": "/purchasing/approval/urgent/responsible-leader",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "approval-urgent-supervising-leader",
+                "name": "主管领导",
+                "path": "/purchasing/approval/urgent/supervising-leader",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "approval-urgent-finance-director",
+                "name": "财务总监",
+                "path": "/purchasing/approval/urgent/finance-director",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              },
+              {
+                "key": "approval-urgent-general-manager",
+                "name": "总经理",
+                "path": "/purchasing/approval/urgent/general-manager",
+                "icon": null,
+                "permission_code": null,
+                "disabled": false,
+                "children": null
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "supplier",
+        "name": "供应商管理",
+        "path": "/purchasing/supplier",
+        "icon": null,
+        "permission_code": null,
+        "disabled": false,
+        "children": null
+      },
+      {
+        "key": "order",
+        "name": "采购订单",
+        "path": "/purchasing/order",
+        "icon": null,
+        "permission_code": null,
+        "disabled": false,
+        "children": null
+      },
+      {
+        "key": "invoice-recognition",
+        "name": "发票识别",
+        "path": "/purchasing/invoice-recognition",
+        "icon": null,
+        "permission_code": null,
+        "disabled": false,
+        "children": null
+      },
+      {
+        "key": "contract-summary",
+        "name": "合同汇总",
+        "path": "/purchasing/contract-summary",
+        "icon": null,
+        "permission_code": null,
+        "disabled": false,
+        "children": null
+      },
+      {
+        "key": "contract-generation",
+        "name": "合同生成",
+        "path": "",
+        "icon": null,
+        "permission_code": null,
+        "disabled": false,
+        "children": [
+          {
+            "key": "contract-generation-fixed-assets",
+            "name": "固定资产",
+            "path": "/purchasing/contract-generation/fixed-assets",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "contract-generation-consumables",
+            "name": "耗材",
+            "path": "/purchasing/contract-generation/consumables",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "contract-generation-hardware",
+            "name": "五金",
+            "path": "/purchasing/contract-generation/hardware",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          },
+          {
+            "key": "contract-generation-raw-materials",
+            "name": "原材料",
+            "path": "/purchasing/contract-generation/raw-materials",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
+          }
+        ]
+      },
+      {
+        "key": "settings",
+        "name": "采购设置",
+        "path": "/purchasing/settings",
+        "icon": null,
+        "permission_code": null,
+        "disabled": false,
+        "children": null
+      }
+    ]
+  }
+]

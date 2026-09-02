@@ -12,7 +12,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.correlation import normalize_correlation_id
 from app.platform.audit.models import AuditLog
+from app.platform.identity.data_scope import (
+    current_page_actor,
+    current_page_data_scope,
+    current_page_key,
+)
 from app.platform.identity.models import User
+from app.platform.identity.page_permission_repository import PagePermissionRepository
+from app.platform.identity.page_permissions import PagePermissionService
+from app.platform.identity.page_policy import (
+    ToolPageBinding,
+    get_page_definition,
+    register_tool_catalog_provider,
+)
+from app.platform.identity.schemas import EffectivePageGrantOut
 from app.shared.module_registry import MODULES_BY_CODE
 
 from .models import AgentAutomationGrant, AgentConfirmation
@@ -56,6 +69,8 @@ class AgentToolSpec:
     capability_version: str = "1.0"
     module: str | None = None
     permission_key: str | None = None
+    page_keys: tuple[str, ...] = ()
+    sensitive_action: str | None = None
     data_scope_type: str | None = None
     sensitivity: Literal["public", "internal", "sensitive", "restricted"] = "internal"
     idempotent: bool = False
@@ -83,6 +98,8 @@ class AgentToolSpec:
             "capability_version": self.capability_version,
             "module": self.module,
             "permission_key": self.permission_key,
+            "page_keys": list(self.page_keys),
+            "sensitive_action": self.sensitive_action,
             "data_scope_type": self.data_scope_type,
             "sensitivity": self.sensitivity,
             "idempotent": self.idempotent,
@@ -133,6 +150,22 @@ class ToolRegistry:
 tool_registry = ToolRegistry()
 
 
+def _page_contract_projection() -> list[ToolPageBinding]:
+    return [
+        ToolPageBinding(
+            module_code=spec.module,
+            name=spec.name,
+            summary=spec.summary,
+            page_keys=spec.page_keys,
+            sensitive_action=spec.sensitive_action,
+        )
+        for spec in tool_registry.list()
+    ]
+
+
+register_tool_catalog_provider(_page_contract_projection)
+
+
 def _inferred_output_schema(handler: Callable[..., Any]) -> dict[str, Any]:
     """Build a non-empty baseline contract from the handler return annotation."""
     try:
@@ -163,6 +196,8 @@ def agent_tool(
     capability_version: str = "1.0",
     module: str | None = None,
     permission_key: str | None = None,
+    page_keys: tuple[str, ...] | list[str] = (),
+    sensitive_action: str | None = None,
     data_scope_type: str | None = None,
     sensitivity: Literal["public", "internal", "sensitive", "restricted"] = "internal",
     idempotent: bool = False,
@@ -211,6 +246,8 @@ def agent_tool(
             capability_version=capability_version,
             module=business_module or module,
             permission_key=inferred_permission_key,
+            page_keys=tuple(page_keys),
+            sensitive_action=sensitive_action,
             data_scope_type=data_scope_type,
             sensitivity=sensitivity,
             idempotent=idempotent,
@@ -550,6 +587,8 @@ class ToolExecutor:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, detail) from exc
 
     def _check_permission(self, spec: AgentToolSpec, user: User | None) -> None:
+        if user is not None and user.role == "admin":
+            return
         if not spec.required_roles:
             return
         if user is None or user.role not in spec.required_roles:
@@ -598,9 +637,24 @@ class ToolExecutor:
             confirmation_id=confirmation_id,
             correlation_id=normalize_correlation_id(request.trace_id),
         )
-        data = spec.handler(context, validated)
-        if inspect.isawaitable(data):
-            data = await data
+        grant = await self._resolve_tool_page_grant(
+            db, spec=spec, request=request, validated=validated, user=user
+        )
+        actor_token = current_page_actor.set(
+            user if grant or (user and user.role == "admin") else None
+        )
+        scope_token = current_page_data_scope.set(
+            grant.data_scope.model_dump() if grant else None
+        )
+        page_token = current_page_key.set(grant.page_key if grant else None)
+        try:
+            data = spec.handler(context, validated)
+            if inspect.isawaitable(data):
+                data = await data
+        finally:
+            current_page_actor.reset(actor_token)
+            current_page_data_scope.reset(scope_token)
+            current_page_key.reset(page_token)
         return AgentToolExecuteResponse(
             ok=True,
             operation=request.operation,
@@ -614,6 +668,57 @@ class ToolExecutor:
                 },
             },
         )
+
+    @staticmethod
+    async def _resolve_tool_page_grant(
+        db: AsyncSession,
+        *,
+        spec: AgentToolSpec,
+        request: AgentToolExecuteRequest,
+        validated: BaseModel,
+        user: User | None,
+    ) -> EffectivePageGrantOut | None:
+        if spec.module is None or (user is not None and user.role == "admin"):
+            return None
+        rollout = await PagePermissionRepository().get_rollout(
+            db, module_code=spec.module
+        )
+        if rollout is None or rollout.status != "enforced":
+            raise HTTPException(403, "工具关联页面尚未发布，暂不可执行")
+        if user is None or not spec.page_keys:
+            raise HTTPException(403, "工具尚未绑定有效页面或责任主体")
+        required = "operate" if spec.write or spec.sensitive_action else "query"
+        grants = await PagePermissionService().effective_grants(db, user=user)
+        allowed = [
+            grant
+            for grant in grants
+            if grant.page_key in spec.page_keys
+            and required in grant.permissions
+            and (
+                not spec.sensitive_action
+                or spec.sensitive_action in grant.sensitive_actions
+            )
+        ]
+        requested = request.execution_context.get("page_key")
+        if requested is not None:
+            allowed = [grant for grant in allowed if grant.page_key == requested]
+        else:
+            category = getattr(validated, "category", None)
+            if category is not None:
+                allowed = [
+                    grant
+                    for grant in allowed
+                    if (definition := get_page_definition(grant.page_key))
+                    and (
+                        definition.route_path.endswith("/" + str(category))
+                        or definition.route_path == "/purchasing/order"
+                    )
+                ]
+        if not allowed:
+            raise HTTPException(403, "未获得工具所需的页面权限")
+        if len(allowed) != 1:
+            raise HTTPException(400, "工具关联多个菜单页面，请提供明确的页面上下文")
+        return allowed[0]
 
     async def _create_confirmation(
         self,

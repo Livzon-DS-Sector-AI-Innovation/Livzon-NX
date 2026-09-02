@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 import type { User } from '@/types/user'
+import { getFirstAuthorizedModulePath } from '@/lib/menu-config'
 
 import { AuthLayout } from './AuthLayout'
 import styles from './AuthLayout.module.css'
@@ -106,6 +107,7 @@ export function AuthCompletion({ nextPath }: AuthCompletionProps) {
       }
 
       setUser(payload.data)
+      const landingPath = getFirstAuthorizedModulePath(payload.data)
       setState('ready')
       readyTimer.current = setTimeout(() => {
         setState('entering')
@@ -115,10 +117,10 @@ export function AuthCompletion({ nextPath }: AuthCompletionProps) {
           }
           if (documentWithTransition.startViewTransition) {
             documentWithTransition.startViewTransition(() => {
-              router.replace(nextPath)
+              router.replace(landingPath)
             })
           } else {
-            router.replace(nextPath)
+            router.replace(landingPath)
           }
         }, ENTER_DURATION_MS)
       }, READY_DURATION_MS)
@@ -131,7 +133,7 @@ export function AuthCompletion({ nextPath }: AuthCompletionProps) {
       )
       setState('error')
     }
-  }, [clearPendingWork, nextPath, router])
+  }, [clearPendingWork, router])
 
   useEffect(() => {
     const startTimer = window.setTimeout(() => {

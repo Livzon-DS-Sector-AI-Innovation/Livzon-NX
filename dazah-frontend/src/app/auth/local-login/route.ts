@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 
-import { getPublicOrigin } from "@/lib/public-origin"
+import { getPublicOrigin, isSecurePublicRequest } from "@/lib/public-origin"
 import { getLocalLoginMode } from "@/lib/local-auth"
 import { getBackendFallbackUrls } from "@/lib/server-api"
 
@@ -65,14 +65,15 @@ export async function POST(request: NextRequest) {
         return loginRedirect(request, "missing_token")
       }
 
-      const redirectUrl = new URL(nextPath, getPublicOrigin(request))
+      const completionPath = `/login/complete?next=${encodeURIComponent(nextPath)}`
+      const redirectUrl = new URL(completionPath, getPublicOrigin(request))
       const redirectResponse = NextResponse.redirect(redirectUrl, 303)
       redirectResponse.cookies.set("auth_token", token, {
         httpOnly: true,
         maxAge: AUTH_COOKIE_MAX_AGE,
         path: "/",
         sameSite: "lax",
-        secure: request.nextUrl.protocol === "https:",
+        secure: isSecurePublicRequest(request),
       })
       return redirectResponse
     } catch (error) {
