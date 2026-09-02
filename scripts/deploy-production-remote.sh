@@ -175,7 +175,6 @@ load_release_images() {
 
   docker image inspect \
     "dazah/backend:$version" \
-    "dazah/edbo:$version" \
     "dazah/frontend:$version" \
     "dazah/hermes-lite:$version" \
     >/dev/null 2>&1 || {
@@ -215,7 +214,7 @@ wait_for_healthy() {
   local state
   local health
   local all_ok
-  local services=(db redis minio edbo-service app hermes-lite frontend)
+  local services=(db redis minio app hermes-lite frontend)
   if [[ -f "$EDGE_COMPOSE_FILE" ]]; then
     services+=(nginx)
   fi

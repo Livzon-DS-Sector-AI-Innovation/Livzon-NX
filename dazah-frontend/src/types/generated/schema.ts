@@ -20176,69 +20176,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/research/edbo/generate-scope": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * 生成反应范围
-         * @description 生成反应范围 CSV（所有组合的笛卡尔积）
-         *
-         *     支持两种组件格式：
-         *
-         *     1. 简单值列表（直接枚举）:
-         *     ```json
-         *     {
-         *         "solvent": ["THF", "DMSO"],
-         *         "catalyst": ["Pd", "Ni"]
-         *     }
-         *     ```
-         *
-         *     2. 范围定义（数值型自动生成等间隔值）:
-         *     ```json
-         *     {
-         *         "temperature": {"type": "numeric", "lower": 30, "upper": 90, "data_points": 4},
-         *         "solvent": {"type": "categorical", "values": ["THF", "DMSO", "MeOH"]}
-         *     }
-         *     ```
-         *
-         *     数值型组件会自动处理有效数字，避免浮点精度问题。
-         */
-        post: operations["edbo_generate_scope_api_v1_research_edbo_generate_scope_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/research/edbo/optimize": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * EDBO+ 贝叶斯优化
-         * @description 使用 EDBO+ 进行贝叶斯反应优化。
-         *
-         *     上传 CSV 文件（反应范围），指定目标列和优化方向，返回建议的实验列表。
-         *     如果 save_prediction=True，还会返回预测文件（包含所有实验的模型预测结果）。
-         */
-        post: operations["edbo_optimize_api_v1_research_edbo_optimize_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/research/experiments/{exp_id}": {
         parameters: {
             query?: never;
@@ -29348,59 +29285,6 @@ export interface components {
              * @description 最新排产 Excel（.xlsx）
              */
             file: string;
-        };
-        /** Body_edbo_generate_scope_api_v1_research_edbo_generate_scope_post */
-        Body_edbo_generate_scope_api_v1_research_edbo_generate_scope_post: {
-            /**
-             * Batch Size
-             * @description 通量大小，表示同时进行的实验数量
-             * @default 5
-             */
-            batch_size: number;
-            /**
-             * Components
-             * @description 组件定义，支持两种格式：1) 直接值列表 {name: [v1,v2,...]} 2) 范围定义 {name: {type: 'numeric', lower: x, upper: y, data_points: n}} 或 {name: {type: 'categorical', values: [...]}}
-             */
-            components: {
-                [key: string]: unknown;
-            };
-            /**
-             * Objectives
-             * @description 优化目标名称列表，会作为新列添加到结果CSV中，初始值为PENDING
-             * @default []
-             */
-            objectives: string[];
-        };
-        /** Body_edbo_optimize_api_v1_research_edbo_optimize_post */
-        Body_edbo_optimize_api_v1_research_edbo_optimize_post: {
-            /**
-             * Batch Size
-             * @description 建议实验数量
-             * @default 5
-             */
-            batch_size: number;
-            /**
-             * File
-             * @description 反应范围 CSV 文件
-             */
-            file: string;
-            /**
-             * Objective Modes
-             * @description 目标方向，逗号分隔（max/min）
-             * @default max
-             */
-            objective_modes: string;
-            /**
-             * Objectives
-             * @description 目标列名，逗号分隔
-             */
-            objectives: string;
-            /**
-             * Save Prediction
-             * @description 是否保存预测文件
-             * @default false
-             */
-            save_prediction: boolean;
         };
         /** Body_extract_article_from_file_api_v1_registration_knowledge_articles_extract_post */
         Body_extract_article_from_file_api_v1_registration_knowledge_articles_extract_post: {
@@ -111358,78 +111242,6 @@ export interface operations {
                     "application/json": {
                         [key: string]: string;
                     };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    edbo_generate_scope_api_v1_research_edbo_generate_scope_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["Body_edbo_generate_scope_api_v1_research_edbo_generate_scope_post"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    edbo_optimize_api_v1_research_edbo_optimize_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "multipart/form-data": components["schemas"]["Body_edbo_optimize_api_v1_research_edbo_optimize_post"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
