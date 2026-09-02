@@ -2,11 +2,12 @@
 .gitignore
 **/.env
 **/.env.*
-!**/.env.example
-!**/.env.local.example
+!.env.example
+!.env.local.example
 **/.venv
 **/venv
 **/node_modules
+**/.pnpm-store
 **/.next
 **/__pycache__
 **/*.py[cod]
@@ -24,9 +25,11 @@
 **/dist
 **/build
 **/*.log
-# 仅排除运行时上传目录；不能用 **/storage，否则会误伤 app/platform/storage 业务模块
-/dazah-backend/storage
+/dazah-backend/storage/
+**/uploads
+/dazah-backend/data
 /dazah-backend/uploads
+/.dev-data/
 /.deploy-tmp/
 /.deploy-cache/
 release
