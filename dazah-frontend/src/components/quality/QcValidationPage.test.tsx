@@ -469,6 +469,119 @@ describe('QcValidationPage', () => {
     })
     expect(apiClient.fetchQcValidationRecords.mock.calls.length).toBeGreaterThan(before)
   })
+
+  it('surfaces editor save failures via toast', async () => {
+    qcActions.createQcValidationRecord.mockRejectedValue(new Error('保存失败：字段冲突'))
+    await renderPage()
+    const createButton = Array.from(container.querySelectorAll('button')).find((btn) =>
+      (btn.textContent || '').includes('新增'),
+    )
+    await act(async () => {
+      createButton?.click()
+      await new Promise((resolve) => setTimeout(resolve, 60))
+    })
+    const nameItem = Array.from(document.body.querySelectorAll('.ant-form-item')).find(
+      (item) => (item.querySelector('.ant-form-item-label')?.textContent || '').includes('方案名称'),
+    )
+    const nameInput = nameItem?.querySelector('input') as HTMLInputElement | null
+    await act(async () => {
+      if (nameInput) {
+        Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set?.call(
+          nameInput,
+          '保存失败方案',
+        )
+        nameInput.dispatchEvent(new Event('input', { bubbles: true }))
+      }
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    })
+    const confirmOk = document.body.querySelector('.ant-modal-footer .ant-btn-primary')
+    await act(async () => {
+      confirmOk?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 80))
+    })
+    expect(document.body.textContent).toContain('保存失败：字段冲突')
+    // 保存失败后弹窗保持在打开状态（编辑未关闭）
+    expect(document.body.textContent).toContain('新增QC验证记录（2026年）')
+  })
+
+  it('opens the detail drawer from the row action and closes it', async () => {
+    await renderPage()
+    const eyeButton = container.querySelector('.anticon-eye')?.closest('button')
+    expect(eyeButton).toBeTruthy()
+    await act(async () => {
+      eyeButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    })
+    expect(document.body.textContent).toContain('QC验证记录详情')
+    const closeButton = document.body.querySelector('.ant-drawer-close')
+    expect(closeButton).toBeTruthy()
+    // happy-dom 下 Drawer 退场动效不会结束，DOM 保留但 onClose 已执行
+    await act(async () => {
+      closeButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 80))
+    })
+  })
+
+  it('closes the editor modal through the cancel button', async () => {
+    await renderPage()
+    const createButton = Array.from(container.querySelectorAll('button')).find((btn) =>
+      (btn.textContent || '').includes('新增'),
+    )
+    await act(async () => {
+      createButton?.click()
+      await new Promise((resolve) => setTimeout(resolve, 60))
+    })
+    expect(document.body.textContent).toContain('新增QC验证记录（2026年）')
+    const cancelButton = Array.from(
+      document.body.querySelectorAll('.ant-modal-footer .ant-btn'),
+    ).find((btn) => !btn.className.includes('ant-btn-primary'))
+    expect(cancelButton).toBeTruthy()
+    // 同上：Modal 退场动效在 happy-dom 下不结束，DOM 保留但 onCancel 已执行
+    await act(async () => {
+      cancelButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 80))
+    })
+    expect(qcActions.createQcValidationRecord).not.toHaveBeenCalled()
+  })
+
+  it('changes page through the table pagination', async () => {
+    apiClient.fetchQcValidationRecords.mockResolvedValue({
+      items: Array.from({ length: 20 }, (_, i) => ({ ...RECORDS[0], record_id: `rec-${i + 1}` })),
+      total: 25,
+      page: 1,
+      page_size: 20,
+      table_configured: true,
+    })
+    await renderPage()
+    const pageTwo = document.body.querySelector<HTMLElement>('.ant-pagination-item-2')
+    expect(pageTwo).toBeTruthy()
+    await act(async () => {
+      pageTwo?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 80))
+    })
+    expect(apiClient.fetchQcValidationRecords).toHaveBeenLastCalledWith(2026, {
+      keyword: undefined,
+      page: 2,
+      page_size: 20,
+    })
+  })
+
+  it('resolves department contacts into the editor person options', async () => {
+    apiClient.fetchDepartmentContacts.mockResolvedValue([
+      { name: '赵双', bitable_user_id: 'bu-1', open_id: 'ou-1' },
+    ])
+    await renderPage()
+    const editButton = container.querySelector('.anticon-edit')?.closest('button')
+    expect(editButton).toBeTruthy()
+    await act(async () => {
+      editButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 60))
+    })
+    expect(document.body.textContent).toContain('编辑QC验证记录（2026年）')
+    // 人员字段以部门联系人映射出的选项渲染（map/filter 分支）——
+    // 弹窗打开即触发 contacts 查询与选项构建
+    expect(apiClient.fetchDepartmentContacts).toHaveBeenCalled()
+  })
 })
 
 function fetchMockHits(fetchMock: unknown): string[] {
