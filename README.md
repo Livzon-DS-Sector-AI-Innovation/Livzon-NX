@@ -14,7 +14,7 @@ by each subproject's `AGENTS.md`.
 ## Daily Development
 
 Start the complete root development stack (backend, frontend, Hermes-Lite,
-EDBO, PostgreSQL, Redis, and MinIO):
+PostgreSQL, Redis, and MinIO):
 
 ```powershell
 Copy-Item .env.local.example .env.local
@@ -25,6 +25,60 @@ Reuse the existing development images without rebuilding:
 
 ```powershell
 .\scripts\dev.ps1 -NoBuild
+```
+
+The root Docker stack polls source changes every 2000 ms. Set
+`DEV_WATCH_POLL_INTERVAL_MS` in the root `.env.local` to tune the interval, then
+recreate the application containers with `scripts/dev.ps1 -NoBuild`. This setting
+controls both Watchfiles and Watchpack; the legacy `WATCHPACK_POLLING` setting
+does not override it in the root stack. Compilation and application startup add
+to the roughly two-second change detection delay.
+
+Backend reload watches `dazah-backend/app`. Hermes watches its runtime Python
+directories and root Python modules, excluding the top-level virtual environment,
+tests, documentation and temporary data. When adding a new Hermes runtime root,
+also add it to the development Dockerfile's watch list. Frontend mounts only
+`src`, `public`, `next.config.ts`, `postcss.config.mjs` and `tsconfig.json`; its
+dependencies and build cache remain in Docker volumes. After changing package
+manifests, lockfiles, startup scripts or other files outside these mounts, rebuild
+the affected development image. The native launcher continues using filesystem
+events and is unaffected by this Docker polling interval.
+
+For faster source reloads on Windows, use the hybrid native-development
+launcher. It keeps PostgreSQL, Redis, and MinIO in Docker, while running
+the Backend, Frontend, and Hermes-Lite as local processes:
+
+```powershell
+.\scripts\dev-native.ps1
+```
+
+On the first run, or after dependency changes, synchronize native dependencies:
+
+```powershell
+.\scripts\dev-native.ps1 -Sync
+```
+
+The launcher uses `pnpm` when it is available and otherwise falls back to
+Node.js Corepack, using the `pnpm@10.33.0` version declared by the project.
+It also installs the repository-pinned `lark-cli` binary for the current host
+into `.dev-data/tools` on first use, verifies its SHA-256 checksum, and reuses
+that local copy on later starts. If the initial download is unavailable,
+Hermes still starts but reports that Feishu resource CLI operations are
+temporarily unavailable.
+
+The launcher runs the native Alembic migration before starting the Backend,
+automatically maps Compose service URLs to localhost, and uses Next.js
+Turbopack by default. Use `-FrontendWebpack` if the Webpack development
+command is needed. Before starting Frontend, it stops a leftover Next.js
+process for this project while preserving `.next/dev` so compiled routes can be
+reused across restarts. Use `-ResetFrontendCache` only to recover from a stale
+development route graph. The launcher also probes a protected page route before
+reporting Frontend as ready. Press `Ctrl+C` to stop the three native processes;
+the infrastructure containers remain running. Stop those containers explicitly
+when the development environment is no longer needed:
+
+```powershell
+docker compose --env-file .env.local -f compose.dev.yml stop db redis minio
 ```
 
 Useful local URLs:
@@ -53,6 +107,12 @@ the API contract changed.
 
 ## Configuration Notes
 
+- Environment configuration has one source per environment: the workspace
+  root `.env.local` for development and the workspace root `.env` for
+  production. Do not create `.env`, `.env.local`, or other environment files
+  inside `dazah-backend/`, `dazah-frontend/`, or `Hermes-Lite/`.
+- The root `.env.local` is used by native development and `compose.dev.yml`;
+  the production host keeps its root `.env` at `/opt/dazah/current/.env`.
 - Browser-side frontend code must call relative `/api/v1/...` paths.
 - Frontend server-side code must use `API_BASE_URL`.
 - Do not use `NEXT_PUBLIC_API_BASE_URL`, `NEXT_PUBLIC_API_URL`, or similar
@@ -70,7 +130,7 @@ the platform's separate-container architecture:
 | Production | `Dockerfile` | `.env` |
 | Development | `Dockerfile.dev` | `.env.local` |
 
-Available targets are `backend`, `edbo`, `frontend`, and `hermes`.
+Available targets are `backend`, `frontend`, and `hermes`.
 
 Start the complete development stack from the workspace root:
 
@@ -95,4 +155,5 @@ docker compose --env-file .env -f compose.yml up -d
 Production services use `pull_policy: never`, so deployment does not depend on
 the server reaching an image registry. The root Compose runs Alembic migrations
 to `head` before starting the backend. The subproject Compose files are retained
-for historical compatibility but are not workspace deployment entry points.
+for historical compatibility, read `../.env.local`/`../.env`, and are not
+workspace deployment entry points.
