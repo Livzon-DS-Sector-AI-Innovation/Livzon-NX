@@ -18,6 +18,9 @@ import type {
   FeishuDeviationReportRecordItem,
   FeishuValidationItem,
   FeishuValidationPullResult,
+  QcValidationFieldsResult,
+  QcValidationRecordsResult,
+  QcValidationYearStatus,
   InspectionFeishuFieldMeta,
   InspectionFeishuFieldsResult,
   QualityPullSyncResult,
@@ -916,6 +919,7 @@ export async function fetchValidations(
   if (params?.planned_end_date_to) searchParams.set('planned_end_date_to', params.planned_end_date_to)
   if (params?.drafted_at_from) searchParams.set('drafted_at_from', params.drafted_at_from)
   if (params?.drafted_at_to) searchParams.set('drafted_at_to', params.drafted_at_to)
+  if (params?.year) searchParams.set('year', String(params.year))
   if (params?.page) searchParams.set('page', String(params.page))
   if (params?.page_size) searchParams.set('page_size', String(params.page_size))
   const query = searchParams.toString()
@@ -970,6 +974,39 @@ export async function fetchFeishuValidations(params?: {
   const json = await res.json()
   const items = (json.data ?? []) as FeishuValidationItem[]
   return { items, total: json.meta?.total ?? 0 }
+}
+
+// ---- QC验证（按年分表） ----
+
+export async function fetchQcValidationYears(): Promise<QcValidationYearStatus[]> {
+  const res = await fetch('/api/v1/quality/validation-qc/years')
+  if (!res.ok) throw await parseError(res)
+  const json = await res.json()
+  return (json.data?.years ?? []) as QcValidationYearStatus[]
+}
+
+export async function fetchQcValidationFields(
+  year: number
+): Promise<QcValidationFieldsResult> {
+  const res = await fetch(`/api/v1/quality/validation-qc/fields?year=${year}`)
+  if (!res.ok) throw await parseError(res)
+  const json = await res.json()
+  return json.data as QcValidationFieldsResult
+}
+
+export async function fetchQcValidationRecords(
+  year: number,
+  params?: { keyword?: string; page?: number; page_size?: number }
+): Promise<QcValidationRecordsResult> {
+  const searchParams = new URLSearchParams()
+  searchParams.set('year', String(year))
+  if (params?.keyword) searchParams.set('keyword', params.keyword)
+  if (params?.page) searchParams.set('page', String(params.page))
+  if (params?.page_size) searchParams.set('page_size', String(params.page_size))
+  const res = await fetch(`/api/v1/quality/validation-qc/records?${searchParams.toString()}`)
+  if (!res.ok) throw await parseError(res)
+  const json = await res.json()
+  return json.data as QcValidationRecordsResult
 }
 
 // ---- Feishu Settings ----

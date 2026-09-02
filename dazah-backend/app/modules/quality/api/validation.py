@@ -113,6 +113,7 @@ async def list_feishu_validations(
     keyword: str | None = Query(None),
     record_code: str | None = Query(None),
     department: str | None = Query(None),
+    year: int | None = Query(None, ge=2000, le=2100, description="年度表，留空读总表"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=500),
     current_user: CurrentUser = None,
@@ -126,6 +127,7 @@ async def list_feishu_validations(
         keyword=keyword,
         record_code=record_code,
         department=department,
+        year=year,
         page=page,
         page_size=page_size,
     )
@@ -145,11 +147,14 @@ async def list_feishu_validations(
 async def get_feishu_validation(
     record_id: str,
     validation_type: str | None = Query(None),
+    year: int | None = Query(None, ge=2000, le=2100, description="年度表，留空读总表"),
     current_user: CurrentUser = None,
     db: AsyncSession = Depends(get_db),
 ) -> JSONResponse:
     _require_user(current_user)
-    detail = await get_validation_record_from_feishu(db, record_id, validation_type)
+    detail = await get_validation_record_from_feishu(
+        db, record_id, validation_type, year
+    )
     return success_response(data=detail)
 
 
@@ -160,11 +165,12 @@ async def get_feishu_validation(
 )
 async def create_feishu_validation(
     payload: dict[str, Any] = Body(..., description="验证记录数据"),
+    year: int | None = Query(None, ge=2000, le=2100, description="年度表，留空写总表"),
     current_user: CurrentUser = None,
     db: AsyncSession = Depends(get_db),
 ) -> JSONResponse:
     _require_user(current_user)
-    result = await create_validation_record_in_feishu(db, payload)
+    result = await create_validation_record_in_feishu(db, payload, year)
     return success_response(data=result, message="创建成功", status_code=201)
 
 
@@ -176,13 +182,14 @@ async def create_feishu_validation(
 async def update_feishu_validation(
     record_id: str,
     validation_type: str | None = Query(None),
+    year: int | None = Query(None, ge=2000, le=2100, description="年度表，留空写总表"),
     payload: dict[str, Any] = Body(..., description="验证记录更新数据"),
     current_user: CurrentUser = None,
     db: AsyncSession = Depends(get_db),
 ) -> JSONResponse:
     _require_user(current_user)
     result = await update_validation_record_in_feishu(
-        db, record_id, payload, validation_type=validation_type
+        db, record_id, payload, validation_type=validation_type, year=year
     )
     return success_response(data=result, message="更新成功")
 
@@ -195,12 +202,13 @@ async def update_feishu_validation(
 async def delete_feishu_validation(
     record_id: str,
     validation_type: str | None = Query(None),
+    year: int | None = Query(None, ge=2000, le=2100, description="年度表，留空写总表"),
     current_user: CurrentUser = None,
     db: AsyncSession = Depends(get_db),
 ) -> JSONResponse:
     user_id = _require_user(current_user)
     await delete_validation_record_in_feishu(
-        db, record_id, validation_type, actor_user_id=user_id
+        db, record_id, validation_type, actor_user_id=user_id, year=year
     )
     return success_response(message="删除成功")
 
@@ -212,12 +220,13 @@ async def delete_feishu_validation(
 )
 async def pull_feishu_validations(
     validation_type: str | None = Query(None, description="验证类型"),
+    year: int | None = Query(None, ge=2000, le=2100, description="年度表，留空读总表"),
     current_user: CurrentUser = None,
     db: AsyncSession = Depends(get_db),
 ) -> JSONResponse:
     _require_user(current_user)
     result = await pull_validation_records_from_feishu(
-        db, validation_type=validation_type
+        db, validation_type=validation_type, year=year
     )
     return success_response(data=result, message="拉取完成")
 

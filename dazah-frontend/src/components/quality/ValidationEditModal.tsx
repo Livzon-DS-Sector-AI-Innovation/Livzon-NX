@@ -13,6 +13,8 @@ interface ValidationEditModalProps {
   validationType?: string
   validationTypeLabel: string
   initialValue?: ValidationListItem | null
+  /** 年度台账模式：真实年度表没有"验证类别"列，隐藏该字段 */
+  hideCategory?: boolean
   onCancel: () => void
   onSubmit: (values: Record<string, unknown>) => Promise<void> | void
 }
@@ -29,6 +31,7 @@ export function ValidationEditModal({
   validationType,
   validationTypeLabel,
   initialValue,
+  hideCategory,
   onCancel,
   onSubmit,
 }: ValidationEditModalProps) {
@@ -151,7 +154,12 @@ export function ValidationEditModal({
         <Form.Item label="确认名称" name="title" rules={[{ required: true, message: '请输入确认名称' }]}>
           <Input maxLength={255} />
         </Form.Item>
-        <Form.Item label="验证类别" name="validation_type" rules={[{ required: true, message: '请选择验证类别' }]}>
+        <Form.Item
+          label="验证类别"
+          name="validation_type"
+          hidden={hideCategory}
+          rules={hideCategory ? [] : [{ required: true, message: '请选择验证类别' }]}
+        >
           <Select
             getPopupContainer={(triggerNode) => triggerNode.parentElement || triggerNode.parentNode as HTMLElement}
             options={[

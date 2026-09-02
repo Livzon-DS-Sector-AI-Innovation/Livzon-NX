@@ -226,3 +226,71 @@ async def get_distinct_employee_values(
     repo = EmployeeRepository(session)
     normalized = _normalize_filters(filters)
     return await repo.get_distinct_values(field, **normalized)
+
+
+async def query_training_ledgers(
+    session: AsyncSession,
+    keywords: list[str],
+    *,
+    limit: int = 5,
+    content_limit: int = 400,
+) -> list[dict[str, Any]]:
+    """按关键词模糊检索培训台账（培训主题/内容/培训对象/授课部门）。
+
+    供跨模块（如质量偏差工作台）只读检索使用；未命中返回空列表。
+    """
+    from datetime import date, datetime
+
+    from sqlalchemy import or_, select
+
+    from app.modules.hr.models import TrainingLedger
+
+    def _escape_like(value: str) -> str:
+        return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+    cleaned = [k.strip() for k in keywords if k and len(k.strip()) >= 2]
+    if not cleaned:
+        return []
+    patterns = [f"%{_escape_like(kw)}%" for kw in cleaned[:8]]
+    match_clause = or_(
+        *[
+            column.ilike(pattern)
+            for column in (
+                TrainingLedger.training_subject,
+                TrainingLedger.training_content,
+                TrainingLedger.trainees,
+                TrainingLedger.teaching_dept,
+            )
+            for pattern in patterns
+        ]
+    )
+    stmt = (
+        select(TrainingLedger)
+        .where(TrainingLedger.is_deleted.is_(False), match_clause)
+        .order_by(TrainingLedger.training_date.desc().nullslast())
+        .limit(limit)
+    )
+    result = await session.execute(stmt)
+    items: list[dict[str, Any]] = []
+    for row in result.scalars().all():
+        training_date = row.training_date
+        items.append(
+            {
+                "training_date": (
+                    training_date.isoformat()
+                    if isinstance(training_date, (date, datetime))
+                    else str(training_date) if training_date else None
+                ),
+                "training_subject": row.training_subject,
+                "training_content": (row.training_content or "")[:content_limit],
+                "training_method": row.training_method,
+                "duration_hours": row.duration_hours,
+                "trainer": row.trainer,
+                "instructor": row.instructor,
+                "teaching_dept": row.teaching_dept,
+                "trainees": (row.trainees or "")[:200],
+                "training_type": row.training_type,
+                "assessment_result": row.assessment_result,
+            }
+        )
+    return items

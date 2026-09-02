@@ -4,7 +4,7 @@ import { qualityTokens } from './themeTokens'
 import { useState, useCallback } from 'react'
 import { Button, Input, Select, Space, Table, Tag, Tooltip, DatePicker, App } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, FilterOutlined } from '@ant-design/icons'
+import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, FilterOutlined, EyeOutlined } from '@ant-design/icons'
 import type { ValidationListItem } from '@/types/quality'
 import { TableEmptyState } from './TableEmptyState'
 import dayjs, { Dayjs } from 'dayjs'
@@ -19,6 +19,8 @@ interface ValidationTableFilters {
   planned_end_date_to: string
   drafted_at_from: string
   drafted_at_to: string
+  /** 年度表；空 = 验证总表 */
+  year: string
 }
 
 interface ValidationTableProps {
@@ -34,6 +36,7 @@ interface ValidationTableProps {
   onPageChange: (page: number, pageSize: number) => void
   onRefresh: () => void
   onCreate: () => void
+  onDetail?: (record: ValidationListItem) => void
   onEdit: (record: ValidationListItem) => void
   onDelete: (record: ValidationListItem) => void
   onBatchDelete?: (recordIds: string[]) => void
@@ -110,6 +113,7 @@ export function ValidationTable({
   onPageChange,
   onRefresh,
   onCreate,
+  onDetail,
   onEdit,
   onDelete,
   onBatchDelete,
@@ -117,6 +121,15 @@ export function ValidationTable({
   const { message, modal } = App.useApp()
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([])
+
+  // 年度选项：2024-2028（未配置的年度表列表为空，可在飞书同步设置中绑定）
+  const yearOptions = [
+    { label: '总表（全部年份）', value: '' },
+    ...Array.from({ length: 5 }, (_, i) => 2024 + i).map((year) => ({
+      label: `${year}年`,
+      value: String(year),
+    })),
+  ]
 
   // 部门选项
   const departmentOptions = [
@@ -182,6 +195,7 @@ export function ValidationTable({
       planned_end_date_to: '',
       drafted_at_from: '',
       drafted_at_to: '',
+      year: '',
     })
   }, [onFilterChange])
 
@@ -191,9 +205,15 @@ export function ValidationTable({
       title: '确认名称',
       dataIndex: 'title',
       width: 280,
-      render: (value: string) => (
+      render: (value: string, record: ValidationListItem) => (
         <Tooltip title={value}>
-          <div style={{ whiteSpace: 'normal', wordBreak: 'break-all' }}>{value}</div>
+          <div style={{ whiteSpace: 'normal', wordBreak: 'break-all' }}>
+            {onDetail ? (
+              <a onClick={() => onDetail(record)}>{value}</a>
+            ) : (
+              value
+            )}
+          </div>
         </Tooltip>
       ),
     },
@@ -337,9 +357,12 @@ export function ValidationTable({
       title: '操作',
       key: 'action',
       fixed: 'right' as const,
-      width: 120,
+      width: onDetail ? 150 : 120,
       render: (_: unknown, record: ValidationListItem) => (
         <Space size="small">
+          {onDetail && (
+            <Button type="text" icon={<EyeOutlined />} onClick={() => onDetail(record)} />
+          )}
           <Button type="text" icon={<EditOutlined />} onClick={() => onEdit(record)} />
           <Button type="text" danger icon={<DeleteOutlined />} onClick={() => onDelete(record)} />
         </Space>
@@ -389,6 +412,15 @@ export function ValidationTable({
             onChange={(value) => onFilterChange({ validation_type: value ?? '' })}
             allowClear
             options={validationTypeOptions}
+          />
+        )}
+        {mode === 'master' && (
+          <Select
+            placeholder="年度"
+            style={{ width: 150 }}
+            value={filters.year || ''}
+            onChange={(value) => onFilterChange({ year: value ?? '' })}
+            options={yearOptions}
           />
         )}
         <Button icon={<FilterOutlined />} onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}>

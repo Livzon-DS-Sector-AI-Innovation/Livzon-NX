@@ -16,6 +16,7 @@ import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AppException, NotFoundException
+from app.core.llm.exceptions import LLMConfigError
 from app.modules.quality.service import quality_feishu_sync as feishu_sync_service
 from app.modules.quality.service.inspection_finished_material import (
     FINISHED_PRODUCT_GROUP_ENTITY_MAP,
@@ -27,6 +28,7 @@ from app.modules.quality.service.quality_feishu_material_groups import (
 from app.modules.quality.service.quality_feishu_pages import (
     _delete_entity_record,
     _resolve_runtime_entity,
+    _search_entity_records,
 )
 from app.platform.audit.service import record_audit_log
 from app.platform.integrations.feishu.auth import FeishuAuth
@@ -52,8 +54,19 @@ for _codes in FINISHED_PRODUCT_GROUP_ENTITY_MAP.values():
     _INSPECTION_ENTITY_CODES.update(_codes)
 _INSPECTION_ENTITY_CODES.update(MATERIAL_ENTITY_CODES)
 
+# 验证与确认-QC验证年度实体：与检验实体共用同一套通用飞书记录读写能力
+VALIDATION_QC_ENTITY_CODES: set[str] = {
+    f"validation_qc_{year}" for year in range(2024, 2029)
+}
+
+# 通用飞书记录 CRUD 的完整实体白名单
+BITABLE_CRUD_ENTITY_CODES: set[str] = (
+    _INSPECTION_ENTITY_CODES | VALIDATION_QC_ENTITY_CODES
+)
+
 # 只读字段类型：通用表单不写入
-# （附件需上传文件、人员需 bitable user id、Lookup/公式由飞书派生）
+# （附件需上传文件、Lookup/公式由飞书派生；Button 是自动化按钮，
+#   写入/点击会触发飞书工作流，平台一律只读）
 _READ_ONLY_UI_TYPES = {
     "User",
     "Lookup",
@@ -65,20 +78,38 @@ _READ_ONLY_UI_TYPES = {
     "CreatedTime",
     "ModifiedTime",
     "GroupChat",
+    "Button",
 }
 
 _NUMERIC_UI_TYPES = {"Number", "Currency", "Percent", "Progress", "Rating"}
 
 
+def validate_bitable_crud_entity(entity_code: str) -> None:
+    """仅允许对白名单实体执行通用写操作（防御任意实体写入）。"""
+    if entity_code not in BITABLE_CRUD_ENTITY_CODES:
+        raise AppException(message=f"不支持的飞书实体: {entity_code}", status_code=400)
+
+
 def validate_inspection_entity(entity_code: str) -> None:
-    """仅允许对检验模块实体执行通用写操作（防御任意实体写入）。"""
-    if entity_code not in _INSPECTION_ENTITY_CODES:
-        raise AppException(message=f"不支持的检验实体: {entity_code}", status_code=400)
+    """兼容别名：检验实体白名单校验。"""
+    validate_bitable_crud_entity(entity_code)
 
 
 def _coerce_write_value(field_meta: dict[str, Any], value: Any) -> Any:
     """按飞书 ui_type 转换前端传入值；返回 SKIP_REMOTE_FIELD 表示跳过该字段。"""
     ui_type = str(field_meta.get("ui_type") or "").strip()
+    if ui_type == "User":
+        # 人员字段：前端通过部门联系人解析出 bitable user id 后按 [{id}] 提交
+        if (
+            isinstance(value, list)
+            and value
+            and all(
+                isinstance(item, dict) and str(item.get("id") or "").strip()
+                for item in value
+            )
+        ):
+            return [{"id": str(item["id"]).strip()} for item in value]
+        return feishu_sync_service.SKIP_REMOTE_FIELD
     if ui_type in _READ_ONLY_UI_TYPES:
         return feishu_sync_service.SKIP_REMOTE_FIELD
     if value is None or value == "":
@@ -171,7 +202,7 @@ async def get_inspection_entity_fields(
     db: AsyncSession, entity_code: str
 ) -> dict[str, Any]:
     """返回实体字段元数据（供前端动态生成新增/编辑表单）。"""
-    validate_inspection_entity(entity_code)
+    validate_bitable_crud_entity(entity_code)
     runtime, entity = await _resolve_runtime_entity(db, entity_code, direction="pull")
     client = BitableClient(
         app_token=entity.app_token,
@@ -184,11 +215,23 @@ async def get_inspection_entity_fields(
         if not field_name:
             continue
         ui_type = str(item.get("ui_type") or "").strip()
+        property_meta = item.get("property")
+        options_raw = (
+            property_meta.get("options")
+            if isinstance(property_meta, dict)
+            else None
+        )
         fields.append(
             {
                 "field_name": field_name,
                 "ui_type": ui_type,
                 "editable": ui_type not in _READ_ONLY_UI_TYPES,
+                "options": [
+                    {"name": str(opt.get("name") or "")}
+                    for opt in (options_raw or [])
+                    if isinstance(opt, dict) and opt.get("name")
+                ]
+                or None,
             }
         )
     return {"fields": fields, "can_push": bool(entity.enable_push_to_feishu)}
@@ -200,7 +243,7 @@ async def create_inspection_feishu_record(
     fields: dict[str, Any],
     actor_user_id: uuid.UUID | None = None,
 ) -> dict[str, Any]:
-    validate_inspection_entity(entity_code)
+    validate_bitable_crud_entity(entity_code)
     client, entity = await _resolve_write_client(db, entity_code)
     remote_field_map = await _list_remote_field_map(client, entity.table_id)
     coerced = _coerce_write_fields(remote_field_map, fields)
@@ -228,7 +271,7 @@ async def update_inspection_feishu_record(
     fields: dict[str, Any],
     actor_user_id: uuid.UUID | None = None,
 ) -> dict[str, Any]:
-    validate_inspection_entity(entity_code)
+    validate_bitable_crud_entity(entity_code)
     client, entity = await _resolve_write_client(db, entity_code)
     remote_field_map = await _list_remote_field_map(client, entity.table_id)
     coerced = _coerce_write_fields(remote_field_map, fields)
@@ -255,7 +298,7 @@ async def delete_inspection_feishu_record(
     record_id: str,
     actor_user_id: uuid.UUID | None = None,
 ) -> dict[str, Any]:
-    validate_inspection_entity(entity_code)
+    validate_bitable_crud_entity(entity_code)
     await _delete_entity_record(db, entity_code, record_id, actor_user_id)
     return {"record_id": record_id}
 
@@ -265,7 +308,7 @@ async def get_inspection_feishu_record(
     entity_code: str,
     record_id: str,
 ) -> dict[str, Any]:
-    validate_inspection_entity(entity_code)
+    validate_bitable_crud_entity(entity_code)
     runtime, entity = await _resolve_runtime_entity(db, entity_code, direction="pull")
     client = BitableClient(
         app_token=entity.app_token,
@@ -287,8 +330,97 @@ async def pull_inspection_feishu_records(
     db: AsyncSession,
     entity_code: str,
 ) -> dict[str, int]:
-    validate_inspection_entity(entity_code)
+    validate_bitable_crud_entity(entity_code)
     return await _pull_count(db, entity_code)
+
+
+async def get_bitable_entity_configured(
+    db: AsyncSession,
+    entity_code: str,
+) -> bool:
+    """判断实体的飞书 Base/表是否已配置且启用（供年度表选择器提示）。"""
+    try:
+        _, entity = await _resolve_runtime_entity(db, entity_code, direction="pull")
+    except (AppException, LLMConfigError):
+        # AppException：实体/表未配置；LLMConfigError：应用凭证解密失败（密钥轮换）
+        return False
+    return bool(
+        str(entity.app_token or "").strip() and str(entity.table_id or "").strip()
+    )
+
+
+async def list_bitable_feishu_records(
+    db: AsyncSession,
+    entity_code: str,
+    *,
+    keyword: str | None = None,
+    page: int = 1,
+    page_size: int = 20,
+) -> dict[str, Any]:
+    """按实体读取飞书原始记录（字段值经 _base_map 归一化，附件/人员可直接渲染）。
+
+    实体未配置时不抛错，返回空列表并携带 table_configured=False，
+    供前端提示先在同步设置中绑定对应年度表。
+    """
+    validate_bitable_crud_entity(entity_code)
+    try:
+        runtime, entity = await _resolve_runtime_entity(
+            db, entity_code, direction="pull"
+        )
+        client = BitableClient(
+            app_token=entity.app_token,
+            app_id=runtime.app_id,
+            app_secret=runtime.app_secret,
+        )
+        remote_field_names = sorted(
+            str(item.get("field_name") or "").strip()
+            for item in await client.list_fields(_entity_table_id(entity))
+            if item.get("field_name")
+        )
+        records = await _search_entity_records(db, entity_code)
+    except (AppException, LLMConfigError):
+        # 未配置/凭证解密失败均按"表不可用"降级，前端提示先配置
+        return {
+            "items": [],
+            "total": 0,
+            "page": page,
+            "page_size": page_size,
+            "table_configured": False,
+        }
+    items = [
+        _base_map(record, entity, remote_field_names)
+        for record in records
+        if record.get("record_id")
+    ]
+    if keyword:
+        kw = keyword.strip().lower()
+
+        def _matches(row: dict[str, Any]) -> bool:
+            for value in row.values():
+                if isinstance(value, str) and kw in value.lower():
+                    return True
+                if isinstance(value, list):
+                    for entry in value:
+                        if isinstance(entry, dict):
+                            joined = " ".join(
+                                str(part)
+                                for part in entry.values()
+                                if isinstance(part, str)
+                            )
+                            if kw in joined.lower():
+                                return True
+            return False
+
+        items = [row for row in items if _matches(row)]
+    total = len(items)
+    start = (page - 1) * page_size
+    return {
+        "items": items[start : start + page_size],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "table_configured": True,
+    }
 
 
 def _find_attachment_in_record(
@@ -354,6 +486,31 @@ async def _download_attachment_bytes(
     return None, "", "forbidden" if forbidden else "invalid"
 
 
+async def _download_media_bytes(
+    file_token: str,
+    token: str,
+) -> tuple[bytes | None, str, str]:
+    """通过 drive 媒体接口下载附件（记录接口未返回临时链接时的兜底）。"""
+    from app.platform.integrations.feishu.utils import OPEN_API_BASE_URL
+
+    async with httpx.AsyncClient(
+        base_url=OPEN_API_BASE_URL, timeout=30, follow_redirects=True
+    ) as http:
+        resp = await http.get(
+            f"/drive/v1/medias/{file_token}/download",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    if resp.status_code != 200:
+        return None, "", "forbidden" if resp.status_code in (401, 403) else "invalid"
+    content = resp.content
+    if not content:
+        return None, "", "invalid"
+    content_type = resp.headers.get("content-type") or ""
+    if content_type.startswith("application/json"):
+        return None, "", "forbidden"
+    return content, content_type, ""
+
+
 async def get_inspection_feishu_attachment_content(
     db: AsyncSession,
     entity_code: str,
@@ -363,8 +520,9 @@ async def get_inspection_feishu_attachment_content(
     """代理下载检验记录附件（飞书附件 url 需带 access token 才能访问）。
 
     返回 (content, content_type, filename)。附件必须属于该记录，避免任意 URL 抓取。
+    记录接口未返回临时链接时回退 drive 媒体下载接口。
     """
-    validate_inspection_entity(entity_code)
+    validate_bitable_crud_entity(entity_code)
     runtime, entity = await _resolve_runtime_entity(db, entity_code, direction="pull")
     client = BitableClient(
         app_token=entity.app_token,
@@ -377,15 +535,15 @@ async def get_inspection_feishu_attachment_content(
     attachment = _find_attachment_in_record(record, file_token)
     if attachment is None:
         raise NotFoundException(resource="飞书附件", resource_id=str(file_token))
-    url = attachment.get("url") or attachment.get("tmp_url")
-    if not url:
-        raise AppException(message="附件无可用下载地址", status_code=400)
     token = await FeishuAuth.get_tenant_access_token(
         app_id=runtime.app_id,
         app_secret=runtime.app_secret,
     )
-    downloaded = await _download_attachment_bytes(url, token)
-    content, content_type, reason = downloaded
+    url = attachment.get("url") or attachment.get("tmp_url")
+    if url:
+        content, content_type, reason = await _download_attachment_bytes(url, token)
+    else:
+        content, content_type, reason = await _download_media_bytes(file_token, token)
     if content is None:
         if reason == "forbidden":
             raise AppException(

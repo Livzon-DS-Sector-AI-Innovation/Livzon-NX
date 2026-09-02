@@ -14970,10 +14970,13 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * 按文件名称批量解析条目并读取附件内容
-         * @description 供培训口试 AI 出题使用：按文件名称解析最新版条目并读取附件标准 MD 内容。
+         * 批量解析文件条目并读取附件内容
+         * @description 供培训 AI 出题使用：解析勾选条目并读取附件标准 MD 内容。
          *
-         *     每个文件名称独立匹配：命中则返回条目 ID/编码/附件 MD 内容；未命中 matched=false。
+         *     entries 中带 entry_id 的项严格按 ID 读取（培训勾选时已锁定条目，
+         *     不做名称模糊匹配，避免同名/近名文件误配到其他条目）；entry_id 未命中
+         *     （已删除）视为未匹配，不回退名称匹配。仅提供 names 的旧客户端沿用
+         *     名称匹配最新版。
          */
         post: operations["resolve_document_entry_content_api_v1_quality_document_entries_resolve_content_post"];
         delete?: never;
@@ -15617,6 +15620,23 @@ export interface paths {
         put?: never;
         /** 创建历史偏差 */
         post: operations["create_historical_deviation_api_api_v1_quality_historical_deviations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/historical-deviations/batch-import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 批量导入历史偏差（转 MD + 建记录 + 解析编号 + AI 提取） */
+        post: operations["batch_import_historical_deviations_api_api_v1_quality_historical_deviations_batch_import_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -18251,6 +18271,94 @@ export interface paths {
         get?: never;
         /** 更新验证执行记录 */
         put: operations["update_validation_execution_endpoint_api_v1_quality_validation_executions__validation_type___record_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/validation-qc/fields": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 获取QC验证字段元数据 */
+        get: operations["api_get_qc_validation_fields_api_v1_quality_validation_qc_fields_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/validation-qc/records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 获取QC验证记录列表 */
+        get: operations["api_list_qc_validation_records_api_v1_quality_validation_qc_records_get"];
+        put?: never;
+        /** 新增QC验证记录（同步到多维表格） */
+        post: operations["api_create_qc_validation_record_api_v1_quality_validation_qc_records_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/validation-qc/records/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 获取QC验证记录详情 */
+        get: operations["api_get_qc_validation_record_api_v1_quality_validation_qc_records__record_id__get"];
+        /** 编辑QC验证记录（同步到多维表格） */
+        put: operations["api_update_qc_validation_record_api_v1_quality_validation_qc_records__record_id__put"];
+        post?: never;
+        /** 删除QC验证记录（同步到多维表格） */
+        delete: operations["api_delete_qc_validation_record_api_v1_quality_validation_qc_records__record_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/validation-qc/records/{record_id}/attachments/{file_token}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 下载QC验证记录附件（后端代理，携带飞书 token） */
+        get: operations["api_get_qc_validation_attachment_content_api_v1_quality_validation_qc_records__record_id__attachments__file_token__content_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/validation-qc/years": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 获取QC验证年度表配置状态 */
+        get: operations["api_get_qc_validation_years_api_v1_quality_validation_qc_years_get"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -26590,6 +26698,24 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /** ApiResponseEnvelope[HistoricalDeviationBatchImportResult] */
+        ApiResponseEnvelope_HistoricalDeviationBatchImportResult_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["HistoricalDeviationBatchImportResult"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
         /** ApiResponseEnvelope[HistoricalDeviationDetail] */
         ApiResponseEnvelope_HistoricalDeviationDetail_: {
             /**
@@ -29273,6 +29399,11 @@ export interface components {
              * Files
              * @description 附件文件列表（.doc/.docx/.wps/.pdf/图片/.md）
              */
+            files: string[];
+        };
+        /** Body_batch_import_historical_deviations_api_api_v1_quality_historical_deviations_batch_import_post */
+        Body_batch_import_historical_deviations_api_api_v1_quality_historical_deviations_batch_import_post: {
+            /** Files */
             files: string[];
         };
         /** Body_confirm_capa_import_api_v1_quality_capas_import_confirm_post */
@@ -33506,6 +33637,8 @@ export interface components {
         };
         /** CreateDeviationWorkbenchRequest */
         CreateDeviationWorkbenchRequest: {
+            /** Affected Items */
+            affected_items?: string | null;
             /** Attachments */
             attachments?: components["schemas"]["DeviationWorkbenchAttachmentIn"][];
             /** Manual Text */
@@ -33517,6 +33650,8 @@ export interface components {
              * @default manual
              */
             source_type: string;
+            /** Supplement Text */
+            supplement_text?: string | null;
         };
         /**
          * CreateDocumentDepartmentRequest
@@ -36443,15 +36578,36 @@ export interface components {
             name: string;
         };
         /**
+         * DocumentEntryResolveQuery
+         * @description 单个待解析文件的查询项（培训勾选时锁定的条目）。
+         */
+        DocumentEntryResolveQuery: {
+            /**
+             * Entry Id
+             * @description 勾选时锁定的条目 ID；提供时严格按 ID 读取，未命中不回退名称匹配
+             */
+            entry_id?: string | null;
+            /**
+             * Name
+             * @description 文件名称（展示与 entry_id 未提供时的名称匹配兜底）
+             */
+            name: string;
+        };
+        /**
          * DocumentEntryResolveRequest
-         * @description 按文件名称批量解析条目并读取附件内容请求（供培训口试 AI 出题使用）。
+         * @description 批量解析文件条目并读取附件内容请求（供培训 AI 出题使用）。
          */
         DocumentEntryResolveRequest: {
             /**
-             * Names
-             * @description 文件名称列表
+             * Entries
+             * @description 按勾选条目解析（优先；entry_id 精确读取，杜绝名称误匹配）
              */
-            names: string[];
+            entries?: components["schemas"]["DocumentEntryResolveQuery"][];
+            /**
+             * Names
+             * @description 按文件名称解析（旧客户端兜底，取名称最新版）
+             */
+            names?: string[];
         };
         /**
          * DocumentEntryResolveResult
@@ -41187,6 +41343,34 @@ export interface components {
              * @default
              */
             url: string;
+        };
+        /** HistoricalDeviationBatchImportResult */
+        HistoricalDeviationBatchImportResult: {
+            /** Failed */
+            failed: number;
+            /** Results */
+            results?: components["schemas"]["HistoricalDeviationBatchImportResultItem"][];
+            /** Succeeded */
+            succeeded: number;
+            /** Total */
+            total: number;
+        };
+        /** HistoricalDeviationBatchImportResultItem */
+        HistoricalDeviationBatchImportResultItem: {
+            /**
+             * Code
+             * @default
+             */
+            code: string;
+            /** File Name */
+            file_name: string;
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+            /** Status */
+            status: string;
         };
         /** HistoricalDeviationDetail */
         HistoricalDeviationDetail: {
@@ -97679,6 +97863,8 @@ export interface operations {
             query?: {
                 /** @description 验证类型 */
                 validation_type?: string | null;
+                /** @description 年度表，留空读总表 */
+                year?: number | null;
             };
             header?: never;
             path?: never;
@@ -98130,6 +98316,8 @@ export interface operations {
                 keyword?: string | null;
                 record_code?: string | null;
                 department?: string | null;
+                /** @description 年度表，留空读总表 */
+                year?: number | null;
                 page?: number;
                 page_size?: number;
             };
@@ -98163,7 +98351,10 @@ export interface operations {
     };
     create_feishu_validation_api_v1_quality_feishu_validations_post: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 年度表，留空写总表 */
+                year?: number | null;
+            };
             header?: never;
             path?: never;
             cookie?: {
@@ -98202,6 +98393,8 @@ export interface operations {
         parameters: {
             query?: {
                 validation_type?: string | null;
+                /** @description 年度表，留空读总表 */
+                year?: number | null;
             };
             header?: never;
             path: {
@@ -98237,6 +98430,8 @@ export interface operations {
         parameters: {
             query?: {
                 validation_type?: string | null;
+                /** @description 年度表，留空写总表 */
+                year?: number | null;
             };
             header?: never;
             path: {
@@ -98278,6 +98473,8 @@ export interface operations {
         parameters: {
             query?: {
                 validation_type?: string | null;
+                /** @description 年度表，留空写总表 */
+                year?: number | null;
             };
             header?: never;
             path: {
@@ -98541,6 +98738,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiResponseEnvelope_HistoricalDeviationDetail_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    batch_import_historical_deviations_api_api_v1_quality_historical_deviations_batch_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_batch_import_historical_deviations_api_api_v1_quality_historical_deviations_batch_import_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_HistoricalDeviationBatchImportResult_"];
                 };
             };
             /** @description Validation Error */
@@ -106278,6 +106510,296 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiResponseEnvelope_ValidationExecutionListItem_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_get_qc_validation_fields_api_v1_quality_validation_qc_fields_get: {
+        parameters: {
+            query?: {
+                /** @description QC验证年度 */
+                year?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_list_qc_validation_records_api_v1_quality_validation_qc_records_get: {
+        parameters: {
+            query?: {
+                /** @description QC验证年度 */
+                year?: number;
+                /** @description 关键词（按全部字段模糊匹配） */
+                keyword?: string | null;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_create_qc_validation_record_api_v1_quality_validation_qc_records_post: {
+        parameters: {
+            query?: {
+                /** @description QC验证年度 */
+                year?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InspectionFeishuRecordBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_get_qc_validation_record_api_v1_quality_validation_qc_records__record_id__get: {
+        parameters: {
+            query?: {
+                /** @description QC验证年度 */
+                year?: number;
+            };
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_update_qc_validation_record_api_v1_quality_validation_qc_records__record_id__put: {
+        parameters: {
+            query?: {
+                /** @description QC验证年度 */
+                year?: number;
+            };
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InspectionFeishuRecordBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_delete_qc_validation_record_api_v1_quality_validation_qc_records__record_id__delete: {
+        parameters: {
+            query?: {
+                /** @description QC验证年度 */
+                year?: number;
+            };
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_get_qc_validation_attachment_content_api_v1_quality_validation_qc_records__record_id__attachments__file_token__content_get: {
+        parameters: {
+            query?: {
+                /** @description QC验证年度 */
+                year?: number;
+            };
+            header?: never;
+            path: {
+                record_id: string;
+                file_token: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_get_qc_validation_years_api_v1_quality_validation_qc_years_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

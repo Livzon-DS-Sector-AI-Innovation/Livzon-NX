@@ -68,4 +68,6 @@ class CreateDeviationWorkbenchRequest(BaseModel):
     source_type: str = Field(default="manual", pattern="^(report_record|manual)$")
     source_record_id: str | None = None
     manual_text: str | None = None
+    affected_items: str | None = None
+    supplement_text: str | None = None
     attachments: list[DeviationWorkbenchAttachmentIn] = Field(default_factory=list)

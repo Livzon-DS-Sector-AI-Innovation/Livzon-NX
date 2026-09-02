@@ -71,6 +71,7 @@ from app.modules.quality.service.feishu_capa import (
 )
 from app.modules.quality.service.historical_deviation import (
     ai_extract_historical_deviation,
+    batch_import_historical_deviations,
     create_historical_deviation,
     delete_historical_deviation,
     delete_historical_deviation_attachment,
@@ -391,6 +392,7 @@ __all__ = [
     "apply_deviation_ai_session",
     # Historical Deviations
     "get_historical_deviation_list",
+    "batch_import_historical_deviations",
     "get_historical_deviation_detail",
     "create_historical_deviation",
     "update_historical_deviation",

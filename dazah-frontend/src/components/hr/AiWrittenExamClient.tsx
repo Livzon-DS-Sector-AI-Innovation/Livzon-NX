@@ -155,34 +155,34 @@ export default function AiWrittenExamClient({ sessionData, initialPayload, activ
     setFillBlankQuestions(initialPayload.fill_blank_questions || [])
   }, [initialPayload])
 
-  // ── 自动解析 checked_content ──
+  // ── 自动解析 checked_content（勾选锁定的条目按 ID 精确读取，不按名称匹配） ──
   useEffect(() => {
     if (!active) return
-    const names = sessionData.checked_content?.map((f) => f.name) || []
-    if (!names.length) {
+    const entries = sessionData.checked_content || []
+    if (!entries.length) {
       setResolvedFiles([])
       return
     }
     // 如果已有 initialPayload 恢复的文件则不重复解析
     if (initialPayload?.files?.length) return
     setResolving(true)
-    resolveDocumentEntryContent(names)
+    resolveDocumentEntryContent(entries.map((f) => ({ name: f.name, entry_id: f.entry_id ?? null })))
       .then((items) => {
-        const resolved: ResolvedFile[] = names.map((name) => {
-          const item = items.find((x) => x.name === name)
+        const resolved: ResolvedFile[] = entries.map((f) => {
+          const item = items.find((x) => x.name === f.name)
           if (!item || !item.matched) {
-            return { name, code: item?.code ?? null, content: '', matched: false }
+            return { name: f.name, code: item?.code ?? null, content: '', matched: false }
           }
           const mdText = (item.attachments || [])
             .map((a) => a.md_text)
             .filter(Boolean)
             .join('\n\n')
-          return { name, code: item.code, content: mdText || '', matched: !!mdText }
+          return { name: f.name, code: item.code, content: mdText || '', matched: !!mdText }
         })
         setResolvedFiles(resolved)
       })
       .catch(() => {
-        setResolvedFiles(names.map((name) => ({ name, content: '', matched: false })))
+        setResolvedFiles(entries.map((f) => ({ name: f.name, content: '', matched: false })))
       })
       .finally(() => setResolving(false))
 
