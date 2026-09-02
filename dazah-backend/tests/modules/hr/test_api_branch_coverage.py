@@ -134,12 +134,13 @@ async def test_contract_expiry_background_task_covers_empty_skips_and_failures(
     monkeypatch.setattr(api, "_require_user", Mock())
     monkeypatch.setattr(api, "success_response", _response)
 
+    import app.modules.hr.feishu.notification as notification
+
     import app.core.database as database
     import app.core.jobs as jobs
     import app.core.redis as redis
     import app.modules.hr.contract_api as contract_api
     import app.modules.hr.contract_service as contract_service
-    import app.modules.hr.feishu.notification as notification
     import app.modules.hr.service as hr_service
 
     session = SimpleNamespace(flush=AsyncMock(), commit=AsyncMock())

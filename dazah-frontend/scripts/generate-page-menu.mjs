@@ -10,16 +10,16 @@ const cache = new Map()
 function load(source) {
   const filename = path.resolve(source)
   if (cache.has(filename)) return cache.get(filename)
-  const module = { exports: {} }
-  cache.set(filename, module.exports)
+  const loadedModule = { exports: {} }
+  cache.set(filename, loadedModule.exports)
   const code = ts.transpileModule(fs.readFileSync(filename, 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText
-  vm.runInNewContext(code, { module, exports: module.exports, require: (specifier) => {
+  vm.runInNewContext(code, { module: loadedModule, exports: loadedModule.exports, require: (specifier) => {
     if (!specifier.startsWith('.')) throw new Error(`Static menu has external dependency: ${specifier}`)
     return load(path.resolve(path.dirname(filename), `${specifier}.ts`))
   } }, { filename })
-  return module.exports
+  return loadedModule.exports
 }
 function node(item) {
   return { key: item.key, name: item.label, path: item.path || '',
@@ -28,7 +28,7 @@ function node(item) {
 }
 const { moduleMenus } = load(path.join(root, 'src/lib/menu-config.ts'))
 const firstBatch = new Set(['hr', 'warehouse', 'quality', 'procurement'])
-const output = moduleMenus.filter((module) => firstBatch.has(module.moduleCode)).map(node)
+const output = moduleMenus.filter((menuModule) => firstBatch.has(menuModule.moduleCode)).map(node)
 const target = path.resolve(root, '../dazah-backend/app/platform/identity/page_menu_catalog.json')
 const content = `${JSON.stringify(output, null, 2)}\n`
 if (process.argv.includes('--check')) {
@@ -38,4 +38,4 @@ if (process.argv.includes('--check')) {
 } else {
   fs.writeFileSync(target, content)
 }
-console.info(`Page menu catalog ${process.argv.includes('--check') ? 'verified' : 'generated'} (${output.length} modules)`)
+process.stdout.write(`Page menu catalog ${process.argv.includes('--check') ? 'verified' : 'generated'} (${output.length} modules)\n`)
