@@ -103,7 +103,9 @@ class OffboardingReminderGenerator(SchedulerTaskGenerator):
         for c in all_configs:
             if not c.is_enabled:
                 continue
-            trigger_hour = c.trigger_hour or 9
+            trigger_hour = (
+                c.trigger_hour if c.trigger_hour is not None else 9
+            )
             notify_hours = c.notify_hours or 24
             message_template = c.message_template or ""
 
@@ -478,7 +480,9 @@ class ContractExpiryReminderGenerator(SchedulerTaskGenerator):
                 continue
             trigger_freq = c.trigger_frequency or "monthly"
             trigger_day = c.trigger_day or 1
-            trigger_hour = c.trigger_hour or 9
+            trigger_hour = (
+                c.trigger_hour if c.trigger_hour is not None else 9
+            )
 
             trigger_key = f"hr:contract:triggered:{today.isoformat()}"
             already_triggered = await cache_get(trigger_key)
