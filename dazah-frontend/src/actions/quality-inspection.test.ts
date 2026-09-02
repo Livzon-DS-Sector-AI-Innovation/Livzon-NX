@@ -7,7 +7,10 @@ const mocks = vi.hoisted(() => ({
   revalidatePath: vi.fn(),
 }))
 
-vi.mock('next/headers', () => ({ cookies: mocks.cookies }))
+vi.mock('next/headers', () => ({
+  cookies: mocks.cookies,
+  headers: vi.fn(async () => new Headers()),
+}))
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }))
 
 import {

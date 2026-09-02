@@ -6,7 +6,10 @@ const mocks = vi.hoisted(() => ({
   }),
 }))
 
-vi.mock('next/headers', () => ({ cookies: mocks.cookies }))
+vi.mock('next/headers', () => ({
+  cookies: mocks.cookies,
+  headers: vi.fn(async () => new Headers()),
+}))
 
 import { actionFetch } from './quality-shared'
 
