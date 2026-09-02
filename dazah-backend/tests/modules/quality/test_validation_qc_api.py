@@ -244,3 +244,23 @@ async def test_batch_share_links_endpoint_returns_mapping(
     links = resp.json()["data"]["record_share_links"]
     assert links["rec-1"].endswith("rec-1-tok")
     assert links["rec-2"].endswith("rec-2-tok")
+
+
+@pytest.mark.anyio
+async def test_api_get_qc_validation_record_detail(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from unittest.mock import AsyncMock
+
+    from app.modules.quality.api import validation_qc as validation_qc_api
+
+    monkeypatch.setattr(
+        validation_qc_api,
+        "get_inspection_feishu_record",
+        AsyncMock(return_value={"record_id": "rec-1", "方案名称": "设备再确认"}),
+    )
+    resp = await client.get("/api/v1/quality/validation-qc/records/rec-1?year=2026")
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert data["record_id"] == "rec-1"
+    assert data["方案名称"] == "设备再确认"

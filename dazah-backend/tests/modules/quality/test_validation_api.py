@@ -243,3 +243,39 @@ async def test_batch_delete_validation_api_soft_deletes_rows(
     )
     assert list_response.status_code == 200
     assert list_response.json()["meta"]["total"] == 0
+
+
+# ── 飞书侧边挂载端点（feishu/validations 读写） ──
+
+
+@pytest.mark.anyio
+async def test_feishu_validation_get_and_create_endpoints(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from unittest.mock import AsyncMock
+
+    from app.modules.quality.api import validation as validation_api
+
+    monkeypatch.setattr(
+        validation_api,
+        "get_validation_record_from_feishu",
+        AsyncMock(return_value={"record_id": "rec-1", "title": "纯化水系统 IQ"}),
+    )
+    resp = await client.get(
+        "/api/v1/quality/feishu/validations/rec-1"
+        "?validation_type=equipment_qualification&year=2026"
+    )
+    assert resp.status_code == 200
+    assert resp.json()["data"]["record_id"] == "rec-1"
+
+    monkeypatch.setattr(
+        validation_api,
+        "create_validation_record_in_feishu",
+        AsyncMock(return_value=[{"record_id": "rec-new", "title": "新验证"}]),
+    )
+    resp = await client.post(
+        "/api/v1/quality/feishu/validations?year=2026",
+        json={"title": "新验证"},
+    )
+    assert resp.status_code == 201
+    assert resp.json()["data"][0]["record_id"] == "rec-new"
