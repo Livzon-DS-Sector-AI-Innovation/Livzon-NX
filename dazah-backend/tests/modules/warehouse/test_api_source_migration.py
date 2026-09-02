@@ -381,6 +381,64 @@ async def test_get_feishu_material_page_applies_keyword_filter(
 
 
 @pytest.mark.anyio
+async def test_get_feishu_material_page_local_force_runs_incremental_sync(
+    db_session: AsyncSession,
+) -> None:
+    """本地快照模式下手动刷新（force=1）先做增量同步，再读镜像，不全量拉取。"""
+    service = WarehouseService(db_session)
+    sync_mock = AsyncMock()
+    local_mock = AsyncMock(return_value={"source": "local_snapshot", "total": 5})
+    with (
+        patch.object(
+            WarehouseService,
+            "_resolve_material_page_source",
+            new=AsyncMock(return_value="local"),
+        ),
+        patch.object(
+            WarehouseService, "sync_material_page_to_local", new=sync_mock
+        ),
+        patch.object(WarehouseService, "get_local_material_page", new=local_mock),
+    ):
+        result = await service.get_feishu_material_page(
+            "raw-ledger",
+            page=2,
+            page_size=50,
+            keyword="葡萄糖",
+            force=True,
+        )
+    assert result == {"source": "local_snapshot", "total": 5}
+    sync_mock.assert_awaited_once_with("raw-ledger", incremental=True)
+    local_mock.assert_awaited_once()
+    assert local_mock.await_args.kwargs["page"] == 2
+    assert local_mock.await_args.kwargs["page_size"] == 50
+    assert local_mock.await_args.kwargs["keyword"] == "葡萄糖"
+
+
+@pytest.mark.anyio
+async def test_get_feishu_material_page_local_no_force_skips_sync(
+    db_session: AsyncSession,
+) -> None:
+    """本地快照模式非刷新（force=false）直接读镜像，不触发同步。"""
+    service = WarehouseService(db_session)
+    sync_mock = AsyncMock()
+    local_mock = AsyncMock(return_value={"source": "local_snapshot"})
+    with (
+        patch.object(
+            WarehouseService,
+            "_resolve_material_page_source",
+            new=AsyncMock(return_value="local"),
+        ),
+        patch.object(
+            WarehouseService, "sync_material_page_to_local", new=sync_mock
+        ),
+        patch.object(WarehouseService, "get_local_material_page", new=local_mock),
+    ):
+        await service.get_feishu_material_page("raw-ledger", force=False)
+    sync_mock.assert_not_awaited()
+    local_mock.assert_awaited_once()
+
+
+@pytest.mark.anyio
 async def test_get_material_page_can_read_local_snapshot(
     client: AsyncClient,
     db_session: AsyncSession,

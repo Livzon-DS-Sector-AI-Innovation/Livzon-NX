@@ -19,7 +19,8 @@ interface FeeDashboardPageProps {
   defaultYearFrom?: number
 }
 
-const CHART_COLORS = ['#1677ff', '#52c41a', '#fa8c16', '#722ed1', '#eb2f96', '#13c2c2', '#f5222d', '#2f54eb', '#faad14', '#a0d911']
+// 语义色取自 antd-theme：主紫 #5645d4 / 成功 #1aae39 / 警告 #dd5b00 / 错误 #e03131
+const CHART_COLORS = ['#5645d4', '#1aae39', '#dd5b00', '#9a8de2', '#e03131', '#4534b3', '#d6cef3', '#6b5ddb', '#ffd591', '#ffa8a8']
 
 function formatAmount(value: number): string {
   if (value >= 10000) return `¥${(value / 10000).toFixed(1)}万`
@@ -36,9 +37,9 @@ export default function FeeDashboardPage({ dashboard: initialDashboard, defaultY
 
   // ── Metrics ──────────────────────────────────────────────────────────
   const metrics: RegistrationMetricItem[] = [
-    { label: '费用总金额(当年起)', value: formatAmount(Number(dashboard.total_amount)), accent: '#1677ff' },
-    { label: '已支付', value: formatAmount(Number(dashboard.paid_amount)), accent: '#52c41a' },
-    { label: '待支付', value: formatAmount(Number(dashboard.pending_amount)), accent: '#fa8c16' },
+    { label: '费用总金额(当年起)', value: formatAmount(Number(dashboard.total_amount)), accent: '#5645d4' },
+    { label: '已支付', value: formatAmount(Number(dashboard.paid_amount)), accent: '#1aae39' },
+    { label: '待支付', value: formatAmount(Number(dashboard.pending_amount)), accent: '#dd5b00' },
     { label: '总笔数 / 外检机构', value: `${dashboard.total_records} / ${dashboard.inspection_contact_count}`, accent: '#722ed1' },
   ]
 
@@ -163,7 +164,7 @@ export default function FeeDashboardPage({ dashboard: initialDashboard, defaultY
                 grid: { left: 140, right: 80, top: 16, bottom: 16 },
                 xAxis: { type: 'value', axisLabel: { formatter: (v: number) => v >= 10000 ? `${(v/10000).toFixed(0)}万` : String(v) }, splitLine: { lineStyle: { type: 'dashed', color: '#e5e7eb' } } },
                 yAxis: { type: 'category', data: agencyBarData.map(d => d.name), axisLabel: { width: 120, overflow: 'truncate' } },
-                series: [{ type: 'bar', data: agencyBarData.map(d => d.value), barWidth: 18, itemStyle: { color: '#fa8c16', borderRadius: [0, 6, 6, 0] }, label: { show: true, position: 'right', formatter: (p: DefaultLabelFormatterCallbackParams) => `¥${Number(p.value).toLocaleString()}` } }],
+                series: [{ type: 'bar', data: agencyBarData.map(d => d.value), barWidth: 18, itemStyle: { color: '#dd5b00', borderRadius: [0, 6, 6, 0] }, label: { show: true, position: 'right', formatter: (p: DefaultLabelFormatterCallbackParams) => `¥${Number(p.value).toLocaleString()}` } }],
               }}
               hasData={agencyBarData.length > 0}
               height={420}

@@ -17,6 +17,12 @@ from app.core.database import get_db
 from app.core.deps import CurrentUser
 from app.core.exceptions import AppException
 from app.core.response import error_response, paginated_response, success_response
+from app.modules.quality.api.deps import (
+    QUALITY_QA_SCOPE_PERMISSIONS,
+)
+from app.modules.quality.api.deps import (
+    assert_quality_edit_scope as _assert_quality_edit_scope,
+)
 from app.modules.quality.api.deps import require_user as _require_user
 from app.modules.quality.service.oos_oot_export import (
     export_oos_ledger,
@@ -126,6 +132,11 @@ async def api_update_report_record(
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     _require_user(current_user)
+    await _assert_quality_edit_scope(
+        db,
+        current_user,
+        scope_permission=QUALITY_QA_SCOPE_PERMISSIONS["system_qa"],
+    )
     try:
         result = await update_oos_oot_report_record(db, record_id, data)
         return success_response(data=result, message="更新成功")
@@ -147,6 +158,11 @@ async def api_delete_report_record(
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     _require_user(current_user)
+    await _assert_quality_edit_scope(
+        db,
+        current_user,
+        scope_permission=QUALITY_QA_SCOPE_PERMISSIONS["system_qa"],
+    )
     try:
         await delete_oos_oot_report_record(db, record_id)
         return success_response(message="已删除")
@@ -307,6 +323,11 @@ async def api_update_investigation_push_record(
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     _require_user(current_user)
+    await _assert_quality_edit_scope(
+        db,
+        current_user,
+        scope_permission=QUALITY_QA_SCOPE_PERMISSIONS["system_qa"],
+    )
     try:
         result = await update_oos_oot_investigation_push_record(db, record_id, data)
         return success_response(data=result, message="更新成功")
@@ -328,6 +349,11 @@ async def api_delete_investigation_push_record(
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     _require_user(current_user)
+    await _assert_quality_edit_scope(
+        db,
+        current_user,
+        scope_permission=QUALITY_QA_SCOPE_PERMISSIONS["system_qa"],
+    )
     try:
         await delete_oos_oot_investigation_push_record(db, record_id)
         return success_response(message="已删除")
@@ -424,6 +450,11 @@ async def api_update_oos_ledger(
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     _require_user(current_user)
+    await _assert_quality_edit_scope(
+        db,
+        current_user,
+        scope_permission=QUALITY_QA_SCOPE_PERMISSIONS["system_qa"],
+    )
     try:
         result = await update_oos_ledger_record(db, record_id, data)
         return success_response(data=result, message="更新成功")
@@ -445,6 +476,11 @@ async def api_delete_oos_ledger(
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     _require_user(current_user)
+    await _assert_quality_edit_scope(
+        db,
+        current_user,
+        scope_permission=QUALITY_QA_SCOPE_PERMISSIONS["system_qa"],
+    )
     try:
         await delete_oos_ledger_record(db, record_id)
         return success_response(message="已删除")
@@ -541,6 +577,11 @@ async def api_update_oot_ledger(
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     _require_user(current_user)
+    await _assert_quality_edit_scope(
+        db,
+        current_user,
+        scope_permission=QUALITY_QA_SCOPE_PERMISSIONS["system_qa"],
+    )
     try:
         result = await update_oot_ledger_record(db, record_id, data)
         return success_response(data=result, message="更新成功")
@@ -562,6 +603,11 @@ async def api_delete_oot_ledger(
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     _require_user(current_user)
+    await _assert_quality_edit_scope(
+        db,
+        current_user,
+        scope_permission=QUALITY_QA_SCOPE_PERMISSIONS["system_qa"],
+    )
     try:
         await delete_oot_ledger_record(db, record_id)
         return success_response(message="已删除")
@@ -658,6 +704,11 @@ async def api_update_product_department(
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     _require_user(current_user)
+    await _assert_quality_edit_scope(
+        db,
+        current_user,
+        scope_permission=QUALITY_QA_SCOPE_PERMISSIONS["system_qa"],
+    )
     try:
         result = await update_product_department_record(db, record_id, data)
         return success_response(data=result, message="更新成功")
@@ -679,6 +730,11 @@ async def api_delete_product_department(
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     _require_user(current_user)
+    await _assert_quality_edit_scope(
+        db,
+        current_user,
+        scope_permission=QUALITY_QA_SCOPE_PERMISSIONS["system_qa"],
+    )
     try:
         await delete_product_department_record(db, record_id)
         return success_response(message="已删除")

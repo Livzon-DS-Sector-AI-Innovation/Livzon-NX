@@ -4,6 +4,7 @@ import { Drawer, Descriptions, Divider, Tag, Button, Space } from 'antd'
 import { LinkOutlined, SwapOutlined, EditOutlined, FileTextOutlined } from '@ant-design/icons'
 import Link from 'next/link'
 import { Employee } from '@/types/hr'
+import { maskIdCard, maskMiddle, maskPhone } from '@/lib/mask'
 
 interface EmployeeDetailDrawerProps {
   open: boolean
@@ -60,9 +61,9 @@ export default function EmployeeDetailDrawer({ open, employee, onClose, onEdit }
       <Divider />
 
       <Descriptions title="证件信息" bordered column={2} size="small">
-        <Descriptions.Item label="身份证号">{employee.id_card || '-'}</Descriptions.Item>
+        <Descriptions.Item label="身份证号">{maskIdCard(employee.id_card)}</Descriptions.Item>
         <Descriptions.Item label="身份证有效期">{employee.id_card_expiry || '-'}</Descriptions.Item>
-        <Descriptions.Item label="现居住地址" span={2}>{employee.current_address || '-'}</Descriptions.Item>
+        <Descriptions.Item label="现居住地址" span={2}>{maskMiddle(employee.current_address, 8, 4)}</Descriptions.Item>
       </Descriptions>
 
       <Divider />
@@ -161,10 +162,10 @@ export default function EmployeeDetailDrawer({ open, employee, onClose, onEdit }
       <Divider />
 
       <Descriptions title="联系信息" bordered column={2} size="small">
-        <Descriptions.Item label="联系电话">{employee.phone || '-'}</Descriptions.Item>
+        <Descriptions.Item label="联系电话">{maskPhone(employee.phone)}</Descriptions.Item>
         <Descriptions.Item label="电子邮箱">{employee.email || '-'}</Descriptions.Item>
         <Descriptions.Item label="紧急联系人">{employee.emergency_contact_name || '-'}</Descriptions.Item>
-        <Descriptions.Item label="紧急联系人电话">{employee.emergency_contact_phone || '-'}</Descriptions.Item>
+        <Descriptions.Item label="紧急联系人电话">{maskPhone(employee.emergency_contact_phone)}</Descriptions.Item>
         <Descriptions.Item label="与本人关系">{employee.emergency_contact_relation || '-'}</Descriptions.Item>
       </Descriptions>
 

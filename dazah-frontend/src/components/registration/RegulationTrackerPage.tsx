@@ -335,11 +335,6 @@ export default function RegulationTrackerPage({
         }
       } catch (triggerError) {
         const triggerErrMsg = triggerError instanceof Error ? triggerError.message : ''
-        if (triggerErrMsg.includes('后端暂未暴露法规跟踪手动同步 API')) {
-          message.info('后端暂未开放法规跟踪手动抓取接口，当前页面仅支持查看、筛选和触发现有分析。')
-          setSyncing(false)
-          return
-        }
         // 409: 已有任务正在执行，继续轮询其进度
         if (triggerErrMsg.includes('已有抓取任务正在执行')) {
           message.info('法规抓取任务正在执行中，正在获取进度')
@@ -746,7 +741,7 @@ export default function RegulationTrackerPage({
           <Alert
             type="info"
             showIcon
-            title="系统会在每天 10:00 自动抓取法规网站更新内容；若存在新增或更新法规，将自动分析并推送到指定 QA 接收人。"
+            title="系统会在每天 00:10 自动抓取法规网站更新内容，02:00 自动 AI 分析；若存在新增或更新法规，将在每天 10:00 推送到指定 QA 接收人。"
           />
           <Row gutter={[12, 12]} align="middle">
             <Col xs={24} md={6}>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import {
   App, Card, Tree, Button, Space, Tag, Upload, Spin, Empty, Descriptions,
@@ -27,37 +27,6 @@ import { DocxPreview } from '@/components/registration/DocxPreview'
 const { Text, Title, Paragraph } = Typography
 
 // M3 标准目录结构（固定）
-const M3_STRUCTURE = [
-  { code: "3.2", title: "主体数据", level: 1, parent_code: null },
-  { code: "3.2.S", title: "原料药", level: 2, parent_code: "3.2" },
-  { code: "3.2.S.1", title: "基本信息", level: 3, parent_code: "3.2.S" },
-  { code: "3.2.S.1.1", title: "药品名称", level: 4, parent_code: "3.2.S.1" },
-  { code: "3.2.S.1.2", title: "结构", level: 4, parent_code: "3.2.S.1" },
-  { code: "3.2.S.1.3", title: "基本性质", level: 4, parent_code: "3.2.S.1" },
-  { code: "3.2.S.2", title: "生产", level: 3, parent_code: "3.2.S" },
-  { code: "3.2.S.2.1", title: "生产商", level: 4, parent_code: "3.2.S.2" },
-  { code: "3.2.S.2.2", title: "生产工艺控制", level: 4, parent_code: "3.2.S.2" },
-  { code: "3.2.S.2.3", title: "物料控制", level: 4, parent_code: "3.2.S.2" },
-  { code: "3.2.S.2.4", title: "关键步骤和中间体的控制", level: 4, parent_code: "3.2.S.2" },
-  { code: "3.2.S.2.5", title: "工艺验证和/或评价", level: 4, parent_code: "3.2.S.2" },
-  { code: "3.2.S.2.6", title: "生产工艺的开发", level: 4, parent_code: "3.2.S.2" },
-  { code: "3.2.S.3", title: "特性鉴定", level: 3, parent_code: "3.2.S" },
-  { code: "3.2.S.3.1", title: "结构和理化性质", level: 4, parent_code: "3.2.S.3" },
-  { code: "3.2.S.3.2", title: "杂质", level: 4, parent_code: "3.2.S.3" },
-  { code: "3.2.S.4", title: "原料药的质量控制", level: 3, parent_code: "3.2.S" },
-  { code: "3.2.S.4.1", title: "质量标准", level: 4, parent_code: "3.2.S.4" },
-  { code: "3.2.S.4.2", title: "分析方法", level: 4, parent_code: "3.2.S.4" },
-  { code: "3.2.S.4.3", title: "分析方法的验证", level: 4, parent_code: "3.2.S.4" },
-  { code: "3.2.S.4.4", title: "批分析", level: 4, parent_code: "3.2.S.4" },
-  { code: "3.2.S.4.5", title: "质量标准制定依据", level: 4, parent_code: "3.2.S.4" },
-  { code: "3.2.S.5", title: "对照品", level: 3, parent_code: "3.2.S" },
-  { code: "3.2.S.6", title: "包装系统", level: 3, parent_code: "3.2.S" },
-  { code: "3.2.S.7", title: "稳定性", level: 3, parent_code: "3.2.S" },
-  { code: "3.2.S.7.1", title: "稳定性总结和结论", level: 4, parent_code: "3.2.S.7" },
-  { code: "3.2.S.7.2", title: "批准后稳定性研究方案和承诺", level: 4, parent_code: "3.2.S.7" },
-  { code: "3.2.S.7.3", title: "稳定性数据", level: 4, parent_code: "3.2.S.7" },
-]
-
 interface ChapterWithAssets extends Chapter {
   assets: ChapterAsset[]
   working_file?: string
@@ -163,7 +132,8 @@ export default function DossierDetailPage() {
     return convertToTreeData(chapterTree)
   }
 
-  // 选择章节
+  // 选择章节（带序号守卫：快速连选时，先发慢返的素材请求不得覆盖后选章节）
+  const chapterSeqRef = useRef(0)
   const handleSelectChapter = async (selectedKeys: React.Key[]) => {
     if (selectedKeys.length > 0) {
       const chapterId = selectedKeys[0] as string
@@ -180,19 +150,24 @@ export default function DossierDetailPage() {
 
       const chapter = findChapter(chapterTree)
       if (chapter) {
+        const seq = ++chapterSeqRef.current
+        setSelectedChapterId(chapterId)
+        setSelectedChapter({ ...chapter, assets: [] })
+        setPreviewRefreshKey(prev => prev + 1)
+        // 加载该章节的素材分类
+        if (chapter.chapter_code) {
+          loadCategories(chapter.chapter_code)
+        }
         let assets: ChapterAsset[] = []
         try {
           assets = await fetchChapterAssets(chapterId)
         } catch {
           assets = []
         }
-        setSelectedChapterId(chapterId)
-        setSelectedChapter({ ...chapter, assets })
-        setPreviewRefreshKey(prev => prev + 1)
-        // 加载该章节的素材分类
-        if (chapter.chapter_code) {
-          loadCategories(chapter.chapter_code)
-        }
+        if (seq !== chapterSeqRef.current) return
+        setSelectedChapter(prev =>
+          prev && prev.id === chapterId ? { ...chapter, assets } : prev
+        )
       }
     }
   }

@@ -149,9 +149,9 @@ class RegistrationDeclarationProgressWorkbookRepository:
         versions: list[RegistrationDeclarationProgressWorkbookVersion],
     ) -> None:
         await self.session.execute(
-            update(RegistrationDeclarationProgressWorkbookVersion).values(
-                is_deleted=True
-            )
+            update(RegistrationDeclarationProgressWorkbookVersion)
+            .values(is_deleted=True)
+            .execution_options(synchronize_session=False)
         )
         if versions:
             self.session.add_all(versions)

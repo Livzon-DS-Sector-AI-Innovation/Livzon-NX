@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
-import { App, Button, Table, Space, Popconfirm, Input, Tag, Tooltip, Select, DatePicker } from 'antd'
+import { App, Button, Table, Space, Popconfirm, Input, Tag, Tooltip, Select, AutoComplete, DatePicker } from 'antd'
 import { PlusOutlined, SearchOutlined, EditOutlined, DeleteOutlined, EyeOutlined, SyncOutlined, FileTextOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { OffboardingRecord } from '@/types/hr'
@@ -35,6 +35,7 @@ export default function OffboardingClient({
   const [syncing, setSyncing] = useState(false)
   const [searchKeyword, setSearchKeyword] = useState('')
   const [editingCell, setEditingCell] = useState<{ recordId: string; field: string } | null>(null)
+  const [editingReason, setEditingReason] = useState('')
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -55,10 +56,6 @@ export default function OffboardingClient({
   const handlePageChange = (newPage: number, newPageSize: number) => {
     setPage(newPage)
     setPageSize(newPageSize)
-  }
-
-  const handleRefresh = () => {
-    loadData()
   }
 
   const handleEdit = (record: OffboardingRecord) => {
@@ -91,13 +88,18 @@ export default function OffboardingClient({
   }
 
   const handleGenerateCertificate = async (record: OffboardingRecord) => {
+    const result = await generateOffboardingCertificateAction(record.id)
+    if (!result.ok || !result.bytes) {
+      message.error(result.message || '生成失败')
+      return
+    }
     try {
-      const { bytes, filename } = await generateOffboardingCertificateAction(record.id)
+      const { bytes, filename } = result
       const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' })
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
-      link.download = filename
+      link.download = filename || '解除劳动合同通知单.docx'
       document.body.appendChild(link)
       link.click()
       link.remove()
@@ -137,11 +139,17 @@ export default function OffboardingClient({
     { label: '其他', value: '其他' },
   ]
 
-  // 交接状态选项（与多维表格一致）
-  const handoverStatusOptions = [
-    { label: '待交接', value: '待交接' },
-    { label: '交接中', value: '交接中' },
-    { label: '已完成', value: '已完成' },
+  // 在职状态选项（页面内联切换；选「离职」触发员工档案转抄）
+  const statusOptions = [
+    { label: '在职', value: '在职' },
+    { label: '离职', value: '离职' },
+  ]
+
+  // 离职原因选项（可下拉选择或手动输入；HR 自动转离职的特殊原因不在此列）
+  const offboardingReasonOptions = [
+    { value: '薪资低' },
+    { value: '与领导关系不融洽' },
+    { value: '家庭原因' },
   ]
 
   // 行内编辑处理
@@ -173,12 +181,7 @@ export default function OffboardingClient({
     退休: 'blue',
     其他: 'purple' }
 
-  const handoverColorMap: Record<string, string> = {
-    待交接: 'warning',
-    交接中: 'processing',
-    已完成: 'success' }
-
-  // 10个核心列 + 离职专属字段
+  // 离职管理核心列（其余字段在详情查看）
   const columns = [
     {
       title: '工号',
@@ -223,59 +226,6 @@ export default function OffboardingClient({
       width: 120,
       render: (_: unknown, record: OffboardingRecord) => record.sub_department || '-' },
     {
-      title: '职位/岗位',
-      dataIndex: 'position',
-      key: 'position',
-      width: 120,
-      render: (_: unknown, record: OffboardingRecord) => record.position || record.employee?.position || '-' },
-    {
-      title: '职级',
-      dataIndex: 'level',
-      key: 'level',
-      width: 80,
-      render: (_: unknown, record: OffboardingRecord) => record.level || record.employee?.level || '-' },
-    {
-      title: '联系电话',
-      dataIndex: 'phone',
-      key: 'phone',
-      width: 130,
-      render: (_: unknown, record: OffboardingRecord) => record.phone || record.employee?.phone || '-' },
-    {
-      title: '邮箱',
-      dataIndex: 'email',
-      key: 'email',
-      width: 180,
-      render: (_: unknown, record: OffboardingRecord) => record.email || record.employee?.email || '-' },
-    {
-      title: '最后工作日',
-      dataIndex: 'offboarding_date',
-      key: 'offboarding_date',
-      width: 120,
-      render: (date: string, record: OffboardingRecord) => {
-        if (editingCell?.recordId === record.id && editingCell?.field === 'offboarding_date') {
-          return (
-            <DatePicker
-              value={date ? dayjs(date) : null}
-              onChange={(d) => handleCellSave(record.id, 'offboarding_date', d ? d.format('YYYY-MM-DD') : '')}
-              onBlur={handleCellCancel}
-              autoFocus
-              style={{ width: '100%' }}
-              size="small"
-              format="YYYY-MM-DD"
-            />
-          )
-        }
-        return (
-          <span
-            onClick={() => handleCellEdit(record.id, 'offboarding_date')}
-            className="cursor-pointer hover:opacity-80"
-          >
-            {date || '-'}
-          </span>
-        )
-      }
-    },
-    {
       title: '离职类型',
       dataIndex: 'offboarding_type',
       key: 'offboarding_type',
@@ -306,17 +256,18 @@ export default function OffboardingClient({
       }
     },
     {
-      title: '交接状态',
-      dataIndex: 'handover_status',
-      key: 'handover_status',
-      width: 100,
+      title: '在职状态',
+      dataIndex: 'status',
+      key: 'status',
+      width: 90,
       render: (status: string, record: OffboardingRecord) => {
-        if (editingCell?.recordId === record.id && editingCell?.field === 'handover_status') {
+        const s = status || record.employee?.status || ''
+        if (editingCell?.recordId === record.id && editingCell?.field === 'status') {
           return (
             <Select
-              value={status}
-              options={handoverStatusOptions}
-              onChange={(value) => handleCellSave(record.id, 'handover_status', value)}
+              value={s}
+              options={statusOptions}
+              onChange={(value) => handleCellSave(record.id, 'status', value)}
               onBlur={handleCellCancel}
               autoFocus
               style={{ width: '100%' }}
@@ -326,12 +277,74 @@ export default function OffboardingClient({
         }
         return (
           <Tag
-            color={handoverColorMap[status] || 'default'}
-            onClick={() => handleCellEdit(record.id, 'handover_status')}
+            color={s === '离职' ? 'red' : s === '在职' ? 'green' : 'default'}
+            onClick={() => handleCellEdit(record.id, 'status')}
             className="cursor-pointer hover:opacity-80"
           >
-            {status}
+            {s || '-'}
           </Tag>
+        )
+      }
+    },
+    {
+      title: '最后工作日',
+      dataIndex: 'offboarding_date',
+      key: 'offboarding_date',
+      width: 120,
+      render: (date: string, record: OffboardingRecord) => {
+        if (editingCell?.recordId === record.id && editingCell?.field === 'offboarding_date') {
+          return (
+            <DatePicker
+              value={date ? dayjs(date) : null}
+              onChange={(d) => handleCellSave(record.id, 'offboarding_date', d ? d.format('YYYY-MM-DD') : '')}
+              onBlur={handleCellCancel}
+              autoFocus
+              style={{ width: '100%' }}
+              size="small"
+              format="YYYY-MM-DD"
+            />
+          )
+        }
+        return (
+          <span
+            onClick={() => handleCellEdit(record.id, 'offboarding_date')}
+            className="cursor-pointer hover:opacity-80"
+          >
+            {date || '-'}
+          </span>
+        )
+      }
+    },
+    {
+      title: '离职原因',
+      dataIndex: 'reason',
+      key: 'reason',
+      width: 200,
+      render: (reason: string, record: OffboardingRecord) => {
+        if (editingCell?.recordId === record.id && editingCell?.field === 'reason') {
+          return (
+            <AutoComplete
+              value={editingReason}
+              options={offboardingReasonOptions}
+              onChange={(value) => setEditingReason(value)}
+              onSelect={(value) => handleCellSave(record.id, 'reason', value)}
+              onBlur={() => handleCellSave(record.id, 'reason', editingReason)}
+              autoFocus
+              style={{ width: '100%' }}
+              size="small"
+              allowClear
+            />
+          )
+        }
+        return (
+          <Tooltip title={reason}>
+            <span
+              onClick={() => { handleCellEdit(record.id, 'reason'); setEditingReason(reason || '') }}
+              className="cursor-pointer hover:opacity-80 inline-block w-full truncate"
+            >
+              {reason || '-'}
+            </span>
+          </Tooltip>
         )
       }
     },

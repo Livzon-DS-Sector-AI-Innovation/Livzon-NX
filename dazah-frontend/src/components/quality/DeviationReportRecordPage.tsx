@@ -312,11 +312,11 @@ export function DeviationReportRecordPage({
   async function handleOpenAiWorkbench(record: FeishuDeviationReportRecordItem) {
     const recordId = record.record_id?.trim() || record.feishu_base_record_id?.trim() || record.id?.trim()
     if (!recordId) {
-      message.warning('当前飞书记录缺少 record_id，暂时无法进入 AI 工作台')
+      message.warning('当前飞书记录缺少 record_id，暂时无法进入偏差工作台')
       return
     }
-    // AI工作台基于报告记录，直接用报告记录的 record_id
-    router.push(`/quality/deviations/${recordId}/ai`)
+    // 进入新的独立偏差工作台页面，并预填该报告记录
+    router.push(`/quality/deviations/workbench?record_id=${encodeURIComponent(recordId)}`)
   }
 
   const handlePullFromFeishu = useCallback(async () => {
@@ -516,7 +516,7 @@ export function DeviationReportRecordPage({
         extra={
           detailRecord ? (
             <Button type="primary" onClick={() => void handleOpenAiWorkbench(detailRecord)}>
-              进入 AI 工作台
+              进入偏差工作台
             </Button>
           ) : null
         }

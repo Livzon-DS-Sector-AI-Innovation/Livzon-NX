@@ -50,7 +50,13 @@ def field_catalog_payload() -> list[dict[str, str]]:
     return [{"key": key, "label": label} for key, label in FIELD_CATALOG]
 
 
-async def analyze_headers_by_llm(sheet_name: str, headers: list[str]) -> dict[str, Any]:
+async def analyze_headers_by_llm(
+    sheet_name: str,
+    headers: list[str],
+    *,
+    timeout: int = 30,
+    enable_thinking: bool = False,
+) -> dict[str, Any]:
     """调 LLM 分析表头，返回 {"mapping": {列号str: 字段名}, "judgment": str}.
 
     mapping 仅包含有把握的列；无法识别时返回空 mapping，由前端引导人工指定。
@@ -85,6 +91,8 @@ async def analyze_headers_by_llm(sheet_name: str, headers: list[str]) -> dict[st
             messages=messages,
             expected_keys=["mapping", "judgment"],
             temperature=0.0,
+            timeout=timeout,
+            enable_thinking=enable_thinking,
         )
     except LLMOutputError:
         # 注意：extra 不能覆盖 LogRecord 保留属性（如 module），否则 logging 抛 KeyError

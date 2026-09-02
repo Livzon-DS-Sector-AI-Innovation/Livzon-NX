@@ -14,6 +14,10 @@ const baseValues: LLMConfigFormValues = {
   temperature: 0.7,
   use_temperature: false,
   timeout_seconds: 120,
+  enable_thinking: false,
+  context_window_tokens: 200000,
+  compress_threshold: 0.8,
+  stream_output: true,
   is_active: true,
   notes: null,
 }

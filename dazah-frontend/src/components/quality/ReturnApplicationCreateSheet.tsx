@@ -1,5 +1,6 @@
 'use client'
 
+import { qualityTokens } from './themeTokens'
 import type { CSSProperties } from 'react'
 import type { Dayjs } from 'dayjs'
 import { DatePicker, Form, Input, Select, Typography } from 'antd'
@@ -72,7 +73,7 @@ const labelCellStyle: CSSProperties = {
   ...centerCellStyle,
   width: 72,
   fontWeight: 600,
-  background: '#fafafa',
+  background: qualityTokens.bgSoft,
 }
 
 const textAreaCellStyle: CSSProperties = {

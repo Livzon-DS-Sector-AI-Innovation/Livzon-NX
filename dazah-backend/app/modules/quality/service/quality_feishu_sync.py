@@ -713,7 +713,10 @@ class QualityFeishuSync:
         runtime = await self._resolve_runtime(db)
         entity = runtime.get_entity_config(entity_code, direction="push")
         if not runtime.is_enabled() or not entity or not entity.app_token:
-            raise RuntimeError("质量模块飞书 Base 同步未启用")
+            raise AppException(
+                message="质量模块飞书 Base 同步未启用，请先在「飞书设置」完成配置",
+                status_code=400,
+            )
         resolved_table_id = _require_table_id(entity)
         client = BitableClient(
             app_token=entity.app_token,

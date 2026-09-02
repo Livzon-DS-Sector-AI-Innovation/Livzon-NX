@@ -445,9 +445,68 @@ async def hr_query_offboarding(
             "最后工作日": r.offboarding_date.isoformat() if r.offboarding_date else "",
             "离职类型": r.offboarding_type or "",
             "离职原因": r.reason or "",
-            "状态": r.handover_status or "",
+            "状态": r.status or "",
         }
         for r in records
+    ]
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Tool 8: 入职查询
+# ═══════════════════════════════════════════════════════════════════
+
+HR_QUERY_ONBOARDING_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "hr_query_onboarding",
+        "description": (
+            "查询入职记录（最近入职的员工）。可按姓名/工号搜索特定人员，"
+            "不传 keyword 则返回最近入职的员工（最多 50 条）。"
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "keyword": {
+                    "type": "string",
+                    "description": "员工姓名或工号（可选，不传则查最近入职）",
+                },
+            },
+        },
+    },
+}
+
+
+async def hr_query_onboarding(
+    session: AsyncSession,
+    keyword: str | None = None,
+) -> list[dict[str, Any]]:
+    """查询入职记录（基于员工档案的入职日期）。"""
+    stmt = select(Employee).where(
+        Employee.is_deleted == False,  # noqa: E712
+        Employee.hire_date.is_not(None),
+    )
+
+    if keyword:
+        pattern = f"%{keyword}%"
+        stmt = stmt.where(
+            Employee.name.ilike(pattern)
+            | Employee.employee_number.ilike(pattern)
+        )
+
+    stmt = stmt.order_by(Employee.hire_date.desc()).limit(MAX_RESULTS)
+    result = await session.execute(stmt)
+    emps = result.scalars().all()
+
+    return [
+        {
+            "姓名": e.name or "",
+            "工号": e.employee_number or "",
+            "部门": e.department or "",
+            "职位": e.position or "",
+            "入职日期": e.hire_date.isoformat() if e.hire_date else "",
+            "状态": e.status or "",
+        }
+        for e in emps
     ]
 
 
@@ -949,10 +1008,6 @@ HR_CREATE_OFFBOARDING_SCHEMA = {
                     "description": "离职类型：辞职/辞退/合同到期/退休/其他（必填）",
                 },
                 "reason": {"type": "string", "description": "离职原因（必填）"},
-                "handover_status": {
-                    "type": "string",
-                    "description": "交接状态：待交接/交接中/已完成，默认待交接",
-                },
                 "notes": {"type": "string", "description": "备注（可选）"},
             },
             "required": [
@@ -972,7 +1027,6 @@ async def hr_create_offboarding_record(
     offboarding_date: str,
     offboarding_type: str,
     reason: str,
-    handover_status: str = "待交接",
     notes: str | None = None,
 ) -> dict[str, Any]:
     """创建离职记录。"""
@@ -984,7 +1038,6 @@ async def hr_create_offboarding_record(
         offboarding_date=date.fromisoformat(offboarding_date),
         offboarding_type=offboarding_type,
         reason=reason,
-        handover_status=handover_status,
         notes=notes,
     )
     service = OffboardingRecordService(session)
@@ -1076,6 +1129,7 @@ ALL_TOOL_SCHEMAS = [
     HR_QUERY_TRAINING_SCHEMA,
     HR_QUERY_OFFBOARDING_SCHEMA,
     HR_QUERY_TRANSFERS_SCHEMA,
+    HR_QUERY_ONBOARDING_SCHEMA,
     HR_LIST_TEAMS_SCHEMA,
     HR_LIST_TRAINERS_SCHEMA,
     HR_LIST_TRAINING_PLANS_SCHEMA,
@@ -1096,6 +1150,7 @@ TOOL_EXECUTORS: dict[str, Any] = {
     "hr_query_training_records": hr_query_training_records,
     "hr_query_offboarding": hr_query_offboarding,
     "hr_query_position_transfers": hr_query_position_transfers,
+    "hr_query_onboarding": hr_query_onboarding,
     "hr_list_teams": hr_list_teams,
     "hr_list_trainers": hr_list_trainers,
     "hr_list_training_plans": hr_list_training_plans,

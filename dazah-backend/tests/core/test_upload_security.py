@@ -1,10 +1,15 @@
 from io import BytesIO
+from zipfile import ZipFile
 
 import pytest
 from fastapi import UploadFile
 
 from app.core.exceptions import AppException
-from app.core.upload_security import read_upload_secure, safe_upload_filename
+from app.core.upload_security import (
+    read_upload_secure,
+    safe_upload_filename,
+    sniff_upload_mime,
+)
 
 
 def test_safe_upload_filename_rejects_path_traversal() -> None:
@@ -81,3 +86,41 @@ async def test_read_upload_secure_rejects_empty_upload() -> None:
     upload = UploadFile(filename="empty.pdf", file=BytesIO(b""))
     with pytest.raises(AppException):
         await read_upload_secure(upload, max_bytes=32, allowed_extensions={".pdf"})
+
+
+def test_sniff_upload_mime_ole_compound_doc_variants() -> None:
+    from app.core.upload_security import sniff_upload_mime
+
+    ole = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"\x00" * 64
+    # .doc/.wps 同为 OLE 复合文档 → Word
+    assert sniff_upload_mime("报告.doc", ole) == "application/msword"
+    assert sniff_upload_mime("报告.wps", ole) == "application/msword"
+    # 其它后缀的 OLE 归为 Excel
+    assert sniff_upload_mime("表.xls", ole) == "application/vnd.ms-excel"
+
+
+def test_sniff_upload_mime_office_zip_and_images() -> None:
+    def _zip(names: list[str]) -> bytes:
+        buf = BytesIO()
+        with ZipFile(buf, "w") as z:
+            for n in names:
+                z.writestr(n, "x")
+        return buf.getvalue()
+
+    assert sniff_upload_mime(
+        "a.docx", _zip(["word/document.xml"])
+    ) == (
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    )
+    assert sniff_upload_mime(
+        "a.xlsx", _zip(["xl/workbook.xml"])
+    ) == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    assert sniff_upload_mime("a.gif", b"GIF89a....") == "image/gif"
+    assert (
+        sniff_upload_mime("a.webp", b"RIFF\x00\x00\x00\x00WEBPVP8 ")
+        == "image/webp"
+    )
+    assert sniff_upload_mime("a.bmp", b"BM....") == "image/bmp"
+    # 非 zip、非法 UTF-8 → 二进制兜底；合法 UTF-8 → text/plain
+    assert sniff_upload_mime("a.bin", b"\xff\xfe\x00\x01") == "application/octet-stream"
+    assert sniff_upload_mime("a.txt", "普通文本".encode()) == "text/plain"

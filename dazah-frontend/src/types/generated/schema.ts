@@ -4185,6 +4185,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/hr/dept-approval-configs/names": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 部门级审批人配置的部门名单（按配置粒度去重排序，供按部门配置办事员/接收人使用） */
+        get: operations["list_dept_approval_config_names_api_v1_hr_dept_approval_configs_names_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/hr/dept-approval-configs/{config_id}": {
         parameters: {
             query?: never;
@@ -4739,7 +4756,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** ESG培训报表列表 */
+        /** ESG培训报表列表（支持各列筛选） */
         get: operations["list_esg_records_api_v1_hr_esg_training_records_get"];
         put?: never;
         /** 创建ESG培训记录 */
@@ -4759,6 +4776,23 @@ export interface paths {
         };
         /** 按部门导出ESG培训报表Excel */
         get: operations["export_esg_records_api_v1_hr_esg_training_records_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/hr/esg-training-records/filter-options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** ESG培训报表各枚举列筛选选项（部门+日期范围内去重） */
+        get: operations["list_esg_filter_options_api_v1_hr_esg_training_records_filter_options_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -5677,20 +5711,20 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/hr/onboarding/dashboard": {
+    "/api/v1/hr/onboarding/attachments": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /**
-         * 入职看板统计
-         * @description 获取入职管理看板统计数据。飞书多维表格未配置时返回空统计。
-         */
-        get: operations["get_onboarding_dashboard_api_v1_hr_onboarding_dashboard_get"];
+        get?: never;
         put?: never;
-        post?: never;
+        /**
+         * 上传入职附件（写回飞书多维附件字段用）
+         * @description 上传文件到飞书多维，返回 file_token（用于编辑时写入附件字段）。
+         */
+        post: operations["upload_onboarding_attachment_api_v1_hr_onboarding_attachments_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5754,6 +5788,33 @@ export interface paths {
          * @description 更新招聘入职记录信息。
          */
         put: operations["update_onboarding_record_recruitment_api_v1_hr_onboarding__record_id__put"];
+        post?: never;
+        /**
+         * 删除入职记录（从飞书多维表格删除）
+         * @description 删除入职记录。不可恢复，前端需二次确认。
+         */
+        delete: operations["delete_onboarding_record_recruitment_api_v1_hr_onboarding__record_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/hr/onboarding/{record_id}/attachments/{file_token}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 获取入职附件内容（预览/下载）
+         * @description 代理下载入职记录附件（图片内嵌预览 / PDF 等新标签打开）。
+         *
+         *     安全：仅允许下载属于该记录的附件（file_token 归属校验），
+         *     内容经后端携带飞书 tenant token 下载，不暴露直链。
+         */
+        get: operations["get_onboarding_attachment_content_api_v1_hr_onboarding__record_id__attachments__file_token__content_get"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -6820,6 +6881,31 @@ export interface paths {
         put?: never;
         /** 导入实操试题（APP13格式docx，提取描述与培训日期） */
         post: operations["import_practical_exam_questions_api_v1_hr_training_practical_exam_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/hr/training-sessions/from-ledger": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 从培训台账一键创建部门级二级培训会话（带入上级试卷）
+         * @description 公司级（全厂性）培训入台账后按部门拆副本；各部门从自己的台账副本
+         *     一键创建部门级二级培训会话，并把上级会话的试卷草稿（笔试/口试/实操）
+         *     复制过来，供培训员微调后开展二级培训。
+         *
+         *     - 复制为快照：新会话修改题目不影响上级会话
+         *     - 返回新会话 id，前端跳转 ?session=新id 恢复
+         */
+        post: operations["create_second_level_session_from_ledger_api_v1_hr_training_sessions_from_ledger_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -14136,6 +14222,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/quality/department-contacts/feishu/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 更新飞书部门联系人人员字段 */
+        put: operations["update_department_contact_from_feishu_api_v1_quality_department_contacts_feishu__record_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/quality/department-contacts/{contact_id}": {
         parameters: {
             query?: never;
@@ -14309,6 +14412,111 @@ export interface paths {
         put?: never;
         /** 按飞书报告记录准备平台偏差供AI工作台使用 */
         post: operations["ensure_deviation_from_report_record_api_v1_quality_deviation_report_records__record_id__ensure_deviation_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/deviation-workbench/analyze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 生成偏差调查报告 */
+        post: operations["analyze_deviation_workbench_api_v1_quality_deviation_workbench_analyze_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/deviation-workbench/attachments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 上传偏差工作台附件（返回描述符供生成时引用） */
+        post: operations["upload_deviation_workbench_attachment_api_v1_quality_deviation_workbench_attachments_post"];
+        /** 清理未消费的工作台附件对象（原件+转换MD+图片资产） */
+        delete: operations["delete_deviation_workbench_attachments_api_v1_quality_deviation_workbench_attachments_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/deviation-workbench/attachments/{storage_key}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 偏差工作台附件内容（word 返回标准 MD；图片/PDF 返回原文件） */
+        get: operations["get_deviation_workbench_attachment_content_api_v1_quality_deviation_workbench_attachments__storage_key__content_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/deviation-workbench/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 获取偏差工作台记录台账 */
+        get: operations["list_deviation_workbench_reports_api_v1_quality_deviation_workbench_reports_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/deviation-workbench/reports/{report_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 获取偏差工作台记录详情 */
+        get: operations["get_deviation_workbench_report_api_v1_quality_deviation_workbench_reports__report_id__get"];
+        put?: never;
+        post?: never;
+        /** 删除偏差工作台记录 */
+        delete: operations["delete_deviation_workbench_report_api_v1_quality_deviation_workbench_reports__report_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/deviation-workbench/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 获取偏差工作台提示词设置 */
+        get: operations["get_deviation_workbench_settings_api_v1_quality_deviation_workbench_settings_get"];
+        /** 更新偏差工作台提示词设置 */
+        put: operations["update_deviation_workbench_settings_api_v1_quality_deviation_workbench_settings_put"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -14617,7 +14825,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** 统一导入附件（自动识别名称/编号绑定条目，失败时 LLM 匹配） */
+        /** 统一导入附件（自动识别名称/编号绑定条目，失败时 LLM 匹配；文件名版本高于条目时自动升级文件编码） */
         post: operations["batch_import_document_attachments_api_v1_quality_document_catalog_attachments_import_post"];
         delete?: never;
         options?: never;
@@ -15397,6 +15605,111 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/quality/historical-deviations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 获取历史偏差列表 */
+        get: operations["list_historical_deviations_api_v1_quality_historical_deviations_get"];
+        put?: never;
+        /** 创建历史偏差 */
+        post: operations["create_historical_deviation_api_api_v1_quality_historical_deviations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/historical-deviations/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 获取历史偏差详情 */
+        get: operations["get_historical_deviation_api_api_v1_quality_historical_deviations__record_id__get"];
+        /** 更新历史偏差 */
+        put: operations["update_historical_deviation_api_api_v1_quality_historical_deviations__record_id__put"];
+        post?: never;
+        /** 删除历史偏差 */
+        delete: operations["delete_historical_deviation_api_api_v1_quality_historical_deviations__record_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/historical-deviations/{record_id}/ai-extract": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** AI 提取历史偏差字段（偏差事件/偏差内容/调查结论） */
+        post: operations["ai_extract_historical_deviation_api_api_v1_quality_historical_deviations__record_id__ai_extract_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/historical-deviations/{record_id}/attachments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 上传历史偏差附件（word 自动转标准 MD） */
+        post: operations["upload_historical_deviation_attachment_api_api_v1_quality_historical_deviations__record_id__attachments_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/historical-deviations/{record_id}/attachments/{attachment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** 删除历史偏差附件 */
+        delete: operations["delete_historical_deviation_attachment_api_api_v1_quality_historical_deviations__record_id__attachments__attachment_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/historical-deviations/{record_id}/attachments/{storage_key}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 历史偏差附件内容（word 返回标准 MD；图片/PDF 返回原文件） */
+        get: operations["get_historical_deviation_attachment_content_api_api_v1_quality_historical_deviations__record_id__attachments__storage_key__content_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/quality/inspection-dashboard": {
         parameters: {
             query?: never;
@@ -15800,6 +16113,93 @@ export interface paths {
         };
         /** 检验趋势分析 */
         get: operations["get_legacy_inspection_trend_api_v1_quality_inspection_trends_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/inspection/feishu/{entity_code}/fields": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 获取检验实体字段元数据 */
+        get: operations["api_get_inspection_entity_fields_api_v1_quality_inspection_feishu__entity_code__fields_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/inspection/feishu/{entity_code}/pull": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 回拉检验飞书记录 */
+        post: operations["api_pull_inspection_feishu_records_api_v1_quality_inspection_feishu__entity_code__pull_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/inspection/feishu/{entity_code}/records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 新增检验飞书记录（同步到多维表格） */
+        post: operations["api_create_inspection_feishu_record_api_v1_quality_inspection_feishu__entity_code__records_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/inspection/feishu/{entity_code}/records/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 获取检验飞书记录详情 */
+        get: operations["api_get_inspection_feishu_record_api_v1_quality_inspection_feishu__entity_code__records__record_id__get"];
+        /** 编辑检验飞书记录（同步到多维表格） */
+        put: operations["api_update_inspection_feishu_record_api_v1_quality_inspection_feishu__entity_code__records__record_id__put"];
+        post?: never;
+        /** 删除检验飞书记录（同步到多维表格） */
+        delete: operations["api_delete_inspection_feishu_record_api_v1_quality_inspection_feishu__entity_code__records__record_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/inspection/feishu/{entity_code}/records/{record_id}/attachments/{file_token}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 下载检验记录附件（后端代理，携带飞书 token） */
+        get: operations["api_get_inspection_feishu_attachment_content_api_v1_quality_inspection_feishu__entity_code__records__record_id__attachments__file_token__content_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -19279,7 +19679,7 @@ export interface paths {
         };
         /**
          * 获取对照品列表
-         * @description 获取所有对照品记录
+         * @description 获取对照品记录列表
          */
         get: operations["list_reference_substances_api_v1_registration_reference_substances__get"];
         put?: never;
@@ -19568,6 +19968,126 @@ export interface paths {
          * @description 触发 AI 分析未处理的文档。
          */
         post: operations["trigger_ai_analysis_api_v1_regulatory_documents_analyze_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/regulatory-documents/backfill-summaries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 回填中文内容总结
+         * @description 回填国际站点历史文档的中文内容总结。
+         */
+        post: operations["trigger_summary_backfill_api_v1_regulatory_documents_backfill_summaries_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/regulatory-documents/notification-recipients": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 获取法规更新推送接收人 */
+        get: operations["list_notification_recipients_api_v1_regulatory_documents_notification_recipients_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/regulatory-documents/notification-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 获取法规更新推送配置 */
+        get: operations["get_notification_settings_api_v1_regulatory_documents_notification_settings_get"];
+        /** 更新法规更新推送配置 */
+        put: operations["update_notification_settings_api_v1_regulatory_documents_notification_settings_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/regulatory-documents/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 手动触发法规站点同步
+         * @description 手动触发法规跟踪同步，后台异步执行，立即返回任务启动状态。
+         *
+         *     通过 ``GET /regulatory-documents/sync/status`` 轮询任务进度。
+         */
+        post: operations["trigger_manual_sync_api_v1_regulatory_documents_sync_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/regulatory-documents/sync/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 查询法规抓取任务状态
+         * @description 返回后台法规抓取任务的当前状态。
+         *
+         *     状态取值：``idle`` / ``running`` / ``completed`` / ``failed``。
+         *     ``completed`` 时 ``result`` 字段包含上次执行结果。
+         */
+        get: operations["get_sync_status_api_v1_regulatory_documents_sync_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/regulatory-documents/{doc_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 法规文档详情
+         * @description 获取法规台账详情。
+         */
+        get: operations["get_document_detail_api_v1_regulatory_documents__doc_id__get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -25314,6 +25834,24 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /** ApiResponseEnvelope[BatchImportDocumentAttachmentsResult] */
+        ApiResponseEnvelope_BatchImportDocumentAttachmentsResult_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["BatchImportDocumentAttachmentsResult"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
         /** ApiResponseEnvelope[BatchUpdateStatusResponse] */
         ApiResponseEnvelope_BatchUpdateStatusResponse_: {
             /**
@@ -25872,6 +26410,60 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /** ApiResponseEnvelope[DeviationWorkbenchAttachmentIn] */
+        ApiResponseEnvelope_DeviationWorkbenchAttachmentIn_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["DeviationWorkbenchAttachmentIn"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[DeviationWorkbenchReportDetail] */
+        ApiResponseEnvelope_DeviationWorkbenchReportDetail_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["DeviationWorkbenchReportDetail"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[DeviationWorkbenchSettingsOut] */
+        ApiResponseEnvelope_DeviationWorkbenchSettingsOut_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["DeviationWorkbenchSettingsOut"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
         /** ApiResponseEnvelope[DocumentDepartmentOut] */
         ApiResponseEnvelope_DocumentDepartmentOut_: {
             /**
@@ -25970,6 +26562,42 @@ export interface components {
              */
             code: number;
             data: components["schemas"]["FeeOverview"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[HistoricalDeviationAttachmentOut] */
+        ApiResponseEnvelope_HistoricalDeviationAttachmentOut_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["HistoricalDeviationAttachmentOut"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[HistoricalDeviationDetail] */
+        ApiResponseEnvelope_HistoricalDeviationDetail_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["HistoricalDeviationDetail"];
             /**
              * Message
              * @default success
@@ -26810,6 +27438,25 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /** ApiResponseEnvelope[list[DeviationWorkbenchReportListItem]] */
+        ApiResponseEnvelope_list_DeviationWorkbenchReportListItem__: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            /** Data */
+            data: components["schemas"]["DeviationWorkbenchReportListItem"][];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
         /** ApiResponseEnvelope[list[DocumentDepartmentOut]] */
         ApiResponseEnvelope_list_DocumentDepartmentOut__: {
             /**
@@ -26914,6 +27561,25 @@ export interface components {
             code: number;
             /** Data */
             data: components["schemas"]["FeeEntryResponse"][];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[list[HistoricalDeviationListItem]] */
+        ApiResponseEnvelope_list_HistoricalDeviationListItem__: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            /** Data */
+            data: components["schemas"]["HistoricalDeviationListItem"][];
             /**
              * Message
              * @default success
@@ -28237,6 +28903,86 @@ export interface components {
             /** Rows */
             rows?: components["schemas"]["DeleteMergedRowRequest"][];
         };
+        /**
+         * BatchImportAttachmentResultItem
+         * @description 单个附件文件的导入结果。
+         */
+        BatchImportAttachmentResultItem: {
+            /**
+             * Entry Code
+             * @description 绑定条目文件编码
+             */
+            entry_code?: string | null;
+            /**
+             * Entry Id
+             * @description 绑定条目 ID
+             */
+            entry_id?: string | null;
+            /**
+             * Entry Name
+             * @description 绑定条目名称
+             */
+            entry_name?: string | null;
+            /**
+             * File Name
+             * @description 附件文件名
+             */
+            file_name: string;
+            /**
+             * Match Type
+             * @description 匹配方式：name/code/content/llm/none
+             * @default none
+             */
+            match_type: string;
+            /**
+             * Matched
+             * @description 是否匹配到条目
+             * @default false
+             */
+            matched: boolean;
+            /**
+             * New Code
+             * @description 版本升级后的文件编码（未升级为空）
+             */
+            new_code?: string | null;
+            /**
+             * Old Code
+             * @description 版本升级前的文件编码（未升级为空）
+             */
+            old_code?: string | null;
+            /**
+             * Version Updated
+             * @description 是否自动升级了条目文件编码版本
+             * @default false
+             */
+            version_updated: boolean;
+        };
+        /**
+         * BatchImportDocumentAttachmentsResult
+         * @description 统一导入附件结果汇总。
+         */
+        BatchImportDocumentAttachmentsResult: {
+            /**
+             * Bound
+             * @description 成功绑定附件数
+             * @default 0
+             */
+            bound: number;
+            /**
+             * Failed
+             * @description 未匹配文件数
+             * @default 0
+             */
+            failed: number;
+            /** Results */
+            results?: components["schemas"]["BatchImportAttachmentResultItem"][];
+            /**
+             * Version Updated Count
+             * @description 文件编码版本自动升级数
+             * @default 0
+             */
+            version_updated_count: number;
+        };
         /** BatchManualEntryRequest */
         BatchManualEntryRequest: {
             /**
@@ -28525,7 +29271,7 @@ export interface components {
         Body_batch_import_document_attachments_api_v1_quality_document_catalog_attachments_import_post: {
             /**
              * Files
-             * @description 附件文件列表（.doc/.docx/.pdf/图片/.md）
+             * @description 附件文件列表（.doc/.docx/.wps/.pdf/图片/.md）
              */
             files: string[];
         };
@@ -28980,6 +29726,11 @@ export interface components {
             /** File */
             file: string;
         };
+        /** Body_upload_deviation_workbench_attachment_api_v1_quality_deviation_workbench_attachments_post */
+        Body_upload_deviation_workbench_attachment_api_v1_quality_deviation_workbench_attachments_post: {
+            /** File */
+            file: string;
+        };
         /** Body_upload_document_entry_attachment_api_v1_quality_document_entries__entry_id__attachments_post */
         Body_upload_document_entry_attachment_api_v1_quality_document_entries__entry_id__attachments_post: {
             /**
@@ -29013,6 +29764,11 @@ export interface components {
             /** File */
             file: string;
         };
+        /** Body_upload_historical_deviation_attachment_api_api_v1_quality_historical_deviations__record_id__attachments_post */
+        Body_upload_historical_deviation_attachment_api_api_v1_quality_historical_deviations__record_id__attachments_post: {
+            /** File */
+            file: string;
+        };
         /** Body_upload_knowledge_article_attachment_api_v1_safety_knowledge_articles__article_id__upload_post */
         Body_upload_knowledge_article_attachment_api_v1_safety_knowledge_articles__article_id__upload_post: {
             /** File */
@@ -29030,6 +29786,11 @@ export interface components {
         };
         /** Body_upload_offer_template_api_v1_hr_email_upload_offer_template_post */
         Body_upload_offer_template_api_v1_hr_email_upload_offer_template_post: {
+            /** File */
+            file: string;
+        };
+        /** Body_upload_onboarding_attachment_api_v1_hr_onboarding_attachments_post */
+        Body_upload_onboarding_attachment_api_v1_hr_onboarding_attachments_post: {
             /** File */
             file: string;
         };
@@ -30710,6 +31471,8 @@ export interface components {
             delay_flag?: string | null;
             /** Delayed Deadline Date */
             delayed_deadline_date?: string | null;
+            /** Director Avatar Url */
+            director_avatar_url?: string | null;
             /** Director Name */
             director_name?: string | null;
             /** Director User Id */
@@ -30725,6 +31488,8 @@ export interface components {
             last_reminded_at?: string | null;
             /** Last Synced At */
             last_synced_at?: string | null;
+            /** Owner Avatar Url */
+            owner_avatar_url?: string | null;
             /** Owner Name */
             owner_name?: string | null;
             /** Owner User Id */
@@ -30777,6 +31542,8 @@ export interface components {
             delay_flag?: string | null;
             /** Delayed Deadline Date */
             delayed_deadline_date?: string | null;
+            /** Director Avatar Url */
+            director_avatar_url?: string | null;
             /** Director Name */
             director_name?: string | null;
             /** Director User Id */
@@ -30792,6 +31559,8 @@ export interface components {
             last_reminded_at?: string | null;
             /** Last Synced At */
             last_synced_at?: string | null;
+            /** Owner Avatar Url */
+            owner_avatar_url?: string | null;
             /** Owner Name */
             owner_name?: string | null;
             /** Owner User Id */
@@ -32735,6 +33504,20 @@ export interface components {
             /** Title */
             title?: string | null;
         };
+        /** CreateDeviationWorkbenchRequest */
+        CreateDeviationWorkbenchRequest: {
+            /** Attachments */
+            attachments?: components["schemas"]["DeviationWorkbenchAttachmentIn"][];
+            /** Manual Text */
+            manual_text?: string | null;
+            /** Source Record Id */
+            source_record_id?: string | null;
+            /**
+             * Source Type
+             * @default manual
+             */
+            source_type: string;
+        };
         /**
          * CreateDocumentDepartmentRequest
          * @description Create document department request.
@@ -32841,6 +33624,21 @@ export interface components {
              * @description 检验结果
              */
             test_result?: string | null;
+        };
+        /** CreateHistoricalDeviationRequest */
+        CreateHistoricalDeviationRequest: {
+            /** Deviation Content */
+            deviation_content?: string | null;
+            /** Deviation Event */
+            deviation_event?: string | null;
+            /** Direct Cause */
+            direct_cause?: string | null;
+            /** Investigation Conclusion */
+            investigation_conclusion?: string | null;
+            /** Remark */
+            remark?: string | null;
+            /** Root Cause */
+            root_cause?: string | null;
         };
         /**
          * CreateInspectionRequest
@@ -34683,14 +35481,11 @@ export interface components {
         };
         /**
          * DeptApprovalConfigCreate
-         * @description 部门级审批人配置 - 创建
+         * @description 部门级审批人配置 - 创建（部门表为空时 department_id 可空，按名称展示）
          */
         DeptApprovalConfigCreate: {
-            /**
-             * Department Id
-             * Format: uuid
-             */
-            department_id: string;
+            /** Department Id */
+            department_id?: string | null;
             /** Department Name */
             department_name: string;
             /** Direct Leader Name */
@@ -35341,6 +36136,135 @@ export interface components {
             stepBreakdown: components["schemas"]["StepBreakdownItem"][];
             /** Total */
             total: number;
+        };
+        /**
+         * DeviationWorkbenchAttachmentIn
+         * @description 工作台附件描述（由上传接口返回后随 analyze 提交）。
+         */
+        DeviationWorkbenchAttachmentIn: {
+            /** Asset Keys */
+            asset_keys?: string[];
+            /** Content Type */
+            content_type?: string | null;
+            /**
+             * Converted
+             * @default false
+             */
+            converted: boolean;
+            /** Converted Md Key */
+            converted_md_key?: string | null;
+            /** File Name */
+            file_name: string;
+            /** File Size */
+            file_size?: number | null;
+            /** Id */
+            id: string;
+            /** Storage Key */
+            storage_key: string;
+        };
+        /** DeviationWorkbenchAttachmentOut */
+        DeviationWorkbenchAttachmentOut: {
+            /** Content Type */
+            content_type?: string | null;
+            /**
+             * Converted
+             * @default false
+             */
+            converted: boolean;
+            /** File Name */
+            file_name: string;
+            /** File Size */
+            file_size?: number | null;
+            /** Id */
+            id: string;
+            /** Uploaded At */
+            uploaded_at?: string | null;
+            /**
+             * Url
+             * @default
+             */
+            url: string;
+        };
+        /** DeviationWorkbenchReportDetail */
+        DeviationWorkbenchReportDetail: {
+            /** Attachments */
+            attachments?: components["schemas"]["DeviationWorkbenchAttachmentOut"][];
+            /** Code */
+            code: string;
+            /** Context Snapshot */
+            context_snapshot?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Deviation Summary */
+            deviation_summary?: string | null;
+            /** Error Message */
+            error_message?: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Manual Text */
+            manual_text?: string | null;
+            /** Model Name */
+            model_name?: string | null;
+            /** Report Md */
+            report_md?: string | null;
+            /** Report Payload */
+            report_payload?: {
+                [key: string]: unknown;
+            } | null;
+            /** Source Record Id */
+            source_record_id?: string | null;
+            /** Source Type */
+            source_type: string;
+            /** Status */
+            status: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** DeviationWorkbenchReportListItem */
+        DeviationWorkbenchReportListItem: {
+            /** Code */
+            code: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Deviation Summary */
+            deviation_summary?: string | null;
+            /** Error Message */
+            error_message?: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Source Type */
+            source_type: string;
+            /** Status */
+            status: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** DeviationWorkbenchSettingsOut */
+        DeviationWorkbenchSettingsOut: {
+            /** Report System Prompt */
+            report_system_prompt: string;
+            /** Updated At */
+            updated_at?: string | null;
         };
         /**
          * DocumentDepartmentOut
@@ -40239,6 +41163,109 @@ export interface components {
             /** User Id */
             user_id?: string | null;
         };
+        /** HistoricalDeviationAttachmentOut */
+        HistoricalDeviationAttachmentOut: {
+            /** Content Type */
+            content_type?: string | null;
+            /**
+             * Converted
+             * @default false
+             */
+            converted: boolean;
+            /** File Name */
+            file_name: string;
+            /** File Size */
+            file_size?: number | null;
+            /** Id */
+            id: string;
+            /** Uploaded At */
+            uploaded_at?: string | null;
+            /** Uploaded By */
+            uploaded_by?: string | null;
+            /**
+             * Url
+             * @default
+             */
+            url: string;
+        };
+        /** HistoricalDeviationDetail */
+        HistoricalDeviationDetail: {
+            /** Ai Extract Payload */
+            ai_extract_payload?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Attachment Count
+             * @default 0
+             */
+            attachment_count: number;
+            /** Attachments */
+            attachments?: components["schemas"]["HistoricalDeviationAttachmentOut"][];
+            /** Code */
+            code: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Deviation Content */
+            deviation_content?: string | null;
+            /** Deviation Event */
+            deviation_event?: string | null;
+            /** Direct Cause */
+            direct_cause?: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Investigation Conclusion */
+            investigation_conclusion?: string | null;
+            /** Remark */
+            remark?: string | null;
+            /** Root Cause */
+            root_cause?: string | null;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** HistoricalDeviationListItem */
+        HistoricalDeviationListItem: {
+            /**
+             * Attachment Count
+             * @default 0
+             */
+            attachment_count: number;
+            /** Code */
+            code: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Deviation Content */
+            deviation_content?: string | null;
+            /** Deviation Event */
+            deviation_event?: string | null;
+            /** Direct Cause */
+            direct_cause?: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Investigation Conclusion */
+            investigation_conclusion?: string | null;
+            /** Root Cause */
+            root_cause?: string | null;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
         /** HolidayCreate */
         HolidayCreate: {
             /**
@@ -40683,6 +41710,16 @@ export interface components {
             unmapped_notification_count: number;
             /** Valid Record Count */
             valid_record_count: number;
+        };
+        /**
+         * InspectionFeishuRecordBody
+         * @description 通用飞书记录写操作请求体（字段名 = 飞书表真实字段名）。
+         */
+        InspectionFeishuRecordBody: {
+            /** Fields */
+            fields?: {
+                [key: string]: unknown;
+            };
         };
         /**
          * InspectionRecordOut
@@ -41731,11 +42768,6 @@ export interface components {
              */
             file_name: string;
             /**
-             * File Path
-             * @description 存储路径
-             */
-            file_path: string;
-            /**
              * File Size
              * @description 文件大小（字节）
              */
@@ -41948,8 +42980,31 @@ export interface components {
             api_base_url: string;
             /** Api Key */
             api_key: string;
+            /**
+             * Compress Threshold
+             * @description 上下文压缩阈值（比例）
+             * @default 0.8
+             */
+            compress_threshold: number;
             /** Config Name */
             config_name: string;
+            /**
+             * Context Window Tokens
+             * @description 上下文窗口大小（token）
+             * @default 200000
+             */
+            context_window_tokens: number;
+            /**
+             * Custom Context
+             * @description 自定义上下文提示词（追加到系统提示词末尾）
+             */
+            custom_context?: string | null;
+            /**
+             * Enable Thinking
+             * @description 是否开启思考模式（返回 reasoning_content）
+             * @default false
+             */
+            enable_thinking: boolean;
             /**
              * Is Active
              * @default false
@@ -41959,6 +43014,12 @@ export interface components {
             model_name: string;
             /** Notes */
             notes?: string | null;
+            /**
+             * Stream Output
+             * @description 是否流式输出
+             * @default true
+             */
+            stream_output: boolean;
             /**
              * Temperature
              * @default 0.1
@@ -42022,12 +43083,20 @@ export interface components {
             api_key_masked: string;
             /** Capabilities */
             capabilities: string[];
+            /** Compress Threshold */
+            compress_threshold: number;
             /** Config Name */
             config_name: string;
             /** Config Type */
             config_type: string;
+            /** Context Window Tokens */
+            context_window_tokens: number;
             /** Created At */
             created_at: string;
+            /** Custom Context */
+            custom_context: string | null;
+            /** Enable Thinking */
+            enable_thinking: boolean;
             /** Id */
             id: string;
             /** Is Active */
@@ -42036,6 +43105,8 @@ export interface components {
             model_name: string;
             /** Notes */
             notes: string | null;
+            /** Stream Output */
+            stream_output: boolean;
             /** Temperature */
             temperature: number;
             /** Timeout Seconds */
@@ -42052,14 +43123,24 @@ export interface components {
             api_base_url?: string | null;
             /** Api Key */
             api_key?: string | null;
+            /** Compress Threshold */
+            compress_threshold?: number | null;
             /** Config Name */
             config_name?: string | null;
+            /** Context Window Tokens */
+            context_window_tokens?: number | null;
+            /** Custom Context */
+            custom_context?: string | null;
+            /** Enable Thinking */
+            enable_thinking?: boolean | null;
             /** Is Active */
             is_active?: boolean | null;
             /** Model Name */
             model_name?: string | null;
             /** Notes */
             notes?: string | null;
+            /** Stream Output */
+            stream_output?: boolean | null;
             /** Temperature */
             temperature?: number | null;
             /** Timeout Seconds */
@@ -43980,12 +45061,6 @@ export interface components {
              */
             graduation_date?: string | null;
             /**
-             * Handover Status
-             * @description 交接状态
-             * @default 待交接
-             */
-            handover_status: string;
-            /**
              * Health Status
              * @description 健康状况
              */
@@ -44129,6 +45204,12 @@ export interface components {
              */
             seq_number?: number | null;
             /**
+             * Status
+             * @description 在职状态
+             * @default 在职
+             */
+            status: string;
+            /**
              * Status Category
              * @description 统计类别
              */
@@ -44246,8 +45327,6 @@ export interface components {
             gender?: string | null;
             /** Graduation Date */
             graduation_date?: string | null;
-            /** Handover Status */
-            handover_status?: string | null;
             /** Health Status */
             health_status?: string | null;
             /** Hire Date */
@@ -44296,6 +45375,11 @@ export interface components {
             school?: string | null;
             /** Seq Number */
             seq_number?: number | null;
+            /**
+             * Status
+             * @description 在职状态
+             */
+            status?: string | null;
             /** Status Category */
             status_category?: string | null;
             /** Sub Department */
@@ -44629,65 +45713,6 @@ export interface components {
              */
             scheduled_date?: string | null;
         };
-        /** OnboardingCreate */
-        OnboardingCreate: {
-            /**
-             * Contract Term
-             * @description 合同期限
-             */
-            contract_term?: string | null;
-            /**
-             * Department
-             * @description 入职部门
-             */
-            department?: string | null;
-            /**
-             * Education Cert
-             * @description 学历证明: 已提供/未提供
-             */
-            education_cert?: string | null;
-            /**
-             * Health Status
-             * @description 体检状态: 未进行/合格/不合格
-             */
-            health_status?: string | null;
-            /**
-             * Id Card
-             * @description 身份证信息: 已提供/未提供
-             */
-            id_card?: string | null;
-            /**
-             * Level
-             * @description 岗位职级
-             */
-            level?: string | null;
-            /**
-             * Onboard Date
-             * @description 入职日期
-             */
-            onboard_date?: string | null;
-            /**
-             * Resignation Cert
-             * @description 离职证明: 已提供/未提供
-             */
-            resignation_cert?: string | null;
-            /**
-             * Salary
-             * @description 薪资信息
-             */
-            salary?: string | null;
-            /**
-             * Status
-             * @description 入职状态
-             * @default 进行中
-             */
-            status: string;
-            /**
-             * Supervisor
-             * @description 直属上级
-             */
-            supervisor?: string | null;
-        };
         /** OnboardingEvaluationInput */
         OnboardingEvaluationInput: {
             /**
@@ -44826,6 +45851,60 @@ export interface components {
              * @description 姓名（来自入职表）
              */
             name?: string | null;
+        };
+        /**
+         * OnboardingUpdate
+         * @description 更新入职信息（可选字段，未传不更新）
+         */
+        OnboardingUpdate: {
+            /**
+             * Department
+             * @description 入职部门
+             */
+            department?: string | null;
+            /**
+             * Education Attachment
+             * @description 学历证书附件
+             */
+            education_attachment?: {
+                [key: string]: unknown;
+            }[] | null;
+            /**
+             * Id Attachment
+             * @description 身份信息附件
+             */
+            id_attachment?: {
+                [key: string]: unknown;
+            }[] | null;
+            /**
+             * Level
+             * @description 岗位
+             */
+            level?: string | null;
+            /**
+             * Name
+             * @description 姓名
+             */
+            name?: string | null;
+            /**
+             * Onboard Date
+             * @description 入职日期（YYYY-MM-DD）
+             */
+            onboard_date?: string | null;
+            /**
+             * Other Attachment
+             * @description 其他附件
+             */
+            other_attachment?: {
+                [key: string]: unknown;
+            }[] | null;
+            /**
+             * Resignation Attachment
+             * @description 离职证明附件
+             */
+            resignation_attachment?: {
+                [key: string]: unknown;
+            }[] | null;
         };
         /**
          * OosOotRecordOut
@@ -49130,6 +50209,27 @@ export interface components {
              */
             revision_scope?: string | null;
         };
+        /**
+         * RegulatoryTrackerNotificationSettingUpdate
+         * @description 法规跟踪推送配置更新入参。
+         */
+        RegulatoryTrackerNotificationSettingUpdate: {
+            /**
+             * Is Enabled
+             * @description 是否启用每日自动抓取推送
+             */
+            is_enabled: boolean;
+            /**
+             * Recent Days
+             * @description 自动抓取最近天数窗口
+             */
+            recent_days: number;
+            /**
+             * Recipient Open Id
+             * @description 接收人飞书 open_id
+             */
+            recipient_open_id?: string | null;
+        };
         /** RelatedCapaRef */
         RelatedCapaRef: {
             /** Capa Code */
@@ -52182,6 +53282,106 @@ export interface components {
             user?: components["schemas"]["UserResponse"] | null;
         };
         /**
+         * TrackerLedgerDetailRead
+         * @description Regulatory tracker ledger detail payload.
+         */
+        TrackerLedgerDetailRead: {
+            /** Ai Analysis Status */
+            ai_analysis_status?: string | null;
+            /** Ai Analyzed At */
+            ai_analyzed_at?: string | null;
+            /** Ai Key Points */
+            ai_key_points?: string[] | null;
+            /** Ai Relevance Score */
+            ai_relevance_score?: number | null;
+            /** Ai Summary */
+            ai_summary?: string | null;
+            /** Capture Date */
+            capture_date?: string | null;
+            /** Effective Date */
+            effective_date?: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Is New */
+            is_new: boolean;
+            /** Publish Date */
+            publish_date?: string | null;
+            /** Source Site Name */
+            source_site_name?: string | null;
+            /** Source Url */
+            source_url?: string | null;
+            /** Summary Text */
+            summary_text?: string | null;
+            /** Title */
+            title: string;
+            /** Version Text */
+            version_text?: string | null;
+        };
+        /** TrackerLedgerDetailResponse */
+        TrackerLedgerDetailResponse: {
+            /** Code */
+            code: number;
+            data: components["schemas"]["TrackerLedgerDetailRead"] | null;
+            /** Message */
+            message: string;
+        };
+        /** TrackerLedgerItemRead */
+        TrackerLedgerItemRead: {
+            /** Ai Analysis Status */
+            ai_analysis_status?: string | null;
+            /** Ai Analyzed At */
+            ai_analyzed_at?: string | null;
+            /** Ai Summary */
+            ai_summary?: string | null;
+            /** Capture Date */
+            capture_date?: string | null;
+            /** Effective Date */
+            effective_date?: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Is New */
+            is_new: boolean;
+            /** Publish Date */
+            publish_date?: string | null;
+            /** Source Site Name */
+            source_site_name?: string | null;
+            /** Source Url */
+            source_url?: string | null;
+            /** Summary Text */
+            summary_text?: string | null;
+            /** Title */
+            title: string;
+            /** Version Text */
+            version_text?: string | null;
+        };
+        /** TrackerLedgerListResponse */
+        TrackerLedgerListResponse: {
+            /** Code */
+            code: number;
+            data: components["schemas"]["TrackerLedgerPageRead"];
+            /** Message */
+            message: string;
+        };
+        /** TrackerLedgerPageRead */
+        TrackerLedgerPageRead: {
+            /** Items */
+            items: components["schemas"]["TrackerLedgerItemRead"][];
+            /** Page */
+            page: number;
+            /** Pagesize */
+            pageSize: number;
+            /** Total */
+            total: number;
+            /** Totalpages */
+            totalPages: number;
+        };
+        /**
          * TraineeConflictItem
          * @description 参训人员冲突汇总项.
          */
@@ -53161,6 +54361,12 @@ export interface components {
              */
             involved_depts?: string | null;
             /**
+             * Is Presented
+             * @description 是否呈现（默认显示，不呈现则不进入员工培训清单）
+             * @default true
+             */
+            is_presented: boolean;
+            /**
              * Ledger Assessment Method
              * @description 考核方式
              */
@@ -53298,6 +54504,11 @@ export interface components {
             instructor?: string | null;
             /** Involved Depts */
             involved_depts?: string | null;
+            /**
+             * Is Presented
+             * @description 是否呈现
+             */
+            is_presented?: boolean | null;
             /** Ledger Assessment Method */
             ledger_assessment_method?: string | null;
             /** Ledger Department */
@@ -53406,6 +54617,11 @@ export interface components {
              * @description 培训日期
              */
             training_date: string;
+            /**
+             * Training Level
+             * @description 培训级别：公司级/部门级（五、培训要求第1条插入）
+             */
+            training_level?: string | null;
             /**
              * Training Time End
              * @description 培训结束时间
@@ -53632,6 +54848,23 @@ export interface components {
             score?: number | null;
         };
         /**
+         * TrainingSessionFromLedgerRequest
+         * @description 从培训台账记录一键创建部门级二级培训会话（带入上级试卷草稿）.
+         */
+        TrainingSessionFromLedgerRequest: {
+            /**
+             * Copy Doc Types
+             * @description 要复制的试卷类型，默认 ai_written_exam/oral_exam/practical_exam
+             */
+            copy_doc_types?: string[] | null;
+            /**
+             * Record Id
+             * Format: uuid
+             * @description 台账记录ID（部门副本）
+             */
+            record_id: string;
+        };
+        /**
          * TrainingSessionUpsert
          * @description 培训会话保存（id 存在则更新，否则新建）.
          */
@@ -53677,9 +54910,16 @@ export interface components {
         TrainingSignInSheetInput: {
             /**
              * Department
-             * @description 受训部门
+             * @description 受训部门（多部门时用、拼接）
              */
             department: string;
+            /**
+             * Employee Dept Map
+             * @description 人员姓名→所属部门（签到表数据行每人显示自己部门）
+             */
+            employee_dept_map?: {
+                [key: string]: string;
+            } | null;
             /**
              * Employee Names
              * @description 应出席受训人员姓名列表
@@ -54064,6 +55304,11 @@ export interface components {
             /** Title */
             title?: string | null;
         };
+        /** UpdateDeviationWorkbenchSettingsRequest */
+        UpdateDeviationWorkbenchSettingsRequest: {
+            /** Report System Prompt */
+            report_system_prompt: string;
+        };
         /**
          * UpdateDocumentDepartmentRequest
          * @description Update document department request.
@@ -54092,6 +55337,23 @@ export interface components {
             /** Seq No */
             seq_no?: number | null;
         };
+        /**
+         * UpdateFeishuDepartmentContactRequest
+         * @description 更新飞书多维表部门联系人整条记录的请求
+         *
+         *     人员身份来自人事管理下同步的飞书联系人（open_id）；后端负责把 open_id
+         *     解析为该多维表人员字段可用的 id 后写回。
+         */
+        UpdateFeishuDepartmentContactRequest: {
+            /** Department */
+            department?: string | null;
+            /** Department Head Open Id */
+            department_head_open_id?: string | null;
+            /** Enterprise Email */
+            enterprise_email?: string | null;
+            /** Open Id */
+            open_id?: string | null;
+        };
         /** UpdateFinishedProductInspectionRequest */
         UpdateFinishedProductInspectionRequest: {
             /** Batch No */
@@ -54114,6 +55376,21 @@ export interface components {
             specification?: string | null;
             /** Test Result */
             test_result?: string | null;
+        };
+        /** UpdateHistoricalDeviationRequest */
+        UpdateHistoricalDeviationRequest: {
+            /** Deviation Content */
+            deviation_content?: string | null;
+            /** Deviation Event */
+            deviation_event?: string | null;
+            /** Direct Cause */
+            direct_cause?: string | null;
+            /** Investigation Conclusion */
+            investigation_conclusion?: string | null;
+            /** Remark */
+            remark?: string | null;
+            /** Root Cause */
+            root_cause?: string | null;
         };
         /** UpdateHrFeishuAppSettingsRequest */
         UpdateHrFeishuAppSettingsRequest: {
@@ -67912,6 +69189,37 @@ export interface operations {
             };
         };
     };
+    list_dept_approval_config_names_api_v1_hr_dept_approval_configs_names_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     update_dept_approval_config_api_v1_hr_dept_approval_configs__config_id__put: {
         parameters: {
             query?: never;
@@ -69103,6 +70411,26 @@ export interface operations {
         parameters: {
             query?: {
                 department?: string | null;
+                /** @description 培训日期起 */
+                date_from?: string | null;
+                /** @description 培训日期止 */
+                date_to?: string | null;
+                training_name?: string | null;
+                training_method?: string | null;
+                caliber?: string | null;
+                training_type?: string | null;
+                employee_name?: string | null;
+                employee_account?: string | null;
+                location_address?: string | null;
+                employee_level?: string | null;
+                gender?: string | null;
+                apply_company?: string | null;
+                apply_company_no?: string | null;
+                remarks?: string | null;
+                age_min?: number | null;
+                age_max?: number | null;
+                duration_min?: number | null;
+                duration_max?: number | null;
                 page?: number;
                 page_size?: number;
             };
@@ -69175,6 +70503,44 @@ export interface operations {
                 /** @description 部门 */
                 department: string;
                 /** @description 培训日期起（筛选全年/月份） */
+                date_from?: string | null;
+                /** @description 培训日期止 */
+                date_to?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_esg_filter_options_api_v1_hr_esg_training_records_filter_options_get: {
+        parameters: {
+            query: {
+                /** @description 部门 */
+                department: string;
+                /** @description 培训日期起 */
                 date_from?: string | null;
                 /** @description 培训日期止 */
                 date_to?: string | null;
@@ -71359,7 +72725,7 @@ export interface operations {
             };
         };
     };
-    get_onboarding_dashboard_api_v1_hr_onboarding_dashboard_get: {
+    upload_onboarding_attachment_api_v1_hr_onboarding_attachments_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -71368,7 +72734,11 @@ export interface operations {
                 auth_token?: string | null;
             };
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_onboarding_attachment_api_v1_hr_onboarding_attachments_post"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -71504,9 +72874,76 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["OnboardingCreate"];
+                "application/json": components["schemas"]["OnboardingUpdate"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_onboarding_record_recruitment_api_v1_hr_onboarding__record_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_onboarding_attachment_content_api_v1_hr_onboarding__record_id__attachments__file_token__content_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+                file_token: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -74380,6 +75817,41 @@ export interface operations {
         requestBody: {
             content: {
                 "multipart/form-data": components["schemas"]["Body_import_practical_exam_questions_api_v1_hr_training_practical_exam_import_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_second_level_session_from_ledger_api_v1_hr_training_sessions_from_ledger_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TrainingSessionFromLedgerRequest"];
             };
         };
         responses: {
@@ -93113,6 +94585,43 @@ export interface operations {
             };
         };
     };
+    update_department_contact_from_feishu_api_v1_quality_department_contacts_feishu__record_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateFeishuDepartmentContactRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     update_department_contact_api_v1_quality_department_contacts__contact_id__put: {
         parameters: {
             query?: never;
@@ -93787,6 +95296,318 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    analyze_deviation_workbench_api_v1_quality_deviation_workbench_analyze_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateDeviationWorkbenchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_DeviationWorkbenchReportDetail_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_deviation_workbench_attachment_api_v1_quality_deviation_workbench_attachments_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_deviation_workbench_attachment_api_v1_quality_deviation_workbench_attachments_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_DeviationWorkbenchAttachmentIn_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_deviation_workbench_attachments_api_v1_quality_deviation_workbench_attachments_delete: {
+        parameters: {
+            query?: {
+                keys?: string[];
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_deviation_workbench_attachment_content_api_v1_quality_deviation_workbench_attachments__storage_key__content_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                storage_key: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_deviation_workbench_reports_api_v1_quality_deviation_workbench_reports_get: {
+        parameters: {
+            query?: {
+                /** @description 关键字（编号/偏差摘要/报告正文） */
+                keyword?: string | null;
+                /** @description 信息来源：report_record/manual */
+                source_type?: string | null;
+                /** @description 状态：processing/completed/failed */
+                status?: string | null;
+                /** @description 开始日期 YYYY-MM-DD */
+                date_from?: string | null;
+                /** @description 结束日期 YYYY-MM-DD */
+                date_to?: string | null;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_list_DeviationWorkbenchReportListItem__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_deviation_workbench_report_api_v1_quality_deviation_workbench_reports__report_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_DeviationWorkbenchReportDetail_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_deviation_workbench_report_api_v1_quality_deviation_workbench_reports__report_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_deviation_workbench_settings_api_v1_quality_deviation_workbench_settings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_DeviationWorkbenchSettingsOut_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_deviation_workbench_settings_api_v1_quality_deviation_workbench_settings_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateDeviationWorkbenchSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_DeviationWorkbenchSettingsOut_"];
                 };
             };
             /** @description Validation Error */
@@ -94578,7 +96399,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ApiResponseEnvelope_dict_str__Any__"];
+                    "application/json": components["schemas"]["ApiResponseEnvelope_BatchImportDocumentAttachmentsResult_"];
                 };
             };
             /** @description Validation Error */
@@ -96662,6 +98483,318 @@ export interface operations {
             };
         };
     };
+    list_historical_deviations_api_v1_quality_historical_deviations_get: {
+        parameters: {
+            query?: {
+                /** @description 关键字（编号/偏差事件/偏差内容/调查结论） */
+                keyword?: string | null;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_list_HistoricalDeviationListItem__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_historical_deviation_api_api_v1_quality_historical_deviations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateHistoricalDeviationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_HistoricalDeviationDetail_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_historical_deviation_api_api_v1_quality_historical_deviations__record_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_HistoricalDeviationDetail_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_historical_deviation_api_api_v1_quality_historical_deviations__record_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateHistoricalDeviationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_HistoricalDeviationDetail_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_historical_deviation_api_api_v1_quality_historical_deviations__record_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ai_extract_historical_deviation_api_api_v1_quality_historical_deviations__record_id__ai_extract_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_HistoricalDeviationDetail_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_historical_deviation_attachment_api_api_v1_quality_historical_deviations__record_id__attachments_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_historical_deviation_attachment_api_api_v1_quality_historical_deviations__record_id__attachments_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_HistoricalDeviationAttachmentOut_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_historical_deviation_attachment_api_api_v1_quality_historical_deviations__record_id__attachments__attachment_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+                attachment_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_HistoricalDeviationDetail_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_historical_deviation_attachment_content_api_api_v1_quality_historical_deviations__record_id__attachments__storage_key__content_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+                storage_key: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_legacy_inspection_dashboard_api_v1_quality_inspection_dashboard_get: {
         parameters: {
             query?: never;
@@ -97574,6 +99707,250 @@ export interface operations {
             };
             header?: never;
             path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_get_inspection_entity_fields_api_v1_quality_inspection_feishu__entity_code__fields_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_code: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_pull_inspection_feishu_records_api_v1_quality_inspection_feishu__entity_code__pull_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_code: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_create_inspection_feishu_record_api_v1_quality_inspection_feishu__entity_code__records_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_code: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InspectionFeishuRecordBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_get_inspection_feishu_record_api_v1_quality_inspection_feishu__entity_code__records__record_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_code: string;
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_update_inspection_feishu_record_api_v1_quality_inspection_feishu__entity_code__records__record_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_code: string;
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InspectionFeishuRecordBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_delete_inspection_feishu_record_api_v1_quality_inspection_feishu__entity_code__records__record_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_code: string;
+                record_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    api_get_inspection_feishu_attachment_content_api_v1_quality_inspection_feishu__entity_code__records__record_id__attachments__file_token__content_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_code: string;
+                record_id: string;
+                file_token: string;
+            };
             cookie?: {
                 auth_token?: string | null;
             };
@@ -107771,7 +110148,10 @@ export interface operations {
     };
     list_reference_substances_api_v1_registration_reference_substances__get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 返回条数上限 */
+                limit?: number;
+            };
             header?: never;
             path?: never;
             cookie?: {
@@ -108549,10 +110929,16 @@ export interface operations {
             query?: {
                 /** @description 关键词搜索 */
                 keyword?: string | null;
+                /** @description 来源网站 */
+                sourceSite?: string | null;
                 /** @description 发布日期起始 */
                 publishDateFrom?: string | null;
                 /** @description 发布日期结束 */
                 publishDateTo?: string | null;
+                /** @description 抓取日期起始 */
+                captureDateFrom?: string | null;
+                /** @description 抓取日期结束 */
+                captureDateTo?: string | null;
                 /** @description 状态筛选 */
                 statusText?: string | null;
                 /** @description 分类筛选 */
@@ -108578,7 +110964,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["TrackerLedgerListResponse"];
                 };
             };
             /** @description Validation Error */
@@ -108613,6 +110999,235 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    trigger_summary_backfill_api_v1_regulatory_documents_backfill_summaries_post: {
+        parameters: {
+            query?: {
+                /** @description 最多回填文档数量 */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_notification_recipients_api_v1_regulatory_documents_notification_recipients_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_notification_settings_api_v1_regulatory_documents_notification_settings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_notification_settings_api_v1_regulatory_documents_notification_settings_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegulatoryTrackerNotificationSettingUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    trigger_manual_sync_api_v1_regulatory_documents_sync_post: {
+        parameters: {
+            query?: {
+                /** @description 最近抓取天数窗口 */
+                recentDays?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_sync_status_api_v1_regulatory_documents_sync_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_document_detail_api_v1_regulatory_documents__doc_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrackerLedgerDetailResponse"];
                 };
             };
             /** @description Validation Error */

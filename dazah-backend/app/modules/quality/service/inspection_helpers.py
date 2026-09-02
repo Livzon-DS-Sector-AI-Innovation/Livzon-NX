@@ -30,6 +30,69 @@ def _normalize(value: Any) -> str | None:
     return feishu_sync_service._normalize_text(value)
 
 
+def _is_attachment_item(item: Any) -> bool:
+    return (
+        isinstance(item, dict)
+        and bool(item.get("name"))
+        and bool(item.get("url") or item.get("tmp_url") or item.get("file_token"))
+    )
+
+
+def _is_person_item(item: Any) -> bool:
+    return (
+        isinstance(item, dict)
+        and bool(item.get("name") or item.get("en_name") or item.get("avatar_url"))
+        and bool(item.get("id") or item.get("open_id") or item.get("avatar_url"))
+    )
+
+
+def _smart_normalize_value(value: Any) -> Any:
+    """把飞书字段值转成前端可直接渲染的结构。
+
+    附件列表 → [{name, url, file_token, type, size}]（可点击查看）
+    url/超链接 → {link, text}（可点击查看）
+    人员列表 → [{name, avatar_url, id}]（可展示头像/姓名）
+    其余 → 文本
+    """
+    if isinstance(value, list):
+        if value and all(_is_attachment_item(v) for v in value):
+            return [
+                {
+                    "name": v.get("name"),
+                    "url": v.get("url") or v.get("tmp_url") or "",
+                    "file_token": str(v.get("file_token") or ""),
+                    "type": v.get("type") or "",
+                    "size": v.get("size"),
+                }
+                for v in value
+            ]
+        if value and all(_is_person_item(v) for v in value):
+            return [
+                {
+                    "name": v.get("name") or v.get("en_name") or "",
+                    "avatar_url": v.get("avatar_url") or "",
+                    "id": str(v.get("id") or v.get("open_id") or ""),
+                }
+                for v in value
+            ]
+        return _normalize(value)
+    if isinstance(value, dict):
+        link = value.get("link")
+        if link and value.get("type") == "url":
+            return {"link": str(link), "text": str(value.get("text") or link)}
+        # 单个人员对象（如 CreatedUser 字段，飞书返回单对象而非数组）→ 人员列表结构
+        if _is_person_item(value):
+            return [
+                {
+                    "name": value.get("name") or value.get("en_name") or "",
+                    "avatar_url": value.get("avatar_url") or "",
+                    "id": str(value.get("id") or value.get("open_id") or ""),
+                }
+            ]
+        return _normalize(value)
+    return _normalize(value)
+
+
 def _parse_dt(value: Any) -> datetime | None:
     return feishu_sync_service._parse_feishu_datetime(value)
 
@@ -87,7 +150,7 @@ def _base_map(
         "updated_at": _dt_iso(modified_at or created_at),
     }
     for name in field_names:
-        result[name] = _normalize(_field(fields, entity, name))
+        result[name] = _smart_normalize_value(_field(fields, entity, name))
     return result
 
 

@@ -2,18 +2,18 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
-import re
+import os
 import uuid
-from datetime import date, datetime
+from datetime import datetime
 from typing import Any
 from urllib.parse import quote
 
 from fastapi import APIRouter, Body, Depends, File, Query, UploadFile
 from fastapi.responses import Response
-from sqlalchemy import func, literal, or_, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.sql.elements import ColumnElement
 
 from app.core.database import get_db
 from app.core.deps import CurrentUser
@@ -24,13 +24,23 @@ from app.core.upload_security import (
     sniff_upload_mime,
     validate_upload_metadata,
 )
-from app.modules.quality.api.deps import require_user as _require_user
+from app.modules.quality.api.deps import (
+    assert_quality_edit_scope as _assert_quality_edit_scope,
+)
+from app.modules.quality.api.deps import (
+    require_user as _require_user,
+)
+from app.modules.quality.api.deps import (
+    resolve_quality_list_scope as _resolve_quality_list_scope,
+)
 from app.modules.quality.api.uploads import read_upload_with_limit
 from app.modules.quality.models.document_catalog import (
     DocumentDepartment,
     DocumentEntry,
 )
 from app.modules.quality.schemas.document_catalog import (
+    BatchImportAttachmentResultItem,
+    BatchImportDocumentAttachmentsResult,
     CreateDocumentDepartmentRequest,
     CreateDocumentEntryRequest,
     DocumentDepartmentOut,
@@ -43,12 +53,14 @@ from app.modules.quality.schemas.document_catalog import (
     UpdateDocumentDepartmentRequest,
     UpdateDocumentEntryRequest,
 )
+from app.modules.quality.service import document_catalog_crud as crud
 from app.modules.quality.service.document_catalog import import_document_catalog
 from app.modules.quality.service.document_catalog_attachment import (
     delete_attachment_from_entry,
     find_entry_by_file_name,
     read_attachment_preview,
     read_entry_md_contents,
+    sync_entry_version,
     upload_attachment_to_entry,
 )
 from app.modules.quality.service.document_catalog_export import (
@@ -65,6 +77,7 @@ DOCUMENT_CATALOG_EXTENSIONS = {
     ".md",
     ".doc",
     ".docx",
+    ".wps",
     ".pdf",
     ".png",
     ".jpg",
@@ -74,8 +87,12 @@ DOCUMENT_CATALOG_EXTENSIONS = {
 }
 DOCUMENT_CATALOG_MIMES = {
     "text/markdown",
+    # .md 文件内容嗅探结果为 text/plain，缺少该值会导致 md 导入被内容校验拒绝
+    "text/plain",
     "application/msword",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.ms-works",
+    "application/kswps",
     "application/pdf",
     "image/png",
     "image/jpeg",
@@ -99,34 +116,15 @@ async def list_document_departments(
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
-    try:
-        result = await db.execute(
-            select(DocumentDepartment)
-            .where(DocumentDepartment.is_deleted.is_(False))
-            .order_by(
-                DocumentDepartment.sort_order.asc(), DocumentDepartment.name.asc()
-            )
+    departments, counts = await crud.list_document_departments(db)
+    data = []
+    for department in departments:
+        item = DocumentDepartmentOut.model_validate(department).model_dump(
+            mode="json"
         )
-        departments = result.scalars().all()
-
-        count_result = await db.execute(
-            select(DocumentEntry.department_id, func.count(DocumentEntry.id))
-            .where(DocumentEntry.is_deleted.is_(False))
-            .group_by(DocumentEntry.department_id)
-        )
-        counts = {row[0]: row[1] for row in count_result.all()}
-
-        data = []
-        for department in departments:
-            item = DocumentDepartmentOut.model_validate(department).model_dump(
-                mode="json"
-            )
-            item["document_count"] = counts.get(department.id, 0)
-            data.append(item)
-        return success_response(data=data)
-    except Exception:
-        logger.exception("Failed to list document departments")
-        return error_response(message="操作失败，请稍后重试", status_code=500)
+        item["document_count"] = counts.get(department.id, 0)
+        data.append(item)
+    return success_response(data=data)
 
 
 @router.post(
@@ -140,42 +138,13 @@ async def create_document_department(
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
-    try:
-        name = data.name.strip()
-        result = await db.execute(
-            select(DocumentDepartment).where(DocumentDepartment.name == name)
-        )
-        existing = result.scalar_one_or_none()
-        if existing is not None:
-            if not existing.is_deleted:
-                return error_response(message="该部门已存在", status_code=400)
-            # 复活已软删除的同名部门
-            existing.is_deleted = False
-            existing.sort_order = data.sort_order
-            await db.flush()
-            result = await db.execute(
-                select(DocumentDepartment).where(DocumentDepartment.id == existing.id)
-            )
-            existing = result.scalar_one()
-            return success_response(
-                data=DocumentDepartmentOut.model_validate(existing).model_dump(
-                    mode="json"
-                ),
-                message="创建成功",
-            )
-
-        department = DocumentDepartment(name=name, sort_order=data.sort_order)
-        db.add(department)
-        await db.flush()
-        return success_response(
-            data=DocumentDepartmentOut.model_validate(department).model_dump(
-                mode="json"
-            ),
-            message="创建成功",
-        )
-    except Exception:
-        logger.exception("Failed to create document department")
-        return error_response(message="请求处理失败，请检查输入后重试", status_code=400)
+    department = await crud.create_document_department(db, data.name, data.sort_order)
+    return success_response(
+        data=DocumentDepartmentOut.model_validate(department).model_dump(
+            mode="json"
+        ),
+        message="创建成功",
+    )
 
 
 @router.put(
@@ -190,47 +159,15 @@ async def update_document_department(
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
-    try:
-        result = await db.execute(
-            select(DocumentDepartment).where(
-                DocumentDepartment.id == department_id,
-                DocumentDepartment.is_deleted.is_(False),
-            )
-        )
-        department = result.scalar_one_or_none()
-        if department is None:
-            return error_response(message="部门不存在", status_code=404)
-
-        update_data = data.model_dump(exclude_unset=True)
-        if "name" in update_data:
-            new_name = update_data["name"].strip()
-            dup_result = await db.execute(
-                select(DocumentDepartment).where(
-                    DocumentDepartment.name == new_name,
-                    DocumentDepartment.id != department_id,
-                )
-            )
-            if dup_result.scalar_one_or_none() is not None:
-                return error_response(message="该部门名称已存在", status_code=400)
-            update_data["name"] = new_name
-
-        for key, value in update_data.items():
-            setattr(department, key, value)
-
-        await db.flush()
-        result = await db.execute(
-            select(DocumentDepartment).where(DocumentDepartment.id == department.id)
-        )
-        department = result.scalar_one()
-        return success_response(
-            data=DocumentDepartmentOut.model_validate(department).model_dump(
-                mode="json"
-            ),
-            message="更新成功",
-        )
-    except Exception:
-        logger.exception("Failed to update document department")
-        return error_response(message="请求处理失败，请检查输入后重试", status_code=400)
+    department = await crud.get_document_department(db, department_id)
+    await _assert_quality_edit_scope(db, current_user, record=department)
+    updated = await crud.update_document_department(
+        db, department, data.model_dump(exclude_unset=True)
+    )
+    return success_response(
+        data=DocumentDepartmentOut.model_validate(updated).model_dump(mode="json"),
+        message="更新成功",
+    )
 
 
 @router.delete(
@@ -244,32 +181,10 @@ async def delete_document_department(
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
-    try:
-        result = await db.execute(
-            select(DocumentDepartment).where(
-                DocumentDepartment.id == department_id,
-                DocumentDepartment.is_deleted.is_(False),
-            )
-        )
-        department = result.scalar_one_or_none()
-        if department is None:
-            return error_response(message="部门不存在", status_code=404)
-
-        department.is_deleted = True
-        entry_result = await db.execute(
-            select(DocumentEntry).where(
-                DocumentEntry.department_id == department_id,
-                DocumentEntry.is_deleted.is_(False),
-            )
-        )
-        for entry in entry_result.scalars().all():
-            entry.is_deleted = True
-
-        await db.flush()
-        return success_response(message="已删除")
-    except Exception:
-        logger.exception("Failed to delete document department")
-        return error_response(message="操作失败，请稍后重试", status_code=500)
+    department = await crud.get_document_department(db, department_id)
+    await _assert_quality_edit_scope(db, current_user, record=department)
+    await crud.delete_document_department(db, department)
+    return success_response(message="已删除")
 
 
 @router.get(
@@ -290,86 +205,13 @@ async def lookup_latest_document_entry(
     core = (name or "").strip()
     if not core:
         return success_response(data=None)
-    base = select(DocumentEntry).where(DocumentEntry.is_deleted.is_(False))
-
-    rows = (await db.execute(base.where(DocumentEntry.name == core))).scalars().all()
-    if not rows:
-        rows = (
-            (
-                await db.execute(
-                    base.where(DocumentEntry.name.ilike(f"%{_escape_like(core)}%"))
-                )
-            )
-            .scalars()
-            .all()
-        )
-    if not rows:
-        rows = (
-            (
-                await db.execute(
-                    base.where(func.strpos(literal(core), DocumentEntry.name) > 0)
-                )
-            )
-            .scalars()
-            .all()
-        )
-    if not rows:
+    entry = await crud.find_latest_entry_by_name(db, core)
+    if entry is None:
         return success_response(data=None)
-
-    def sort_key(entry: DocumentEntry) -> Any:
-        m = re.search(r"/(\d+)$", (entry.code or "").strip())
-        rev = int(m.group(1)) if m else -1
-        return (
-            rev,
-            entry.effective_date or date.min,
-            entry.updated_at or datetime.min,
-        )
-
-    best = max(rows, key=sort_key)
     return success_response(
-        data=DocumentEntryLookupOut.model_validate(best).model_dump(mode="json")
+        data=DocumentEntryLookupOut.model_validate(entry).model_dump(mode="json")
     )
 
-
-async def _find_latest_entry_by_name(
-    db: AsyncSession, core: str
-) -> DocumentEntry | None:
-    "按文件名称查找最新版条目（与 lookup-latest 相同匹配策略：精确→模糊→反向包含）。"
-    base = select(DocumentEntry).where(DocumentEntry.is_deleted.is_(False))
-    rows = (await db.execute(base.where(DocumentEntry.name == core))).scalars().all()
-    if not rows:
-        rows = (
-            (
-                await db.execute(
-                    base.where(DocumentEntry.name.ilike(f"%{_escape_like(core)}%"))
-                )
-            )
-            .scalars()
-            .all()
-        )
-    if not rows:
-        rows = (
-            (
-                await db.execute(
-                    base.where(func.strpos(literal(core), DocumentEntry.name) > 0)
-                )
-            )
-            .scalars()
-            .all()
-        )
-    if not rows:
-        return None
-
-    def sort_key(entry: DocumentEntry) -> Any:
-        m = re.search(r"/(\d+)$", (entry.code or "").strip())
-        rev = int(m.group(1)) if m else -1
-        return (
-            rev,
-            entry.effective_date or date.min,
-            entry.updated_at or datetime.min,
-        )
-
-    return max(rows, key=sort_key)
 
 
 @router.post(
@@ -392,7 +234,7 @@ async def resolve_document_entry_content(
         core = (name or "").strip()
         item = DocumentEntryResolveItem(name=core)
         if core:
-            entry = await _find_latest_entry_by_name(db, core)
+            entry = await crud.find_latest_entry_by_name(db, core)
             if entry is not None:
                 item.code = entry.code
                 item.entry_id = entry.id
@@ -420,10 +262,9 @@ async def list_document_entries(
 ) -> Any:
     _require_user(current_user)
     assert current_user is not None
-    from app.platform.identity.data_scope import resolve_user_department_scope
 
-    # 部门数据隔离：部门名范围 → 文档部门目录 id 集合 → 条目过滤
-    scope = await resolve_user_department_scope(db, current_user)
+    # 部门数据隔离：QA 角色全部可见，否则按部门名范围 → 文档部门目录 id 集合过滤
+    scope = await _resolve_quality_list_scope(db, current_user)
     scope_dept_ids: list[str] | None = None
     if not scope.is_all and scope.department_names:
         dept_result = await db.execute(
@@ -436,73 +277,23 @@ async def list_document_entries(
         if not scope_dept_ids:
             # 无可见部门目录：置不可能匹配的 id 保证空结果
             scope_dept_ids = ["00000000-0000-0000-0000-000000000000"]
-    try:
-        base_query = select(DocumentEntry).where(DocumentEntry.is_deleted.is_(False))
-        count_query = (
-            select(func.count())
-            .select_from(DocumentEntry)
-            .where(DocumentEntry.is_deleted.is_(False))
-        )
-
-        if scope_dept_ids is not None:
-            base_query = base_query.where(
-                DocumentEntry.department_id.in_(scope_dept_ids)
-            )
-            count_query = count_query.where(
-                DocumentEntry.department_id.in_(scope_dept_ids)
-            )
-
-        if department_id is not None:
-            base_query = base_query.where(DocumentEntry.department_id == department_id)
-            count_query = count_query.where(
-                DocumentEntry.department_id == department_id
-            )
-
-        if keyword:
-            pattern = f"%{_escape_like(keyword)}%"
-            filters = or_(
-                DocumentEntry.name.ilike(pattern),
-                DocumentEntry.code.ilike(pattern),
-            )
-            base_query = base_query.where(filters)
-            count_query = count_query.where(filters)
-
-        total_result = await db.execute(count_query)
-        total = total_result.scalar() or 0
-
-        if department_id is None:
-            base_query = base_query.join(
-                DocumentDepartment,
-                DocumentEntry.department_id == DocumentDepartment.id,
-            )
-            order_by: list[ColumnElement[Any]] = [
-                DocumentDepartment.sort_order.asc(),
-                DocumentEntry.seq_no.asc().nulls_last(),
-                DocumentEntry.created_at.asc(),
-            ]
-        else:
-            order_by = [
-                DocumentEntry.seq_no.asc().nulls_last(),
-                DocumentEntry.created_at.asc(),
-            ]
-
-        offset = (page - 1) * page_size
-        result = await db.execute(
-            base_query.order_by(*order_by).offset(offset).limit(page_size)
-        )
-        items = result.scalars().all()
-        return paginated_response(
-            data=[
-                DocumentEntryOut.model_validate(item).model_dump(mode="json")
-                for item in items
-            ],
-            page=page,
-            page_size=page_size,
-            total=total,
-        )
-    except Exception:
-        logger.exception("Failed to list document entries")
-        return error_response(message="操作失败，请稍后重试", status_code=500)
+    items, total = await crud.list_document_entries(
+        db,
+        department_id=department_id,
+        keyword=keyword,
+        page=page,
+        page_size=page_size,
+        scope_dept_ids=scope_dept_ids,
+    )
+    return paginated_response(
+        data=[
+            DocumentEntryOut.model_validate(item).model_dump(mode="json")
+            for item in items
+        ],
+        page=page,
+        page_size=page_size,
+        total=total,
+    )
 
 
 @router.post(
@@ -516,30 +307,11 @@ async def create_document_entry(
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
-    try:
-        dept_result = await db.execute(
-            select(DocumentDepartment).where(
-                DocumentDepartment.id == data.department_id,
-                DocumentDepartment.is_deleted.is_(False),
-            )
-        )
-        if dept_result.scalar_one_or_none() is None:
-            return error_response(message="部门不存在", status_code=404)
-
-        entry = DocumentEntry(**data.model_dump())
-        db.add(entry)
-        await db.flush()
-        result = await db.execute(
-            select(DocumentEntry).where(DocumentEntry.id == entry.id)
-        )
-        entry = result.scalar_one()
-        return success_response(
-            data=DocumentEntryOut.model_validate(entry).model_dump(mode="json"),
-            message="创建成功",
-        )
-    except Exception:
-        logger.exception("Failed to create document entry")
-        return error_response(message="请求处理失败，请检查输入后重试", status_code=400)
+    entry = await crud.create_document_entry(db, data.model_dump())
+    return success_response(
+        data=DocumentEntryOut.model_validate(entry).model_dump(mode="json"),
+        message="创建成功",
+    )
 
 
 @router.put(
@@ -554,43 +326,15 @@ async def update_document_entry(
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
-    try:
-        result = await db.execute(
-            select(DocumentEntry).where(
-                DocumentEntry.id == entry_id,
-                DocumentEntry.is_deleted.is_(False),
-            )
-        )
-        entry = result.scalar_one_or_none()
-        if entry is None:
-            return error_response(message="条目不存在", status_code=404)
-
-        update_data = data.model_dump(exclude_unset=True)
-        if "department_id" in update_data:
-            dept_result = await db.execute(
-                select(DocumentDepartment).where(
-                    DocumentDepartment.id == update_data["department_id"],
-                    DocumentDepartment.is_deleted.is_(False),
-                )
-            )
-            if dept_result.scalar_one_or_none() is None:
-                return error_response(message="部门不存在", status_code=404)
-
-        for key, value in update_data.items():
-            setattr(entry, key, value)
-
-        await db.flush()
-        result = await db.execute(
-            select(DocumentEntry).where(DocumentEntry.id == entry.id)
-        )
-        entry = result.scalar_one()
-        return success_response(
-            data=DocumentEntryOut.model_validate(entry).model_dump(mode="json"),
-            message="更新成功",
-        )
-    except Exception:
-        logger.exception("Failed to update document entry")
-        return error_response(message="请求处理失败，请检查输入后重试", status_code=400)
+    entry = await crud.get_document_entry(db, entry_id)
+    await _assert_quality_edit_scope(db, current_user, record=entry)
+    updated = await crud.update_document_entry(
+        db, entry, data.model_dump(exclude_unset=True)
+    )
+    return success_response(
+        data=DocumentEntryOut.model_validate(updated).model_dump(mode="json"),
+        message="更新成功",
+    )
 
 
 @router.delete(
@@ -604,23 +348,10 @@ async def delete_document_entry(
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
-    try:
-        result = await db.execute(
-            select(DocumentEntry).where(
-                DocumentEntry.id == entry_id,
-                DocumentEntry.is_deleted.is_(False),
-            )
-        )
-        entry = result.scalar_one_or_none()
-        if entry is None:
-            return error_response(message="条目不存在", status_code=404)
-
-        entry.is_deleted = True
-        await db.flush()
-        return success_response(message="已删除")
-    except Exception:
-        logger.exception("Failed to delete document entry")
-        return error_response(message="操作失败，请稍后重试", status_code=500)
+    entry = await crud.get_document_entry(db, entry_id)
+    await _assert_quality_edit_scope(db, current_user, record=entry)
+    await crud.delete_document_entry(db, entry)
+    return success_response(message="已删除")
 
 
 @router.post(
@@ -715,25 +446,32 @@ async def export_document_catalog(
 
 @router.post(
     "/document-catalog/attachments/import",
-    summary="统一导入附件（自动识别名称/编号绑定条目，失败时 LLM 匹配）",
-    response_model=ApiResponseEnvelope[dict[str, Any]],
+    summary="统一导入附件（自动识别名称/编号绑定条目，失败时 LLM 匹配；"
+    "文件名版本高于条目时自动升级文件编码）",
+    response_model=ApiResponseEnvelope[BatchImportDocumentAttachmentsResult],
 )
 async def batch_import_document_attachments(
     files: list[UploadFile] = File(
-        ..., description="附件文件列表（.doc/.docx/.pdf/图片/.md）"
+        ..., description="附件文件列表（.doc/.docx/.wps/.pdf/图片/.md）"
     ),
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
     from app.modules.quality.service.document_catalog_attachment import (
+        WORD_EXT,
+        extract_content_identity,
         match_entry_for_attachment,
         upload_attachment_to_entry,
     )
+    from app.modules.quality.service.document_catalog_md import (
+        convert_word_attachment,
+    )
 
-    results: list[dict[str, Any]] = []
+    results: list[BatchImportAttachmentResultItem] = []
     bound = 0
     failed = 0
+    version_updated_count = 0
     try:
         if len(files) > MAX_UPLOAD_FILES:
             raise AppException(
@@ -745,20 +483,6 @@ async def batch_import_document_attachments(
                 allowed_extensions=DOCUMENT_CATALOG_EXTENSIONS,
                 allowed_mimes=DOCUMENT_CATALOG_MIMES,
             )
-            entry, match_type = await match_entry_for_attachment(db, file_name)
-            if entry is None:
-                failed += 1
-                results.append(
-                    {
-                        "file_name": file_name,
-                        "matched": False,
-                        "match_type": "none",
-                        "entry_id": None,
-                        "entry_name": None,
-                        "entry_code": None,
-                    }
-                )
-                continue
             content = await read_upload_with_limit(
                 file,
                 IMPORT_MAX_SIZE,
@@ -766,6 +490,31 @@ async def batch_import_document_attachments(
                 allowed_extensions=DOCUMENT_CATALOG_EXTENSIONS,
                 allowed_mimes=DOCUMENT_CATALOG_MIMES,
             )
+            # word/md 先行转换：正文身份（编号/标题）参与匹配，转换结果复用避免二次转换
+            content_identity: tuple[str | None, str | None] | None = None
+            prepared = None
+            ext = os.path.splitext(file_name)[1].lower()
+            if ext in WORD_EXT:
+                try:
+                    prepared = await asyncio.to_thread(
+                        convert_word_attachment, file_name, content
+                    )
+                    content_identity = extract_content_identity(prepared[0])
+                except Exception:  # noqa: BLE001 转换失败仍按文件名匹配并原样存储
+                    prepared = None
+                    content_identity = None
+            elif ext == ".md":
+                content_identity = extract_content_identity(
+                    content.decode("utf-8", errors="replace")
+                )
+
+            entry, match_type = await match_entry_for_attachment(
+                db, file_name, content_identity
+            )
+            if entry is None:
+                failed += 1
+                results.append(BatchImportAttachmentResultItem(file_name=file_name))
+                continue
             await upload_attachment_to_entry(
                 db,
                 entry,
@@ -773,20 +522,40 @@ async def batch_import_document_attachments(
                 content,
                 sniff_upload_mime(file_name, content),
                 str(_require_user(current_user)),
+                prepared=prepared,
             )
             bound += 1
+            version_update = sync_entry_version(
+                entry,
+                file_name,
+                rev_source=(
+                    content_identity[0]
+                    if match_type == "content" and content_identity
+                    else None
+                ),
+            )
+            if version_update is not None:
+                version_updated_count += 1
             results.append(
-                {
-                    "file_name": file_name,
-                    "matched": True,
-                    "match_type": match_type,
-                    "entry_id": entry.id,
-                    "entry_name": entry.name,
-                    "entry_code": entry.code,
-                }
+                BatchImportAttachmentResultItem(
+                    file_name=file_name,
+                    matched=True,
+                    match_type=match_type,
+                    entry_id=entry.id,
+                    entry_name=entry.name,
+                    entry_code=entry.code,
+                    version_updated=version_update is not None,
+                    old_code=version_update.old_code if version_update else None,
+                    new_code=version_update.new_code if version_update else None,
+                )
             )
         return success_response(
-            data={"bound": bound, "failed": failed, "results": results},
+            data=BatchImportDocumentAttachmentsResult(
+                bound=bound,
+                failed=failed,
+                version_updated_count=version_updated_count,
+                results=results,
+            ),
             message=f"附件导入完成：成功 {bound} 个，未匹配 {failed} 个",
         )
     except AppException:

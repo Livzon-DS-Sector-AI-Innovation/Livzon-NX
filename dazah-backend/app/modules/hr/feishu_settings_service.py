@@ -7,6 +7,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.core.exceptions import AppException
 from app.core.llm import decrypt_api_key, encrypt_api_key, mask_api_key
 from app.modules.hr.models import HrFeishuAppSettings, HrFeishuEntitySetting
 from app.modules.hr.schemas import (
@@ -290,18 +291,31 @@ def _build_system_fields(entity_code: str) -> list[HrFeishuSystemFieldOption]:
 # ─── Core service functions ───
 
 
+class HrFeishuNotConfigured(AppException):
+    """人事飞书应用未配置（严格独立：不回退平台全局凭证）。"""
+
+    def __init__(self, message: str | None = None) -> None:
+        super().__init__(
+            status_code=503,
+            message=message
+            or "人事飞书应用未配置，请先在人事-飞书设置中填写 App ID 与 App Secret",
+        )
+
+
 async def _ensure_app_settings_seeded(db: AsyncSession) -> HrFeishuAppSettings:
-    """Ensure the singleton app settings row exists, seeding from env vars."""
+    """Ensure the singleton app settings row exists.
+
+    严格独立：只保证行存在，不再从平台全局环境变量播种凭证；
+    凭证一律由用户在人事-飞书设置页填写。
+    """
     result = await db.execute(select(HrFeishuAppSettings).limit(1))
     row = result.scalar_one_or_none()
     if row:
         return row
 
     row = HrFeishuAppSettings(
-        app_id=_settings.FEISHU_APP_ID or "",
-        app_secret=encrypt_api_key(_settings.FEISHU_APP_SECRET)
-        if _settings.FEISHU_APP_SECRET
-        else "",
+        app_id="",
+        app_secret="",
         is_enabled=True,
     )
     db.add(row)
@@ -312,15 +326,15 @@ async def _ensure_app_settings_seeded(db: AsyncSession) -> HrFeishuAppSettings:
 async def get_hr_feishu_app_credentials(db: AsyncSession) -> tuple[str, str]:
     """Return ``(app_id, decrypted_app_secret)`` from the HR Feishu app settings DB row.
 
-    Falls back to environment variables when the DB row is missing or empty,
-    so callers without DB config still work in pure-env-var deployments.
+    严格独立：只读人事自己的 DB 配置；缺失/未启用/解密失败时抛 HrFeishuNotConfigured，
+    绝不回退平台全局环境变量（平台应用只用于登录）。
     """
     result = await db.execute(select(HrFeishuAppSettings).limit(1))
     row = result.scalar_one_or_none()
 
     app_id = ""
     app_secret = ""
-    if row:
+    if row and row.is_enabled:
         app_id = row.app_id or ""
         if row.app_secret:
             try:
@@ -328,13 +342,17 @@ async def get_hr_feishu_app_credentials(db: AsyncSession) -> tuple[str, str]:
             except Exception:
                 logger.warning("Failed to decrypt HR Feishu app_secret", exc_info=True)
 
-    # Fall back to env vars
-    if not app_id:
-        app_id = _settings.FEISHU_APP_ID or ""
-    if not app_secret:
-        app_secret = _settings.FEISHU_APP_SECRET or ""
-
+    if not app_id or not app_secret:
+        raise HrFeishuNotConfigured()
     return app_id, app_secret
+
+
+async def try_get_hr_feishu_app_credentials(db: AsyncSession) -> tuple[str, str] | None:
+    """同 get_hr_feishu_app_credentials，但未配置时返回 None（供后台任务跳过）。"""
+    try:
+        return await get_hr_feishu_app_credentials(db)
+    except AppException:
+        return None
 
 
 async def ensure_hr_feishu_entity_settings(db: AsyncSession) -> None:
@@ -505,15 +523,8 @@ async def list_hr_feishu_tables(
     db: AsyncSession, entity_code: str, app_token: str | None = None
 ) -> list[HrFeishuTableOption]:
     """List tables in the bitable app for the given entity."""
-    # Resolve app credentials
-    app_settings = await _ensure_app_settings_seeded(db)
-    app_id = app_settings.app_id
-    try:
-        app_secret = (
-            decrypt_api_key(app_settings.app_secret) if app_settings.app_secret else ""
-        )
-    except Exception:
-        app_secret = ""
+    # Resolve app credentials（严格独立：未配置时抛 HrFeishuNotConfigured）
+    app_id, app_secret = await get_hr_feishu_app_credentials(db)
 
     # Resolve app_token: use provided > entity config > env prefill
     resolved_app_token = app_token
@@ -583,16 +594,7 @@ async def get_hr_feishu_entity_field_mapping_bundle(
     # Feishu fields (fetch from API if possible)
     feishu_fields: list[HrFeishuFieldOption] = []
     if resolved_app_token and resolved_table_id:
-        app_settings = await _ensure_app_settings_seeded(db)
-        app_id = app_settings.app_id
-        try:
-            app_secret = (
-                decrypt_api_key(app_settings.app_secret)
-                if app_settings.app_secret
-                else ""
-            )
-        except Exception:
-            app_secret = ""
+        app_id, app_secret = await get_hr_feishu_app_credentials(db)
         try:
             client = BitableClient(
                 app_token=resolved_app_token,
@@ -666,15 +668,8 @@ async def test_hr_feishu_entity_setting(
 
     now = datetime.now(UTC)
 
-    # Resolve credentials
-    app_settings = await _ensure_app_settings_seeded(db)
-    app_id = app_settings.app_id
-    try:
-        app_secret = (
-            decrypt_api_key(app_settings.app_secret) if app_settings.app_secret else ""
-        )
-    except Exception:
-        app_secret = ""
+    # Resolve credentials（严格独立：未配置时抛 HrFeishuNotConfigured）
+    app_id, app_secret = await get_hr_feishu_app_credentials(db)
 
     app_token = row.app_token
     table_id = row.base_table_id

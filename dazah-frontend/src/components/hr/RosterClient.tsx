@@ -6,6 +6,7 @@ import { SearchOutlined, CheckCircleFilled } from '@ant-design/icons'
 import { Employee } from '@/types/hr'
 import { fetchEmployeesAction } from '@/actions/hr'
 import FeishuSyncPanel from './FeishuSyncPanel'
+import { maskBankAccount, maskIdCard, maskPhone } from '@/lib/mask'
 
 interface RosterClientProps {
   initialEmployees: Employee[]
@@ -196,6 +197,7 @@ export default function RosterClient({
       dataIndex: 'phone',
       key: 'phone',
       width: 130,
+      render: (v: string) => maskPhone(v),
     },
     {
       title: '邮箱',
@@ -208,6 +210,7 @@ export default function RosterClient({
       dataIndex: 'id_card',
       key: 'id_card',
       width: 170,
+      render: (v: string) => maskIdCard(v),
     },
     {
       title: '入职日期',
@@ -256,6 +259,7 @@ export default function RosterClient({
       dataIndex: 'bank_account',
       key: 'bank_account',
       width: 170,
+      render: (v: string) => maskBankAccount(v),
     },
     {
       title: '培训档案编号',

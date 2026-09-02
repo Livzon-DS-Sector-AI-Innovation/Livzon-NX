@@ -41,9 +41,9 @@ export default function OffboardingDetailDrawer({ open, record, onClose }: Offbo
           <Tag>{record.offboarding_type}</Tag>
         </Descriptions.Item>
         <Descriptions.Item label="离职原因" span={2}>{record.reason || '-'}</Descriptions.Item>
-        <Descriptions.Item label="交接状态" span={2}>
-          <Tag color={record.handover_status === '已完成' ? 'success' : record.handover_status === '交接中' ? 'processing' : 'warning'}>
-            {record.handover_status}
+        <Descriptions.Item label="在职状态">
+          <Tag color={record.status === '离职' ? 'red' : record.status === '在职' ? 'green' : 'default'}>
+            {record.status || '-'}
           </Tag>
         </Descriptions.Item>
       </Descriptions>

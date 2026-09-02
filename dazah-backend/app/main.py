@@ -26,10 +26,6 @@ from app.core.llm import (
     LLMRateLimitError,
 )
 from app.core.response import error_response
-from app.modules.regulatory_tracker.tasks.sync_tasks import (
-    start_scheduler,
-    stop_scheduler,
-)
 from app.platform.audit import AuditMiddleware
 
 settings = get_settings()
@@ -116,7 +112,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         stop_member_sync_flag,
     )
 
-    start_scheduler()
     maintenance_plan_task = asyncio.ensure_future(maintenance_plan_loop())
     timeout_task = asyncio.ensure_future(timeout_scan_loop())
     member_task = asyncio.ensure_future(member_sync_loop())
@@ -151,6 +146,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     from app.modules.safety.feishu.event_client import start_ws, stop_ws
 
     safety_ws_task = asyncio.create_task(start_ws())
+
+    # ── 人事模块专属飞书长连接（合同/岗位调动审批卡片回调）──
+    try:
+        from app.modules.hr.feishu.ws_client import start_hr_ws_if_configured
+
+        await start_hr_ws_if_configured()
+    except Exception:
+        logger.exception("人事飞书长连接启动失败（不阻断启动）")
 
     # ── 安全模块定时任务调度引擎 ──
     from app.modules.safety.scheduler import (
@@ -208,10 +211,36 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     scheduler_registry.register_generator(ResumeFolderScanner())
     scheduler_registry.register_generator(MailFetchScanner())
 
+    # ── 法规跟踪三阶段流水线（00:10 抓取 / 02:00 AI 分析 / 10:00 推送） ──
     try:
-        from app.modules.warehouse.scheduled import warehouse_sync_task
+        from app.modules.regulatory_tracker.scheduled import (
+            RegulatoryTrackerDailyAnalysisGenerator,
+            RegulatoryTrackerDailyNotifyGenerator,
+            RegulatoryTrackerNightlySyncGenerator,
+        )
+
+        scheduler_registry.register_generator(
+            RegulatoryTrackerNightlySyncGenerator()
+        )
+        scheduler_registry.register_generator(
+            RegulatoryTrackerDailyAnalysisGenerator()
+        )
+        scheduler_registry.register_generator(
+            RegulatoryTrackerDailyNotifyGenerator()
+        )
+    except Exception:
+        logger.exception(
+            "Regulatory tracker scheduled generators could not register (non-fatal)"
+        )
+
+    try:
+        from app.modules.warehouse.scheduled import (
+            warehouse_full_sync_task,
+            warehouse_sync_task,
+        )
 
         scheduler_registry.register_task(warehouse_sync_task)
+        scheduler_registry.register_task(warehouse_full_sync_task)
     except Exception:
         logger.exception("Warehouse scheduled sync could not register (non-fatal)")
 
@@ -232,7 +261,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     yield
 
-    stop_scheduler()
     stop_maintenance_plan_flag.set()
     stop_timeout_flag.set()
     stop_member_sync_flag.set()
@@ -262,6 +290,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     from app.modules.warehouse.ws_client import stop_ws as stop_warehouse_ws
 
     await stop_warehouse_ws()
+
+    # 停止人事模块飞书长连接
+    try:
+        from app.modules.hr.feishu.ws_client import stop_hr_ws
+
+        stop_hr_ws()
+    except Exception:
+        logger.exception("人事飞书长连接停止失败")
 
     # ── 停止生产模块飞书同步调度器 ──
     from app.modules.production.mc_feishu_sheets_sync import stop_mc_sync_scheduler

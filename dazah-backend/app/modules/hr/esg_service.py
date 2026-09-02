@@ -1,5 +1,6 @@
 """ESG 培训报表 Service."""
 
+from datetime import date
 from typing import Any
 from uuid import UUID
 
@@ -8,7 +9,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import NotFoundException
 from app.modules.hr.esg_repository import EsgTrainingRecordRepository
 from app.modules.hr.models import EsgTrainingRecord
-from app.modules.hr.schemas import EsgTrainingRecordCreate, EsgTrainingRecordUpdate
+from app.modules.hr.schemas import (
+    EsgListFilters,
+    EsgTrainingRecordCreate,
+    EsgTrainingRecordUpdate,
+)
 
 
 class EsgTrainingRecordService:
@@ -44,9 +49,27 @@ class EsgTrainingRecordService:
         department: str,
         page: int = 1,
         page_size: int = 200,
+        date_from: date | None = None,
+        date_to: date | None = None,
+        filters: EsgListFilters | None = None,
     ) -> tuple[list[EsgTrainingRecord], int]:
         return await self.repo.list_by_department(
-            department=department, page=page, page_size=page_size
+            department=department,
+            page=page,
+            page_size=page_size,
+            date_from=date_from,
+            date_to=date_to,
+            filters=filters,
+        )
+
+    async def filter_options(
+        self,
+        department: str,
+        date_from: date | None = None,
+        date_to: date | None = None,
+    ) -> dict[str, list[str]]:
+        return await self.repo.filter_options(
+            department=department, date_from=date_from, date_to=date_to
         )
 
     async def sync_from_ledger(self, department: str) -> dict[str, Any]:

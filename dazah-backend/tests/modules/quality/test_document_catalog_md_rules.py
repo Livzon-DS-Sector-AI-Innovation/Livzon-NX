@@ -1,147 +1,127 @@
 from __future__ import annotations
 
+import base64
 import builtins
 from io import BytesIO
-from types import SimpleNamespace as _SimpleNamespace
 from typing import Any
 
 import pytest
 from docx import Document
 
 from app.core.exceptions import AppException
+from app.modules.quality.service import document_catalog_docx_md as docx_md
 from app.modules.quality.service import document_catalog_md as md
 
-SimpleNamespace: Any = _SimpleNamespace
-
-
-@pytest.mark.parametrize(
-    ("line", "expected"),
-    [
-        ("审核及颁发 / Review and issue", True),
-        ("Distribution 分发", True),
-        ("正文", False),
-    ],
+# 1x1 透明 PNG，用于内存构造含图片的 docx
+PNG_1PX: bytes = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
 )
-def test_section_marker_detection(line: str, expected: bool) -> None:
-    assert md.is_section_marker_to_delete(line) is expected
 
 
-@pytest.mark.parametrize(
-    ("line", "expected"),
-    [
-        ("", False),
-        ("Prepared by", True),
-        ("Distribution-1", True),
-        ("颁发：", True),
-        (" ( signature ) ", True),
-        ("date", True),
-        ("日期 date", False),
-        ("正常正文", False),
-    ],
-)
-def test_boilerplate_detection(line: str, expected: bool) -> None:
-    assert md.is_boilerplate_text_line(line) is expected
+def _is_section_number(text: str) -> bool:
+    return docx_md._is_section_number(text)
 
 
-def test_row_helpers_cover_empty_separator_and_number_cases() -> None:
-    assert md.strip_bold("**1**") == "1"
-    assert md.non_empty([" a ", "", " b "]) == ["a", "b"]
-    assert md.parse_row("| a | b |") == ["a", "b"]
-    assert md.is_sep_row([]) is False
-    assert md.is_sep_row(["---", ":---:"]) is True
-    assert md.is_dash_row(["", " "]) is False
-    assert md.is_dash_row(["—", "-"]) is True
-    assert md.is_distribution_list([["ordinary"], ["分发-1"]]) is True
-    assert md.is_distribution_list([["ordinary"]]) is False
-    assert md.is_approval_row(["审核1", "签名"]) is True
-    assert md.is_approval_row(["正文"]) is False
-    assert md.is_placeholder(["/", "--"]) is True
-    assert md.is_placeholder(["无斜线"]) is False
-    assert md.is_placeholder(["/", "签名"]) is False
-    assert md.is_num_row([]) is False
-    assert md.is_num_row(["**1.2.**", "标题"]) is True
-
-
-def test_render_outline_and_flat_cover_all_layouts() -> None:
-    assert md.render_outline(
-        [[], ["引言", "正文"], ["1", "一级"], ["1.1", "二级"], ["结尾"]]
-    ) == ["引言 正文", "1 一级", "", "  1.1 二级", "结尾"]
-    assert md.render_flat(
-        [[], ["/", "--"], ["名称", "值"], ["A", "1", "B", "2"], ["单项"]]
-    ) == ["名称：值", "A：1；B：2", "单项"]
-
-
-@pytest.mark.parametrize(
-    ("rows", "expected"),
-    [
-        (["|---|---|", "|—|-|"], []),
-        (["|名称|Distribution-1|"], []),
-        (["|Prepared by|Signature|"], []),
-        (
-            ["|字段|值|", "|---|---|", "|1|一级|", "|1.1|二级|"],
-            ["字段：值", "1 一级", "", "  1.1 二级"],
-        ),
-    ],
-)
-def test_convert_table(rows: list[str], expected: list[str]) -> None:
-    assert md.convert_table(rows) == expected
-
-
-def test_transform_text_removes_markers_tables_and_boilerplate() -> None:
-    result = md.transform_text(
-        [
-            "审核及颁发 / Review and issue",
-            "**保留标题**",
-            "|字段|值|",
-            "|---|---|",
-            "|名称|内容|",
-            "Prepared by",
-            "正文",
-            "",
-            "",
-            "结尾",
-        ]
-    )
-    assert result == ["**保留标题**", "字段：值", "名称：内容", "正文", "", "结尾"]
-
-
-def test_docx_helpers_and_word_conversion_preserve_tables() -> None:
+def _build_template_docx() -> bytes:
+    """构造公司 GMP 模板 docx：首页审批格 + 正文段落 + 主内容表（含数据表、
+    嵌套表格与内嵌图片）。"""
     document = Document()
-    document.add_paragraph("正文")
-    table = document.add_table(rows=2, cols=2)
-    table.cell(0, 0).text = "字段"
-    table.cell(0, 1).text = "值"
-    table.cell(1, 0).text = "名称"
-    table.cell(1, 1).text = "内容"
-    nested = table.cell(1, 1).add_table(rows=1, cols=1)
-    nested.cell(0, 0).text = "嵌套"
+
+    # 首页审批格（应整体跳过，仅生效日期进入 md 头部）
+    header_table = document.add_table(rows=2, cols=2)
+    header_table.cell(0, 0).text = "生效日期"
+    header_table.cell(0, 1).text = "2026-08-01"
+    header_table.cell(1, 0).text = "分发-1"
+    header_table.cell(1, 1).text = "QA部门"
+
+    # 正文段落（有序号，转标题）
+    document.add_paragraph("1. 目的：建立本文件")
+
+    # 主内容表：序号列 + 内容列 + 两个空列；第 5/6 行构成修订数据表，
+    # 末行附嵌套表格与内嵌图片
+    main_table = document.add_table(rows=7, cols=4)
+    rows_content = [
+        ("1", "目的", "", ""),
+        ("2", "职责", "", ""),
+        ("2.1", "车间主任负责执行", "", ""),
+        ("3", "程序", "", ""),
+        ("", "版本", "修订内容", "修订内容"),
+        ("", "01", "首次颁发", "首次颁发"),
+        ("4", "附录", "", ""),
+    ]
+    for r, cells in enumerate(rows_content):
+        for c, text in enumerate(cells):
+            main_table.cell(r, c).text = text
+
+    nested = main_table.cell(6, 1).add_table(rows=1, cols=1)
+    nested.cell(0, 0).text = "嵌套内容"
+    picture_run = main_table.cell(6, 2).paragraphs[0].add_run()
+    picture_run.add_picture(BytesIO(PNG_1PX))
+
     stream = BytesIO()
     document.save(stream)
-
-    markdown = md.word_to_markdown(stream.getvalue())
-    assert "正文" in markdown
-    assert "| 字段 | 值 |" in markdown
-    assert "嵌套" in markdown
-    assert md.convert_word_attachment("test.docx", stream.getvalue())
+    return stream.getvalue()
 
 
-def test_cell_and_nested_table_helpers_cover_dedup_and_depth_limit() -> None:
-    tc: Any = object()
-    first: Any = SimpleNamespace(_tc=tc)
-    second: Any = SimpleNamespace(_tc=tc)
-    third: Any = SimpleNamespace(_tc=object())
-    assert md._dedup_merged_cells([first, second, third]) == [first, third]
+def test_heading_level_and_section_number_helpers() -> None:
+    assert _is_section_number("1") is True
+    assert _is_section_number("1.2.3") is True
+    assert _is_section_number("1.2.") is True
+    assert _is_section_number("1、") is True
+    assert _is_section_number("1a") is False
+    assert _is_section_number("") is False
+    assert docx_md._heading_level("1") == 2
+    assert docx_md._heading_level("1.1") == 3
+    assert docx_md._heading_level("2.3.4") == 4
+    assert docx_md._heading_level("2.3.4.5") == 0
 
-    cell: Any = SimpleNamespace(
-        paragraphs=[
-            SimpleNamespace(text=" a "),
-            SimpleNamespace(text=""),
-            SimpleNamespace(text="b"),
-        ]
+
+def test_dedupe_table_columns_keeps_first_unique_column() -> None:
+    rows = [["a", "a", "b"], ["1", "1", "2"]]
+    assert docx_md._dedupe_table_columns(rows) == [["a", "b"], ["1", "2"]]
+    assert docx_md._dedupe_table_columns([]) == []
+
+
+def test_convert_docx_content_to_md_full_template() -> None:
+    content = _build_template_docx()
+    markdown, images = docx_md.convert_docx_content_to_md(
+        content, "SMP-QA-001-02偏差处理程序.docx"
     )
-    assert md._cell_text(cell) == "a<br>b"
-    assert md._cell_text(SimpleNamespace(paragraphs=[])) == ""
-    assert md._collect_nested_tables(SimpleNamespace(rows=[]), depth=6) == []
+
+    # md 头部：文件名提取编号/标题，首页表格提取生效日期
+    assert markdown.startswith("# 偏差处理程序")
+    assert "**文件编号**: SMP-QA-001-02" in markdown
+    assert "**生效日期**: 2026-08-01" in markdown
+
+    # 首页审批格整体跳过
+    assert "分发-1" not in markdown
+    assert "QA部门" not in markdown
+
+    # 正文段落与主内容表序号转标题层级
+    assert "## 1 目的" in markdown
+    assert "## 1 目的：建立本文件" in markdown
+    assert "### 2.1 车间主任负责执行" in markdown
+    assert "## 3 程序" in markdown
+    assert "## 4 附录" in markdown
+
+    # 数据表（修订简历）保留为 md 表格，重复列去重
+    assert "版本 | 修订内容 |" in markdown
+    assert "01 | 首次颁发 |" in markdown
+
+    # 嵌套表格保留为 md 表格
+    assert "| 嵌套内容 |" in markdown
+
+    # 图片原位引用且被提取
+    assert "![image](img_000.png)" in markdown
+    assert len(images) == 1
+    assert images[0].name == "img_000.png"
+    assert images[0].data == PNG_1PX
+    assert images[0].content_type == "image/png"
+
+
+def test_convert_docx_content_to_md_rejects_corrupt_file() -> None:
+    with pytest.raises(AppException, match="解析失败"):
+        docx_md.convert_docx_content_to_md(b"not-a-docx", "bad.docx")
 
 
 def test_find_soffice_prefers_config_then_path(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -175,11 +155,12 @@ def test_soffice_conversion_handles_missing_binary_and_process_error(
     assert md._convert_doc_via_soffice(b"doc", "test.doc") == b""
 
 
-def test_convert_doc_to_docx_uses_primary_converter_or_reports_unsupported(
+def test_convert_legacy_to_docx_uses_soffice_or_reports_unsupported(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(md, "_convert_doc_via_soffice", lambda *_args: b"docx")
-    assert md.convert_doc_to_docx(b"doc", "test.doc") == b"docx"
+    assert md.convert_legacy_to_docx(b"doc", "test.doc") == b"docx"
+    assert md.convert_legacy_to_docx(b"wps", "test.wps") == b"docx"
 
     monkeypatch.setattr(md, "_convert_doc_via_soffice", lambda *_args: b"")
     original_import = builtins.__import__
@@ -190,16 +171,32 @@ def test_convert_doc_to_docx_uses_primary_converter_or_reports_unsupported(
         return original_import(name, *args, **kwargs)
 
     monkeypatch.setattr(builtins, "__import__", import_without_win32)
-    with pytest.raises(AppException, match="不支持 .doc"):
-        md.convert_doc_to_docx(b"doc", "test.doc")
+    with pytest.raises(AppException, match="不支持该格式转换"):
+        md.convert_legacy_to_docx(b"doc", "test.doc")
+    with pytest.raises(AppException, match="不支持该格式转换"):
+        md.convert_legacy_to_docx(b"wps", "test.wps")
 
 
-def test_doc_attachment_runs_conversion_before_markdown(
+def test_convert_word_attachment_runs_legacy_conversion_for_doc_and_wps(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    legacy_calls: list[str] = []
+
+    def fake_legacy(content: bytes, file_name: str) -> bytes:
+        legacy_calls.append(file_name)
+        return content
+
+    monkeypatch.setattr(md, "convert_legacy_to_docx", fake_legacy)
     monkeypatch.setattr(
-        md, "convert_doc_to_docx", lambda content, _name: content + b"x"
+        md,
+        "convert_docx_content_to_md",
+        lambda content, name: (f"# {name}", []),
     )
-    monkeypatch.setattr(md, "word_to_markdown", lambda content: f"正文-{content!r}")
-    result = md.convert_word_attachment("legacy.DOC", b"a")
-    assert result == "正文-b'ax'"
+
+    docx_result = md.convert_word_attachment("标准.docx", b"docx")
+    assert docx_result == ("# 标准.docx", [])
+    assert legacy_calls == []
+
+    assert md.convert_word_attachment("标准.doc", b"doc")[0] == "# 标准.doc"
+    assert md.convert_word_attachment("标准.WPS", b"wps")[0] == "# 标准.WPS"
+    assert legacy_calls == ["标准.doc", "标准.WPS"]

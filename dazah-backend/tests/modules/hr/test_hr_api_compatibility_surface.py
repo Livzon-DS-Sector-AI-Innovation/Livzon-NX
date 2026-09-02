@@ -211,7 +211,16 @@ async def test_hr_training_and_page_routes_delegate_without_data(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     user = _user()
-    db = SimpleNamespace()
+    def _empty_result() -> SimpleNamespace:
+        # scalars 与 scalar_one_or_none 同时提供：resolve_user_roles 任意查询顺序兼容
+        return SimpleNamespace(
+            scalars=lambda: SimpleNamespace(all=lambda: []),
+            scalar_one_or_none=lambda: None,
+        )
+
+    from itertools import cycle as _cycle
+
+    db = SimpleNamespace(execute=AsyncMock(side_effect=_cycle([_empty_result()])))
     monkeypatch.setattr(api, "_resolve_visible_scope", AsyncMock(return_value=None))
     _patch_response_helpers(monkeypatch)
     monkeypatch.setattr(
@@ -286,7 +295,10 @@ async def test_hr_training_and_page_routes_delegate_without_data(
         )
     )["data"] == []
     await api.delete_training_personnel_config(
-        config_id=uuid4(), service=personnel_service, current_user=user
+        config_id=uuid4(),
+        service=personnel_service,
+        db=db,
+        current_user=user,
     )
 
 

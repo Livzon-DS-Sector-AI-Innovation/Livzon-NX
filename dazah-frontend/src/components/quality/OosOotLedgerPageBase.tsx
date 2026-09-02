@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import dayjs, { type Dayjs } from 'dayjs'
-import { App, Button, Card, DatePicker, Form, Input, Input as AntInput, Modal, Popconfirm, Select, Space, Table, Typography } from 'antd'
+import { App, Button, Card, DatePicker, Drawer, Form, Input, Input as AntInput, Popconfirm, Select, Space, Table, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { DownloadOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { fetchDepartmentContacts } from '@/lib/api/client/quality'
+import { TableEmptyState } from './TableEmptyState'
 import type { DepartmentContact } from '@/types/quality'
 
 export interface OosOotLedgerRecord {
@@ -81,6 +82,8 @@ export function OosOotLedgerPageBase({ config }: { config: OosOotLedgerConfig })
   const [modalVisible, setModalVisible] = useState(false)
   const [editingRecord, setEditingRecord] = useState<OosOotLedgerRecord | null>(null)
   const [form] = Form.useForm<FormValues>()
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
 
   const { data: contacts = [] } = useQuery<DepartmentContact[]>({
     queryKey: ['quality-department-contacts'],
@@ -89,8 +92,13 @@ export function OosOotLedgerPageBase({ config }: { config: OosOotLedgerConfig })
 
   const { data, isLoading: loading, error } = useQuery({
     queryKey: [queryKeyPrefix, 'list'],
-    queryFn: () => fetchRecords({ page: '1', page_size: '100' }),
+    queryFn: () => fetchRecords({ page: '1', page_size: '200' }),
   })
+
+  // 筛选或搜索变化时回到第一页，避免停留在已不存在的页码
+  useEffect(() => {
+    setPage(1)
+  }, [searchKeyword, filterMaterial, filterBatch, filterInvCode, filterRegistrant])
 
   useEffect(() => {
     if (error) {
@@ -211,7 +219,7 @@ export function OosOotLedgerPageBase({ config }: { config: OosOotLedgerConfig })
     }
   }, [queryClient, message, label, queryKeyPrefix, deleteRecord])
 
-  const hasFilters = filterMaterial || filterBatch || filterInvCode || filterRegistrant
+  const hasFilters = searchKeyword || filterMaterial || filterBatch || filterInvCode || filterRegistrant
   const clearFilters = useCallback(() => {
     setFilterMaterial(undefined)
     setFilterBatch(undefined)
@@ -238,6 +246,8 @@ export function OosOotLedgerPageBase({ config }: { config: OosOotLedgerConfig })
     if (filterRegistrant) result = result.filter(i => i.registrant === filterRegistrant)
     return result
   })()
+
+  const pagedItems = filteredItems.slice((page - 1) * pageSize, page * pageSize)
 
   const columns: ColumnsType<OosOotLedgerRecord> = [
     {
@@ -346,31 +356,61 @@ export function OosOotLedgerPageBase({ config }: { config: OosOotLedgerConfig })
           rowKey="record_id"
           loading={loading}
           columns={columns}
-          dataSource={filteredItems}
-          pagination={false}
+          dataSource={pagedItems}
           scroll={{ x: 1100 }}
+          locale={{
+            emptyText: (
+              <TableEmptyState
+                hasFilters={Boolean(hasFilters)}
+                hasError={Boolean(error)}
+              />
+            ),
+          }}
+          pagination={{
+            current: page,
+            pageSize,
+            total: filteredItems.length,
+            showSizeChanger: true,
+            showQuickJumper: true,
+            showTotal: (t) => `共 ${t} 条`,
+            onChange: (nextPage, nextPageSize) => {
+              setPage(nextPage)
+              setPageSize(nextPageSize)
+            },
+          }}
         />
       </Card>
 
-      <Modal
+      <Drawer
         title={editingRecord ? `修改${label}台账记录` : `新增${label}台账记录`}
         open={modalVisible}
-        onOk={() => void handleSubmit()}
-        onCancel={closeModal}
-        confirmLoading={saving}
+        onClose={closeModal}
         destroyOnHidden
-        width={600}
+        size={720}
+        extra={
+          <Space>
+            <Button onClick={closeModal}>取消</Button>
+            <Button type="primary" loading={saving} onClick={() => void handleSubmit()}>
+              保存
+            </Button>
+          </Space>
+        }
       >
         <Form form={form} layout="vertical">
+          <Typography.Title level={5} style={{ marginTop: 0 }}>基础信息</Typography.Title>
           {editingRecord ? (
             <Form.Item name="serial_number" label="序号">
               <Input placeholder="序号" />
             </Form.Item>
           ) : null}
-          <Form.Item name="date" label="日期">
+          <Form.Item name="date" label="日期" rules={[{ required: true, message: '请选择日期' }]}>
             <DatePicker style={{ width: '100%' }} placeholder="请选择日期" format="YYYY-MM-DD" />
           </Form.Item>
-          <Form.Item name="material_name" label="物料名称">
+          <Form.Item
+            name="material_name"
+            label="物料名称"
+            rules={[{ required: true, message: '请输入物料名称' }]}
+          >
             <Input placeholder="请输入物料名称" />
           </Form.Item>
           <Form.Item name="batch_number" label="批号">
@@ -379,9 +419,15 @@ export function OosOotLedgerPageBase({ config }: { config: OosOotLedgerConfig })
           <Form.Item name="investigation_code" label="调查编号">
             <Input placeholder="请输入调查编号" />
           </Form.Item>
-          <Form.Item name="problem_description" label="问题描述">
+          <Form.Item
+            name="problem_description"
+            label="问题描述"
+            rules={[{ required: true, message: '请输入问题描述' }]}
+          >
             <Input.TextArea placeholder="请输入问题描述" rows={2} />
           </Form.Item>
+
+          <Typography.Title level={5}>调查与处理</Typography.Title>
           <Form.Item name="root_cause" label="产生原因">
             <Input.TextArea placeholder="请输入产生原因" rows={2} />
           </Form.Item>
@@ -406,7 +452,7 @@ export function OosOotLedgerPageBase({ config }: { config: OosOotLedgerConfig })
             <Input.TextArea placeholder="请输入备注" rows={2} />
           </Form.Item>
         </Form>
-      </Modal>
+      </Drawer>
     </div>
   )
 }

@@ -131,10 +131,12 @@ export function FinishedSubtablePage({
       <InspectionFeishuTable
         title={title}
         listApi={recordsApi}
+        pullApi={`/api/v1/quality/inspection-finished/${productGroup}/pull`}
         entityCode={selectedEntityCode}
         autoColumnPreset="finished"
         toolbarContent={toolbarContent}
         toolbarContainer={toolbarContainer}
+        editable
       />
     </div>
   )

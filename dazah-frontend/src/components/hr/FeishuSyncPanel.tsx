@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react'
 import { App, Card, Button, Statistic, Row, Col, Tag, Spin } from 'antd'
 import { SyncOutlined, CloudSyncOutlined, ExclamationCircleOutlined } from '@ant-design/icons'
-import { fetchSyncStatus, syncFromFeishu } from '@/lib/api/hr'
+import { fetchSyncStatus } from '@/lib/api/hr'
+import { syncFromFeishuAction } from '@/actions/hr'
 
 interface SyncStatus {
   local_total: number
@@ -39,7 +40,7 @@ export default function FeishuSyncPanel({ onSynced }: { onSynced?: () => void })
   const handleSync = async () => {
     setSyncing(true)
     try {
-      const res = await syncFromFeishu()
+      const res = await syncFromFeishuAction()
       message.success(res.message)
       await loadStatus()
       onSynced?.()

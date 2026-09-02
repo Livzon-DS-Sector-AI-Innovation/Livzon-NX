@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import secrets
 from pathlib import Path
 
@@ -37,20 +36,19 @@ def _set_values(path: Path, updates: dict[str, str]) -> None:
 
 
 def configure(project_root: Path) -> None:
-    app_env = os.environ.get("APP_ENV", "development").strip().lower()
-    env_name = ".env" if app_env == "production" else ".env.local"
-    workspace_env = project_root / env_name
-    _, workspace_values = _read_values(workspace_env)
+    hermes_env = project_root / "Hermes-Lite" / ".env"
+    backend_env = project_root / "dazah-backend" / ".env"
+    _, hermes_values = _read_values(hermes_env)
 
-    encryption_key = workspace_values.get("HERMES_FEISHU_CREDENTIAL_KEY")
+    encryption_key = hermes_values.get("HERMES_FEISHU_CREDENTIAL_KEY")
     if not encryption_key:
         encryption_key = Fernet.generate_key().decode("ascii")
-    internal_token = workspace_values.get("HERMES_INTERNAL_TOKEN")
+    internal_token = hermes_values.get("HERMES_INTERNAL_TOKEN")
     if not internal_token:
         internal_token = secrets.token_urlsafe(48)
 
     _set_values(
-        workspace_env,
+        hermes_env,
         {
             "HERMES_FEISHU_CREDENTIAL_KEY": encryption_key,
             "HERMES_INTERNAL_TOKEN": internal_token,
@@ -58,7 +56,7 @@ def configure(project_root: Path) -> None:
         },
     )
     _set_values(
-        workspace_env,
+        backend_env,
         {
             "HERMES_INTERNAL_URL": "http://hermes-lite:8100",
             "HERMES_INTERNAL_TOKEN": internal_token,

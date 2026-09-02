@@ -146,9 +146,16 @@ class WarehouseFeishuClient:
                     )
                     if retryable and attempt < 5:
                         retry_after = resp.headers.get("Retry-After")
-                        delay = (
-                            float(retry_after) if retry_after else min(2**attempt, 16)
-                        )
+                        try:
+                            delay = (
+                                float(retry_after)
+                                if retry_after
+                                else min(2**attempt, 16)
+                            )
+                        except ValueError:
+                            # Retry-After 可能是非数字（如 HTTP 日期格式），
+                            # 回退到指数退避而不是让整个请求失败
+                            delay = min(2**attempt, 16)
                         await asyncio.sleep(delay + random.uniform(0, 0.3))
                         continue
                     if code != 0:

@@ -91,7 +91,6 @@ class ValidationAuditTaskResponse(BaseModel):
     suggestion_count: int = 0
     compliant_count: int = 0
     non_compliant_count: int = 0
-    report_path: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -126,7 +125,6 @@ class ValidationAuditFileResponse(BaseModel):
     task_id: UUID
     file_type: str
     original_filename: str
-    file_path: str
     file_size: int
     parse_status: str
     created_at: datetime
@@ -179,7 +177,6 @@ class ValidationAuditReportResponse(BaseModel):
     task_id: UUID
     report_title: str
     report_markdown: str | None = None
-    report_file_path: str | None = None
     version: int
     created_at: datetime
 

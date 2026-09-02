@@ -25,6 +25,7 @@ import {
   Radio,
   Segmented,
   Spin,
+  Popconfirm,
 } from 'antd'
 import {
   CheckCircleOutlined,
@@ -356,8 +357,7 @@ export default function PlanTrackingClient() {
         .pt-pill:hover { border-color: #c9ced8; }
         .pt-pill-on-green { background: #f6ffed; border-color: #b7eb8f; color: #389e0d; }
         .pt-pill-on-red { background: #fff1f0; border-color: #ffa39e; color: #cf1322; }
-        .pt-op { opacity: 0; transition: opacity .15s; }
-        tr:hover > td .pt-op { opacity: 1; }
+        .pt-op { opacity: 1; }
       `}</style>
 
       {/* 统计概览 */}
@@ -578,15 +578,20 @@ export default function PlanTrackingClient() {
                         title={`编辑第 ${idx + 1} 行`}
                         onClick={() => handleOpenEdit(idx)}
                       />
-                      <Button
-                        className="pt-op"
-                        size="small"
-                        type="text"
-                        danger
-                        icon={<DeleteOutlined />}
-                        title={`删除第 ${idx + 1} 行`}
-                        onClick={() => handleDeleteRow(idx)}
-                      />
+                      <Popconfirm
+                        title={`确认删除第 ${idx + 1} 行？`}
+                        description="已保存到服务器的跟踪记录会一并删除"
+                        onConfirm={() => handleDeleteRow(idx)}
+                      >
+                        <Button
+                          className="pt-op"
+                          size="small"
+                          type="text"
+                          danger
+                          icon={<DeleteOutlined />}
+                          title={`删除第 ${idx + 1} 行`}
+                        />
+                      </Popconfirm>
                     </div>
                   </td>
                 </tr>

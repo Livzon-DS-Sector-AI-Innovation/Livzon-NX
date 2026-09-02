@@ -116,6 +116,7 @@ export function InspectionGroupSubtablePage({
       pullApi={pullApi}
       entityCode={selectedEntityCode}
       toolbarContent={toolbarContent}
+      editable
     />
   )
 }

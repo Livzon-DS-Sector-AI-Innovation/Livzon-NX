@@ -8,9 +8,11 @@ import {
   SyncOutlined,
   EyeOutlined } from '@ant-design/icons'
 import { DepartureRecord } from '@/types/hr'
+import { maskPhone } from '@/lib/mask'
+import { syncDepartureFromFeishuAction } from '@/actions/hr'
 import {
   fetchDepartureRecords,
-  syncDepartureFromFeishu } from '@/lib/api/hr'
+} from '@/lib/api/hr'
 import HrChatbot from './HrChatbot'
 
 interface DepartureClientProps {
@@ -62,7 +64,7 @@ export default function DepartureClient({
   const handleSync = async () => {
     setSyncing(true)
     try {
-      const res = await syncDepartureFromFeishu()
+      const res = await syncDepartureFromFeishuAction()
       message.success(res.message)
       loadData()
     } catch (err) {
@@ -163,7 +165,8 @@ export default function DepartureClient({
       title: '手机',
       dataIndex: 'phone',
       key: 'phone',
-      width: 120 },
+      width: 120,
+      render: (v: string) => maskPhone(v) },
     {
       title: '离职原因',
       dataIndex: 'offboarding_reason',

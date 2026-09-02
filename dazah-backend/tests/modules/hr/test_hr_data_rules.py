@@ -315,15 +315,16 @@ async def test_import_rows_with_mapping_creates_records_and_skips_blanks() -> No
         4: "remarks",
     }
     record_service: Any = AsyncMock()
+    record_service.create_many = AsyncMock(side_effect=lambda data_list: len(data_list))
 
     created = await api._import_rows_with_mapping(
         ws, 1, col_map, "质量部", record_service
     )
 
     assert created == 2
-    assert record_service.create_record.await_count == 2
-    first = record_service.create_record.await_args_list[0].args[0]
-    second = record_service.create_record.await_args_list[1].args[0]
+    record_service.create_many.assert_awaited_once()
+    batch = record_service.create_many.await_args.args[0]
+    first, second = batch[0], batch[1]
     assert first.training_date == date(2026, 8, 20)
     assert first.duration_hours == 1.5
     assert first.training_datetime == "2026.08.20 09:00~10:30"

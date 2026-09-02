@@ -93,8 +93,8 @@ async def test_upload_attachment_persists_content(
     assert data["file_name"] == "规范.pdf"
     assert data["file_size"] == len(content)
     # 对象键带 uuid 前缀防覆盖，且包含文章 ID 前缀目录
-    assert data["file_path"].startswith(f"knowledge/{article_id}/")
-    assert data["file_path"].endswith("_规范.pdf")
+    # 内部存储路径不得下发前端
+    assert "file_path" not in data
     # 文件内容真正写入存储
     stored = list(fake_storage.values())
     assert len(stored) == 1

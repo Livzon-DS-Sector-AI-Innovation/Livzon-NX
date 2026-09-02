@@ -1,9 +1,10 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
-import { App, Button, Card, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Switch, Table, Tag, Typography } from 'antd'
+import { useMemo, useState, useTransition , useEffect , useRef} from 'react'
+import { App, Button, Card, DatePicker, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Switch, Table, Tag, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
+import dayjs from 'dayjs'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createFeeEntry, deleteFeeEntry, updateFeeEntry } from '@/actions/registration'
 import type { FeeEntry, FeeEntryCreate, FeeEntryUpdate } from '@/types/registration'
@@ -33,6 +34,16 @@ export default function FeeLedgerPage({ entries, defaultYearFrom = 2023 }: FeeLe
   const [mode, setMode] = useState<FormMode>('create')
   const [pending, startTransition] = useTransition()
   const [yearFrom, setYearFrom] = useState(String(searchParams?.get('year_from') || defaultYearFrom))
+  const yearNavigateTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => {
+    if (yearNavigateTimer.current) clearTimeout(yearNavigateTimer.current)
+  }, [])
+  // 浏览器前进/后退或外部改 URL 时同步本地筛选，避免 state 与 URL 错位
+  useEffect(() => {
+    const urlYear = searchParams?.get('year_from')
+    if (urlYear && urlYear !== yearFrom) setYearFrom(urlYear)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
 
   const filteredEntries = useMemo(() => {
     const kw = keyword.trim().toLowerCase()
@@ -78,10 +89,17 @@ export default function FeeLedgerPage({ entries, defaultYearFrom = 2023 }: FeeLe
   return (
     <Space orientation="vertical" size={16} style={{ width: '100%' }}>
       <Typography.Title level={3} style={{ marginBottom: 0 }}>费用台账</Typography.Title>
-      <Card size="small" extra={<Space><Button icon={<PlusOutlined />} type="primary" onClick={openCreate}>新增</Button><Button icon={<EditOutlined />} disabled={!selected} onClick={openEdit}>编辑</Button><Popconfirm title="确认删除？" onConfirm={handleDelete} disabled={!selected}><Button danger icon={<DeleteOutlined />} disabled={!selected}>删除</Button></Popconfirm></Space>}>
+      <Card size="small" extra={<Space><Button icon={<PlusOutlined />} type="primary" onClick={openCreate}>新增</Button><Button icon={<EditOutlined />} disabled={!selected} onClick={openEdit}>编辑</Button><Popconfirm title={`确认删除「${selected?.agency_name || selected?.expense_content || ""}」这条费用记录吗？`} description="删除后不可恢复。" okText="删除" okButtonProps={{ danger: true }} cancelText="取消" onConfirm={handleDelete} disabled={!selected}><Button danger icon={<DeleteOutlined />} disabled={!selected}>删除</Button></Popconfirm></Space>}>
         <Space wrap size={12} style={{ marginBottom: 16 }}>
           <InputNumber value={Number(yearFrom) || 2023} min={2000} max={2099} style={{ width: 110 }}
-            onChange={(v) => { const y = String(v || 2023); setYearFrom(y); router.push(`/registration/fees/ledger?year_from=${y}`) }} />
+            onChange={(v) => {
+              const y = String(v || 2023)
+              setYearFrom(y)
+              if (yearNavigateTimer.current) clearTimeout(yearNavigateTimer.current)
+              yearNavigateTimer.current = setTimeout(() => {
+                router.replace(`/registration/fees/ledger?year_from=${y}`)
+              }, 400)
+            }} />
           <Select allowClear placeholder="费用类型" value={feeTypeFilter} onChange={setFeeTypeFilter} options={FEE_TYPES.map(t => ({ label: t, value: t }))} style={{ width: 140 }} />
           <Select allowClear placeholder="支付状态" value={paymentStatusFilter} onChange={setPaymentStatusFilter} options={PAYMENT_STATUSES.map(s => ({ label: s, value: s }))} style={{ width: 140 }} />
           <Input allowClear placeholder="搜索付款方/内容/经办人" value={keyword} onChange={e => setKeyword(e.target.value)} style={{ width: 260 }} />
@@ -99,7 +117,16 @@ export default function FeeLedgerPage({ entries, defaultYearFrom = 2023 }: FeeLe
             <Form.Item name="amount" label="金额" rules={[{ required: true }]} style={{ flex: 1, marginBottom: 0 }}><InputNumber min={0} precision={2} style={{ width: '100%' }} /></Form.Item>
             <Form.Item name="currency" label="币种" style={{ flex: 1, marginBottom: 0 }}><Select options={CURRENCIES.map(c => ({ label: c, value: c }))} style={{ width: '100%' }} /></Form.Item>
           </div>
-          <Form.Item name="payment_date" label="申请时间"><Input placeholder="2018.04.17" /></Form.Item>
+          <Form.Item
+            name="payment_date"
+            label="申请时间"
+            getValueProps={(value) => ({
+              value: value && /^\d{4}\.\d{2}\.\d{2}$/.test(value) ? dayjs(value, 'YYYY.MM.DD') : undefined,
+            })}
+            normalize={(value) => (value ? value.format('YYYY.MM.DD') : '')}
+          >
+            <DatePicker format="YYYY.MM.DD" style={{ width: '100%' }} placeholder="如 2018.04.17" />
+          </Form.Item>
           <Form.Item name="agency_name" label="付款方"><Input /></Form.Item>
           <Form.Item name="expense_content" label="开支内容"><Input.TextArea rows={2} /></Form.Item>
           <div style={{ display: 'flex', gap: 16 }}>

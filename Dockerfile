@@ -9,7 +9,11 @@ FROM python:3.12-slim-bookworm AS backend
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir uv \
+# libreoffice-writer/draw：.doc/.wps 转 docx 及 wmf/emf 图片转 png 依赖
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libreoffice-writer libreoffice-draw \
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install --no-cache-dir uv \
     && groupadd --system app \
     && useradd --system --gid app --home-dir /app app
 

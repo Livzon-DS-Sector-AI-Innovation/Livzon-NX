@@ -10,6 +10,8 @@ export default function InstrRepairPage() {
         title="设备维修记录"
         listApi="/api/v1/quality/instruments/repair"
         pullApi="/api/v1/quality/instruments/repair/pull"
+        entityCode="qc_instr_repair"
+        editable
       />
     </QualityQueryProvider>
   )

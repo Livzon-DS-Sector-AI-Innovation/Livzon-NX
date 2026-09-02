@@ -18,15 +18,28 @@ export function DocxPreview({ chapterId, chapterTitle, onDownload, refreshKey }:
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [hasContent, setHasContent] = useState(false)
+  // 渲染序号守卫：快速切换章节/连续 refresh 时，只有最新一次渲染允许写 DOM
+  const renderSeqRef = useRef(0)
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      renderSeqRef.current += 1
+    }
+  }, [])
 
   const renderDocx = useCallback(async () => {
     if (!chapterId || !containerRef.current) return
 
+    const seq = ++renderSeqRef.current
     setLoading(true)
     setError(null)
 
     try {
       const buffer = await fetchChapterDocx(chapterId)
+      if (seq !== renderSeqRef.current || !mountedRef.current) return
       if (!buffer) {
         setHasContent(false)
         setError(null)
@@ -54,11 +67,14 @@ export function DocxPreview({ chapterId, chapterTitle, onDownload, refreshKey }:
         renderFooters: true,
       })
     } catch (err) {
+      if (seq !== renderSeqRef.current || !mountedRef.current) return
       console.error('DocxPreview render error:', err)
       setError((err instanceof Error ? err.message : '') || '文档渲染失败')
       setHasContent(false)
     } finally {
-      setLoading(false)
+      if (seq === renderSeqRef.current && mountedRef.current) {
+        setLoading(false)
+      }
     }
   }, [chapterId])
 
@@ -97,7 +113,7 @@ export function DocxPreview({ chapterId, chapterTitle, onDownload, refreshKey }:
           >
             刷新
           </Button>
-          {hasContent && (
+          {hasContent && onDownload && (
             <Button
               size="small"
               type="primary"

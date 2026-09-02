@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { App, Modal, Form, Select, DatePicker, Input, Tabs } from 'antd'
 import dayjs from 'dayjs'
 import { Employee, OffboardingRecord, OffboardingRecordCreateInput, OffboardingRecordUpdateInput } from '@/types/hr'
@@ -26,6 +26,8 @@ export default function OffboardingForm({ open, record, onClose, onSuccess }: Of
   const [form] = Form.useForm()
   const isEdit = !!record
   const [employees, setEmployees] = useState<Employee[]>([])
+  const [searching, setSearching] = useState(false)
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     if (open) {
@@ -44,10 +46,22 @@ export default function OffboardingForm({ open, record, onClose, onSuccess }: Of
         form.setFieldsValue(values)
       } else {
         form.resetFields()
-        form.setFieldsValue({ offboarding_type: '辞职', handover_status: '待交接' })
+        form.setFieldsValue({ offboarding_type: '辞职', status: '在职' })
       }
     }
   }, [open, record, form])
+
+  // 远程搜索员工：300ms 防抖，按姓名/工号关键字查询（在职）
+  const handleEmployeeSearch = (keyword: string) => {
+    if (searchTimer.current) clearTimeout(searchTimer.current)
+    searchTimer.current = setTimeout(() => {
+      setSearching(true)
+      fetchEmployees({ status: '在职', keyword: keyword || undefined, page_size: 50 })
+        .then((res) => setEmployees(res.data))
+        .catch(() => {})
+        .finally(() => setSearching(false))
+    }, 300)
+  }
 
   const handleSubmit = async () => {
     try {
@@ -203,14 +217,16 @@ export default function OffboardingForm({ open, record, onClose, onSuccess }: Of
                     rules={[{ required: true, message: '请选择员工' }]}
                   >
                     <Select
-                      placeholder="请选择员工"
+                      placeholder="请选择员工（输入姓名/工号搜索）"
                       options={employeeOptions}
                       showSearch
                       disabled={isEdit}
                       onChange={handleEmployeeChange}
-                      filterOption={(input, option) =>
-                        (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-                      }
+                      onSearch={handleEmployeeSearch}
+                      loading={searching}
+                      allowClear
+                      notFoundContent={searching ? '搜索中...' : '未找到匹配员工'}
+                      filterOption={false}
                     />
                   </Form.Item>
                   <div className="grid grid-cols-3 gap-4">
@@ -229,11 +245,10 @@ export default function OffboardingForm({ open, record, onClose, onSuccess }: Of
                         { value: '其他', label: '其他' },
                       ]} />
                     </Form.Item>
-                    <Form.Item name="handover_status" label="交接状态" rules={[{ required: true }]}>
+                    <Form.Item name="status" label="在职状态">
                       <Select options={[
-                        { value: '待交接', label: '待交接' },
-                        { value: '交接中', label: '交接中' },
-                        { value: '已完成', label: '已完成' },
+                        { value: '在职', label: '在职' },
+                        { value: '离职', label: '离职' },
                       ]} />
                     </Form.Item>
                   </div>

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 import re
@@ -975,7 +976,9 @@ class CertificateWorkbookService:
 
         await self.ensure_seeded()
         old_entries = await self.repository.list_entries()
-        parsed_entries = _load_entries_from_workbook_bytes(content)
+        parsed_entries = await asyncio.to_thread(
+            _load_entries_from_workbook_bytes, content
+        )
 
         try:
             await self.repository.soft_delete_many(old_entries)
@@ -1001,9 +1004,9 @@ class CertificateWorkbookService:
 
         temp_dir = Path(tempfile.mkdtemp(prefix="certificate-workbook-export-"))
         export_path = temp_dir / "药政证书台账-导出.xlsx"
-        shutil.copyfile(workbook_path, export_path)
+        await asyncio.to_thread(shutil.copyfile, workbook_path, export_path)
 
-        workbook = load_workbook(export_path)
+        workbook = await asyncio.to_thread(load_workbook, export_path)
         try:
             entries = await self.repository.list_entries()
             for sheet_meta in CERTIFICATE_SHEET_CONFIG:
@@ -1025,7 +1028,7 @@ class CertificateWorkbookService:
                     start_row=3,
                     template_row=3,
                 )
-            workbook.save(export_path)
+            await asyncio.to_thread(workbook.save, export_path)
         finally:
             workbook.close()
 

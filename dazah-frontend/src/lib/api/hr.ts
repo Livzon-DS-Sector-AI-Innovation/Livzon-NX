@@ -19,31 +19,82 @@ import {
 export async function fetchTrainingLedgersByDept(
   department: string,
   page = 1,
-  pageSize = 200
+  pageSize = 200,
+  dateFrom?: string,
+  dateTo?: string
 ): Promise<TrainingLedgerListResponse> {
   const params = new URLSearchParams({
     department,
     page: String(page),
-    page_size: String(Math.min(pageSize, 200)),
+    page_size: String(Math.min(pageSize, 1000)),
   })
+  if (dateFrom) params.set('date_from', dateFrom)
+  if (dateTo) params.set('date_to', dateTo)
   const res = await fetch(`/api/v1/hr/training-ledgers?${params}`, { cache: 'no-store' })
   if (!res.ok) throw new Error('获取培训台账列表失败')
   return res.json()
 }
 
+/** ESG 培训报表各列筛选条件（undefined 的键不参与查询） */
+export interface EsgRecordFilters {
+  training_name?: string
+  training_method?: string
+  caliber?: string
+  training_type?: string
+  employee_name?: string
+  employee_account?: string
+  location_address?: string
+  employee_level?: string
+  gender?: string
+  apply_company?: string
+  apply_company_no?: string
+  remarks?: string
+  age_min?: number
+  age_max?: number
+  duration_min?: number
+  duration_max?: number
+}
+
 export async function fetchEsgRecordsByDept(
   department: string,
   page = 1,
-  pageSize = 200
+  pageSize = 200,
+  dateFrom?: string,
+  dateTo?: string,
+  filters?: EsgRecordFilters
 ): Promise<EsgTrainingRecordListResponse> {
   const params = new URLSearchParams({
     department,
     page: String(page),
-    page_size: String(Math.min(pageSize, 200)),
+    page_size: String(Math.min(pageSize, 1000)),
   })
+  if (dateFrom) params.set('date_from', dateFrom)
+  if (dateTo) params.set('date_to', dateTo)
+  if (filters) {
+    for (const [key, value] of Object.entries(filters)) {
+      if (value !== undefined && value !== '') params.set(key, String(value))
+    }
+  }
   const res = await fetch(`/api/v1/hr/esg-training-records?${params}`, { cache: 'no-store' })
   if (!res.ok) throw new Error('获取 ESG 培训记录失败')
   return res.json()
+}
+
+/** ESG 培训报表各枚举列筛选选项（部门+日期范围内去重） */
+export async function fetchEsgFilterOptions(
+  department: string,
+  dateFrom?: string,
+  dateTo?: string
+): Promise<Record<string, string[]>> {
+  const params = new URLSearchParams({ department })
+  if (dateFrom) params.set('date_from', dateFrom)
+  if (dateTo) params.set('date_to', dateTo)
+  const res = await fetch(`/api/v1/hr/esg-training-records/filter-options?${params}`, {
+    cache: 'no-store',
+  })
+  if (!res.ok) throw new Error('获取 ESG 筛选选项失败')
+  const json = await res.json()
+  return json.data || {}
 }
 
 async function unwrapHrResponse<T>(responseOrPromise: Response | Promise<Response>): Promise<T> {

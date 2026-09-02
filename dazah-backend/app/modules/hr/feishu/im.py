@@ -12,13 +12,24 @@ logger = logging.getLogger(__name__)
 
 
 class FeishuIM:
-    """Send messages via Feishu IM API."""
+    """Send messages via Feishu IM API.
+
+    凭证由调用方显式传入（人事模块 DB 配置）；不传时回退 env（兼容历史调用）。
+    """
 
     base_url = "https://open.feishu.cn/open-apis"
 
+    def __init__(
+        self, app_id: str | None = None, app_secret: str | None = None,
+    ) -> None:
+        self._app_id = app_id or None
+        self._app_secret = app_secret or None
+
     async def _batch_get_ids(self, payload: dict[str, Any]) -> dict[str, str]:
         """Internal helper to call batch_get_id and extract open_id mapping."""
-        token = await FeishuAuth.get_tenant_access_token()
+        token = await FeishuAuth.get_tenant_access_token(
+            app_id=self._app_id, app_secret=self._app_secret
+        )
         async with httpx.AsyncClient() as client:
             resp = await client.post(
                 f"{self.base_url}/contact/v3/users/batch_get_id",
@@ -76,7 +87,9 @@ class FeishuIM:
         self, receive_id: str, content: str, *, receive_id_type: str = "open_id"
     ) -> None:
         """Send text message to a single user."""
-        token = await FeishuAuth.get_tenant_access_token()
+        token = await FeishuAuth.get_tenant_access_token(
+            app_id=self._app_id, app_secret=self._app_secret
+        )
         async with httpx.AsyncClient() as client:
             resp = await client.post(
                 f"{self.base_url}/im/v1/messages",

@@ -13,6 +13,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.deps import CurrentUser
 from app.core.response import error_response, paginated_response, success_response
+from app.modules.quality.api.deps import (
+    assert_quality_edit_scope as _assert_quality_edit_scope,
+)
 from app.modules.quality.api.deps import require_user as _require_user
 from app.modules.quality.models.return_recall import ReturnRecallRecord
 from app.modules.quality.schemas.return_recall import (
@@ -181,6 +184,8 @@ async def update_return_recall(
         if item is None:
             return error_response(message="记录不存在", status_code=404)
 
+        await _assert_quality_edit_scope(db, current_user, record=item)
+
         update_data = data.model_dump(exclude_unset=True)
         for key, value in update_data.items():
             setattr(item, key, value)
@@ -220,6 +225,8 @@ async def delete_return_recall(
         item = result.scalar_one_or_none()
         if item is None:
             return error_response(message="记录不存在", status_code=404)
+
+        await _assert_quality_edit_scope(db, current_user, record=item)
 
         item.is_deleted = True
         await db.flush()

@@ -57,9 +57,9 @@ def _parse_date_value(value: Any) -> date | None:
     return None
 
 
-def _extract_user_info(value: Any) -> tuple[str | None, str | None]:
+def _extract_user_info(value: Any) -> tuple[str | None, str | None, str | None]:
     if value in (None, "", []):
-        return None, None
+        return None, None, None
     if isinstance(value, list) and value:
         first = value[0]
         if isinstance(first, dict):
@@ -69,14 +69,16 @@ def _extract_user_info(value: Any) -> tuple[str | None, str | None]:
                 or first.get("user_id")
                 or first.get("open_id")
                 or first.get("union_id"),
+                first.get("avatar_url") or None,
             )
-        return str(first), None
+        return str(first), None, None
     if isinstance(value, dict):
         return (
             value.get("name") or value.get("display_name"),
             value.get("id") or value.get("user_id") or value.get("open_id"),
+            value.get("avatar_url") or None,
         )
-    return str(value), None
+    return str(value), None, None
 
 
 def _normalize_feishu_text(value: Any) -> str | None:
@@ -961,11 +963,15 @@ async def sync_change_action_plans_from_feishu(
             if not change_code or not project_name:
                 raise AppException(message="飞书记录缺少变更控制号或项目名称")
 
-            owner_name, owner_user_id = _extract_user_info(fields.get("总负责人"))
+            owner_name, owner_user_id, owner_avatar_url = _extract_user_info(
+                fields.get("总负责人")
+            )
             director_value = fields.get("部门负责人")
             if director_value in (None, ""):
                 director_value = fields.get("部门总监")
-            director_name, director_user_id = _extract_user_info(director_value)
+            director_name, director_user_id, director_avatar_url = _extract_user_info(
+                director_value
+            )
             payload: dict[str, Any] = {
                 "change_id": await _resolve_change_id(
                     db, change_id=None, change_code=change_code
@@ -975,8 +981,10 @@ async def sync_change_action_plans_from_feishu(
                 "related_work": related_work,
                 "owner_name": owner_name,
                 "owner_user_id": owner_user_id,
+                "owner_avatar_url": owner_avatar_url,
                 "director_name": director_name,
                 "director_user_id": director_user_id,
+                "director_avatar_url": director_avatar_url,
                 "deadline_date": _parse_date_value(fields.get("项目截止时间")),
                 "status": _normalize_feishu_text(fields.get("状态")),
                 "delay_flag": _normalize_feishu_text(fields.get("未完成是否延期")),

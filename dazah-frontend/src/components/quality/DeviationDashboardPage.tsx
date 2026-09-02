@@ -1,5 +1,6 @@
 'use client'
 
+import { qualityTokens } from './themeTokens'
 import { useMemo } from 'react'
 import Link from 'next/link'
 import { Button, Card, Col, Empty, Row, Space, Spin, Statistic } from 'antd'
@@ -110,7 +111,7 @@ export function DeviationDashboardPage() {
           avoidLabelOverlap: true,
           itemStyle: { borderRadius: 6, borderColor: '#fff', borderWidth: 2 },
           label: { show: true, formatter: '{b}\n{d}%' },
-          color: ['#52c41a', '#faad14', '#ff4d4f', '#1677ff', '#722ed1'],
+          color: ['#52c41a', '#faad14', '#ff4d4f', qualityTokens.primary, '#722ed1'],
           data:
             stats?.levelDistribution.map(l => ({
               name: getLevelLabel(l.level),

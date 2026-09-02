@@ -251,22 +251,18 @@ export default function ReminderDetailClient({ params }: { params: Promise<{ ent
                   </div>
 
                   <div>
-                    <Typography.Text type="secondary">消息模板（支持变量：{'{姓名}'}、{'{工号}'}、{'{部门}'}、{'{离职日期}'}、{'{离职类型}'}）</Typography.Text>
+                    <Typography.Text type="secondary">消息模板（合并提醒：用 {`{员工列表}`} 占位列出所有待更新员工）</Typography.Text>
                     <div style={{ marginTop: 8 }}>
                       <Input.TextArea
                         value={config.message_template || ''}
                         onChange={(e) => updateConfig(config.id, 'message_template', e.target.value)}
                         rows={6}
                         placeholder={`示例：
-离职手续未办结提醒
+离职资料更新提醒
 
-员工：{姓名}
-工号：{工号}
-部门：{部门}
-离职日期：{离职日期}
-离职类型：{离职类型}
+以下员工的在职状态已超过 1 天未更新为离职，请及时更新资料：
 
-该员工离职手续尚未办结，请及时跟进。`}
+{员工列表}`}
                         style={{ fontFamily: 'monospace' }}
                       />
                     </div>
@@ -343,7 +339,13 @@ export default function ReminderDetailClient({ params }: { params: Promise<{ ent
                   </div>
                 </div>
 
-                {entityCode === 'contract_renewal' ? (
+                {entityCode === 'offboarding' ? (
+                  <div>
+                    <Typography.Text type="secondary">
+                      离职提醒仅通知下方配置的 HR 接收人，不通知部门负责人。
+                    </Typography.Text>
+                  </div>
+                ) : entityCode === 'contract_renewal' ? (
                   <div>
                     <Typography.Text type="secondary">
                       审批卡片自动按「审批流程设置」中配置的部门经理/部门总监发送（飞书内直接审批），此处无需单独设置。

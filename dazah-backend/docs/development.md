@@ -30,16 +30,16 @@ uv run alembic revision --autogenerate -m "add production batch table"
 
 ## Local PostgreSQL and Redis on Windows
 
-Copy the root development environment template once (from the workspace root):
+Copy the example environment file once:
 
 ```powershell
-Copy-Item .env.local.example .env.local
+Copy-Item .env.example .env
 ```
 
 Start only PostgreSQL and Redis:
 
 ```powershell
-docker compose --env-file .env.local -f compose.dev.yml up -d db redis
+docker compose up -d db redis
 ```
 
 Run migrations:
@@ -54,7 +54,7 @@ Start the backend locally:
 uv run uvicorn app.main:app --reload
 ```
 
-The local application should use these URLs from the root `.env.local`:
+The local application should use these URLs from `.env`:
 
 ```env
 DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/dazah
@@ -82,30 +82,30 @@ uv run pytest
 To run the application inside Docker as well:
 
 ```powershell
-docker compose --env-file .env.local -f compose.dev.yml up -d --build
+docker compose --profile app up --build
 ```
 
 The app container runs `alembic upgrade head` before starting Uvicorn. It uses
-the Docker service hostnames from the root `.env.local.example`:
+the Docker service hostnames from `.env.example`:
 
 ```env
-DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/dazah
-REDIS_URL=redis://redis:6379/0
+APP_DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/dazah
+APP_REDIS_URL=redis://redis:6379/0
 ```
 
 ## Useful Commands
 
 ```powershell
-docker compose --env-file .env.local -f compose.dev.yml ps
-docker compose --env-file .env.local -f compose.dev.yml logs -f db
-docker compose --env-file .env.local -f compose.dev.yml logs -f redis
-docker compose --env-file .env.local -f compose.dev.yml down
+docker compose ps
+docker compose logs -f db
+docker compose logs -f redis
+docker compose down
 ```
 
 To reset only local container data:
 
 ```powershell
-docker compose --env-file .env.local -f compose.dev.yml down -v
-docker compose --env-file .env.local -f compose.dev.yml up -d db redis
+docker compose down -v
+docker compose up -d db redis
 uv run alembic upgrade head
 ```

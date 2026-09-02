@@ -1,16 +1,17 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { App, Button, Input, InputNumber, Modal, Space, Spin, Tag } from 'antd'
+import { App, Button, Input, InputNumber, Modal, Space, Spin, Tag, Upload } from 'antd'
 import {
   RobotOutlined,
   DeleteOutlined,
   CheckOutlined,
   FileTextOutlined,
+  UploadOutlined,
 } from '@ant-design/icons'
 import type { OralExamFile, OralExamQuestion, OralExamSourceFile } from '@/types/hr'
 import { resolveDocumentEntryContent } from '@/actions/quality'
-import { generateOralExamQuestions } from '@/lib/api/ai'
+import { extractExamDocumentText, generateOralExamQuestions } from '@/lib/api/ai'
 
 /** 单文件内容截断上限（防止 prompt 超长） */
 const CONTENT_MAX_LEN = 8000
@@ -46,13 +47,59 @@ export default function OralExamAiModal({
   const { message } = App.useApp()
   const [files, setFiles] = useState<OralExamSourceFile[]>([])
   const [resolving, setResolving] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [questions, setQuestions] = useState<OralExamQuestion[]>([])
   const [questionCount, setQuestionCount] = useState<number | null>(null)
 
+  // 上传文档（可多份）：调后端解析全文，作为出题素材追加（同名去重）
+  const handleUploadFiles = async (list: File[]) => {
+    if (!list.length) return
+    setUploading(true)
+    const failed: string[] = []
+    try {
+      for (const file of list) {
+        try {
+          const res = await extractExamDocumentText(file)
+          const text = (res.text || '').slice(0, CONTENT_MAX_LEN)
+          if (!text.trim()) {
+            failed.push(`${file.name}：未解析到文本`)
+            continue
+          }
+          let duplicated = false
+          setFiles((prev) => {
+            if (prev.some((f) => f.name === file.name)) {
+              duplicated = true
+              return prev
+            }
+            return [
+              ...prev,
+              {
+                name: file.name,
+                code: null,
+                matched: true,
+                attachmentCount: 0,
+                resolvedContent: text,
+              },
+            ]
+          })
+          if (duplicated) failed.push(`${file.name}：同名文件已存在`)
+        } catch (err) {
+          failed.push(`${file.name}：${(err instanceof Error ? err.message : '') || '解析失败'}`)
+        }
+      }
+    } finally {
+      setUploading(false)
+    }
+    if (failed.length) message.warning(`部分文档解析失败：${failed.join('；')}`)
+    else message.success('文档解析完成，已加入出题素材')
+  }
+
   // 打开弹窗时：收集文件名 → 解析质量文件管理中的附件内容
   useEffect(() => {
     if (!open) return
+    // 打开弹窗时同步重置题目列表：仅在 open 变化触发
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setQuestions([])
     const names = sourceFiles?.length
       ? sourceFiles.map((f) => f.name)
@@ -83,7 +130,7 @@ export default function OralExamAiModal({
         })
         setFiles(resolved)
       })
-      .catch((err: any) => {
+      .catch((err) => {
         message.error((err instanceof Error ? err.message : '') || '解析文件内容失败')
         setFiles(names.map((name) => ({ name, code: null, matched: false, attachmentCount: 0 })))
       })
@@ -167,8 +214,24 @@ export default function OralExamAiModal({
     >
       {/* ─── 文件解析结果 ─── */}
       <div className="mb-3">
-        <div className="text-[14px] font-semibold text-[var(--color-charcoal)] mb-2">
-          培训文件（{files.length}）
+        <div className="flex items-center justify-between mb-2">
+          <div className="text-[14px] font-semibold text-[var(--color-charcoal)]">
+            培训文件（{files.length}）
+          </div>
+          <Upload
+            multiple
+            showUploadList={false}
+            accept=".docx,.doc,.wps,.pdf,.txt,.md"
+            beforeUpload={(file, fileList) => {
+              // 仅在批次最后一个文件触发时统一处理，避免多份重复调用
+              if (fileList.indexOf(file) === fileList.length - 1) handleUploadFiles(fileList)
+              return false
+            }}
+          >
+            <Button size="small" icon={<UploadOutlined />} loading={uploading}>
+              上传文档出题（可多份）
+            </Button>
+          </Upload>
         </div>
         <Spin spinning={resolving}>
           {files.length === 0 ? (
@@ -190,6 +253,13 @@ export default function OralExamAiModal({
                     ) : (
                       <Tag color="warning">未找到可读内容</Tag>
                     )}
+                    <Button
+                      type="text"
+                      danger
+                      size="small"
+                      icon={<DeleteOutlined />}
+                      onClick={() => setFiles((prev) => prev.filter((_, idx) => idx !== i))}
+                    />
                   </div>
                   {f.matched && f.resolvedContent ? (
                     <div className="text-[12px] text-gray-500 max-h-16 overflow-auto bg-gray-50 rounded px-2 py-1">

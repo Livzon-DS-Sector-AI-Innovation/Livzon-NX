@@ -19,12 +19,15 @@ async def create_reference_substance(
     return substance
 
 
-async def get_reference_substances(db: AsyncSession) -> list[ReferenceSubstance]:
-    """获取所有对照品记录"""
+async def get_reference_substances(
+    db: AsyncSession, limit: int = 500
+) -> list[ReferenceSubstance]:
+    """获取对照品记录列表，limit 为保护性上限"""
     query = (
         select(ReferenceSubstance)
         .where(ReferenceSubstance.is_deleted == False)  # noqa: E712
         .order_by(ReferenceSubstance.created_at.desc())
+        .limit(limit)
     )
     result = await db.execute(query)
     return list(result.scalars().all())

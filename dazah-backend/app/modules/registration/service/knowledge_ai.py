@@ -95,7 +95,9 @@ async def extract_article_from_content(
         Dict with keys: title, content, tags, country, summary, file_base64, file_name,
         content_type
     """
-    text_content = _extract_text_from_file(file_name, file_content)
+    text_content = await asyncio.to_thread(
+        _extract_text_from_file, file_name, file_content
+    )
 
     if len(text_content) > 6000:
         text_content = text_content[:6000]
@@ -192,7 +194,9 @@ async def generate_attachment_summary(
 
     # 提取文本内容
     if file_content:
-        text_content = _extract_text_from_file(attachment.file_name, file_content)
+        text_content = await asyncio.to_thread(
+            _extract_text_from_file, attachment.file_name, file_content
+        )
     else:
         text_content = ""
 

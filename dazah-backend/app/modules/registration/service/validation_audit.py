@@ -11,6 +11,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.core.exceptions import AppException
 from app.core.llm import llm_client
 from app.core.upload_security import safe_upload_filename
 from app.modules.registration.models.validation_audit import (
@@ -173,8 +174,9 @@ class ValidationAuditService:
                     audit_file, parse_status="failed"
                 )
                 await self.task_repo.update(task, status=TaskStatus.FAILED.value)
-                raise RuntimeError(
-                    f"文件解析失败: {audit_file.original_filename}: {e}"
+                raise AppException(
+                    status_code=400,
+                    message=f"文件解析失败: {audit_file.original_filename}",
                 ) from e
 
         await self.task_repo.update(task, status=TaskStatus.UPLOADED.value)
@@ -229,7 +231,7 @@ class ValidationAuditService:
         ]
 
         if not parsed_files:
-            raise RuntimeError("没有已解析的文件可供审核")
+            raise AppException(status_code=400, message="没有已解析的文件可供审核")
 
         await self.task_repo.update(task, status=TaskStatus.AUDITING.value)
 
@@ -243,14 +245,16 @@ class ValidationAuditService:
             elif audit_mode == AuditMode.PROTOCOL_REPORT.value:
                 result = await self._audit_cross(task, parsed_files)
             else:
-                raise RuntimeError(f"未知审核模式: {audit_mode}")
+                raise AppException(
+                    status_code=400, message=f"未知审核模式: {audit_mode}"
+                )
 
             return result
 
         except Exception as e:
             logger.exception("审核执行失败")
             await self.task_repo.update(task, status=TaskStatus.FAILED.value)
-            raise RuntimeError(f"审核执行失败: {e}") from e
+            raise AppException(status_code=400, message=f"审核执行失败: {e}") from e
 
     async def _audit_protocol(
         self, task: ValidationAuditTask, files: list[ValidationAuditFile]
@@ -305,7 +309,9 @@ class ValidationAuditService:
         report_file = next((f for f in files if f.file_type == "report"), None)
 
         if not protocol_file or not report_file:
-            raise RuntimeError("模式 C 需要同时上传方案和报告文件")
+            raise AppException(
+                status_code=400, message="模式 C 需要同时上传方案和报告文件"
+            )
 
         golden_protocol = await self.build_golden_standard(
             protocol_file.parsed_text or "", "验证方案"
@@ -378,6 +384,9 @@ class ValidationAuditService:
         self, task: ValidationAuditTask, result: AuditResult
     ) -> list[ValidationAuditIssue]:
         """保存审核问题到数据库"""
+        # 幂等保护：重新审核时先清掉上次保存的全部问题，避免重复插入
+        await self.issue_repo.delete_by_task_id(task.id)
+
         issue_models = []
         for idx, issue_data in enumerate(result.issues, start=1):
             issue_type = (
@@ -473,6 +482,10 @@ class ValidationAuditService:
 
     # ── 生成审核报告 ──────────────────────────────────────
 
+    async def mark_failed(self, task: ValidationAuditTask) -> None:
+        """任务失败状态统一入口（幂等）。"""
+        await self.task_repo.update(task, status=TaskStatus.FAILED.value)
+
     async def generate_report(
         self, task: ValidationAuditTask, result: AuditResult
     ) -> ValidationAuditReport:
@@ -517,7 +530,11 @@ class ValidationAuditService:
             {"role": "system", "content": REPORT_GENERATION_SYSTEM},
             {"role": "user", "content": user_prompt},
         ]
-        markdown = await llm_client.chat(messages, temperature=0.2, max_tokens=32768)
+        # 报告是自然语言 Markdown：必须显式关闭 JSON 输出模式，
+        # 否则 llm_client 默认的 json_object 会把报告内容损坏。
+        markdown = await llm_client.chat(
+            messages, response_format=None, temperature=0.2, max_tokens=32768
+        )
 
         # 保存报告文件
         report_dir = _task_storage_path(task.id, "reports")

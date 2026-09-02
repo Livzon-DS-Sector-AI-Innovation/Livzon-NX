@@ -18,13 +18,14 @@ async def create_drug(db: AsyncSession, data: dict[str, Any]) -> Drug:
     return drug
 
 
-async def get_drugs(db: AsyncSession) -> list[Drug]:
-    """获取所有药品（含节点）"""
+async def get_drugs(db: AsyncSession, limit: int = 500) -> list[Drug]:
+    """获取药品列表（含节点），limit 为保护性上限"""
     query = (
         select(Drug)
         .where(Drug.is_deleted.is_(False))
         .options(selectinload(Drug.nodes.and_(DrugNode.is_deleted.is_(False))))
         .order_by(Drug.created_at)
+        .limit(limit)
     )
     result = await db.execute(query)
     return list(result.scalars().all())

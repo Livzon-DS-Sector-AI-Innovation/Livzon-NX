@@ -88,7 +88,12 @@ def generate_training_evaluation_doc(values: dict[str, Any]) -> BytesIO:
 
     # R1 培训日期 | 课时
     fill_whole_cell(cell(1, 1), _d(v.get("training_date")), fmt_src)
-    fill_whole_cell(cell(1, 4), _int(v.get("duration_hours")), fmt_src)
+    _duration = v.get("duration_hours")
+    fill_whole_cell(
+        cell(1, 4),
+        f"{_int(_duration)}h" if _duration is not None else "",
+        fmt_src,
+    )
 
     # R2 培训方式(sym) | 授课人
     method = v.get("training_method") or ""
@@ -114,7 +119,13 @@ def generate_training_evaluation_doc(values: dict[str, Any]) -> BytesIO:
     need_re = v.get("need_retraining")
     retrain_sel = "Yes" if need_re is True else ("No" if need_re is False else None)
     set_sym_group(cell(6, 0), retrain_sel, ["No", "Yes"])
-    fill_after_phrase(cell(6, 0), "再培训", v.get("retraining_info") or "")
+    # 精确匹配"再培训（时间、地点、方式等）"：
+    # 避免命中 Yes 行"（若再培训，请填写以下资料）"里的"再培训"
+    fill_after_phrase(
+        cell(6, 0),
+        "再培训（时间、地点、方式等）",
+        v.get("retraining_info") or "",
+    )
 
     # R7 考核方式(sym)
     set_sym_group(cell(7, 2), v.get("assessment_method") or "", ASSESS_OPTIONS)
@@ -129,10 +140,10 @@ def generate_training_evaluation_doc(values: dict[str, Any]) -> BytesIO:
     # R9 缺考及不合格人员处理方式
     fill_whole_cell(cell(9, 2), v.get("fail_handling") or "", fmt_src)
 
-    # R10 补考结果（空值显示"—"，与纸质模板填写规范一致）
-    fill_after_phrase(cell(10, 2), "补考", _int(v.get("makeup_count")) or "—")
-    fill_after_phrase(cell(10, 2), "合格", _int(v.get("makeup_pass_count")) or "—")
-    fill_after_phrase(cell(10, 2), "不合格", _int(v.get("makeup_fail_count")) or "—")
+    # R10 补考结果（未填时显示"-"，不再默认 0；前端支持填数值或"-"）
+    fill_after_phrase(cell(10, 2), "补考", _int(v.get("makeup_count")) or "-")
+    fill_after_phrase(cell(10, 2), "合格", _int(v.get("makeup_pass_count")) or "-")
+    fill_after_phrase(cell(10, 2), "不合格", _int(v.get("makeup_fail_count")) or "-")
 
     # R11 缺考及补考不合格人员处理方式
     fill_after_phrase(cell(11, 0), "处理方式", v.get("makeup_fail_handling") or "")

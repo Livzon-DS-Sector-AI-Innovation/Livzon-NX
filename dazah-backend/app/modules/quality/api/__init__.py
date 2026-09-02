@@ -16,6 +16,9 @@ from app.modules.quality.api.external_quality import router as external_quality_
 from app.modules.quality.api.feishu_capa import router as feishu_capa_router
 from app.modules.quality.api.inspection import router as inspection_router
 from app.modules.quality.api.inspection_feishu import router as inspection_feishu_router
+from app.modules.quality.api.inspection_feishu_crud import (
+    router as inspection_feishu_crud_router,
+)
 from app.modules.quality.api.inspection_submodules import (
     router as inspection_submodules_router,
 )
@@ -31,8 +34,14 @@ from app.modules.quality.api.quality_capa import router as quality_capa_router
 from app.modules.quality.api.quality_change import router as quality_change_router
 from app.modules.quality.api.quality_contacts import router as quality_contacts_router
 from app.modules.quality.api.quality_deviation import router as quality_deviation_router
+from app.modules.quality.api.quality_deviation_workbench import (
+    router as quality_deviation_workbench_router,
+)
 from app.modules.quality.api.quality_feishu_sync import (
     router as quality_feishu_sync_router,
+)
+from app.modules.quality.api.quality_historical_deviation import (
+    router as quality_historical_deviation_router,
 )
 from app.modules.quality.api.quality_management import (
     router as quality_management_router,
@@ -81,6 +90,12 @@ router.include_router(read_mirror_router, tags=["Quality-Feishu-Read"])
 # Mount quality management routes (deviations, CAPA, contacts, etc.)
 # Q1 拆分：原 quality_management 单一路由按实体拆为 6 个子路由
 router.include_router(quality_deviation_router, tags=["Quality-Management"])
+router.include_router(
+    quality_historical_deviation_router, tags=["Quality-Management"]
+)
+router.include_router(
+    quality_deviation_workbench_router, tags=["Quality-Management"]
+)
 router.include_router(quality_change_router, tags=["Quality-Management"])
 router.include_router(quality_capa_router, tags=["Quality-Management"])
 router.include_router(quality_feishu_sync_router, tags=["Quality-Management"])
@@ -92,6 +107,9 @@ router.include_router(feishu_capa_router, tags=["Quality-Feishu-CAPA"])
 # Mount quality inspection routes
 router.include_router(inspection_router, tags=["Quality-Inspection"])
 router.include_router(inspection_feishu_router, tags=["Quality-Inspection-Feishu"])
+router.include_router(
+    inspection_feishu_crud_router, tags=["Quality-Inspection-Feishu-CRUD"]
+)
 router.include_router(
     inspection_submodules_router, tags=["Quality-Inspection-Submodules"]
 )

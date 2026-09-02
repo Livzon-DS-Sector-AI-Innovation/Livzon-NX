@@ -1,7 +1,5 @@
 'use client'
 
- 'use client'
-
 import { useState } from 'react'
 import { Form, Input, Upload, Button, App, Card, Radio, Typography } from 'antd'
 import {
@@ -58,6 +56,12 @@ export default function ValidationAuditNewClient() {
         message.error('请上传至少一个审核文件')
         return
       }
+      const MAX_BYTES = 50 * 1024 * 1024
+      const oversized = fileList.find((f) => ((f.originFileObj || f) as File).size > MAX_BYTES)
+      if (oversized) {
+        message.error(`文件「${oversized.name}」超过 50MB 限制`)
+        return
+      }
 
       setSubmitting(true)
 
@@ -77,13 +81,20 @@ export default function ValidationAuditNewClient() {
 
       const taskId = createResult.data.id
 
+      // 联合审核需要区分方案/报告两类文件；单文件组上传无法表达分类，
+      // 引导到详情页分类型上传，避免报告被错误标记为方案。
+      if (values.audit_mode === 'protocol_report') {
+        message.info('联合审核模式：请进入任务详情，分别上传验证方案与验证报告')
+        router.push(`/registration/validation-audit/${taskId}`)
+        return
+      }
+
       const formData = new FormData()
       for (const file of fileList) {
         const originFile = file.originFileObj || file
         formData.append('files', originFile)
       }
-      const fileType = values.audit_mode === 'protocol_report' ? 'protocol' : values.audit_mode
-      formData.append('file_type', fileType)
+      formData.append('file_type', values.audit_mode)
 
       const uploadResult = await uploadValidationAuditFiles(taskId, formData)
       if (!uploadResult.success) {
@@ -123,6 +134,7 @@ export default function ValidationAuditNewClient() {
         </div>
       </div>
 
+      <Form form={form} layout="vertical" initialValues={{ audit_mode: 'protocol' }}>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left Column: Task Info */}
         <div className="space-y-6">
@@ -141,7 +153,7 @@ export default function ValidationAuditNewClient() {
               </Text>
             </div>
 
-            <Form form={form} layout="vertical" initialValues={{ audit_mode: 'protocol' }}>
+            <div>
               <Form.Item name="audit_mode" noStyle>
                 <Radio.Group
                   value={auditMode}
@@ -178,7 +190,7 @@ export default function ValidationAuditNewClient() {
                   </div>
                 </Radio.Group>
               </Form.Item>
-            </Form>
+            </div>
           </Card>
 
           {/* Task Info Form */}
@@ -193,7 +205,7 @@ export default function ValidationAuditNewClient() {
               </div>
             </div>
 
-            <Form form={form} layout="vertical">
+            <div>
               <Form.Item
                 name="task_name"
                 label={<span className="text-[13px] font-medium">任务名称</span>}
@@ -228,7 +240,7 @@ export default function ValidationAuditNewClient() {
               >
                 <Input placeholder="文件提供方公司名称" maxLength={300} style={{ borderRadius: 8 }} />
               </Form.Item>
-            </Form>
+            </div>
           </Card>
         </div>
 
@@ -246,7 +258,7 @@ export default function ValidationAuditNewClient() {
               </div>
               <Text type="secondary" className="text-[12px] ml-7">
                 {auditMode === 'protocol_report'
-                  ? '请同时上传验证方案和验证报告'
+                  ? '联合审核：创建任务后请在详情页分别上传验证方案与验证报告'
                   : auditMode === 'protocol' ? '请上传验证方案文件' : '请上传验证报告文件'}
               </Text>
             </div>
@@ -294,6 +306,7 @@ export default function ValidationAuditNewClient() {
           </Card>
         </div>
       </div>
+      </Form>
 
       {/* Actions */}
       <div className="flex justify-end gap-3 mt-6 pb-8">

@@ -112,19 +112,22 @@ async def test_app_settings_seed_credentials_and_updates(
     db = _Db([_Result(existing)])
     assert await service._ensure_app_settings_seeded(db) is existing
 
+    # 严格独立：新建行不再从平台 env 播种凭证，留空待用户在设置页填写
     monkeypatch.setattr(service._settings, "FEISHU_APP_ID", "env-id")
     monkeypatch.setattr(service._settings, "FEISHU_APP_SECRET", "env-secret")
-    monkeypatch.setattr(service, "encrypt_api_key", lambda value: f"enc-{value}")
+    db = _Db([_Result()])
+    seeded = await service._ensure_app_settings_seeded(db)
+    assert seeded.app_id == ""
+    assert seeded.app_secret == ""
+
+    # DB 中配置了凭证（启用行）→ 解密后返回，env 不参与
     monkeypatch.setattr(
         service, "decrypt_api_key", lambda value: value.removeprefix("enc-")
     )
-    db = _Db([_Result()])
-    seeded = await service._ensure_app_settings_seeded(db)
-    assert seeded.app_id == "env-id"
-    assert seeded.app_secret == "enc-env-secret"
-    assert await service.get_hr_feishu_app_credentials(_Db([_Result(seeded)])) == (
-        "env-id",
-        "env-secret",
+    cred_row = _app_row(app_id="db-id", app_secret="enc-db-secret")
+    assert await service.get_hr_feishu_app_credentials(_Db([_Result(cred_row)])) == (
+        "db-id",
+        "db-secret",
     )
 
     db = _Db([_Result(_app_row()), _Result(_app_row())])
@@ -143,17 +146,16 @@ async def test_app_settings_seed_credentials_and_updates(
 async def test_credentials_fallback_and_app_connection_branches(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # 严格独立：行未配置凭证时直接抛错，即使平台 env 有配置也不回退
     monkeypatch.setattr(service._settings, "FEISHU_APP_ID", "fallback-id")
     monkeypatch.setattr(service._settings, "FEISHU_APP_SECRET", "fallback-secret")
     monkeypatch.setattr(
         service, "decrypt_api_key", lambda _value: (_ for _ in ()).throw(ValueError())
     )
-    assert await service.get_hr_feishu_app_credentials(
-        _Db([_Result(_app_row(app_id=""))])
-    ) == (
-        "fallback-id",
-        "fallback-secret",
-    )
+    with pytest.raises(service.HrFeishuNotConfigured):
+        await service.get_hr_feishu_app_credentials(
+            _Db([_Result(_app_row(app_id=""))])
+        )
 
     missing = _app_row(app_id="", app_secret="")
     result = await service.test_hr_feishu_app_settings(_Db([_Result(missing)]))
@@ -282,8 +284,12 @@ async def test_entity_setting_update_and_missing_table_token(
 ) -> None:
     monkeypatch.setattr(service, "DEFAULT_HR_FEISHU_ENTITIES", [])
     monkeypatch.setattr(service, "DEFAULT_HR_FEISHU_ENTITY_MAP", {})
+    # 凭证严格独立：先解析人事凭证（首个 _Result 供凭证查询），再走缺失 App Token 分支
+    monkeypatch.setattr(service, "decrypt_api_key", lambda _value: "secret")
     with pytest.raises(ValueError, match="App Token"):
-        await service.list_hr_feishu_tables(_Db([_Result()]), "unknown", app_token=None)
+        await service.list_hr_feishu_tables(
+            _Db([_Result(_app_row()), _Result()]), "unknown", app_token=None
+        )
 
     monkeypatch.setattr(
         service,

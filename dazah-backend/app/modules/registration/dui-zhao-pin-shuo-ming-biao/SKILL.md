@@ -29,8 +29,9 @@ description: 根据COA（检验报告/分析证书）自动生成对照物质说
 
 使用 JoinCare OCR API 读取COA PDF内容：
 ```bash
+# 凭据必须从环境变量 JOINCARE_OCR_TOKEN 读取，禁止把真实 Token 写入本文件
 curl -X POST "https://ops.joincare.com/api/jky/ems/attach/ocr/file" \
-  -H "Authorization: 852F88D8-E94A-44EB-A712-65CB167A1995" \
+  -H "Authorization: ${JOINCARE_OCR_TOKEN:?请先在环境变量 JOINCARE_OCR_TOKEN 中配置 OCR 凭据}" \
   -F "file=@COA.pdf"
 ```
 
@@ -121,10 +122,10 @@ curl -X POST "https://ops.joincare.com/api/jky/ems/attach/ocr/file" \
 
 ## 固定信息配置
 
-以下信息在所有说明表中保持不变：
+以下信息在所有说明表中保持不变（由部署方通过环境变量或部署配置提供，禁止写死个人隐私信息）：
 - **提供单位**：珠海保税区丽珠合成制药有限公司
-- **经办人签名**：魏永红
-- **联系方式**：13570680132
+- **经办人签名**：（经办人姓名，由部署配置提供）
+- **联系方式**：（联系电话，由部署配置提供）
 
 ## 格式规范
 
@@ -152,8 +153,8 @@ curl -X POST "https://ops.joincare.com/api/jky/ems/attach/ocr/file" \
 | R7C2-4 | 贮存条件（根据COA勾选） |
 | R8C2-4 | 使用方法（勾选"直接折算"） |
 | R2C2-4 | 提供单位（固定：珠海保税区丽珠合成制药有限公司） |
-| R3C2 | 经办人签名（固定：魏永红） |
-| R3C4 | 联系方式（固定：13570680132） |
+| R3C2 | 经办人签名（由部署配置提供） |
+| R3C4 | 联系方式（由部署配置提供） |
 
 ## 注意事项
 

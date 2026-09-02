@@ -6,6 +6,7 @@ import { Button, Input, Select, Space, Table, Tag, Tooltip } from 'antd'
 import type { TableColumnsType } from 'antd'
 import { DeleteOutlined, EditOutlined, ReloadOutlined, SyncOutlined } from '@ant-design/icons'
 import type { ChangeActionPlanListItem } from '@/types/quality'
+import { PersonCell } from './index'
 import { ResizableHeaderCell } from './ResizableTableHeader'
 
 interface ChangeActionPlanFilters {
@@ -207,8 +208,24 @@ export function ChangeActionPlanTable({
           </Tooltip>
         ),
       },
-      { title: '总负责人', dataIndex: 'owner_name', key: 'owner_name', width: defaultColumnWidths.owner_name, render: (value: string | null) => value || '-' },
-      { title: '部门总监', dataIndex: 'director_name', key: 'director_name', width: defaultColumnWidths.director_name, render: (value: string | null) => value || '-' },
+      {
+        title: '总负责人',
+        dataIndex: 'owner_name',
+        key: 'owner_name',
+        width: defaultColumnWidths.owner_name,
+        render: (value: string | null, record) => (
+          <PersonCell name={value} avatarUrl={record.owner_avatar_url || null} />
+        ),
+      },
+      {
+        title: '部门总监',
+        dataIndex: 'director_name',
+        key: 'director_name',
+        width: defaultColumnWidths.director_name,
+        render: (value: string | null, record) => (
+          <PersonCell name={value} avatarUrl={record.director_avatar_url || null} />
+        ),
+      },
       { title: '项目截止时间', dataIndex: 'deadline_date', key: 'deadline_date', width: defaultColumnWidths.deadline_date, render: formatDate },
       { title: '状态', dataIndex: 'status', key: 'status', width: defaultColumnWidths.status, render: (value: string | null) => value || '-' },
       { title: '延期', dataIndex: 'delay_flag', key: 'delay_flag', width: defaultColumnWidths.delay_flag, render: (value: string | null) => value || '-' },

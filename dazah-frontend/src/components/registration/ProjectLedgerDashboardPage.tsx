@@ -64,7 +64,16 @@ function getValueByLabel(
   }
 }
 
-function checkSuccess(meta: {
+// 审评/批准语义的成功判定：
+// 1) 证书状态/证书名称是明确事实，优先采信；
+// 2) 文本匹配必须先排除"待/拟/不/未"等未完成或否定表述，
+//    再匹配明确的成功词（裸"批准""gmp"歧义太大，不作为成功依据）。
+const LEDGER_PENDING_PATTERN =
+  /不批准|未批准|待批准|拟批准|未通过|待通过|待审评|审评中|受理中|计划|拟接受|预计|拟于/i
+const LEDGER_SUCCESS_PATTERN =
+  /已获批|批准文号|注册成功|获证|审评通过|已通过|certificate/i
+
+export function checkSuccess(meta: {
   certificateStatus: string
   certificateName: string
   resultText: string
@@ -77,8 +86,16 @@ function checkSuccess(meta: {
   if (meta.certificateName) {
     return true
   }
-  const mergedText = [meta.resultText, meta.historyText, meta.activityType].join(' ')
-  return /批准|通过|获证|注册成功|已获批|批准文号|certificate|gmp/i.test(mergedText)
+  const mergedText = [meta.resultText, meta.historyText, meta.activityType]
+    .join(' ')
+    .trim()
+  if (!mergedText) {
+    return false
+  }
+  if (LEDGER_PENDING_PATTERN.test(mergedText)) {
+    return false
+  }
+  return LEDGER_SUCCESS_PATTERN.test(mergedText)
 }
 
 export default function ProjectLedgerDashboardPage({

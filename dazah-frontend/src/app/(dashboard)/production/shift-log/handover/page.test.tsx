@@ -238,6 +238,12 @@ describe('ShiftHandoverPage', () => {
       root.render(<App><ShiftHandoverPage /></App>)
     })
     await act(async () => { await flush(80) })
+    // 用当月日期定位面板单元格，避免默认面板月份导致目标日期格子不存在
+    const nowDate = new Date()
+    const year = nowDate.getFullYear()
+    const month = String(nowDate.getMonth() + 1).padStart(2, '0')
+    const dateFrom = `${year}-${month}-20`
+    const dateTo = `${year}-${month}-22`
     const pickerInput = document.querySelector('.ant-picker-input input') as HTMLInputElement | null
     if (pickerInput) {
       await act(async () => {
@@ -245,9 +251,9 @@ describe('ShiftHandoverPage', () => {
         pickerInput.dispatchEvent(new Event('focus'))
         await flush(150)
       })
-      const cells = Array.from(document.querySelectorAll('.ant-picker-dropdown .ant-picker-cell')).filter((c) => (c.getAttribute('title') || '').startsWith('2026-'))
-      const first = cells.find((c) => c.getAttribute('title') === '2026-08-20') as HTMLElement | undefined
-      const second = cells.find((c) => c.getAttribute('title') === '2026-08-22') as HTMLElement | undefined
+      const cells = Array.from(document.querySelectorAll('.ant-picker-dropdown .ant-picker-cell')).filter((c) => (c.getAttribute('title') || '').startsWith(`${year}-`))
+      const first = cells.find((c) => c.getAttribute('title') === dateFrom) as HTMLElement | undefined
+      const second = cells.find((c) => c.getAttribute('title') === dateTo) as HTMLElement | undefined
       await act(async () => { first?.click(); await flush(80) })
       await act(async () => { second?.click(); await flush(80) })
     }
@@ -256,6 +262,6 @@ describe('ShiftHandoverPage', () => {
     const calls = actions.getShiftHandovers.mock.calls
     const lastCall = calls[calls.length - 1]
     expect(lastCall).toBeDefined()
-    expect(lastCall[0]).toEqual(expect.objectContaining({ date_from: '2026-08-20', date_to: '2026-08-22' }))
+    expect(lastCall[0]).toEqual(expect.objectContaining({ date_from: dateFrom, date_to: dateTo }))
   })
 })

@@ -8,7 +8,7 @@ from typing import Any, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Query, UploadFile
-from sqlalchemy import case, delete, func, or_, select
+from sqlalchemy import case, delete, func, or_, select, text
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -347,7 +347,10 @@ async def _sync_feishu_members(db: AsyncSession) -> None:
     任一部门成员拉取失败时抛异常并放弃本次全表重写，保留现有数据，
     避免失败部门的成员被静默清除。
     """
-    contact = FeishuContact()
+    from app.modules.hr.feishu_settings_service import get_hr_feishu_app_credentials
+
+    app_id, app_secret = await get_hr_feishu_app_credentials(db)
+    contact = FeishuContact(app_id=app_id, app_secret=app_secret)
     root_id = await _resolve_ningxia_root_dept_id(db)
     extra_roots = await _resolve_extra_root_dept_ids(db, contact, root_id)
     roots = [root_id] + [r for r in extra_roots if r and r != root_id]
@@ -421,20 +424,35 @@ async def _sync_feishu_members(db: AsyncSession) -> None:
         )
 
     if collected:
+        # 接口不返回的手机号/性别/邮箱：重写前按 open_id 继承现有值，
+        # 防止全表重写把回填过的联系信息清空
+        prev_mobile: dict[str, str | None] = {}
+        prev_gender: dict[str, str | None] = {}
+        prev_email: dict[str, str | None] = {}
+        prev_ent_email: dict[str, str | None] = {}
+        existing_rows = await db.execute(select(HrFeishuMember))
+        for m in existing_rows.scalars().all():
+            prev_mobile[m.open_id] = m.mobile
+            prev_gender[m.open_id] = m.gender
+            prev_email[m.open_id] = m.email
+            prev_ent_email[m.open_id] = m.enterprise_email
+
         await db.execute(delete(HrFeishuMember))
         now = datetime.now(UTC)
         for item in collected:
+            oid = item["open_id"]
             db.add(
                 HrFeishuMember(
                     open_id=item["open_id"],
                     name=item["name"],
                     department=item["department"],
-                    mobile=item["mobile"],
-                    email=item["email"],
-                    enterprise_email=item["enterprise_email"],
+                    mobile=item["mobile"] or prev_mobile.get(oid),
+                    email=item["email"] or prev_email.get(oid),
+                    enterprise_email=item["enterprise_email"]
+                    or prev_ent_email.get(oid),
                     employee_no=item["employee_no"],
                     job_title=item["job_title"],
-                    gender=item["gender"],
+                    gender=item["gender"] or prev_gender.get(oid),
                     avatar_url=item["avatar_url"],
                     status=item["status"],
                     status_changed_at=item.get("status_changed_at"),
@@ -442,6 +460,54 @@ async def _sync_feishu_members(db: AsyncSession) -> None:
                 )
             )
         await db.commit()
+
+    # 全表重写成功后，按联系人（排除无工号公用账号）回填部门在职人数。
+    # 人事应用的通讯录权限下飞书部门接口不返回 member_count，部门人数
+    # 统一以本表真实人员统计为准，与联系人页面口径一致。
+    try:
+        # 口径：status=1（在职）且有工号（排除公用账号与离职/冻结账号）。
+        # 上卷按部门名去重：同名父子部门（如"仓储部"下还有"仓储部"）的
+        # 成员在联系人表里是同一个 department 名，去重避免重复计数。
+        await db.execute(
+            text(
+                """
+                WITH RECURSIVE subtree AS (
+                    SELECT id AS root_id, id AS node_id
+                    FROM hr.departments WHERE is_deleted = false
+                    UNION ALL
+                    SELECT s.root_id, c.id
+                    FROM subtree s
+                    JOIN hr.departments c ON c.parent_id = s.node_id
+                    WHERE c.is_deleted = false
+                ),
+                name_counts AS (
+                    SELECT m.department, count(*) AS cnt
+                    FROM hr.hr_feishu_members m
+                    WHERE m.is_deleted = false
+                      AND m.employee_no IS NOT NULL AND m.employee_no <> ''
+                      AND m.status = '1'
+                    GROUP BY m.department
+                ),
+                root_names AS (
+                    SELECT DISTINCT s.root_id, n.name
+                    FROM subtree s
+                    JOIN hr.departments n ON n.id = s.node_id
+                )
+                UPDATE hr.departments d
+                SET current_count = coalesce(ag.cnt, 0)
+                FROM (
+                    SELECT r.root_id, sum(coalesce(nc.cnt, 0)) AS cnt
+                    FROM root_names r
+                    LEFT JOIN name_counts nc ON nc.department = r.name
+                    GROUP BY r.root_id
+                ) ag
+                WHERE d.id = ag.root_id
+                """
+            )
+        )
+        await db.commit()
+    except Exception:
+        logger.exception("[FeishuMemberSync] 回填部门在职人数失败")
 
     # 全表重写成功后，对「在职→冻结/离职」的成员触发自动离职联动（逐个容错）
     for item in transitions:
@@ -498,6 +564,8 @@ async def _auto_offboard(
 
     # 2. 创建离职台账记录（内部同步飞书离职管理表 + 设状态离职）
     svc = OffboardingRecordService(db)
+    # 仅「暂停使用/冻结」（status=4）标记为账号冻结；正常离职（status=2）用正常离职原因
+    is_frozen = str(item.get("status")) == "4"
     data = OffboardingRecordCreate(
         employee_id=employee.id,
         employee_number=emp_no,
@@ -513,8 +581,13 @@ async def _auto_offboard(
         phone=employee.phone,
         email=employee.email,
         offboarding_date=change_d,
-        offboarding_type="其他",
-        reason="飞书账号冻结/暂停使用，自动转离职",
+        offboarding_type="其他" if is_frozen else "正常离职",
+        reason=(
+            "飞书账号冻结/暂停使用，自动转离职"
+            if is_frozen
+            else "飞书账号状态变更离职，自动转离职"
+        ),
+        status="离职",
     )
     await svc.create_record(data)
 
@@ -686,21 +759,28 @@ async def list_feishu_members(
     total = total_result.scalar() or 0
 
     # 分页查询 - 用 CASE 把原始部门映射为展示部门及其排序值，
-    # 不做 join，避免同名部门产生重复行
-    display_case = case(
-        display_map, value=HrFeishuMember.department, else_=HrFeishuMember.department
-    )
-    sort_case = case(
-        {raw: sort_by_name.get(disp, 9999) for raw, disp in display_map.items()},
-        value=HrFeishuMember.department,
-        else_=9999,
-    )
-    result = await db.execute(
-        query.order_by(
-            sort_case.asc(),
-            display_case.asc(),
-            HrFeishuMember.name.asc(),
+    # 不做 join，避免同名部门产生重复行。
+    # 部门表为空（如开发环境未同步部门）时映射为空，CASE 无 WHEN 分支
+    # 会生成非法 SQL，此时回退按原始部门名排序。
+    if display_map:
+        display_case = case(
+            display_map,
+            value=HrFeishuMember.department,
+            else_=HrFeishuMember.department,
         )
+        sort_case = case(
+            {
+                raw: sort_by_name.get(disp, 9999)
+                for raw, disp in display_map.items()
+            },
+            value=HrFeishuMember.department,
+            else_=9999,
+        )
+        order_columns = [sort_case.asc(), display_case.asc()]
+    else:
+        order_columns = [HrFeishuMember.department.asc()]
+    result = await db.execute(
+        query.order_by(*order_columns, HrFeishuMember.name.asc())
         .offset((page - 1) * page_size)
         .limit(page_size)
     )

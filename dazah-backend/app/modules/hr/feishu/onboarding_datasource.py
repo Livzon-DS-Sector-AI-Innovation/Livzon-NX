@@ -100,9 +100,20 @@ def _ms_to_date(value: Any) -> date | None:
 class OnboardingBitableDataSource:
     """Onboarding (老厂入职) datasource backed by Feishu Bitable."""
 
-    def __init__(self) -> None:
-        self.client = BitableClient()
-        self.client.app_token = _settings.FEISHU_BITABLE_APP_TOKEN
+    def __init__(
+        self,
+        *,
+        app_id: str | None = None,
+        app_secret: str | None = None,
+    ) -> None:
+        # 凭证优先用人事自有应用（app_id/secret 由调用方从
+        # get_hr_feishu_app_credentials 解析）；未提供时回退平台应用，
+        # 仅覆盖"人事应用尚未配置"的老部署，保持读数据源可用
+        self.client = BitableClient(
+            app_token=_settings.FEISHU_BITABLE_APP_TOKEN,
+            app_id=app_id or None,
+            app_secret=app_secret or None,
+        )
         self.table_id = _settings.FEISHU_BITABLE_ONBOARDING_TABLE_ID
 
     def _is_enabled(self) -> bool:

@@ -8,6 +8,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { pullComplaintLedgerRecords, createComplaintLedgerRecord, updateComplaintLedgerRecord, deleteComplaintLedgerRecord } from '@/actions/quality'
 import { fetchComplaintLedgerRecords } from '@/lib/api/client/quality'
 import type { ComplaintLedgerItem } from '@/types/quality'
+import { TableEmptyState } from './TableEmptyState'
 
 interface FormValues {
   serial_number: string
@@ -54,6 +55,8 @@ export default function ComplaintLedgerPage({ initialItems = [] }: ComplaintLedg
   const [modalVisible, setModalVisible] = useState(false)
   const [editingRecord, setEditingRecord] = useState<ComplaintLedgerItem | null>(null)
   const [form] = Form.useForm<FormValues>()
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
 
   const { data, isLoading: loading, error } = useQuery({
     queryKey: ['quality-complaint', 'list'],
@@ -180,6 +183,13 @@ export default function ComplaintLedgerPage({ initialItems = [] }: ComplaintLedg
     )
   }, [items, searchKeyword])
 
+  // 搜索变化时回到第一页
+  useEffect(() => {
+    setPage(1)
+  }, [searchKeyword])
+
+  const pagedItems = filteredItems.slice((page - 1) * pageSize, page * pageSize)
+
   const columns: ColumnsType<ComplaintLedgerItem> = [
     {
       title: '序号',
@@ -301,8 +311,24 @@ export default function ComplaintLedgerPage({ initialItems = [] }: ComplaintLedg
           rowKey="record_id"
           loading={loading}
           columns={columns}
-          dataSource={filteredItems}
-          pagination={false}
+          dataSource={pagedItems}
+          locale={{
+            emptyText: (
+              <TableEmptyState hasFilters={Boolean(searchKeyword)} hasError={Boolean(error)} />
+            ),
+          }}
+          pagination={{
+            current: page,
+            pageSize,
+            total: filteredItems.length,
+            showSizeChanger: true,
+            showQuickJumper: true,
+            showTotal: (t) => `共 ${t} 条`,
+            onChange: (nextPage, nextPageSize) => {
+              setPage(nextPage)
+              setPageSize(nextPageSize)
+            },
+          }}
           scroll={{ x: 1700 }}
         />
       </Card>

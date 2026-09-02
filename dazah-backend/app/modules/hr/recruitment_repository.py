@@ -53,11 +53,11 @@ F_ONBOARDING_R = {
     "onboard_date": "入职日期",
     "department": "入职部门",
     "level": "岗位",
-    "status": "入职状态",
-    "health_status": "体检状态",
-    "resignation_cert": "离职证明",
-    "id_card": "身份证信息",
-    "education_cert": "学历证明",
+    # 附件字段（飞书多维 type=17 附件）
+    "resignation_attachment": "离职证明附件",
+    "id_attachment": "身份信息附件",
+    "education_attachment": "学历证书附件",
+    "other_attachment": "其他",
 }
 
 # ═══════════════════════════════════════════════════════════════
@@ -96,11 +96,11 @@ F_ONBOARDING_W = {
     "onboard_date": "入职日期",
     "department": "入职部门",
     "level": "岗位",
-    "status": "入职状态",
-    "health_status": "体检状态",
-    "resignation_cert": "离职证明",
-    "id_card": "身份证信息",
-    "education_cert": "学历证明",
+    # 附件字段（飞书多维 type=17 附件），写入格式 [{"file_token": "..."}]
+    "resignation_attachment": "离职证明附件",
+    "id_attachment": "身份信息附件",
+    "education_attachment": "学历证书附件",
+    "other_attachment": "其他",
 }
 
 
@@ -191,8 +191,19 @@ class RecruitmentBitableRepo:
         self._resolved_token: str | None = None
 
     async def _get_client(self) -> BitableClient | None:
-        "延迟初始化 client。从 module_settings → env → entity_settings 依次查找 token。"
+        """延迟初始化 client。从 module_settings → env → entity_settings 找 token.
+
+        应用凭证（app_id/secret）严格使用人事模块自己的 DB 配置，未配置时抛
+        HrFeishuNotConfigured，不回退平台全局凭证。
+        """
         if self._client is None:
+            from app.core.database import async_session_factory
+            from app.modules.hr.feishu_settings_service import (
+                get_hr_feishu_app_credentials,
+            )
+
+            async with async_session_factory() as session:
+                app_id, app_secret = await get_hr_feishu_app_credentials(session)
             token = self._app_token
             if not token:
                 token = await get_module_setting("hr", "HR_FEISHU_APP_TOKEN", "")
@@ -211,7 +222,9 @@ class RecruitmentBitableRepo:
                 self._resolved_token = ""
                 return None
             self._resolved_token = token
-            self._client = BitableClient(app_token=token)
+            self._client = BitableClient(
+                app_token=token, app_id=app_id, app_secret=app_secret,
+            )
         elif not self._resolved_token:
             return None
         return self._client
@@ -304,6 +317,19 @@ class RecruitmentBitableRepo:
             result[rid] = title or rid
         return result
 
+    async def get_job_display_names(self) -> dict[str, str]:
+        """候选人 job_id（record_id 或职位名称）→ 职位显示名 的映射。
+
+        兼容两种数据形态：应聘职位字段可能是职位关联 record_id（关联字段），
+        也可能是职位名称文本（文本/单选字段）。
+        """
+        names = await self.get_job_names()
+        merged = dict(names)
+        for rid, title in names.items():
+            if title:
+                merged[title] = title
+        return merged
+
     async def update_job(
         self, record_id: str, fields: dict[str, Any]
     ) -> dict[str, Any]:
@@ -347,7 +373,14 @@ class RecruitmentBitableRepo:
                 it for it in items if it.get("interview_status") == interview_status
             ]
         if job_id:
-            items = [it for it in items if it.get("job_id") == job_id]
+            # 兼容两种数据形态：候选人的「应聘职位」可能是职位 record_id（关联字段）
+            # 或职位名称（文本/单选字段），取两者并集匹配
+            allowed = {job_id}
+            job_names = await self.get_job_names()
+            title = job_names.get(job_id)
+            if title:
+                allowed.add(title)
+            items = [it for it in items if it.get("job_id") in allowed]
         # Filter out soft-deleted
         items = [it for it in items if it.get("interview_status") != "已删除"]
         total = len(items)
@@ -463,79 +496,10 @@ class RecruitmentBitableRepo:
         # 飞书 update 接口只返回变更字段，需重新获取完整记录
         return await self.get_onboarding(record_id)
 
-    # ─── Dashboard ──────────────────────────────────────────────────
-
-    async def get_dashboard_stats(
-        self, dept_alias_set: set[str] | None = None
-    ) -> dict[str, Any]:
+    async def delete_onboarding(self, record_id: str) -> None:
+        """从飞书多维表格删除入职记录（不可恢复）。"""
         client = await self._get_client()
         if not client:
-            return {"stages": {}, "total": 0}
-        records = await client.search_records(TBL_ONBOARDING, page_size=500)
+            raise RecruitmentNotConfigured()
+        await client.delete_record(TBL_ONBOARDING, record_id)
 
-        stage_1 = stage_2 = stage_3 = stage_4 = stage_5 = 0
-        total = 0
-        for ob in records:
-            fs = ob.get("fields", {})
-            if dept_alias_set is not None:
-                # 部门级数据隔离：非管理员仅统计可见部门
-                ob_dept = fs.get("入职部门", "")
-                if ob_dept not in dept_alias_set:
-                    continue
-            total += 1
-            ob_status = fs.get("入职状态", "")
-            ob_date = fs.get("入职日期")
-            health_status = fs.get("体检状态", "")
-            resignation_cert = fs.get("离职证明", "")
-            id_card = fs.get("身份证信息", "")
-            education_cert = fs.get("学历证明", "")
-
-            if ob_status == "已完成":
-                stage_5 += 1
-                continue
-
-            all_materials_provided = (
-                resignation_cert == "已提供"
-                and id_card == "已提供"
-                and education_cert == "已提供"
-            )
-
-            if (
-                ob_status == "进行中"
-                and health_status == "合格"
-                and all_materials_provided
-            ):
-                stage_4 += 1
-                continue
-
-            if (
-                ob_status == "进行中"
-                and health_status not in ("未进行", "")
-                and not all_materials_provided
-            ):
-                stage_3 += 1
-                continue
-
-            if (
-                ob_status == "进行中"
-                and ob_date
-                and health_status == "未进行"
-                and not all_materials_provided
-            ):
-                stage_2 += 1
-                continue
-
-            if ob_status == "进行中" and not ob_date:
-                stage_1 += 1
-                continue
-
-        return {
-            "stages": {
-                "stage_1_pending": {"count": stage_1, "label": "待入职"},
-                "stage_2_info": {"count": stage_2, "label": "信息录入"},
-                "stage_3_health": {"count": stage_3, "label": "体检"},
-                "stage_4_material": {"count": stage_4, "label": "材料登记"},
-                "stage_5_done": {"count": stage_5, "label": "完成"},
-            },
-            "total": total,
-        }

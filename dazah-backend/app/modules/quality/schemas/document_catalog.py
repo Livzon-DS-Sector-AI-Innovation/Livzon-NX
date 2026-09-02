@@ -168,3 +168,36 @@ class DocumentCatalogImportResult(BaseModel):
     department_count: int
     entry_count: int
     sheets: list[DocumentCatalogImportSheetResult] = Field(default_factory=list)
+
+
+class BatchImportAttachmentResultItem(BaseModel):
+    """单个附件文件的导入结果。"""
+
+    file_name: str = Field(..., description="附件文件名")
+    matched: bool = Field(default=False, description="是否匹配到条目")
+    match_type: str = Field(
+        default="none", description="匹配方式：name/code/content/llm/none"
+    )
+    entry_id: UUID | None = Field(default=None, description="绑定条目 ID")
+    entry_name: str | None = Field(default=None, description="绑定条目名称")
+    entry_code: str | None = Field(default=None, description="绑定条目文件编码")
+    version_updated: bool = Field(
+        default=False, description="是否自动升级了条目文件编码版本"
+    )
+    old_code: str | None = Field(
+        default=None, description="版本升级前的文件编码（未升级为空）"
+    )
+    new_code: str | None = Field(
+        default=None, description="版本升级后的文件编码（未升级为空）"
+    )
+
+
+class BatchImportDocumentAttachmentsResult(BaseModel):
+    """统一导入附件结果汇总。"""
+
+    bound: int = Field(default=0, description="成功绑定附件数")
+    failed: int = Field(default=0, description="未匹配文件数")
+    version_updated_count: int = Field(
+        default=0, description="文件编码版本自动升级数"
+    )
+    results: list[BatchImportAttachmentResultItem] = Field(default_factory=list)

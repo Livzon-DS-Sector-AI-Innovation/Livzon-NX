@@ -18,7 +18,9 @@ class RegistrationProjectLedgerRepository(RegistrationDeclarationProgressReposit
         versions: list[RegistrationProjectLedgerVersion],
     ) -> None:
         await self.session.execute(
-            update(RegistrationProjectLedgerVersion).values(is_deleted=True)
+            update(RegistrationProjectLedgerVersion)
+            .values(is_deleted=True)
+            .execution_options(synchronize_session=False)
         )
         if versions:
             self.session.add_all(versions)

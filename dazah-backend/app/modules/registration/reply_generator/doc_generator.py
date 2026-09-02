@@ -95,7 +95,7 @@ def _add_cover_page(doc: Any, drug_info: dict[str, Any]) -> Any:
     )
     _add_para(
         doc,
-        f"联 系 人：{drug_info.get('contact', '魏永红')}",
+        f"联 系 人：{drug_info.get('contact', '')}",
         size=16,
         align=WD_ALIGN_PARAGRAPH.LEFT,
     )

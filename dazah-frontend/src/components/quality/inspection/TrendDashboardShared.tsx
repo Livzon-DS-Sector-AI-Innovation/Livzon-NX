@@ -1,5 +1,6 @@
 'use client'
 
+import { qualityTokens } from '../themeTokens'
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { ColumnsType } from 'antd/es/table'
@@ -113,7 +114,7 @@ export function buildTrendOption(chart: QualityInspectionDashboardChart, expande
       smooth: true,
       symbol: 'none',
       data: chart.upper_sigma_series,
-      lineStyle: { width: 2, type: 'solid', color: '#fa8c16' },
+      lineStyle: { width: 2, type: 'solid', color: qualityTokens.warning },
     },
     {
       name: '平均值 - 3σ',
@@ -186,7 +187,7 @@ export function buildTrendOption(chart: QualityInspectionDashboardChart, expande
       type: 'value',
       scale: true,
       axisLabel: { fontSize: expanded ? 11 : 10 },
-      splitLine: { lineStyle: { color: '#f0f0f0' } },
+      splitLine: { lineStyle: { color: qualityTokens.borderLight } },
     },
     series,
   }

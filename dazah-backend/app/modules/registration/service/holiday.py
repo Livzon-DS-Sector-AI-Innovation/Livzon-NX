@@ -15,9 +15,11 @@ async def create_holiday(db: AsyncSession, data: HolidayCreate) -> Holiday:
     return await repo.create_holiday(db, data.model_dump())
 
 
-async def get_holidays(db: AsyncSession, year: int | None = None) -> list[Holiday]:
+async def get_holidays(
+    db: AsyncSession, year: int | None = None, limit: int = 500
+) -> list[Holiday]:
     """获取节假日列表"""
-    return await repo.get_holidays(db, year)
+    return await repo.get_holidays(db, year, limit=limit)
 
 
 async def update_holiday(

@@ -1,5 +1,7 @@
 'use client'
 
+import { TableEmptyState } from './TableEmptyState'
+
 import { useCallback, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { App, Button, DatePicker, Descriptions, Form, Input, Modal, Select, Space, Table, Tooltip } from 'antd'
@@ -490,6 +492,7 @@ export function ChangeTable({ changes, total, loading = false, showPlans = true,
         rowKey="id"
         loading={loading}
         dataSource={changes}
+        locale={{ emptyText: <TableEmptyState /> }}
         columns={baseColumns}
         rowSelection={{ selectedRowKeys, onChange: (keys) => setSelectedRowKeys(keys as string[]) }}
         expandable={

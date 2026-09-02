@@ -111,6 +111,7 @@ export function MaterialSubtablePage({ title, group }: MaterialSubtablePageProps
       pullApi={pullApi}
       entityCode={selectedEntityCode}
       toolbarContent={toolbarContent}
+      editable
     />
   )
 }

@@ -1,5 +1,6 @@
 'use client'
 
+import { qualityTokens } from '../themeTokens'
 import { Card, Row, Col } from 'antd'
 import {
   BgColorsOutlined,
@@ -15,7 +16,7 @@ const inspectionCards = [
     key: 'items',
     title: '物品管理',
     description: '实验室物品、试剂、耗材的管理',
-    icon: <ToolOutlined style={{ fontSize: 32, color: '#1677ff' }} />,
+    icon: <ToolOutlined style={{ fontSize: 32, color: qualityTokens.primary }} />,
     path: '/quality/inspection/items/inventory',
   },
   {
@@ -29,7 +30,7 @@ const inspectionCards = [
     key: 'finished',
     title: '成品检验',
     description: '成品检验数据录入、查询与统计分析',
-    icon: <CheckCircleOutlined style={{ fontSize: 32, color: '#fa8c16' }} />,
+    icon: <CheckCircleOutlined style={{ fontSize: 32, color: qualityTokens.warning }} />,
     path: '/quality/inspection/finished/mpa',
   },
   {

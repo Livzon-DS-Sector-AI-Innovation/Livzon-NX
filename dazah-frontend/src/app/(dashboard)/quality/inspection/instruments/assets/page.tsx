@@ -10,6 +10,8 @@ export default function InstrAssetsPage() {
         title="固资台账"
         listApi="/api/v1/quality/instruments/assets"
         pullApi="/api/v1/quality/instruments/assets/pull"
+        entityCode="qc_instr_assets"
+        editable
       />
     </QualityQueryProvider>
   )

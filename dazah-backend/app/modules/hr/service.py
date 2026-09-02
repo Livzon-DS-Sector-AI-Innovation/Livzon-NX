@@ -10,7 +10,9 @@ from typing import Any, cast
 from uuid import UUID
 
 from sqlalchemy import desc, func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core import storage
 from app.core.exceptions import AppException, DuplicateException, NotFoundException
@@ -155,6 +157,37 @@ def _extract_number(value: Any) -> int | None:
     return None
 
 
+def _parse_birth_date(value: Any) -> date | None:
+    """解析飞书「出生年月」字段为日期。
+
+    可能是 Excel 序列号（如 27408 = 1975-01-14）、毫秒时间戳或 YYYY-MM-DD 字符串。
+    """
+    if value is None or value == "":
+        return None
+    if isinstance(value, (int, float)):
+        try:
+            if value > 1000000000000:
+                # 毫秒时间戳（本地时区口径与 _ms_to_date 一致，避免日期偏移）
+                return datetime.fromtimestamp(value / 1000).date()
+            # Excel 序列日期（1900 起）
+            return date(1899, 12, 30) + timedelta(days=int(value))
+        except (ValueError, OverflowError, OSError):
+            return None
+    if isinstance(value, str):
+        try:
+            return datetime.strptime(value.strip(), "%Y-%m-%d").date()
+        except ValueError:
+            return None
+    return None
+
+
+def _extract_age(value: Any) -> int | None:
+    """从飞书「年龄」字段（如 "51岁7个月"）取整年数。"""
+    text = _extract_text(value)
+    m = re.match(r"(\d+)", text)
+    return int(m.group(1)) if m else None
+
+
 def _ms_to_date(value: Any) -> date | None:
     """Convert Feishu millisecond timestamp to Python date.
 
@@ -207,6 +240,7 @@ def _parse_feishu_record(record: dict[str, Any]) -> dict[str, Any]:
         return fields.get(key)
 
     qualifications = gt("技能证书") or gt("职称／职业资格")
+    _birth = _parse_birth_date(gt("出生年月"))
     data = {
         "feishu_record_id": rid,
         "seq_number": _extract_number(gt("序号")),
@@ -217,6 +251,10 @@ def _parse_feishu_record(record: dict[str, Any]) -> dict[str, Any]:
         "sub_department": _extract_text(gt("二级部门")),
         "position": _extract_text(gt("职务|岗位") or gt("职位")),
         "level": _extract_text(gt("职级")),
+        "birth_year": _birth.year if _birth else None,
+        "birth_month": _birth.month if _birth else None,
+        "birth_day": _birth.day if _birth else None,
+        "age": _extract_age(gt("年龄")),
         "qualifications": (
             qualifications
             if isinstance(qualifications, list)
@@ -336,9 +374,12 @@ class EmployeeService:
         setting = result.scalar_one_or_none()
         if not setting or not setting.app_token or not setting.base_table_id:
             raise AppException(message="员工飞书多维表格未配置或未启用")
+        app_id, app_secret = await get_hr_feishu_app_credentials(self.session)
         return EmployeeBitableDataSource(
             app_token=setting.app_token,
             table_id=setting.base_table_id,
+            app_id=app_id,
+            app_secret=app_secret,
         )
 
     async def get_employee(self, employee_id: UUID) -> Employee:
@@ -361,7 +402,7 @@ class EmployeeService:
     async def create_employee(
         self, data: EmployeeCreate
     ) -> Employee | tuple[Employee, str]:
-        # 空字符串工号转为 None，避免 unique 约束冲突
+        # 空字符串工号转为 None，避免唯一索引冲突
         employee_number = getattr(data, "employee_number", None)
         if employee_number is not None and employee_number.strip() == "":
             data.employee_number = None
@@ -379,7 +420,8 @@ class EmployeeService:
             try:
                 from app.modules.hr.feishu.im import FeishuIM
 
-                im = FeishuIM()
+                app_id, app_secret = await get_hr_feishu_app_credentials(self.session)
+                im = FeishuIM(app_id=app_id, app_secret=app_secret)
                 # 飞书接口要求手机号带 +86 区号
                 mobile = (
                     data.phone if data.phone.startswith("+") else f"+86{data.phone}"
@@ -400,8 +442,12 @@ class EmployeeService:
                     e,
                 )
 
-        result = await self.repo.create(employee)
-
+        try:
+            result = await self.repo.create(employee)
+        except IntegrityError:
+            # 并发窗口兜底：查重通过后另一请求先插入同工号 → 部分唯一索引冲突转 409
+            await self.session.rollback()
+            raise DuplicateException("工号", data.employee_number)
         # Sync to Feishu
         sync_status = "success"
         try:
@@ -575,7 +621,7 @@ class EmployeeService:
         sent = 0
         failed = 0
         details: list[dict[str, Any]] = []
-        im = FeishuIM()
+        im = FeishuIM(*await get_hr_feishu_app_credentials(self.session))
         for employee in employees:
             if not employee.feishu_open_id:
                 failed += 1
@@ -690,6 +736,9 @@ class EmployeeService:
         feishu_record_ids: set[str] = set()
 
         for rec in raw_records:
+            # 每条记录一个 savepoint：单条失败只回滚本条，
+            # 不丢弃本轮已同步的其他员工（此前整事务 rollback 会丢数据）
+            nested = await self.session.begin_nested()
             try:
                 parsed = _parse_feishu_record(rec)
                 emp_no = parsed.get("employee_number")
@@ -697,12 +746,18 @@ class EmployeeService:
                 if not emp_no:
                     stats["skipped"] += 1
                     logger.warning("飞书同步跳过：record_id=%s 工号为空", rid)
+                    await nested.commit()
                     continue
 
                 if rid:
                     feishu_record_ids.add(rid)
 
-                await self.repo.upsert_by_employee_number(parsed)
+                upserted = await self.repo.upsert_by_employee_number(parsed)
+                if upserted is None:
+                    # 本地已离职/已软删 → 跳过，不复活
+                    stats["skipped"] += 1
+                    await nested.commit()
+                    continue
                 existing = await self.repo.get_by_employee_number(emp_no)
                 if (
                     existing
@@ -715,7 +770,9 @@ class EmployeeService:
                     stats["created"] += 1
                 else:
                     stats["updated"] += 1
+                await nested.commit()
             except Exception as e:
+                await nested.rollback()
                 logger.error(
                     "飞书同步异常：record_id=%s, error=%s, traceback:",
                     rec.get("record_id"),
@@ -723,7 +780,6 @@ class EmployeeService:
                     exc_info=True,
                 )
                 stats["failed"] += 1
-                await self.session.rollback()
 
         # 删除飞书中已不存在的记录（按 feishu_record_id 判断）
         deleted = await self.repo.delete_not_in_feishu(feishu_record_ids)
@@ -1188,7 +1244,7 @@ class DepartmentService:
         if not roots:
             return []
 
-        contact = FeishuContact()
+        contact = FeishuContact(*await get_hr_feishu_app_credentials(self.session))
 
         # 并发获取所有叶子部门的用户列表，单次超时 5 秒
         leaf_depts = [
@@ -1283,11 +1339,36 @@ class DepartmentService:
         root_department_id: str | None = None
         all_depts_local = await self.repo.list_all_departments()
         top_depts = [d for d in all_depts_local if d.parent_id is None]
-        probe = next((d for d in top_depts if d.feishu_open_department_id), None)
+        # 优先取有子部门的顶层部门作为同步根：parent_id 数据异常（全部为空、
+        # 顶层遍地都是）时，避免 next() 随机选中某个叶子部门，BFS 只拉到
+        # 残缺子树进而触发整树误判
+        child_parent_ids = {
+            d.parent_id for d in all_depts_local if d.parent_id is not None
+        }
+        top_with_children = [
+            d
+            for d in top_depts
+            if d.id in child_parent_ids and d.feishu_open_department_id
+        ]
+        probe = next((d for d in top_with_children), None) or next(
+            (d for d in top_depts if d.feishu_open_department_id), None
+        )
+        if len(top_depts) > 1:
+            logger.warning(
+                "本地存在 %d 个顶层部门（parent_id 为空），选用 %s 作为飞书同步根；"
+                "如与预期不符请检查部门层级数据",
+                len(top_depts),
+                probe.name if probe else "(无可用部门)",
+            )
         if probe is not None and probe.feishu_open_department_id:
             root_department_id = probe.feishu_open_department_id
         if not root_department_id:
-            logger.warning("无法定位本公司根部门，回退为全租户遍历（可能拉到其他公司）")
+            # 本地部门表为空时无法定位同步根：拉集团树会拿到残缺子树并触发
+            # 陈旧部门清理，把全部本地部门误删。此处直接失败保护数据。
+            raise AppException(
+                status_code=503,
+                message="本地部门表为空，无法定位飞书同步根部门，已跳过同步以保护数据；请先恢复部门数据或检查部门配置",
+            )
 
         # 2. 尝试从 Redis 缓存获取飞书部门数据
         cached_raw = await cache_get(cache_key)
@@ -1297,12 +1378,22 @@ class DepartmentService:
                 "Using cached Feishu departments (%d items)", len(departments_data)
             )
         else:
-            # 缓存 miss，从飞书 BFS 获取本公司子树
+            # 缓存 miss，从飞书 BFS 获取本公司子树（root 必定有效，不回退 "0"）
             from app.platform.integrations.feishu.contact import get_all_departments
 
             departments_data = await get_all_departments(
-                root_department_id=root_department_id or "0"
+                root_department_id=root_department_id
             )
+            if not departments_data:
+                # 空树不写缓存也不进入后续流程：否则空结果会被缓存 24 小时，
+                # 且会把本地部门大量误判为陈旧数据
+                raise AppException(
+                    status_code=502,
+                    message=(
+                        "飞书部门树拉取结果为空，已跳过同步以保护本地部门数据；"
+                        "请检查飞书应用通讯录权限范围与同步根配置"
+                    ),
+                )
             # 写入缓存
             await cache_set(
                 cache_key,
@@ -1353,7 +1444,6 @@ class DepartmentService:
                 stats["failed"] += 1
                 continue
 
-            member_count = dept_data.get("member_count")
             sort_order = dept_data.get("order", 0)
             parent_feishu_id = dept_data.get("parent_department_id", "")
 
@@ -1393,19 +1483,22 @@ class DepartmentService:
                     feishu_to_local_id[open_dept_id] = existing.id
                     re_id = True
             if existing:
-                # 增量更新：检测字段是否有变化
+                # 增量更新：检测字段是否有变化。
+                # 注意：不更新 current_count——人事应用通讯录权限下飞书部门
+                # 接口的 member_count 恒为 0，部门在职人数由联系人同步按
+                # 本地联系人（排除公用账号）统计回填。
                 changed = re_id
                 if existing.name != name:
                     existing.name = name
-                    changed = True
-                if member_count is not None and existing.current_count != member_count:
-                    existing.current_count = member_count
                     changed = True
                 if sort_order is not None and existing.sort_order != sort_order:
                     existing.sort_order = sort_order
                     changed = True
 
-                # 更新 parent_id（通过飞书 ID 映射；同名部门合并后避免自挂父级）
+                # 更新 parent_id（通过飞书 ID 映射；同名部门合并后避免自挂父级）。
+                # 注意：BFS 拉取会把"同步根的直接子部门"的上级抹空
+                # （见 platform get_all_departments），因此飞书未带上级时
+                # 必须保持本地现状，否则每轮同步都会把一级部门从树上摘下来。
                 if parent_feishu_id:
                     parent_local_id = feishu_to_local_id.get(parent_feishu_id)
                     if (
@@ -1415,10 +1508,6 @@ class DepartmentService:
                     ):
                         existing.parent_id = parent_local_id
                         changed = True
-                elif existing.parent_id is not None:
-                    # 飞书无上级，本地有上级 → 清空
-                    existing.parent_id = None
-                    changed = True
 
                 if changed:
                     category = match_department_category(name)
@@ -1440,7 +1529,7 @@ class DepartmentService:
         if leader_ids:
             from app.modules.hr.feishu.contact import FeishuContact
 
-            contact = FeishuContact()
+            contact = FeishuContact(*await get_hr_feishu_app_credentials(self.session))
             sem = asyncio.Semaphore(10)
 
             async def _fetch_leader_name(uid: str) -> tuple[str, str | None]:
@@ -1490,7 +1579,9 @@ class DepartmentService:
                     code=code,
                     leader_name=leader_names.get(leader_user_id),
                     feishu_open_department_id=open_dept_id,
-                    current_count=dept_data.get("member_count"),
+                    # 飞书 member_count 在人事应用权限下恒为 0，新建时先置 0，
+                    # 由联系人同步按本地联系人统计回填
+                    current_count=0,
                     category=match_department_category(name),
                     sort_order=dept_data.get("order", 0) or 0,
                 )
@@ -1540,10 +1631,26 @@ class DepartmentService:
             for d in all_depts_local
             if d.feishu_open_department_id
             and d.feishu_open_department_id not in feishu_ids
+            # BFS 树从根的下级开始、不含根本身：不排除会把公司根每次同步都
+            # 误删，并连带解除全部一级部门的父级引用，摧毁整棵层级树
+            and d.feishu_open_department_id != root_department_id
             and not d.is_deleted
         ]
+        # 清理段包独立 savepoint：失败只回滚清理本身，不丢本轮已同步的部门
+        nested_clean = await self.session.begin_nested()
         try:
             if stale_ids:
+                # 大差异保护：飞书树与本地差异超过本地未删部门一半时，
+                # 大概率是权限范围/树拉取不完整导致误判，跳过自动清理保护数据
+                alive_count = sum(1 for d in all_depts_local if not d.is_deleted)
+                if len(stale_ids) > max(1, alive_count // 2):
+                    logger.warning(
+                        "飞书部门树与本地差异过大（%d/%d），"
+                        "为保护数据已跳过陈旧部门自动清理，请检查飞书应用通讯录权限范围",
+                        len(stale_ids),
+                        alive_count,
+                    )
+                    stale_ids = []
                 # 先解除被删部门的子部门父级引用，避免外键约束失败
                 await self.session.execute(
                     update(HrDepartment)
@@ -1572,8 +1679,9 @@ class DepartmentService:
                     "Found %d soft-deleted leftovers (skipped physical deletion)",
                     leftover_count,
                 )
+            await nested_clean.commit()
         except Exception as e:
-            await self.session.rollback()
+            await nested_clean.rollback()
             logger.error("Failed to hard-clean stale departments: %s", e)
 
         return stats
@@ -1642,6 +1750,113 @@ class OffboardingRecordService:
         self.employee_repo = EmployeeRepository(session)
         self.session = session
 
+    # 员工档案 → 离职台账 转抄字段（两个模型共有的快照字段；
+    # 离职专属字段/employee_id 不覆盖）
+    SNAPSHOT_FIELDS: tuple[str, ...] = (
+        "employee_number",
+        "name",
+        "domain_account",
+        "gender",
+        "ethnic_group",
+        "native_place",
+        "political_status",
+        "marital_status",
+        "health_status",
+        "household_type",
+        "status_category",
+        "birth_year",
+        "birth_month",
+        "birth_day",
+        "age",
+        "id_card",
+        "id_card_expiry",
+        "current_address",
+        "phone",
+        "email",
+        "emergency_contact_name",
+        "emergency_contact_phone",
+        "emergency_contact_relation",
+        "department",
+        "sub_department",
+        "position",
+        "level",
+        "employment_type",
+        "probation_status",
+        "probation_effective_date",
+        "hire_date",
+        "work_start_date",
+        "factory_entry_date",
+        "livo_entry_date",
+        "work_years",
+        "education",
+        "degree",
+        "major",
+        "school",
+        "graduation_date",
+        "qualification_type",
+        "qualifications",
+        "certificate_number",
+        "certificate_review_date",
+        "contract_start_date",
+        "contract_end_date",
+        "contract_start_2",
+        "contract_end_2",
+        "contract_start_3",
+        "contract_end_3",
+        "contract_start_4",
+        "contract_end_4",
+        "contract_start_5",
+        "contract_end_5",
+        "contract_start_6",
+        "contract_end_6",
+        "work_experience_1",
+        "work_experience_2",
+        "work_experience_3",
+        "work_experience_4",
+        "archive_number",
+    )
+
+    def _snapshot_employee(
+        self, record: OffboardingRecord, employee: Employee | None
+    ) -> None:
+        """把员工档案对应字段整体转抄进离职台账（保留离职专属字段与 employee_id）。
+
+        员工档案是在职状态的唯一权威来源：在职状态变为离职时调用，
+        将姓名/域账号/身份证/学历/部门/职位/合同/工作经历等一次性补齐到离职台账。
+        处理两个模型的类型差异：OffboardingRecord 为 String 的合同字段，
+        若 Employee 是 date 则转成 YYYY-MM-DD 字符串，避免 asyncpg 类型错误。
+        """
+        if employee is None:
+            return
+        ob_columns = OffboardingRecord.__table__.columns
+        for field in self.SNAPSHOT_FIELDS:
+            value = getattr(employee, field, None)
+            if value is None:
+                continue
+            col = ob_columns.get(field)
+            if col is not None and col.type.python_type is str:
+                if isinstance(value, (date, datetime)):
+                    value = value.strftime("%Y-%m-%d")
+                elif not isinstance(value, str):
+                    value = str(value)
+            setattr(record, field, value)
+
+    async def _resolve_employee_for_snapshot(
+        self, record: OffboardingRecord
+    ) -> Employee | None:
+        """按 employee_id（无则按工号）查找员工，包含软删员工，用于转抄员工档案。"""
+        if record.employee_id:
+            emp = await self.employee_repo.get_by_id_include_deleted(record.employee_id)
+            if emp:
+                return emp
+        if record.employee_number:
+            emp = await self.employee_repo.get_by_employee_number_include_deleted(
+                record.employee_number
+            )
+            if emp:
+                return emp
+        return None
+
     async def get_record(self, record_id: UUID) -> OffboardingRecord:
         record = await self.repo.get_by_id(record_id)
         if not record:
@@ -1687,11 +1902,33 @@ class OffboardingRecordService:
         record = OffboardingRecord(**data.model_dump())
         if not record.employee_id:
             record.employee_id = employee.id
+        # 创建时把员工档案整体转抄进来（保留离职专属字段与 employee_id）
+        self._snapshot_employee(record, employee)
+        is_departed = record.status == "离职"
         record = await self.repo.create(record)
 
-        # 自动将员工状态更新为离职
-        employee.status = "离职"
-        await self.employee_repo.update(employee)
+        # 已离职时：员工档案在职状态同步为离职 + 软删员工档案
+        # + 尽力删除飞书员工档案记录，
+        # 与 update_record 及自动转离职流程一致
+        if is_departed:
+            if employee.status != "离职":
+                employee.status = "离职"
+                await self.employee_repo.update(employee)
+            await self.employee_repo.soft_delete(employee)
+            try:
+                from app.modules.hr.feishu.bitable import FeishuBitableSync
+
+                app_id, app_secret = await get_hr_feishu_app_credentials(self.session)
+                sync = FeishuBitableSync(
+                    app_id=app_id or None, app_secret=app_secret or None
+                )
+                await sync.sync_employee_deleted(record.employee_number or "")
+            except Exception:
+                logger.exception(
+                    "创建离职记录联动删除飞书员工档案失败: %s",
+                    record.employee_number,
+                    extra={"hr_module": "hr"},
+                )
 
         # 同步到飞书（失败不影响本地创建）
         try:
@@ -1722,6 +1959,8 @@ class OffboardingRecordService:
             if employee.feishu_open_id:
                 from app.platform.integrations.feishu import notification as feishu_n
 
+                app_id, app_secret = await get_hr_feishu_app_credentials(self.session)
+
                 content = """请按模版规范填写以下离职材料：
 
 • 附表6：员工离职申请单
@@ -1736,6 +1975,8 @@ class OffboardingRecordService:
                     open_id=employee.feishu_open_id,
                     title="离职单填写模版请查收！",
                     content=content,
+                    app_id=app_id,
+                    app_secret=app_secret,
                 )
                 record.materials_sent = True
                 record.materials_sent_at = datetime.now()
@@ -1761,6 +2002,38 @@ class OffboardingRecordService:
         update_data = data.model_dump(exclude_unset=True)
         for field, value in update_data.items():
             setattr(record, field, value)
+
+        employee: Employee | None = None
+        if hasattr(self, "session"):
+            # 在职状态变为离职：把员工档案对应信息整体转抄进离职台账
+            becoming_departed = update_data.get("status") == "离职"
+            employee = await self._resolve_employee_for_snapshot(record)
+            if becoming_departed and record.status == "离职":
+                self._snapshot_employee(record, employee)
+                # 员工档案在职状态同步为离职 + 软删员工档案 + 尽力删除飞书员工档案记录，
+                # 与自动转离职流程一致（资料已转抄到离职台账，员工档案不再保留）
+                if employee:
+                    if employee.status != "离职":
+                        employee.status = "离职"
+                        await self.employee_repo.update(employee)
+                    await self.employee_repo.soft_delete(employee)
+                    try:
+                        from app.modules.hr.feishu.bitable import FeishuBitableSync
+
+                        app_id, app_secret = await get_hr_feishu_app_credentials(
+                            self.session
+                        )
+                        sync = FeishuBitableSync(
+                            app_id=app_id or None, app_secret=app_secret or None
+                        )
+                        await sync.sync_employee_deleted(record.employee_number or "")
+                    except Exception:
+                        logger.exception(
+                            "离职联动删除飞书员工档案失败: %s",
+                            record.employee_number,
+                            extra={"hr_module": "hr"},
+                        )
+
         result = await self.repo.update(record)
 
         if not hasattr(self, "session"):
@@ -1772,14 +2045,31 @@ class OffboardingRecordService:
                 logger.warning("Feishu sync failed for offboarding updated: %s", exc)
             return result
 
-        # 同步到飞书
-        employee = None
-        if record.employee_id:
-            try:
-                employee = await self.employee_repo.get_by_id(record.employee_id)
-            except Exception:
-                logger.exception("update_record 查找员工失败，将跳过飞书同步")
-        await self._sync_to_feishu(result, employee, is_create=False)
+        # 离职联动：员工档案在职状态同步为离职（如尚未软删时）
+        if record.status == "离职" and employee and employee.status != "离职":
+            employee.status = "离职"
+            await self.employee_repo.update(employee)
+
+        # 同步到飞书（失败不影响本地更新，与创建时行为一致）
+        try:
+            await self._sync_to_feishu(result, employee, is_create=False)
+        except Exception as e:
+            logger.error(
+                "飞书同步失败，但离职记录已更新: employee_number=%s, error=%s",
+                result.employee_number,
+                str(e),
+                extra={"record_id": str(record_id), "hr_module": "hr"},
+                exc_info=True,
+            )
+
+        # 重载记录并预加载 employee 关系，避免响应序列化时懒加载触发 MissingGreenlet
+        result = (
+            await self.session.execute(
+                select(OffboardingRecord)
+                .options(selectinload(OffboardingRecord.employee))
+                .where(OffboardingRecord.id == record_id)
+            )
+        ).scalar_one()
         return result
 
     async def delete_record(self, record_id: UUID) -> None:
@@ -1800,31 +2090,51 @@ class OffboardingRecordService:
 
         record = await self.get_record(record_id)
 
+        # 优先用员工档案（含软删员工）；未关联时回退到离职台账快照字段
         employee = None
         if record.employee_id:
-            employee = await self.employee_repo.get_by_id(record.employee_id)
-
-        if not employee:
-            raise NotFoundException(
-                "员工", str(record.employee_id) if record.employee_id else "未知"
+            employee = await self.employee_repo.get_by_id_include_deleted(
+                record.employee_id
+            )
+        elif record.employee_number:
+            employee = await self.employee_repo.get_by_employee_number_include_deleted(
+                record.employee_number
             )
 
+        def _pick(emp_field: str, rec_field: str) -> str:
+            value = getattr(employee, emp_field, None) if employee else None
+            if not value:
+                value = getattr(record, rec_field, None)
+            return value or ""
+
         employee_data = {
-            "name": employee.name or "",
-            "gender": employee.gender or "",
-            "id_card": employee.id_card or "",
-            "hire_date": employee.hire_date.strftime("%Y年%m月%d日")
-            if employee.hire_date
-            else "",
-            "current_address": employee.current_address or "",
+            "name": _pick("name", "name"),
+            "gender": _pick("gender", "gender"),
+            "id_card": _pick("id_card", "id_card"),
+            "current_address": _pick("current_address", "current_address"),
+            "hire_date": "",
         }
+        hire = (employee.hire_date if employee and employee.hire_date else None) or (
+            record.hire_date
+        )
+        if hire:
+            employee_data["hire_date"] = (
+                hire.strftime("%Y年%m月%d日")
+                if hasattr(hire, "strftime")
+                else str(hire)
+            )
+
+        if not employee_data["name"]:
+            raise NotFoundException(
+                "员工", record.name or record.employee_number or "未知"
+            )
 
         doc_buffer = generate_termination_notice(employee_data)
 
         # 上传到 MinIO
         from app.core.storage import is_enabled, upload_object
 
-        filename = f"{employee.name}_解除劳动合同通知单.docx"
+        filename = f"{employee_data['name']}_解除劳动合同通知单.docx"
         if is_enabled():
             upload_object(
                 "hr",
@@ -1837,7 +2147,6 @@ class OffboardingRecordService:
 
         # Update completion status
         record.completed_date = date.today()
-        record.handover_status = "已完成"
         await self.repo.update(record)
 
         return doc_buffer, filename, record
@@ -1913,7 +2222,11 @@ class OffboardingRecordService:
         # 字段配置：(飞书字段名, 本地值, type=文本/数字/日期)
         # 文本直接写字符串，日期写 ms 时间戳，数字写 int
         def _s(v: Any) -> Any:
-            return v if v else ""
+            # 统一转字符串：离职台账 age/work_years 等数值列若原样传入，
+            # 飞书 Text 字段会报 TextFieldConvFail（code=1254060）
+            if v is None:
+                return ""
+            return str(v)
 
         def _d(v: Any) -> Any:
             return _dt(v) if v else ""
@@ -1946,9 +2259,9 @@ class OffboardingRecordService:
             else:
                 qualifications_str = str(record.qualifications)
 
-        # 在职状态（从关联的 employee 读取）
-        status_str = ""
-        if employee and hasattr(employee, "status"):
+        # 在职状态（离职台账自身快照优先；无快照时回退关联 employee）
+        status_str = _s(record.status) if record.status else ""
+        if not status_str and employee and hasattr(employee, "status"):
             status_str = _s(employee.status)
 
         # 拟转正日期（从关联的 employee 读取，OffboardingRecord 没有此字段）
@@ -2189,10 +2502,29 @@ class OffboardingRecordService:
                 # Try to resolve employee_id from employee_number
                 emp_no = _extract_text(gt("工号"))
                 employee_id = None
+                emp = None
                 if emp_no:
                     emp = await self.employee_repo.get_by_employee_number(emp_no)
                     if emp:
                         employee_id = emp.id
+
+                _birth = _parse_birth_date(gt("出生年月"))
+                _age = _extract_age(gt("年龄"))
+
+                # 飞书离职表未维护出生年月/年龄（或为空）时，
+                # 回退到员工档案（权威来源），
+                # 保证离职台账与员工档案一致，避免飞书拉取后丢字段
+                if emp:
+                    emp_birth_year = getattr(emp, "birth_year", None)
+                    if _birth is None and emp_birth_year:
+                        _birth = date(
+                            emp_birth_year,
+                            getattr(emp, "birth_month", None) or 1,
+                            getattr(emp, "birth_day", None) or 1,
+                        )
+                    emp_age = getattr(emp, "age", None)
+                    if _age is None and emp_age is not None:
+                        _age = emp_age
 
                 data = {
                     "feishu_record_id": rid,
@@ -2200,79 +2532,90 @@ class OffboardingRecordService:
                     "seq_number": _extract_number(gt("序号")),
                     "employee_number": emp_no,
                     "name": _extract_text(gt("姓名")),
-                    "domain_account": _extract_text(gt("域账号")),
+                    "domain_account": _extract_text(gt("域账户")),
                     "gender": _extract_text(gt("性别")),
+                    "birth_year": _birth.year if _birth else None,
+                    "birth_month": _birth.month if _birth else None,
+                    "birth_day": _birth.day if _birth else None,
+                    "age": _age,
                     "ethnic_group": _extract_text(gt("民族")),
                     "native_place": _extract_text(gt("籍贯")),
                     "political_status": _extract_text(gt("政治面貌")),
                     "marital_status": _extract_text(gt("婚姻状况")),
                     "health_status": _extract_text(gt("健康状况")),
-                    "household_type": _extract_text(gt("户籍类型")),
-                    "status_category": _extract_text(gt("统计类别")),
-                    "id_card": _extract_text(gt("身份证号")),
-                    "id_card_expiry": _extract_text(gt("身份证到期日")),
-                    "current_address": _extract_text(gt("现住址")),
-                    "phone": _extract_text(gt("手机")),
-                    "email": _extract_text(gt("邮箱地址")),
+                    "household_type": _extract_text(gt("户口类别")),
+                    "status_category": _extract_text(gt("人员类别")),
+                    "id_card": _extract_text(gt("身份证号码")),
+                    "id_card_expiry": _extract_text(gt("身份证有效期截止日期")),
+                    "current_address": _extract_text(gt("现家庭住址")),
+                    "phone": _extract_text(gt("联系电话")),
+                    "email": _extract_text(gt("电子邮箱")),
                     "emergency_contact_name": _extract_text(gt("紧急联系人")),
                     "emergency_contact_phone": _extract_text(gt("紧急联系人电话")),
-                    "emergency_contact_relation": _extract_text(gt("紧急联系人关系")),
+                    "emergency_contact_relation": _extract_text(gt("与本人关系")),
                     "department": _extract_text(gt("一级部门")),
                     "sub_department": _extract_text(gt("二级部门")),
-                    "position": _extract_text(gt("职务|岗位")),
+                    "position": _extract_text(gt("职位/岗位")),
                     "level": _extract_text(gt("职级")),
                     "employment_type": _extract_text(gt("人员就业方式")),
                     "probation_status": _extract_text(gt("转正状态")),
                     "probation_effective_date": _parse_date(gt("转正生效日期")),
-                    "hire_date": _parse_date(gt("进厂时间")),
+                    "hire_date": _parse_date(gt("入职日期")),
                     "work_start_date": _parse_date(gt("参加工作时间")),
-                    "factory_entry_date": _parse_date(gt("进厂时间")),
+                    "factory_entry_date": _parse_date(gt("进入本公司时间")),
                     "work_years": _extract_text(gt("工龄"))
                     or _extract_text(gt("工作年限")),
                     "offboarding_date": _parse_date(gt("最后工作日")),
                     "offboarding_type": _extract_text(gt("离职类型")) or "辞职",
                     "reason": _extract_text(gt("离职原因")),
-                    "handover_status": _extract_text(gt("交接状态")) or "待交接",
+                    # 在职状态与交接状态联动：飞书离职表无「交接状态」字段。
+                    # 仅在飞书「在职状态」明确为离职时写离职；否则返回 None，
+                    # 保留本地已手动维护的在职状态（不被飞书空值或误值覆盖）。
+                    "status": (
+                        "离职" if _extract_text(gt("在职状态")) == "离职" else None
+                    ),
                     "education": _extract_text(gt("学历")),
                     "degree": _extract_text(gt("学位")),
                     "major": _extract_text(gt("专业")),
-                    "school": _extract_text(gt("毕业学校")),
+                    "school": _extract_text(gt("毕业院校")),
                     "graduation_date": _parse_date(gt("毕业时间")),
-                    "qualification_type": _extract_text(gt("职称类型")),
-                    "qualifications": gt("职称／职业资格")
-                    if isinstance(gt("职称／职业资格"), list)
+                    "qualification_type": _extract_text(gt("职称")),
+                    "qualifications": gt("技能证书")
+                    if isinstance(gt("技能证书"), list)
                     else None,
                     "certificate_number": _extract_text(gt("证书编号")),
                     "certificate_review_date": _parse_date(gt("技能证书复审时间")),
-                    "contract_start_date": _parse_date(gt("第一次合同起点时间")),
-                    "contract_end_date": _parse_date(gt("第一次合同终止时间")),
+                    "contract_start_date": _parse_date(gt("首次签订合同日期")),
+                    "contract_end_date": _parse_date(gt("首次签订合同截止日期")),
                     "contract_end_2": _extract_text(gt("合同截止日期2")),
                     "contract_end_3": _extract_text(gt("合同截止日期3")),
                     "contract_end_4": _extract_text(gt("合同截止日期4")),
                     "contract_end_5": _extract_text(gt("合同截止日期5")),
-                    "contract_start_2": _parse_date(gt("第二次合同起点时间")),
-                    "contract_start_3": _extract_text(gt("第三次续签合同日期")),
-                    "contract_start_4": _extract_text(gt("第四次续签合同日期")),
-                    "contract_start_5": _extract_text(gt("第五次续签合同日期")),
-                    "contract_start_6": _extract_text(gt("第六次续签合同日期")),
+                    "contract_start_2": _parse_date(gt("第二次续签合同日期")),
+                    "contract_start_3": _parse_date(gt("第三次续签合同日期")),
+                    "contract_start_4": _parse_date(gt("第四次续签合同日期")),
+                    "contract_start_5": _parse_date(gt("第五次续签合同日期")),
+                    "contract_start_6": _parse_date(gt("第六次续签合同日期")),
                     "work_experience_1": _extract_text(gt("工作经验一")),
                     "work_experience_2": _extract_text(gt("工作经验二")),
                     "work_experience_3": _extract_text(gt("工作经验三")),
                     "work_experience_4": _extract_text(gt("工作经验四")),
-                    "archive_number": _extract_text(gt("档案编号")),
+                    "archive_number": _extract_text(gt("档案号")),
                     "notes": _extract_text(gt("备注")),
                     "feishu_synced_at": date.today(),
                 }
 
-                # Upsert by feishu_record_id（以飞书为主：空值也覆盖本地旧值）
+                # Upsert by feishu_record_id（飞书为主，但空值不覆盖本地已有值，
+                # 避免清掉本地手动维护的在职状态、域账号、职务等）
                 existing = await self.repo.get_by_feishu_record_id(rid)
                 if existing:
                     for key, value in data.items():
-                        if key != "id":
+                        if key != "id" and value not in (None, ""):
                             setattr(existing, key, value)
                     stats["updated"] += 1
                 else:
-                    record = OffboardingRecord(**data)
+                    create_data = {k: v for k, v in data.items() if v not in (None, "")}
+                    record = OffboardingRecord(**create_data)
                     self.session.add(record)
                     stats["created"] += 1
             except Exception:
@@ -2362,6 +2705,9 @@ class PositionTransferRecordService:
 
     async def _get_position_bitable(self) -> Any:
         from app.modules.hr.feishu.bitable import BitableClient
+        from app.modules.hr.feishu_settings_service import (
+            get_hr_feishu_app_credentials,
+        )
 
         result = await self.session.execute(
             select(HrFeishuEntitySetting).where(
@@ -2372,7 +2718,17 @@ class PositionTransferRecordService:
         entity = result.scalar_one_or_none()
         if not entity or not entity.app_token or not entity.base_table_id:
             return None
-        return BitableClient(app_token=entity.app_token), entity.base_table_id
+        # 写回必须用人事自有应用：平台应用未开通多维表格写 scope（99991672），
+        # 且平台应用只负责登录（模块应用架构决策）
+        app_id, app_secret = await get_hr_feishu_app_credentials(self.session)
+        return (
+            BitableClient(
+                app_token=entity.app_token,
+                app_id=app_id,
+                app_secret=app_secret,
+            ),
+            entity.base_table_id,
+        )
 
     async def _build_feishu_fields(
         self, record: PositionTransferRecord
@@ -3150,6 +3506,8 @@ class PositionTransferRecordService:
                 send_user_card_with_message_id,
             )
 
+            app_id, app_secret = await get_hr_feishu_app_credentials(self.session)
+
             card_elements: list[dict[str, Any]] = [
                 {
                     "tag": "div",
@@ -3222,6 +3580,8 @@ class PositionTransferRecordService:
                 title="岗位调动审批 - 需您审批",
                 content="",
                 elements=card_elements,
+                app_id=app_id,
+                app_secret=app_secret,
             )
             if message_id:
                 record.feishu_approval_message_id = message_id
@@ -3254,6 +3614,8 @@ class PositionTransferRecordService:
             from app.platform.integrations.feishu.notification import (
                 send_user_card_with_message_id,
             )
+
+            app_id, app_secret = await get_hr_feishu_app_credentials(self.session)
 
             await send_user_card_with_message_id(
                 open_id=applicant_open_id,
@@ -3680,9 +4042,17 @@ class _LegacyFeishuRecordService:
 class OnboardingRecordService(_LegacyFeishuRecordService):
     record_label = "入职记录"
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        *,
+        feishu_app_id: str | None = None,
+        feishu_app_secret: str | None = None,
+    ) -> None:
         self.repo = OnboardingRecordRepository(session)
-        self.bitable = OnboardingBitableDataSource()
+        self.bitable = OnboardingBitableDataSource(
+            app_id=feishu_app_id, app_secret=feishu_app_secret
+        )
 
     async def _parse_feishu_record(self, record: dict[str, Any]) -> dict[str, Any]:
         from app.modules.hr.feishu.onboarding_datasource import OnboardingRecord
@@ -3721,9 +4091,17 @@ class OnboardingRecordService(_LegacyFeishuRecordService):
 class DepartureRecordService(_LegacyFeishuRecordService):
     record_label = "离职台账记录"
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        *,
+        feishu_app_id: str | None = None,
+        feishu_app_secret: str | None = None,
+    ) -> None:
         self.repo = DepartureRecordRepository(session)
-        self.bitable = DepartureBitableDataSource()
+        self.bitable = DepartureBitableDataSource(
+            app_id=feishu_app_id, app_secret=feishu_app_secret
+        )
 
     async def _parse_feishu_record(self, record: dict[str, Any]) -> dict[str, Any]:
         from app.modules.hr.feishu.departure_datasource import DepartureRecord
@@ -3807,6 +4185,31 @@ class TrainingLedgerService:
         dept = result.scalar_one_or_none()
         return dept or fallback_dept
 
+    async def _resolve_teaching_depts(
+        self, instructors: list[str | None]
+    ) -> dict[str, str]:
+        """批量解析多个培训师的授课部门（一次 IN 查询），返回 {instructor: dept}.
+
+        语义与 _resolve_teaching_dept 一致：按姓名查 Trainer 表取首个有部门的记录；
+        查不到的姓名不出现返回 dict 中，由调用方回退到主办部门。
+        """
+        names = {n for n in instructors if n and n.strip()}
+        if not names:
+            return {}
+        result = await self.session.execute(
+            select(Trainer.name, Trainer.department).where(
+                Trainer.name.in_(names),
+                Trainer.is_deleted.is_(False),
+                Trainer.department.is_not(None),
+                Trainer.department != "",
+            )
+        )
+        mapping: dict[str, str] = {}
+        for name, dept in result.all():
+            if name not in mapping:
+                mapping[name] = dept
+        return mapping
+
     async def create_record(self, data: TrainingLedgerCreate) -> TrainingLedger:
         if not hasattr(self, "session"):
             record = TrainingLedger(**data.model_dump())
@@ -3857,6 +4260,59 @@ class TrainingLedgerService:
                     await self.repo.create(copy_record)
 
         return record
+
+    async def create_many(self, data_list: list[TrainingLedgerCreate]) -> int:
+        """批量创建培训台账记录（含多部门拆分），单次 flush.
+
+        与 create_record 语义一致（预取 trainer、归属部门归一、多部门
+        pending 兜底与副本拆分），仅把逐行 DB 往返合并为一次 add_all+flush，
+        用于 Excel 批量导入，避免逐行 create 拖垮导入/服务器。
+        返回成功创建的"数据条数"（不含多部门拆分副本），与旧口径一致。
+        """
+        from app.modules.hr.training_dept_resolver import split_ledger_departments
+
+        if not data_list:
+            return 0
+        trainer_map = await self._resolve_teaching_depts(
+            [d.instructor for d in data_list]
+        )
+        all_records: list[TrainingLedger] = []
+        for data in data_list:
+            teaching_dept = trainer_map.get(data.instructor or "") or data.teaching_dept
+            data.teaching_dept = teaching_dept
+
+            if data.ledger_department:
+                data.ledger_department = (
+                    await split_ledger_departments(self.session, data.ledger_department)
+                )[0]
+
+            if data.second_level_status != "pending":
+                depts_all = [
+                    d.strip()
+                    for d in (data.involved_depts or "").split("、")
+                    if d.strip()
+                ]
+                if len(depts_all) >= 2:
+                    data.second_level_status = "pending"
+
+            all_records.append(TrainingLedger(**data.model_dump()))
+
+            if data.involved_depts and data.session_id:
+                depts = [
+                    d.strip() for d in data.involved_depts.split("、") if d.strip()
+                ]
+                seen = {data.ledger_department}
+                for dept in depts:
+                    for canonical in await split_ledger_departments(self.session, dept):
+                        if canonical in seen:
+                            continue
+                        seen.add(canonical)
+                        copy_data = data.model_dump()
+                        copy_data["ledger_department"] = canonical
+                        all_records.append(TrainingLedger(**copy_data))
+
+        await self.repo.add_all(all_records)
+        return len(data_list)
 
     # 需要同步的核心字段（teaching_dept 除外，每条记录保持自己的部门）
     _SYNC_FIELDS = {
@@ -5154,40 +5610,60 @@ class TrainingPersonnelConfigService:
         *,
         level: str | None = None,
         department: str | None = None,
+        owner_id: str | None = None,
+        is_admin: bool = False,
     ) -> list[TrainingPersonnelConfig]:
-        return await self.repo.list_configs(level=level, department=department)
+        """列出配置；普通用户只返回自己的（owner_id 过滤），
+        超管返回全部（含公共历史）。
+        """
+        return await self.repo.list_configs(
+            level=level,
+            department=department,
+            owner_id=None if is_admin else owner_id,
+        )
 
     async def upsert_config(
-        self, data: TrainingPersonnelConfigCreate
+        self, data: TrainingPersonnelConfigCreate, owner_id: str | None
     ) -> TrainingPersonnelConfig:
-        "按 (level, department, config_n"
-        "ame) upsert：存在则更新 personnel/re"
-        "marks，否则创建"
+        """按 (level, department, config_name, created_by) upsert。
+
+        同人同名才复用更新；不同用户可各自建同名配置，互不覆盖。
+        """
         existing = await self.repo.get_by_key(
-            data.level, data.department, data.config_name
+            data.level, data.department, data.config_name, owner_id=owner_id
         )
         if existing:
-            return await self.repo.update_fields(
+            record = await self.repo.update_fields(
                 existing,
                 personnel=data.personnel,
                 remarks=data.remarks,
             )
+            if owner_id:
+                record.updated_by = UUID(owner_id)
+            return record
         record = TrainingPersonnelConfig(
             level=data.level,
             department=data.department,
             config_name=data.config_name,
             personnel=data.personnel,
             remarks=data.remarks,
+            created_by=UUID(owner_id) if owner_id else None,
+            updated_by=UUID(owner_id) if owner_id else None,
         )
         return await self.repo.create(record)
 
-    async def delete_config(self, config_id: UUID) -> None:
-        """软删除一条人员配置"""
-        from app.core.exceptions import NotFoundException
+    async def delete_config(
+        self, config_id: UUID, user_id: str | None = None, is_admin: bool = False
+    ) -> None:
+        """软删除一条人员配置；非超管只能删自己创建的。"""
+        from app.core.exceptions import ForbiddenException, NotFoundException
 
         record = await self.repo.get_by_id(config_id)
         if not record:
             raise NotFoundException("培训人员配置", str(config_id))
+        if not is_admin and user_id:
+            if record.created_by != user_id:
+                raise ForbiddenException("只能删除自己创建的培训人员配置")
         await self.repo.soft_delete(record)
 
     async def list_new_hires(

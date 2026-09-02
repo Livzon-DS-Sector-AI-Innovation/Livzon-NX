@@ -337,7 +337,7 @@ class PushSettingsService:
                 content = f"{title}\n\n{body}"
                 for open_id in open_ids:
                     try:
-                        await _send_feishu_with_retry(open_id, content)
+                        await _send_feishu_with_retry(self.session, open_id, content)
                         result["feishu_sent"] = True
                         result["feishu_recipients"].append(open_id)
                         await self._log_push(
@@ -398,7 +398,9 @@ class PushSettingsService:
                 return {"success": False, "message": f"发送失败: {e}"}
         else:
             try:
-                await _send_feishu_with_retry(recipient, f"{title}\n\n{body}")
+                await _send_feishu_with_retry(
+                    self.session, recipient, f"{title}\n\n{body}",
+                )
                 return {"success": True, "message": f"测试飞书消息已发送到 {recipient}"}
             except Exception as e:
                 return {"success": False, "message": f"发送失败: {e}"}
@@ -532,11 +534,13 @@ async def _send_email_with_retry(to_email: str, subject: str, html_body: str) ->
     raise last_error  # type: ignore[misc]
 
 
-async def _send_feishu_with_retry(open_id: str, content: str) -> None:
+async def _send_feishu_with_retry(db: AsyncSession, open_id: str, content: str) -> None:
     """飞书消息发送，最多 3 次重试，指数退避（1s, 2s）"""
     from app.modules.hr.feishu.im import FeishuIM
+    from app.modules.hr.feishu_settings_service import get_hr_feishu_app_credentials
 
-    im = FeishuIM()
+    app_id, app_secret = await get_hr_feishu_app_credentials(db)
+    im = FeishuIM(app_id=app_id, app_secret=app_secret)
     last_error = None
     for attempt in range(3):
         try:

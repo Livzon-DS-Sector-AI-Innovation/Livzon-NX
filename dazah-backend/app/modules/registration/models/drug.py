@@ -7,9 +7,10 @@ from sqlalchemy import (
     CheckConstraint,
     Date,
     ForeignKey,
+    Index,
     Integer,
     String,
-    UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -50,11 +51,12 @@ class DrugNode(BaseModel):
 
     __tablename__ = "drug_nodes"
     __table_args__ = (
-        UniqueConstraint(
+        Index(
+            "uq_drug_nodes_drug_node",
             "drug_id",
             "node_index",
-            "is_deleted",
-            name="uq_drug_nodes_drug_node",
+            unique=True,
+            postgresql_where=text("is_deleted = false"),
         ),
         {"schema": "registration"},
     )

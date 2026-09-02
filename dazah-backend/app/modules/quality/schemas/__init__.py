@@ -42,6 +42,7 @@ from app.modules.quality.schemas.contacts import (
     DepartmentWeeklyConfirmationOut,
     FeishuDepartmentContactOut,
     UpdateDepartmentContactRequest,
+    UpdateFeishuDepartmentContactRequest,
 )
 from app.modules.quality.schemas.cpv_batch import CpvBatchResponse, CpvBatchWideResponse
 from app.modules.quality.schemas.cpv_import import (
@@ -76,6 +77,15 @@ from app.modules.quality.schemas.deviation_ai_session import (
     DeviationAiSessionResultPayload,
     UpdateDeviationAiSessionRequest,
 )
+from app.modules.quality.schemas.deviation_workbench import (
+    CreateDeviationWorkbenchRequest,
+    DeviationWorkbenchAttachmentIn,
+    DeviationWorkbenchAttachmentOut,
+    DeviationWorkbenchReportDetail,
+    DeviationWorkbenchReportListItem,
+    DeviationWorkbenchSettingsOut,
+    UpdateDeviationWorkbenchSettingsRequest,
+)
 from app.modules.quality.schemas.deviations import (
     AiAnalysis,
     BatchUpdateStatusRequest,
@@ -109,6 +119,14 @@ from app.modules.quality.schemas.feishu_settings import (
     QualityFeishuTableOption,
     UpdateQualityFeishuAppSettingsRequest,
     UpdateQualityFeishuEntitySettingRequest,
+)
+from app.modules.quality.schemas.historical_deviation import (
+    CreateHistoricalDeviationRequest,
+    HistoricalDeviationAiExtractResult,
+    HistoricalDeviationAttachmentOut,
+    HistoricalDeviationDetail,
+    HistoricalDeviationListItem,
+    UpdateHistoricalDeviationRequest,
 )
 from app.modules.quality.schemas.inspection_dashboard import (
     InspectionDashboardAlert,
@@ -217,6 +235,21 @@ __all__ = [
     "DeviationAiSessionOut",
     "UpdateDeviationAiSessionRequest",
     "ApplyDeviationAiSessionRequest",
+    # Historical Deviations
+    "HistoricalDeviationListItem",
+    "HistoricalDeviationDetail",
+    "HistoricalDeviationAttachmentOut",
+    "CreateHistoricalDeviationRequest",
+    "UpdateHistoricalDeviationRequest",
+    "HistoricalDeviationAiExtractResult",
+    # Deviation Workbench
+    "DeviationWorkbenchSettingsOut",
+    "UpdateDeviationWorkbenchSettingsRequest",
+    "DeviationWorkbenchAttachmentIn",
+    "DeviationWorkbenchAttachmentOut",
+    "DeviationWorkbenchReportListItem",
+    "DeviationWorkbenchReportDetail",
+    "CreateDeviationWorkbenchRequest",
     # CAPA
     "CapaItem",
     "ExecutionTrack",
@@ -240,6 +273,7 @@ __all__ = [
     "FeishuDepartmentContactOut",
     "CreateDepartmentContactRequest",
     "UpdateDepartmentContactRequest",
+    "UpdateFeishuDepartmentContactRequest",
     "DepartmentWeeklyConfirmationOut",
     "ConfirmProductionStatusRequest",
     # Attachment Review

@@ -140,6 +140,12 @@ EXTRA_SCOPE_CHECKS: tuple[tuple[str, str], ...] = (
         "该端点含 HR 模块部门范围校验（按账号可见培训部门过滤/校验），"
         "最终结果以真实执行为准",
     ),
+    (
+        "/api/v1/quality/",
+        "该端点含质量模块子域编辑精校验（quality:qc/product_qa/change_qa/"
+        "validation_qa/system_qa/material_qa:write 或记录归属人），"
+        "最终结果以真实执行为准",
+    ),
 )
 
 

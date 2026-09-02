@@ -2,7 +2,7 @@
 
 import uuid
 
-from sqlalchemy import Index, String, Text, UniqueConstraint, Uuid
+from sqlalchemy import Index, String, Text, Uuid, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -14,11 +14,12 @@ class RegistrationDeclarationProgressVersion(BaseModel):
 
     __tablename__ = "declaration_progress_versions"
     __table_args__ = (
-        UniqueConstraint(
+        Index(
+            "uq_registration_declaration_progress_versions_group_version",
             "record_group_id",
             "version_number",
-            "is_deleted",
-            name="uq_registration_declaration_progress_versions_group_version",
+            unique=True,
+            postgresql_where=text("is_deleted = false"),
         ),
         Index(
             "ix_registration_declaration_progress_versions_sheet_key",
