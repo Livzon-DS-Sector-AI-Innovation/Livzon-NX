@@ -34,6 +34,10 @@ desktop.ini
 /docs/runbooks/*
 !/docs/runbooks/hermes-native-feishu-gateway-phase0-runbook.md
 !/docs/runbooks/production-offline-deployment.md
+!/docs/runbooks/feishu-login-credential-boundary.md
+!/docs/runbooks/edbo-retirement.md
+!/docs/runbooks/page-permission-implementation-status.md
+!/docs/runbooks/page-permission-core.md
 !/scripts/
 /scripts/*
 !/scripts/ci.sh
@@ -46,12 +50,15 @@ desktop.ini
 !/scripts/check-agent-v2-residuals.py
 !/scripts/check-agent-instruction-bridges.py
 !/scripts/check-test-impact.py
+!/scripts/check-page-permission-lifecycle.py
 !/scripts/prepare-integration.sh
 !/scripts/tests/
 /scripts/tests/*
 !/scripts/tests/test_check_agent_instruction_bridges.py
 !/scripts/tests/test_check_test_impact.py
 !/scripts/tests/test_production_proxy_deployment.py
+!/scripts/tests/test_edbo_retirement.py
+!/scripts/tests/test_frontend_development_runtime.py
 !/scripts/wait-for-database.sh
 
 # Python
@@ -97,6 +104,14 @@ desktop.ini
 /.deploy-tmp/
 /.deploy-cache/
 
+# Local Docker and Compose deployment configuration
+**/Dockerfile
+**/Dockerfile.dev
+**/compose.yml
+**/compose.dev.yml
+**/docker-compose.yml
+**/docker-compose.yaml
+
 # Local environment and logs
 **/.env
 **/.env.*
@@ -106,6 +121,7 @@ desktop.ini
 *.pid
 
 # Runtime data
+dazah-backend/data/
 dazah-backend/uploads/
 dazah-backend/storage/
 dazah-backend/backups/
