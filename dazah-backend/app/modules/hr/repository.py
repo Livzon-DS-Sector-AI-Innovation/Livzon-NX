@@ -1406,17 +1406,65 @@ class TrainingLedgerRepository:
         from app.modules.hr.training_dept_resolver import ledger_dept_read_family
 
         dept_values = await ledger_dept_read_family(self.session, department)
-        stmt = select(TrainingLedger).where(
-            or_(
-                TrainingLedger.ledger_department.in_(dept_values),
-                and_(
-                    TrainingLedger.ledger_department.is_(None),
-                    TrainingLedger.teaching_dept.in_(dept_values),
-                ),
+        is_201_family = department in ("201二车间（MC）", "201二车间（DR）")
+        # 201 家族裸名「201二车间」不能通过 ledger_department/teaching_dept 直接匹配，
+        # 否则裸名记录会无条件落入 MC/DR；只能按 trainees 的飞书部门归属判断
+        # （见下方裸名条件）。
+        if is_201_family:
+            dept_values = [v for v in dept_values if v != "201二车间"]
+        conditions = [
+            TrainingLedger.ledger_department.in_(dept_values),
+            and_(
+                TrainingLedger.ledger_department.is_(None),
+                TrainingLedger.teaching_dept.in_(dept_values),
             ),
+        ]
+        # 201 家族裸名「201二车间」记录（归属部门或授课部门为裸名）：
+        # 按 trainees 姓名在飞书联系人中的部门判断归属
+        # MC 匹配飞书部门 "201二车间"，
+        # DR 匹配 "201二车间（多拉）"/"201二车间（多拉菌素）"
+        # 仅 201 家族生效；其他部门保持原逻辑（不受影响）
+        if is_201_family:
+            from sqlalchemy import exists
+
+            from app.modules.hr.models import HrFeishuMember
+            from app.modules.hr.training_dept_resolver import training_dept_aliases_of
+
+            feishu_depts = await training_dept_aliases_of(self.session, department)
+            if feishu_depts:
+                # trainees 是顿号/换行分隔的姓名字符串，
+                # 用正则边界匹配飞书联系人姓名 → 检查其 department 是否在目标集合
+                has_matching_trainee = exists(
+                    select(HrFeishuMember.id).where(
+                        HrFeishuMember.is_deleted.is_(False),
+                        HrFeishuMember.department.in_(feishu_depts),
+                        TrainingLedger.trainees.regexp_match(
+                            func.concat(
+                                "(^|[、\\s\\n\\r])",
+                                HrFeishuMember.name,
+                                "([、\\s\\n\\r]|$)",
+                            )
+                        ),
+                    )
+                )
+                bare_ledger = or_(
+                    TrainingLedger.ledger_department == "201二车间",
+                    and_(
+                        TrainingLedger.ledger_department.is_(None),
+                        TrainingLedger.teaching_dept == "201二车间",
+                    ),
+                )
+                conditions.append(
+                    and_(
+                        bare_ledger,
+                        has_matching_trainee,
+                    )
+                )
+        stmt = select(TrainingLedger).where(
+            or_(*conditions),
             TrainingLedger.is_deleted.is_(False),
         )
-        if department in ("201二车间（MC）", "201二车间（DR）"):
+        if is_201_family:
             # 有拆分副本时隐藏裸名总副本（列表与 ESG 同步同口径）
             stmt = stmt.where(self.bare201_hidden_when_split())
         stmt = stmt.order_by(TrainingLedger.training_datetime.desc())

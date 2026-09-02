@@ -124,6 +124,8 @@ from app.modules.quality.schemas.historical_deviation import (
     CreateHistoricalDeviationRequest,
     HistoricalDeviationAiExtractResult,
     HistoricalDeviationAttachmentOut,
+    HistoricalDeviationBatchImportResult,
+    HistoricalDeviationBatchImportResultItem,
     HistoricalDeviationDetail,
     HistoricalDeviationListItem,
     UpdateHistoricalDeviationRequest,
@@ -237,6 +239,8 @@ __all__ = [
     "ApplyDeviationAiSessionRequest",
     # Historical Deviations
     "HistoricalDeviationListItem",
+    "HistoricalDeviationBatchImportResult",
+    "HistoricalDeviationBatchImportResultItem",
     "HistoricalDeviationDetail",
     "HistoricalDeviationAttachmentOut",
     "CreateHistoricalDeviationRequest",

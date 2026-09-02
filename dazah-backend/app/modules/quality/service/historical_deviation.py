@@ -40,6 +40,8 @@ from app.modules.quality.models import HistoricalDeviation
 from app.modules.quality.schemas.historical_deviation import (
     CreateHistoricalDeviationRequest,
     HistoricalDeviationAttachmentOut,
+    HistoricalDeviationBatchImportResult,
+    HistoricalDeviationBatchImportResultItem,
     HistoricalDeviationDetail,
     HistoricalDeviationListItem,
     UpdateHistoricalDeviationRequest,
@@ -49,6 +51,7 @@ from app.modules.quality.service.quality_attachment import (
     attachment_storage_keys,
     delete_file,
     generate_code,
+    parse_deviation_code_from_text,
     persisted_user_id,
     read_file,
     render_word_to_md,
@@ -62,6 +65,7 @@ WORD_EXT = {".doc", ".docx", ".wps"}
 IMAGE_EXT = {".png", ".jpg", ".jpeg"}
 TEXT_MD_MIME = "text/markdown; charset=utf-8"
 ATTACHMENT_MAX_SIZE = 20 * 1024 * 1024  # 20MB
+MAX_BATCH_FILES = 20
 AI_CONTEXT_TEXT_LIMIT = 60000
 
 # 本地文件存储子目录（配合 quality_attachment 共享 helper 使用）
@@ -251,22 +255,31 @@ async def update_historical_deviation(
     return _detail_to_schema(result.scalar_one())
 
 
-async def delete_historical_deviation(
-    db: AsyncSession,
-    record_id: uuid.UUID,
-    user_id: str,
+async def _maybe_apply_pc_code(
+    db: AsyncSession, record: HistoricalDeviation, file_name: str, text_sample: str
 ) -> None:
-    record = await _get_or_raise(db, record_id)
-    for attachment in record.attachments or []:
-        for key in attachment_storage_keys(attachment):
-            try:
-                delete_file(_STORAGE_SUBDIR, key)
-            except Exception:  # noqa: BLE001
-                logger.exception("清理历史偏差附件对象失败: object_key=%s", key)
-    record.is_deleted = True
-    record.deleted_by = persisted_user_id(user_id)
-    record.deleted_at = datetime.now(UTC)
-    await db.commit()
+    """从附件文件名（回退正文）解析 PC-YYMMNNN 编号并回填 code。
+
+    仅当当前 code 仍是 HD 占位（尚未解析出真实编号）且解析到的编号未被占用时更新；
+    解析不到则保持 HD 占位，列表按「非 PC- 前缀」显示 "-"。
+    """
+    if record.code and record.code.startswith("PC-"):
+        return
+    parsed = parse_deviation_code_from_text(file_name)
+    if not parsed:
+        parsed = parse_deviation_code_from_text(text_sample[:300])
+    if not parsed:
+        return
+    taken = await db.execute(
+        select(HistoricalDeviation.id).where(
+            HistoricalDeviation.code == parsed,
+            HistoricalDeviation.is_deleted.is_(False),
+            HistoricalDeviation.id != record.id,
+        )
+    )
+    if taken.first() is not None:
+        return
+    record.code = parsed
 
 
 async def upload_historical_deviation_attachment(
@@ -296,6 +309,7 @@ async def upload_historical_deviation_attachment(
 
         converted_md_key: str | None = None
         asset_keys: list[str] = []
+        text_for_code: str = file_name
         ext = Path(file_name).suffix.lower()
         if ext in WORD_EXT:
             try:
@@ -308,6 +322,7 @@ async def upload_historical_deviation_attachment(
                     extra={"component": "quality", "file": file_name},
                 )
             else:
+                text_for_code = f"{file_name}\n{md_text}"
                 name_to_url: dict[str, str] = {}
                 for image in images:
                     asset_key = (
@@ -351,6 +366,7 @@ async def upload_historical_deviation_attachment(
         attachments.append(attachment)
         record.attachments = attachments
         record.updated_by = persisted_user_id(user_id)
+        await _maybe_apply_pc_code(db, record, file_name, text_for_code)
         await db.flush()
         await db.commit()
     except Exception:
@@ -361,6 +377,102 @@ async def upload_historical_deviation_attachment(
                 logger.exception("清理历史偏差附件对象失败: object_key=%s", stored_key)
         raise
     return _attachment_to_schema(record.id, attachment)
+
+
+async def delete_historical_deviation(
+    db: AsyncSession,
+    record_id: uuid.UUID,
+    user_id: str,
+) -> None:
+    record = await _get_or_raise(db, record_id)
+    for attachment in record.attachments or []:
+        for key in attachment_storage_keys(attachment):
+            try:
+                delete_file(_STORAGE_SUBDIR, key)
+            except Exception:  # noqa: BLE001
+                logger.exception("清理历史偏差附件对象失败: object_key=%s", key)
+    record.is_deleted = True
+    record.deleted_by = persisted_user_id(user_id)
+    record.deleted_at = datetime.now(UTC)
+    await db.commit()
+
+
+async def batch_import_historical_deviations(
+    db: AsyncSession,
+    files: list[UploadFile],
+    user_id: str,
+) -> HistoricalDeviationBatchImportResult:
+    """批量导入历史偏差：每个附件转 MD + 建记录 + 解析 PC 编号 + AI 提取。
+
+    单文件失败回滚会话并补偿删除半成品记录，不影响其它文件；AI 提取失败
+    不算导入失败（记录与 MD 已就绪，可后续手动提取）。
+    """
+    if len(files) > MAX_BATCH_FILES:
+        raise AppException(message=f"单次最多上传 {MAX_BATCH_FILES} 个附件")
+    results: list[HistoricalDeviationBatchImportResultItem] = []
+    succeeded = 0
+    for file in files:
+        file_name = (file.filename or "").strip()
+        created_id: uuid.UUID | None = None
+        try:
+            created = await create_historical_deviation(
+                db, CreateHistoricalDeviationRequest(), user_id
+            )
+            created_id = created.id
+            await upload_historical_deviation_attachment(
+                db, created_id, file, user_id
+            )
+            refreshed = await db.execute(
+                select(HistoricalDeviation).where(HistoricalDeviation.id == created_id)
+            )
+            record = refreshed.scalar_one()
+            ai_message = ""
+            try:
+                await ai_extract_historical_deviation(db, record.id, user_id)
+            except AppException as exc:
+                ai_message = f"AI 提取失败：{exc.message}"
+            succeeded += 1
+            results.append(
+                HistoricalDeviationBatchImportResultItem(
+                    file_name=file_name,
+                    code=record.code,
+                    status="succeeded",
+                    message=ai_message,
+                )
+            )
+        except Exception as exc:  # noqa: BLE001
+            await db.rollback()
+            if created_id is not None:
+                # 补偿删除半成品记录，避免遗留空壳
+                try:
+                    await delete_historical_deviation(db, created_id, user_id)
+                except Exception:  # noqa: BLE001
+                    logger.exception(
+                        "批量导入补偿删除失败: record_id=%s", created_id
+                    )
+            logger.exception("批量导入单文件失败: file=%s", file_name)
+            results.append(
+                HistoricalDeviationBatchImportResultItem(
+                    file_name=file_name,
+                    code="",
+                    status="failed",
+                    message=_safe_import_error(exc),
+                )
+            )
+    return HistoricalDeviationBatchImportResult(
+        total=len(files),
+        succeeded=succeeded,
+        failed=len(files) - succeeded,
+        results=results,
+    )
+
+
+def _safe_import_error(exc: Exception) -> str:
+    """仅回传业务异常消息，避免把 DB/内部错误细节暴露给前端。"""
+    if isinstance(exc, AppException):
+        return exc.message
+    logger.exception("批量导入内部错误")
+    return "导入失败，请检查文件格式后重试"
 
 
 async def delete_historical_deviation_attachment(

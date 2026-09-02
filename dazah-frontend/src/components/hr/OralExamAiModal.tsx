@@ -19,8 +19,8 @@ const CONTENT_MAX_LEN = 8000
 interface OralExamAiModalProps {
   open: boolean
   onClose: () => void
-  /** 结构化勾选文件（优先来源，来自签到表 checked_content） */
-  sourceFiles?: { name: string; code: string | null }[]
+  /** 结构化勾选文件（优先来源，来自签到表 checked_content；entry_id 为勾选时锁定条目） */
+  sourceFiles?: { name: string; code: string | null; entry_id?: string | null }[]
   /** 培训内容字符串（回退来源，解析《文件名称》） */
   contentText?: string
   /** 确认回填：返回要追加的口试问答题 */
@@ -108,8 +108,12 @@ export default function OralExamAiModal({
       setFiles([])
       return
     }
+    // 结构化勾选的条目带 entry_id（勾选时锁定，按 ID 精确读取）；文本解析的文件名无 ID，按名称兜底
+    const resolveInputs = sourceFiles?.length
+      ? sourceFiles.map((f) => ({ name: f.name, entry_id: f.entry_id ?? null }))
+      : names.map((name) => ({ name, entry_id: null }))
     setResolving(true)
-    resolveDocumentEntryContent(names)
+    resolveDocumentEntryContent(resolveInputs)
       .then((items) => {
         const resolved: OralExamSourceFile[] = names.map((name) => {
           const item = items.find((x) => x.name === name)

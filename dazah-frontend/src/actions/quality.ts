@@ -918,8 +918,8 @@ export async function syncExternalQualityRecordToFeishu(
   return result
 }
 
-export async function createFeishuValidationAction(data: Partial<FeishuValidationItem>): Promise<FeishuValidationItem | null> {
-  const result = await actionFetch<FeishuValidationItem>(`${API_BASE_URL}/api/v1/quality/feishu/validations`, {
+export async function createFeishuValidationAction(data: Partial<FeishuValidationItem>, year?: number): Promise<FeishuValidationItem | null> {
+  const result = await actionFetch<FeishuValidationItem>(`${API_BASE_URL}/api/v1/quality/feishu/validations${buildQuery({ year })}`, {
     method: 'POST',
     body: JSON.stringify(data),
   })
@@ -927,9 +927,9 @@ export async function createFeishuValidationAction(data: Partial<FeishuValidatio
   return result
 }
 
-export async function updateFeishuValidationAction(recordId: string, data: Partial<FeishuValidationItem>, validationType?: string): Promise<FeishuValidationItem | null> {
+export async function updateFeishuValidationAction(recordId: string, data: Partial<FeishuValidationItem>, validationType?: string, year?: number): Promise<FeishuValidationItem | null> {
   const result = await actionFetch<FeishuValidationItem>(
-    `${API_BASE_URL}/api/v1/quality/feishu/validations/${recordId}${buildQuery({ validation_type: validationType })}`,
+    `${API_BASE_URL}/api/v1/quality/feishu/validations/${recordId}${buildQuery({ validation_type: validationType, year })}`,
     {
     method: 'PUT',
     body: JSON.stringify(data),
@@ -939,8 +939,8 @@ export async function updateFeishuValidationAction(recordId: string, data: Parti
   return result
 }
 
-export async function deleteFeishuValidationAction(recordId: string, validationType?: string) {
-  await actionFetch(`${API_BASE_URL}/api/v1/quality/feishu/validations/${recordId}${buildQuery({ validation_type: validationType })}`, {
+export async function deleteFeishuValidationAction(recordId: string, validationType?: string, year?: number) {
+  await actionFetch(`${API_BASE_URL}/api/v1/quality/feishu/validations/${recordId}${buildQuery({ validation_type: validationType, year })}`, {
     method: 'DELETE',
   })
   revalidatePath('/quality/validation')
@@ -1220,10 +1220,21 @@ async function mutateMigratedQuality<T>(
   return result
 }
 
-export async function resolveDocumentEntryContent(names: string[]): Promise<DocumentEntryResolveItem[]> {
+/** 培训勾选条目解析请求项：entry_id 为勾选时锁定的文件管理条目，出题时严格按 ID 读取 */
+export interface DocumentEntryResolveInput {
+  name: string
+  entry_id?: string | null
+}
+
+export async function resolveDocumentEntryContent(
+  inputs: (string | DocumentEntryResolveInput)[]
+): Promise<DocumentEntryResolveItem[]> {
+  const entries = inputs.map((input) =>
+    typeof input === 'string' ? { name: input } : input
+  )
   const result = await actionFetch<components['schemas']['DocumentEntryResolveResult']>(
     `${API_BASE_URL}/api/v1/quality/document-entries/resolve-content`,
-    { method: 'POST', body: JSON.stringify({ names } satisfies DocumentEntryResolveRequest) }
+    { method: 'POST', body: JSON.stringify({ entries } satisfies DocumentEntryResolveRequest) }
   )
   return result?.results ?? []
 }
@@ -1302,11 +1313,11 @@ export async function deleteProductDepartmentRecord(recordId: string) {
   return mutateMigratedQuality(`/api/v1/quality/oos-oot/product-departments/${recordId}`, 'DELETE', undefined, OOS_OOT_PATHS)
 }
 
-export async function batchDeleteFeishuValidationsAction(recordIds: string[], validationType?: string) {
+export async function batchDeleteFeishuValidationsAction(recordIds: string[], validationType?: string, year?: number) {
   let deleted = 0
   for (const recordId of recordIds) {
     try {
-      await deleteFeishuValidationAction(recordId, validationType)
+      await deleteFeishuValidationAction(recordId, validationType, year)
       deleted += 1
     } catch {
       // Continue so a single stale Feishu record does not block the batch.

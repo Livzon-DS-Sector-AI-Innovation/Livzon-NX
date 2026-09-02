@@ -7,6 +7,7 @@ import type {
   DeviationWorkbenchAttachmentDescriptor,
   DeviationWorkbenchReportDetail,
   DeviationWorkbenchSettings,
+  HistoricalDeviationBatchImportResult,
   HistoricalDeviationDetail,
 } from '@/types/quality'
 import { API_BASE_URL, actionFetch } from './quality-shared'
@@ -136,4 +137,16 @@ export async function deleteDeviationWorkbenchAttachment(
     `${API_BASE_URL}/api/v1/quality/deviation-workbench/attachments${query ? `?${query}` : ''}`,
     { method: 'DELETE' }
   )
+}
+
+/** 批量导入历史偏差附件：转 MD + 建记录 + 解析编号 + AI 提取 */
+export async function batchImportHistoricalDeviations(
+  formData: FormData
+): Promise<HistoricalDeviationBatchImportResult | null> {
+  const result = await actionFetch<HistoricalDeviationBatchImportResult>(
+    `${API_BASE_URL}/api/v1/quality/historical-deviations/batch-import`,
+    { method: 'POST', body: formData }
+  )
+  revalidateDeviationWorkbenchPaths()
+  return result
 }

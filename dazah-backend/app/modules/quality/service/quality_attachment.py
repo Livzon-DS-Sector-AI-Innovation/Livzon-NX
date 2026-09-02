@@ -252,3 +252,21 @@ def render_word_to_md(
             if chunk.strip():
                 blocks.append(chunk)
     return "\n\n".join(blocks).strip(), images
+
+
+# 偏差编号 PC-YYMMNNN（前 4 位=YYMM，后 3 位流水号）；兼容 PC2508001 / PC_2508001
+_PC_CODE_RE = re.compile(r"PC[-_ ]?(\d{4})(\d{3})(?=\D|$)", re.IGNORECASE)
+
+
+def parse_deviation_code_from_text(text: str | None) -> str | None:
+    """从文本（文件名或正文）解析偏差编号，规范化为 PC-YYMMNNN；未命中返回 None。"""
+    if not text:
+        return None
+    match = _PC_CODE_RE.search(text)
+    if not match:
+        return None
+    return f"PC-{match.group(1)}{match.group(2)}"
+
+
+def parse_deviation_code_from_filename(filename: str | None) -> str | None:
+    return parse_deviation_code_from_text(filename)
