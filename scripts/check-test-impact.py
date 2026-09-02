@@ -45,6 +45,19 @@ def revision_exists(revision: str) -> bool:
     )
 
 
+def origin_main_head() -> str | None:
+    """Return the current origin/main commit, the base a PR run would use."""
+    if not revision_exists("origin/main"):
+        return None
+    out = subprocess.run(
+        ["git", "rev-parse", "origin/main"],
+        capture_output=True,
+        check=False,
+        text=True,
+    ).stdout.strip()
+    return out if out and revision_exists(out) else None
+
+
 def resolve_revisions(base: str | None, head: str | None) -> tuple[str, str]:
     resolved_head = (
         head or os.environ.get("CI_HEAD_SHA") or os.environ.get("GITHUB_SHA") or "HEAD"
@@ -57,10 +70,14 @@ def resolve_revisions(base: str | None, head: str | None) -> tuple[str, str]:
         or os.environ.get("CI_BASE_SHA")
         or os.environ.get("GITHUB_BASE_SHA")
         or os.environ.get("GITHUB_EVENT_BEFORE")
-        or "HEAD^"
     )
-    if revision_exists(resolved_base):
+    if resolved_base and revision_exists(resolved_base):
         return resolved_base, resolved_head
+    # 无 PR 上下文（workflow_dispatch）：回退到 origin/main 作为 base（与
+    # PR 的 base.sha 一致），让增量检查覆盖整条分支相对主线的改动。
+    merged_base = origin_main_head()
+    if merged_base:
+        return merged_base, resolved_head
     if revision_exists(f"{resolved_head}^"):
         return f"{resolved_head}^", resolved_head
 

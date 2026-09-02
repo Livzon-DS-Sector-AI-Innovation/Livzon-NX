@@ -29,13 +29,13 @@ elif [[ -n "${CI_BASE_SHA:-}" && -n "${CI_HEAD_SHA:-}" ]]; then
       -- "dazah-backend/**/*.py"
   )
 elif [[ -n "${CI_BASE_SHA:-}" || -n "${CI_HEAD_SHA:-}" || "${CI:-}" == "true" ]]; then
-  # CI 场景：workflow_dispatch 无 PR 上下文时 CI_BASE_SHA 为空。与
-  # change_scope.py 一致，回退到 origin/main 的 merge-base（首个提交无祖先则
-  # 退回 HEAD^），避免整仓 lint 或直接退出；真实 PR 运行仍走完整 base..head。
+  # CI 场景：workflow_dispatch 无 PR 上下文时 CI_BASE_SHA 为空。回退到
+  # origin/main（与 PR 的 base.sha 一致），让增量检查覆盖整条分支相对主线的
+  # 改动；origin/main 不可解析时退回 HEAD^，避免整仓 lint 或直接退出。
   lint_base="${CI_BASE_SHA:-}"
   lint_head="${CI_HEAD_SHA:-HEAD}"
   if [[ -z "${lint_base:-}" ]]; then
-    lint_base="$(git -C "$repository_dir" merge-base origin/main "$lint_head" 2>/dev/null || true)"
+    lint_base="$(git -C "$repository_dir" rev-parse origin/main 2>/dev/null || true)"
   fi
   if [[ -z "${lint_base:-}" ]]; then
     lint_base="$(git -C "$repository_dir" rev-parse "${lint_head}^" 2>/dev/null || true)"

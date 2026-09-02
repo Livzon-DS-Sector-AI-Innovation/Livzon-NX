@@ -50,6 +50,13 @@ def resolve_head(head: str | None) -> str:
     return head if revision_exists(head) else "HEAD"
 
 
+def origin_main_head() -> str | None:
+    """Return the current origin/main commit, the base a PR run would use."""
+    if not revision_exists("origin/main"):
+        return None
+    return _git("rev-parse", "origin/main").decode("utf-8").strip()
+
+
 def collect_changed_paths(base: str | None, head: str | None) -> set[str]:
     """Return changed paths, failing safe to the complete tree for an unknown base."""
     resolved_head = resolve_head(head)
@@ -64,21 +71,26 @@ def collect_changed_paths(base: str | None, head: str | None) -> set[str]:
             base or "",
             resolved_head,
         )
-    elif base is None and revision_exists(f"{resolved_head}^"):
-        output = _git(
-            "-c",
-            "core.quotePath=false",
-            "diff",
-            "--name-only",
-            "-z",
-            "--diff-filter=ACMRD",
-            f"{resolved_head}^",
-            resolved_head,
-        )
     else:
-        # A first push or an explicitly unavailable/all-zero before SHA must not
-        # skip checks, even when the pushed branch contains several commits.
-        output = _git("ls-tree", "-r", "--name-only", "-z", resolved_head)
+        # 无 PR 上下文（workflow_dispatch）：回退到 origin/main 作为 base（与
+        # PR 的 base.sha 一致），覆盖整条分支相对主线的改动；无法解析时退回
+        # HEAD^，仍不行则用完整树，绝不跳过检查。
+        resolved_base = origin_main_head()
+        if resolved_base is None and revision_exists(f"{resolved_head}^"):
+            resolved_base = f"{resolved_head}^"
+        if resolved_base:
+            output = _git(
+                "-c",
+                "core.quotePath=false",
+                "diff",
+                "--name-only",
+                "-z",
+                "--diff-filter=ACMRD",
+                resolved_base,
+                resolved_head,
+            )
+        else:
+            output = _git("ls-tree", "-r", "--name-only", "-z", resolved_head)
     return {
         item.decode("utf-8").replace("\\", "/")
         for item in output.split(b"\0")
