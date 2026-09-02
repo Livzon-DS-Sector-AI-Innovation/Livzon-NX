@@ -16,7 +16,10 @@ class ValidationTitleClassification(BaseModel):
     """
 
     __tablename__ = "validation_title_classifications"
-    __table_args__ = {"schema": "quality"}
+    __table_args__ = {
+        "schema": "quality",
+        "comment": "验证确认名称的 AI 分类缓存（真实年度台账无验证类别列）",
+    }
 
     title: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     category: Mapped[str] = mapped_column(String(50), nullable=False)
