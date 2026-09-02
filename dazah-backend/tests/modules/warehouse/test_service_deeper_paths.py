@@ -111,6 +111,9 @@ def test_warehouse_filter_operator_covers_text_numeric_date_and_empty_cases() ->
 @pytest.mark.asyncio
 async def test_warehouse_feishu_pagination_and_material_page_scope_paths() -> None:
     instance = _instance()
+    instance._get_material_client = AsyncMock(
+        side_effect=lambda _app_token: instance.feishu_client
+    )
     instance.feishu_client = SimpleNamespace(
         request=AsyncMock(
             side_effect=[
