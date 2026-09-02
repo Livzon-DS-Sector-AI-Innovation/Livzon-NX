@@ -115,7 +115,8 @@ async def training_dept_aliases_of(session: AsyncSession, norm: str) -> list[str
     aliases = {norm}
     for m in _resolve_mappings(await _load_mappings(session)):
         # 仅使用 resolve 类型（special/alias），排除 split/exclude/candidate_source
-        # split 是一对多拆分关系，不是别名；若纳入会导致裸名同时出现在 MC 和 DR 的别名集中
+        # split 是一对多拆分关系，不是别名；若纳入会导致裸名同时出现在
+        # MC 和 DR 的别名集中
         if m["target_name"] == norm and m["mapping_type"] in _RESOLVE_TYPES:
             aliases.add(m["source_name"])
     return sorted(aliases)

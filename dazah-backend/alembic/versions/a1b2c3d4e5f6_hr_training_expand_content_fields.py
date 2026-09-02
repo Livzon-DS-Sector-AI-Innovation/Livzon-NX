@@ -1,6 +1,7 @@
 """hr training expand content fields
 
-- training_ledgers: training_date/training_subject 改为 nullable; training_content VARCHAR(512)->VARCHAR(4096)
+- training_ledgers: training_date/training_subject 改为 nullable;
+  training_content VARCHAR(512)->VARCHAR(4096)
 - training_evaluations: training_content VARCHAR(512)->VARCHAR(4096)
 - plan_tracking_records: training_content VARCHAR(512)->VARCHAR(4096)
 - esg_training_records: training_name VARCHAR(512)->VARCHAR(4096)
@@ -11,15 +12,16 @@ Create Date: 2026-09-02
 
 """
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
 
+from alembic import op
+
 revision: str = "a1b2c3d4e5f6"
-down_revision: Union[str, None] = "f7a8b9c0d1e2"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "f7a8b9c0d1e2"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:

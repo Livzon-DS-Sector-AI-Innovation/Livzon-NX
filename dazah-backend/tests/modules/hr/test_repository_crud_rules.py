@@ -426,7 +426,14 @@ async def test_training_ledger_repository_crud_lists_and_batch_updates(
     monkeypatch.setattr(
         training_dept_resolver,
         "training_dept_aliases_of",
-        AsyncMock(return_value=["201二车间（MC）", "201二车间", "201二车间（霉酚酸）", "201三车间"]),
+        AsyncMock(
+            return_value=[
+                "201二车间（MC）",
+                "201二车间",
+                "201二车间（霉酚酸）",
+                "201三车间",
+            ]
+        ),
     )
     rows, total = await repo.list_by_department("201二车间（MC）")
     assert rows == [record] and total == 1

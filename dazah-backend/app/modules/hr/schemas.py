@@ -1201,7 +1201,9 @@ class TrainingLedgerBase(BaseModel):
         None, max_length=32, description="工号（培训级台账记录可为空）"
     )
     training_date: date | None = Field(None, description="培训日期")
-    training_subject: str | None = Field(None, max_length=256, description="培训课程/主题")
+    training_subject: str | None = Field(
+        None, max_length=256, description="培训课程/主题"
+    )
     training_method: str | None = Field(None, max_length=32, description="培训方式")
     duration_hours: float | None = Field(None, description="培训时长（h）")
     location: str | None = Field(None, max_length=128, description="培训地点")

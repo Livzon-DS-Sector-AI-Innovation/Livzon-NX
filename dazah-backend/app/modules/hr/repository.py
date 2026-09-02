@@ -1407,8 +1407,9 @@ class TrainingLedgerRepository:
 
         dept_values = await ledger_dept_read_family(self.session, department)
         is_201_family = department in ("201二车间（MC）", "201二车间（DR）")
-        # 201 家族裸名「201二车间」不能通过 ledger_department/teaching_dept 直接匹配
-        # （否则裸名记录会无条件落入 MC/DR），只能按 trainees 的飞书部门归属（下方裸名条件）
+        # 201 家族裸名「201二车间」不能通过 ledger_department/teaching_dept 直接匹配，
+        # 否则裸名记录会无条件落入 MC/DR；只能按 trainees 的飞书部门归属判断
+        # （见下方裸名条件）。
         if is_201_family:
             dept_values = [v for v in dept_values if v != "201二车间"]
         conditions = [
@@ -1420,7 +1421,8 @@ class TrainingLedgerRepository:
         ]
         # 201 家族裸名「201二车间」记录（归属部门或授课部门为裸名）：
         # 按 trainees 姓名在飞书联系人中的部门判断归属
-        # MC 匹配飞书部门 "201二车间"，DR 匹配 "201二车间（多拉）"/"201二车间（多拉菌素）"
+        # MC 匹配飞书部门 "201二车间"，
+        # DR 匹配 "201二车间（多拉）"/"201二车间（多拉菌素）"
         # 仅 201 家族生效；其他部门保持原逻辑（不受影响）
         if is_201_family:
             from sqlalchemy import exists

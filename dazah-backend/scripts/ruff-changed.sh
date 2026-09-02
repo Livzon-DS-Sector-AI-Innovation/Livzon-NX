@@ -29,8 +29,32 @@ elif [[ -n "${CI_BASE_SHA:-}" && -n "${CI_HEAD_SHA:-}" ]]; then
       -- "dazah-backend/**/*.py"
   )
 elif [[ -n "${CI_BASE_SHA:-}" || -n "${CI_HEAD_SHA:-}" || "${CI:-}" == "true" ]]; then
-  echo "CI requires both CI_BASE_SHA and CI_HEAD_SHA." >&2
-  exit 2
+  # CI 场景：workflow_dispatch 无 PR 上下文时 CI_BASE_SHA 为空。与
+  # change_scope.py 一致，回退到 origin/main 的 merge-base（首个提交无祖先则
+  # 退回 HEAD^），避免整仓 lint 或直接退出；真实 PR 运行仍走完整 base..head。
+  lint_base="${CI_BASE_SHA:-}"
+  lint_head="${CI_HEAD_SHA:-HEAD}"
+  if [[ -z "${lint_base:-}" ]]; then
+    lint_base="$(git -C "$repository_dir" merge-base origin/main "$lint_head" 2>/dev/null || true)"
+  fi
+  if [[ -z "${lint_base:-}" ]]; then
+    lint_base="$(git -C "$repository_dir" rev-parse "${lint_head}^" 2>/dev/null || true)"
+  fi
+  if [[ -z "${lint_base:-}" ]]; then
+    echo "CI requires both CI_BASE_SHA and CI_HEAD_SHA." >&2
+    exit 2
+  fi
+  while IFS= read -r -d '' path; do
+    add_backend_file "$path"
+  done < <(
+    git -C "$repository_dir" diff \
+      --name-only \
+      --diff-filter=ACMR \
+      -z \
+      "$lint_base" \
+      "$lint_head" \
+      -- "dazah-backend/**/*.py"
+  )
 else
   while IFS= read -r -d '' path; do
     add_backend_file "$path"
