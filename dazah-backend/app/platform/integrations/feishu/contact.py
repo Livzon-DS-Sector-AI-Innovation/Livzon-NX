@@ -100,6 +100,7 @@ def _department_to_dict(item: Any, parent_department_id: str = "") -> dict[str, 
 
 async def get_contact_scope(
     *,
+    user_id_type: str = "user_id",
     app_id: str | None = None,
     app_secret: str | None = None,
     tenant_access_token: str | None = None,
@@ -125,7 +126,7 @@ async def get_contact_scope(
         req = (
             ListScopeRequest.builder()
             .department_id_type("open_department_id")
-            .user_id_type("user_id")
+            .user_id_type(user_id_type)
             .page_size(CONTACT_PAGE_SIZE)
             .page_token(page_token)
             .build()
@@ -157,6 +158,7 @@ async def get_contact_scope(
 async def get_all_departments(
     *,
     root_department_id: str = "0",
+    user_id_type: str = "user_id",
     app_id: str | None = None,
     app_secret: str | None = None,
     tenant_access_token: str | None = None,
@@ -183,7 +185,7 @@ async def get_all_departments(
         req = (
             ChildrenDepartmentRequest.builder()
             .department_id_type("open_department_id")
-            .user_id_type("user_id")
+            .user_id_type(user_id_type)
             .department_id(root_id)
             .fetch_child(True)
             .page_size(50)
@@ -445,6 +447,7 @@ async def get_all_users(
 async def find_users_by_department(
     department_id: str,
     *,
+    user_id_type: str = "user_id",
     app_id: str | None = None,
     app_secret: str | None = None,
     tenant_access_token: str | None = None,
@@ -470,7 +473,7 @@ async def find_users_by_department(
     while True:
         req = (
             FindByDepartmentUserRequest.builder()
-            .user_id_type("user_id")
+            .user_id_type(user_id_type)
             .department_id_type("open_department_id")
             .department_id(department_id)
             .page_size(CONTACT_PAGE_SIZE)

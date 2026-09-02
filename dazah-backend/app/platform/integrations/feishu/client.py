@@ -42,8 +42,8 @@ class FeishuClient(IntegrationClient):
 
     async def health_check(self) -> dict[str, Any]:
         try:
-            token = await FeishuAuth.get_tenant_access_token()
-            return {"status": "ok", "token_prefix": token[:10] + "..."}
+            await FeishuAuth.get_tenant_access_token(self.app_id, self.app_secret)
+            return {"status": "ok"}
         except Exception as e:
             return {"status": "error", "message": str(e)}
 

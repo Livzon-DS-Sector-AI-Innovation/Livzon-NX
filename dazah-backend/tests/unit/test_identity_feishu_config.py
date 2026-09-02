@@ -1,6 +1,7 @@
 from datetime import UTC, datetime
 from types import SimpleNamespace as _SimpleNamespace
 from typing import Any, cast
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
@@ -83,6 +84,131 @@ def test_external_identity_binding_out_normalizes_migrated_source() -> None:
     )
 
     assert binding.source == "directory_sync"
+
+
+@pytest.mark.anyio
+async def test_directory_credentials_fall_back_to_environment(
+    monkeypatch: Any,
+) -> None:
+    monkeypatch.setattr(
+        service,
+        "_feishu_config_repo",
+        FakeFeishuConfigRepo(None),
+    )
+    monkeypatch.setattr(
+        service,
+        "get_settings",
+        lambda: SimpleNamespace(
+            FEISHU_APP_ID="env-app-id",
+            FEISHU_APP_SECRET="env-app-secret",
+            FEISHU_SYNC_ROOT_DEPT_ID="od-root",
+            FEISHU_SYNC_MEMBER_DEPT_ID="od-members",
+        ),
+    )
+
+    credentials = await service._effective_feishu_credentials(cast(Any, FakeDb)())
+
+    assert credentials == (
+        "env-app-id",
+        "env-app-secret",
+        "od-root",
+        "od-members",
+    )
+
+
+@pytest.mark.anyio
+async def test_livzon_directory_credentials_keep_database_priority(
+    monkeypatch: Any,
+) -> None:
+    stored = FeishuConfig(
+        config_name="Livzon 助手飞书设置",
+        app_id="stored-app-id",
+        encrypted_app_secret="stored-secret",
+        sync_root_department_id="stored-root",
+        sync_member_department_id="stored-members",
+        is_active=True,
+    )
+    monkeypatch.setattr(
+        service,
+        "_feishu_config_repo",
+        FakeFeishuConfigRepo(stored),
+    )
+    monkeypatch.setattr(service, "decrypt_secret", lambda value: f"plain-{value}")
+    monkeypatch.setattr(
+        service,
+        "get_settings",
+        lambda: SimpleNamespace(
+            FEISHU_APP_ID="environment-app-id",
+            FEISHU_APP_SECRET="environment-app-secret",
+            FEISHU_SYNC_ROOT_DEPT_ID="environment-root",
+            FEISHU_SYNC_MEMBER_DEPT_ID="environment-members",
+        ),
+    )
+
+    credentials = await service._effective_feishu_credentials(cast(Any, FakeDb)())
+
+    assert credentials == (
+        "stored-app-id",
+        "plain-stored-secret",
+        "stored-root",
+        "stored-members",
+    )
+
+
+@pytest.mark.anyio
+async def test_directory_sync_uses_environment_app_instead_of_active_database_config(
+    monkeypatch: Any,
+) -> None:
+    import app.platform.integrations.feishu.contact as contact
+    import app.platform.integrations.feishu.sync as feishu_sync
+
+    stored = FeishuConfig(
+        config_name="Livzon 助手飞书设置",
+        app_id="stored-app-id",
+        encrypted_app_secret="stored-secret",
+        is_active=True,
+    )
+    monkeypatch.setattr(
+        service,
+        "_feishu_config_repo",
+        FakeFeishuConfigRepo(stored),
+    )
+    monkeypatch.setattr(
+        service,
+        "get_settings",
+        lambda: SimpleNamespace(
+            FEISHU_APP_ID="environment-app-id",
+            FEISHU_APP_SECRET="environment-app-secret",
+            FEISHU_SYNC_ROOT_DEPT_ID="od-root",
+            FEISHU_SYNC_MEMBER_DEPT_ID="od-members",
+        ),
+    )
+    get_scope = AsyncMock(
+        return_value={"department_ids": [], "user_ids": [], "group_ids": []}
+    )
+    sync_departments = AsyncMock(return_value={"dept_count": 1})
+    sync_members = AsyncMock(return_value={"user_count": 1, "errors": []})
+    monkeypatch.setattr(contact, "get_contact_scope", get_scope)
+    monkeypatch.setattr(feishu_sync, "sync_departments", sync_departments)
+    monkeypatch.setattr(feishu_sync, "sync_members", sync_members)
+    monkeypatch.setattr(
+        service,
+        "reconcile_livzon_identity_bindings",
+        AsyncMock(return_value={"created": 0, "existing": 1, "conflicts": []}),
+    )
+
+    result = await service.run_environment_feishu_user_sync(cast(Any, FakeDb)())
+
+    assert result["status"] == "ok"
+    assert get_scope.await_args.kwargs == {
+        "user_id_type": "open_id",
+        "app_id": "environment-app-id",
+        "app_secret": "environment-app-secret",
+    }
+    assert sync_departments.await_args.kwargs["app_id"] == "environment-app-id"
+    assert sync_departments.await_args.kwargs["user_id_type"] == "open_id"
+    assert sync_members.await_args.kwargs["app_id"] == "environment-app-id"
+    assert sync_members.await_args.kwargs["user_id_type"] == "open_id"
 
 
 @pytest.mark.anyio

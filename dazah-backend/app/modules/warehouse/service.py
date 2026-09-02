@@ -61,6 +61,7 @@ from app.modules.warehouse.schemas import (
     WarehouseRecordFieldValue,
 )
 from app.platform.identity.data_scope import DepartmentScope
+from app.platform.integrations.feishu.bitable import BitableClient
 from app.platform.integrations.feishu.client import FeishuClient
 
 logger = logging.getLogger(__name__)
@@ -450,7 +451,6 @@ _DASHBOARD_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 class WarehouseService:
     def __init__(self, session: AsyncSession) -> None:
         self.repo = WarehouseRepository(session)
-        self.feishu_client = FeishuClient()
         # 缓存为模块级共享（进程内跨请求复用）：
         # get_warehouse_service 每请求新建实例，实例级缓存会全部失效导致每次全量拉取
         self._page_cache = _PAGE_CACHE
@@ -458,6 +458,21 @@ class WarehouseService:
         self._table_fields_cache = _TABLE_FIELDS_CACHE
         # 仪表盘聚合结果缓存：冷启动全量拉取耗时长，TTL 放宽到 300s，force 可强制刷新
         self._dashboard_cache = _DASHBOARD_CACHE
+
+    async def _get_feishu_client(self) -> FeishuClient:
+        config = await self._get_active_feishu_config_or_raise()
+        return FeishuClient(
+            app_id=config.app_id,
+            app_secret=decrypt_secret(config.encrypted_app_secret),
+        )
+
+    async def _get_bitable_client(self, app_token: str) -> BitableClient:
+        client = await self._get_feishu_client()
+        return BitableClient(
+            app_token=app_token,
+            app_id=client.app_id,
+            app_secret=client.app_secret,
+        )
 
     async def list_raw_materials(self) -> list[RawMaterialInventory]:
         return await self.repo.list_raw_materials()
@@ -2394,7 +2409,7 @@ class WarehouseService:
         page_config = await self._get_material_page_config(page_key)
         fields_meta = await self._get_page_field_meta(page_config)
         option_map = await self._build_page_option_map(page_config, fields_meta)
-        data = await self.feishu_client.request(
+        data = await (await self._get_feishu_client()).request(
             "GET",
             f"/bitable/v1/apps/{page_config.app_token}/tables/{page_config.table_id}/records/{record_id}",
         )
@@ -2774,10 +2789,7 @@ class WarehouseService:
 
     async def _get_any_feishu_config_or_raise(self) -> Any | None:
         try:
-            config = await self.repo.get_any_feishu_config()
-            if config is not None:
-                return config
-            return self._env_fallback_feishu_config()
+            return await self.repo.get_any_feishu_config()
         except SQLAlchemyError as exc:
             raise AppException(
                 status_code=500,
@@ -2787,63 +2799,15 @@ class WarehouseService:
                 detail=exc.__class__.__name__,
             ) from exc
 
-    @staticmethod
-    def _env_fallback_feishu_config() -> Any:
-        """平台 env 凭据回退（对齐 quality/hr 模式）。
-
-        warehouse.feishu_configs 尚无行时，用共享飞书应用（settings 中的
-        FEISHU_APP_ID/SECRET）构造内存配置对象（不落库），保证连接测试、
-        root 发现、附件下载等能力开箱即用；用户在飞书设置页保存专属
-        凭证后即覆盖此回退。
-        """
-        from app.core.config import get_settings
-        from app.core.secrets import encrypt_secret
-        from app.modules.warehouse.legacy_models import WarehouseFeishuConfig
-
-        settings = get_settings()
-        if not settings.FEISHU_APP_ID or not settings.FEISHU_APP_SECRET:
-            return None
-        from datetime import UTC, datetime
-        from uuid import uuid4
-
-        now = datetime.now(UTC)
-        return WarehouseFeishuConfig(
-            id=uuid4(),
-            config_name="仓储飞书配置（环境变量回退）",
-            app_id=settings.FEISHU_APP_ID,
-            encrypted_app_secret=encrypt_secret(settings.FEISHU_APP_SECRET),
-            is_active=True,
-            timezone="Asia/Shanghai",
-            daily_sync_time="02:00",
-            created_at=now,
-            updated_at=now,
-        )
-
     async def _get_material_client(self, app_token: str) -> Any:
-        """物料页同步优先使用仓储模块自有应用（feishu-config 页配置的
-        app_id/secret），未配置时回退平台共享应用。
-
-        模块应用与平台应用是两个不同的飞书应用，各 Base 的表授权分别
-        授予对应应用；用错应用会对已授权的表报 403。
-        """
+        """使用仓储模块自有应用访问物料页，禁止回退登录应用。"""
         cached = _MATERIAL_SYNC_CLIENTS.get(app_token)
         if cached is not None:
             return cached
-        try:
-            get_config = self.repo.get_active_feishu_config
-        except AttributeError:
-            get_config = None
-        config: Any = None
-        if get_config is not None:
-            try:
-                config = await get_config()
-            except SQLAlchemyError:
-                config = None
-        if config and config.app_id and config.encrypted_app_secret:
-            client = self._build_feishu_client(config, app_token)
-            _MATERIAL_SYNC_CLIENTS[app_token] = client
-            return client
-        return self.feishu_client
+        config = await self._get_active_feishu_config_or_raise()
+        client = self._build_feishu_client(config, app_token)
+        _MATERIAL_SYNC_CLIENTS[app_token] = client
+        return client
 
     async def _get_active_feishu_config_or_raise(self) -> Any:
         try:
@@ -2856,8 +2820,6 @@ class WarehouseService:
                 ),
                 detail=exc.__class__.__name__,
             ) from exc
-        if not config:
-            config = self._env_fallback_feishu_config()
         if not config:
             raise AppException(message="请先启用仓储飞书配置")
         return config

@@ -103,15 +103,20 @@ async def start_ws_from_db() -> WarehouseFeishuWsStatus:
         set_main_loop(asyncio.get_running_loop())
 
     try:
-        # The migrated warehouse uses page-level app tokens while the current
-        # platform keeps the shared Feishu credentials in Settings.  Preserve
-        # the WS lifecycle by deriving the subscription set from the page map.
-        from app.core.config import get_settings
+        from app.core.secrets import decrypt_secret
         from app.modules.warehouse.feishu_material_pages import (
             FEISHU_WAREHOUSE_MATERIAL_PAGES,
         )
+        from app.modules.warehouse.repository import WarehouseRepository
 
-        settings = get_settings()
+        async with async_session_factory() as session:
+            config = await WarehouseRepository(session).get_active_feishu_config()
+        app_id = config.app_id if config else ""
+        app_secret = (
+            decrypt_secret(config.encrypted_app_secret)
+            if config and config.encrypted_app_secret
+            else ""
+        )
         app_tokens = {
             f"source_{index + 1}": token
             for index, token in enumerate(
@@ -120,22 +125,18 @@ async def start_ws_from_db() -> WarehouseFeishuWsStatus:
                 )
             )
         }
-        if (
-            not settings.FEISHU_APP_ID
-            or not settings.FEISHU_APP_SECRET
-            or not app_tokens
-        ):
+        if not app_id or not app_secret or not app_tokens:
             await stop_ws()
-            _last_error = "未配置共享飞书凭据或仓储数据入口"
+            _last_error = "未配置独立仓储飞书应用或仓储数据入口"
             return await get_ws_status()
         return await restart_ws_with_config(
-            app_id=settings.FEISHU_APP_ID,
-            app_secret=settings.FEISHU_APP_SECRET,
+            app_id=app_id,
+            app_secret=app_secret,
             app_tokens=app_tokens,
         )
     except Exception as exc:
         await stop_ws()
-        _last_error = f"读取仓储飞书配置失败：{exc}"
+        _last_error = f"读取仓储飞书配置失败：{type(exc).__name__}"
         logger.warning(_last_error)
         return await get_ws_status()
 

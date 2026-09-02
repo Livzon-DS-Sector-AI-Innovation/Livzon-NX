@@ -15,6 +15,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.exceptions import AppException, NotFoundException
 from app.modules.quality import repository
+from app.modules.quality.feishu_notification import (
+    send_user_card_with_message_id,
+    update_card,
+)
 from app.modules.quality.models import ChangeActionPlan
 from app.modules.quality.schemas.change_action_plan import (
     ChangeActionPlanDetail,
@@ -27,10 +31,6 @@ from app.modules.quality.schemas.change_action_plan import (
 )
 from app.platform.integrations.feishu.bitable import BitableClient, _to_ms_timestamp
 from app.platform.integrations.feishu.contact import get_all_users
-from app.platform.integrations.feishu.notification import (
-    send_user_card_with_message_id,
-    update_card,
-)
 
 logger = logging.getLogger(__name__)
 settings = get_settings()

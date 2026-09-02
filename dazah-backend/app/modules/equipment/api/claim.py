@@ -14,9 +14,9 @@ from app.core.deps import CurrentUser
 from app.core.exceptions import AppException, ForbiddenException
 from app.core.response import success_response
 from app.modules.equipment import service
+from app.modules.equipment.feishu.message import send_claim_notification
 from app.modules.equipment.schemas import WorkOrderResponse
 from app.platform.integrations.feishu.contact import is_department_member
-from app.platform.integrations.feishu.message import send_claim_notification
 
 router = APIRouter()
 

@@ -6,8 +6,8 @@ from typing import Any
 
 from sqlalchemy import select
 
+from app.modules.hr.feishu import notification as feishu_notification
 from app.modules.hr.models import HrReminderConfig, OffboardingRecord
-from app.platform.integrations.feishu import notification as feishu_notification
 from app.platform.scheduler.registry import ScheduleConfig, ScheduleStrategy
 from app.platform.scheduler.registry import TaskGenerator as SchedulerTaskGenerator
 

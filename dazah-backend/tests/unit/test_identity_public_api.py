@@ -30,14 +30,6 @@ async def test_platform_feishu_credentials_prefer_active_database_config(
         lambda: _FakeRepository(config),
     )
     monkeypatch.setattr(public_api, "decrypt_secret", lambda value: f"plain:{value}")
-    monkeypatch.setattr(
-        public_api,
-        "get_settings",
-        lambda: SimpleNamespace(
-            FEISHU_APP_ID="env-app-id",
-            FEISHU_APP_SECRET="env-secret",
-        ),
-    )
 
     credentials = await public_api.get_platform_feishu_app_credentials(None)  # type: ignore[arg-type]
 
@@ -47,7 +39,7 @@ async def test_platform_feishu_credentials_prefer_active_database_config(
 
 
 @pytest.mark.anyio
-async def test_platform_feishu_credentials_fall_back_to_environment(
+async def test_platform_feishu_credentials_do_not_fall_back_to_environment(
     monkeypatch: Any,
 ) -> Any:
     monkeypatch.setattr(
@@ -55,20 +47,10 @@ async def test_platform_feishu_credentials_fall_back_to_environment(
         "FeishuConfigRepository",
         lambda: _FakeRepository(None),
     )
-    monkeypatch.setattr(
-        public_api,
-        "get_settings",
-        lambda: SimpleNamespace(
-            FEISHU_APP_ID="env-app-id",
-            FEISHU_APP_SECRET="env-secret",
-        ),
-    )
 
     credentials = await public_api.get_platform_feishu_app_credentials(None)  # type: ignore[arg-type]
 
-    assert credentials is not None
-    assert credentials.app_id == "env-app-id"
-    assert credentials.app_secret == "env-secret"
+    assert credentials is None
 
 
 @pytest.mark.anyio
@@ -80,10 +62,35 @@ async def test_platform_feishu_credentials_return_none_when_unconfigured(
         "FeishuConfigRepository",
         lambda: _FakeRepository(None),
     )
-    monkeypatch.setattr(
-        public_api,
-        "get_settings",
-        lambda: SimpleNamespace(FEISHU_APP_ID="", FEISHU_APP_SECRET=""),
-    )
 
     assert await public_api.get_platform_feishu_app_credentials(None) is None  # type: ignore[arg-type]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "user,expected",
+    [
+        (
+            SimpleNamespace(feishu_user_id="employee", enterprise_email=None),
+            ("employee", "user_id"),
+        ),
+        (
+            SimpleNamespace(feishu_user_id=None, enterprise_email="user@example.test"),
+            ("user@example.test", "email"),
+        ),
+        (SimpleNamespace(feishu_user_id=None, enterprise_email=None), None),
+        (None, ("ou-module", "open_id")),
+    ],
+)
+async def test_notification_recipient_avoids_login_open_id(monkeypatch, user, expected):
+    from unittest.mock import AsyncMock
+
+    monkeypatch.setattr(
+        public_api.UserRepository, "get_by_feishu_open_id", AsyncMock(return_value=user)
+    )
+    assert (
+        await public_api.resolve_feishu_notification_recipient(
+            AsyncMock(), "ou-module", "open_id"
+        )
+        == expected
+    )
