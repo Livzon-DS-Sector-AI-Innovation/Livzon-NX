@@ -57,7 +57,7 @@ src/
 | **Quality** | Deviations, CAPA, CPV (process validation) |
 | **HR** | Employee profiles, onboarding, training, attendance |
 | **Registration** | Dossier writing, regulatory tracking, supplementary replies |
-| **Research** | Experiments, Bayesian optimization, ICH analysis |
+| **Research** | Experiments, ICH analysis |
 
 ## API Integration
 

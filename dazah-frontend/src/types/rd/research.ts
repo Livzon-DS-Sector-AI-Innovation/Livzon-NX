@@ -58,18 +58,3 @@ export interface ResearchProjectUpdate {
   end_date?: string | null
   description?: string | null
 }
-
-// EDBO+ 贝叶斯优化类型定义
-
-export interface EDBOOptimizeRequest {
-  objectives: string[]
-  objective_modes: ('max' | 'min')[]
-  batch_size: number
-}
-
-export interface EDBOOptimizeResponse {
-  csv_data: string  // base64 encoded CSV
-  row_count: number
-  prediction_data?: string  // base64 encoded prediction CSV (optional)
-  prediction_filename?: string  // prediction filename (optional)
-}
