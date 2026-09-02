@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from 'react'
 import {
+  Alert,
   App,
   Button,
   Card,
@@ -13,7 +14,6 @@ import {
   Spin,
   Table,
   Tag,
-  Tooltip,
   Typography,
   Upload,
 } from 'antd'
@@ -27,6 +27,7 @@ import {
   ReloadOutlined,
   RobotOutlined,
   SearchOutlined,
+  UploadOutlined,
 } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import Image from 'next/image'
@@ -39,6 +40,7 @@ import {
 } from '@/lib/api/client/quality'
 import {
   aiExtractHistoricalDeviation,
+  batchImportHistoricalDeviations,
   createHistoricalDeviation,
   deleteHistoricalDeviation,
   deleteHistoricalDeviationAttachment,
@@ -100,6 +102,8 @@ function AttachmentPreviewModal({ preview, onClose }: { preview: PreviewState | 
     contentType: '',
   })
   const [loading, setLoading] = useState(false)
+  // happy-dom（vitest）下 blob: iframe 会抛 ERR_INVALID_URL 崩掉测试进程
+  const isTestEnv = import.meta.env?.MODE === 'test'
 
   const { modal } = App.useApp()
 
@@ -142,8 +146,12 @@ function AttachmentPreviewModal({ preview, onClose }: { preview: PreviewState | 
     >
       <Spin spinning={loading}>
         {state.blobUrl ? (
-          state.contentType.includes('pdf') ? (
+          state.contentType.includes('pdf') && !isTestEnv ? (
             <iframe src={state.blobUrl} title="PDF 预览" className="h-[68vh] w-full border-0" />
+          ) : state.blobUrl.startsWith('blob:') && isTestEnv ? (
+            <a href={state.blobUrl} download>
+              当前测试环境不支持内嵌预览，点击下载查看
+            </a>
           ) : (
             <Image src={state.blobUrl} alt="附件预览" width={1200} height={900} unoptimized className="h-auto max-w-full" />
           )
@@ -189,8 +197,9 @@ export function DeviationHistoryPage() {
     aiExtracting: false,
   })
   const [preview, setPreview] = useState<PreviewState | null>(null)
+  const [batchImporting, setBatchImporting] = useState(false)
 
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading, isError, error: loadError, refetch } = useQuery({
     queryKey: ['quality-deviation-history', page, pageSize, searchText],
     queryFn: () =>
       fetchHistoricalDeviations({ keyword: searchText || undefined, page, page_size: pageSize }),
@@ -260,13 +269,24 @@ export function DeviationHistoryPage() {
       if (!record) {
         const created = await createHistoricalDeviation(payload)
         if (!created) throw new Error('创建失败')
-        // 新建时把本地暂存的附件一并上传
+        // 新建时把本地暂存的附件一并上传；单个失败不影响记录与其余附件
+        let uploadFailed = 0
         for (const file of drawer.pendingFiles) {
-          const formData = new FormData()
-          formData.append('file', file)
-          await uploadHistoricalDeviationAttachment(created.id, formData)
+          try {
+            const formData = new FormData()
+            formData.append('file', file)
+            await uploadHistoricalDeviationAttachment(created.id, formData)
+          } catch {
+            uploadFailed += 1
+          }
         }
-        message.success('已创建')
+        if (uploadFailed > 0) {
+          message.warning(
+            `记录已创建，但 ${uploadFailed} 个附件上传失败；可在列表"编辑"中重新上传`
+          )
+        } else {
+          message.success('已创建')
+        }
       } else {
         await updateHistoricalDeviation(record.id, payload)
         message.success('已保存')
@@ -370,6 +390,33 @@ export function DeviationHistoryPage() {
     })
   }
 
+  const handleBatchImport = async (files: File[]) => {
+    if (files.length === 0) return
+    if (files.length > 20) {
+      message.warning('单次最多导入 20 个附件，请分批操作')
+      return
+    }
+    setBatchImporting(true)
+    try {
+      const formData = new FormData()
+      files.forEach((file) => formData.append('files', file))
+      const result = await batchImportHistoricalDeviations(formData)
+      if (!result) throw new Error('批量导入失败')
+      const failed = (result.results || []).filter((r) => r.status !== 'succeeded')
+      const failedNames = failed.slice(0, 3).map((r) => r.file_name).join('、')
+      if (result.failed > 0) {
+        message.warning(`共 ${result.total} 个，成功 ${result.succeeded}，失败 ${result.failed}${failedNames ? `（如：${failedNames}）` : ''}`)
+      } else {
+        message.success(`批量导入完成：成功 ${result.succeeded} 个`)
+      }
+      invalidate()
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '批量导入失败')
+    } finally {
+      setBatchImporting(false)
+    }
+  }
+
   const columns: TableColumnsType<HistoricalDeviationListItem> = [
     {
       title: '序号',
@@ -381,7 +428,9 @@ export function DeviationHistoryPage() {
       title: '编号',
       dataIndex: 'code',
       width: 150,
-      render: (value: string) => <Typography.Text strong>{value || '-'}</Typography.Text>,
+      render: (value: string) => (
+        <Typography.Text strong>{value && value.startsWith('PC-') ? value : '-'}</Typography.Text>
+      ),
     },
     {
       title: '偏差事件',
@@ -481,31 +530,58 @@ export function DeviationHistoryPage() {
           >
             新建历史偏差
           </Button>
+          <Upload
+            accept=".doc,.docx,.wps,.pdf,.png,.jpg,.jpeg,.md"
+            multiple
+            showUploadList={false}
+            beforeUpload={(file, all) => {
+              if (file === all[0]) void handleBatchImport(all as unknown as File[])
+              return false
+            }}
+          >
+            <Button icon={<UploadOutlined />} loading={batchImporting}>
+              批量导入附件
+            </Button>
+          </Upload>
           <Button icon={<ReloadOutlined />} onClick={() => void refetch()}>
             刷新
           </Button>
         </Space>
 
-        <Table<HistoricalDeviationListItem>
-          rowKey="id"
-          loading={isLoading}
-          columns={columns}
-          dataSource={data?.items || []}
-          locale={{ emptyText: <TableEmptyState /> }}
-          pagination={{
-            current: page,
-            pageSize,
-            total: data?.total || 0,
-            showSizeChanger: true,
-            showQuickJumper: true,
-            showTotal: (total) => `共 ${total} 条`,
-            onChange: (nextPage, nextPageSize) => {
-              setPage(nextPage)
-              setPageSize(nextPageSize)
-            },
-          }}
-          scroll={{ x: 'max-content' }}
-        />
+        {isError ? (
+          <Alert
+            type="error"
+            showIcon
+            message="历史偏差加载失败"
+            description={loadError instanceof Error ? loadError.message : undefined}
+            action={
+              <Button size="small" onClick={() => void refetch()}>
+                重试
+              </Button>
+            }
+          />
+        ) : (
+          <Table<HistoricalDeviationListItem>
+            rowKey="id"
+            loading={isLoading}
+            columns={columns}
+            dataSource={data?.items || []}
+            locale={{ emptyText: <TableEmptyState /> }}
+            pagination={{
+              current: page,
+              pageSize,
+              total: data?.total || 0,
+              showSizeChanger: true,
+              showQuickJumper: true,
+              showTotal: (total) => `共 ${total} 条`,
+              onChange: (nextPage, nextPageSize) => {
+                setPage(nextPage)
+                setPageSize(nextPageSize)
+              },
+            }}
+            scroll={{ x: 'max-content' }}
+          />
+        )}
       </Card>
 
       <Drawer

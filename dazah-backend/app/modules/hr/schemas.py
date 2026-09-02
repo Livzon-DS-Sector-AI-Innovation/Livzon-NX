@@ -1200,8 +1200,8 @@ class TrainingLedgerBase(BaseModel):
     employee_number: str | None = Field(
         None, max_length=32, description="工号（培训级台账记录可为空）"
     )
-    training_date: date = Field(..., description="培训日期")
-    training_subject: str = Field(..., max_length=256, description="培训课程/主题")
+    training_date: date | None = Field(None, description="培训日期")
+    training_subject: str | None = Field(None, max_length=256, description="培训课程/主题")
     training_method: str | None = Field(None, max_length=32, description="培训方式")
     duration_hours: float | None = Field(None, description="培训时长（h）")
     location: str | None = Field(None, max_length=128, description="培训地点")
@@ -1216,7 +1216,7 @@ class TrainingLedgerBase(BaseModel):
     training_datetime: str | None = Field(
         None, max_length=64, description="培训时间（日期+时间）"
     )
-    training_content: str | None = Field(None, max_length=512, description="培训内容")
+    training_content: str | None = Field(None, max_length=4096, description="培训内容")
     teaching_dept: str | None = Field(None, max_length=128, description="授课部门")
     instructor: str | None = Field(None, max_length=128, description="授课人")
     level_category: str | None = Field(None, max_length=16, description="一级/二级")
@@ -1268,7 +1268,7 @@ class TrainingLedgerUpdate(BaseModel):
     source_id: str | None = Field(None, max_length=64)
     remarks: str | None = Field(None, max_length=512)
     training_datetime: str | None = Field(None, max_length=64)
-    training_content: str | None = Field(None, max_length=512)
+    training_content: str | None = Field(None, max_length=4096)
     teaching_dept: str | None = Field(None, max_length=128)
     instructor: str | None = Field(None, max_length=128)
     level_category: str | None = Field(None, max_length=16)
@@ -1408,7 +1408,7 @@ class TrainingLedgerPageResponse(BaseModel):
 
 class EsgTrainingRecordBase(BaseModel):
     training_date: date = Field(..., description="培训日期")
-    training_name: str = Field(..., max_length=512, description="培训名称")
+    training_name: str = Field(..., max_length=4096, description="培训名称")
     training_method: str | None = Field(None, max_length=32, description="培训方式")
     caliber: str | None = Field(None, max_length=32, description="口径")
     training_type: str | None = Field(None, max_length=32, description="培训类型")
@@ -1469,7 +1469,7 @@ class EsgListFilters(BaseModel):
 
 class EsgTrainingRecordUpdate(BaseModel):
     training_date: date | None = Field(None)
-    training_name: str | None = Field(None, max_length=512)
+    training_name: str | None = Field(None, max_length=4096)
     training_method: str | None = Field(None, max_length=32)
     caliber: str | None = Field(None, max_length=32)
     training_type: str | None = Field(None, max_length=32)
@@ -2348,7 +2348,7 @@ class TrainerListResponse(BaseModel):
 
 
 class TrainingEvaluationBase(BaseModel):
-    training_content: str | None = Field(None, max_length=512, description="培训内容")
+    training_content: str | None = Field(None, max_length=4096, description="培训内容")
     training_date: date | None = Field(None, description="培训日期")
     duration_hours: float | None = Field(None, description="课时")
     training_method: str | None = Field(None, max_length=32, description="培训方式")
@@ -2396,7 +2396,7 @@ class TrainingEvaluationCreate(TrainingEvaluationBase):
 
 
 class TrainingEvaluationUpdate(BaseModel):
-    training_content: str | None = Field(None, max_length=512, description="培训内容")
+    training_content: str | None = Field(None, max_length=4096, description="培训内容")
     training_date: date | None = Field(None, description="培训日期")
     duration_hours: float | None = Field(None, description="课时")
     training_method: str | None = Field(None, max_length=32, description="培训方式")
@@ -2569,7 +2569,7 @@ class PlanTrackingRecordBase(BaseModel):
         None, max_length=64, description="部门（部门级计划）"
     )
     sort_order: int | None = Field(None, description="排序")
-    training_content: str | None = Field(None, max_length=512, description="培训内容")
+    training_content: str | None = Field(None, max_length=4096, description="培训内容")
     actual_time: str | None = Field(None, max_length=64, description="实际培训时间")
     target_audience: str | None = Field(None, description="培训对象")
     training_type: str | None = Field(None, max_length=32, description="培训类型")
@@ -2603,7 +2603,7 @@ class PlanTrackingRecordUpdate(BaseModel):
         None, max_length=64, description="部门（部门级计划）"
     )
     sort_order: int | None = Field(None, description="排序")
-    training_content: str | None = Field(None, max_length=512, description="培训内容")
+    training_content: str | None = Field(None, max_length=4096, description="培训内容")
     actual_time: str | None = Field(None, max_length=64, description="实际培训时间")
     target_audience: str | None = Field(None, description="培训对象")
     training_type: str | None = Field(None, max_length=32, description="培训类型")

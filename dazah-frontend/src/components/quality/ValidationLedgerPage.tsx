@@ -7,6 +7,7 @@ import { batchDeleteFeishuValidationsAction, createFeishuValidationAction, delet
 import { fetchValidations, fetchValidationExecutions } from '@/lib/api/client/quality'
 import type { ValidationListItem, ValidationExecutionItem } from '@/types/quality'
 import { ValidationEditModal } from './ValidationEditModal'
+import { ValidationDetailDrawer } from './ValidationDetailDrawer'
 import { ValidationTable } from './ValidationTable'
 
 /** 台账行：主列表为本地验证记录（无 record_id），子表为飞书执行记录（含 record_id） */
@@ -34,6 +35,8 @@ interface ValidationTableFilters {
   planned_end_date_to: string
   drafted_at_from: string
   drafted_at_to: string
+  /** 年度表；空 = 验证总表 */
+  year: string
 }
 
 function getErrorMessage(error: unknown, fallback: string): string {
@@ -64,9 +67,19 @@ export function ValidationLedgerPage({
     planned_end_date_to: '',
     drafted_at_from: '',
     drafted_at_to: '',
+    year: '',
   })
   const [editorOpen, setEditorOpen] = useState(false)
   const [editingRecord, setEditingRecord] = useState<ValidationRow | null>(null)
+  const [detailOpen, setDetailOpen] = useState(false)
+  const [detailRecord, setDetailRecord] = useState<ValidationRow | null>(null)
+
+  /** 主计划模式：写入/删除统一走验证主计划实体（年度表含全部验证类别） */
+  const mutationValidationType =
+    mode === 'child' ? validationType : undefined
+  /** 主计划模式选择年度后读写对应年度表 */
+  const mutationYear =
+    mode === 'master' && filters.year ? Number(filters.year) : undefined
 
   const { data, isLoading: loading, error } = useQuery<{ items: ValidationRow[]; total: number }>({
     queryKey: ['quality-validation', 'list', {
@@ -81,6 +94,7 @@ export function ValidationLedgerPage({
       planned_end_date_to: filters.planned_end_date_to,
       drafted_at_from: filters.drafted_at_from,
       drafted_at_to: filters.drafted_at_to,
+      year: filters.year,
       page,
       pageSize,
     }],
@@ -94,6 +108,7 @@ export function ValidationLedgerPage({
             department: filters.department || undefined,
             planned_end_date_from: filters.planned_end_date_from || undefined,
             planned_end_date_to: filters.planned_end_date_to || undefined,
+            year: filters.year ? Number(filters.year) : undefined,
             page,
             page_size: pageSize,
           })
@@ -122,6 +137,11 @@ export function ValidationLedgerPage({
     setEditorOpen(true)
   }
 
+  const handleDetail = (record: ValidationRow) => {
+    setDetailRecord(record)
+    setDetailOpen(true)
+  }
+
   const handleEdit = (record: ValidationListItem) => {
     setEditingRecord(record)
     setEditorOpen(true)
@@ -136,7 +156,11 @@ export function ValidationLedgerPage({
       okButtonProps: { danger: true },
       onOk: async () => {
         try {
-          await deleteFeishuValidationAction(getRowRecordId(record), record.validation_type)
+          await deleteFeishuValidationAction(
+            getRowRecordId(record),
+            mutationValidationType ?? record.validation_type,
+            mutationYear
+          )
           message.success('删除成功')
           queryClient.invalidateQueries({ queryKey: ['quality-validation', 'list'] })
         } catch (error: unknown) {
@@ -153,11 +177,12 @@ export function ValidationLedgerPage({
         await updateFeishuValidationAction(
           getRowRecordId(editingRecord),
           values,
-          editingRecord.validation_type ?? undefined
+          mutationValidationType ?? editingRecord.validation_type ?? undefined,
+          mutationYear
         )
         message.success(`${title}已更新`)
       } else {
-        await createFeishuValidationAction(values)
+        await createFeishuValidationAction(values, mutationYear)
         message.success(`${title}已创建`)
       }
       setEditorOpen(false)
@@ -171,7 +196,7 @@ export function ValidationLedgerPage({
 
   const handleBatchDelete = async (recordIds: string[]) => {
     try {
-      await batchDeleteFeishuValidationsAction(recordIds, validationType)
+      await batchDeleteFeishuValidationsAction(recordIds, mutationValidationType, mutationYear)
       message.success(`成功删除 ${recordIds.length} 条记录`)
       queryClient.invalidateQueries({ queryKey: ['quality-validation', 'list'] })
     } catch (error: unknown) {
@@ -208,9 +233,19 @@ export function ValidationLedgerPage({
         }}
         onRefresh={() => queryClient.invalidateQueries({ queryKey: ['quality-validation', 'list'] })}
         onCreate={handleCreate}
+        onDetail={handleDetail}
         onEdit={handleEdit}
         onDelete={handleDelete}
         onBatchDelete={handleBatchDelete}
+      />
+
+      <ValidationDetailDrawer
+        open={detailOpen}
+        record={detailRecord as Record<string, unknown> | null}
+        onClose={() => {
+          setDetailOpen(false)
+          setDetailRecord(null)
+        }}
       />
 
       <ValidationEditModal
@@ -218,6 +253,7 @@ export function ValidationLedgerPage({
         saving={saving}
         validationType={validationType}
         validationTypeLabel={title}
+        hideCategory={mode === 'master' && Boolean(filters.year)}
         initialValue={editingRecord as ValidationListItem | null}
         onCancel={() => setEditorOpen(false)}
         onSubmit={handleSubmit}

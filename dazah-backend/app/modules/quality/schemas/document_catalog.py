@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class DocumentDepartmentBase(BaseModel):
@@ -118,12 +118,36 @@ class DocumentEntryLookupOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class DocumentEntryResolveQuery(BaseModel):
+    """单个待解析文件的查询项（培训勾选时锁定的条目）。"""
+
+    name: str = Field(
+        ..., description="文件名称（展示与 entry_id 未提供时的名称匹配兜底）"
+    )
+    entry_id: UUID | None = Field(
+        default=None,
+        description="勾选时锁定的条目 ID；提供时严格按 ID 读取，未命中不回退名称匹配",
+    )
+
+
 class DocumentEntryResolveRequest(BaseModel):
-    """按文件名称批量解析条目并读取附件内容请求（供培训口试 AI 出题使用）。"""
+    """批量解析文件条目并读取附件内容请求（供培训 AI 出题使用）。"""
 
     # 不限数量：培训勾选教材份数不设上限（2026-08-12
     # 业务确认），请求体大小由网关/框架默认限制兜底
-    names: list[str] = Field(..., min_length=1, description="文件名称列表")
+    entries: list[DocumentEntryResolveQuery] = Field(
+        default_factory=list,
+        description="按勾选条目解析（优先；entry_id 精确读取，杜绝名称误匹配）",
+    )
+    names: list[str] = Field(
+        default_factory=list, description="按文件名称解析（旧客户端兜底，取名称最新版）"
+    )
+
+    @model_validator(mode="after")
+    def _require_entries_or_names(self) -> DocumentEntryResolveRequest:
+        if not self.entries and not self.names:
+            raise ValueError("entries 与 names 至少提供一个")
+        return self
 
 
 class ResolveAttachmentContent(BaseModel):

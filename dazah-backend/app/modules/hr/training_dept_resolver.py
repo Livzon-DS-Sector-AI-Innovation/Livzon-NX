@@ -114,7 +114,9 @@ async def training_dept_aliases_of(session: AsyncSession, norm: str) -> list[str
     "01二车间（MC）→ 裸名/霉酚酸/201三车间）."
     aliases = {norm}
     for m in _resolve_mappings(await _load_mappings(session)):
-        if m["target_name"] == norm:
+        # 仅使用 resolve 类型（special/alias），排除 split/exclude/candidate_source
+        # split 是一对多拆分关系，不是别名；若纳入会导致裸名同时出现在 MC 和 DR 的别名集中
+        if m["target_name"] == norm and m["mapping_type"] in _RESOLVE_TYPES:
             aliases.add(m["source_name"])
     return sorted(aliases)
 
@@ -141,23 +143,14 @@ async def ledger_dept_read_family(session: AsyncSession, selected: str) -> list[
     """读端（台账列表/ESG同步）选中部门命中的归属部门集合.
 
     201二车间 家族（由 split 目标 + exclude 的 201 源推导）：MC/DR 各自只见
-    「自身规范名+历史别名+裸名总副本」，MC/DR 之间不互见（拆分副本只归各自 Tab）。
+    「自身规范名+历史别名」，MC/DR 之间不互见（拆分副本只归各自 Tab）。
+    裸名「201二车间」总副本的归属由 list_by_department 通过 trainees 的
+    飞书联系人部门动态判定，不再在此处加入别名集（否则 MC/DR 都会命中裸名记录）。
     其他部门仅含自身别名，控制影响面。
     """
     values = set(await training_dept_aliases_of(session, selected))
-    mappings = await _load_mappings(session)
-    family = {
-        m["target_name"]
-        for m in mappings
-        if m["mapping_type"] == "split" and m["target_name"]
-    }
-    family.update(
-        m["source_name"]
-        for m in mappings
-        if m["mapping_type"] == "exclude" and m["source_name"].startswith("201")
-    )
-    if selected in family:
-        values.add("201二车间")
+    # 不再将裸名 "201二车间" 加入 alias 集；
+    # 裸名总副本按 trainees 的飞书部门归属到 MC 或 DR，见 repository.list_by_department
     return sorted(values)
 
 
