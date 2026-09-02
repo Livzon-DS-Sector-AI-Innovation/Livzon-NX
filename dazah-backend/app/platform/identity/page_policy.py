@@ -76,9 +76,25 @@ WAREHOUSE_MATERIAL_PAGE_ALIASES = {
         f"warehouse:product-inventory:{alias}": alias
         for alias in (
             "product-summary",
+            "product-inbound-detail",
             "product-inbound-ledger",
             "product-outbound-ledger",
             "product-shipping",
+        )
+    },
+    **{
+        f"warehouse:product-inventory:product-details:{alias}": alias
+        for alias in (
+            "product-detail-l-phenylalanine",
+            "product-detail-fumaric-acid",
+            "product-detail-l-tryptophan",
+            "product-detail-mevastatin",
+            "product-detail-kitasamycin-hcl",
+            "product-detail-doramectin",
+            "product-detail-lovastatin",
+            "product-detail-florfenicol-premix",
+            "product-detail-demeclocycline-hcl",
+            "product-detail-fenbendazole-powder",
         )
     },
 }

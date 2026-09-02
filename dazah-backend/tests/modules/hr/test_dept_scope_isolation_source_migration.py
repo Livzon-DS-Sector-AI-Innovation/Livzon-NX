@@ -28,7 +28,9 @@ from app.main import app
 from app.modules.hr.api import _assert_dept_in_scope
 from app.modules.hr.models import Employee, HrUserDeptScope, TrainingLedger
 from app.modules.hr.training_dept_resolver import resolve_visible_dept_alias_set
+from app.platform.identity.deps import get_current_user
 from app.platform.identity.models import User
+from app.platform.identity.permission_repository import PermissionGrantRepository
 
 # 独有虚拟部门，真实数据不会命中
 DEPT_A = "SPEC隔离车间A"
@@ -160,6 +162,29 @@ def _patch_rbac(monkeypatch, perms: list[str]) -> None:
         return list(perms)
 
     monkeypatch.setattr("app.platform.identity.rbac.resolve_user_permissions", fake_rp)
+
+
+def _use_non_admin_test_user(monkeypatch) -> None:
+    user = User(
+        id=UUID(DEV_USER_ID),
+        name="范围测试用户",
+        username="hr-scope-migration-user",
+        role="user",
+        status="active",
+        auth_source="local",
+        feishu_open_id=DEV_OPEN_ID,
+        department=DEPT_A,
+    )
+
+    async def _override_current_user() -> User:
+        return user
+
+    app.dependency_overrides[get_current_user] = _override_current_user
+    monkeypatch.setattr(
+        PermissionGrantRepository,
+        "has_module_view",
+        AsyncMock(return_value=True),
+    )
 
 
 # ─── 可见范围解析三分支（单元测试，mock session）───
@@ -315,6 +340,7 @@ async def test_employee_list_filtered_by_scope(
     client: AsyncClient, db_session: AsyncSession, monkeypatch
 ):
     """非管理员：员工列表只见可见部门人员；越权部门参数 → 403"""
+    _use_non_admin_test_user(monkeypatch)
     _patch_rbac(monkeypatch, ["hr:read", "hr:employee:read"])
     await _seed_employees(db_session)
     await _seed_scope(db_session, DEV_USER_ID, [DEPT_A])
@@ -532,6 +558,7 @@ async def test_whitelist_no_config_sees_nothing(
     monkeypatch,
 ):
     """白名单制：非管理员无配置时员工列表为空（回归用例）"""
+    _use_non_admin_test_user(monkeypatch)
     _patch_rbac(monkeypatch, ["hr:read", "hr:employee:read"])
     await _seed_employees(db_session)
     await db_session.execute(
