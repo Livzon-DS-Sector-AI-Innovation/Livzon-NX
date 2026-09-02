@@ -1,8 +1,6 @@
 """飞书 WebSocket 长连接客户端测试：生命周期、URL 获取、重连、事件分发。"""
 
 import asyncio
-import sys
-import types
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -189,14 +187,13 @@ async def test_run_ws_connection_closed_retries(
 async def test_default_dispatcher_routes_message_events(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    import app.platform.integrations.feishu.event_handler as real_eh
+
     # 非消息事件 → 直接返回
     await svc._default_other_event_dispatcher("other.event", {})
 
     # 消息事件 + 无 raw handler → 静默跳过
-    fake_eh = types.ModuleType("app.platform.integrations.feishu.event_handler")
-    monkeypatch.setitem(
-        sys.modules, "app.platform.integrations.feishu.event_handler", fake_eh
-    )
+    monkeypatch.delattr(real_eh, "_on_message_receive_raw", raising=False)
     await svc._default_other_event_dispatcher("im.message.receive_v1", {})
 
     # 消息事件 + raw handler → 被调用
@@ -205,11 +202,7 @@ async def test_default_dispatcher_routes_message_events(
     async def _raw(event: Any) -> None:
         called.append(event)
 
-    fake_eh2 = types.ModuleType("app.platform.integrations.feishu.event_handler")
-    fake_eh2._on_message_receive_raw = _raw
-    monkeypatch.setitem(
-        sys.modules, "app.platform.integrations.feishu.event_handler", fake_eh2
-    )
+    monkeypatch.setattr(real_eh, "_on_message_receive_raw", _raw, raising=False)
     await svc._default_other_event_dispatcher("im.message.receive_v1", {"k": 1})
     assert called == [{"k": 1}]
 
@@ -217,9 +210,5 @@ async def test_default_dispatcher_routes_message_events(
     async def _boom(event: Any) -> None:
         raise RuntimeError("handler down")
 
-    fake_eh3 = types.ModuleType("app.platform.integrations.feishu.event_handler")
-    fake_eh3._on_message_receive_raw = _boom
-    monkeypatch.setitem(
-        sys.modules, "app.platform.integrations.feishu.event_handler", fake_eh3
-    )
+    monkeypatch.setattr(real_eh, "_on_message_receive_raw", _boom, raising=False)
     await svc._default_other_event_dispatcher("im.message.receive_v1", {})  # 不抛
