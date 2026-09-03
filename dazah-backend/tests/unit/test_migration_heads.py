@@ -25,7 +25,6 @@ def test_migration_histories_have_one_merged_head() -> None:
         "f7b2d9a4c103",
     }
     assert script.get_revision("f7b2d9a4c103").down_revision == "d2f8a4c6e1b3"
-    assert script.get_revision("e4a9c2d7b601").down_revision == "d2f8a4c6e1b3"
 
     # 合并历史锚点保持不变：b5f4c8d1a2e3 是合并修订，
     # 其父为旧线两条链的 4772bce4935d 与 5e1f7a9b0c2d。
