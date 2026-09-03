@@ -73272,7 +73272,6 @@
           "training_content": {
             "anyOf": [
               {
-                "maxLength": 4096,
                 "type": "string"
               },
               {
@@ -73638,7 +73637,6 @@
           "training_content": {
             "anyOf": [
               {
-                "maxLength": 4096,
                 "type": "string"
               },
               {
