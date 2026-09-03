@@ -17,4 +17,7 @@ export type User = Pick<
   | 'module_codes'
   | 'permissions'
   | 'roles'
+  | 'page_permissions'
+  | 'page_permission_rollouts'
+  | 'grant_version'
 >

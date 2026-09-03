@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { cookies } from 'next/headers'
 import type { components } from '@/types/generated/schema'
 import { filenameFromDisposition } from '@/lib/download'
+import { getAuthHeaders } from '@/lib/auth'
 import {
   EmployeeCreateInput,
   EmployeeUpdateInput,
@@ -47,13 +48,11 @@ const API_BASE =
 
 
 async function authedFetch(input: string | URL | Request, init?: RequestInit): Promise<Response> {
-  const cookieStore = await cookies()
-  const token = cookieStore.get('auth_token')?.value
+  const authHeaders = await getAuthHeaders()
+  if (init?.body instanceof FormData) delete authHeaders['Content-Type']
   const headers: Record<string, string> = {
+    ...authHeaders,
     ...(init?.headers as Record<string, string> | undefined),
-  }
-  if (token && !Object.keys(headers).some((h) => h.toLowerCase() === 'authorization')) {
-    headers['Authorization'] = `Bearer ${token}`
   }
   return fetch(input, { ...init, headers })
 }

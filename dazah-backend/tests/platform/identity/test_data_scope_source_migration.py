@@ -71,10 +71,10 @@ def test_department_in_clause() -> None:
     clause = department_in_clause(column, scope)
     assert clause is not None
     assert clause.right.value == ["质量管理部"]
-    # is_all 或空集合 → None（不过滤）
+    # 仅全部范围可以不加过滤；空集合必须失败关闭。
     assert department_in_clause(column, DepartmentScope(is_all=True)) is None
     empty_scope = DepartmentScope(is_all=False, department_names=set())
-    assert department_in_clause(column, empty_scope) is None
+    assert str(department_in_clause(column, empty_scope)) == "false"
 
 
 # ─── 范围解析（真实部门树 + 角色）──────────────────────────────────────

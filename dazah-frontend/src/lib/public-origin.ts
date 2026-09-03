@@ -19,3 +19,7 @@ export function getPublicOrigin(request: NextRequest): string {
 
   return `${proto}://${host}`
 }
+
+export function isSecurePublicRequest(request: NextRequest): boolean {
+  return new URL(getPublicOrigin(request)).protocol === "https:"
+}

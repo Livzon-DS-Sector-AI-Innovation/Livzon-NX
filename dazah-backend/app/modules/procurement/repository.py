@@ -19,6 +19,12 @@ from app.modules.procurement.models import (
     PurchaseRequestItem,
     Supplier,
 )
+from app.modules.procurement.page_access import (
+    assert_request_scope,
+    constrain_contract_category,
+    constrain_request_category,
+    request_department_names,
+)
 
 
 class MaterialSourceConfigRepository:
@@ -449,6 +455,7 @@ class ContractRecordRepository:
         self.session = session
 
     async def create(self, record: ContractRecord) -> ContractRecord:
+        constrain_contract_category(record.category)
         self.session.add(record)
         await self.session.flush()
         return record
@@ -460,7 +467,10 @@ class ContractRecordRepository:
                 ContractRecord.is_deleted.is_(False),
             )
         )
-        return result.scalar_one_or_none()
+        record = result.scalar_one_or_none()
+        if record is not None:
+            constrain_contract_category(record.category)
+        return record
 
     async def list_records(
         self,
@@ -469,10 +479,14 @@ class ContractRecordRepository:
         page: int = 1,
         page_size: int = 20,
     ) -> tuple[list[ContractRecord], int]:
+        category = constrain_contract_category()
         base_query = select(ContractRecord).where(ContractRecord.is_deleted.is_(False))
         count_query = select(func.count(ContractRecord.id)).where(
             ContractRecord.is_deleted.is_(False)
         )
+        if category is not None:
+            base_query = base_query.where(ContractRecord.category == category)
+            count_query = count_query.where(ContractRecord.category == category)
 
         if keyword:
             like_pattern = f"%{keyword}%"
@@ -504,6 +518,11 @@ class PurchaseRequestRepository:
         request: PurchaseRequest,
         items: list[PurchaseRequestItem],
     ) -> PurchaseRequest:
+        await assert_request_scope(
+            self.session,
+            category=request.category,
+            department=request.request_department,
+        )
         self.session.add(request)
         await self.session.flush()
         request_id = str(request.id)
@@ -520,7 +539,14 @@ class PurchaseRequestRepository:
                 PurchaseRequest.is_deleted.is_(False),
             )
         )
-        return result.scalar_one_or_none()
+        request = result.scalar_one_or_none()
+        if request is not None:
+            await assert_request_scope(
+                self.session,
+                category=request.category,
+                department=request.request_department,
+            )
+        return request
 
     async def find_by_import_duplicate_key(
         self,
@@ -543,7 +569,14 @@ class PurchaseRequestRepository:
             )
             .with_for_update()
         )
-        return result.scalar_one_or_none()
+        request = result.scalar_one_or_none()
+        if request is not None:
+            await assert_request_scope(
+                self.session,
+                category=request.category,
+                department=request.request_department,
+            )
+        return request
 
     async def list_items(self, request_id: UUID) -> list[PurchaseRequestItem]:
         result = await self.session.execute(
@@ -576,12 +609,22 @@ class PurchaseRequestRepository:
         page: int = 1,
         page_size: int = 20,
     ) -> tuple[list[PurchaseRequest], int]:
+        category = constrain_request_category(category)
+        departments = await request_department_names(self.session)
         base_query = select(PurchaseRequest).where(
             PurchaseRequest.is_deleted.is_(False)
         )
         count_query = select(func.count(PurchaseRequest.id)).where(
             PurchaseRequest.is_deleted.is_(False)
         )
+
+        if departments is not None:
+            base_query = base_query.where(
+                PurchaseRequest.request_department.in_(departments)
+            )
+            count_query = count_query.where(
+                PurchaseRequest.request_department.in_(departments)
+            )
 
         if category:
             base_query = base_query.where(PurchaseRequest.category == category)
@@ -615,6 +658,8 @@ class PurchaseRequestRepository:
         page: int | None = None,
         page_size: int | None = None,
     ) -> tuple[list[tuple[PurchaseRequest, PurchaseRequestItem]], int]:
+        category = constrain_request_category(category)
+        departments = await request_department_names(self.session)
         request_item_match = PurchaseRequestItem.purchase_request_id == cast(
             PurchaseRequest.id, String
         )
@@ -627,6 +672,8 @@ class PurchaseRequestRepository:
         ]
         if category:
             filters.append(PurchaseRequest.category == category)
+        if departments is not None:
+            filters.append(PurchaseRequest.request_department.in_(departments))
 
         base_query = (
             select(PurchaseRequest, PurchaseRequestItem)
@@ -666,6 +713,8 @@ class PurchaseRequestRepository:
         page: int = 1,
         page_size: int = 20,
     ) -> tuple[list[PurchaseRequest], int]:
+        category = constrain_request_category(category)
+        departments = await request_department_names(self.session)
         approval_subquery = (
             select(
                 PurchaseRequestApproval.purchase_request_id,
@@ -695,6 +744,13 @@ class PurchaseRequestRepository:
             .join(approval_subquery, request_id_match)
             .where(PurchaseRequest.is_deleted.is_(False))
         )
+        if departments is not None:
+            base_query = base_query.where(
+                PurchaseRequest.request_department.in_(departments)
+            )
+            count_query = count_query.where(
+                PurchaseRequest.request_department.in_(departments)
+            )
 
         if category:
             base_query = base_query.where(PurchaseRequest.category == category)

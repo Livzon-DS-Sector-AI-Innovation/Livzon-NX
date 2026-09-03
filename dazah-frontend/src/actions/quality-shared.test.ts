@@ -6,7 +6,9 @@ const mocks = vi.hoisted(() => ({
   }),
 }))
 
-vi.mock('next/headers', () => ({ cookies: mocks.cookies }))
+vi.mock('next/headers', () => ({ cookies: mocks.cookies,
+  headers: vi.fn(async () => new Headers({ 'X-Dazah-Page-Path': '/quality/capas' })),
+}))
 
 import { actionFetch } from './quality-shared'
 
@@ -29,7 +31,9 @@ describe('quality action request boundary', () => {
     expect(fetchMock).toHaveBeenCalledWith(
       'http://backend.test/api/v1/quality/capas',
       expect.objectContaining({
-        headers: expect.objectContaining({ Authorization: 'Bearer quality-token' }),
+        headers: expect.objectContaining({ Authorization: 'Bearer quality-token',
+          'X-Dazah-Page-Path': '/quality/capas',
+        }),
       }),
     )
   })

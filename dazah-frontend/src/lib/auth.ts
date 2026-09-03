@@ -14,6 +14,8 @@ export async function getAuthHeaders(): Promise<Record<string, string>> {
   const [cookieStore, requestHeaders] = await Promise.all([cookies(), headers()])
   const token = cookieStore.get('auth_token')?.value
   const rawCookie = requestHeaders.get('cookie')
+  const pagePath = requestHeaders.get('X-Dazah-Page-Path')
+  if (pagePath) authHeaders['X-Dazah-Page-Path'] = pagePath
   const rawToken = rawCookie?.match(/(?:^|;\s*)auth_token=([^;]+)/)?.[1]
 
   // Prefer a standard Bearer header from Next.js' parsed cookie store. Raw

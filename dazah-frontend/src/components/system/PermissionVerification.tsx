@@ -1,332 +1,119 @@
 "use client"
 
-import { useMemo, useState } from "react"
-import {
-  Alert,
-  App,
-  Button,
-  Card,
-  Descriptions,
-  Form,
-  Input,
-  Select,
-  Space,
-  Spin,
-  Tag,
-  Tree,
-  Typography,
-} from "antd"
-import { DownloadOutlined } from "@ant-design/icons"
-import type { TreeDataNode } from "antd"
-import type { AdminUserItem } from "@/lib/api/server/admin"
-import type { MenuFlatItem } from "@/lib/menu-tree"
-import { buildMenuTree, type MenuTreeNode } from "@/lib/menu-tree"
-import {
-  exportPermissions,
-  previewUserPermission,
-  simulatePermission,
-  type PermissionPreviewData,
-  type PermissionSimulateData,
-} from "@/actions/admin"
+import { PAGE_DATA_SCOPE_VISIBLE } from "@/lib/page-permission-editor"
 
-interface PermissionVerificationProps {
-  users: AdminUserItem[]
+import { useMemo, useState } from "react"
+import { Alert, App, Button, Card, Descriptions, Form, Select, Space, Tag, Typography } from "antd"
+import type { AdminUserItem } from "@/lib/api/server/admin"
+import { getUserPagePermissions, type UserPagePermissionsOut } from "@/actions/users"
+import {
+  simulatePagePermission,
+  type PagePermissionSimulationOut,
+} from "@/actions/admin"
+import { PermissionRolloutManager } from "./PermissionRolloutManager"
+
+const permissionNames = { access: "访问页面", query: "查询数据", operate: "操作业务" }
+const scopeNames: Record<string, string> = {
+  not_applicable: "不适用", department_tree: "本部门及下级",
+  departments: "指定部门及下级", all: "全部部门", self: "仅本人",
 }
 
-/** 常用接口示例路径（预填帮助） */
-const EXAMPLE_PATHS = [
-  { label: "HR 员工列表", path: "/api/v1/hr/employees" },
-  { label: "质量偏差", path: "/api/v1/quality/deviations" },
-]
-
-export function PermissionVerification({ users }: PermissionVerificationProps) {
+export function PermissionVerification({ users }: { users: AdminUserItem[] }) {
   const { message } = App.useApp()
-  const [selectedUserId, setSelectedUserId] = useState<string>()
-  const [preview, setPreview] = useState<PermissionPreviewData | null>(null)
-  const [previewLoading, setPreviewLoading] = useState(false)
-  const [simulateForm] = Form.useForm()
-  const [simulateResult, setSimulateResult] = useState<PermissionSimulateData | null>(null)
-  const [simulateLoading, setSimulateLoading] = useState(false)
-  const [exporting, setExporting] = useState(false)
+  const [form] = Form.useForm()
+  const [userId, setUserId] = useState<string>()
+  const [snapshot, setSnapshot] = useState<UserPagePermissionsOut | null>(null)
+  const [result, setResult] = useState<PagePermissionSimulationOut | null>(null)
+  const [loading, setLoading] = useState(false)
 
-  const loadPreview = async (userId: string) => {
-    setPreviewLoading(true)
-    setPreview(null)
-    setSimulateResult(null)
-    try {
-      const data = await previewUserPermission(userId)
-      setPreview(data)
-    } catch (e) {
-      message.error(e instanceof Error ? e.message : "权限预览加载失败")
-    } finally {
-      setPreviewLoading(false)
-    }
-  }
-
-  // 可见菜单树（扁平列表 → 树，复用项目唯一树构建器）
-  const menuTreeData = useMemo<TreeDataNode[]>(() => {
-    if (!preview) return []
-    const toTreeData = (nodes: MenuTreeNode[]): TreeDataNode[] =>
-      nodes.map((node) => ({
-        key: node.id,
-        title: node.name,
-        children: node.children.length > 0 ? toTreeData(node.children) : undefined,
-        disabled: node.status === "disabled",
-      }))
-    return toTreeData(buildMenuTree(preview.menus as MenuFlatItem[]))
-  }, [preview])
-
-  const handleSimulate = async (values: {
-    method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD'
-    path: string
-    department?: string
-  }) => {
-    if (!selectedUserId) {
-      message.warning("请先选择账号")
-      return
-    }
-    setSimulateLoading(true)
-    try {
-      const data = await simulatePermission({
-        user_id: selectedUserId,
-        method: values.method,
-        path: values.path,
-        department: values.department || null,
-      })
-      setSimulateResult(data)
-    } catch (e) {
-      message.error(e instanceof Error ? e.message : "模拟判定失败")
-    } finally {
-      setSimulateLoading(false)
-    }
-  }
-
-  const handleExport = async () => {
-    setExporting(true)
-    try {
-      const { filename, content } = await exportPermissions()
-      const blob = new Blob([content], { type: "text/csv;charset=utf-8" })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement("a")
-      a.href = url
-      a.download = filename
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
-      message.success("权限清单已导出")
-    } catch (e) {
-      message.error(e instanceof Error ? e.message : "导出失败")
-    } finally {
-      setExporting(false)
-    }
-  }
-
-  const formatTime = (iso: string) => {
-    const d = new Date(iso)
-    return Number.isNaN(d.getTime()) ? iso : d.toLocaleString("zh-CN", { hour12: false })
-  }
-
-  return (
-    <div className="space-y-4">
-      {/* 1. 账号选择 + 权限全景 */}
-      <Card title="账号权限全景" size="small">
-        <Space direction="vertical" size="middle" className="w-full">
-          <Select
-            showSearch
-            placeholder="选择账号查看权限快照"
-            style={{ width: 360 }}
-            value={selectedUserId}
-            onChange={(v) => {
-              setSelectedUserId(v)
-              loadPreview(v)
-            }}
-            optionFilterProp="label"
-            options={users.map((u) => ({
-              value: u.id,
-              label: `${u.name}（${u.department ?? "未分配部门"}）`,
-            }))}
-          />
-          <Spin spinning={previewLoading}>
-            {preview ? (
-              <div className="space-y-3">
-                <div>
-                  <div className="text-sm font-medium mb-1">角色</div>
-                  <div className="flex flex-wrap gap-1">
-                    {preview.roles.length === 0 ? (
-                      <Tag>未分配角色</Tag>
-                    ) : (
-                      preview.roles.map((role) => (
-                        <Tag
-                          key={role.id}
-                          color={
-                            role.is_super_admin
-                              ? "gold"
-                              : role.source === "manual"
-                                ? "blue"
-                                : "green"
-                          }
-                        >
-                          {role.name}
-                          {role.is_super_admin
-                            ? "（超级管理员·通配）"
-                            : role.source === "manual"
-                              ? "（手动分配）"
-                              : "（部门映射）"}
-                        </Tag>
-                      ))
-                    )}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-sm font-medium mb-1">
-                    权限点（{preview.permissions.length}）
-                  </div>
-                  <div className="flex flex-wrap gap-1">
-                    {preview.permissions.length === 0 ? (
-                      <Tag>无权限点</Tag>
-                    ) : (
-                      preview.permissions.map((code) => <Tag key={code}>{code}</Tag>)
-                    )}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-sm font-medium mb-1">可见菜单</div>
-                  <div className="border rounded-md p-3 max-h-72 overflow-auto">
-                    {menuTreeData.length === 0 ? (
-                      <Typography.Text type="secondary">无可见菜单</Typography.Text>
-                    ) : (
-                      <Tree
-                        treeData={menuTreeData}
-                        defaultExpandAll
-                        selectable={false}
-                        showLine={{ showLeafIcon: false }}
-                      />
-                    )}
-                  </div>
-                </div>
-                <Descriptions size="small" column={1} bordered>
-                  <Descriptions.Item label="数据范围">
-                    {preview.data_scope.is_all
-                      ? "全部部门"
-                      : preview.data_scope.department_names.join("、") || "仅本部门及子部门"}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="生效时间">
-                    {formatTime(preview.effective_at)}
-                  </Descriptions.Item>
-                </Descriptions>
-              </div>
-            ) : (
-              <Typography.Text type="secondary">
-                {previewLoading ? "权限快照加载中…" : "请选择账号以查看权限快照"}
-              </Typography.Text>
-            )}
-          </Spin>
-        </Space>
-      </Card>
-
-      {/* 2. 接口准入模拟 */}
-      <Card title="接口准入模拟" size="small">
-        <Space direction="vertical" size="middle" className="w-full">
-          <Form
-            form={simulateForm}
-            layout="inline"
-            onFinish={handleSimulate}
-            initialValues={{ method: "GET" }}
-          >
-            <Form.Item name="method" rules={[{ required: true, message: "请选择请求方法" }]}>
-              <Select
-                style={{ width: 110 }}
-                options={["GET", "POST", "PUT", "DELETE"].map((m) => ({ value: m, label: m }))}
-              />
-            </Form.Item>
-            <Form.Item
-              name="path"
-              rules={[{ required: true, message: "请输入接口路径" }]}
-              style={{ minWidth: 320 }}
-            >
-              <Input placeholder="如 /api/v1/hr/employees" />
-            </Form.Item>
-            <Form.Item name="department">
-              <Input placeholder="可选：部门（HR 数据范围参考）" style={{ width: 220 }} />
-            </Form.Item>
-            <Form.Item>
-              <Button
-                type="primary"
-                htmlType="submit"
-                loading={simulateLoading}
-                disabled={!selectedUserId}
-              >
-                模拟判定
-              </Button>
-            </Form.Item>
-          </Form>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-[var(--color-stone)]">预填示例：</span>
-            {EXAMPLE_PATHS.map((item) => (
-              <Button
-                key={item.path}
-                size="small"
-                onClick={() => simulateForm.setFieldValue("path", item.path)}
-              >
-                {item.label}
-              </Button>
-            ))}
-          </div>
-          {simulateResult ? (
-            <div className="space-y-2">
-              <Alert
-                type={simulateResult.allowed ? "success" : "error"}
-                showIcon
-                message={
-                  <span>
-                    <b>{simulateResult.allowed ? "允许访问" : "拒绝访问"}</b>
-                    {!simulateResult.allowed && simulateResult.required ? (
-                      <>
-                        {" "}
-                        — 缺失权限码{" "}
-                        <Tag color="red" style={{ marginInlineEnd: 0 }}>
-                          {simulateResult.required}
-                        </Tag>
-                      </>
-                    ) : null}
-                  </span>
-                }
-                description={simulateResult.reason}
-              />
-              {simulateResult.note ? (
-                <Alert
-                  type="warning"
-                  showIcon
-                  message="精校验标注"
-                  description={simulateResult.note}
-                />
-              ) : null}
-              {simulateResult.dept_scope_hint ? (
-                <div className="text-xs text-[var(--color-stone)]">
-                  部门范围参考：{simulateResult.dept_scope_hint}
-                </div>
-              ) : null}
-            </div>
-          ) : (
-            <Typography.Text type="secondary">
-              按指定账号的权限集合判定接口准入，结果与真实执行一致（不真实执行请求）。
-            </Typography.Text>
-          )}
-        </Space>
-      </Card>
-
-      {/* 3. 导出权限清单 */}
-      <Card title="导出权限清单" size="small">
-        <Space direction="vertical" size="middle">
-          <Button icon={<DownloadOutlined />} loading={exporting} onClick={handleExport}>
-            导出权限清单
-          </Button>
-          <Typography.Text type="secondary" className="text-xs">
-            导出全部角色与权限点的 CSV 清单（UTF-8 带 BOM，可用 Excel 直接打开）。
-          </Typography.Text>
-        </Space>
-      </Card>
-    </div>
+  const definitionByKey = useMemo(
+    () => new Map((snapshot?.definitions || []).map((item) => [item.page_key, item])),
+    [snapshot],
   )
+  const selectedPageKey = Form.useWatch("page_key", form) as string | undefined
+  const selectedDefinition = selectedPageKey ? definitionByKey.get(selectedPageKey) : undefined
+
+  const selectUser = async (nextUserId: string) => {
+    setUserId(nextUserId)
+    setResult(null)
+    form.resetFields(["page_key", "permission", "sensitive_action"])
+    try {
+      setSnapshot(await getUserPagePermissions(nextUserId))
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "页面权限快照加载失败")
+    }
+  }
+  const simulate = async (values: {
+    page_key: string
+    permission: "access" | "query" | "operate"
+    sensitive_action?: string
+  }) => {
+    if (!userId) return
+    setLoading(true)
+    try {
+      setResult(await simulatePagePermission({ user_id: userId, ...values }))
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "模拟判定失败")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return <div className="space-y-4">
+    <PermissionRolloutManager />
+    <Card title="按页面验证生效权限" size="small">
+      <Space direction="vertical" size="middle" className="w-full">
+        <Select showSearch optionFilterProp="label" className="w-full max-w-md"
+          placeholder="选择账号" value={userId} onChange={selectUser}
+          options={users.map((user) => ({
+            value: user.id, label: `${user.name}（${user.department || "未分配部门"}）`,
+          }))} />
+        <Form form={form} layout="vertical" onFinish={simulate} className="grid gap-3 lg:grid-cols-3">
+          <Form.Item name="page_key" label="菜单页面" rules={[{ required: true, message: "请选择菜单页面" }]}>
+            <Select showSearch optionFilterProp="label" disabled={!snapshot}
+              options={(snapshot?.definitions || []).map((definition) => ({
+                value: definition.page_key,
+                label: definition.page_name,
+              }))} onChange={() => form.setFieldValue("sensitive_action", undefined)} />
+          </Form.Item>
+          <Form.Item name="permission" label="业务动作" rules={[{ required: true, message: "请选择业务动作" }]}>
+            <Select options={Object.entries(permissionNames).map(([value, label]) => ({ value, label }))} />
+          </Form.Item>
+          <Form.Item name="sensitive_action" label="高风险动作（可选）">
+            <Select allowClear placeholder="普通业务动作" options={(selectedDefinition?.sensitive_actions || []).map(
+              (action) => ({ value: action.key, label: action.name }),
+            )} />
+          </Form.Item>
+          <Button type="primary" htmlType="submit" loading={loading} disabled={!userId}>
+            模拟判定
+          </Button>
+        </Form>
+        {result && <Alert type={result.allowed ? "success" : "error"} showIcon
+          message={result.allowed ? "允许执行" : "拒绝执行"} description={result.reason} />}
+      </Space>
+    </Card>
+
+    <Card title="当前页面生效结果" size="small">
+      {snapshot ? <div className="space-y-3">
+        {(snapshot.grants || []).length ? (snapshot.grants || []).map((grant) => {
+          const definition = definitionByKey.get(grant.page_key)
+          return <Descriptions key={grant.page_key} size="small" bordered column={1}
+            title={definition?.page_name || "菜单页面"}>
+            <Descriptions.Item label="权限">
+              {(grant.permissions || []).length ? (grant.permissions || []).map((permission) =>
+                <Tag key={permission} color="blue">{permissionNames[permission]}</Tag>,
+              ) : <Tag>明确拒绝</Tag>}
+            </Descriptions.Item>
+            <Descriptions.Item label="来源">
+              {grant.source === "role" ? grant.source_role_names?.join("、") || "角色基线" :
+                grant.source === "user" ? "用户覆盖" : grant.source === "super_admin" ? "系统管理员" : "用户覆盖（拒绝）"}
+            </Descriptions.Item>
+            {PAGE_DATA_SCOPE_VISIBLE && <Descriptions.Item label="数据范围">
+              {scopeNames[grant.data_scope.scope_type] || grant.data_scope.scope_type}
+            </Descriptions.Item>}
+          </Descriptions>
+        }) : <Typography.Text type="secondary">该账号尚无新页面授权。</Typography.Text>}
+      </div> : <Typography.Text type="secondary">请选择账号查看页面权限。</Typography.Text>}
+    </Card>
+  </div>
 }

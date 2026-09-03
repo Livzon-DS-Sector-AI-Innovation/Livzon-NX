@@ -129,8 +129,18 @@ async def test_required_user_and_admin_matrix() -> None:
 
 
 @pytest.mark.asyncio
-async def test_module_view_supports_all_mode_and_role_grants() -> None:
-    dependency = deps.require_module_view("energy")
+async def test_module_view_supports_all_mode_and_role_grants(monkeypatch) -> None:
+    module_dependency = deps.require_module_view("energy")
+    request = Request(
+        {"type": "http", "method": "GET", "path": "/api/v1/energy", "headers": []}
+    )
+    monkeypatch.setattr(
+        deps.PagePermissionRepository, "get_rollout", AsyncMock(return_value=None)
+    )
+
+    async def dependency(**kwargs):
+        return await module_dependency(request=request, **kwargs)
+
     regular = _user()
     all_mode: Any = SimpleNamespace(effective_module_access_mode="all")
     assert (

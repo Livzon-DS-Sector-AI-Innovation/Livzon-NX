@@ -7,9 +7,14 @@ import FeishuSettingsClient from './FeishuSettingsClient'
 import LLMConfigClient from './LLMConfigClient'
 import LivzonTaskClient from './LivzonTaskClient'
 import SystemPermissionsPanel from './SystemPermissionsPanel'
+import type { SystemPermissionsData } from './SystemPermissionsPanel'
 import UserManagementClient from './UserManagementClient'
 
-export default function SettingsAdminClient() {
+interface SettingsAdminClientProps {
+  systemPermissions: SystemPermissionsData
+}
+
+export default function SettingsAdminClient({ systemPermissions }: SettingsAdminClientProps) {
   return (
     <div className="mx-auto max-w-[1320px] px-6 py-6">
       <div className="mb-5">
@@ -30,8 +35,8 @@ export default function SettingsAdminClient() {
           },
           {
             key: 'permissions',
-            label: '权限与数据范围',
-            children: <SystemPermissionsPanel />,
+            label: '权限管理',
+            children: <SystemPermissionsPanel {...systemPermissions} />,
           },
           {
             key: 'audit',

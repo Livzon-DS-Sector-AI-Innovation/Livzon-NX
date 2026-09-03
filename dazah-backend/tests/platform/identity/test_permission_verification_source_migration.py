@@ -432,13 +432,17 @@ async def test_export_permissions_csv(db_session) -> None:
         assert "姓名" in header
         assert "部门" in header
         assert "角色" in header
-        assert "权限点" in header
+        assert "菜单页面" in header
+        assert "高风险业务动作" in header
+        assert "权限点" not in header
         assert "数据范围" in header
         user_line = next(line for line in lines[1:] if "权限验证测试用户" in line)
-        assert "pv_manual_role" in user_line
-        assert "pv_dept_role" in user_line
-        assert "quality:read" in user_line
-        assert "质量管理部" in user_line
+        assert "无页面授权" in user_line
+        assert "pv_manual_role" not in user_line
+        assert "pv_dept_role" not in user_line
+        assert "quality:read" not in user_line
+        assert user.department in user_line
+        assert "质量管理部" not in user_line  # 旧权限范围不作为新页面授权导出。
     finally:
         await _cleanup_user(db_session, user.id)
 

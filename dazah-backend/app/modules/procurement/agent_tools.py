@@ -12,6 +12,7 @@ from app.modules.procurement.contract_generator import (
     generate_contract,
     get_contract_template_metadata,
 )
+from app.modules.procurement.page_access import constrain_contract_category
 from app.modules.procurement.schemas import (
     ContractCategory,
     ContractGenerateRequest,
@@ -42,6 +43,35 @@ from app.modules.procurement.service import (
 )
 from app.modules.procurement.service import (
     update_purchase_request as update_purchase_request_service,
+)
+from app.platform.identity.page_policy import PAGES_BY_MODULE
+
+_PROCUREMENT_PAGES = PAGES_BY_MODULE["procurement"]
+_REQUEST_PAGE_KEYS = tuple(
+    page.page_key
+    for page in _PROCUREMENT_PAGES
+    if page.route_path.startswith("/purchasing/request/")
+)
+_APPROVAL_PAGE_KEYS = tuple(
+    page.page_key
+    for page in _PROCUREMENT_PAGES
+    if page.route_path.startswith("/purchasing/approval/")
+)
+_CONTRACT_PAGE_KEYS = tuple(
+    page.page_key
+    for page in _PROCUREMENT_PAGES
+    if page.route_path.startswith("/purchasing/contract-generation/")
+)
+# Only effective menu pages are eligible to authorize tools.
+_SUPPLIER_PAGE_KEYS = tuple(
+    page.page_key
+    for page in _PROCUREMENT_PAGES
+    if page.route_path == "/purchasing/supplier"
+)
+_ORDER_PAGE_KEYS = tuple(
+    page.page_key
+    for page in _PROCUREMENT_PAGES
+    if page.route_path == "/purchasing/order"
 )
 
 
@@ -172,6 +202,7 @@ def _contract_template_info(category: ContractCategory) -> dict[str, Any]:
     input_model=InvoiceRecordsInput,
     method="GET",
     path="/procurement/invoices/recognition-records",
+    page_keys=("purchasing:invoice-recognition",),
 )
 async def list_invoice_records(
     context: ToolContext, data: InvoiceRecordsInput
@@ -201,6 +232,7 @@ async def list_invoice_records(
     input_model=SupplierListInput,
     method="GET",
     path="/procurement/suppliers",
+    page_keys=_SUPPLIER_PAGE_KEYS,
     input_schema={
         "params": {
             "keyword": "跨供应商、物料、厂家、品类和原始字段关键词",
@@ -245,6 +277,7 @@ async def list_supplier_records(
     input_model=PurchaseRequestListInput,
     method="GET",
     path="/procurement/purchase-requests",
+    page_keys=_REQUEST_PAGE_KEYS,
 )
 async def list_purchase_request_records(
     context: ToolContext, data: PurchaseRequestListInput
@@ -271,6 +304,7 @@ async def list_purchase_request_records(
     input_model=PurchaseRequestIdInput,
     method="GET",
     path="/procurement/purchase-requests/{request_id}",
+    page_keys=_REQUEST_PAGE_KEYS,
 )
 async def get_purchase_request_record(
     context: ToolContext, data: PurchaseRequestIdInput
@@ -286,6 +320,7 @@ async def get_purchase_request_record(
     risk_level="medium",
     method="POST",
     path="/procurement/purchase-requests",
+    page_keys=_REQUEST_PAGE_KEYS,
 )
 async def create_purchase_request(
     context: ToolContext, data: PurchaseRequestCreateInput
@@ -301,6 +336,7 @@ async def create_purchase_request(
     risk_level="medium",
     method="PUT",
     path="/procurement/purchase-requests/{request_id}",
+    page_keys=_REQUEST_PAGE_KEYS,
 )
 async def update_purchase_request(
     context: ToolContext, data: PurchaseRequestUpdateInput
@@ -321,6 +357,7 @@ async def update_purchase_request(
     risk_level="medium",
     method="POST",
     path="/procurement/purchase-requests/{request_id}/submit",
+    page_keys=_REQUEST_PAGE_KEYS,
 )
 async def submit_purchase_request_record(
     context: ToolContext, data: PurchaseRequestIdInput
@@ -338,6 +375,8 @@ async def submit_purchase_request_record(
     human_decision_required=True,
     method="POST",
     path="/procurement/purchase-requests/{request_id}/approve",
+    page_keys=_APPROVAL_PAGE_KEYS,
+    sensitive_action="approve",
 )
 async def approve_purchase_request_record(
     context: ToolContext, data: PurchaseApprovalInput
@@ -363,6 +402,8 @@ async def approve_purchase_request_record(
     human_decision_required=True,
     method="POST",
     path="/procurement/purchase-requests/{request_id}/reject",
+    page_keys=_APPROVAL_PAGE_KEYS,
+    sensitive_action="reject",
 )
 async def reject_purchase_request_record(
     context: ToolContext, data: PurchaseApprovalInput
@@ -384,6 +425,7 @@ async def reject_purchase_request_record(
     input_model=PurchaseOrderInput,
     method="GET",
     path="/procurement/purchase-orders",
+    page_keys=_ORDER_PAGE_KEYS,
 )
 async def list_purchase_order_records(
     context: ToolContext, data: PurchaseOrderInput
@@ -408,6 +450,8 @@ async def list_purchase_order_records(
     input_model=PurchaseOrderExportInput,
     method="GET",
     path="/procurement/purchase-orders/export",
+    page_keys=_ORDER_PAGE_KEYS,
+    sensitive_action="sensitive_export",
 )
 async def export_purchase_orders(
     context: ToolContext, data: PurchaseOrderExportInput
@@ -434,11 +478,15 @@ async def export_purchase_orders(
     summary="查询四类合同模板字段",
     method="GET",
     path="/procurement/contracts/templates",
+    page_keys=_CONTRACT_PAGE_KEYS,
 )
 async def list_contract_templates(context: ToolContext, _: BaseModel) -> dict[str, Any]:
+    allowed_category = constrain_contract_category()
     return {
         "templates": [
-            _contract_template_info(category) for category in ContractCategory
+            _contract_template_info(category)
+            for category in ContractCategory
+            if allowed_category is None or category == allowed_category
         ],
         "generate_operation": "procurement.generate_contract",
         "template_lookup_operation": "procurement.get_contract_template",
@@ -451,10 +499,12 @@ async def list_contract_templates(context: ToolContext, _: BaseModel) -> dict[st
     input_model=ContractTemplateInput,
     method="GET",
     path="/procurement/contracts/templates/{category}",
+    page_keys=_CONTRACT_PAGE_KEYS,
 )
 async def get_contract_template(
     context: ToolContext, data: ContractTemplateInput
 ) -> dict[str, Any]:
+    constrain_contract_category(data.category)
     return _contract_template_info(data.category)
 
 
@@ -466,10 +516,12 @@ async def get_contract_template(
     risk_level="medium",
     method="POST",
     path="/procurement/contracts/generate",
+    page_keys=_CONTRACT_PAGE_KEYS,
 )
 async def generate_purchase_contract(
     context: ToolContext, data: ContractGenerateRequest
 ) -> dict[str, Any]:
+    constrain_contract_category(data.category)
     buffer, filename, media_type = generate_contract(data)
     return _artifact_response(
         filename=filename,

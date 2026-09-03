@@ -15,11 +15,30 @@ from app.platform.identity.models import (
 
 
 class PermissionGrantRepository:
+    async def has_module_view(
+        self,
+        db: AsyncSession,
+        *,
+        user_id: UUID,
+        module_code: str,
+    ) -> bool:
+        result = await db.execute(
+            select(UserModuleGrant.permissions).where(
+                UserModuleGrant.user_id == user_id,
+                UserModuleGrant.module_code == module_code,
+                UserModuleGrant.status == "active",
+                UserModuleGrant.is_deleted.is_(False),
+            )
+        )
+        permissions = result.scalar_one_or_none()
+        return permissions is not None and "module.view" in permissions
+
     async def get_user_for_update(self, db: AsyncSession, user_id: UUID) -> User | None:
         result = await db.execute(
             select(User)
             .where(User.id == user_id, User.is_deleted.is_(False))
             .with_for_update()
+            .execution_options(populate_existing=True)
         )
         return result.scalar_one_or_none()
 
@@ -98,9 +117,10 @@ class PermissionGrantRepository:
         user_id: UUID,
         grant_version: int,
         actor_id: UUID,
+        event_type: str = "identity.user_module_grants.changed.v1",
     ) -> PermissionOutboxEvent:
         event = PermissionOutboxEvent(
-            event_type="identity.user_module_grants.changed.v1",
+            event_type=event_type,
             user_id=user_id,
             grant_version=grant_version,
             payload={"user_id": str(user_id), "grant_version": grant_version},

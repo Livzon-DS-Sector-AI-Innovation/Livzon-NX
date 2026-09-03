@@ -20,6 +20,7 @@ from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.sql import Select
+from sqlalchemy.sql.elements import ColumnElement
 
 from app.modules.hr.legacy_models import DepartureRecord, OnboardingRecord
 from app.modules.hr.models import (
@@ -40,6 +41,11 @@ from app.modules.hr.models import (
     TrainingPersonnelConfig,
     TrainingSession,
 )
+from app.modules.hr.page_access import (
+    assert_employee_filter,
+    employee_department_expression,
+    employee_page_scope,
+)
 
 if TYPE_CHECKING:
     from app.modules.hr.models import HrCustomTrainingDepartment, TrainingDeptMapping
@@ -49,12 +55,15 @@ class EmployeeRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def get_by_id(self, employee_id: UUID) -> Employee | None:
-        result = await self.session.execute(
-            select(Employee).where(
-                Employee.id == employee_id, Employee.is_deleted.is_(False)
-            )
+    async def get_by_id(
+        self, employee_id: UUID, *, for_update: bool = False
+    ) -> Employee | None:
+        stmt = select(Employee).where(
+            Employee.id == employee_id, Employee.is_deleted.is_(False)
         )
+        if for_update:
+            stmt = stmt.with_for_update().execution_options(populate_existing=True)
+        result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
     async def get_by_id_include_deleted(self, employee_id: UUID) -> Employee | None:
@@ -176,7 +185,16 @@ class EmployeeRepository:
     ) -> tuple[list[Employee], int]:
         stmt = select(Employee).where(Employee.is_deleted.is_(False))
 
-        if dept_alias_set is not None:
+        page_scope = await employee_page_scope(self.session)
+        if page_scope is not None:
+            assert_employee_filter(page_scope, department)
+            assert_employee_filter(page_scope, sub_department)
+            owner = employee_department_expression()
+            if not page_scope.is_all:
+                stmt = stmt.where(owner.in_(page_scope.department_names))
+            if department is not None:
+                stmt = stmt.where(owner == department.strip())
+        elif dept_alias_set is not None:
             # 部门级数据隔离：可见部门别名集合（含档案名与培训规范名），
             # department/sub_department 任一命中即可见
             stmt = stmt.where(
@@ -397,8 +415,14 @@ class EmployeeRepository:
     async def get_stats(self, dept_alias_set: set[str] | None = None) -> dict[str, Any]:
         """Return employee statistics for dashboard."""
         # 部门级数据隔离：非管理员只统计可见部门
-        dept_scope = None
-        if dept_alias_set is not None:
+        dept_scope: ColumnElement[bool] | None = None
+        page_scope = await employee_page_scope(self.session)
+        if page_scope is not None:
+            if not page_scope.is_all:
+                dept_scope = employee_department_expression().in_(
+                    page_scope.department_names
+                )
+        elif dept_alias_set is not None:
             dept_scope = (Employee.department.in_(dept_alias_set)) | (
                 Employee.sub_department.in_(dept_alias_set)
             )

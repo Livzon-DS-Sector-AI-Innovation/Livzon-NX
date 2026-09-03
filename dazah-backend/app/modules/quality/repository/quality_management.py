@@ -205,6 +205,19 @@ async def update_deviation(
     return deviation
 
 
+async def get_deviations_for_update(
+    db: AsyncSession, ids: list[uuid.UUID]
+) -> list[Deviation]:
+    result = await db.execute(
+        select(Deviation)
+        .where(Deviation.id.in_(ids), Deviation.is_deleted.is_(False))
+        .order_by(Deviation.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    return list(result.scalars().all())
+
+
 async def delete_deviation(db: AsyncSession, deviation: Deviation) -> None:
     deviation.is_deleted = True
     await db.flush()

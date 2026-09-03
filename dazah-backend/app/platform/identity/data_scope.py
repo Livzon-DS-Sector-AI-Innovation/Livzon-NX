@@ -18,10 +18,12 @@ from __future__ import annotations
 
 import json
 import logging
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Any
 
-from sqlalchemy import select
+from fastapi import HTTPException
+from sqlalchemy import false, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.events import event_bus
@@ -38,6 +40,13 @@ logger = logging.getLogger(__name__)
 DATA_SCOPE_CACHE_TTL = 300  # 5 分钟
 DATA_SCOPE_CACHE_PREFIX = "identity:data-scope:"
 DATA_SCOPE_CHANGED_EVENT = "identity.data_scope.changed"
+current_page_data_scope: ContextVar[dict[str, Any] | None] = ContextVar(
+    "current_page_data_scope", default=None
+)
+current_page_actor: ContextVar[User | None] = ContextVar(
+    "current_page_actor", default=None
+)
+current_page_key: ContextVar[str | None] = ContextVar("current_page_key", default=None)
 
 
 @dataclass
@@ -101,6 +110,8 @@ async def _resolve_department_scope(db: AsyncSession, user: User) -> DepartmentS
 
     优先级：super_admin/DEV_BYPASS > 用户级配置 > 角色级配置 > 默认部门树。
     """
+    if getattr(user, "role", None) == "admin":
+        return DepartmentScope(is_all=True)
     roles = await resolve_user_roles(db, user.id)
     if any(r.code == SUPER_ADMIN_ROLE_CODE for r in roles):
         return DepartmentScope(is_all=True)
@@ -204,6 +215,23 @@ async def resolve_user_department_scope(
     user: User,
 ) -> DepartmentScope:
     """解析用户可见部门范围（Redis 缓存 5 分钟）。"""
+    if getattr(user, "role", None) == "admin":
+        return DepartmentScope(is_all=True)
+    page_scope = current_page_data_scope.get()
+    if page_scope is not None:
+        scope_type = page_scope.get("scope_type")
+        if scope_type in {"all", "not_applicable"}:
+            return DepartmentScope(is_all=True)
+        if scope_type not in {"departments", "department_tree"}:
+            # A self scope requires an owner adapter; never widen it to a department.
+            return DepartmentScope(is_all=False)
+        department_ids = (
+            page_scope.get("department_ids", [])
+            if scope_type == "departments"
+            else _parse_department_ids(user.feishu_department_ids)
+        )
+        result = await db.execute(select(Department))
+        return page_department_scope(list(result.scalars().all()), department_ids)
     cache_key = f"{DATA_SCOPE_CACHE_PREFIX}{user.id}"
     cached = await cache_get(cache_key)
     if cached is not None:
@@ -228,6 +256,42 @@ async def resolve_user_department_scope(
     return scope
 
 
+def page_department_scope(
+    departments: list[Department], root_ids: list[str]
+) -> DepartmentScope:
+    """Resolve stable IDs without widening name-based business adapters.
+
+    Missing mappings fail closed. A department name shared with an ungranted
+    (including retired) ID is ambiguous and must not authorize those rows.
+    """
+    active = [
+        item
+        for item in departments
+        if not item.is_deleted and not item.status_is_deleted
+    ]
+    by_id = {item.feishu_department_id: item for item in active}
+    children = _build_children_map(active)
+    selected: set[str] = set()
+    pending = list(root_ids)
+    while pending:
+        department_id = pending.pop()
+        if department_id in selected or department_id not in by_id:
+            continue
+        selected.add(department_id)
+        pending.extend(
+            item.feishu_department_id for item in children.get(department_id, [])
+        )
+    names = {by_id[item].name for item in selected}
+    if any(
+        item.name in names and item.feishu_department_id not in selected
+        for item in departments
+    ):
+        raise HTTPException(
+            403, "部门名称存在歧义，无法安全确定页面数据范围，请联系管理员"
+        )
+    return DepartmentScope(is_all=False, department_names=names)
+
+
 def filter_rows_by_department(
     rows: list[Any],
     dept_getter: Any,
@@ -241,8 +305,10 @@ def filter_rows_by_department(
 
 def department_in_clause(column: Any, scope: DepartmentScope) -> Any:
     """构造 SQL 部门过滤条件（ORM 用）；is_all 时返回 None 表示不过滤。"""
-    if scope.is_all or not scope.department_names:
+    if scope.is_all:
         return None
+    if not scope.department_names:
+        return false()
     return column.in_(list(scope.department_names))
 
 

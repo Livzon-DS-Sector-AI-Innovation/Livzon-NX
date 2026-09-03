@@ -2,6 +2,7 @@
 
 import logging
 import uuid
+from collections import Counter
 from datetime import UTC, datetime
 from typing import Any
 
@@ -172,7 +173,14 @@ async def get_department_contact_list(
 
 
 async def get_department_contact_list_from_feishu(
-    db: AsyncSession, page: int = 1, page_size: int = 20
+    db: AsyncSession,
+    page: int = 1,
+    page_size: int = 20,
+    *,
+    scope: DepartmentScope | None = None,
+    keyword: str | None = None,
+    open_id: str | None = None,
+    reporter_only: bool = False,
 ) -> dict[str, Any]:
     from app.modules.quality.service import quality_feishu_sync as feishu_sync_service
     from app.platform.integrations.feishu.bitable import BitableClient
@@ -200,6 +208,28 @@ async def get_department_contact_list_from_feishu(
     )
 
     serialized = [_serialize_feishu_department_contact(record) for record in records]
+    if reporter_only:
+        # Ambiguous identities must not be assigned through a partial directory view.
+        counts = Counter(item.open_id for item in serialized if item.open_id)
+        serialized = [
+            item
+            for item in serialized
+            if item.open_id
+            and counts[item.open_id] == 1
+            and item.name
+            and item.department
+        ]
+    if scope is not None:
+        serialized = [item for item in serialized if scope.allows(item.department)]
+    if open_id is not None:
+        serialized = [item for item in serialized if item.open_id == open_id]
+    if keyword and (search := keyword.strip().casefold()):
+        serialized = [
+            item
+            for item in serialized
+            if search in (item.name or "").casefold()
+            or search in item.department.casefold()
+        ]
     serialized.sort(key=lambda item: (item.department, item.name or ""))
     total = len(serialized)
     start = max(page - 1, 0) * page_size

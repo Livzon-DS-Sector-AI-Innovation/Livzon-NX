@@ -151,6 +151,9 @@ async def test_get_material_page_returns_dynamic_columns_and_rows(
     ):
         response = await client.get(
             "/api/v1/warehouse/material-pages/raw-summary",
+            headers={
+                "X-Dazah-Page-Key": "warehouse:materials:raw-summary"
+            },
             params={"page": 1, "page_size": 20, "source": "feishu"},
         )
 
@@ -210,6 +213,11 @@ async def test_get_finished_product_material_page_returns_configured_title(
     ):
         response = await client.get(
             "/api/v1/warehouse/material-pages/product-inbound-ledger",
+            headers={
+                "X-Dazah-Page-Key": (
+                    "warehouse:product-inventory:product-inbound-ledger"
+                )
+            },
             params={"page": 1, "page_size": 20, "source": "feishu"},
         )
 
@@ -265,6 +273,9 @@ async def test_get_hardware_material_page_returns_configured_title(
     ):
         response = await client.get(
             "/api/v1/warehouse/material-pages/hardware-summary",
+            headers={
+                "X-Dazah-Page-Key": "warehouse:hardware:hardware-hardware-summary"
+            },
             params={"page": 1, "page_size": 20, "source": "feishu"},
         )
 
@@ -298,6 +309,7 @@ async def test_get_material_page_rejects_unknown_page_key(
 ) -> None:
     response = await client.get(
         "/api/v1/warehouse/material-pages/not-exists",
+        headers={"X-Dazah-Page-Key": "warehouse:materials:raw-summary"},
         params={"source": "feishu"},
     )
 
@@ -480,6 +492,7 @@ async def test_get_material_page_can_read_local_snapshot(
 
     response = await client.get(
         "/api/v1/warehouse/material-pages/raw-summary",
+        headers={"X-Dazah-Page-Key": "warehouse:materials:raw-summary"},
         params={"source": "local", "keyword": "葡萄"},
     )
 
@@ -539,6 +552,9 @@ async def test_get_finished_product_material_page_can_read_local_snapshot(
 
     response = await client.get(
         "/api/v1/warehouse/material-pages/product-summary",
+        headers={
+            "X-Dazah-Page-Key": "warehouse:product-inventory:product-summary"
+        },
         params={"source": "local", "keyword": "多拉"},
     )
 
@@ -608,6 +624,12 @@ async def test_finished_product_detail_page_hides_zero_inventory_rows_in_local_s
 
     response = await client.get(
         "/api/v1/warehouse/material-pages/product-detail-l-phenylalanine",
+        headers={
+            "X-Dazah-Page-Key": (
+                "warehouse:product-inventory:product-details:"
+                "product-detail-l-phenylalanine"
+            )
+        },
         params={"source": "local"},
     )
 
@@ -688,6 +710,7 @@ async def test_get_material_page_applies_local_filters_after_paging(
 
     response = await client.get(
         "/api/v1/warehouse/material-pages/raw-ledger",
+        headers={"X-Dazah-Page-Key": "warehouse:materials:raw-ledger"},
         params={
             "source": "local",
             "date_field": "出库日期",
@@ -716,6 +739,7 @@ async def test_get_material_page_rejects_invalid_advanced_filters(
 ) -> None:
     response = await client.get(
         "/api/v1/warehouse/material-pages/raw-summary",
+        headers={"X-Dazah-Page-Key": "warehouse:materials:raw-summary"},
         params={"source": "local", "filters": "{bad-json}"},
     )
 

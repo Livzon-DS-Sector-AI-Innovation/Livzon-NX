@@ -26,7 +26,7 @@ SimpleNamespace: Any = _SimpleNamespace
 @pytest.fixture
 async def authenticated_client(client: AsyncClient) -> Any:
     async def _override_current_user() -> Any:
-        return SimpleNamespace(role="admin", status="active")
+        return SimpleNamespace(role="admin", status="active", name="何学斌")
 
     app.dependency_overrides[get_current_user] = _override_current_user
     try:
@@ -83,6 +83,7 @@ async def test_create_purchase_request_api_accepts_new_fields_and_attachment_not
     monkeypatch.setattr(procurement_api, "create_purchase_request", create)
     response = await authenticated_client.post(
         "/api/v1/procurement/purchase-requests",
+        headers={"X-Dazah-Page-Key": "purchasing:request:request-fire"},
         json={
             "category": "fire",
             "request_department": "安全环保部",
@@ -122,6 +123,7 @@ async def test_create_purchase_request_api_maps_material_validation_to_400(
     monkeypatch.setattr(procurement_api, "create_purchase_request", create)
     response = await authenticated_client.post(
         "/api/v1/procurement/purchase-requests",
+        headers={"X-Dazah-Page-Key": "purchasing:request:request-fire"},
         json={
             "category": "fire",
             "request_department": "安全环保部",
@@ -159,6 +161,7 @@ async def test_create_urgent_purchase_request_api_accepts_mixed_item_categories(
     monkeypatch.setattr(procurement_api, "create_purchase_request", create)
     response = await authenticated_client.post(
         "/api/v1/procurement/purchase-requests",
+        headers={"X-Dazah-Page-Key": "purchasing:request:request-urgent"},
         json={
             "category": "urgent",
             "request_department": "采购部",
@@ -198,6 +201,7 @@ async def test_create_urgent_purchase_request_api_maps_missing_item_category_to_
     monkeypatch.setattr(procurement_api, "create_purchase_request", create)
     response = await authenticated_client.post(
         "/api/v1/procurement/purchase-requests",
+        headers={"X-Dazah-Page-Key": "purchasing:request:request-urgent"},
         json={
             "category": "urgent",
             "request_department": "采购部",
@@ -223,6 +227,7 @@ async def test_create_urgent_purchase_request_api_uses_test_database(
 ) -> None:
     response = await authenticated_client.post(
         "/api/v1/procurement/purchase-requests",
+        headers={"X-Dazah-Page-Key": "purchasing:request:request-urgent"},
         json={
             "category": "urgent",
             "request_department": "接口测试部",
@@ -280,6 +285,12 @@ async def test_approve_purchase_request_api_accepts_new_approval_role(
     monkeypatch.setattr(procurement_api, "approve_purchase_request", approve)
     response = await authenticated_client.post(
         f"/api/v1/procurement/purchase-requests/{uuid4()}/approve",
+        headers={
+            "X-Dazah-Page-Key": (
+                "purchasing:approval:approval-electrical:"
+                "approval-electrical-equipment-power"
+            )
+        },
         json={
             "approval_role": "equipment_power",
             "approver_name": "何学斌",
@@ -303,6 +314,12 @@ async def test_approve_purchase_request_api_returns_400_for_invalid_workflow_ste
     monkeypatch.setattr(procurement_api, "approve_purchase_request", approve)
     response = await authenticated_client.post(
         f"/api/v1/procurement/purchase-requests/{uuid4()}/approve",
+        headers={
+            "X-Dazah-Page-Key": (
+                "purchasing:approval:approval-urgent:"
+                "approval-urgent-general-manager"
+            )
+        },
         json={
             "approval_role": "general_manager",
             "approver_name": "总经理",
@@ -351,6 +368,7 @@ async def test_import_purchase_requests_api_accepts_table_file(
     )
     response = await authenticated_client.post(
         "/api/v1/procurement/purchase-requests/import",
+        headers={"X-Dazah-Page-Key": "purchasing:request:request-hardware"},
         files={
             "file": (
                 "采购申请.xlsx",
@@ -374,6 +392,7 @@ async def test_import_purchase_requests_api_rejects_unsupported_extension(
 ) -> None:
     response = await authenticated_client.post(
         "/api/v1/procurement/purchase-requests/import",
+        headers={"X-Dazah-Page-Key": "purchasing:request:request-hardware"},
         files={"file": ("采购申请.docx", b"docx-bytes", "application/octet-stream")},
     )
 
@@ -396,6 +415,7 @@ async def test_import_purchase_requests_api_maps_service_error_to_400(
     )
     response = await authenticated_client.post(
         "/api/v1/procurement/purchase-requests/import",
+        headers={"X-Dazah-Page-Key": "purchasing:request:request-hardware"},
         files={"file": ("采购申请.xlsx", b"", "application/octet-stream")},
     )
 
@@ -416,7 +436,8 @@ async def test_delete_purchase_request_api_deletes_draft(
 
     monkeypatch.setattr(procurement_api, "delete_purchase_request", delete_request)
     response = await authenticated_client.delete(
-        f"/api/v1/procurement/purchase-requests/{request_id}"
+        f"/api/v1/procurement/purchase-requests/{request_id}",
+        headers={"X-Dazah-Page-Key": "purchasing:request:request-fire"},
     )
 
     assert response.status_code == 200
@@ -436,7 +457,8 @@ async def test_delete_purchase_request_api_maps_status_error_to_400(
 
     monkeypatch.setattr(procurement_api, "delete_purchase_request", delete_request)
     response = await authenticated_client.delete(
-        f"/api/v1/procurement/purchase-requests/{uuid4()}"
+        f"/api/v1/procurement/purchase-requests/{uuid4()}",
+        headers={"X-Dazah-Page-Key": "purchasing:request:request-fire"},
     )
 
     assert response.status_code == 400
@@ -455,7 +477,8 @@ async def test_submit_purchase_request_api_maps_total_amount_error_to_400(
 
     monkeypatch.setattr(procurement_api, "submit_purchase_request", submit)
     response = await authenticated_client.post(
-        f"/api/v1/procurement/purchase-requests/{uuid4()}/submit"
+        f"/api/v1/procurement/purchase-requests/{uuid4()}/submit",
+        headers={"X-Dazah-Page-Key": "purchasing:request:request-fire"},
     )
 
     assert response.status_code == 400

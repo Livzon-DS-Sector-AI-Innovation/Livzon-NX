@@ -11,7 +11,7 @@ import json
 import logging
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.platform.identity.menu_seed_data import SEED_MENUS
@@ -28,12 +28,28 @@ from app.platform.identity.models import (
 
 logger = logging.getLogger(__name__)
 
-# 超级管理员角色编码（通配权限）
+# 保留历史角色编码兼容旧绑定；统一身份是 User.role == "admin"。
 SUPER_ADMIN_ROLE_CODE = "super_admin"
 
 # 本地开发用户（DEV_BYPASS_AUTH 模式由 get_current_user 创建）：
 # 视为管理员，拥有全部权限（通配），不受部门级数据隔离限制
 DEV_BYPASS_OPEN_ID = "dev-bypass-open-id"
+
+
+async def lock_admin_changes(db: AsyncSession) -> None:
+    """Serialize identity promotions/demotions and last-administrator checks."""
+    await db.execute(text("SELECT pg_advisory_xact_lock(739214061)"))
+
+
+async def active_system_admin_count(db: AsyncSession) -> int:
+    from app.platform.identity.models import User
+
+    result = await db.execute(
+        select(func.count(User.id)).where(
+            User.role == "admin", User.status == "active", User.is_deleted.is_(False)
+        )
+    )
+    return int(result.scalar_one())
 
 # ─── 质量 QA 系统角色种子 ────────────────────────────────────────────
 # 六个子域角色：质量管理全部可见，编辑范围限定各自子域（端点内精校验）
@@ -293,6 +309,7 @@ async def resolve_user_roles(db: AsyncSession, user_id: Any) -> list[Role]:
     if dept_role_ids:
         dept_stmt = select(Role).where(
             Role.id.in_(dept_role_ids),
+            Role.code != SUPER_ADMIN_ROLE_CODE,
             Role.is_deleted == False,  # noqa: E712
         )
         dept_result = await db.execute(dept_stmt)
@@ -321,18 +338,11 @@ async def resolve_user_permissions(db: AsyncSession, user_id: Any) -> list[str]:
     dev_result = await db.execute(
         select(User.id).where(
             User.id == user_id,
-            User.feishu_open_id == DEV_BYPASS_OPEN_ID,
+            or_(User.role == "admin", User.feishu_open_id == DEV_BYPASS_OPEN_ID),
             User.is_deleted.is_(False),
         )
     )
     if dev_result.scalar_one_or_none() is not None:
-        return ["*"]
-
-    user_result = await db.execute(
-        select(User).where(User.id == user_id, User.is_deleted.is_(False))
-    )
-    user = user_result.scalar_one_or_none()
-    if user is not None and user.role == "admin":
         return ["*"]
 
     roles = await resolve_user_roles(db, user_id)
@@ -500,7 +510,7 @@ async def seed_permissions(db: AsyncSession) -> None:
     role = role_result.scalar_one_or_none()
     if role is None:
         role = Role(
-            name="超级管理员",
+            name="系统管理员",
             code=SUPER_ADMIN_ROLE_CODE,
             description="拥有全部权限（通配）",
             is_system=True,
@@ -610,12 +620,12 @@ async def seed_menus(db: AsyncSession) -> None:
     """
     existing_stmt = select(Menu.key).where(
         Menu.key.is_not(None),
-        Menu.is_deleted == False,  # noqa: E712
     )
     existing_result = await db.execute(existing_stmt)
     existing_keys = set(existing_result.scalars().all())
 
     created = 0
+    created_keys: set[str] = set()
     for node in _flatten_seed_menus(SEED_MENUS):
         if node["key"] in existing_keys:
             continue
@@ -630,6 +640,7 @@ async def seed_menus(db: AsyncSession) -> None:
             status=("disabled" if node.get("disabled") else "active"),
         )
         db.add(menu)
+        created_keys.add(node["key"])
         created += 1
     if created:
         await db.flush()
@@ -644,6 +655,8 @@ async def seed_menus(db: AsyncSession) -> None:
             if m.key:
                 keyed[m.key] = m
         for node in _flatten_seed_menus(SEED_MENUS):
+            if node["key"] not in created_keys:
+                continue
             menu = keyed[node["key"]]
             if ":" in node["key"]:
                 parent_key = node["key"].rsplit(":", 1)[0]

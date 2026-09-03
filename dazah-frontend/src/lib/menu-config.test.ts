@@ -1,5 +1,69 @@
 import { describe, expect, it } from 'vitest'
-import { moduleMenus } from './menu-config'
+import {
+  getFirstAuthorizedModulePath,
+  getAuthorizedPageMenus,
+  getPageKeyByPath,
+  getPermissionModuleName,
+  moduleMenus,
+} from './menu-config'
+
+describe('page permission menu boundary', () => {
+  it('uses Chinese navigation names for every permission module, never raw module codes', () => {
+    for (const item of moduleMenus) {
+      expect(getPermissionModuleName(item.moduleCode)).toBe(item.label)
+      expect(getPermissionModuleName(item.moduleCode)).toMatch(/[\u4e00-\u9fff]/)
+    }
+    expect(getPermissionModuleName('production')).toBe('生产管理')
+    expect(getPermissionModuleName('equipment')).toBe('设备管理')
+    expect(getPermissionModuleName('energy')).toBe('能源管理')
+    expect(getPermissionModuleName('safety')).toBe('安全管理')
+    expect(getPermissionModuleName('research')).toBe('研发管理')
+    expect(getPermissionModuleName('registration')).toBe('注册管理')
+    expect(getPermissionModuleName('administration')).toBe('行政管理')
+    expect(getPermissionModuleName('unknown')).toBe('未命名模块')
+  })
+  it('filters an enforced module down to authorized leaf pages and ancestors', () => {
+    const menus = getAuthorizedPageMenus(
+      ['hr'],
+      [
+        {
+          page_key: 'hr:employee-management:profile',
+          module_code: 'hr',
+          permissions: ['access'],
+        },
+      ],
+      { hr: 'enforced' }
+    )
+    expect(menus).toHaveLength(1)
+    expect(menus[0].children.map((item) => item.key)).toEqual([
+      'employee-management',
+    ])
+  })
+
+  it('keeps draft modules on the legacy menu rule', () => {
+    const menus = getAuthorizedPageMenus(['hr'], [], { hr: 'draft' })
+    expect(menus[0].children.length).toBeGreaterThan(1)
+  })
+
+  it('uses navigation order for the post-login module landing page', () => {
+    expect(getFirstAuthorizedModulePath({
+      role: 'user',
+      module_codes: ['quality', 'administration', 'research'],
+      page_permissions: [],
+      page_permission_rollouts: {},
+    })).toBe('/rd')
+  })
+
+  it('keeps the first platform module as the administrator landing page', () => {
+    expect(getFirstAuthorizedModulePath({ role: 'admin' })).toBe('/production')
+  })
+
+  it('resolves dynamic detail URLs to the longest stable page key', () => {
+    expect(getPageKeyByPath('/hr/profile')).toBe(
+      'hr:employee-management:profile'
+    )
+  })
+})
 
 describe('procurement menu structure', () => {
   it('adds the new request categories and nests labor categories', () => {
