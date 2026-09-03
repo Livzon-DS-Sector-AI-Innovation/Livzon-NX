@@ -520,3 +520,169 @@ async def test_analyze_workbench_config_missing(
     detail = await svc.analyze_workbench(session, _request(), user_id="u1")  # type: ignore[arg-type]  # noqa: E501
     assert detail.status == "failed"
     assert detail.error_message == "AI 服务尚未配置"
+
+
+# ── 检索辅助与快照补充分支 ──
+
+
+def test_split_keywords_edges() -> None:
+    assert svc._split_keywords("") == []
+    assert svc._split_keywords("  \t ") == []
+    kws = svc._split_keywords(
+        "a 精密 精密 灌装、压塞；灭菌 干燥 清洗 灯检 贴标 装箱 仓储"
+    )
+    assert "a" not in kws  # 长度不足 2 被清洗
+    assert kws.count("精密") == 1  # 去重
+    assert len(kws) == 8  # 上限截断
+
+
+async def test_retrieve_documents_dedupes_entries() -> None:
+    entry = MagicMock(id="doc-1", code="PC-1", name="压塞机操作")
+    with (
+        patch.object(
+            svc,
+            "list_document_entries",
+            AsyncMock(return_value=([entry, entry], 2)),
+        ),
+        patch.object(
+            svc,
+            "read_entry_md_contents",
+            return_value=[{"md_text": "标准内容"}],
+        ),
+    ):
+        result = await svc._retrieve_documents(None, ["压塞"])  # type: ignore[arg-type]
+    assert len(result) == 1  # 重复条目被去重
+    assert result[0]["code"] == "PC-1"
+    assert result[0]["content"] == "标准内容"
+
+
+async def test_retrieve_training_ledgers_empty_and_degraded(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert await svc._retrieve_training_ledgers(None, []) == []  # type: ignore[arg-type]
+
+    async def _hr_down(
+        _db: Any, keywords: list[str], *, limit: int = 5
+    ) -> list[dict[str, Any]]:
+        raise RuntimeError("hr down")
+
+    monkeypatch.setattr("app.modules.hr.public_api.query_training_ledgers", _hr_down)
+    assert await svc._retrieve_training_ledgers(None, ["灌装"]) == []  # type: ignore[arg-type]
+
+
+async def test_build_context_with_retrievals_and_extra_fields(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+
+    from app.modules.quality.schemas.deviation_workbench import (
+        CreateDeviationWorkbenchRequest,
+        DeviationWorkbenchAttachmentIn,
+    )
+
+    monkeypatch.setattr(
+        svc,
+        "_retrieve_historical_deviations",
+        AsyncMock(
+            return_value=[
+                {
+                    "code": "HD-1",
+                    "deviation_event": "压塞压力超上限",
+                    "deviation_content": "内容",
+                    "root_cause": "传感器漂移",
+                }
+            ]
+        ),
+    )
+    monkeypatch.setattr(
+        svc,
+        "_retrieve_documents",
+        AsyncMock(return_value=[{"code": "PC-1", "name": "压塞机", "content": "标准"}]),
+    )
+    monkeypatch.setattr(
+        svc,
+        "_retrieve_training_ledgers",
+        AsyncMock(return_value=[{"training_subject": "压塞机操作培训"}]),
+    )
+    monkeypatch.setattr(
+        svc, "_attachment_context_text", AsyncMock(return_value="附件内容")
+    )
+
+    request = CreateDeviationWorkbenchRequest(
+        source_type="manual",
+        manual_text="灌装线压塞压力超上限",
+        affected_items="产品A 批号B",
+        supplement_text="已停机检查",
+        attachments=[
+            DeviationWorkbenchAttachmentIn(
+                id="att-1",
+                file_name="a.docx",
+                storage_key="uploads/a.docx",
+                content_type="application/octet-stream",
+                file_size=10,
+            )
+        ],
+    )
+    snapshot, context_text, summary = await svc._build_context(None, request)  # type: ignore[arg-type]
+    assert snapshot["source"]["affected_items"] == "产品A 批号B"
+    assert snapshot["source"]["supplement_text"] == "已停机检查"
+    assert snapshot["historical_deviations"][0]["code"] == "HD-1"
+    assert snapshot["historical_deviations"][0]["deviation_event"] == "压塞压力超上限"
+    assert snapshot["documents"][0]["code"] == "PC-1"
+    assert snapshot["training_ledgers"][0]["training_subject"] == "压塞机操作培训"
+    assert "【附件：a.docx】" in context_text
+    assert summary == "灌装线压塞压力超上限"
+
+
+async def test_build_context_from_report_record_source(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.modules.quality.schemas.deviation_workbench import (
+        CreateDeviationWorkbenchRequest,
+    )
+
+    monkeypatch.setattr(
+        "app.modules.quality.service.tracking_records.get_deviation_report_record_from_feishu",
+        AsyncMock(
+            return_value={
+                "deviation_code": "DR-2026-001",
+                "description": "压塞压力超上限",
+                "product_batch": "批号B-01",
+                "department": "灌装车间",
+                "report_time": "2026-08-01",
+                "attachments": [
+                    {"name": "a.pdf", "url": "http://x/a.pdf", "type": "pdf"}
+                ],
+            }
+        ),
+    )
+    monkeypatch.setattr(
+        svc, "_retrieve_historical_deviations", AsyncMock(return_value=[])
+    )
+    monkeypatch.setattr(svc, "_retrieve_documents", AsyncMock(return_value=[]))
+    monkeypatch.setattr(svc, "_retrieve_training_ledgers", AsyncMock(return_value=[]))
+    monkeypatch.setattr(svc, "_attachment_context_text", AsyncMock(return_value=""))
+
+    request = CreateDeviationWorkbenchRequest(
+        source_type="report_record",
+        source_record_id="rec-dr-1",
+    )
+    snapshot, context_text, _ = await svc._build_context(None, request)  # type: ignore[arg-type]
+    assert snapshot["source"]["deviation_code"] == "DR-2026-001"
+    assert "批号B-01" in context_text
+
+    # 报告记录读取失败（AppException）→ 来源降级为空；仍需其余输入支撑上下文
+    async def _raise(_db: Any, record_id: str) -> dict[str, Any]:
+        raise AppException(message="飞书记录不存在")
+
+    monkeypatch.setattr(
+        "app.modules.quality.service.tracking_records.get_deviation_report_record_from_feishu",
+        _raise,
+    )
+    degraded = CreateDeviationWorkbenchRequest(
+        source_type="report_record",
+        source_record_id="rec-dr-1",
+        manual_text="灌装线压塞压力超上限",
+    )
+    snapshot, _, _ = await svc._build_context(None, degraded)  # type: ignore[arg-type]
+    assert snapshot["source"] == {"manual_text": "灌装线压塞压力超上限"}
+

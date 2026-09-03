@@ -167,4 +167,71 @@ describe('renderFeishuValue', () => {
     renderValue(renderFeishuValue(42, {}, 'ent', makeMessage() as never))
     expect(container.textContent).toBe('42')
   })
+
+  it('renders file_token-only attachments via custom proxy builder', async () => {
+    const blob = new Blob(['x'], { type: 'image/jpeg' })
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, blob: async () => blob })
+    vi.stubGlobal('fetch', fetchMock)
+    const createObjectURL = vi.fn(() => 'blob:proxy')
+    Object.defineProperty(URL, 'createObjectURL', { value: createObjectURL, configurable: true })
+    const openMock = vi.fn()
+    vi.stubGlobal('open', openMock)
+
+    const msg = makeMessage()
+    renderValue(
+      renderFeishuValue(
+        [{ name: '封面.jpeg', file_token: 'ft-qc-1' }],
+        { record_id: 'rec-qc-1' },
+        undefined,
+        msg as never,
+        {
+          attachmentUrlBuilder: (entityCode, recordId, fileToken) =>
+            `/api/v1/quality/validation-qc/records/${recordId}/attachments/${fileToken}/content?year=2026&entity=${entityCode ?? ''}`,
+        },
+      ),
+    )
+    const button = container.querySelector('button')
+    expect(button?.textContent).toBe('封面.jpeg')
+    await act(async () => {
+      button?.click()
+    })
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/quality/validation-qc/records/rec-qc-1/attachments/ft-qc-1/content?year=2026&entity=',
+    )
+    expect(openMock).toHaveBeenCalledWith('blob:proxy', '_blank')
+  })
+
+  it('formats DateTime ms values and Checkbox booleans by uiType', () => {
+    renderValue(
+      renderFeishuValue(
+        new Date(2026, 2, 26, 0, 0, 0).getTime(),
+        {},
+        undefined,
+        makeMessage() as never,
+        { uiType: 'DateTime' },
+      ),
+    )
+    expect(container.textContent).toBe('2026-03-26')
+
+    renderValue(
+      renderFeishuValue('True', {}, undefined, makeMessage() as never, { uiType: 'Checkbox' }),
+    )
+    expect(container.textContent).toBe('是')
+
+    renderValue(
+      renderFeishuValue('False', {}, undefined, makeMessage() as never, { uiType: 'Checkbox' }),
+    )
+    expect(container.textContent).toBe('否')
+  })
+
+  it('formats string ms timestamps to date for DateTime fields', () => {
+    // 飞书 DateTime 可能返回字符串毫秒时间戳，须转成日期而非显示原始时间戳。
+    // 使用 UTC 正午的时间戳，避免格式化结果随测试环境时区漂移（本地东八区 vs CI UTC）。
+    renderValue(
+      renderFeishuValue('1769774400000', {}, undefined, makeMessage() as never, {
+        uiType: 'DateTime',
+      }),
+    )
+    expect(container.textContent).toBe('2026-01-30')
+  })
 })

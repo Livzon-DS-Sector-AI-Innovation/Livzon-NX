@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { qualityTokens } from '../themeTokens'
 import { Avatar, Space } from 'antd'
 import type { App } from 'antd'
+import dayjs from 'dayjs'
 
 type FeishuMessage = ReturnType<typeof App.useApp>['message']
 
@@ -11,20 +12,42 @@ export interface FeishuAttachment {
   file_token?: string
 }
 
-/** 通过后端代理下载飞书附件并以新标签页打开（附件 url 需带 token）。 */
-async function openFeishuAttachment(
+/** 附件代理下载的基础路径：不同模块的通用飞书记录接口前缀不同。 */
+export type FeishuAttachmentUrlBuilder = (
   entityCode: string,
   recordId: string,
+  fileToken: string,
+) => string
+
+const DEFAULT_ATTACHMENT_URL_BUILDER: FeishuAttachmentUrlBuilder = (
+  entityCode,
+  recordId,
+  fileToken,
+) =>
+  `/api/v1/quality/inspection/feishu/${encodeURIComponent(entityCode)}/records/${encodeURIComponent(recordId)}/attachments/${encodeURIComponent(fileToken)}/content`
+
+export interface RenderFeishuValueOptions {
+  /** 字段 ui_type，用于按类型格式化日期/勾选等原始值 */
+  uiType?: string
+  /** 附件代理下载地址构造器，默认走检验模块通用接口 */
+  attachmentUrlBuilder?: FeishuAttachmentUrlBuilder
+}
+
+/** 通过后端代理下载飞书附件并以新标签页打开（附件 url 需带 token）。 */
+async function openFeishuAttachment(
+  entityCode: string | undefined,
+  recordId: string,
   att: FeishuAttachment,
-  message: FeishuMessage
+  message: FeishuMessage,
+  attachmentUrlBuilder: FeishuAttachmentUrlBuilder,
 ): Promise<void> {
-  if (!entityCode || !recordId || !att.file_token) {
+  if (!recordId || !att.file_token) {
     if (att.url) window.open(att.url, '_blank', 'noopener,noreferrer')
     return
   }
   try {
     const res = await fetch(
-      `/api/v1/quality/inspection/feishu/${encodeURIComponent(entityCode)}/records/${encodeURIComponent(recordId)}/attachments/${encodeURIComponent(att.file_token)}/content`
+      attachmentUrlBuilder(entityCode ?? '', recordId, att.file_token),
     )
     if (!res.ok) {
       let msg = `下载失败(${res.status})`
@@ -42,16 +65,36 @@ async function openFeishuAttachment(
   }
 }
 
+function formatDateTimeValue(value: unknown): string {
+  // 飞书 DateTime 返回毫秒时间戳（可能为 number 或数字字符串）
+  const numeric =
+    typeof value === 'string' && /^\d+$/.test(value.trim())
+      ? Number(value.trim())
+      : (value as number)
+  const parsed = dayjs(numeric)
+  return parsed.isValid() ? parsed.format('YYYY-MM-DD') : String(value)
+}
+
+function formatCheckboxValue(value: unknown): string {
+  if (value === true || value === 'True' || value === 'true') return '是'
+  if (value === false || value === 'False' || value === 'false') return '否'
+  return String(value)
+}
+
 /** 把飞书字段值渲染为可读内容：附件可点击、链接可点击、人员显示姓名、其余为文本。 */
 export function renderFeishuValue(
   value: unknown,
   record: Record<string, unknown>,
   entityCode: string | undefined,
-  message: FeishuMessage
+  message: FeishuMessage,
+  options?: RenderFeishuValueOptions,
 ): ReactNode {
+  const uiType = options?.uiType
+  const attachmentUrlBuilder =
+    options?.attachmentUrlBuilder ?? DEFAULT_ATTACHMENT_URL_BUILDER
   if (Array.isArray(value)) {
     if (value.length === 0) return '-'
-    if (value.some((v) => (v as { url?: string })?.url)) {
+    if (value.some((v) => (v as FeishuAttachment)?.url || (v as FeishuAttachment)?.file_token)) {
       return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           {value.map((v, i) => {
@@ -72,7 +115,7 @@ export function renderFeishuValue(
                   lineHeight: 1.4,
                   maxWidth: 220,
                 }}
-                onClick={() => void openFeishuAttachment(entityCode ?? '', String(record.record_id ?? ''), att, message)}
+                onClick={() => void openFeishuAttachment(entityCode ?? '', String(record.record_id ?? ''), att, message, attachmentUrlBuilder)}
               >
                 {att.name || '附件'}
               </button>
@@ -122,5 +165,11 @@ export function renderFeishuValue(
     }
   }
   if (value === null || value === undefined || value === '') return '-'
+  if (uiType === 'DateTime' && (typeof value === 'number' || typeof value === 'string')) {
+    return formatDateTimeValue(value)
+  }
+  if (uiType === 'Checkbox') {
+    return formatCheckboxValue(value)
+  }
   return String(value)
 }
