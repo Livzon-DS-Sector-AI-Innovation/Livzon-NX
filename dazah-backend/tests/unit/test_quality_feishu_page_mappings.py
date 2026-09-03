@@ -174,8 +174,13 @@ def test_validation_record_mapping_handles_people_products_and_dates() -> None:
     )
     assert mapped["validation_type"] == "equipment_qualification"
     assert mapped["product_codes"] == ["P001", "P002"]
-    assert mapped["participants"] == "张三、李四、王五"
-    assert mapped["owner_name"] == "赵六"
+    # 人员/负责人保留结构化信息（name/avatar_url/id），供前端渲染头像
+    assert mapped["participants"] == [
+        {"name": "张三", "avatar_url": "", "id": ""},
+        {"name": "李四", "avatar_url": "", "id": ""},
+        {"name": "王五", "avatar_url": "", "id": ""},
+    ]
+    assert mapped["owner_name"] == [{"name": "赵六", "avatar_url": "", "id": ""}]
     assert mapped["revalidation_cycle_years"] == 3
     assert mapped["drafted_at"] == date(2026, 7, 1)
 
