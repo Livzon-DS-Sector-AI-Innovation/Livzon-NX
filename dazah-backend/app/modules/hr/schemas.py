@@ -1218,7 +1218,7 @@ class TrainingLedgerBase(BaseModel):
     training_datetime: str | None = Field(
         None, max_length=64, description="培训时间（日期+时间）"
     )
-    training_content: str | None = Field(None, max_length=4096, description="培训内容")
+    training_content: str | None = Field(None, description="培训内容")
     teaching_dept: str | None = Field(None, max_length=128, description="授课部门")
     instructor: str | None = Field(None, max_length=128, description="授课人")
     level_category: str | None = Field(None, max_length=16, description="一级/二级")
@@ -1270,7 +1270,7 @@ class TrainingLedgerUpdate(BaseModel):
     source_id: str | None = Field(None, max_length=64)
     remarks: str | None = Field(None, max_length=512)
     training_datetime: str | None = Field(None, max_length=64)
-    training_content: str | None = Field(None, max_length=4096)
+    training_content: str | None = Field(None)
     teaching_dept: str | None = Field(None, max_length=128)
     instructor: str | None = Field(None, max_length=128)
     level_category: str | None = Field(None, max_length=16)
