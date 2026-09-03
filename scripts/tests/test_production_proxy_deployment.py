@@ -25,7 +25,9 @@ def test_deploy_recreates_nginx_and_runs_proxy_smoke_checks() -> None:
     assert "single-file bind mount" in script
     assert "verify_proxy_routes()" in script
     assert "for path in health login" in script
+    assert '"http://127.0.0.1/$path"' in script
     assert '"https://127.0.0.1/$path"' in script
+    assert "--location" in script
     assert "--max-time 5" in script
     assert "deadline=$((SECONDS + 30))" in script
     assert script.count("! recreate_nginx") == 2

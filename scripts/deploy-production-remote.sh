@@ -267,17 +267,26 @@ recreate_nginx() {
 verify_proxy_routes() {
   [[ -f "$EDGE_COMPOSE_FILE" ]] || return 0
   local path
+  local url
   local deadline
+  local verified
   for path in health login; do
     deadline=$((SECONDS + 30))
+    verified=0
     while (( SECONDS < deadline )); do
-      if curl --fail --silent --show-error --insecure --max-time 5 \
-        "https://127.0.0.1/$path" >/dev/null; then
+      for url in "http://127.0.0.1/$path" "https://127.0.0.1/$path"; do
+        if curl --fail --silent --show-error --location --insecure --max-time 5 \
+          "$url" >/dev/null; then
+          verified=1
+          break
+        fi
+      done
+      if (( verified == 1 )); then
         break
       fi
       sleep 1
     done
-    if (( SECONDS >= deadline )); then
+    if (( verified == 0 )); then
       log "反向代理检查失败: /$path" >&2
       return 1
     fi
