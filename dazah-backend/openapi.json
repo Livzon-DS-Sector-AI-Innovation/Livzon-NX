@@ -5681,6 +5681,142 @@
         "title": "ApiResponseEnvelope[ValidationExecutionListItem]",
         "type": "object"
       },
+      "ApiResponseEnvelope_ValidationReviewFileUploadedOut_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/ValidationReviewFileUploadedOut"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[ValidationReviewFileUploadedOut]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_ValidationReviewJobStatusResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/ValidationReviewJobStatusResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[ValidationReviewJobStatusResponse]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_ValidationReviewOut_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/ValidationReviewOut"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[ValidationReviewOut]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_ValidationReviewRunOut_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/ValidationReviewRunOut"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[ValidationReviewRunOut]",
+        "type": "object"
+      },
       "ApiResponseEnvelope_ValidationStatistics_": {
         "properties": {
           "code": {
@@ -7345,6 +7481,44 @@
           "data"
         ],
         "title": "ApiResponseEnvelope[list[ValidationListItem]]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_list_ValidationReviewListItem__": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationReviewListItem"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[list[ValidationReviewListItem]]",
         "type": "object"
       },
       "ApiResponseEnvelope_list_dict_str__Any___": {
@@ -11432,6 +11606,31 @@
           "file"
         ],
         "title": "Body_upload_regulation_document_api_v1_safety_regulations__regulation_id__upload_post",
+        "type": "object"
+      },
+      "Body_upload_review_file_endpoint_api_v1_quality_validation_reviews__review_id__files_post": {
+        "properties": {
+          "doc_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Doc Kind"
+          },
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_review_file_endpoint_api_v1_quality_validation_reviews__review_id__files_post",
         "type": "object"
       },
       "Body_upload_task_photo_api_v1_equipment_inspection_tasks__task_id__photos_post": {
@@ -80625,6 +80824,561 @@
           "updated_at"
         ],
         "title": "ValidationListItem",
+        "type": "object"
+      },
+      "ValidationReviewCreateRequest": {
+        "description": "新建一次 AI 审核会话。entry 模式需传 entry_id（文件管理目录条目）。",
+        "properties": {
+          "entry_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entry Id"
+          },
+          "review_mode": {
+            "default": "upload",
+            "enum": [
+              "upload",
+              "entry"
+            ],
+            "title": "Review Mode",
+            "type": "string"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "title": "ValidationReviewCreateRequest",
+        "type": "object"
+      },
+      "ValidationReviewFileOut": {
+        "properties": {
+          "doc_kind": {
+            "title": "Doc Kind",
+            "type": "string"
+          },
+          "file_name": {
+            "title": "File Name",
+            "type": "string"
+          },
+          "file_size": {
+            "title": "File Size",
+            "type": "integer"
+          },
+          "file_type": {
+            "title": "File Type",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "parse_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parse Error"
+          },
+          "parse_status": {
+            "title": "Parse Status",
+            "type": "string"
+          },
+          "sort_order": {
+            "title": "Sort Order",
+            "type": "integer"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "doc_kind",
+          "source",
+          "file_name",
+          "file_type",
+          "file_size",
+          "parse_status",
+          "sort_order"
+        ],
+        "title": "ValidationReviewFileOut",
+        "type": "object"
+      },
+      "ValidationReviewFileUploadedOut": {
+        "properties": {
+          "doc_kind": {
+            "title": "Doc Kind",
+            "type": "string"
+          },
+          "file_name": {
+            "title": "File Name",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "parse_status": {
+            "title": "Parse Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "file_name",
+          "doc_kind",
+          "parse_status"
+        ],
+        "title": "ValidationReviewFileUploadedOut",
+        "type": "object"
+      },
+      "ValidationReviewFindingOut": {
+        "properties": {
+          "basis_match_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basis Match Type"
+          },
+          "basis_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basis Source"
+          },
+          "category": {
+            "enum": [
+              "reference_missing",
+              "version_mismatch",
+              "plan_report_mismatch",
+              "content_consistency",
+              "format_issue",
+              "numeric_check"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
+          "detail": {
+            "default": "",
+            "title": "Detail",
+            "type": "string"
+          },
+          "location": {
+            "default": "",
+            "title": "Location",
+            "type": "string"
+          },
+          "quote": {
+            "default": "",
+            "title": "Quote",
+            "type": "string"
+          },
+          "quote_verified": {
+            "default": false,
+            "title": "Quote Verified",
+            "type": "boolean"
+          },
+          "severity": {
+            "default": "medium",
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ],
+            "title": "Severity",
+            "type": "string"
+          }
+        },
+        "required": [
+          "category"
+        ],
+        "title": "ValidationReviewFindingOut",
+        "type": "object"
+      },
+      "ValidationReviewJobStatusResponse": {
+        "properties": {
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "progress": {
+            "default": "",
+            "title": "Progress",
+            "type": "string"
+          },
+          "review_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Id"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          }
+        },
+        "required": [
+          "job_id",
+          "state"
+        ],
+        "title": "ValidationReviewJobStatusResponse",
+        "type": "object"
+      },
+      "ValidationReviewListItem": {
+        "properties": {
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "file_count": {
+            "default": 0,
+            "title": "File Count",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "model_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Name"
+          },
+          "review_mode": {
+            "title": "Review Mode",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "review_mode",
+          "status"
+        ],
+        "title": "ValidationReviewListItem",
+        "type": "object"
+      },
+      "ValidationReviewOut": {
+        "properties": {
+          "basis_used": {
+            "default": [],
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Basis Used",
+            "type": "array"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "files": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ValidationReviewFileOut"
+            },
+            "title": "Files",
+            "type": "array"
+          },
+          "findings": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ValidationReviewFindingOut"
+            },
+            "title": "Findings",
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "input_snapshot": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Snapshot"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "last_generated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Generated At"
+          },
+          "model_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Name"
+          },
+          "review_mode": {
+            "title": "Review Mode",
+            "type": "string"
+          },
+          "stats": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ValidationReviewStatsOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "review_mode",
+          "status"
+        ],
+        "title": "ValidationReviewOut",
+        "type": "object"
+      },
+      "ValidationReviewRunOut": {
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "review_id": {
+            "format": "uuid",
+            "title": "Review Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "review_id"
+        ],
+        "title": "ValidationReviewRunOut",
+        "type": "object"
+      },
+      "ValidationReviewStatsOut": {
+        "properties": {
+          "high": {
+            "default": 0,
+            "title": "High",
+            "type": "integer"
+          },
+          "low": {
+            "default": 0,
+            "title": "Low",
+            "type": "integer"
+          },
+          "medium": {
+            "default": 0,
+            "title": "Medium",
+            "type": "integer"
+          },
+          "plan_report_checked": {
+            "default": false,
+            "title": "Plan Report Checked",
+            "type": "boolean"
+          },
+          "references_checked": {
+            "default": 0,
+            "title": "References Checked",
+            "type": "integer"
+          },
+          "references_matched": {
+            "default": 0,
+            "title": "References Matched",
+            "type": "integer"
+          },
+          "total_findings": {
+            "default": 0,
+            "title": "Total Findings",
+            "type": "integer"
+          }
+        },
+        "title": "ValidationReviewStatsOut",
         "type": "object"
       },
       "ValidationStatistics": {
@@ -182939,6 +183693,562 @@
         "tags": [
           "质量管理",
           "Quality-Validation-QC"
+        ]
+      }
+    },
+    "/api/v1/quality/validation-reviews": {
+      "get": {
+        "operationId": "list_reviews_endpoint_api_v1_quality_validation_reviews_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_list_ValidationReviewListItem__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "分页列出验证 AI 审核会话",
+        "tags": [
+          "质量管理",
+          "Quality-Validation-Review"
+        ]
+      },
+      "post": {
+        "operationId": "create_review_endpoint_api_v1_quality_validation_reviews_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ValidationReviewCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_ValidationReviewOut_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "新建验证 AI 审核会话",
+        "tags": [
+          "质量管理",
+          "Quality-Validation-Review"
+        ]
+      }
+    },
+    "/api/v1/quality/validation-reviews/job/{job_id}": {
+      "get": {
+        "operationId": "get_review_job_endpoint_api_v1_quality_validation_reviews_job__job_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_ValidationReviewJobStatusResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "查询验证 AI 审核任务进度与结果",
+        "tags": [
+          "质量管理",
+          "Quality-Validation-Review"
+        ]
+      }
+    },
+    "/api/v1/quality/validation-reviews/{review_id}": {
+      "delete": {
+        "operationId": "delete_review_endpoint_api_v1_quality_validation_reviews__review_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "review_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Review Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Delete Review Endpoint Api V1 Quality Validation Reviews  Review Id  Delete"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "删除验证 AI 审核会话（软删除）",
+        "tags": [
+          "质量管理",
+          "Quality-Validation-Review"
+        ]
+      },
+      "get": {
+        "operationId": "get_review_detail_endpoint_api_v1_quality_validation_reviews__review_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "review_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Review Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_ValidationReviewOut_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "获取验证 AI 审核详情",
+        "tags": [
+          "质量管理",
+          "Quality-Validation-Review"
+        ]
+      }
+    },
+    "/api/v1/quality/validation-reviews/{review_id}/export": {
+      "post": {
+        "operationId": "export_review_endpoint_api_v1_quality_validation_reviews__review_id__export_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "review_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Review Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "导出验证 AI 审核报告（docx）",
+        "tags": [
+          "质量管理",
+          "Quality-Validation-Review"
+        ]
+      }
+    },
+    "/api/v1/quality/validation-reviews/{review_id}/files": {
+      "post": {
+        "operationId": "upload_review_file_endpoint_api_v1_quality_validation_reviews__review_id__files_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "review_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Review Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_review_file_endpoint_api_v1_quality_validation_reviews__review_id__files_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_ValidationReviewFileUploadedOut_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "上传 VP/VR 文档到审核会话",
+        "tags": [
+          "质量管理",
+          "Quality-Validation-Review"
+        ]
+      }
+    },
+    "/api/v1/quality/validation-reviews/{review_id}/rerun": {
+      "post": {
+        "operationId": "rerun_review_endpoint_api_v1_quality_validation_reviews__review_id__rerun_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "review_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Review Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_ValidationReviewRunOut_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "重新运行验证 AI 审核",
+        "tags": [
+          "质量管理",
+          "Quality-Validation-Review"
+        ]
+      }
+    },
+    "/api/v1/quality/validation-reviews/{review_id}/run": {
+      "post": {
+        "operationId": "run_review_endpoint_api_v1_quality_validation_reviews__review_id__run_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "review_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Review Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_ValidationReviewRunOut_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "发起验证 AI 审核（后台任务）",
+        "tags": [
+          "质量管理",
+          "Quality-Validation-Review"
         ]
       }
     },

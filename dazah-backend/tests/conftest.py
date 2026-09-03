@@ -30,6 +30,25 @@ def anyio_backend() -> str:
     return "asyncio"
 
 
+@pytest.fixture(autouse=True)
+async def _dispose_app_engine_pools() -> AsyncIterator[None]:
+    """每个测试结束后释放 app 全局 engine 的池连接。
+
+    app 的全局 engine 使用 QueuePool（pool_size=10 + max_overflow=20），集成测试
+    通过 ASGITransport 触发其连接；pytest 的每个测试运行在独立事件循环上，绑定
+    到已关闭循环的池连接不会被复用。Linux CI 上这些孤儿连接依赖 GC 回收，累积
+    后会打满 PostgreSQL 的 max_connections（TooManyConnectionsError）。测试结束
+    时显式 dispose，保证池连接不跨测试累积。
+    """
+    yield
+    try:
+        from app.core.database import engine
+
+        await engine.dispose()
+    except Exception:  # noqa: BLE001 —— 清理失败不应影响测试结果
+        pass
+
+
 @pytest.fixture
 async def db_session() -> AsyncIterator[AsyncSession]:
     """Provide an AsyncSession that rolls back after each test."""

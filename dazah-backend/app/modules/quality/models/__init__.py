@@ -74,6 +74,10 @@ from app.modules.quality.models.validation_execution_record import (
     ProcessValidationRecord,
 )
 from app.modules.quality.models.validation_record import ValidationRecord
+from app.modules.quality.models.validation_review import (
+    ValidationReviewFile,
+    ValidationReviewRecord,
+)
 from app.modules.quality.models.validation_title_classification import (
     ValidationTitleClassification,
 )
@@ -90,6 +94,8 @@ __all__ = [
     "ChangeActionPlan",
     "ValidationRecord",
     "ValidationTitleClassification",
+    "ValidationReviewRecord",
+    "ValidationReviewFile",
     "EquipmentQualificationRecord",
     "ProcessValidationRecord",
     "CleaningValidationRecord",

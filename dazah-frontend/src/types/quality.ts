@@ -1717,3 +1717,40 @@ export type DeviationWorkbenchReportListItem = components['schemas']['DeviationW
 export type DeviationWorkbenchReportDetail = components['schemas']['DeviationWorkbenchReportDetail'];
 export type CreateDeviationWorkbenchPayload = components['schemas']['CreateDeviationWorkbenchRequest'];
 export type HistoricalDeviationBatchImportResult = components['schemas']['HistoricalDeviationBatchImportResult'];
+
+// ============ Validation Review (验证 AI 审核) Types ============
+export type ValidationReviewRecord = components['schemas']['ValidationReviewOut'];
+export type ValidationReviewListItem = components['schemas']['ValidationReviewListItem'];
+export type ValidationReviewFinding = components['schemas']['ValidationReviewFindingOut'];
+export type ValidationReviewStats = components['schemas']['ValidationReviewStatsOut'];
+export type ValidationReviewRunResult = components['schemas']['ValidationReviewRunOut'];
+export type ValidationReviewFileUploaded = components['schemas']['ValidationReviewFileUploadedOut'];
+export type ValidationReviewJobStatus = components['schemas']['ValidationReviewJobStatusResponse'];
+export type ValidationReviewCreatePayload = components['schemas']['ValidationReviewCreateRequest'];
+
+export const VALIDATION_REVIEW_STATUS_LABELS: Record<string, string> = {
+  draft: '草稿',
+  processing: '审核中',
+  completed: '已完成',
+  failed: '失败',
+};
+
+export const VALIDATION_REVIEW_CATEGORY_LABELS: Record<string, string> = {
+  reference_missing: '引用文件缺失',
+  version_mismatch: '引用版本不一致',
+  plan_report_mismatch: '方案报告不一致',
+  content_consistency: '内容一致性',
+  format_issue: '格式/编号问题',
+  numeric_check: '数值核对',
+};
+
+export const VALIDATION_REVIEW_SEVERITY_LABELS: Record<string, string> = {
+  high: '高',
+  medium: '中',
+  low: '低',
+};
+
+export const VALIDATION_REVIEW_MODE_LABELS: Record<string, string> = {
+  upload: '页面上传',
+  entry: '文件管理',
+};

@@ -52,6 +52,9 @@ from app.modules.quality.api.supplier import router as supplier_router
 from app.modules.quality.api.supplier_feishu import router as supplier_feishu_router
 from app.modules.quality.api.validation import router as validation_router
 from app.modules.quality.api.validation_qc import router as validation_qc_router
+from app.modules.quality.api.validation_review import (
+    router as validation_review_router,
+)
 
 router = APIRouter()
 
@@ -104,6 +107,9 @@ router.include_router(quality_ai_router, tags=["Quality-Management"])
 router.include_router(quality_contacts_router, tags=["Quality-Management"])
 router.include_router(validation_router, tags=["Quality-Validation"])
 router.include_router(validation_qc_router, tags=["Quality-Validation-QC"])
+router.include_router(
+    validation_review_router, tags=["Quality-Validation-Review"]
+)
 router.include_router(feishu_capa_router, tags=["Quality-Feishu-CAPA"])
 
 # Mount quality inspection routes

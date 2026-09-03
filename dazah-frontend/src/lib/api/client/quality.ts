@@ -23,6 +23,9 @@ import type {
   QcValidationYearStatus,
   InspectionFeishuFieldMeta,
   InspectionFeishuFieldsResult,
+  ValidationReviewJobStatus,
+  ValidationReviewListItem,
+  ValidationReviewRecord,
   QualityPullSyncResult,
   QualitySyncConflictItem,
   QualityFeishuAppSettingsDetail,
@@ -905,6 +908,41 @@ export async function fetchNextChangeCode(changeType: string = 'technical'): Pro
 }
 
 // ---- Validations ----
+
+// ---- Validation Review (验证 AI 审核) ----
+
+export async function fetchValidationReviews(params?: {
+  page?: number
+  page_size?: number
+}): Promise<{ items: ValidationReviewListItem[]; total: number }> {
+  const queryParts: string[] = []
+  if (params?.page) queryParts.push(`page=${params.page}`)
+  if (params?.page_size) queryParts.push(`page_size=${params.page_size}`)
+  const query = queryParts.length ? `?${queryParts.join('&')}` : ''
+  const res = await fetch(`/api/v1/quality/validation-reviews${query}`)
+  if (!res.ok) throw await parseError(res)
+  const json = await res.json()
+  return { items: json.data ?? [], total: json.meta?.total ?? 0 }
+}
+
+export async function fetchValidationReviewDetail(
+  reviewId: string
+): Promise<ValidationReviewRecord> {
+  const res = await fetch(`/api/v1/quality/validation-reviews/${reviewId}`)
+  if (!res.ok) throw await parseError(res)
+  const json = await res.json()
+  return json.data
+}
+
+export async function fetchValidationReviewJob(
+  jobId: string
+): Promise<ValidationReviewJobStatus> {
+  const res = await fetch(`/api/v1/quality/validation-reviews/job/${jobId}`)
+  if (!res.ok) throw await parseError(res)
+  const json = await res.json()
+  return json.data
+}
+
 
 export async function fetchValidations(
   params?: ValidationFilters
