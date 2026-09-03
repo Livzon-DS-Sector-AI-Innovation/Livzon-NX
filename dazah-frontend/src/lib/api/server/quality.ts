@@ -8,11 +8,22 @@ import { cookies } from 'next/headers'
 const API_BASE_URL = process.env.API_BASE_URL || 'http://dazah-backend-app-1:8000'
 const QUALITY_SERVER_REQUEST_TIMEOUT_MS = 15000
 
+/** 由 auth_token 构造 Bearer 请求头；无 token 时返回 undefined（不带鉴权） */
+export function buildAuthHeaders(
+  token: string | null | undefined
+): Record<string, string> | undefined {
+  return token ? { Authorization: `Bearer ${token}` } : undefined
+}
+
 /** 服务端读取 auth_token cookie，供请求后端时携带 Bearer 认证头 */
 async function getAuthHeadersForServer(): Promise<Record<string, string> | undefined> {
-  const cookieStore = await cookies()
-  const token = cookieStore.get('auth_token')?.value
-  return token ? { Authorization: `Bearer ${token}` } : undefined
+  try {
+    const cookieStore = await cookies()
+    return buildAuthHeaders(cookieStore.get('auth_token')?.value)
+  } catch {
+    // 无请求上下文（构建期/测试）等价于未登录，不带鉴权头
+    return undefined
+  }
 }
 
 interface ApiEnvelope<T> {
