@@ -183,6 +183,78 @@ async def test_analyze_manual_success(
 
 
 @pytest.mark.anyio
+async def test_analyze_retrieves_training_ledgers(
+    client: AsyncClient, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """偏差工作台分析时应检索培训台账并注入上下文快照。"""
+    captured_prompt: dict[str, str] = {}
+
+    async def _fake_chat_json(
+        self: Any,  # noqa: ANN001
+        messages: list[dict[Any, Any]],
+        expected_keys: Any = None,  # noqa: ANN001
+        temperature: Any = None,  # noqa: ANN001
+        config_type: Any = "text",  # noqa: ANN001
+    ) -> dict[str, Any]:
+        captured_prompt["prompt"] = messages[-1]["content"] if messages else ""
+        return _valid_report_payload()
+
+    async def _async_config(*_args: Any, **_kwargs: Any) -> SimpleNamespace:
+        return _async_config_stub()
+
+    async def _async_list_entries(*_args: Any, **_kwargs: Any) -> tuple[Any, int]:
+        return ([], 0)
+
+    async def _fake_training(
+        _db: Any, keywords: list[str], *, limit: int = 5
+    ) -> list[dict[str, Any]]:
+        captured_prompt["training_keywords"] = ",".join(keywords)
+        return [
+            {
+                "training_date": "2026-08-01",
+                "training_subject": "压塞机操作与压力复核培训",
+                "training_content": "压塞压力标准 0.40MPa，超限须停机上报",
+                "training_method": "现场",
+                "duration_hours": 2,
+                "trainer": "质量部",
+                "instructor": "张三",
+                "teaching_dept": "质量部",
+                "trainees": "灌装线操作工",
+                "training_type": "质量类",
+                "assessment_result": "合格",
+            }
+        ]
+
+    monkeypatch.setattr("app.core.llm.client.LLMClient.chat_json", _fake_chat_json)
+    monkeypatch.setattr(
+        "app.modules.quality.service.deviation_workbench.get_config", _async_config
+    )
+    monkeypatch.setattr(
+        "app.modules.quality.service.deviation_workbench.list_document_entries",
+        _async_list_entries,
+    )
+    monkeypatch.setattr(
+        "app.modules.hr.public_api.query_training_ledgers", _fake_training
+    )
+
+    response = await client.post(
+        "/api/v1/quality/deviation-workbench/analyze",
+        json={
+            "source_type": "manual",
+            "manual_text": "灌装线压塞压力超上限，怀疑传感器漂移。",
+            "attachments": [],
+        },
+    )
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["status"] == "completed"
+    training = (data["context_snapshot"] or {}).get("training_ledgers") or []
+    assert len(training) == 1
+    assert training[0]["training_subject"] == "压塞机操作与压力复核培训"
+    assert "压塞机操作与压力复核培训" in captured_prompt["prompt"]
+
+
+@pytest.mark.anyio
 async def test_analyze_no_input_rejected(client: AsyncClient) -> None:
     response = await client.post(
         "/api/v1/quality/deviation-workbench/analyze",

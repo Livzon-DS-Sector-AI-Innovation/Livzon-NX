@@ -22,6 +22,7 @@ from app.core.database import get_db
 from app.main import app
 from app.modules.hr.models import (
     Employee,
+    HrFeishuMember,
     TrainingDeptMapping,
     TrainingLedger,
     TrainingSession,
@@ -73,6 +74,13 @@ async def _share_db_session(
             "match_level": "second",
             "mapping_type": "alias",
             "priority": 100,
+        },
+        {
+            "source_name": "201二车间",
+            "target_name": "201二车间（MC）",
+            "match_level": "first",
+            "mapping_type": "special",
+            "priority": 99,
         },
         {
             "source_name": "201二车间",
@@ -177,6 +185,15 @@ async def _esg_rows(client: AsyncClient, dept: str, subject: str) -> list[dict]:
     return [r for r in rows if r["training_name"] == subject]
 
 
+def _feishu(name: str, department: str, open_id: str | None = None) -> HrFeishuMember:
+    """飞书联系人缓存行（裸名台账归属判定用）。"""
+    return HrFeishuMember(
+        open_id=open_id or f"SPEC-{name}-{department}",
+        name=name,
+        department=department,
+    )
+
+
 @pytest.mark.asyncio
 async def test_sync_only_records_own_department_people(
     client: AsyncClient, db_session: AsyncSession
@@ -252,20 +269,38 @@ _SUBJ4 = "SPEC家族裸名测试培训"
 
 
 @pytest.mark.asyncio
-async def test_bare_copy_visible_in_mc_and_dr_tabs(
+async def test_bare_copy_routed_by_trainee_feishu_dept(
     client: AsyncClient, db_session: AsyncSession
 ) -> None:
-    """裸名「201二车间」副本在（MC）与（DR）Tab 列表均可见。"""
-    db_session.add(_ledger("201二车间", _SUBJ4, _D, "测张三"))
+    """裸名「201二车间」副本按 trainees 在飞书联系人中的部门归属到 MC/DR。
+
+    - 参训人是「201二车间」→ 只进（MC）Tab；
+    - 参训人是「201二车间（多拉）」→ 只进（DR）Tab；
+    - 参训人不在飞书联系人 → 两个 Tab 都不显示。
+    """
+    db_session.add_all(
+        [
+            _feishu("测MC人", "201二车间"),
+            _feishu("测DR人", "201二车间（多拉）"),
+            _ledger("201二车间", _SUBJ4, _D, "测MC人"),
+            _ledger("201二车间", _SUBJ4 + "DR场", _D, "测DR人"),
+            _ledger("201二车间", _SUBJ4 + "无档场", _D, "查无此人"),
+        ]
+    )
     await db_session.flush()
 
-    for dept in (_MC, _DR):
+    async def _subjects(dept: str) -> set[str]:
         resp = await client.get(
             "/api/v1/hr/training-ledgers",
             params={"department": dept, "page_size": 200},
         )
-        rows = resp.json()["data"]
-        assert any(r["training_subject"] == _SUBJ4 for r in rows), dept
+        return {r["training_subject"] for r in resp.json()["data"]}
+
+    mc = await _subjects(_MC)
+    dr = await _subjects(_DR)
+    assert _SUBJ4 in mc and _SUBJ4 not in dr
+    assert (_SUBJ4 + "DR场") in dr and (_SUBJ4 + "DR场") not in mc
+    assert (_SUBJ4 + "无档场") not in mc and (_SUBJ4 + "无档场") not in dr
 
 
 @pytest.mark.asyncio
@@ -277,6 +312,9 @@ async def test_sync_family_splits_personnel_by_roster(
         [
             _emp("测MC人", "201车间", "201二车间（霉酚酸）", "mc-ren"),
             _emp("测DR人", "201车间", "201二车间（多拉）", "dr-ren"),
+            # 飞书联系人部门是裸名台账归属判定的依据
+            _feishu("测MC人", "201二车间"),
+            _feishu("测DR人", "201二车间（多拉）"),
             _ledger("201二车间", _SUBJ4, _D, "测MC人、测DR人"),
         ]
     )

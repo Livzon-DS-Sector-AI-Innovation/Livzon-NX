@@ -1,8 +1,9 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { App, Button, Checkbox, Form, Input, Modal, Popconfirm, Select, Space, Table, Typography } from 'antd'
+import { useSearchParams } from 'next/navigation'
+import { App, Button, Checkbox, Form, Input, Modal, Popconfirm, Select, Space, Table, Tag, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { SyncOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -11,19 +12,10 @@ import { syncCapaPlanTracksFromFeishu } from '@/actions/quality-capa'
 import { fetchCapaPlanTracks, fetchCapas } from '@/lib/api/client/quality'
 
 import { fetchFeishuDepartmentContactsAction } from '@/actions/quality'
+import { PersonCell } from './PersonCell'
+import { qualityTokens } from './themeTokens'
+import { progressMeta, reminderMeta, PROGRESS_OPTIONS, REMINDER_OPTIONS } from './capaPlanTrackLabels'
 import type { CapaPlanTrackItem, CreateCapaPlanTrackRequest } from '@/types/quality'
-
-const columns: ColumnsType<CapaPlanTrackItem> = [
-  { title: 'CAPA编号', dataIndex: 'capa_code', key: 'capa_code', width: 170 },
-  { title: '计划内容', dataIndex: 'plan_content', key: 'plan_content' },
-  { title: '责任人', dataIndex: 'owner_name', key: 'owner_name', width: 120 },
-  { title: '责任人确认', dataIndex: 'owner_confirmed', key: 'owner_confirmed', width: 100, render: (value: boolean) => (value ? '是' : '否') },
-  { title: '部门负责人', dataIndex: 'department_head', key: 'department_head', width: 120 },
-  { title: '负责人确认', dataIndex: 'department_head_confirmed', key: 'department_head_confirmed', width: 100, render: (value: boolean) => (value ? '是' : '否') },
-  { title: '进度', dataIndex: 'progress', key: 'progress', width: 120 },
-  { title: '提醒状态', dataIndex: 'reminder_status', key: 'reminder_status', width: 120 },
-  { title: '完成时间', dataIndex: 'due_date', key: 'due_date', width: 140 },
-]
 
 function getErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback
@@ -32,6 +24,8 @@ function getErrorMessage(error: unknown, fallback: string): string {
 export function CapaPlanTrackPage() {
   const { message } = App.useApp()
   const queryClient = useQueryClient()
+  const searchParams = useSearchParams()
+  const [capaCodeFilter, setCapaCodeFilter] = useState(searchParams.get('capa_code') ?? '')
   const [saving, setSaving] = useState(false)
   const [pulling, setPulling] = useState(false)
   const [open, setOpen] = useState(false)
@@ -39,10 +33,10 @@ export function CapaPlanTrackPage() {
   const [form] = Form.useForm<CreateCapaPlanTrackRequest>()
 
   const { data, isLoading: loading, error } = useQuery({
-    queryKey: ['quality-capa-plan', 'list'],
+    queryKey: ['quality-capa-plan', 'list', { capa_code: capaCodeFilter }],
     queryFn: async () => {
       const [tracks, capas] = await Promise.all([
-        fetchCapaPlanTracks({ page: 1, page_size: 50 }),
+        fetchCapaPlanTracks({ page: 1, page_size: 50, capa_code: capaCodeFilter || undefined }),
         fetchCapas({ page: 1, page_size: 50 }),
       ])
       return { items: tracks.items, capaOptions: capas.items }
@@ -51,13 +45,27 @@ export function CapaPlanTrackPage() {
 
   const { data: contactData } = useQuery({
     queryKey: ['quality-contacts', 'department'],
-    queryFn: () => fetchFeishuDepartmentContactsAction(1, 100),
+    queryFn: () => fetchFeishuDepartmentContactsAction(1, 1000),
     staleTime: 5 * 60 * 1000,
   })
-  const contactOptions = ((contactData as { contacts?: { name?: string; department?: string; contact?: string }[] } | null)?.contacts ?? []).map((c) => ({
-    label: `${c.department ?? ''} - ${c.contact ?? ''} (${c.name ?? ''})`,
-    value: c.name ?? '',
-    department: c.department ?? '',
+
+  const contacts = useMemo(() => contactData?.items ?? [], [contactData])
+
+  const avatarByName = useMemo(() => {
+    const map: Record<string, string> = {}
+    for (const contact of contacts) {
+      if (contact.name && contact.avatar_url) map[contact.name] = contact.avatar_url
+      if (contact.department_head_name && contact.department_head_avatar_url) {
+        map[contact.department_head_name] = contact.department_head_avatar_url
+      }
+    }
+    return map
+  }, [contacts])
+
+  const contactOptions = contacts.map((contact) => ({
+    label: [contact.department, contact.name].filter(Boolean).join(' - '),
+    value: contact.name ?? '',
+    department: contact.department ?? '',
   }))
 
   useEffect(() => {
@@ -68,6 +76,72 @@ export function CapaPlanTrackPage() {
 
   const items = data?.items ?? []
   const capaOptions = data?.capaOptions ?? []
+
+  const renderPersons = useCallback((value: string | null | undefined) => {
+    if (!value) return <span style={{ color: qualityTokens.textMuted }}>-</span>
+    const names = value
+      .split(/[、，,]/)
+      .map((name) => name.trim())
+      .filter(Boolean)
+    if (names.length === 0) return <span style={{ color: qualityTokens.textMuted }}>-</span>
+    return (
+      <span style={{ display: 'inline-flex', flexDirection: 'column', gap: 2 }}>
+        {names.map((name) => (
+          <PersonCell key={name} name={name} avatarUrl={avatarByName[name] || null} />
+        ))}
+      </span>
+    )
+  }, [avatarByName])
+
+  const columns = useMemo<ColumnsType<CapaPlanTrackItem>>(() => [
+    { title: 'CAPA编号', dataIndex: 'capa_code', key: 'capa_code', width: 170 },
+    {
+      title: '计划内容',
+      dataIndex: 'plan_content',
+      key: 'plan_content',
+      width: 460,
+      render: (value: string | null) => (
+        <div style={{ whiteSpace: 'pre-line', wordBreak: 'break-word' }}>{value || '-'}</div>
+      ),
+    },
+    {
+      title: '责任人',
+      dataIndex: 'owner_name',
+      key: 'owner_name',
+      width: 140,
+      render: (value: string | null | undefined) => renderPersons(value),
+    },
+    { title: '责任人确认', dataIndex: 'owner_confirmed', key: 'owner_confirmed', width: 90, render: (value: boolean) => (value ? '是' : '否') },
+    {
+      title: '部门负责人',
+      dataIndex: 'department_head',
+      key: 'department_head',
+      width: 140,
+      render: (value: string | null | undefined) => renderPersons(value),
+    },
+    { title: '负责人确认', dataIndex: 'department_head_confirmed', key: 'department_head_confirmed', width: 90, render: (value: boolean) => (value ? '是' : '否') },
+    {
+      title: '进度',
+      dataIndex: 'progress',
+      key: 'progress',
+      width: 110,
+      render: (value: string | null | undefined) => {
+        const { label, color } = progressMeta(value)
+        return <Tag color={color}>{label}</Tag>
+      },
+    },
+    {
+      title: '提醒状态',
+      dataIndex: 'reminder_status',
+      key: 'reminder_status',
+      width: 110,
+      render: (value: string | null | undefined) => {
+        const { label, color } = reminderMeta(value)
+        return <Tag color={color}>{label}</Tag>
+      },
+    },
+    { title: '完成时间', dataIndex: 'due_date', key: 'due_date', width: 130 },
+  ], [renderPersons])
 
   const openCreate = useCallback(() => {
     setEditingRecord(null)
@@ -145,8 +219,12 @@ export function CapaPlanTrackPage() {
         <Button type="primary" onClick={openCreate}>新增计划跟踪</Button>
         <Button icon={<SyncOutlined />} loading={pulling} onClick={() => void handlePullFromFeishu()}>拉取飞书</Button>
         <Link href="/quality/capas/ledger"><Button>查看CAPA台账</Button></Link>
-        <Link href="/quality/capas/new"><Button>新建CAPA</Button></Link>
       </Space>
+      {capaCodeFilter ? (
+        <Tag closable onClose={() => setCapaCodeFilter('')} style={{ marginBottom: 16 }}>
+          CAPA编号：{capaCodeFilter}
+        </Tag>
+      ) : null}
       <Table<CapaPlanTrackItem>
         rowKey="id"
         loading={loading}
@@ -168,7 +246,7 @@ export function CapaPlanTrackPage() {
         ]}
         dataSource={items}
         pagination={false}
-        scroll={{ x: 1200 }}
+        scroll={{ x: 1590 }}
       />
       <Modal
         title={editingRecord ? '编辑CAPA计划跟踪' : '新增CAPA计划跟踪'}
@@ -224,18 +302,10 @@ export function CapaPlanTrackPage() {
           </Form.Item>
           <Form.Item name="department_head_confirmed" valuePropName="checked"><Checkbox>部门负责人已确认</Checkbox></Form.Item>
           <Form.Item name="progress" label="进度">
-            <Select allowClear options={[
-              { value: 'pending', label: '待开始' },
-              { value: 'in_progress', label: '进行中' },
-              { value: 'completed', label: '已完成' },
-            ]} />
+            <Select allowClear options={PROGRESS_OPTIONS} />
           </Form.Item>
           <Form.Item name="reminder_status" label="提醒状态">
-            <Select options={[
-              { value: 'pending', label: '待提醒' },
-              { value: 'reminded', label: '已提醒' },
-              { value: 'confirmed', label: '已确认' },
-            ]} />
+            <Select options={REMINDER_OPTIONS} />
           </Form.Item>
         </Form>
       </Modal>

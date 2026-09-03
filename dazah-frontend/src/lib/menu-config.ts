@@ -514,6 +514,7 @@ export const moduleMenus: ModuleMenu[] = [
           { key: "process-validation", label: "工艺验证", path: "/quality/validation/process-validation" },
           { key: "cleaning-validation", label: "清洁验证", path: "/quality/validation/cleaning-validation" },
           { key: "other-validations", label: "其他验证", path: "/quality/validation/other-validations" },
+          { key: "qc-validation", label: "QC验证", path: "/quality/validation/qc-validation" },
         ],
       },
     ],

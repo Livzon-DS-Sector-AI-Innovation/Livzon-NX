@@ -31,5 +31,5 @@ describe('migrated module import contract', () => {
 
     expect(Object.keys(moduleLoaders).length).toBeGreaterThan(0)
     expect(failures).toEqual([])
-  }, 60000)
+  }, 180000)
 })

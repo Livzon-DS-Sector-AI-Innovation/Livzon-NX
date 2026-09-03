@@ -189,6 +189,86 @@ async def test_upload_and_delete_attachment(
 
 
 @pytest.mark.anyio
+async def test_upload_derives_pc_code_from_filename(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    created = await _create_record(client)
+    record_id = created["id"]
+    # 上传文件名含 PC-YYMMNNN，上传后 code 应回填为 PC 编号
+    response = await client.post(
+        f"/api/v1/quality/historical-deviations/{record_id}/attachments",
+        files={
+            "file": (
+                "PC-2508001 液状石蜡重复测试.docx",
+                _build_docx_bytes("偏差报告正文"),
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            )
+        },
+    )
+    assert response.status_code == 200
+    detail = await client.get(f"/api/v1/quality/historical-deviations/{record_id}")
+    assert detail.json()["data"]["code"] == "PC-2508001"
+
+
+@pytest.mark.anyio
+async def test_batch_import_historical_deviations(
+    client: AsyncClient, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def _fake_chat_json(
+        self: Any,  # noqa: ANN001
+        messages: list[dict[Any, Any]],
+        expected_keys: Any = None,  # noqa: ANN001
+        temperature: Any = None,  # noqa: ANN001
+        config_type: Any = "text",  # noqa: ANN001
+    ) -> dict[str, Any]:
+        return {
+            "deviation_event": "灌装压塞压力超上限",
+            "deviation_content": "人：操作未复核；机：传感器漂移",
+            "direct_cause": "传感器漂移",
+            "root_cause": "未建立校准机制",
+        }
+
+    async def _async_config(*_args: Any, **_kwargs: Any) -> SimpleNamespace:
+        return _async_config_stub()
+
+    monkeypatch.setattr("app.core.llm.client.LLMClient.chat_json", _fake_chat_json)
+    monkeypatch.setattr(
+        "app.modules.quality.service.historical_deviation.get_config", _async_config
+    )
+
+    doc_a = _build_docx_bytes("偏差A：压塞压力异常。")
+    doc_b = _build_docx_bytes("偏差B：灌装异物。")
+    response = await client.post(
+        "/api/v1/quality/historical-deviations/batch-import",
+        files=[
+            (
+                "files",
+                (
+                    "PC-2508002 偏差A.docx",
+                    doc_a,
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                ),
+            ),
+            (
+                "files",
+                (
+                    "PC-2508003 偏差B.docx",
+                    doc_b,
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                ),
+            ),
+        ],
+    )
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["total"] == 2
+    assert data["succeeded"] == 2
+    assert data["failed"] == 0
+    codes = {r["code"] for r in data["results"]}
+    assert codes == {"PC-2508002", "PC-2508003"}
+
+
+@pytest.mark.anyio
 async def test_ai_extract_historical_deviation_success(
     client: AsyncClient, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:

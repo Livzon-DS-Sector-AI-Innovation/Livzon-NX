@@ -91,7 +91,7 @@ async def test_unknown_entity_returns_400(client: AsyncClient) -> None:
     )
     assert resp.status_code == 400
     body = resp.json()
-    assert "不支持的检验实体" in body.get("message", "")
+    assert "不支持的飞书实体" in body.get("message", "")
 
 
 @pytest.mark.anyio

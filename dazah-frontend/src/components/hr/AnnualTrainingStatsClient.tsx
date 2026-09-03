@@ -2,14 +2,14 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { App, Button, Drawer, Modal, Popconfirm, Spin, Table, Descriptions, Form, Input, Select, DatePicker, Tag, Space, Tooltip, Switch } from 'antd'
-import { EditOutlined, DeleteOutlined, EyeOutlined, FolderOpenOutlined, DownloadOutlined, FileExcelOutlined } from '@ant-design/icons'
+import { EditOutlined, DeleteOutlined, EyeOutlined, FolderOpenOutlined, DownloadOutlined, FileExcelOutlined, PlusOutlined } from '@ant-design/icons'
 import { useRouter } from 'next/navigation'
 import dayjs from 'dayjs'
 import { HR_DISPLAY_DATE_FORMAT, fmtTrainingDatetime } from '@/lib/dayjs-config'
 import type { TrainingLedgerRecord } from '@/types/hr'
 import { fetchTrainingLedgersByDept } from '@/lib/api/hr'
 import { fetchSessionDocuments, fetchTrainingSession } from '@/lib/api/client/hr'
-import { updateTrainingLedger, deleteTrainingLedger, createSecondLevelTraining, generateOralExamResult, generatePracticalExamResult } from '@/actions/hr'
+import { updateTrainingLedger, deleteTrainingLedger, createSecondLevelTraining, generateOralExamResult, generatePracticalExamResult, createTrainingLedger } from '@/actions/hr'
 import { downloadBytes } from '@/lib/download'
 import ImportExamScoresModal from './ImportExamScoresModal'
 
@@ -74,11 +74,14 @@ export default function AnnualTrainingStatsClient({ department, dateFrom, dateTo
   const [loading, setLoading] = useState(true)
   const [detailRecord, setDetailRecord] = useState<TrainingLedgerRecord | null>(null)
   const [editingRecord, setEditingRecord] = useState<TrainingLedgerRecord | null>(null)
+  const [createModalOpen, setCreateModalOpen] = useState(false)
+  const [creating, setCreating] = useState(false)
   const [saving, setSaving] = useState(false)
   const [page, setPage] = useState(1)
   const [pageSize] = useState(50)
   const [total, setTotal] = useState(0)
   const [form] = Form.useForm()
+  const [createForm] = Form.useForm()
   const router = useRouter()
 
   // ── 培训资料 Drawer（台账行 → 会话五类资料） ──
@@ -237,6 +240,30 @@ export default function AnnualTrainingStatsClient({ department, dateFrom, dateTo
     }
   }
 
+  const handleCreateOpen = () => {
+    createForm.resetFields()
+    setCreateModalOpen(true)
+  }
+
+  const handleCreateSave = async () => {
+    const values = await createForm.validateFields()
+    setCreating(true)
+    try {
+      await createTrainingLedger({
+        ...values,
+        source_type: 'manual',
+        training_date: values.training_date ? values.training_date.format('YYYY-MM-DD') : undefined,
+      })
+      message.success('创建成功')
+      setCreateModalOpen(false)
+      loadData(page)
+    } catch (e) {
+      message.error((e instanceof Error ? e.message : '') || '创建失败')
+    } finally {
+      setCreating(false)
+    }
+  }
+
   // 二级培训确认：已完成二级 / 不需二级 → 消除淡黄底色
   const handleSetSecondLevel = async (record: TrainingLedgerRecord, status: 'done' | 'not_needed') => {
     try {
@@ -275,7 +302,7 @@ export default function AnnualTrainingStatsClient({ department, dateFrom, dateTo
     { title: '培训日期', dataIndex: 'training_date', width: 110, render: (v: string) => v ? dayjs(v).format(HR_DISPLAY_DATE_FORMAT) : '-' },
     { title: '培训时长（h）', dataIndex: 'duration_hours', width: 90 },
     {
-      title: '培训内容', dataIndex: 'training_content', width: 220, ellipsis: true,
+      title: '培训内容', dataIndex: 'training_content', width: 300,
       render: (v: string, record: TrainingLedgerRecord) =>
         record.owner_deleted ? (
           <Tooltip title="该记录已被主办方删除，请注意">
@@ -338,6 +365,11 @@ export default function AnnualTrainingStatsClient({ department, dateFrom, dateTo
 
   return (
     <>
+      <Space className="mb-3">
+        <Button type="primary" icon={<PlusOutlined />} onClick={handleCreateOpen}>
+          新增台账记录
+        </Button>
+      </Space>
       <Table
         rowKey="id"
         dataSource={records}
@@ -466,7 +498,7 @@ export default function AnnualTrainingStatsClient({ department, dateFrom, dateTo
             <Input type="number" />
           </Form.Item>
           <Form.Item name="training_content" label="培训内容">
-            <Input.TextArea rows={2} />
+            <Input.TextArea rows={4} />
           </Form.Item>
           <Form.Item name="teaching_dept" label="授课部门">
             <Input />
@@ -517,6 +549,102 @@ export default function AnnualTrainingStatsClient({ department, dateFrom, dateTo
           </Form.Item>
           <Form.Item name="is_presented" label="是否呈现" valuePropName="checked">
             <Switch checkedChildren="是" unCheckedChildren="否" />
+          </Form.Item>
+          <Form.Item name="remarks" label="备注">
+            <Input.TextArea rows={2} />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* 新增 Modal */}
+      <Modal
+        title="新增培训记录"
+        open={createModalOpen}
+        onCancel={() => setCreateModalOpen(false)}
+        onOk={handleCreateSave}
+        confirmLoading={creating}
+        width={640}
+      >
+        <Form form={createForm} layout="vertical">
+          <Form.Item name="training_datetime" label="培训时间（日期+时间）">
+            <Input placeholder="如 2026.01.06 09:00~10:00" />
+          </Form.Item>
+          <Form.Item name="training_date" label="培训日期">
+            <DatePicker style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="training_subject" label="培训课程/主题">
+            <Input />
+          </Form.Item>
+          <Form.Item name="duration_hours" label="培训时长（h）">
+            <Input type="number" />
+          </Form.Item>
+          <Form.Item name="training_content" label="培训内容">
+            <Input.TextArea rows={4} />
+          </Form.Item>
+          <Form.Item name="training_method" label="培训方式">
+            <Select options={[{ value: '线上', label: '线上' }, { value: '线下', label: '线下' }]} />
+          </Form.Item>
+          <Form.Item name="teaching_dept" label="授课部门">
+            <Input />
+          </Form.Item>
+          <Form.Item name="instructor" label="授课人">
+            <Input />
+          </Form.Item>
+          <Form.Item name="location" label="培训地点">
+            <Input />
+          </Form.Item>
+          <Form.Item name="trainer" label="培训单位/培训师">
+            <Input />
+          </Form.Item>
+          <Form.Item name="level_category" label="一级/二级">
+            <Select options={[{ value: '一级', label: '一级' }, { value: '二级', label: '二级' }]} />
+          </Form.Item>
+          <Form.Item name="involved_depts" label="涉及部门">
+            <Input.TextArea rows={2} />
+          </Form.Item>
+          <Form.Item name="trainees" label="培训对象">
+            <Input.TextArea rows={2} />
+          </Form.Item>
+          <Form.Item name="training_type" label="培训类型">
+            <Select options={[
+              { value: '管理类', label: '管理类' },
+              { value: 'EHS培训', label: 'EHS培训' },
+              { value: '质量培训', label: '质量培训' },
+              { value: '质量类', label: '质量类' },
+              { value: '数据安全、隐私保护', label: '数据安全、隐私保护' },
+              { value: '领导力培训', label: '领导力培训' },
+              { value: '多元化', label: '多元化' },
+              { value: '反贪腐类', label: '反贪腐类' },
+              { value: '负责任营销', label: '负责任营销' },
+            ]} />
+          </Form.Item>
+          <Form.Item name="ledger_assessment_method" label="考核方式">
+            <Select options={[{ value: '口试', label: '口试' }, { value: '笔试', label: '笔试' }]} />
+          </Form.Item>
+          <Form.Item name="plan_source" label="部门/公司计划">
+            <Select options={[
+              { value: '部门级计划', label: '部门级计划' },
+              { value: '公司级计划', label: '公司级计划' },
+            ]} />
+          </Form.Item>
+          <Form.Item name="drug_category" label="人药/兽药">
+            <Select options={[
+              { value: '人药', label: '人药' },
+              { value: '兽药', label: '兽药' },
+              { value: '人药、兽药', label: '人药、兽药' },
+            ]} />
+          </Form.Item>
+          <Form.Item name="assessment_result" label="考核成绩">
+            <Input />
+          </Form.Item>
+          <Form.Item name="score_summary" label="成绩汇总">
+            <Input.TextArea rows={2} />
+          </Form.Item>
+          <Form.Item name="ledger_department" label="部门">
+            <Input defaultValue={department} />
+          </Form.Item>
+          <Form.Item name="is_presented" label="是否呈现" valuePropName="checked">
+            <Switch checkedChildren="是" unCheckedChildren="否" defaultChecked />
           </Form.Item>
           <Form.Item name="remarks" label="备注">
             <Input.TextArea rows={2} />

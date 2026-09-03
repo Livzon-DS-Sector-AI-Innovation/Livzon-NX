@@ -1,7 +1,8 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
+  Alert,
   App,
   Button,
   Card,
@@ -21,12 +22,13 @@ import {
 } from 'antd'
 import type { TableColumnsType } from 'antd'
 import {
+  CopyOutlined,
   DeleteOutlined,
   DownloadOutlined,
   EyeOutlined,
   PaperClipOutlined,
+  PlayCircleOutlined,
   PlusOutlined,
-  RobotOutlined,
   SearchOutlined,
   SettingOutlined,
 } from '@ant-design/icons'
@@ -37,26 +39,25 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { Components } from 'react-markdown'
 import {
-  fetchDeviationWorkbenchReport,
-  fetchDeviationWorkbenchReports,
-  fetchDeviationWorkbenchSettings,
-  fetchFeishuDeviationReportRecord,
-  fetchFeishuDeviationReportRecords,
-} from '@/lib/api/client/quality'
-import {
   analyzeDeviationWorkbench,
   deleteDeviationWorkbenchAttachment,
   deleteDeviationWorkbenchReport,
   updateDeviationWorkbenchSettings,
   uploadDeviationWorkbenchAttachment,
 } from '@/actions/quality-deviation-workbench'
+import {
+  fetchDeviationWorkbenchReport,
+  fetchDeviationWorkbenchReports,
+  fetchDeviationWorkbenchSettings,
+  fetchFeishuDeviationReportRecord,
+  fetchFeishuDeviationReportRecords,
+} from '@/lib/api/client/quality'
 import type {
+  CreateDeviationWorkbenchPayload,
   DeviationWorkbenchAttachmentDescriptor,
   DeviationWorkbenchReportDetail,
   DeviationWorkbenchReportListItem,
   DeviationWorkbenchSettings,
-  DeviationWorkbenchStatus,
-  FeishuDeviationReportRecordItem,
 } from '@/types/quality'
 import { TableEmptyState } from './TableEmptyState'
 import { qualityTokens } from './themeTokens'
@@ -107,422 +108,7 @@ function formatTime(value?: string | null): string {
   return value.slice(0, 19).replace('T', ' ')
 }
 
-/** 生成调查报告的抽屉：来源（报告记录/手动输入）+ 附件上传 + 生成 */
-function CreateReportDrawer({
-  open,
-  initialRecordId,
-  onClose,
-  onCreated,
-}: {
-  open: boolean
-  initialRecordId?: string | null
-  onClose: () => void
-  onCreated: (report: DeviationWorkbenchReportDetail) => void
-}) {
-  const { message } = App.useApp()
-  const [form] = Form.useForm()
-  const [sourceType, setSourceType] = useState<'report_record' | 'manual'>(
-    initialRecordId ? 'report_record' : 'manual'
-  )
-  const [recordId, setRecordId] = useState<string | null>(initialRecordId || null)
-  const [prefill, setPrefill] = useState<FeishuDeviationReportRecordItem | null>(null)
-  const [descriptors, setDescriptors] = useState<DeviationWorkbenchAttachmentDescriptor[]>([])
-  const [generating, setGenerating] = useState(false)
-  // 是否已生成报告（生成的附件已被报告消费，关闭时不再清理）
-  const generatedRef = useRef(false)
-
-  const { data: reportRecords, isLoading: recordsLoading } = useQuery({
-    queryKey: ['quality-deviation-workbench-records', 1],
-    queryFn: () => fetchFeishuDeviationReportRecords({ page: 1, page_size: 50 }),
-  })
-
-  // 选择报告记录后拉取详情预填（异步回调内 setState，非副作用内直接同步调用）
-  useEffect(() => {
-    if (!recordId) return
-    let cancelled = false
-    void fetchFeishuDeviationReportRecord(recordId)
-      .then((record) => {
-        if (!cancelled) setPrefill(record)
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setPrefill(null)
-          message.warning('未能获取报告记录详情（可能飞书未启用），可手动输入偏差内容')
-        }
-      })
-    return () => {
-      cancelled = true
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recordId])
-
-  const handleRecordSelect = useCallback((value: string) => {
-    setRecordId(value)
-    setPrefill(null)
-  }, [])
-
-  const handleUpload = async (file: File) => {
-    const formData = new FormData()
-    formData.append('file', file)
-    try {
-      const descriptor = await uploadDeviationWorkbenchAttachment(formData)
-      if (!descriptor) throw new Error('上传失败')
-      setDescriptors((prev) => [...prev, descriptor])
-      message.success('上传成功')
-    } catch (error) {
-      message.error(error instanceof Error ? error.message : '上传失败')
-    }
-  }
-
-  const handleGenerate = async () => {
-    const values = await form.validateFields()
-    const manualText = sourceType === 'manual' ? (values.manual_text as string | undefined) : undefined
-    if (sourceType === 'manual' && !manualText?.trim() && descriptors.length === 0) {
-      message.warning('请手动输入偏差内容或上传附件')
-      return
-    }
-    if (sourceType === 'report_record' && !recordId) {
-      message.warning('请选择报告记录')
-      return
-    }
-    setGenerating(true)
-    try {
-      const report = await analyzeDeviationWorkbench({
-        source_type: sourceType,
-        source_record_id: sourceType === 'report_record' ? recordId : null,
-        manual_text: manualText || null,
-        attachments: descriptors,
-      })
-      if (!report) throw new Error('生成失败')
-      generatedRef.current = true
-      message.success(report.status === 'completed' ? '调查报告已生成' : '生成未完成，请查看结果')
-      onCreated(report)
-    } catch (error) {
-      message.error(error instanceof Error ? error.message : '生成失败')
-    } finally {
-      setGenerating(false)
-    }
-  }
-
-  const descriptorKeys = (descriptor: DeviationWorkbenchAttachmentDescriptor): string[] =>
-    [descriptor.storage_key, descriptor.converted_md_key, ...(descriptor.asset_keys || [])]
-      .filter((key): key is string => Boolean(key))
-
-  const cleanupUploaded = (items: DeviationWorkbenchAttachmentDescriptor[]) => {
-    const keys = items.flatMap(descriptorKeys)
-    if (keys.length) {
-      void deleteDeviationWorkbenchAttachment(keys).catch(() => undefined)
-    }
-  }
-
-  const handleClose = () => {
-    // 未生成报告时清理已上传但未消费的附件，避免孤儿对象残留
-    if (!generatedRef.current) {
-      cleanupUploaded(descriptors)
-    }
-    onClose()
-  }
-
-  const reportRecordOptions = useMemo(
-    () =>
-      (reportRecords?.items || []).map((item) => ({
-        value: item.record_id || item.feishu_base_record_id || item.id,
-        label: `${item.deviation_code || ''}${item.product_batch ? `｜${item.product_batch}` : ''}｜${(item.description || '').slice(0, 24)}`,
-      })),
-    [reportRecords]
-  )
-
-  return (
-    <Drawer
-      title="新建偏差工作台 - 生成调查报告"
-      size={720}
-      open={open}
-      onClose={handleClose}
-      destroyOnHidden
-      extra={
-        <Button
-          type="primary"
-          icon={<RobotOutlined />}
-          loading={generating}
-          onClick={() => void handleGenerate()}
-        >
-          生成调查报告
-        </Button>
-      }
-    >
-      <Card size="small" title="信息来源">
-        <Form form={form} layout="vertical">
-          <Form.Item label="来源方式">
-            <Select
-              value={sourceType}
-              onChange={(value: 'report_record' | 'manual') => setSourceType(value)}
-              options={[
-                { value: 'report_record', label: '从偏差管理报告记录获取' },
-                { value: 'manual', label: '手动输入 / 上传附件' },
-              ]}
-            />
-          </Form.Item>
-
-          {sourceType === 'report_record' ? (
-            <>
-              <Form.Item label="选择报告记录">
-                <Select
-                  showSearch
-                  optionFilterProp="label"
-                  placeholder="选择偏差报告记录"
-                  loading={recordsLoading}
-                  options={reportRecordOptions}
-                  value={recordId || undefined}
-                  onChange={(value) => void handleRecordSelect(value)}
-                />
-              </Form.Item>
-              {prefill && (
-                <div
-                  style={{
-                    padding: 12,
-                    border: `1px solid ${qualityTokens.border}`,
-                    borderRadius: 6,
-                    background: '#fafafa',
-                  }}
-                >
-                  <Typography.Paragraph style={{ marginBottom: 6 }}>
-                    <Typography.Text strong>偏差内容：</Typography.Text>
-                    {prefill.description || '-'}
-                  </Typography.Paragraph>
-                  <Typography.Paragraph style={{ marginBottom: 6 }}>
-                    <Typography.Text strong>涉及产品/批号：</Typography.Text>
-                    {prefill.product_name_batch || prefill.product_batch || '-'}
-                  </Typography.Paragraph>
-                  {prefill.attachments?.length ? (
-                    <Typography.Paragraph style={{ marginBottom: 0 }}>
-                      <Typography.Text strong>附件：</Typography.Text>
-                      {prefill.attachments.map((attachment, index) => (
-                        <span key={index}>
-                          <a href={attachment.url} target="_blank" rel="noreferrer">
-                            {attachment.name}
-                          </a>
-                          {index < (prefill.attachments?.length || 0) - 1 ? '、' : ''}
-                        </span>
-                      ))}
-                    </Typography.Paragraph>
-                  ) : null}
-                </div>
-              )}
-            </>
-          ) : (
-            <Form.Item
-              name="manual_text"
-              label="偏差内容（手动输入）"
-              rules={[{ max: 10000 }]}
-            >
-              <Input.TextArea
-                rows={5}
-                placeholder="请输入偏差情况，例如：灌装压塞压力超上限，怀疑传感器漂移……"
-              />
-            </Form.Item>
-          )}
-        </Form>
-      </Card>
-
-      <Card size="small" title="上传附件（doc/docx/wps 自动转标准 MD 供 AI 分析）" style={{ marginTop: 16 }}>
-        <Upload
-          multiple
-          accept=".doc,.docx,.wps,.pdf,.png,.jpg,.jpeg"
-          showUploadList={false}
-          beforeUpload={(file) => {
-            void handleUpload(file)
-            return false
-          }}
-        >
-          <Button icon={<PlusOutlined />}>上传附件</Button>
-        </Upload>
-        <div style={{ display: 'grid', gap: 8, marginTop: 12 }}>
-          {descriptors.length === 0 && <Typography.Text type="secondary">暂无附件</Typography.Text>}
-          {descriptors.map((descriptor) => (
-            <div
-              key={descriptor.id}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '6px 10px',
-                border: `1px solid ${qualityTokens.border}`,
-                borderRadius: 6,
-              }}
-            >
-              <Space size={8}>
-                <PaperClipOutlined className="text-gray-400" />
-                <Typography.Text ellipsis style={{ maxWidth: 320 }}>
-                  {descriptor.file_name}
-                </Typography.Text>
-                {descriptor.converted ? <Tag color="blue">标准MD</Tag> : <Tag>原文件</Tag>}
-              </Space>
-              <Button
-                type="link"
-                size="small"
-                danger
-                icon={<DeleteOutlined />}
-                onClick={() => {
-                  cleanupUploaded([descriptor])
-                  setDescriptors((prev) => prev.filter((item) => item.id !== descriptor.id))
-                }}
-              >
-                移除
-              </Button>
-            </div>
-          ))}
-        </div>
-      </Card>
-
-      <Card size="small" title="分析依据" style={{ marginTop: 16 }}>
-        <Typography.Paragraph style={{ marginBottom: 0, color: 'var(--color-steel)' }}>
-          AI 将结合历史偏差、文件管理（文件目录）内容与模型通用知识，从人、机、料、法、环、测（5M1E）六个维度展开调查分析并生成调查报告。
-        </Typography.Paragraph>
-      </Card>
-    </Drawer>
-  )
-}
-
-/** 报告详情抽屉：结构化调查报告 + 参考来源 + 附件 */
-function ReportDetailDrawer({
-  report,
-  onClose,
-}: {
-  report: DeviationWorkbenchReportDetail | null
-  onClose: () => void
-}) {
-  const [preview, setPreview] = useState<{ url: string; file_name: string } | null>(null)
-
-  const context = (report?.context_snapshot || {}) as {
-    historical_deviations?: Array<Record<string, unknown>>
-    documents?: Array<Record<string, unknown>>
-  }
-
-  const handleExportMd = () => {
-    if (!report?.report_md) return
-    const blob = new Blob([report.report_md], { type: 'text/markdown;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `${report.code || '偏差调查报告'}.md`
-    link.click()
-    URL.revokeObjectURL(url)
-  }
-
-  return (
-    <Drawer
-      title={report ? `调查报告 - ${report.code}` : '调查报告'}
-      size={860}
-      open={!!report}
-      onClose={onClose}
-      destroyOnHidden
-      extra={
-        <Button icon={<DownloadOutlined />} onClick={handleExportMd}>
-          导出 Markdown
-        </Button>
-      }
-    >
-      {report ? (
-        <Spin spinning={report.status === 'processing'}>
-          <Space style={{ marginBottom: 12 }} wrap>
-            <Tag color={statusMeta(report.status).color}>{statusMeta(report.status).label}</Tag>
-            <Tag color={sourceConfig[report.source_type]?.color}>{sourceConfig[report.source_type]?.label}</Tag>
-            {report.model_name && <Typography.Text type="secondary">模型：{report.model_name}</Typography.Text>}
-          </Space>
-
-          {report.status === 'failed' && (
-            <Typography.Paragraph type="danger">
-              生成失败：{report.error_message || '未知错误'}
-            </Typography.Paragraph>
-          )}
-
-          {report.status === 'completed' && report.report_md ? (
-            <div className="rounded bg-gray-50 p-4">
-              <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownPreviewComponents}>
-                {report.report_md}
-              </ReactMarkdown>
-            </div>
-          ) : (
-            <Typography.Text type="secondary">暂无报告内容</Typography.Text>
-          )}
-
-          <Collapse
-            style={{ marginTop: 16 }}
-            items={[
-              {
-                key: 'sources',
-                label: '参考来源',
-                children: (
-                  <div style={{ display: 'grid', gap: 8 }}>
-                    {!context.historical_deviations?.length && !context.documents?.length && (
-                      <Typography.Text type="secondary">未检索到历史偏差 / 文件管理制度</Typography.Text>
-                    )}
-                    {context.historical_deviations?.map((item, index) => (
-                      <div key={index}>
-                        <Typography.Text strong>{String(item.code || '')}</Typography.Text>
-                        <Typography.Paragraph style={{ marginBottom: 0 }}>
-                          事件：{String(item.deviation_event || '-')}
-                        </Typography.Paragraph>
-                        <Typography.Paragraph style={{ marginBottom: 0 }}>
-                          根因：{String(item.root_cause || '-')}
-                        </Typography.Paragraph>
-                      </div>
-                    ))}
-                    {context.documents?.map((item, index) => (
-                      <div key={index}>
-                        <Typography.Text strong>
-                          {String(item.code || '')} {String(item.name || '')}
-                        </Typography.Text>
-                        <Typography.Paragraph style={{ marginBottom: 0 }}>
-                          {String(item.content || '-')}
-                        </Typography.Paragraph>
-                      </div>
-                    ))}
-                  </div>
-                ),
-              },
-              {
-                key: 'attachments',
-                label: `附件（${report.attachments?.length || 0}）`,
-                children: (
-                  <div style={{ display: 'grid', gap: 8 }}>
-                    {!report.attachments?.length && <Typography.Text type="secondary">无附件</Typography.Text>}
-                    {report.attachments?.map((attachment) => (
-                      <Space key={attachment.id}>
-                        <PaperClipOutlined className="text-gray-400" />
-                        <Typography.Text>{attachment.file_name}</Typography.Text>
-                        <Button
-                          type="link"
-                          size="small"
-                          icon={<EyeOutlined />}
-                          onClick={() => setPreview({ url: attachment.url, file_name: attachment.file_name })}
-                        >
-                          预览
-                        </Button>
-                      </Space>
-                    ))}
-                  </div>
-                ),
-              },
-            ]}
-          />
-        </Spin>
-      ) : null}
-
-      <Modal
-        title={preview ? `附件预览 - ${preview.file_name}` : '附件预览'}
-        open={!!preview}
-        onCancel={() => setPreview(null)}
-        footer={null}
-        width={900}
-        destroyOnHidden
-      >
-        {preview && <AttachmentContent key={preview.url} url={preview.url} />}
-      </Modal>
-    </Drawer>
-  )
-}
-
+/** 附件内容预览（MD 渲染 / PDF iframe / 图片） */
 function AttachmentContent({ url }: { url: string }) {
   const [state, setState] = useState<{ text: string; blobUrl: string; contentType: string }>({
     text: '',
@@ -530,6 +116,8 @@ function AttachmentContent({ url }: { url: string }) {
     contentType: '',
   })
   const [loading, setLoading] = useState(true)
+  // happy-dom（vitest）下 blob: iframe 会抛 ERR_INVALID_URL 崩掉测试进程
+  const isTestEnv = import.meta.env?.MODE === 'test'
 
   useEffect(() => {
     let cancelled = false
@@ -559,8 +147,12 @@ function AttachmentContent({ url }: { url: string }) {
   return (
     <Spin spinning={loading}>
       {state.blobUrl ? (
-        state.contentType.includes('pdf') ? (
+        state.contentType.includes('pdf') && !isTestEnv ? (
           <iframe src={state.blobUrl} title="PDF 预览" className="h-[68vh] w-full border-0" />
+        ) : state.blobUrl.startsWith('blob:') && isTestEnv ? (
+          <a href={state.blobUrl} download>
+            当前测试环境不支持内嵌预览，点击下载查看
+          </a>
         ) : (
           <Image src={state.blobUrl} alt="附件预览" width={1200} height={900} unoptimized className="h-auto max-w-full" />
         )
@@ -646,6 +238,19 @@ export function DeviationWorkbenchPage({ initialRecordId }: { initialRecordId?: 
   const { message, modal } = App.useApp()
   const queryClient = useQueryClient()
 
+  // 输入区状态
+  const [deviationContent, setDeviationContent] = useState('')
+  const [affectedItems, setAffectedItems] = useState('')
+  const [supplementText, setSupplementText] = useState('')
+  const [recordId, setRecordId] = useState<string | null>(initialRecordId || null)
+  const [recordSelectOpen, setRecordSelectOpen] = useState(false)
+  const [descriptors, setDescriptors] = useState<DeviationWorkbenchAttachmentDescriptor[]>([])
+  const [generating, setGenerating] = useState(false)
+
+  // 结果区状态
+  const [report, setReport] = useState<DeviationWorkbenchReportDetail | null>(null)
+
+  // 生成记录台账状态
   const [keyword, setKeyword] = useState('')
   const [searchText, setSearchText] = useState('')
   const [sourceType, setSourceType] = useState<string>()
@@ -653,11 +258,11 @@ export function DeviationWorkbenchPage({ initialRecordId }: { initialRecordId?: 
   const [dateRange, setDateRange] = useState<[string, string] | undefined>(undefined)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
-  const [createOpen, setCreateOpen] = useState<boolean>(() => Boolean(initialRecordId))
-  const [detail, setDetail] = useState<DeviationWorkbenchReportDetail | null>(null)
-  const [settingsOpen, setSettingsOpen] = useState(false)
 
-  const { data, isLoading, refetch } = useQuery({
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [preview, setPreview] = useState<{ url: string; file_name: string } | null>(null)
+
+  const { data, isLoading, isError: recordsError, error: recordsErrorObj, refetch } = useQuery({
     queryKey: ['quality-deviation-workbench', page, pageSize, searchText, sourceType, status, dateRange],
     queryFn: () =>
       fetchDeviationWorkbenchReports({
@@ -676,24 +281,122 @@ export function DeviationWorkbenchPage({ initialRecordId }: { initialRecordId?: 
     queryFn: fetchDeviationWorkbenchSettings,
   })
 
+  const { data: reportRecords, isLoading: recordsLoading } = useQuery({
+    queryKey: ['quality-deviation-workbench-records', 1],
+    queryFn: () => fetchFeishuDeviationReportRecords({ page: 1, page_size: 50 }),
+  })
+
   const invalidate = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: ['quality-deviation-workbench'] })
   }, [queryClient])
 
-  const openDetail = async (reportId: string) => {
-    try {
-      const report = await fetchDeviationWorkbenchReport(reportId)
-      if (!report) throw new Error('未找到报告')
-      setDetail(report)
-    } catch (error) {
-      message.error(error instanceof Error ? error.message : '加载失败')
+  const descriptorKeys = (descriptor: DeviationWorkbenchAttachmentDescriptor): string[] =>
+    [descriptor.storage_key, descriptor.converted_md_key, ...(descriptor.asset_keys || [])]
+      .filter((key): key is string => Boolean(key))
+
+  const cleanupUploaded = (items: DeviationWorkbenchAttachmentDescriptor[]) => {
+    const keys = items.flatMap(descriptorKeys)
+    if (keys.length) {
+      void deleteDeviationWorkbenchAttachment(keys).catch(() => undefined)
     }
   }
 
-  const handleCreated = (report: DeviationWorkbenchReportDetail) => {
-    setCreateOpen(false)
-    invalidate()
-    setDetail(report)
+  // 报告记录选择 / 预填（含从报告记录详情跳入的 initialRecordId）
+  useEffect(() => {
+    if (!recordId) return
+    let cancelled = false
+    void fetchFeishuDeviationReportRecord(recordId)
+      .then((record) => {
+        if (cancelled) return
+        if (record.description) setDeviationContent(record.description)
+        if (record.product_name_batch || record.product_batch) {
+          setAffectedItems(record.product_name_batch || record.product_batch || '')
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          message.warning('未能获取报告记录详情（可能飞书未启用），可手动输入偏差内容')
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- message 来自 App.useApp()，实例稳定
+  }, [recordId])
+
+  const handleUpload = async (file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    try {
+      const descriptor = await uploadDeviationWorkbenchAttachment(formData)
+      if (!descriptor) throw new Error('上传失败')
+      setDescriptors((prev) => [...prev, descriptor])
+      message.success('上传成功（word 已自动转标准 MD）')
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '上传失败')
+    }
+  }
+
+  const handleGenerate = async () => {
+    if (!deviationContent.trim() && descriptors.length === 0) {
+      message.warning('请填写偏差内容或上传附件')
+      return
+    }
+    setGenerating(true)
+    try {
+      const payload: CreateDeviationWorkbenchPayload = {
+        source_type: recordId ? 'report_record' : 'manual',
+        source_record_id: recordId,
+        manual_text: deviationContent || null,
+        affected_items: affectedItems || null,
+        supplement_text: supplementText || null,
+        attachments: descriptors,
+      }
+      const result = await analyzeDeviationWorkbench(payload)
+      if (!result) throw new Error('生成失败')
+      setDescriptors([])
+      setReport(result)
+      if (result.status !== 'completed') {
+        message.warning(result.error_message || '生成未完成，请查看报告')
+      }
+      invalidate()
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '生成失败')
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  const handleCopyReport = async () => {
+    if (!report?.report_md) return
+    try {
+      await navigator.clipboard.writeText(report.report_md)
+      message.success('已复制到剪贴板')
+    } catch {
+      message.error('复制失败，请手动选择复制')
+    }
+  }
+
+  const handleExportMd = () => {
+    if (!report?.report_md) return
+    const blob = new Blob([report.report_md], { type: 'text/markdown;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${report.code || '偏差调查报告'}.md`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const openDetail = async (reportId: string) => {
+    try {
+      const detail = await fetchDeviationWorkbenchReport(reportId)
+      if (!detail) throw new Error('未找到报告')
+      setReport(detail)
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '加载失败')
+    }
   }
 
   const handleDelete = (reportId: string, code: string) => {
@@ -707,6 +410,7 @@ export function DeviationWorkbenchPage({ initialRecordId }: { initialRecordId?: 
         try {
           await deleteDeviationWorkbenchReport(reportId)
           message.success('已删除')
+          if (report?.id === reportId) setReport(null)
           invalidate()
         } catch (error) {
           message.error(error instanceof Error ? error.message : '删除失败')
@@ -715,18 +419,26 @@ export function DeviationWorkbenchPage({ initialRecordId }: { initialRecordId?: 
     })
   }
 
-  const columns: TableColumnsType<DeviationWorkbenchReportListItem> = [
+  const recordColumns: TableColumnsType<DeviationWorkbenchReportListItem> = [
     {
-      title: '序号',
-      key: 'index',
-      width: 60,
-      render: (_, __, index) => (page - 1) * pageSize + index + 1,
+      title: '生成时间',
+      dataIndex: 'created_at',
+      width: 150,
+      render: (value: string) => formatTime(value),
     },
     {
-      title: '编号',
+      title: '偏差编号',
       dataIndex: 'code',
-      width: 150,
+      width: 140,
       render: (value: string) => <Typography.Text strong>{value}</Typography.Text>,
+    },
+    {
+      title: '偏差内容',
+      dataIndex: 'deviation_summary',
+      ellipsis: { showTitle: false },
+      render: (value: string | null) => (
+        <span title={value ?? ''}>{value || '-'}</span>
+      ),
     },
     {
       title: '来源',
@@ -737,29 +449,18 @@ export function DeviationWorkbenchPage({ initialRecordId }: { initialRecordId?: 
       ),
     },
     {
-      title: '偏差摘要',
-      dataIndex: 'deviation_summary',
-      ellipsis: { showTitle: false },
-      render: (value: string | null) => <span title={value ?? ''}>{value || '-'}</span>,
-    },
-    {
       title: '状态',
       dataIndex: 'status',
       width: 100,
-      render: (value: DeviationWorkbenchStatus) => (
-        <Tag color={statusMeta(value).color}>{statusMeta(value).label}</Tag>
-      ),
-    },
-    {
-      title: '生成时间',
-      dataIndex: 'created_at',
-      width: 160,
-      render: (value: string) => formatTime(value),
+      render: (value: string) => {
+        const meta = statusMeta(value)
+        return <Tag color={meta.color}>{meta.label}</Tag>
+      },
     },
     {
       title: '操作',
       key: 'action',
-      width: 140,
+      width: 130,
       fixed: 'end' as const,
       render: (_, record) => (
         <Space size={4}>
@@ -780,119 +481,414 @@ export function DeviationWorkbenchPage({ initialRecordId }: { initialRecordId?: 
     },
   ]
 
+  const reportRecordOptions = useMemo(
+    () =>
+      (reportRecords?.items || []).map((item) => ({
+        value: item.record_id || item.feishu_base_record_id || item.id,
+        label: `${item.deviation_code || ''}${item.product_batch ? `｜${item.product_batch}` : ''}｜${(item.description || '').slice(0, 24)}`,
+      })),
+    [reportRecords]
+  )
+
+  const context = (report?.context_snapshot || {}) as {
+    source?: Record<string, unknown>
+    historical_deviations?: Array<Record<string, unknown>>
+    documents?: Array<Record<string, unknown>>
+    training_ledgers?: Array<Record<string, unknown>>
+  }
+
   return (
     <div style={{ display: 'grid', gap: 16 }}>
-      <div>
-        <Typography.Title level={3} style={{ margin: 0 }}>
-          偏差工作台
-        </Typography.Title>
-        <Typography.Paragraph style={{ marginTop: 8, color: 'var(--color-steel)' }}>
-          从偏差管理报告记录获取或手动输入 / 上传附件，AI 结合历史偏差、文件管理与模型知识，按人机料法环测（5M1E）生成调查报告并保留记录。
-        </Typography.Paragraph>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+        <div>
+          <Typography.Title level={3} style={{ margin: 0 }}>
+            偏差工作台
+          </Typography.Title>
+          <Typography.Paragraph style={{ marginTop: 8, marginBottom: 0, color: 'var(--color-steel)' }}>
+            从报告记录带入或手动输入偏差信息，AI 结合历史偏差、文件管理、培训台账与行业知识，从人机料法环测维度生成调查报告。
+          </Typography.Paragraph>
+        </div>
+        <Button icon={<SettingOutlined />} onClick={() => setSettingsOpen(true)}>
+          设置
+        </Button>
       </div>
 
-      <Card>
-        <Space style={{ marginBottom: 16, flexWrap: 'wrap' }}>
-          <Input.Search
-            allowClear
-            placeholder="搜索编号 / 偏差摘要 / 报告正文"
-            prefix={<SearchOutlined style={{ color: qualityTokens.textMuted }} />}
-            style={{ width: 280 }}
-            value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
-            onSearch={(value) => {
-              setPage(1)
-              setSearchText(value.trim())
-            }}
-          />
-          <Select
-            allowClear
-            placeholder="来源"
-            style={{ width: 120 }}
-            value={sourceType}
-            onChange={(value) => {
-              setPage(1)
-              setSourceType(value)
-            }}
-            options={[
-              { value: 'report_record', label: '报告记录' },
-              { value: 'manual', label: '手动输入' },
-            ]}
-          />
-          <Select
-            allowClear
-            placeholder="状态"
-            style={{ width: 120 }}
-            value={status}
-            onChange={(value) => {
-              setPage(1)
-              setStatus(value)
-            }}
-            options={[
-              { value: 'completed', label: '已完成' },
-              { value: 'failed', label: '失败' },
-              { value: 'processing', label: '生成中' },
-            ]}
-          />
-          <DatePicker.RangePicker
-            style={{ width: 240 }}
-            value={
-              dateRange
-                ? [dayjs(dateRange[0]), dayjs(dateRange[1])]
-                : null
+      {/* 两栏：左输入 / 右报告 */}
+      <div
+        style={{
+          display: 'grid',
+          gap: 16,
+          gridTemplateColumns: 'minmax(0, 5fr) minmax(0, 6fr)',
+          alignItems: 'start',
+        }}
+      >
+        {/* 左栏：偏差信息 + 附件材料 + 生成按钮 */}
+        <div style={{ display: 'grid', gap: 16, alignContent: 'start' }}>
+          <Card title="1. 偏差信息" extra={
+            <Button size="small" onClick={() => setRecordSelectOpen(true)}>从报告记录选择</Button>
+          }>
+            {recordId && (
+              <Alert
+                type="info"
+                showIcon
+                style={{ marginBottom: 12 }}
+                message="已带入报告记录信息，可继续补充后生成"
+              />
+            )}
+            <Typography.Text strong style={{ display: 'block', marginBottom: 6 }}>偏差内容</Typography.Text>
+            <Input.TextArea
+              rows={4}
+              placeholder="描述发现的偏差情况（可从报告记录带入）"
+              value={deviationContent}
+              onChange={(e) => setDeviationContent(e.target.value)}
+            />
+            <Typography.Text strong style={{ display: 'block', margin: '12px 0 6px' }}>涉及产品名称/批号</Typography.Text>
+            <Input
+              placeholder="如 阿司匹林原料药 批号20240101（用于匹配历史偏差与体系文件）"
+              value={affectedItems}
+              onChange={(e) => setAffectedItems(e.target.value)}
+            />
+            <Typography.Text strong style={{ display: 'block', margin: '12px 0 6px' }}>补充说明</Typography.Text>
+            <Input.TextArea
+              rows={3}
+              placeholder="调查背景、已采取的措施、需要重点分析的问题等"
+              value={supplementText}
+              onChange={(e) => setSupplementText(e.target.value)}
+            />
+          </Card>
+
+          {/* 左栏下方：附件材料 + 生成按钮 */}
+          <div style={{ display: 'grid', gap: 16, alignContent: 'start' }}>
+            <Card title="2. 附件材料（word 自动转标准 MD）">
+              <Upload
+                multiple
+                accept=".doc,.docx,.wps,.pdf,.png,.jpg,.jpeg,.md"
+                showUploadList={false}
+                beforeUpload={(file) => {
+                  void handleUpload(file)
+                  return false
+                }}
+              >
+                <Button icon={<PlusOutlined />}>选择文件</Button>
+              </Upload>
+              <div style={{ display: 'grid', gap: 8, marginTop: 12 }}>
+                {descriptors.length === 0 && (
+                  <Typography.Text type="secondary">暂无附件</Typography.Text>
+                )}
+                {descriptors.map((descriptor) => (
+                  <div
+                    key={descriptor.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '6px 10px',
+                      border: `1px solid ${qualityTokens.border}`,
+                      borderRadius: 6,
+                    }}
+                  >
+                    <Space size={8}>
+                      <PaperClipOutlined className="text-gray-400" />
+                      <Typography.Text ellipsis style={{ maxWidth: 260 }}>
+                        {descriptor.file_name}
+                      </Typography.Text>
+                      {descriptor.converted ? <Tag color="blue">标准MD</Tag> : <Tag>原文件</Tag>}
+                    </Space>
+                    <Button
+                      type="link"
+                      size="small"
+                      danger
+                      icon={<DeleteOutlined />}
+                      onClick={() => {
+                        cleanupUploaded([descriptor])
+                        setDescriptors((prev) => prev.filter((item) => item.id !== descriptor.id))
+                      }}
+                    >
+                      移除
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </Card>
+            <Button
+              type="primary"
+              size="large"
+              block
+              icon={<PlayCircleOutlined />}
+              loading={generating}
+              onClick={() => void handleGenerate()}
+            >
+              {generating ? 'AI 分析中（约 1-3 分钟）…' : '生成调查报告'}
+            </Button>
+          </div>
+        </div>
+
+          {/* 右栏：调查报告 */}
+          <Card
+            title={report ? `调查报告 - ${report.code}` : '调查报告'}
+            extra={
+              report?.report_md ? (
+                <Space size={4}>
+                  <Button size="small" icon={<CopyOutlined />} onClick={() => void handleCopyReport()}>
+                    复制 Markdown
+                  </Button>
+                  <Button size="small" icon={<DownloadOutlined />} onClick={handleExportMd}>
+                    导出 Markdown
+                  </Button>
+                </Space>
+              ) : null
             }
+          >
+            {generating ? (
+              <div style={{ display: 'grid', minHeight: 320, placeItems: 'center' }}>
+                <Spin tip="AI 分析中（约 1-3 分钟）…" />
+              </div>
+            ) : report ? (
+              <div style={{ display: 'grid', gap: 12 }}>
+                <Space wrap>
+                  <Tag color={statusMeta(report.status).color}>{statusMeta(report.status).label}</Tag>
+                  <Tag color={sourceConfig[report.source_type]?.color}>
+                    {sourceConfig[report.source_type]?.label || report.source_type}
+                  </Tag>
+                  {report.model_name && (
+                    <Typography.Text type="secondary">模型：{report.model_name}</Typography.Text>
+                  )}
+                </Space>
+                {report.status === 'failed' && (
+                  <Typography.Paragraph type="danger">
+                    生成失败：{report.error_message || '未知错误'}
+                  </Typography.Paragraph>
+                )}
+                {report.report_md ? (
+                  <div className="max-h-[62vh] overflow-auto rounded bg-gray-50 p-4">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownPreviewComponents}>
+                      {report.report_md}
+                    </ReactMarkdown>
+                  </div>
+                ) : (
+                  <Typography.Text type="secondary">暂无报告内容</Typography.Text>
+                )}
+                <Collapse
+                  items={[
+                    {
+                      key: 'sources',
+                      label: '参考来源（历史偏差 / 文件管理 / 培训台账）',
+                      children: (
+                        <div style={{ display: 'grid', gap: 8 }}>
+                          {!context.historical_deviations?.length &&
+                            !context.documents?.length &&
+                            !context.training_ledgers?.length && (
+                              <Typography.Text type="secondary">
+                                未检索到历史偏差 / 文件管理 / 培训台账记录
+                              </Typography.Text>
+                            )}
+                          {context.historical_deviations?.map((item, index) => (
+                            <div key={`h-${index}`}>
+                              <Typography.Text strong>{String(item.code || '')}</Typography.Text>
+                              <Typography.Paragraph style={{ marginBottom: 0 }}>
+                                事件：{String(item.deviation_event || '-')}
+                              </Typography.Paragraph>
+                              <Typography.Paragraph style={{ marginBottom: 0 }}>
+                                根因：{String(item.root_cause || '-')}
+                              </Typography.Paragraph>
+                            </div>
+                          ))}
+                          {context.documents?.map((item, index) => (
+                            <div key={`d-${index}`}>
+                              <Typography.Text strong>
+                                {String(item.code || '')} {String(item.name || '')}
+                              </Typography.Text>
+                              <Typography.Paragraph style={{ marginBottom: 0 }}>
+                                {String(item.content || '-')}
+                              </Typography.Paragraph>
+                            </div>
+                          ))}
+                          {context.training_ledgers?.map((item, index) => (
+                            <div key={`t-${index}`}>
+                              <Typography.Text strong>
+                                {String(item.training_date || '')} {String(item.training_subject || '')}
+                              </Typography.Text>
+                              <Typography.Paragraph style={{ marginBottom: 0 }}>
+                                {String(item.training_content || '-')}
+                              </Typography.Paragraph>
+                            </div>
+                          ))}
+                        </div>
+                      ),
+                    },
+                    {
+                      key: 'attachments',
+                      label: `附件（${report.attachments?.length || 0}）`,
+                      children: (
+                        <div style={{ display: 'grid', gap: 8 }}>
+                          {!report.attachments?.length && (
+                            <Typography.Text type="secondary">无附件</Typography.Text>
+                          )}
+                          {report.attachments?.map((attachment) => (
+                            <Space key={attachment.id}>
+                              <PaperClipOutlined className="text-gray-400" />
+                              <Typography.Text>{attachment.file_name}</Typography.Text>
+                              <Button
+                                type="link"
+                                size="small"
+                                icon={<EyeOutlined />}
+                                onClick={() =>
+                                  setPreview({ url: attachment.url, file_name: attachment.file_name })
+                                }
+                              >
+                                预览
+                              </Button>
+                            </Space>
+                          ))}
+                        </div>
+                      ),
+                    },
+                  ]}
+                />
+              </div>
+            ) : (
+              <div style={{ display: 'grid', minHeight: 320, placeItems: 'center' }}>
+                <Typography.Text type="secondary">
+                  填写左侧信息后点击「生成调查报告」
+                </Typography.Text>
+              </div>
+            )}
+          </Card>
+        </div>
+
+        {/* 底部：生成记录台账 */}
+        <Card title="生成记录">
+          <Space style={{ marginBottom: 16, flexWrap: 'wrap' }}>
+            <Input.Search
+              allowClear
+              placeholder="搜索偏差编号 / 偏差摘要"
+              prefix={<SearchOutlined style={{ color: qualityTokens.textMuted }} />}
+              style={{ width: 260 }}
+              value={keyword}
+              onChange={(e) => setKeyword(e.target.value)}
+              onSearch={(value) => {
+                setPage(1)
+                setSearchText(value.trim())
+              }}
+            />
+            <Select
+              allowClear
+              placeholder="来源"
+              style={{ width: 120 }}
+              value={sourceType}
+              onChange={(value) => {
+                setPage(1)
+                setSourceType(value)
+              }}
+              options={[
+                { value: 'report_record', label: '报告记录' },
+                { value: 'manual', label: '手动输入' },
+              ]}
+            />
+            <Select
+              allowClear
+              placeholder="状态"
+              style={{ width: 120 }}
+              value={status}
+              onChange={(value) => {
+                setPage(1)
+                setStatus(value)
+              }}
+              options={[
+                { value: 'completed', label: '已完成' },
+                { value: 'failed', label: '失败' },
+                { value: 'processing', label: '生成中' },
+              ]}
+            />
+            <DatePicker.RangePicker
+              style={{ width: 240 }}
+              value={dateRange ? [dayjs(dateRange[0]), dayjs(dateRange[1])] : null}
+              onChange={(value) => {
+                setPage(1)
+                setDateRange(
+                  value && value[0] && value[1]
+                    ? [value[0].format('YYYY-MM-DD'), value[1].format('YYYY-MM-DD')]
+                    : undefined
+                )
+              }}
+            />
+            <Button icon={<SearchOutlined />} onClick={() => void refetch()}>
+              刷新
+            </Button>
+          </Space>
+
+          {recordsError ? (
+            <Alert
+              type="error"
+              showIcon
+              message="生成记录加载失败"
+              description={recordsErrorObj instanceof Error ? recordsErrorObj.message : undefined}
+              action={
+                <Button size="small" onClick={() => void refetch()}>
+                  重试
+                </Button>
+              }
+            />
+          ) : (
+            <Table<DeviationWorkbenchReportListItem>
+              rowKey="id"
+              loading={isLoading}
+              columns={recordColumns}
+              dataSource={data?.items || []}
+              locale={{ emptyText: <TableEmptyState /> }}
+              pagination={{
+                current: page,
+                pageSize,
+                total: data?.total || 0,
+                showSizeChanger: true,
+                showQuickJumper: true,
+                showTotal: (total) => `共 ${total} 条`,
+                onChange: (nextPage, nextPageSize) => {
+                  setPage(nextPage)
+                  setPageSize(nextPageSize)
+                },
+              }}
+              scroll={{ x: 'max-content' }}
+            />
+          )}
+        </Card>
+
+      {/* 报告记录选择弹窗 */}
+      <Modal
+        title="从报告记录选择"
+        open={recordSelectOpen}
+        onCancel={() => setRecordSelectOpen(false)}
+        footer={null}
+        width={720}
+        destroyOnHidden
+      >
+        <Spin spinning={recordsLoading}>
+          <Select
+            showSearch
+            optionFilterProp="label"
+            placeholder="选择偏差报告记录"
+            style={{ width: '100%' }}
+            options={reportRecordOptions}
+            value={recordId || undefined}
             onChange={(value) => {
-              setPage(1)
-              setDateRange(
-                value && value[0] && value[1]
-                  ? [value[0].format('YYYY-MM-DD'), value[1].format('YYYY-MM-DD')]
-                  : undefined
-              )
+              setRecordId(value)
+              setRecordSelectOpen(false)
             }}
           />
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
-            新建偏差工作台
-          </Button>
-          <Button icon={<SettingOutlined />} onClick={() => setSettingsOpen(true)}>
-            设置
-          </Button>
-          <Button icon={<SearchOutlined />} onClick={() => void refetch()}>
-            刷新
-          </Button>
-        </Space>
+        </Spin>
+      </Modal>
 
-        <Table<DeviationWorkbenchReportListItem>
-          rowKey="id"
-          loading={isLoading}
-          columns={columns}
-          dataSource={data?.items || []}
-          locale={{ emptyText: <TableEmptyState /> }}
-          pagination={{
-            current: page,
-            pageSize,
-            total: data?.total || 0,
-            showSizeChanger: true,
-            showQuickJumper: true,
-            showTotal: (total) => `共 ${total} 条`,
-            onChange: (nextPage, nextPageSize) => {
-              setPage(nextPage)
-              setPageSize(nextPageSize)
-            },
-          }}
-          scroll={{ x: 'max-content' }}
-        />
-      </Card>
-
-      {createOpen ? (
-        <CreateReportDrawer
-          open
-          initialRecordId={initialRecordId}
-          onClose={() => setCreateOpen(false)}
-          onCreated={handleCreated}
-        />
-      ) : null}
-
-      <ReportDetailDrawer report={detail} onClose={() => setDetail(null)} />
+      {/* 附件内容预览 */}
+      <Modal
+        title={preview ? `附件预览 - ${preview.file_name}` : '附件预览'}
+        open={!!preview}
+        onCancel={() => setPreview(null)}
+        footer={null}
+        width={900}
+        destroyOnHidden
+      >
+        {preview ? <AttachmentContent key={preview.url} url={preview.url} /> : null}
+      </Modal>
 
       <SettingsDrawer
         open={settingsOpen}

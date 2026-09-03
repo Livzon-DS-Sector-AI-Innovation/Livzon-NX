@@ -3740,7 +3740,7 @@ async def _import_rows_with_mapping(
                 or None,
                 64,
             ),
-            training_content=_clip(content_text or None, 512),
+            training_content=_clip(content_text or None, 4096),
             teaching_dept=_clip(department, 128),
             instructor=_clip(_cell_text(vals.get("instructor")), 128),
             level_category=_clip(_cell_text(vals.get("level_category")), 16),

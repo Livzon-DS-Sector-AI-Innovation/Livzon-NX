@@ -156,7 +156,8 @@ export default function TrainingSignInTabsClient() {
   // 弹窗实际展示的条目：按所选项目"附件X"引用过滤后的 section 子集
   const [modalSections, setModalSections] = useState<PlanAttachmentSection[]>([])
   const [contentModalOpen, setContentModalOpen] = useState(false)
-  const [checkedEntries, setCheckedEntries] = useState<(ContentEntry & { resolvedCode: string | null })[]>([])
+  // entry_id：解析命中的文件管理条目 ID（勾选时锁定，AI 出题按此 ID 精确读取内容）
+  const [checkedEntries, setCheckedEntries] = useState<(ContentEntry & { resolvedCode: string | null; entry_id?: string | null })[]>([])
   const [usedNames, setUsedNames] = useState<Set<string>>(new Set())
 
   useEffect(() => {
@@ -434,17 +435,17 @@ export default function TrainingSignInTabsClient() {
           employee_dept_map: sess.employee_dept_map ?? prev.employee_dept_map,
           checked_content: sess.checked_content ?? prev.checked_content,
         }))
-        // 与部门级一致：按名称匹配质量管理文件管理的最新编号（新员工跳转/恢复会话时刷新）
+        // 与部门级一致：恢复会话时优先按勾选锁定的条目 ID 解析编号（旧数据无 entry_id 才按名称匹配）
         // 批量解析一次请求完成（避免 N 个文件 N 次请求导致页面长时间空白）
         const entries = sess.checked_content ?? []
         if (entries.length) {
-          const resolvedItems = await resolveDocumentEntryContent(entries.map((c) => c.name)).catch(
-            () => [],
-          )
+          const resolvedItems = await resolveDocumentEntryContent(
+            entries.map((c) => ({ name: c.name, entry_id: c.entry_id ?? null })),
+          ).catch(() => [])
           const resolved = entries.map((c) => {
             const item = resolvedItems.find((x) => x.name === c.name)
             const code = item?.code ?? c.code ?? null
-            return { name: c.name, code, resolvedCode: code }
+            return { name: c.name, code, resolvedCode: code, entry_id: c.entry_id ?? item?.entry_id ?? null }
           })
           setCheckedEntries(resolved as (typeof checkedEntries)[number][])
           // 签到表题目：≤2 份显示全部，>2 份截断为前 2 份 + 详见附件（完整清单在培训附件页/台账）
@@ -452,7 +453,11 @@ export default function TrainingSignInTabsClient() {
           setSession((prev) => ({
             ...prev,
             topic: formatted || prev.topic,
-            checked_content: resolved.map((e) => ({ name: e.name, code: e.resolvedCode })),
+            checked_content: resolved.map((e) => ({
+              name: e.name,
+              code: e.resolvedCode,
+              entry_id: e.entry_id ?? null,
+            })),
           }))
         }
         // 恢复全部五类草稿（列表接口已带 payload）
@@ -644,7 +649,7 @@ export default function TrainingSignInTabsClient() {
     )
     const resolved = selected.map((e) => {
       const item = resolvedItems.find((x) => x.name === e.name)
-      return { ...e, resolvedCode: item?.code ?? e.code }
+      return { ...e, resolvedCode: item?.code ?? e.code, entry_id: item?.entry_id ?? null }
     })
     setCheckedEntries(resolved)
     // 签到表题目：≤2 份显示全部，>2 份截断为前 2 份 + 详见附件（完整清单在培训附件页/台账）
@@ -653,20 +658,26 @@ export default function TrainingSignInTabsClient() {
       setSession((prev) => ({
         ...prev,
         topic: formatted,
-        checked_content: resolved.map((e) => ({ name: e.name, code: e.resolvedCode })),
+        checked_content: resolved.map((e) => ({
+          name: e.name,
+          code: e.resolvedCode,
+          entry_id: e.entry_id ?? null,
+        })),
       }))
     }
     setContentModalOpen(false)
   }
 
-  // 从文件管理选择确认：解析最新编码 → 去重合并进已勾选条目（走同一培训内容/AI 出题链路）
+  // 从文件管理选择确认：勾选条目 ID 直接锁定（出题按 ID 精确读取，不再按名称匹配最新版）
   const handleDocPickerConfirm = (items: DocumentCatalogPick[]) => {
     if (!items.length) {
       setDocPickerOpen(false)
       return
     }
     void (async () => {
-      const resolvedItems = await resolveDocumentEntryContent(items.map((i) => i.name)).catch(() => [])
+      const resolvedItems = await resolveDocumentEntryContent(
+        items.map((i) => ({ name: i.name, entry_id: i.entryId })),
+      ).catch(() => [])
       setCheckedEntries((prev) => {
         const map = new Map(prev.map((e) => [e.name, e]))
         items.forEach((i) => {
@@ -680,6 +691,7 @@ export default function TrainingSignInTabsClient() {
             code,
             attachment_id: '',
             resolvedCode: code,
+            entry_id: i.entryId,
           })
         })
         const merged = Array.from(map.values())
@@ -688,7 +700,11 @@ export default function TrainingSignInTabsClient() {
         setSession((prev) => ({
           ...prev,
           topic: formatted,
-          checked_content: merged.map((e) => ({ name: e.name, code: e.resolvedCode })),
+          checked_content: merged.map((e) => ({
+            name: e.name,
+            code: e.resolvedCode,
+            entry_id: e.entry_id ?? null,
+          })),
         }))
         return merged as (typeof checkedEntries)[number][]
       })

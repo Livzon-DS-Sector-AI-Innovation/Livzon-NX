@@ -280,12 +280,15 @@ vi.mock('antd', async () => {
     return createElement('table', { ...props }, createElement('thead', null, createElement('tr', null, columns.map((column, index) => createElement('th', { key: index }, column.title))),), createElement('tbody', null, rows))
   }
   const Modal = ({ open, children, footer, title, onCancel, onOk, afterOpenChange }: { open?: boolean; children?: ReactNode; footer?: ReactNode; title?: ReactNode; onCancel?: () => void; onOk?: () => void; afterOpenChange?: (open: boolean) => void }) => {
+    // 真实 antd 仅在 open 状态变化时回调一次；依赖引用会导致组件重渲染时反复重放（预览加载死循环）
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- afterOpenChange 引用变化不应重放
     React.useEffect(() => { afterOpenChange?.(Boolean(open)) }, [open])
     return open ? createElement('div', { role: 'dialog' }, createElement('h2', null, title), createElement('button', { onClick: onCancel }, '取消'), createElement('button', { onClick: onOk }, '确定'), children, footer) : null
   }
   ;(Modal as typeof Modal & { confirm: (config: { onOk?: () => unknown }) => void; destroyAll: () => void }).confirm = (config) => void config.onOk?.()
   ;(Modal as typeof Modal & { confirm: (config: { onOk?: () => unknown }) => void; destroyAll: () => void }).destroyAll = () => undefined
   const Drawer = ({ open, children, title, onClose, extra, afterOpenChange }: { open?: boolean; children?: ReactNode; title?: ReactNode; onClose?: () => void; extra?: ReactNode; afterOpenChange?: (open: boolean) => void }) => {
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 同 Modal：引用变化不应重放
     React.useEffect(() => { afterOpenChange?.(Boolean(open)) }, [open])
     return open ? createElement('aside', null, createElement('h2', null, title), createElement('button', { onClick: onClose }, '关闭'), extra, children) : null
   }
@@ -385,7 +388,7 @@ vi.mock('antd', async () => {
     return [api] as const
   }
   Form.useWatch = () => undefined
-  const App = Object.assign(({ children }: { children?: ReactNode }) => createElement('div', null, children), { useApp: () => ({ message: mocks.message, modal: { ...mocks.modal, warning: vi.fn(), info: vi.fn() } }) })
+  const App = Object.assign(({ children }: { children?: ReactNode }) => createElement('div', null, children), { useApp: () => useMemo(() => ({ message: mocks.message, modal: { ...mocks.modal, warning: vi.fn(), info: vi.fn(), error: vi.fn() } }), []) })
   const TimePicker = Object.assign(Wrapper, { RangePicker })
   const Result = Wrapper
   const Avatar = Wrapper
@@ -3880,15 +3883,17 @@ describe('quality deviation history / workbench / inspection modal coverage', ()
     findButton('保存')?.click()
     await settle()
     expect(getMock('actions/quality-deviation-workbench', 'updateDeviationWorkbenchSettings')).toHaveBeenCalled()
-    // 新建抽屉：上传附件（Upload beforeUpload 拦截）后生成报告
-    findButton('新建偏差工作台')?.click()
-    await settle()
-    expect(rendered.container.textContent).toContain('新建偏差工作台 - 生成调查报告')
-    findButton('上传附件')?.click()
-    await settle()
+    // 两栏模式：左栏无内容时生成被拦截，上传附件（Upload beforeUpload 拦截）后生成成功
     getMock('actions/quality-deviation-workbench', 'uploadDeviationWorkbenchAttachment').mockResolvedValue({
       id: 'desc-1', file_name: 'template.pdf', storage_key: 'sk-1', asset_keys: [],
     })
+    findButton('生成调查报告')?.click()
+    await settle()
+    expect(mocks.message.warning).toHaveBeenCalledWith('请填写偏差内容或上传附件')
+    expect(getMock('actions/quality-deviation-workbench', 'analyzeDeviationWorkbench')).not.toHaveBeenCalled()
+    findButton('选择文件')?.click()
+    await settle()
+    expect(mocks.message.success).toHaveBeenCalledWith(expect.stringContaining('上传成功'))
     findButton('生成调查报告')?.click()
     await settle()
     expect(getMock('actions/quality-deviation-workbench', 'analyzeDeviationWorkbench')).toHaveBeenCalled()
@@ -3933,7 +3938,7 @@ describe('quality deviation history / workbench / inspection modal coverage', ()
     expect(getMock('actions/quality-deviation-workbench', 'deleteDeviationWorkbenchReport')).toHaveBeenCalledWith('f1')
     closeRendered(rendered)
 
-    // 创建抽屉：手动来源未填内容时拦截；上传失败与关闭清理分支
+    // 左栏：手动来源未填内容时拦截；上传失败与成功分支
     getMock('lib/api/client/quality', 'fetchDeviationWorkbenchReports').mockResolvedValue({ items: [], total: 0 })
     getMock('lib/api/client/quality', 'fetchDeviationWorkbenchSettings').mockResolvedValue(null)
     getMock('actions/quality-deviation-workbench', 'analyzeDeviationWorkbench').mockResolvedValue(null)
@@ -3942,24 +3947,19 @@ describe('quality deviation history / workbench / inspection modal coverage', ()
     const createView = renderClient(createElement(DeviationWorkbenchPage, { initialRecordId: null }))
     await settle()
     const cf = (text: string) => Array.from(createView.container.querySelectorAll('button')).find((b) => b.textContent?.includes(text))
-    cf('新建偏差工作台')?.click()
-    await settle()
     cf('生成调查报告')?.click()
     await settle()
-    expect(mocks.message.warning).toHaveBeenCalledWith('请手动输入偏差内容或上传附件')
-    cf('上传附件')?.click()
+    expect(mocks.message.warning).toHaveBeenCalledWith('请填写偏差内容或上传附件')
+    cf('选择文件')?.click()
     await settle()
     expect(mocks.message.error).toHaveBeenCalledWith('容量超限')
     // 上传成功 → descriptor 渲染（storage_key → 标准MD 标记）
     getMock('actions/quality-deviation-workbench', 'uploadDeviationWorkbenchAttachment').mockResolvedValue({
       id: 'desc-ok', file_name: 'report.pdf', storage_key: 'sk-1', converted_md_key: 'md-1', asset_keys: [],
     })
-    cf('上传附件')?.click()
+    cf('选择文件')?.click()
     await settle()
-    expect(mocks.message.success).toHaveBeenCalledWith('上传成功')
-    // 关闭创建抽屉（未生成）→ 未消费附件清理（无 descriptor 时无需 delete）
-    cf('关闭')?.click()
-    await settle()
+    expect(mocks.message.success).toHaveBeenCalledWith(expect.stringContaining('上传成功'))
     closeRendered(createView)
   })
 
