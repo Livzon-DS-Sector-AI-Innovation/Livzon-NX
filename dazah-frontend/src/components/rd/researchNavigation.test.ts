@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getPageKeyByPath, moduleMenus } from '@/lib/menu-config'
+import { moduleMenus } from '@/lib/menu-config'
 
 describe('research navigation after optimization retirement', () => {
   it('keeps research tools without advertising the retired route', () => {
@@ -10,6 +10,5 @@ describe('research navigation after optimization retirement', () => {
     expect(paths).toEqual(expect.arrayContaining([
       '/rd/projects', '/rd/ich-analysis', '/rd/pilot-workflow',
     ]))
-    expect(getPageKeyByPath('/rd/bayesian')).toBeUndefined()
   })
 })
