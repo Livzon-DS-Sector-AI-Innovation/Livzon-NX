@@ -142,6 +142,9 @@ async def test_oral_evaluation_and_notification_generators(
     saved = Document(BytesIO(output.getvalue()))
     assert "问题一" in saved.tables[0].cell(1, 1).text
     assert "☑" in saved.tables[0].cell(5, 4).text
+    # 备注：空值统一填 "—"（有多少人就有多少—）
+    assert saved.tables[0].cell(4, 6).text == "—"
+    assert saved.tables[0].cell(5, 6).text == "—"
     assert (
         oral_exam_document_generator._find_row(saved.tables[0], lambda row: False) == -1
     )
