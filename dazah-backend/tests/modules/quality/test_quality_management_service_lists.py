@@ -1172,7 +1172,7 @@ async def test_pull_quality_records_from_feishu_rejects_unknown_entity_code(
 
 
 @pytest.mark.anyio
-async def test_entity_settings_prefill_change_and_validation_sources(
+async def test_quality_feishu_settings_do_not_prefill_from_env(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1235,7 +1235,9 @@ async def test_entity_settings_prefill_change_and_validation_sources(
     )
     entity_map = {item.entity_code: item for item in entity_items}
 
-    assert app_settings.app_id == "cli_app_seeded"
+    # 质量模块配置以数据库为准，平台 env 仅用于本地部署兼容，不再自动落入业务配置。
+    assert app_settings.app_id == ""
+    assert app_settings.is_enabled is False
 
     push_item = entity_map["deviation_investigation_push_record"]
     assert push_item.app_token == "test-quality-app-token"
@@ -1264,7 +1266,6 @@ async def test_entity_settings_prefill_change_and_validation_sources(
     assert contact_item.base_table_id == "tblDq7JM4ibtL4MO"
     assert contact_item.base_table_name == "部门联系人"
     assert contact_item.is_enabled is True
-
 
 @pytest.mark.anyio
 async def test_get_quality_feishu_app_settings_does_not_backfill_existing_db_config(

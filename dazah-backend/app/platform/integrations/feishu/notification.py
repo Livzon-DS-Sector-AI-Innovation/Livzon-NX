@@ -11,71 +11,33 @@ import json
 import logging
 from typing import Any
 
-from app.core.config import get_settings
+from app.platform.integrations.feishu.auth import (
+    FeishuAuth,
+    FeishuCredentialsRequiredError,
+)
 
 logger = logging.getLogger(__name__)
-settings = get_settings()
 
 
-async def _get_client(
-    app_id: str | None = None,
-    app_secret: str | None = None,
-) -> Any:
-    """获取 lark-oapi 客户端实例（未传凭证时回退平台 env 配置）"""
+async def _get_client(app_id: str, app_secret: str) -> Any:
+    """获取 lark-oapi 客户端实例"""
+    if not app_id or not app_secret:
+        raise FeishuCredentialsRequiredError()
     import lark_oapi as lark  # type: ignore[import-untyped]
 
     return (
         lark.Client.builder()
-        .app_id(app_id or settings.FEISHU_APP_ID)
-        .app_secret(app_secret or settings.FEISHU_APP_SECRET)
+        .app_id(app_id)
+        .app_secret(app_secret)
+        .timeout(15.0)
         .domain(lark.FEISHU_DOMAIN)
         .app_type(lark.AppType.SELF)
         .build()
     )
 
 
-async def _get_tenant_token(
-    client: Any,
-    app_id: str | None = None,
-    app_secret: str | None = None,
-) -> str:
-    """获取 tenant_access_token（未传凭证时回退平台 env 配置）"""
-    import json as _json
-
-    from lark_oapi.api.auth.v3 import (  # type: ignore[import-untyped]
-        InternalTenantAccessTokenRequest,
-        InternalTenantAccessTokenRequestBody,
-    )
-
-    req = (
-        InternalTenantAccessTokenRequest.builder()
-        .request_body(
-            InternalTenantAccessTokenRequestBody.builder()
-            .app_id(app_id or settings.FEISHU_APP_ID)
-            .app_secret(app_secret or settings.FEISHU_APP_SECRET)
-            .build()
-        )
-        .build()
-    )
-    resp = await client.auth.v3.tenant_access_token.ainternal(req)
-    if not resp.success():
-        logger.error(
-            "Failed to get tenant token: code=%s, msg=%s",
-            resp.code,
-            resp.msg,
-        )
-        raise RuntimeError(
-            f"Failed to get tenant token: code={resp.code}, msg={resp.msg}"
-        )
-    if resp.raw and resp.raw.content:
-        data = _json.loads(resp.raw.content.decode("utf-8"))
-        token = data.get("tenant_access_token", "")
-        if not isinstance(token, str) or not token:
-            raise RuntimeError("Empty tenant token response")
-        logger.info("Tenant token obtained successfully")
-        return token
-    logger.error("Empty tenant token response")
-    raise RuntimeError("Empty tenant token response")
+async def _get_tenant_token(app_id: str, app_secret: str) -> str:
+    return await FeishuAuth.get_tenant_access_token(app_id, app_secret)
 
 
 async def send_user_card(
@@ -84,8 +46,9 @@ async def send_user_card(
     content: str,
     elements: list[dict[str, Any]] | None = None,
     receive_id_type: str = "open_id",
-    app_id: str | None = None,
-    app_secret: str | None = None,
+    *,
+    app_id: str = "",
+    app_secret: str = "",
 ) -> bool:
     """发送卡片消息给单个用户（DM）。
 
@@ -94,8 +57,6 @@ async def send_user_card(
         title: 卡片标题
         content: 卡片正文（支持 markdown）
         elements: 额外的卡片元素（按钮、分割线等）
-        app_id/app_secret: 调用方模块自己的飞书应用凭证（模块独立）；
-            未传时保持旧行为（平台 env 配置）
 
     Returns:
         True 表示发送成功，False 表示失败（不抛异常）
@@ -103,7 +64,7 @@ async def send_user_card(
     logger.info("send_user_card: attempting to send to open_id=%s", open_id)
     try:
         client = await _get_client(app_id, app_secret)
-        token = await _get_tenant_token(client, app_id, app_secret)
+        token = await _get_tenant_token(app_id, app_secret)
 
         from lark_oapi.api.im.v1 import (  # type: ignore[import-untyped]
             CreateMessageRequest,
@@ -142,10 +103,9 @@ async def send_user_card(
         resp = await client.im.v1.message.acreate(req)
         if not resp.success():
             logger.error(
-                "❌ send_user_card FAILED: open_id=%s, code=%s, msg=%s, status_code=%s",
+                "❌ send_user_card FAILED: open_id=%s, code=%s, status_code=%s",
                 open_id,
                 resp.code,
-                resp.msg,
                 resp.status_code if hasattr(resp, "status_code") else "N/A",
             )
             return False
@@ -153,10 +113,9 @@ async def send_user_card(
         return True
     except Exception as e:
         logger.error(
-            "❌ send_user_card EXCEPTION for open_id=%s: %s: %s",
+            "❌ send_user_card EXCEPTION for open_id=%s: %s",
             open_id,
             type(e).__name__,
-            e,
         )
         return False
 
@@ -167,19 +126,18 @@ async def send_user_card_with_message_id(
     content: str,
     elements: list[dict[str, Any]] | None = None,
     receive_id_type: str = "open_id",
-    app_id: str | None = None,
-    app_secret: str | None = None,
+    *,
+    app_id: str = "",
+    app_secret: str = "",
 ) -> str | None:
     """Send a card and return Feishu's message id when available.
 
-    This compatibility entry point shares the current platform credential
-    resolution and does not expose response bodies or credentials to callers.
-    传入 app_id/app_secret 时使用调用方模块自己的飞书应用凭证（模块独立）。
+    Requires explicit business credentials; never uses the login application.
     """
     logger.info("send_user_card_with_message_id: attempting to send to %s", open_id)
     try:
         client = await _get_client(app_id, app_secret)
-        token = await _get_tenant_token(client, app_id, app_secret)
+        token = await _get_tenant_token(app_id, app_secret)
 
         from lark_oapi.api.im.v1 import (
             CreateMessageRequest,
@@ -203,16 +161,13 @@ async def send_user_card_with_message_id(
         response = await client.im.v1.message.acreate(request)
         if not response.success():
             logger.error(
-                "send_user_card_with_message_id failed: code=%s, msg=%s",
+                "send_user_card_with_message_id failed: code=%s",
                 response.code,
-                response.msg,
             )
             return None
         return response.data.message_id if response.data else None
-    except Exception:
-        logger.exception(
-            "send_user_card_with_message_id failed for open_id=%s", open_id
-        )
+    except Exception as exc:
+        logger.error("send_user_card_with_message_id failed: %s", type(exc).__name__)
         return None
 
 
@@ -251,20 +206,13 @@ async def build_card(
 
 
 async def update_card(
-    message_id: str,
-    card: dict[str, Any],
-    *,
-    app_id: str | None = None,
-    app_secret: str | None = None,
+    message_id: str, card: dict[str, Any], *, app_id: str = "", app_secret: str = ""
 ) -> bool:
-    """Update an existing Feishu interactive card.
-
-    传入 app_id/app_secret 时使用调用方模块自己的飞书应用凭证（模块独立）。
-    """
+    """Update an existing Feishu interactive card."""
     logger.info("update_card: attempting to patch message_id=%s", message_id)
     try:
         client = await _get_client(app_id, app_secret)
-        token = await _get_tenant_token(client, app_id, app_secret)
+        token = await _get_tenant_token(app_id, app_secret)
 
         from lark_oapi.api.im.v1 import PatchMessageRequest, PatchMessageRequestBody
 
@@ -281,11 +229,9 @@ async def update_card(
         request.headers["Authorization"] = f"Bearer {token}"
         response = await client.im.v1.message.apatch(request)
         if not response.success():
-            logger.error(
-                "update_card failed: code=%s, msg=%s", response.code, response.msg
-            )
+            logger.error("update_card failed: code=%s", response.code)
             return False
         return True
-    except Exception:
-        logger.exception("update_card failed for message_id=%s", message_id)
+    except Exception as exc:
+        logger.error("update_card failed: %s", type(exc).__name__)
         return False

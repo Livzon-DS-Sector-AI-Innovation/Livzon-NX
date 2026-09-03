@@ -302,9 +302,7 @@ async def test_update_contract_approval_card_covers_department_and_supervisor_ca
 
     update_card = AsyncMock()
     monkeypatch.setattr("app.core.redis.cache_get", cache_get)
-    monkeypatch.setattr(
-        "app.platform.integrations.feishu.notification.update_card", update_card
-    )
+    monkeypatch.setattr("app.modules.hr.feishu.notification.update_card", update_card)
     await contract_api.update_contract_approval_card(
         "E-100", "合同员工", "approve", "dept", "质量部"
     )
@@ -365,9 +363,7 @@ async def test_contract_background_tasks_notify_hr_and_supervisor(
 
     monkeypatch.setattr("app.core.database.async_session_factory", lambda: _Factory())
     send_card = AsyncMock()
-    monkeypatch.setattr(
-        "app.platform.integrations.feishu.notification.send_user_card", send_card
-    )
+    monkeypatch.setattr("app.modules.hr.feishu.notification.send_user_card", send_card)
     await contract_api._send_contract_result_task("E-100")
     assert [call.kwargs["open_id"] for call in send_card.await_args_list] == [
         "ou-hr",
@@ -389,7 +385,7 @@ async def test_contract_background_tasks_notify_hr_and_supervisor(
     )
     send_supervisor = AsyncMock(return_value="msg-supervisor")
     monkeypatch.setattr(
-        "app.platform.integrations.feishu.notification.send_user_card_with_message_id",
+        "app.modules.hr.feishu.notification.send_user_card_with_message_id",
         send_supervisor,
     )
     cache_set = AsyncMock()

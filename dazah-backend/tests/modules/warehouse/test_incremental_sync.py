@@ -234,6 +234,9 @@ async def test_incremental_fetch_dual_route_single_page_dedup(
     """
     service = WarehouseService(db_session)
     service.feishu_client = AsyncMock()
+    service._get_material_client = AsyncMock(
+        side_effect=lambda _app_token: service.feishu_client
+    )
     watermark = datetime.now(UTC) - timedelta(minutes=10)
     last_synced_ms = int(watermark.timestamp() * 1000)
 
@@ -289,6 +292,9 @@ async def test_incremental_fetch_no_changes_returns_empty(
     """两路页面内所有记录都早于水线：返回空列表（零写库）。"""
     service = WarehouseService(db_session)
     service.feishu_client = AsyncMock()
+    service._get_material_client = AsyncMock(
+        side_effect=lambda _app_token: service.feishu_client
+    )
     watermark = datetime.now(UTC) - timedelta(minutes=10)
     last_synced_ms = int(watermark.timestamp() * 1000)
     service.feishu_client.request = AsyncMock(
@@ -333,6 +339,9 @@ async def test_incremental_fetch_second_route_error_tolerated(
     """last_modified_time 排序不被支持（请求报错）时只返回路一结果。"""
     service = WarehouseService(db_session)
     service.feishu_client = AsyncMock()
+    service._get_material_client = AsyncMock(
+        side_effect=lambda _app_token: service.feishu_client
+    )
     watermark = datetime.now(UTC) - timedelta(minutes=10)
     last_synced_ms = int(watermark.timestamp() * 1000)
     service.feishu_client.request = AsyncMock(

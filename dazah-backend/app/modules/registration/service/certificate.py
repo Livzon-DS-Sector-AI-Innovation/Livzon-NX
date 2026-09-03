@@ -25,7 +25,6 @@ from app.core.exceptions import AppException, NotFoundException
 from app.core.upload_security import read_upload_secure
 from app.modules.registration.models import (
     RegistrationCertificateEntry,
-    RegistrationCertificateReminderNotification,
 )
 from app.modules.registration.repository import RegistrationCertificateRepository
 from app.modules.registration.schemas.certificate import (
@@ -45,7 +44,6 @@ from app.modules.registration.schemas.certificate import (
     CertificateWorkbookOverview,
     CertificateWorkbookSheet,
 )
-from app.platform.integrations.feishu.notification import send_user_card
 
 logger = logging.getLogger(__name__)
 
@@ -1119,100 +1117,13 @@ class CertificateWorkbookService:
         await self.session.commit()
 
     async def find_due_reminder_batch(self) -> list[dict[str, object]]:
-        await self.ensure_seeded()
-        setting = await self.repository.get_reminder_setting()
-        if (
-            setting is None
-            or not setting.is_enabled
-            or not (setting.recipient_open_id or "").strip()
-            or setting.reminder_days <= 0
-        ):
-            return []
-
-        entries = await self.repository.list_entries()
-        due_entries: list[RegistrationCertificateEntry] = []
-        recipient_open_id = str(setting.recipient_open_id).strip()
-        recipient = await self._get_qa_reminder_recipient_by_open_id(recipient_open_id)
-        recipient_receive_id = recipient_open_id
-        recipient_receive_id_type = "open_id"
-        if recipient and recipient.enterprise_email:
-            recipient_receive_id = recipient.enterprise_email
-            recipient_receive_id_type = "email"
-
-        for entry in entries:
-            expiry = _extract_date(entry.expiry_date)
-            if expiry is None:
-                continue
-            days_until_expiry = (expiry - date.today()).days
-            if days_until_expiry < 0 or days_until_expiry > setting.reminder_days:
-                continue
-            if await self.repository.reminder_notification_exists(
-                entry.id,
-                recipient_open_id,
-                setting.reminder_days,
-            ):
-                continue
-            due_entries.append(entry)
-
-        if not due_entries:
-            return []
-
-        due_entries.sort(key=lambda item: _extract_date(item.expiry_date) or date.max)
-        return [
-            {
-                "recipient_open_id": recipient_open_id,
-                "recipient_name": setting.recipient_name,
-                "recipient_receive_id": recipient_receive_id,
-                "recipient_receive_id_type": recipient_receive_id_type,
-                "reminder_days": setting.reminder_days,
-                "entries": due_entries,
-            }
-        ]
+        # 独立通知应用尚未接入；不生成任务或写入已发送记录。
+        return []
 
     async def send_due_reminder_batch(self, item: dict[str, object]) -> None:
-        recipient_open_id = str(item["recipient_open_id"])
-        recipient_receive_id = str(
-            item.get("recipient_receive_id") or recipient_open_id
-        )
-        recipient_receive_id_type = str(
-            item.get("recipient_receive_id_type") or "open_id"
-        )
-        reminder_days = int(str(item["reminder_days"]))
-        entries = item["entries"]
-        if not isinstance(entries, list) or not entries:
-            return
-
-        certificate_entries = [
-            entry
-            for entry in entries
-            if isinstance(entry, RegistrationCertificateEntry)
-        ]
-        if not certificate_entries:
-            return
-
-        title = "证书到期提醒"
-        content = _build_reminder_content(certificate_entries, reminder_days)
-        success = await send_user_card(
-            open_id=recipient_receive_id,
-            title=title,
-            content=content,
-            receive_id_type=recipient_receive_id_type,
-        )
-        if not success:
-            return
-
-        await self.repository.create_reminder_notifications(
-            [
-                RegistrationCertificateReminderNotification(
-                    entry_id=entry.id,
-                    recipient_open_id=recipient_open_id,
-                    recipient_name=str(item.get("recipient_name") or "").strip()
-                    or None,
-                    reminder_days=reminder_days,
-                    expiry_date=entry.expiry_date,
-                )
-                for entry in certificate_entries
-            ]
+        raise AppException(
+            status_code=503,
+            message="注册证书飞书提醒暂未启用，待配置独立业务应用后恢复",
         )
 
 

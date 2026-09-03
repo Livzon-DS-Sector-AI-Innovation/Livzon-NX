@@ -254,7 +254,7 @@ async def test_position_transfer_notifications_cover_send_dedupe_and_rejection(
     monkeypatch.setattr("app.core.redis.cache_set", cache_set)
     sender = AsyncMock(return_value="msg-1")
     monkeypatch.setattr(
-        "app.platform.integrations.feishu.notification.send_user_card_with_message_id",
+        "app.modules.hr.feishu.notification.send_user_card_with_message_id",
         sender,
     )
     instance = service.PositionTransferRecordService.__new__(
@@ -279,7 +279,7 @@ async def test_position_transfer_notifications_cover_send_dedupe_and_rejection(
 
     rejected_sender = AsyncMock()
     monkeypatch.setattr(
-        "app.platform.integrations.feishu.notification.send_user_card_with_message_id",
+        "app.modules.hr.feishu.notification.send_user_card_with_message_id",
         rejected_sender,
     )
     instance._get_open_id_by_name = AsyncMock(return_value="ou-applicant")

@@ -25,7 +25,6 @@ from app.modules.procurement.repository import (
 from app.modules.procurement.schemas import MaterialSourceConfigUpsert
 from app.platform.identity.public_api import (
     FeishuAppCredentials,
-    get_platform_feishu_app_credentials,
 )
 from app.platform.integrations.feishu.bitable import (
     BitableClient,
@@ -304,14 +303,19 @@ def _validate_reference(source_url: str) -> BitableReference:
     return reference
 
 
+def _material_source_disabled_error() -> MaterialSourceCredentialsError:
+    return MaterialSourceCredentialsError(
+        "采购飞书同步暂未启用，待配置独立业务应用后恢复"
+    )
+
+
+def ensure_material_source_sync_enabled() -> None:
+    """采购独立应用接入前，禁止启动远程同步。"""
+    raise _material_source_disabled_error()
+
+
 async def _get_credentials(db: AsyncSession) -> FeishuAppCredentials:
-    try:
-        credentials = await get_platform_feishu_app_credentials(db)
-    except RuntimeError as exc:
-        raise MaterialSourceCredentialsError("平台飞书应用凭证不可用") from exc
-    if credentials is None:
-        raise MaterialSourceCredentialsError("平台尚未配置可用的飞书企业自建应用")
-    return credentials
+    raise _material_source_disabled_error()
 
 
 async def _run_feishu[T](
