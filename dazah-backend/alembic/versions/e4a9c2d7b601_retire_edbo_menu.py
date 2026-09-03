@@ -1,7 +1,7 @@
 """Retire the EDBO menu without deleting experimental records.
 
 Revision ID: e4a9c2d7b601
-Revises: d1e2f3a4b5c6
+Revises: 9e2f4a6c8b10
 """
 
 import sqlalchemy as sa
@@ -9,7 +9,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "e4a9c2d7b601"
-down_revision: str | None = "d1e2f3a4b5c6"
+down_revision: str | None = "9e2f4a6c8b10"
 branch_labels: str | None = None
 depends_on: str | None = None
 
