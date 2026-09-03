@@ -234,6 +234,7 @@ _LEGACY_SEED_MENUS: list[dict[str, Any]] = [
             _n("projects", "研发项目（开发中）", "/rd/projects", disabled=True),
             _n("experiments", "实验记录（开发中）", "/rd/experiments", disabled=True),
             _n("reports", "研发报告（开发中）", "/rd/reports", disabled=True),
+            _n("bayesian", "贝叶斯优化", "/rd/bayesian"),
             _n("ich-analysis", "ICH Q3C/Q3D 杂质识别", "/rd/ich-analysis"),
         ],
     ),

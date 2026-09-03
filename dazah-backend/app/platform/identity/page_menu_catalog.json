@@ -838,6 +838,15 @@
             "permission_code": null,
             "disabled": false,
             "children": null
+          },
+          {
+            "key": "qc-validation",
+            "name": "QC验证",
+            "path": "/quality/validation/qc-validation",
+            "icon": null,
+            "permission_code": null,
+            "disabled": false,
+            "children": null
           }
         ]
       }
