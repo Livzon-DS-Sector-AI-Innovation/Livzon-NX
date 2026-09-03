@@ -33,6 +33,7 @@ RUN mkdir -p /app/uploads /app/storage \
     && chown app:app /app/uploads /app/storage
 
 USER app
+ENV WATCHFILES_POLL_DELAY_MS=2000
 EXPOSE 8000
 CMD [".venv/bin/uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/app/app"]
 
@@ -52,8 +53,9 @@ RUN corepack enable pnpm \
 COPY --chown=node:node dazah-frontend/ ./
 
 USER node
+ENV WATCHPACK_POLLING=2000
 EXPOSE 3000
-CMD ["pnpm", "dev:webpack", "--hostname", "0.0.0.0", "--port", "3000"]
+CMD ["pnpm", "dev", "--hostname", "0.0.0.0", "--port", "3000"]
 
 
 FROM python:3.12-slim-bookworm AS hermes-lark-cli
@@ -103,6 +105,11 @@ RUN useradd --create-home --shell /usr/sbin/nologin hermes \
     && chown -R hermes:hermes /data/hermes /run/hermes-feishu /app
 
 USER hermes
+ENV WATCHFILES_POLL_DELAY_MS=2000
 EXPOSE 8100
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
-CMD ["python", "-m", "uvicorn", "services.dazah_agent_service:app", "--host", "0.0.0.0", "--port", "8100", "--reload", "--reload-dir", "/app"]
+# Watch explicit runtime paths, including root Python modules. Uvicorn's
+# --reload-exclude filters events after scanning, so it would still poll the
+# bind-mounted .venv, tests and temporary data when watching all of /app.
+# watchfiles is already provided by uvicorn[standard]; it also accepts files.
+CMD ["python", "-m", "watchfiles", "--filter", "python", "--sigint-timeout", "15", "python -m uvicorn services.dazah_agent_service:app --host 0.0.0.0 --port 8100", "/app/services", "/app/tools", "/app/agent", "/app/gateway", "/app/hermes_cli", "/app/plugins", "/app/providers", "/app/hermes_bootstrap.py", "/app/hermes_constants.py", "/app/hermes_logging.py", "/app/hermes_time.py", "/app/model_tools.py", "/app/run_agent.py", "/app/toolsets.py", "/app/utils.py"]
