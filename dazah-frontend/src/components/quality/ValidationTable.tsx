@@ -2,7 +2,7 @@
 
 import { qualityTokens } from './themeTokens'
 import { useState, useCallback } from 'react'
-import { Button, Input, Select, Space, Table, Tag, Tooltip, DatePicker, App } from 'antd'
+import { Button, Input, Select, Space, Table, Tag, Tooltip, DatePicker, App, Avatar } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, FilterOutlined, EyeOutlined } from '@ant-design/icons'
 import type { ValidationListItem } from '@/types/quality'
@@ -98,6 +98,67 @@ function renderProductCodes(codes: string[] | string | null | undefined) {
       ))}
     </Space>
   )
+}
+
+interface PersonLike {
+  name?: string
+  avatar_url?: string
+  id?: string
+}
+
+/** 渲染群组：结构化数组（含群名）→ 群名；纯文本 → 原样 */
+function renderGroupChat(value: unknown): React.ReactNode {
+  if (Array.isArray(value) && value.length > 0) {
+    const groups = value.filter(
+      (item): item is { name?: string; avatar_url?: string } =>
+        !!item && typeof item === 'object'
+    )
+    if (groups.length > 0) {
+      return (
+        <Space size={4} wrap>
+          {groups.map((group, index) => (
+            <span key={group.name || index} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              {group.avatar_url ? (
+                <Avatar size={20} src={group.avatar_url} />
+              ) : null}
+              <span style={{ fontSize: 13 }}>{group.name || '-'}</span>
+            </span>
+          ))}
+        </Space>
+      )
+    }
+    return value.map((v) => (typeof v === 'string' ? v : '')).join('、') || '-'
+  }
+  const text = value as string | null | undefined
+  return text || '-'
+}
+
+/** 渲染人员：结构化数组（含头像）→ 头像+姓名；纯文本 → 原样显示 */
+function renderParticipants(value: unknown): React.ReactNode {
+  if (Array.isArray(value) && value.length > 0) {
+    const persons = value.filter(
+      (item): item is PersonLike => !!item && typeof item === 'object'
+    )
+    if (persons.length > 0) {
+      return (
+        <Space size={4} wrap>
+          {persons.map((person, index) => (
+            <Tooltip key={person.id || index} title={person.name}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <Avatar size={20} src={person.avatar_url || undefined}>
+                  {person.name?.slice(0, 1) || '?'}
+                </Avatar>
+                <span style={{ fontSize: 13 }}>{person.name || '-'}</span>
+              </span>
+            </Tooltip>
+          ))}
+        </Space>
+      )
+    }
+    return value.join('、') || '-'
+  }
+  const text = value as string | null | undefined
+  return text || '-'
 }
 
 export function ValidationTable({
@@ -283,19 +344,19 @@ export function ValidationTable({
       title: '群组',
       dataIndex: 'group_chat',
       width: 140,
-      render: (value: string | null) => value || '-',
+      render: (value: unknown) => renderGroupChat(value),
     },
     {
       title: '人员',
       dataIndex: 'participants',
       width: 140,
-      render: (value: string | null) => value || '-',
+      render: (value: unknown) => renderParticipants(value),
     },
     {
       title: '负责人',
       dataIndex: 'owner_name',
       width: 120,
-      render: (value: string | null) => value || '-',
+      render: (value: unknown) => renderParticipants(value),
     },
     {
       title: '方案名称',

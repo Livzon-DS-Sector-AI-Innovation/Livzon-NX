@@ -168,7 +168,7 @@ describe('renderFeishuValue', () => {
     expect(container.textContent).toBe('42')
   })
 
-  it('renders file_token-only attachments via custom proxy builder', async () => {
+  it('renders image attachments inline via proxy builder (no download button)', async () => {
     const blob = new Blob(['x'], { type: 'image/jpeg' })
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, blob: async () => blob })
     vi.stubGlobal('fetch', fetchMock)
@@ -190,15 +190,16 @@ describe('renderFeishuValue', () => {
         },
       ),
     )
-    const button = container.querySelector('button')
-    expect(button?.textContent).toBe('封面.jpeg')
     await act(async () => {
-      button?.click()
+      await new Promise((resolve) => setTimeout(resolve, 30))
     })
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/v1/quality/validation-qc/records/rec-qc-1/attachments/ft-qc-1/content?year=2026&entity=',
     )
-    expect(openMock).toHaveBeenCalledWith('blob:proxy', '_blank')
+    expect(createObjectURL).toHaveBeenCalled()
+    // 图片内联展示，没有下载按钮、不触发 window.open
+    expect(container.querySelector('button')).toBeNull()
+    expect(openMock).not.toHaveBeenCalled()
   })
 
   it('formats DateTime ms values and Checkbox booleans by uiType', () => {

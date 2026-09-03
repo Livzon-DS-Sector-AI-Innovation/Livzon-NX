@@ -239,7 +239,7 @@ async def test_list_bitable_feishu_records_unconfigured_returns_flag(
         AsyncMock(side_effect=AppException(message="disabled")),
     )
     result = await crud_service.list_bitable_feishu_records(
-        SimpleNamespace(), "validation_qc_2025"
+        SimpleNamespace(), "validation_qc_2027"
     )
     assert result["table_configured"] is False
     assert result["items"] == []
@@ -293,7 +293,7 @@ async def test_get_bitable_entity_configured_reflects_runtime(
     )
     assert (
         await crud_service.get_bitable_entity_configured(
-            SimpleNamespace(), "validation_qc_2025"
+            SimpleNamespace(), "validation_qc_2027"
         )
         is False
     )
@@ -547,3 +547,37 @@ def test_button_field_is_read_only_and_stripped_from_writes() -> None:
         remote_field_map, {"方案名称": "新方案", "同步": "点击"}
     )
     assert coerced == {"方案名称": "新方案"}
+
+
+def test_validation_mapping_group_chat_and_empty_row() -> None:
+    """群组保留 {id,name,avatar_url} 结构；仅部门/无业务的占位行标记 is_empty_row。"""
+    record = {
+        "record_id": "rec-g",
+        "created_time": "2026-08-01T00:00:00+00:00",
+        "fields": {
+            "确认名称": "生化培养箱再确认",
+            "部门名称": "QC",
+            "群组": [
+                {"id": "oc_abc", "name": "验证群", "avatar_url": "https://x/a.png"}
+            ],
+            "人员": [{"name": "赵双"}],
+        },
+    }
+    item = pages._map_validation_base_item(record)
+    assert item["group_chat"] == [
+        {"id": "oc_abc", "name": "验证群", "avatar_url": "https://x/a.png"}
+    ]
+    assert item["is_empty_row"] is False
+
+    # 仅部门（无其他业务信息）的占位行
+    empty_record = {
+        "record_id": "rec-empty",
+        "created_time": "2026-08-01T00:00:00+00:00",
+        "fields": {
+            "部门名称": "动力部",
+            "父记录": {},
+            "文本 9": {},
+        },
+    }
+    empty_item = pages._map_validation_base_item(empty_record)
+    assert empty_item["is_empty_row"] is True

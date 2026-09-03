@@ -80,7 +80,11 @@ const SERVER_API_BASE =
 async function serverFetch<T>(path: string): Promise<T> {
   const url = `${SERVER_API_BASE}${path}`
   const response = await globalThis.fetch(url, {
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      // 携带登录凭证；缺失会导致后端 401、页面被 catch 成空数据
+      ...(await getAuthHeadersForServer()),
+    },
     next: { revalidate: 0 },
   })
   if (!response.ok) {

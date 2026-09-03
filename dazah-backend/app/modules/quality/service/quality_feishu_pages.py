@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import re
 import uuid
@@ -10,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AppException, NotFoundException
+from app.core.redis import cache_delete, cache_get, cache_set
 from app.modules.quality import repository
 from app.modules.quality.models import CAPA, CapaPlanTrack, ChangeControl
 from app.modules.quality.service import (
@@ -1068,15 +1070,46 @@ def _entity_code_for_validation_type(
     return base
 
 
+async def _invalidate_validation_list_cache(entity_code: str) -> None:
+    """清除指定实体的验证列表缓存（写操作后调用，保证列表即时刷新）。"""
+    try:
+        from app.core.redis import redis_client
+
+        async for key in redis_client.scan_iter(
+            f"quality:validation:list:{entity_code}:*"
+        ):
+            await cache_delete(key)
+    except Exception:
+        logger.warning("验证列表缓存清理失败（忽略）", exc_info=True)
+
+
+_DEPARTMENT_CONTACTS_CACHE_KEY = "quality:department_contacts:list"
+_DEPARTMENT_CONTACTS_CACHE_TTL = 300
+
+
 async def _get_department_contacts_cache(db: AsyncSession) -> list[dict[str, Any]]:
-    """获取部门联系人缓存（从飞书拉取）"""
+    """获取部门联系人（Redis 缓存 5 分钟，避免每个列表请求都拉飞书）"""
+    cached = await cache_get(_DEPARTMENT_CONTACTS_CACHE_KEY)
+    if cached is not None:
+        try:
+            parsed = json.loads(cached)
+            if isinstance(parsed, list):
+                return parsed
+        except (TypeError, ValueError):
+            pass
     from app.modules.quality.service.department_contacts import (
         get_department_contact_list_from_feishu,
     )
 
     result = await get_department_contact_list_from_feishu(db, page=1, page_size=1000)
     items = result.get("items", [])
-    return items if isinstance(items, list) else []
+    items = items if isinstance(items, list) else []
+    await cache_set(
+        _DEPARTMENT_CONTACTS_CACHE_KEY,
+        json.dumps(items, ensure_ascii=False, default=str),
+        ex=_DEPARTMENT_CONTACTS_CACHE_TTL,
+    )
+    return items
 
 
 def _resolve_bitable_user_ids_from_names(
@@ -1201,37 +1234,87 @@ def _map_validation_base_item(
         if digits:
             revalidation_years = int(digits)
 
-    # 人员字段是用户类型，提取名称列表
+    # 人员字段是用户类型：保留 name/avatar_url/id 结构，前端可渲染头像+姓名
     participants_raw = fields.get("人员")
-    participants: str | None = None
+    participants: list[dict[str, str]] | str | None = None
     if isinstance(participants_raw, list):
-        names = []
+        persons = []
         for item in participants_raw:
             if isinstance(item, dict):
-                name = item.get("name", "") or item.get("text", "")
-                if name:
-                    names.append(name)
+                if item.get("name"):
+                    persons.append(
+                        {
+                            "name": str(item.get("name") or ""),
+                            "avatar_url": str(item.get("avatar_url") or ""),
+                            "id": str(item.get("id") or item.get("open_id") or ""),
+                        }
+                    )
+                elif item.get("text"):
+                    persons.append(
+                        {
+                            "name": str(item.get("text") or ""),
+                            "avatar_url": "",
+                            "id": "",
+                        }
+                    )
             elif isinstance(item, str) and item.strip():
-                names.append(item.strip())
-        participants = "、".join(names) if names else None
+                persons.append({"name": item.strip(), "avatar_url": "", "id": ""})
+        participants = persons if persons else None
     elif participants_raw:
         participants = normalize_text(participants_raw)
 
-    # 负责人字段
+    # 负责人字段：同样保留结构化头像信息
     owner_raw = fields.get("负责人")
-    owner_name: str | None = None
+    owner_name: list[dict[str, str]] | str | None = None
     if isinstance(owner_raw, list):
-        owner_names = []
+        owner_persons = []
         for item in owner_raw:
             if isinstance(item, dict):
-                name = item.get("name", "") or item.get("text", "")
-                if name:
-                    owner_names.append(name)
+                if item.get("name"):
+                    owner_persons.append(
+                        {
+                            "name": str(item.get("name") or ""),
+                            "avatar_url": str(item.get("avatar_url") or ""),
+                            "id": str(item.get("id") or item.get("open_id") or ""),
+                        }
+                    )
+                elif item.get("text"):
+                    owner_persons.append(
+                        {
+                            "name": str(item.get("text") or ""),
+                            "avatar_url": "",
+                            "id": "",
+                        }
+                    )
             elif isinstance(item, str) and item.strip():
-                owner_names.append(item.strip())
-        owner_name = "、".join(owner_names) if owner_names else None
+                owner_persons.append(
+                    {
+                        "name": item.strip(),
+                        "avatar_url": "",
+                        "id": "",
+                    }
+                )
+        owner_name = owner_persons if owner_persons else None
     elif owner_raw:
         owner_name = normalize_text(owner_raw)
+
+    # 群组字段是 GroupChat 类型，保留 {id, name, avatar_url} 结构供前端显示群名
+    group_chat_raw = fields.get("群组")
+    group_chat: list[dict[str, str]] | str | None = None
+    if isinstance(group_chat_raw, list):
+        groups = []
+        for item in group_chat_raw:
+            if isinstance(item, dict) and item.get("name"):
+                groups.append(
+                    {
+                        "id": str(item.get("id") or ""),
+                        "name": str(item.get("name") or ""),
+                        "avatar_url": str(item.get("avatar_url") or ""),
+                    }
+                )
+        group_chat = groups if groups else None
+    elif group_chat_raw:
+        group_chat = normalize_text(group_chat_raw)
 
     return {
         "record_id": str(record.get("record_id") or ""),
@@ -1245,7 +1328,7 @@ def _map_validation_base_item(
         "equipment_code": _parse_feishu_text_field(fields.get("设备编码")),
         "product_codes": product_codes,
         "planned_end_date": planned_end_text,  # 文本格式如 "2026.02"
-        "group_chat": normalize_text(fields.get("群组")),
+        "group_chat": group_chat,
         "participants": participants,
         "owner_name": owner_name,
         "plan_name": _parse_feishu_text_field(fields.get("方案名称")),
@@ -1258,6 +1341,23 @@ def _map_validation_base_item(
         "revalidation_cycle_years": revalidation_years,
         "created_at": parse_date(record.get("created_time")) or datetime.now(UTC),
         "updated_at": modified_at or datetime.now(UTC),
+        # 仅部门（或全空）的占位行：除部门外无任何业务信息 → 前端自动隐藏
+        "is_empty_row": not bool(
+            _parse_feishu_text_field(fields.get("确认名称"))
+            or _parse_feishu_text_field(fields.get("设备编码"))
+            or _parse_feishu_text_field(fields.get("方案名称"))
+            or _parse_feishu_text_field(fields.get("方案编码"))
+            or _parse_feishu_text_field(fields.get("报告编号"))
+            or fields.get("人员")
+            or fields.get("负责人")
+            or fields.get("任务状态")
+            or fields.get("验证到期时间")
+            or drafted_date
+            or approved_date
+            or drafted_date_1
+            or approved_date_1
+            or revalidation_years
+        ),
     }
 
 
@@ -1380,7 +1480,10 @@ async def _apply_ai_validation_categories(
     db: AsyncSession,
     items: list[dict[str, Any]],
 ) -> None:
-    """对缺少"验证类别"列的记录按确认名称做 AI 分类（带 DB 缓存）。"""
+    """对缺少"验证类别"列的记录按确认名称做 AI 分类（带 DB 缓存）。
+
+    顺带用部门联系人补全人员/负责人的头像（飞书用户字段本身不含头像）。
+    """
     inferred_titles = sorted(
         {
             str(item.get("title") or "").strip()
@@ -1389,21 +1492,63 @@ async def _apply_ai_validation_categories(
             and str(item.get("title") or "").strip()
         }
     )
-    if not inferred_titles:
-        return
+    if inferred_titles:
+        try:
+            resolve = validation_classification_service.resolve_validation_categories
+            categories = await resolve(db, inferred_titles)
+        except Exception:
+            logger.exception("验证名称 AI 分类失败，保持其他验证归类")
+            categories = {}
+        for item in items:
+            if item.get("validation_type_source") != "inferred":
+                continue
+            category = categories.get(str(item.get("title") or "").strip())
+            if category in validation_classification_service.VALIDATION_CATEGORY_CODES:
+                item["validation_type"] = category
+            item.pop("validation_type_source", None)
+    await _enrich_participants_avatars(db, items)
+
+
+async def _enrich_participants_avatars(
+    db: AsyncSession,
+    items: list[dict[str, Any]],
+) -> None:
+    """用 HR 飞书人员缓存（hr_feishu_members）按姓名补全人员/负责人头像。
+
+    飞书 user 字段本身不含 avatar_url；HR 模块已把飞书通讯录（含头像）
+    缓存到本地表，按姓名匹配即可取到头像，不依赖部门联系人表配置。
+    """
     try:
-        resolve = validation_classification_service.resolve_validation_categories
-        categories = await resolve(db, inferred_titles)
+        from sqlalchemy import select as _select
+
+        from app.modules.hr.models import HrFeishuMember
+
+        rows = (
+            await db.execute(_select(HrFeishuMember))
+        ).scalars().all()
     except Exception:
-        logger.exception("验证名称 AI 分类失败，保持其他验证归类")
-        categories = {}
+        logger.warning("读取 HR 飞书人员缓存失败，人员头像跳过", exc_info=True)
+        return
+    avatar_by_name: dict[str, str] = {}
+    for member in rows:
+        name = str(member.name or "").strip()
+        avatar = str(member.avatar_url or "").strip()
+        if name and avatar and name not in avatar_by_name:
+            avatar_by_name[name] = avatar
+
+    def _fill(person_list: Any) -> None:
+        if not isinstance(person_list, list):
+            return
+        for person in person_list:
+            if not isinstance(person, dict):
+                continue
+            name = str(person.get("name") or "").strip()
+            if not person.get("avatar_url") and name in avatar_by_name:
+                person["avatar_url"] = avatar_by_name[name]
+
     for item in items:
-        if item.get("validation_type_source") != "inferred":
-            continue
-        category = categories.get(str(item.get("title") or "").strip())
-        if category in validation_classification_service.VALIDATION_CATEGORY_CODES:
-            item["validation_type"] = category
-        item.pop("validation_type_source", None)
+        _fill(item.get("participants"))
+        _fill(item.get("owner_name"))
 
 
 async def _search_validation_records_safe(
@@ -1458,8 +1603,22 @@ async def list_validation_records_from_feishu(
     page: int = 1,
     page_size: int = 20,
 ) -> dict[str, Any]:
-    """从飞书拉取验证记录列表。year 指定时严格读取对应年度表（未配置则为空）。"""
+    """从飞书拉取验证记录列表。year 指定时严格读取对应年度表（未配置则为空）。
+
+    结果带 60 秒短时缓存（Redis），降低重复打开/翻页的飞书全量拉取开销；
+    写操作（增删改/批量删）会清除对应实体的缓存。
+    """
     entity_code = _entity_code_for_validation_type(validation_type, year)
+    cache_key = (
+        f"quality:validation:list:{entity_code}:{validation_type or ''}:"
+        f"{status or ''}:{department or ''}:{keyword or ''}:{page}:{page_size}"
+    )
+    cached = await cache_get(cache_key)
+    if cached is not None:
+        try:
+            return json.loads(cached)
+        except (TypeError, ValueError):
+            pass
 
     try:
         _, entity = await _resolve_runtime_entity(db, entity_code, direction="pull")
@@ -1469,6 +1628,8 @@ async def list_validation_records_from_feishu(
     records = await _search_validation_records_safe(db, entity_code)
 
     items = [_map_validation_base_item(record) for record in records]
+    # 隐藏仅部门（无其他业务信息）的占位行
+    items = [item for item in items if not item.get("is_empty_row")]
     await _apply_ai_validation_categories(db, items)
 
     # Filter by validation_type if specified (for child pages)
@@ -1542,9 +1703,15 @@ async def list_validation_records_from_feishu(
         reverse=True,
     )
     start = (page - 1) * page_size
-    return _build_page_result(
+    result = _build_page_result(
         items[start : start + page_size], len(items), page, page_size
     )
+    await cache_set(
+        cache_key,
+        json.dumps(result, ensure_ascii=False, default=str),
+        ex=60,
+    )
+    return result
 
 
 async def get_validation_record_from_feishu(
@@ -1650,6 +1817,7 @@ async def create_validation_record_in_feishu(
         fields,
         search_conditions=[("确认名称", title)],
     )
+    await _invalidate_validation_list_cache(entity_code)
     return await get_validation_record_from_feishu(
         db, created["record_id"], validation_type, year
     )
@@ -1682,6 +1850,7 @@ async def update_validation_record_in_feishu(
         fields,
         search_conditions=[("确认名称", title)],
     )
+    await _invalidate_validation_list_cache(entity_code)
     return await get_validation_record_from_feishu(
         db, record_id, validation_type, year
     )
@@ -1698,6 +1867,7 @@ async def delete_validation_record_in_feishu(
     entity_code = _entity_code_for_validation_type(validation_type, year)
 
     await _delete_entity_record(db, entity_code, record_id, actor_user_id)
+    await _invalidate_validation_list_cache(entity_code)
 
 
 async def pull_validation_records_from_feishu(

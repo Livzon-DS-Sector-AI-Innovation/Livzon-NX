@@ -56,7 +56,7 @@ _INSPECTION_ENTITY_CODES.update(MATERIAL_ENTITY_CODES)
 
 # 验证与确认-QC验证年度实体：与检验实体共用同一套通用飞书记录读写能力
 VALIDATION_QC_ENTITY_CODES: set[str] = {
-    f"validation_qc_{year}" for year in range(2024, 2029)
+    f"validation_qc_{year}" for year in range(2026, 2029)
 }
 
 # 通用飞书记录 CRUD 的完整实体白名单
@@ -323,7 +323,9 @@ async def get_inspection_feishu_record(
         for item in await client.list_fields(_entity_table_id(entity))
         if item.get("field_name")
     )
-    return _base_map(record, entity, remote_field_names)
+    item = _base_map(record, entity, remote_field_names)
+    await _enrich_bitable_record_avatars(db, [item])
+    return item
 
 
 async def pull_inspection_feishu_records(
@@ -368,6 +370,44 @@ async def get_bitable_entity_reference(
 def build_feishu_base_url(app_token: str, table_id: str) -> str:
     """拼接多维表格链接：https://www.feishu.cn/base/{app_token}?table={table_id}"""
     return f"https://www.feishu.cn/base/{app_token}?table={table_id}"
+
+
+async def _enrich_bitable_record_avatars(
+    db: AsyncSession,
+    items: list[dict[str, Any]],
+) -> None:
+    """用 HR 飞书人员缓存按姓名补全人员字段头像（飞书 user 字段无头像）。"""
+    try:
+        from sqlalchemy import select as _select
+
+        from app.modules.hr.models import HrFeishuMember
+
+        rows = (await db.execute(_select(HrFeishuMember))).scalars().all()
+    except Exception:
+        logger.warning("读取 HR 飞书人员缓存失败，QC 人员头像跳过", exc_info=True)
+        return
+    avatar_by_name: dict[str, str] = {}
+    for member in rows:
+        name = str(member.name or "").strip()
+        avatar = str(member.avatar_url or "").strip()
+        if name and avatar and name not in avatar_by_name:
+            avatar_by_name[name] = avatar
+    if not avatar_by_name:
+        return
+
+    def _fill(person_list: Any) -> None:
+        if not isinstance(person_list, list):
+            return
+        for person in person_list:
+            if not isinstance(person, dict):
+                continue
+            name = str(person.get("name") or "").strip()
+            if not person.get("avatar_url") and name in avatar_by_name:
+                person["avatar_url"] = avatar_by_name[name]
+
+    for item in items:
+        for value in item.values():
+            _fill(value)
 
 
 async def batch_create_record_share_links(
@@ -463,6 +503,7 @@ async def list_bitable_feishu_records(
             return False
 
         items = [row for row in items if _matches(row)]
+    await _enrich_bitable_record_avatars(db, items)
     total = len(items)
     start = (page - 1) * page_size
     return {
