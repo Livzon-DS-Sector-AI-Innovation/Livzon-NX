@@ -56,6 +56,45 @@ const EMPTY_APP_FORM: UpdateQualityFeishuAppSettingsRequest = {
   oos_oot_investigation_push_form_url: '',
 }
 
+type AppFormUrlKey =
+  | 'deviation_report_form_url'
+  | 'deviation_investigation_push_form_url'
+  | 'oos_oot_report_form_url'
+  | 'oos_oot_investigation_push_form_url'
+
+/** 归位到对应实体分组下的表单链接字段（偏差→偏差管理，OOSOOT→OOS/OOT管理） */
+const GROUP_FORM_URL_FIELDS: Record<
+  string,
+  Array<{ key: AppFormUrlKey; label: string; placeholder: string }>
+> = {
+  偏差管理: [
+    {
+      key: 'deviation_report_form_url',
+      label: '新建表单链接',
+      placeholder:
+        '偏差报告新建表单链接，例如 https://xxx.feishu.cn/share/base/form/xxx',
+    },
+    {
+      key: 'deviation_investigation_push_form_url',
+      label: '调查推送表单链接',
+      placeholder:
+        '偏差调查推送新建表单链接，例如 https://xxx.feishu.cn/share/base/form/xxx',
+    },
+  ],
+  'OOS/OOT管理': [
+    {
+      key: 'oos_oot_report_form_url',
+      label: 'OOSOOT报告记录表单链接',
+      placeholder: 'OOS/OOT报告记录新建表单链接',
+    },
+    {
+      key: 'oos_oot_investigation_push_form_url',
+      label: 'OOSOOT调查推送表单链接',
+      placeholder: 'OOS/OOT调查推送新建表单链接',
+    },
+  ],
+}
+
 function formatDateTime(value: string | null | undefined): string {
   if (!value) return '-'
   return new Date(value).toLocaleString('zh-CN')
@@ -1005,42 +1044,6 @@ export function QualityFeishuSettingsPage() {
               }
             />
           </Space.Compact>
-          <Space.Compact block>
-            <Button disabled style={{ cursor: 'default', width: 120 }}>
-              新建表单链接
-            </Button>
-            <Input
-              value={appForm.deviation_report_form_url || ''}
-              placeholder="偏差报告新建表单链接，例如 https://xxx.feishu.cn/share/base/form/xxx"
-              onChange={(event) =>
-                setAppForm((current) => ({ ...current, deviation_report_form_url: event.target.value }))
-              }
-            />
-          </Space.Compact>
-          <Space.Compact block>
-            <Button disabled style={{ cursor: 'default', width: 120 }}>调查推送表单链接</Button>
-            <Input
-              value={appForm.deviation_investigation_push_form_url || ''}
-              placeholder="偏差调查推送新建表单链接，例如 https://xxx.feishu.cn/share/base/form/xxx"
-              onChange={(event) => setAppForm((current) => ({ ...current, deviation_investigation_push_form_url: event.target.value }))}
-            />
-          </Space.Compact>
-          <Space.Compact block>
-            <Button disabled style={{ cursor: 'default', width: 120 }}>OOSOOT报告记录表单链接</Button>
-            <Input
-              value={appForm.oos_oot_report_form_url || ''}
-              placeholder="OOS/OOT报告记录新建表单链接"
-              onChange={(event) => setAppForm((current) => ({ ...current, oos_oot_report_form_url: event.target.value }))}
-            />
-          </Space.Compact>
-          <Space.Compact block>
-            <Button disabled style={{ cursor: 'default', width: 120 }}>OOSOOT调查推送表单链接</Button>
-            <Input
-              value={appForm.oos_oot_investigation_push_form_url || ''}
-              placeholder="OOS/OOT调查推送新建表单链接"
-              onChange={(event) => setAppForm((current) => ({ ...current, oos_oot_investigation_push_form_url: event.target.value }))}
-            />
-          </Space.Compact>
           <Space size={12}>
             <Typography.Text>启用飞书同步</Typography.Text>
             <Switch
@@ -1087,15 +1090,46 @@ export function QualityFeishuSettingsPage() {
               key: group,
               label: renderGroupLabel(group, items.length),
               children: (
-                <Table<QualityFeishuEntitySettingItem>
-                  rowKey="entity_code"
-                  loading={loading}
-                  columns={columns}
-                  dataSource={items}
-                  pagination={false}
-                  scroll={{ x: 1720 }}
-                  size="small"
-                />
+                <Space orientation="vertical" size={12} style={{ display: 'flex' }}>
+                  {GROUP_FORM_URL_FIELDS[group] && (
+                    <Space orientation="vertical" size={8} style={{ display: 'flex' }}>
+                      {GROUP_FORM_URL_FIELDS[group].map((field) => (
+                        <Space.Compact key={field.key} block>
+                          <Button disabled style={{ cursor: 'default', width: 170 }}>
+                            {field.label}
+                          </Button>
+                          <Input
+                            value={appForm[field.key] || ''}
+                            placeholder={field.placeholder}
+                            onChange={(event) =>
+                              setAppForm((current) => ({
+                                ...current,
+                                [field.key]: event.target.value,
+                              }))
+                            }
+                          />
+                        </Space.Compact>
+                      ))}
+                      <Button
+                        size="small"
+                        type="primary"
+                        loading={appSaving}
+                        onClick={() => void handleSaveApp()}
+                      >
+                        保存表单链接
+                      </Button>
+                    </Space>
+                  )}
+                  <Table<QualityFeishuEntitySettingItem>
+                    rowKey="entity_code"
+                    loading={loading}
+                    columns={columns}
+                    dataSource={items}
+                    pagination={false}
+                    scroll={{ x: 1720 }}
+                    size="small"
+                  />
+                </Space>
               ),
             }))}
           />

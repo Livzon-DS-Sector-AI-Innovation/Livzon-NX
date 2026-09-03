@@ -139,8 +139,13 @@ def test_validation_mapping_and_parsing_supports_feishu_shapes(
     item = pages._map_validation_base_item(record)
     assert item["validation_type"] == "process_validation"
     assert item["product_codes"] == ["P-1", "P-2"]
-    assert item["participants"] == "张三、李四、王五"
-    assert item["owner_name"] == "张三"
+    # 人员/负责人保留结构化信息（name/avatar_url/id），供前端渲染头像
+    assert item["participants"] == [
+        {"name": "张三", "avatar_url": "", "id": ""},
+        {"name": "李四", "avatar_url": "", "id": ""},
+        {"name": "王五", "avatar_url": "", "id": ""},
+    ]
+    assert item["owner_name"] == [{"name": "张三", "avatar_url": "", "id": ""}]
     assert item["revalidation_cycle_years"] == 3
     assert item["drafted_at"] == date(2026, 8, 2)
 

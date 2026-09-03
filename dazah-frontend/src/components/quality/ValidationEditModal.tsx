@@ -15,6 +15,8 @@ interface ValidationEditModalProps {
   initialValue?: ValidationListItem | null
   /** 年度台账模式：真实年度表没有"验证类别"列，隐藏该字段 */
   hideCategory?: boolean
+  /** 当前选择的年度表；空 = 验证总表 */
+  year?: number
   onCancel: () => void
   onSubmit: (values: Record<string, unknown>) => Promise<void> | void
 }
@@ -32,6 +34,7 @@ export function ValidationEditModal({
   validationTypeLabel,
   initialValue,
   hideCategory,
+  year,
   onCancel,
   onSubmit,
 }: ValidationEditModalProps) {
@@ -118,6 +121,18 @@ export function ValidationEditModal({
       destroyOnHidden
       width={900}
     >
+      <div
+        style={{
+          marginBottom: 16,
+          padding: '8px 12px',
+          background: 'var(--color-bg-soft, #f5f7fa)',
+          borderRadius: 6,
+          fontSize: 13,
+          color: 'var(--color-steel, #555)',
+        }}
+      >
+        将写入：{year ? `${year} 年验证台账` : '验证总表'}
+      </div>
       <Form
         form={form}
         layout="vertical"

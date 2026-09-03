@@ -254,6 +254,7 @@ export function ValidationLedgerPage({
         validationType={validationType}
         validationTypeLabel={title}
         hideCategory={mode === 'master' && Boolean(filters.year)}
+        year={mutationYear}
         initialValue={editingRecord as ValidationListItem | null}
         onCancel={() => setEditorOpen(false)}
         onSubmit={handleSubmit}
