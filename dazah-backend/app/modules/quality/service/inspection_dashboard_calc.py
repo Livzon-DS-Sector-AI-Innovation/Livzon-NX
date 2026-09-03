@@ -17,6 +17,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AppException
+from app.modules.quality.feishu_notification import (
+    send_user_card_with_message_id,
+)
 from app.modules.quality.models.contacts import DepartmentContact
 from app.modules.quality.models.finished_trend_alert_notification import (
     FinishedTrendAlertNotification,
@@ -44,9 +47,6 @@ from app.modules.quality.service.inspection_helpers import (
 from app.modules.quality.service.quality_feishu_pages import (
     _resolve_runtime_entity,
     _search_entity_records,
-)
-from app.platform.integrations.feishu.notification import (
-    send_user_card_with_message_id,
 )
 
 logger = logging.getLogger(__name__)

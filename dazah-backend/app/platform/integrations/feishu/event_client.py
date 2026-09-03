@@ -14,8 +14,6 @@ from typing import Any
 import httpx
 import websockets
 
-from app.core.config import get_settings
-
 logger = logging.getLogger(__name__)
 
 # 事件类型 → 处理器列表
@@ -76,25 +74,21 @@ async def _get_ws_url(app_id: str, app_secret: str) -> str | None:
     return None
 
 
-async def start_ws() -> None:
+async def start_ws(*, app_id: str = "", app_secret: str = "") -> None:
     """启动飞书 WebSocket 连接。"""
     global _stop
     _stop = asyncio.Event()
 
-    settings = get_settings()
-
-    if not settings.FEISHU_APP_ID or not settings.FEISHU_APP_SECRET:
+    if not app_id or not app_secret:
         logger.warning("飞书配置缺失，跳过事件订阅")
         return
 
-    logger.info("启动飞书事件订阅 (app_id=%s)", settings.FEISHU_APP_ID)
+    logger.info("启动飞书业务事件订阅")
 
     while not _stop.is_set():
         try:
             # 1. 获取 WebSocket URL
-            ws_url = await _get_ws_url(
-                settings.FEISHU_APP_ID, settings.FEISHU_APP_SECRET
-            )
+            ws_url = await _get_ws_url(app_id, app_secret)
             if not ws_url:
                 logger.error("无法获取 WebSocket URL，10 秒后重试")
                 await asyncio.sleep(10)

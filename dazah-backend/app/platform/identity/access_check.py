@@ -56,7 +56,7 @@ def check_access(path: str, method: str, permissions: list[str]) -> AccessDecisi
 
     # 3. 通配权限（super_admin / DEV 本地开发用户）
     if "*" in permissions:
-        return _allowed(path, "超级管理员（通配）")
+        return _allowed(path, "系统管理员（全部权限）")
 
     # 4. identity 子路径特殊策略（先于常规模块）
     if path.startswith(IDENTITY_ADMIN_PREFIX):

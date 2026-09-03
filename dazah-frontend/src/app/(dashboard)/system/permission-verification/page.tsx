@@ -11,7 +11,7 @@ export default async function PermissionVerificationPage() {
       <div>
         <h1 className="text-xl font-semibold text-[var(--color-charcoal)]">权限验证台</h1>
         <p className="text-sm text-[var(--color-stone)] mt-1">
-          管理员可查看任意账号的生效权限并模拟接口访问，结果与真实执行一致。
+          按账号、菜单页面和中文业务动作验证生效权限，无需理解接口路径或请求方法。
         </p>
       </div>
       <PermissionVerification users={users} />

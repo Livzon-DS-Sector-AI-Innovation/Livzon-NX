@@ -12,52 +12,17 @@ from app.platform.integrations.feishu import message, notification
 SimpleNamespace: Any = _SimpleNamespace
 
 
-def _token_client(response: Any) -> Any:
-    token_api: Any = SimpleNamespace(ainternal=AsyncMock(return_value=response))
-    return SimpleNamespace(
-        auth=SimpleNamespace(v3=SimpleNamespace(tenant_access_token=token_api))
-    )
-
-
 def _message_client(response: Any) -> Any:
     api: Any = SimpleNamespace(acreate=AsyncMock(return_value=response))
     return SimpleNamespace(im=SimpleNamespace(v1=SimpleNamespace(message=api)))
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("module", [message, notification])
-async def test_tenant_token_rejects_api_and_empty_responses(module: Any) -> None:
-    failed: Any = SimpleNamespace(
-        success=lambda: False,
-        code=999,
-        msg="denied",
-        raw=None,
-    )
-    with pytest.raises(RuntimeError, match="tenant token"):
-        await module._get_tenant_token(_token_client(failed))
-
-    empty: Any = SimpleNamespace(
-        success=lambda: True,
-        code=0,
-        msg="",
-        raw=SimpleNamespace(content=b""),
-    )
-    with pytest.raises(RuntimeError, match="Empty tenant token"):
-        await module._get_tenant_token(_token_client(empty))
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("module", [message, notification])
-async def test_tenant_token_parses_raw_response(module: Any) -> None:
-    response: Any = SimpleNamespace(
-        success=lambda: True,
-        code=0,
-        msg="",
-        raw=SimpleNamespace(
-            content=json.dumps({"tenant_access_token": "token"}).encode()
-        ),
-    )
-    assert await module._get_tenant_token(_token_client(response)) == "token"
+async def test_notification_token_uses_explicit_credentials(monkeypatch):
+    token = AsyncMock(return_value="token")
+    monkeypatch.setattr(notification.FeishuAuth, "get_tenant_access_token", token)
+    assert await notification._get_tenant_token("app", "secret") == "token"
+    token.assert_awaited_once_with("app", "secret")
 
 
 @pytest.mark.asyncio
@@ -126,7 +91,7 @@ async def test_build_card_includes_custom_elements() -> None:
     ("response", "expected"),
     [
         (SimpleNamespace(success=lambda: True, msg=""), True),
-        (SimpleNamespace(success=lambda: False, msg="rejected"), False),
+        (SimpleNamespace(success=lambda: False, code=1, msg="rejected"), False),
     ],
 )
 async def test_send_group_card_handles_api_outcomes(
@@ -135,9 +100,9 @@ async def test_send_group_card_handles_api_outcomes(
     expected: Any,
 ) -> None:
     client = _message_client(response)
-    monkeypatch.setattr(message, "_get_feishu_client", AsyncMock(return_value=client))
+    monkeypatch.setattr(notification, "_get_client", AsyncMock(return_value=client))
     monkeypatch.setattr(
-        message,
+        notification,
         "_get_tenant_token",
         AsyncMock(return_value="token"),
     )
@@ -152,9 +117,9 @@ async def test_send_group_card_handles_api_outcomes(
 
 @pytest.mark.asyncio
 async def test_send_group_card_contains_token_exception(monkeypatch: Any) -> None:
-    monkeypatch.setattr(message, "_get_feishu_client", AsyncMock(return_value=object()))
+    monkeypatch.setattr(notification, "_get_client", AsyncMock(return_value=object()))
     monkeypatch.setattr(
-        message,
+        notification,
         "_get_tenant_token",
         AsyncMock(side_effect=RuntimeError("token unavailable")),
     )
@@ -163,6 +128,8 @@ async def test_send_group_card_contains_token_exception(monkeypatch: Any) -> Non
 
 @pytest.mark.asyncio
 async def test_work_order_notifications_skip_or_delegate(monkeypatch: Any) -> None:
+    from app.modules.equipment.feishu import message
+
     monkeypatch.setattr(
         message,
         "settings",

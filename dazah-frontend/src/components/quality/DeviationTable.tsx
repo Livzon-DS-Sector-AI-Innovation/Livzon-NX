@@ -3,7 +3,7 @@
 import { TableEmptyState } from './TableEmptyState'
 import { qualityTokens } from './themeTokens'
 
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { App, Table, Tag, Space, Button, Input, Select, Tooltip, DatePicker } from 'antd'
 import { DeleteOutlined, SearchOutlined, ImportOutlined, ExportOutlined, FilterOutlined, ReloadOutlined } from '@ant-design/icons'
 import { useQueryClient } from '@tanstack/react-query'
@@ -12,6 +12,7 @@ import { useDeviationStore } from '@/stores/quality'
 import { deleteDeviation, batchDeleteDeviations } from '@/actions/quality-deviation'
 import Link from 'next/link'
 import { DeviationImportDrawer } from './DeviationImportDrawer'
+import { DEVIATION_LEDGER_PAGE, useDeviationPermissions } from './useDeviationPermissions'
 import dayjs, { Dayjs } from 'dayjs'
 
 const statusConfig: Record<DeviationStatus, { color: string; bgColor: string; label: string }> = {
@@ -75,10 +76,13 @@ function formatDate(v: string | null | undefined): string {
 
 export function DeviationTable({ loading = false }: DeviationTableProps) {
   const { message, modal } = App.useApp()
+  const { canDelete, canExport, canImport, canBatchDelete } = useDeviationPermissions()
   const queryClient = useQueryClient()
   const [importOpen, setImportOpen] = useState(false)
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([])
+  const batchLock = useRef(false)
+  const [batchDeleting, setBatchDeleting] = useState(false)
   const {
     deviations,
     total,
@@ -113,6 +117,7 @@ export function DeviationTable({ loading = false }: DeviationTableProps) {
   } = useDeviationStore()
 
   const handleDelete = useCallback((record: DeviationListItem) => {
+    if (!canDelete) return
     modal.confirm({
       title: '确认删除',
       content: `确定要删除偏差 "${record.title}" 吗？`,
@@ -129,9 +134,10 @@ export function DeviationTable({ loading = false }: DeviationTableProps) {
         }
       },
     })
-  }, [modal, message, queryClient])
+  }, [canDelete, modal, message, queryClient])
 
   const handleExport = useCallback(async () => {
+    if (!canExport) return
     try {
       const params = new URLSearchParams()
       if (statusFilter) params.set('status', statusFilter)
@@ -146,7 +152,9 @@ export function DeviationTable({ loading = false }: DeviationTableProps) {
       if (investigationCompletedTo) params.set('investigation_completed_to', investigationCompletedTo)
       if (rootCauseKeywordFilter) params.set('root_cause_keyword', rootCauseKeywordFilter)
       if (correctiveActionsKeywordFilter) params.set('corrective_actions_keyword', correctiveActionsKeywordFilter)
-      const res = await fetch(`/api/v1/quality/deviations/export?${params.toString()}`)
+      const res = await fetch(`/api/v1/quality/deviations/export?${params.toString()}`, {
+        headers: { 'X-Dazah-Page-Key': DEVIATION_LEDGER_PAGE },
+      })
       if (!res.ok) throw new Error('导出失败')
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
@@ -160,6 +168,7 @@ export function DeviationTable({ loading = false }: DeviationTableProps) {
       message.error((err instanceof Error ? err.message : '') || '导出失败')
     }
   }, [
+    canExport,
     statusFilter,
     levelFilter,
     departmentFilter,
@@ -176,17 +185,25 @@ export function DeviationTable({ loading = false }: DeviationTableProps) {
   ])
 
   const handleBatchDelete = useCallback(() => {
+    if (!canDelete || !canBatchDelete) return
     if (selectedRowKeys.length === 0) {
       message.warning('请先选择要删除的记录')
       return
     }
+    if (selectedRowKeys.length > 100) {
+      message.warning('每次最多删除100条偏差记录，请减少选择')
+      return
+    }
     modal.confirm({
       title: '确认批量删除',
-      content: `确定要删除选中的 ${selectedRowKeys.length} 条偏差记录吗？`,
+      content: `确定要删除选中的 ${selectedRowKeys.length} 条偏差记录吗？整批校验通过后统一删除；任一记录无权限或已删除时，本批不会删除任何记录。`,
       okText: '确认',
       cancelText: '取消',
       okButtonProps: { danger: true },
       onOk: async () => {
+        if (batchLock.current) return
+        batchLock.current = true
+        setBatchDeleting(true)
         try {
           const result = await batchDeleteDeviations(selectedRowKeys)
           message.success(`已删除 ${result?.deleted ?? 0} 条记录`)
@@ -194,10 +211,13 @@ export function DeviationTable({ loading = false }: DeviationTableProps) {
           queryClient.invalidateQueries({ queryKey: ['quality-deviation'] })
         } catch (error) {
           message.error((error instanceof Error ? error.message : '') || '批量删除失败')
+        } finally {
+          batchLock.current = false
+          setBatchDeleting(false)
         }
       },
     })
-  }, [message, modal, queryClient, selectedRowKeys])
+  }, [canDelete, canBatchDelete, message, modal, queryClient, selectedRowKeys])
 
   const resetAllFilters = useCallback(() => {
     resetFilters()
@@ -324,9 +344,9 @@ export function DeviationTable({ loading = false }: DeviationTableProps) {
               详情
             </Button>
           </Link>
-          <Button type="link" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)} style={{ padding: 0 }}>
+          {canDelete && <Button type="link" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)} style={{ padding: 0 }}>
             删除
-          </Button>
+          </Button>}
         </Space>
       ),
     },
@@ -385,15 +405,15 @@ export function DeviationTable({ loading = false }: DeviationTableProps) {
           重置筛选
         </Button>
         <div style={{ flex: 1 }} />
-        <Button icon={<ImportOutlined />} onClick={() => setImportOpen(true)}>
+        {canImport && <Button icon={<ImportOutlined />} onClick={() => setImportOpen(true)}>
           导入
-        </Button>
-        <Button danger disabled={selectedRowKeys.length === 0} onClick={handleBatchDelete}>
+        </Button>}
+        {canDelete && canBatchDelete && <Button danger loading={batchDeleting} disabled={batchDeleting || selectedRowKeys.length === 0} onClick={handleBatchDelete}>
           批量删除
-        </Button>
-        <Button icon={<ExportOutlined />} onClick={handleExport}>
+        </Button>}
+        {canExport && <Button icon={<ExportOutlined />} onClick={handleExport}>
           导出
-        </Button>
+        </Button>}
       </div>
       {showAdvancedFilters ? (
         <div
@@ -475,11 +495,11 @@ export function DeviationTable({ loading = false }: DeviationTableProps) {
           },
         }}
       />
-      <DeviationImportDrawer
+      {canImport && <DeviationImportDrawer
         isOpen={importOpen}
         onClose={() => setImportOpen(false)}
         onSuccess={() => queryClient.invalidateQueries({ queryKey: ['quality-deviation'] })}
-      />
+      />}
     </div>
   )
 }

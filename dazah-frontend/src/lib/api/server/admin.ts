@@ -26,6 +26,7 @@ export interface RoleItem {
   description?: string | null
   is_system: boolean
   permissions: string[]
+  grant_version?: number
 }
 
 export interface AdminUserItem {

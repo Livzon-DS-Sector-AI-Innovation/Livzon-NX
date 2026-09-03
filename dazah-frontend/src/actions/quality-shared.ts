@@ -1,4 +1,4 @@
-import { cookies } from 'next/headers'
+import { getAuthHeaders } from '@/lib/auth'
 
 export const API_BASE_URL =
   process.env.API_BASE_URL ||
@@ -6,13 +6,12 @@ export const API_BASE_URL =
   'http://dazah-backend-app-1:8000'
 
 export async function actionFetch<T>(url: string, options?: RequestInit): Promise<T | null> {
-  const cookieStore = await cookies()
-  const authToken = cookieStore.get('auth_token')?.value
+  const authHeaders = await getAuthHeaders()
+  if (options?.body instanceof FormData) delete authHeaders['Content-Type']
   const response = await fetch(url, {
     ...options,
     headers: {
-      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-      ...(options?.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
+      ...authHeaders,
       ...options?.headers,
     },
   })

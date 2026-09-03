@@ -282,6 +282,13 @@ class Role(BaseModel):
     is_system: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default="false", comment="系统内置角色（禁删）"
     )
+    grant_version: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+        comment="角色页面授权单调递增版本",
+    )
 
 
 class Permission(BaseModel):
@@ -369,6 +376,101 @@ class RoleMenu(BaseModel):
 
     role_id = mapped_column(UUID(as_uuid=True), index=True, nullable=False)
     menu_id = mapped_column(UUID(as_uuid=True), index=True, nullable=False)
+
+
+class RolePageGrant(BaseModel):
+    """角色在单个菜单页面上的业务权限基线。"""
+
+    __tablename__ = "role_page_grants"
+    __table_args__ = (
+        UniqueConstraint(
+            "role_id", "page_key", name="uq_identity_role_page_grants_role_page"
+        ),
+        Index("ix_identity_role_page_grants_role", "role_id"),
+        Index("ix_identity_role_page_grants_page", "page_key"),
+        {"schema": "identity", "comment": "角色页面权限基线"},
+    )
+
+    role_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    page_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    permissions: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default="[]"
+    )
+    sensitive_actions: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default="[]"
+    )
+    scope_type: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="department_tree",
+        server_default="department_tree",
+    )
+    department_ids: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default="[]"
+    )
+
+
+class UserPageGrant(BaseModel):
+    """用户对角色页面权限的精确覆盖；记录存在即表示 custom。"""
+
+    __tablename__ = "user_page_grants"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id", "page_key", name="uq_identity_user_page_grants_user_page"
+        ),
+        Index("ix_identity_user_page_grants_user", "user_id"),
+        Index("ix_identity_user_page_grants_page", "page_key"),
+        {"schema": "identity", "comment": "用户页面权限精确覆盖"},
+    )
+
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    page_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    permissions: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default="[]"
+    )
+    sensitive_actions: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default="[]"
+    )
+    scope_type: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="department_tree",
+        server_default="department_tree",
+    )
+    department_ids: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default="[]"
+    )
+
+
+class PermissionModuleRollout(BaseModel):
+    """页面权限按模块发布状态。"""
+
+    __tablename__ = "permission_module_rollouts"
+    __table_args__ = (
+        UniqueConstraint(
+            "module_code", name="uq_identity_permission_module_rollouts_module"
+        ),
+        CheckConstraint(
+            "status IN ('legacy', 'draft', 'enforced')",
+            name="ck_identity_permission_module_rollouts_status",
+        ),
+        {"schema": "identity", "comment": "页面权限模块发布状态"},
+    )
+
+    module_code: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="legacy", server_default="legacy"
+    )
+    version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    published_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    published_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
+    last_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
 
 class DataScopeRule(BaseModel):

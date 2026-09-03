@@ -49,7 +49,7 @@ def _config(field_type: int | None = 1) -> MaterialSourceConfig:
 async def test_probe_accepts_legacy_specification_field(monkeypatch: Any) -> None:
     monkeypatch.setattr(
         material_source,
-        "get_platform_feishu_app_credentials",
+        "_get_credentials",
         AsyncMock(return_value=FeishuAppCredentials("app-id", "app-secret")),
     )
 
@@ -633,16 +633,8 @@ async def test_external_errors_are_mapped_without_raw_response() -> None:
         await material_source._run_feishu("fields", forbidden)
     assert "raw third party body" not in str(exc_info.value)
 
-    async def no_credentials(_db: Any) -> Any:
-        raise RuntimeError("decrypt failed")
-
-    original = material_source.get_platform_feishu_app_credentials  # type: ignore[attr-defined]
-    material_source.get_platform_feishu_app_credentials = no_credentials  # type: ignore[attr-defined, assignment]
-    try:
-        with pytest.raises(MaterialSourceCredentialsError):
-            await material_source._get_credentials(AsyncMock())
-    finally:
-        material_source.get_platform_feishu_app_credentials = original  # type: ignore[attr-defined]
+    with pytest.raises(MaterialSourceCredentialsError, match="暂未启用"):
+        await material_source._get_credentials(AsyncMock())
 
 
 @pytest.mark.anyio

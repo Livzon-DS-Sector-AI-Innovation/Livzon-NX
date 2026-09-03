@@ -30,6 +30,7 @@ class _Result:
 class _Db:
     def __init__(self, values: list[object] | None = None) -> None:
         self.execute = AsyncMock(return_value=_Result(values))
+        self.scalars = AsyncMock(return_value=_Result([]))
         self.commit = AsyncMock()
         self.rollback = AsyncMock()
 
@@ -82,7 +83,7 @@ async def test_set_role_permissions_deduplicates_and_audits(
     monkeypatch.setattr(rbac_api, "RbacRepository", lambda: repo)
     audit, publish = _patch_common(monkeypatch, role)
     db = _Db([permission_id])
-    current_user = SimpleNamespace(id=uuid4())
+    current_user = SimpleNamespace(id=uuid4(), role="admin")
 
     response = await rbac_api.set_role_permissions(
         role.id,

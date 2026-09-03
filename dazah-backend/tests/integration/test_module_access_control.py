@@ -152,7 +152,7 @@ async def test_current_user_exposes_all_module_codes_in_all_mode(
 
 
 @pytest.mark.anyio
-async def test_admin_has_implicit_all_module_and_livzon_access(
+async def test_system_admin_has_all_pages_and_registered_livzon_tools(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
@@ -184,8 +184,14 @@ async def test_admin_has_implicit_all_module_and_livzon_access(
         assert module_response.status_code == 200
 
         scope = await AgentAccessScopeService().scope_out(db_session, user=admin)
-        assert {item.module_code for item in scope.modules} == set(MODULES_BY_CODE)
-        assert "module.agent.automate" in scope.modules[0].permissions
+        assert {module.module_code for module in scope.modules} == set(MODULES_BY_CODE)
+        from app.modules.agent.tools import tool_registry
+
+        assert set(scope.tool_names) == {spec.name for spec in tool_registry.list()}
+        assert set(scope.workflow_tool_names) == {
+            spec.name for spec in tool_registry.list()
+            if spec.workflow_allowed and not spec.human_decision_required
+        }
 
         permissions = await IdentityPermissionService().get_user_permissions(
             db_session,

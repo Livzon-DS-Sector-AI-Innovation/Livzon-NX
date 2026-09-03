@@ -7,7 +7,9 @@ const mocks = vi.hoisted(() => ({
   revalidatePath: vi.fn(),
 }))
 
-vi.mock('next/headers', () => ({ cookies: mocks.cookies }))
+vi.mock('next/headers', () => ({ cookies: mocks.cookies,
+  headers: vi.fn(async () => new Headers({ 'X-Dazah-Page-Path': '/warehouse/raw-summary' })),
+}))
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }))
 
 import {
@@ -52,6 +54,7 @@ describe('warehouse server actions', () => {
       remark: null,
     }
     await saveWarehouseFeishuConfigAction(config)
+    expect(fetchMock.mock.calls[0][1].headers['X-Dazah-Page-Path']).toBe('/warehouse/raw-summary')
     await testWarehouseFeishuConfigAction(config)
     await createWarehouseFeishuRootAction({ name: '原辅料', source_type: 'base', source_url: 'https://feishu.cn/base/a' })
     await deleteWarehouseFeishuRootAction('root/1')

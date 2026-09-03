@@ -991,6 +991,11 @@ async def update_purchase_request(
         raise ValueError("只有草稿或已驳回的采购申请可以编辑")
 
     if data.request_department is not None:
+        from app.modules.procurement.page_access import assert_request_scope
+
+        await assert_request_scope(
+            db, category=request.category, department=data.request_department
+        )
         request.request_department = data.request_department
     if data.request_date is not None:
         request.request_date = data.request_date
@@ -1145,6 +1150,9 @@ async def generate_and_store_contract(
     db: AsyncSession,
     payload: ContractGenerateRequest,
 ) -> tuple[BytesIO, str, str, ContractRecord]:
+    from app.modules.procurement.page_access import constrain_contract_category
+
+    constrain_contract_category(payload.category.value)
     buffer, filename, content_type = generate_contract(payload)
     file_bytes = buffer.getvalue()
     record_id = uuid4()
@@ -1298,6 +1306,11 @@ async def _review_purchase_request(
     request_id: UUID,
     data: PurchaseApprovalRequest,
 ) -> PurchaseRequestResponse:
+    from app.modules.procurement.page_access import assert_approval_responsibility
+
+    approver_name = assert_approval_responsibility(
+        data.approval_role.value, data.approver_name
+    )
     repository = PurchaseRequestRepository(db)
     request = await repository.get_for_update(request_id)
     if not request:
@@ -1320,7 +1333,7 @@ async def _review_purchase_request(
         approval_role=data.approval_role.value,
         result=data.result.value,
         opinion=data.opinion,
-        approver_name=data.approver_name,
+        approver_name=approver_name,
         approval_time=now,
     )
     await repository.add_approval(approval)

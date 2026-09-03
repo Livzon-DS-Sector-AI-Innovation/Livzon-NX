@@ -3,6 +3,7 @@
 import { cookies } from "next/headers"
 import { revalidatePath } from "next/cache"
 import type { components } from "@/types/generated/schema"
+import { permissionActionResult } from "@/lib/permission-action-result"
 
 const API_BASE =
   process.env.API_BASE_URL ||
@@ -20,6 +21,12 @@ type MenuUpdateRequest = components["schemas"]["MenuUpdateRequest"]
 type RoleMenusRequest = components["schemas"]["RoleMenusRequest"]
 type DataScopeRuleCreateRequest = components["schemas"]["DataScopeRuleCreateRequest"]
 type PermissionSimulateRequest = components["schemas"]["PermissionSimulateRequest"]
+export type RolePagePermissionsOut = components["schemas"]["RolePagePermissionsOut"]
+export type RolePagePermissionsUpdate = components["schemas"]["RolePagePermissionsUpdate"]
+export type PagePermissionSimulationRequest = components["schemas"]["PagePermissionSimulationRequest"]
+export type PagePermissionSimulationOut = components["schemas"]["PagePermissionSimulationOut"]
+export type PermissionModuleRolloutOut = components["schemas"]["PermissionModuleRolloutOut"]
+export type PermissionModuleRolloutPreviewOut = components["schemas"]["PermissionModuleRolloutPreviewOut"]
 
 /**
  * 权限管理 Server Actions（写操作）。
@@ -351,4 +358,73 @@ export async function exportPermissions(): Promise<{
   const disposition = res.headers.get("Content-Disposition") ?? ""
   const match = /filename="?([^";]+)"?/.exec(disposition)
   return { filename: match?.[1] ?? "permissions.csv", content }
+}
+
+export async function getRolePagePermissions(roleId: string) {
+  const res = await authedFetch(`/identity/admin/roles/${roleId}/page-permissions`)
+  return handleResponse(res) as Promise<RolePagePermissionsOut>
+}
+
+export async function replaceRolePagePermissions(
+  roleId: string,
+  data: RolePagePermissionsUpdate
+) {
+  const result = await permissionActionResult<RolePagePermissionsOut>(() => authedFetch(
+    `/identity/admin/roles/${roleId}/page-permissions`,
+    { method: "PUT", body: JSON.stringify(data) }
+  ))
+  if (result.ok) revalidatePath("/system/roles")
+  return result
+}
+
+export async function simulatePagePermission(data: PagePermissionSimulationRequest) {
+  const res = await authedFetch("/identity/admin/page-permissions/simulate", {
+    method: "POST",
+    body: JSON.stringify(data),
+  })
+  return handleResponse(res) as Promise<PagePermissionSimulationOut>
+}
+
+export async function listPagePermissionRollouts() {
+  const res = await authedFetch("/identity/admin/page-permissions/modules")
+  return handleResponse(res) as Promise<PermissionModuleRolloutOut[]>
+}
+
+export async function previewPagePermissionRollout(moduleCode: string) {
+  const res = await authedFetch(
+    `/identity/admin/page-permissions/modules/${moduleCode}/preview`
+  )
+  return handleResponse(res) as Promise<PermissionModuleRolloutPreviewOut>
+}
+
+export async function publishPagePermissionRollout(
+  preview: PermissionModuleRolloutPreviewOut,
+  reason: string
+) {
+  return permissionActionResult<PermissionModuleRolloutOut>(() => authedFetch(
+    `/identity/admin/page-permissions/modules/${preview.module_code}/publish`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        expected_version: preview.current_version,
+        preview_hash: preview.preview_hash,
+        reason,
+        confirmed: true,
+      }),
+    }
+  ))
+}
+
+export async function rollbackPagePermissionRollout(
+  moduleCode: string,
+  expectedVersion: number,
+  reason: string
+) {
+  return permissionActionResult<PermissionModuleRolloutOut>(() => authedFetch(
+    `/identity/admin/page-permissions/modules/${moduleCode}/rollback`,
+    {
+      method: "POST",
+      body: JSON.stringify({ expected_version: expectedVersion, reason, confirmed: true }),
+    }
+  ))
 }

@@ -1,68 +1,94 @@
 import { describe, expect, it } from 'vitest'
-import type { UserModulePermissionsOut } from '@/actions/users'
-import {
-  initialEditableState,
-  permissionOptions,
-} from './ModulePermissionsDrawer'
-
-const modules = [
-  {
-    module_code: 'production',
-    module_name: '生产管理',
-    description: '生产管理',
-  },
-  {
-    module_code: 'equipment',
-    module_name: '设备管理',
-    description: '设备管理',
-  },
-]
+import type { UserPagePermissionsOut } from '@/actions/users'
+import { initialPageEditableState, roleBaselineState } from './ModulePermissionsDrawer'
 
 function permissionResult(
-  grants: UserModulePermissionsOut['grants'] = []
-): UserModulePermissionsOut {
+  overrides: Partial<UserPagePermissionsOut> = {}
+): UserPagePermissionsOut {
   return {
     user_id: '00000000-0000-0000-0000-000000000001',
-    grant_version: 0,
-    available_modules: modules,
-    grants,
+    grant_version: 3,
+    definitions: [
+      {
+        page_key: 'hr:employee-management:profile',
+        module_code: 'hr',
+        page_name: '员工管理',
+        route_path: '/hr/employee-management',
+        supported_scope_types: ['department_tree', 'departments', 'all'],
+      },
+    ],
+    grants: [],
+    custom_page_keys: [],
+    module_rollouts: { hr: 'draft' },
+    ...overrides,
   }
 }
 
-describe('module permission defaults', () => {
-  it('enables every configurable permission for modules without a saved grant', () => {
-    const editable = initialEditableState(permissionResult())
-    const expected = permissionOptions.map((option) => option.value)
-
-    expect(editable.production.permissions).toEqual(expected)
-    expect(editable.equipment.permissions).toEqual(expected)
-    expect(expected).toEqual([
-      'module.view',
-      'module.agent.read',
-      'module.agent.execute',
-      'module.agent.automate',
-    ])
+describe('page permission editor state', () => {
+  it('restores actual role permissions and scope instead of stale user overrides', () => {
+    const state = roleBaselineState(permissionResult({ custom_page_keys: ['hr:employee-management:profile'],
+      grants: [{ page_key: 'hr:employee-management:profile', module_code: 'hr', permissions: [],
+        data_scope: { scope_type: 'all' }, source: 'none' }],
+      role_grants: [{ page_key: 'hr:employee-management:profile', module_code: 'hr', permissions: ['access', 'query'],
+        data_scope: { scope_type: 'departments', department_ids: ['od-1'] }, source: 'role' }],
+    }))['hr:employee-management:profile']
+    expect(state.mode).toBe('inherit')
+    expect(state.permissions).toEqual(['access', 'query'])
+    expect(state.scopeType).toBe('departments')
+    expect(state.departmentIds).toEqual(['od-1'])
+  })
+  it('does not grant an unconfigured page by default', () => {
+    const editable = initialPageEditableState(permissionResult())
+    expect(editable['hr:employee-management:profile']).toEqual({
+      mode: 'inherit',
+      permissions: [],
+      sensitiveActions: [],
+      scopeType: 'department_tree',
+      departmentIds: [],
+    })
   })
 
-  it('preserves saved choices and excludes the unused legacy governance permission', () => {
-    const editable = initialEditableState(
-      permissionResult([
-        {
-          module_code: 'production',
-          module_name: '生产管理',
-          permissions: ['module.view', 'module.admin'],
-          data_scope: {},
-          grant_version: 1,
-          granted_by: '00000000-0000-0000-0000-000000000002',
-          status: 'active',
-          updated_at: '2026-08-11T00:00:00Z',
-        },
-      ])
+  it('preserves a user exact deny instead of restoring the role baseline', () => {
+    const editable = initialPageEditableState(
+      permissionResult({
+        custom_page_keys: ['hr:employee-management:profile'],
+        grants: [
+          {
+            page_key: 'hr:employee-management:profile',
+            module_code: 'hr',
+            permissions: [],
+            sensitive_actions: [],
+            data_scope: { scope_type: 'department_tree', department_ids: [] },
+            source: 'none',
+            source_role_names: [],
+          },
+        ],
+      })
     )
+    expect(editable['hr:employee-management:profile'].mode).toBe('custom')
+    expect(editable['hr:employee-management:profile'].permissions).toEqual([])
+  })
 
-    expect(editable.production.permissions).toEqual(['module.view'])
-    expect(editable.equipment.permissions).toEqual(
-      permissionOptions.map((option) => option.value)
+  it('normalizes operation into query and access for display', () => {
+    const editable = initialPageEditableState(
+      permissionResult({
+        grants: [
+          {
+            page_key: 'hr:employee-management:profile',
+            module_code: 'hr',
+            permissions: ['operate'],
+            sensitive_actions: ['delete'],
+            data_scope: { scope_type: 'all', department_ids: [] },
+            source: 'role',
+            source_role_names: ['人事经办员'],
+          },
+        ],
+      })
     )
+    expect(editable['hr:employee-management:profile'].permissions).toEqual([
+      'access',
+      'query',
+      'operate',
+    ])
   })
 })

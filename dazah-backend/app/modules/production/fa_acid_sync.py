@@ -1,4 +1,5 @@
 """FA 酸化过滤 — 飞书同步脚本（独立运行）"""
+
 import asyncio
 import logging
 import os
@@ -59,27 +60,11 @@ PCT_COLS = {
     "平衡率",
 }
 
-_access_token: str | None = None
 
+async def _read(app_id: str, app_secret: str) -> list[list[Any]]:
+    from app.platform.integrations.feishu.auth import FeishuAuth
 
-async def _token() -> str:
-    global _access_token
-    if _access_token:
-        return _access_token
-    app_id = os.getenv("FEISHU_APP_ID")
-    app_secret = os.getenv("FEISHU_APP_SECRET")
-    async with httpx.AsyncClient(base_url=BASE_URL, timeout=30) as c:
-        r = await c.post(
-            "/auth/v3/tenant_access_token/internal",
-            json={"app_id": app_id, "app_secret": app_secret},
-        )
-        r.raise_for_status()
-        _access_token = str(r.json()["tenant_access_token"])
-        return _access_token
-
-
-async def _read() -> list[list[Any]]:
-    t = await _token()
+    t = await FeishuAuth.get_tenant_access_token(app_id, app_secret)
     async with httpx.AsyncClient(base_url=BASE_URL, timeout=60) as c:
         r = await c.get(
             f"/sheets/v2/spreadsheets/{SPREADSHEET}/values/{SHEET}",
@@ -131,7 +116,10 @@ def _p(v: str) -> str:
 
 
 async def run(session: AsyncSession) -> Any:
-    rows = await _read()
+    from app.modules.production.fa_feishu_scheduler import _get_fa_spreadsheet_config
+
+    cfg = await _get_fa_spreadsheet_config(session)
+    rows = await _read(cfg["app_id"], cfg["app_secret"])
     logger.info(f"Read {len(rows)} rows from feishu")
 
     records: list[dict[str, Any]] = []

@@ -24,7 +24,13 @@ _CONVERSATION_ACTIONS = frozenset(
     }
 )
 _PERMISSION_RESOURCE_TYPES = frozenset(
-    {"user_module_permissions", "agent_access_scope"}
+    {
+        "user_module_permissions",
+        "agent_access_scope",
+        "identity.user_page_permissions",
+        "identity.role_page_permissions",
+        "identity.permission_module_rollout",
+    }
 )
 _CATEGORY_SUMMARY_KEYS: dict[AuditCategory, tuple[str, ...]] = {
     "permissions": (

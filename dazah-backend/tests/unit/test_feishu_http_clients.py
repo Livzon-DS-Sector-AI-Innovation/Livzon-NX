@@ -25,37 +25,22 @@ class _HttpContext:
 
 @pytest.fixture(autouse=True)
 def reset_feishu_auth_cache() -> Any:
-    auth.FeishuAuth._token = None
-    auth.FeishuAuth._expire_at = 0
     auth.FeishuAuth._token_cache.clear()
     yield
-    auth.FeishuAuth._token = None
-    auth.FeishuAuth._expire_at = 0
     auth.FeishuAuth._token_cache.clear()
 
 
 @pytest.mark.asyncio
 async def test_auth_rejects_missing_credentials(monkeypatch: Any) -> None:
-    monkeypatch.setattr(
-        auth,
-        "_settings",
-        SimpleNamespace(FEISHU_APP_ID="", FEISHU_APP_SECRET=""),
-    )
-    with pytest.raises(RuntimeError, match="not configured"):
+    with pytest.raises(auth.FeishuCredentialsRequiredError):
         await auth.FeishuAuth.get_tenant_access_token()
 
 
 @pytest.mark.asyncio
 async def test_auth_uses_default_and_explicit_caches(monkeypatch: Any) -> None:
-    monkeypatch.setattr(
-        auth,
-        "_settings",
-        SimpleNamespace(FEISHU_APP_ID="default", FEISHU_APP_SECRET="secret"),
-    )
     monkeypatch.setattr(auth.time, "time", lambda: 100.0)  # type: ignore[attr-defined]
-    auth.FeishuAuth._token = "default-token"
-    auth.FeishuAuth._expire_at = 1000.0
-    assert await auth.FeishuAuth.default().get_token() == "default-token"
+    auth.FeishuAuth._token_cache[("default", "secret")] = ("default-token", 1000.0)
+    assert await auth.FeishuAuth("default", "secret").get_token() == "default-token"
 
     auth.FeishuAuth._token_cache[("custom", "secret")] = (
         "custom-token",
@@ -72,11 +57,6 @@ async def test_auth_uses_default_and_explicit_caches(monkeypatch: Any) -> None:
 
 @pytest.mark.asyncio
 async def test_auth_fetches_and_rejects_api_errors(monkeypatch: Any) -> None:
-    monkeypatch.setattr(
-        auth,
-        "_settings",
-        SimpleNamespace(FEISHU_APP_ID="default", FEISHU_APP_SECRET="secret"),
-    )
     response: Any = SimpleNamespace(
         raise_for_status=lambda: None,
         json=lambda: {
@@ -91,14 +71,13 @@ async def test_auth_fetches_and_rejects_api_errors(monkeypatch: Any) -> None:
         "AsyncClient",
         lambda **_kwargs: _HttpContext(http_client),
     )
-    assert await auth.FeishuAuth.get_tenant_access_token() == "fresh"
-    assert auth.FeishuAuth._token == "fresh"
+    assert await auth.FeishuAuth.get_tenant_access_token("app", "secret") == "fresh"
+    assert auth.FeishuAuth._token_cache[("app", "secret")][0] == "fresh"
 
-    auth.FeishuAuth._token = None
     auth.FeishuAuth._token_cache.clear()
     response.json = lambda: {"code": 1, "msg": "denied"}
     with pytest.raises(RuntimeError, match="auth failed"):
-        await auth.FeishuAuth.get_tenant_access_token()
+        await auth.FeishuAuth.get_tenant_access_token("app", "secret")
 
 
 @pytest.mark.asyncio
@@ -111,7 +90,6 @@ async def test_feishu_client_health_and_request_outcomes(monkeypatch: Any) -> No
     api = client.FeishuClient(app_id="app", app_secret="secret")
     assert await api.health_check() == {
         "status": "ok",
-        "token_prefix": "1234567890...",
     }
 
     auth.FeishuAuth.get_tenant_access_token.side_effect = RuntimeError("down")  # type: ignore[attr-defined]
@@ -206,7 +184,7 @@ def test_ws_lifecycle_skips_missing_credentials_and_stops(monkeypatch: Any) -> N
     )
     thread: Any = Mock()
     monkeypatch.setattr(ws_client.threading, "Thread", Mock(return_value=thread))  # type: ignore[attr-defined]
-    ws_client.start_ws_client(name="running")
+    ws_client.start_ws_client(name="running", app_id="app", app_secret="secret")
     thread.start.assert_called_once()
     flag = ws_client._stop_flags["running"]
     ws_client.stop_ws_client("running")

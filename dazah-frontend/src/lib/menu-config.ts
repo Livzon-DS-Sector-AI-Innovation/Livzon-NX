@@ -33,6 +33,15 @@ export interface ModuleMenu {
   children: SubMenuItem[]
 }
 
+/** Permission screens use the same Chinese module labels as navigation. */
+export function getPermissionModuleName(moduleCode: string): string {
+  return moduleMenus.find((module) => module.moduleCode === moduleCode || module.key === moduleCode)?.label
+    || ({ system: "系统管理", identity: "用户与权限管理", product: "产品管理",
+      environment: "环保管理", regulatory_tracker: "法规追踪", dossier_writer: "申报资料撰写",
+    } as Record<string, string>)[moduleCode]
+    || "未命名模块"
+}
+
 export const moduleMenus: ModuleMenu[] = [
   {
     key: "production",
@@ -855,4 +864,92 @@ export function getModuleByKey(key: string): ModuleMenu | undefined {
 export function getAuthorizedModuleMenus(moduleCodes: string[] | undefined): ModuleMenu[] {
   const allowedCodes = new Set(moduleCodes || [])
   return moduleMenus.filter((module) => allowedCodes.has(module.moduleCode))
+}
+
+export type PageAccessSummary = {
+  page_key: string
+  module_code: string
+  permissions?: Array<"access" | "query" | "operate">
+}
+
+function filterPageChildren(
+  items: SubMenuItem[],
+  parentKey: string,
+  allowedPageKeys: Set<string>,
+): SubMenuItem[] {
+  return items.flatMap((item) => {
+    const pageKey = `${parentKey}:${item.key}`
+    const children = item.children
+      ? filterPageChildren(item.children, pageKey, allowedPageKeys)
+      : undefined
+    if (!allowedPageKeys.has(pageKey) && !children?.length) return []
+    return [{ ...item, children }]
+  })
+}
+
+/** 已发布模块按页面访问权限裁剪；旧规则和草稿模块保持原模块菜单。 */
+export function getAuthorizedPageMenus(
+  moduleCodes: string[] | undefined,
+  pagePermissions: PageAccessSummary[] | undefined,
+  rollouts: Record<string, string> | undefined,
+): ModuleMenu[] {
+  const allowedModules = getAuthorizedModuleMenus(moduleCodes)
+  const allowedPageKeys = new Set(
+    (pagePermissions || [])
+      .filter((grant) => grant.permissions?.includes("access"))
+      .map((grant) => grant.page_key),
+  )
+  return allowedModules.flatMap((module) => {
+    if (rollouts?.[module.moduleCode] !== "enforced") return [module]
+    const children = filterPageChildren(module.children, module.key, allowedPageKeys)
+    return children.length ? [{ ...module, children }] : []
+  })
+}
+
+interface ModuleLandingAccess {
+  role?: string
+  module_codes?: string[]
+  page_permissions?: PageAccessSummary[]
+  page_permission_rollouts?: Record<string, string>
+}
+
+/** 登录后进入顶部菜单栏中从左到右的第一个可见模块。 */
+export function getFirstAuthorizedModulePath(user: ModuleLandingAccess): string {
+  const visibleModules = user.role === "admin"
+    ? moduleMenus
+    : getAuthorizedPageMenus(
+        user.module_codes,
+        user.page_permissions,
+        user.page_permission_rollouts,
+      )
+  return visibleModules[0]?.path || "/production"
+}
+
+function collectPageRoutes(
+  items: SubMenuItem[],
+  parentKey: string,
+): Array<{ pageKey: string; path: string }> {
+  return items.flatMap((item) => {
+    const pageKey = `${parentKey}:${item.key}`
+    return [
+      ...(item.path ? [{ pageKey, path: item.path }] : []),
+      ...(item.children ? collectPageRoutes(item.children, pageKey) : []),
+    ]
+  })
+}
+
+export function getPageKeyByPath(pathname: string): string | undefined {
+  const normalized = pathname.replace(/\/$/, "") || "/"
+  // Only reviewed auxiliary forms inherit the ledger page; sibling pages do not.
+  if (/^\/quality\/deviations\/(?:new|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i.test(normalized)) {
+    return 'quality:deviations:deviation-ledger'
+  }
+  const candidates = moduleMenus.flatMap((module) =>
+    collectPageRoutes(module.children, module.key),
+  ).filter(({ path }) => {
+    const pagePath = path.replace(/\/$/, "") || "/"
+    return normalized === pagePath || normalized.startsWith(`${pagePath}/`)
+  })
+  return candidates.sort((left, right) => right.path.length - left.path.length)[0]
+    ?.pageKey
 }

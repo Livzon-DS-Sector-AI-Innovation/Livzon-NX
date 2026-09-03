@@ -85,4 +85,30 @@ describe('AuthCompletion', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
+
+  it('enters the first visible module after identity verification', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: vi.fn().mockResolvedValue({
+        data: {
+          id: 'user-1',
+          name: '普通用户',
+          role: 'user',
+          module_codes: ['quality', 'administration', 'research'],
+          page_permissions: [],
+          page_permission_rollouts: {},
+        },
+      }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    act(() => root.render(<AuthCompletion nextPath="/production" />))
+
+    await act(async () => {
+      await vi.runAllTimersAsync()
+    })
+
+    expect(routerReplace).toHaveBeenCalledWith('/rd')
+  })
 })

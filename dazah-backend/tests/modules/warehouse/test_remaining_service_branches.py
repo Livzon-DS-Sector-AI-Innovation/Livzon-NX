@@ -311,6 +311,9 @@ async def test_discovery_page_binding_and_config_compatibility_paths(
 async def test_feishu_page_fetch_pagination_and_error_fallbacks() -> None:
     repo = _Repo()
     instance = _service(repo)
+    instance._get_material_client = AsyncMock(
+        side_effect=lambda _app_token: instance.feishu_client
+    )
 
     class _Client:
         def __init__(self) -> None:
@@ -329,6 +332,7 @@ async def test_feishu_page_fetch_pagination_and_error_fallbacks() -> None:
             return {"items": [{"field_id": "f2"}], "has_more": False}
 
     instance.feishu_client = _Client()
+    instance._get_material_client = AsyncMock(return_value=instance.feishu_client)
     fields = await instance.fetch_feishu_table_fields(app_token="a", table_id="t")
     assert len(fields) == 2
 
@@ -350,6 +354,7 @@ async def test_feishu_page_fetch_pagination_and_error_fallbacks() -> None:
             }
 
     instance.feishu_client = _RecordClient()
+    instance._get_material_client = AsyncMock(return_value=instance.feishu_client)
     records = await instance.fetch_feishu_table_records(
         app_token="a", table_id="t", page_size=10
     )

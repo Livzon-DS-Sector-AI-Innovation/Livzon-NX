@@ -3,9 +3,7 @@
 覆盖 fa_acid_sync 的 _read 成功路径、run() 数据主路径（日期/批号/百分比/数值转换、
 DELETE+INSERT）、main() 入口及 __main__ 分支。全部 mock，无真实网络/DB。
 
-注意：模块级 `_token` 与函数同名冲突，`_token()` 实际总是提前返回函数对象，
-其内部缓存写入体（68-79）为不可达死代码，因此这里直接验证 `_read()` 的
-网络请求与行值转换路径。
+飞书访问凭证由数据库配置传入 `_read()`，并交由统一 FeishuAuth 管理。
 """
 from __future__ import annotations
 
@@ -41,8 +39,15 @@ async def test_fa_acid_read_ok() -> Any:
     def fake_sheet(*, base_url: Any=None, timeout: Any=60, **kw: Any) -> Any:
         return real(transport=sheet_transport, timeout=timeout, base_url=base_url)
 
-    with patch.object(mod.httpx, "AsyncClient", fake_sheet):
-        rows = await mod._read()
+    with (
+        patch.object(mod.httpx, "AsyncClient", fake_sheet),
+        patch(
+            "app.platform.integrations.feishu.auth.FeishuAuth.get_tenant_access_token",
+            new=AsyncMock(return_value="tok-read"),
+        ) as get_token,
+    ):
+        rows = await mod._read("app-id", "app-secret")
+    get_token.assert_awaited_once_with("app-id", "app-secret")
     assert rows == [["1", ""], ["a", "b"]]
 
 
@@ -61,8 +66,14 @@ async def test_fa_acid_read_api_error() -> Any:
     def fake_err(*, base_url: Any=None, timeout: Any=60, **kw: Any) -> Any:
         return real(transport=err_transport, timeout=timeout, base_url=base_url)
 
-    with patch.object(mod.httpx, "AsyncClient", fake_err):
-        rows = await mod._read()
+    with (
+        patch.object(mod.httpx, "AsyncClient", fake_err),
+        patch(
+            "app.platform.integrations.feishu.auth.FeishuAuth.get_tenant_access_token",
+            new=AsyncMock(return_value="tok-error"),
+        ),
+    ):
+        rows = await mod._read("app-id", "app-secret")
     assert isinstance(rows, list)
 
 
@@ -88,54 +99,43 @@ async def test_fa_acid_run_with_data() -> Any:
     session = AsyncMock()
     session.flush = AsyncMock()
     session.commit = AsyncMock()
-    with patch.object(mod, "_read", new=AsyncMock(return_value=rows_input)):
+    with (
+        patch.object(mod, "_read", new=AsyncMock(return_value=rows_input)),
+        patch(
+            "app.modules.production.fa_feishu_scheduler._get_fa_spreadsheet_config",
+            new=AsyncMock(
+                return_value={"app_id": "app-id", "app_secret": "app-secret"}
+            ),
+        ),
+    ):
         out = await mod.run(session)
     assert out == {"total_rows": 2, "batches": 2}
     assert session.execute.await_count >= 3  # DELETE + 2 * INSERT
 
 
 @pytest.mark.anyio
-async def test_fa_acid_token_fetch_cache_and_error() -> Any:
+async def test_fa_acid_read_uses_explicit_credentials() -> Any:
     mod = importlib.import_module("app.modules.production.fa_acid_sync")
-    fn = mod._token  # 先保存函数对象（模块级 `_token` 是函数）
     real = httpx.AsyncClient
-    token_transport = httpx.MockTransport(
-        lambda req: httpx.Response(200, json={"tenant_access_token": "tok-ax"})
+    sheet_transport = httpx.MockTransport(
+        lambda req: httpx.Response(
+            200,
+            json={"data": {"valueRange": {"values": [["x"]]}}},
+        )
     )
-    err_transport = httpx.MockTransport(lambda req: httpx.Response(500, text="boom"))
 
-    def fake_ok(*, base_url: Any=None, timeout: Any=30, **kw: Any) -> Any:
-        return real(transport=token_transport, timeout=timeout, base_url=base_url)
+    def fake_sheet(*, base_url: Any = None, timeout: Any = 60, **kw: Any) -> Any:
+        return real(transport=sheet_transport, timeout=timeout, base_url=base_url)
 
-    def fake_err(*, base_url: Any=None, timeout: Any=30, **kw: Any) -> Any:
-        return real(transport=err_transport, timeout=timeout, base_url=base_url)
-
-    # 无缓存：发 HTTP 拿 token（覆盖返回后的缓存写入体）
-    setattr(mod, "_access_token", None)
-    with patch.object(mod.httpx, "AsyncClient", fake_ok), patch.object(
-        mod.os, "getenv", side_effect=["app-id", "app-secret"]
+    with (
+        patch.object(mod.httpx, "AsyncClient", fake_sheet),
+        patch(
+            "app.platform.integrations.feishu.auth.FeishuAuth.get_tenant_access_token",
+            new=AsyncMock(return_value="tok-ax"),
+        ) as get_token,
     ):
-        assert await fn() == "tok-ax"
-
-    # 命中缓存：不再发 HTTP
-    setattr(mod, "_access_token", "cached-tok")
-    with patch.object(
-        mod.httpx, "AsyncClient", new=MagicMock(side_effect=AssertionError("no HTTP"))
-    ):
-        assert await fn() == "cached-tok"
-
-    # HTTP 非 2xx：raise_for_status 抛 HTTPStatusError
-    err_handler = httpx.MockTransport(lambda req: httpx.Response(500, text="boom"))
-    setattr(mod, "_access_token", None)
-
-    def fake_http_err(*, base_url: Any=None, timeout: Any=30, **kw: Any) -> Any:
-        return real(transport=err_handler, timeout=timeout, base_url=base_url)
-
-    with patch.object(mod.httpx, "AsyncClient", fake_http_err), patch.object(
-        mod.os, "getenv", side_effect=["app-id", "app-secret"]
-    ):
-        with pytest.raises(httpx.HTTPStatusError):
-            await fn()
+        assert await mod._read("app-id", "app-secret") == [["x"]]
+    get_token.assert_awaited_once_with("app-id", "app-secret")
 
 
 def test_fa_acid_pure_helpers() -> Any:
