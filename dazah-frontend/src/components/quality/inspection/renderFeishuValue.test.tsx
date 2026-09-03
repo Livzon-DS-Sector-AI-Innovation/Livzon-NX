@@ -235,4 +235,48 @@ describe('renderFeishuValue', () => {
     )
     expect(container.textContent).toBe('2026-01-30')
   })
+
+  it('renders image attachment with direct url when no file_token', async () => {
+    const openMock = vi.fn()
+    vi.stubGlobal('open', openMock)
+    renderValue(
+      renderFeishuValue(
+        [{ name: 'cover.png', url: 'https://files.example/cover.png' }],
+        { record_id: 'rec-1' },
+        undefined,
+        makeMessage() as never,
+      ),
+    )
+    // 无 file_token 但有 url 时直接内联展示图片，不触发 window.open
+    const img = container.querySelector('img')
+    expect(img?.getAttribute('src')).toBe('https://files.example/cover.png')
+    expect(openMock).not.toHaveBeenCalled()
+  })
+
+  it('falls back to download button when image blob fetch fails', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: false, status: 403, json: async () => ({ message: '无权限' }) }),
+    )
+    const msg = makeMessage()
+    renderValue(
+      renderFeishuValue(
+        [{ name: 'fail.jpeg', file_token: 'ft-9' }],
+        { record_id: 'rec-9' },
+        'ent',
+        msg as never,
+        {
+          attachmentUrlBuilder: (e, r, f) => `/api/v1/quality/validation-qc/records/${r}/attachments/${f}/content`,
+        },
+      ),
+    )
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    })
+    // 失败后回退为可点击下载按钮
+    const button = Array.from(container.querySelectorAll('button')).find(
+      (b) => (b.textContent || '').includes('fail.jpeg'),
+    )
+    expect(button).toBeTruthy()
+  })
 })

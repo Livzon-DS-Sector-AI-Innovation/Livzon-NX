@@ -1097,19 +1097,26 @@ async def _get_department_contacts_cache(db: AsyncSession) -> list[dict[str, Any
                 return parsed
         except (TypeError, ValueError):
             pass
-    from app.modules.quality.service.department_contacts import (
-        get_department_contact_list_from_feishu,
-    )
+    try:
+        from app.modules.quality.service.department_contacts import (
+            get_department_contact_list_from_feishu,
+        )
 
-    result = await get_department_contact_list_from_feishu(db, page=1, page_size=1000)
-    items = result.get("items", [])
-    items = items if isinstance(items, list) else []
-    await cache_set(
-        _DEPARTMENT_CONTACTS_CACHE_KEY,
-        json.dumps(items, ensure_ascii=False, default=str),
-        ex=_DEPARTMENT_CONTACTS_CACHE_TTL,
-    )
-    return items
+        result = await get_department_contact_list_from_feishu(
+            db, page=1, page_size=1000
+        )
+        items = result.get("items", [])
+        items = items if isinstance(items, list) else []
+        await cache_set(
+            _DEPARTMENT_CONTACTS_CACHE_KEY,
+            json.dumps(items, ensure_ascii=False, default=str),
+            ex=_DEPARTMENT_CONTACTS_CACHE_TTL,
+        )
+        return items
+    except Exception:
+        # 部门联系人未配置/拉取失败时头像为空，不影响验证列表加载
+        logger.warning("拉取部门联系人失败，人员头像跳过", exc_info=True)
+        return []
 
 
 def _resolve_bitable_user_ids_from_names(

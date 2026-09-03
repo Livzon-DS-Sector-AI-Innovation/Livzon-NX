@@ -581,3 +581,153 @@ def test_validation_mapping_group_chat_and_empty_row() -> None:
     }
     empty_item = pages._map_validation_base_item(empty_record)
     assert empty_item["is_empty_row"] is True
+
+
+# ─── 联系人缓存与头像补全 ─────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_department_contacts_cache_hit_and_miss(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """联系人缓存：命中直接返回；未命中拉取并写缓存；异常返回空列表。"""
+    # 命中缓存
+    async def _fake_cache_get(key: str) -> str | None:
+        import json as _json
+
+        return _json.dumps([{"name": "张三", "avatar_url": "a"}], ensure_ascii=False)
+
+    monkeypatch.setattr(pages, "cache_get", _fake_cache_get)
+    monkeypatch.setattr(pages, "cache_set", AsyncMock())
+    items = await pages._get_department_contacts_cache(SimpleNamespace())
+    assert items == [{"name": "张三", "avatar_url": "a"}]
+
+    # 未命中：拉取并写缓存
+    async def _fake_get_none(key: str) -> str | None:
+        return None
+
+    async def _fake_fetch(db, page=1, page_size=1000):
+        return {"items": [{"name": "李四", "avatar_url": "b"}]}
+
+    monkeypatch.setattr(pages, "cache_get", _fake_get_none)
+    cache_set_mock = AsyncMock()
+    monkeypatch.setattr(pages, "cache_set", cache_set_mock)
+    monkeypatch.setattr(
+        "app.modules.quality.service.department_contacts.get_department_contact_list_from_feishu",
+        _fake_fetch,
+    )
+    items = await pages._get_department_contacts_cache(SimpleNamespace())
+    assert items == [{"name": "李四", "avatar_url": "b"}]
+    cache_set_mock.assert_awaited_once()
+
+    # 拉取抛错（如部门联系人未配置）→ 返回空列表不抛
+    async def _fake_fetch_err(db, page=1, page_size=1000):
+        raise AppException("部门联系人飞书同步未启用")
+
+    monkeypatch.setattr(
+        "app.modules.quality.service.department_contacts.get_department_contact_list_from_feishu",
+        _fake_fetch_err,
+    )
+    items = await pages._get_department_contacts_cache(SimpleNamespace())
+    assert items == []
+
+
+@pytest.mark.asyncio
+async def test_enrich_participants_avatars_fills_and_tolerates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """头像补全：按姓名匹配填充；HR 表查询失败时优雅跳过。"""
+    member = SimpleNamespace(name="张三", avatar_url="https://avatar/zhang.png")
+    no_avatar = SimpleNamespace(name="李四", avatar_url=None)
+    empty_name = SimpleNamespace(name="", avatar_url="https://x")
+
+    class _FakeResult:
+        def scalars(self):
+            return self
+
+        def all(self):
+            return [member, no_avatar, empty_name]
+
+    class _FakeDb:
+        async def execute(self, stmt):
+            return _FakeResult()
+
+    items = [
+        {
+            "participants": [
+                {"name": "张三", "avatar_url": "", "id": "ou_1"},
+                {"name": "李四", "avatar_url": "", "id": "ou_2"},
+                {"name": "王五", "avatar_url": "", "id": "ou_3"},
+            ],
+            "owner_name": [
+                {"name": "张三", "avatar_url": "", "id": "ou_4"},
+                "纯文本",
+            ],
+        }
+    ]
+    await pages._enrich_participants_avatars(_FakeDb(), items)
+    participants = items[0]["participants"]
+    assert participants[0]["avatar_url"] == "https://avatar/zhang.png"  # 张三命中
+    assert participants[1]["avatar_url"] == ""  # 李四无头像，保持空
+    assert participants[2]["avatar_url"] == ""  # 王五未匹配
+    assert items[0]["owner_name"][0]["avatar_url"] == "https://avatar/zhang.png"
+
+    # 查询失败 → 静默跳过不抛
+    class _FakeDbErr:
+        async def execute(self, stmt):
+            raise RuntimeError("db down")
+
+    items2 = [{"participants": [{"name": "张三", "avatar_url": "", "id": "ou_1"}]}]
+    await pages._enrich_participants_avatars(_FakeDbErr(), items2)
+    assert items2[0]["participants"][0]["avatar_url"] == ""
+
+
+@pytest.mark.asyncio
+async def test_crud_enrich_bitable_avatars_and_reference(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """通用 CRUD 头像补全 + 实体引用/URL 拼接。"""
+    member = SimpleNamespace(name="赵双", avatar_url="https://avatar/zhao.png")
+
+    class _FakeResult:
+        def scalars(self):
+            return self
+
+        def all(self):
+            return [member]
+
+    class _FakeDb:
+        async def execute(self, stmt):
+            return _FakeResult()
+
+    item = {"人员": [{"name": "赵双", "avatar_url": "", "id": "ou_9"}]}
+    await crud_service._enrich_bitable_record_avatars(_FakeDb(), [item])
+    assert item["人员"][0]["avatar_url"] == "https://avatar/zhao.png"
+
+    # 实体引用：配置返回 token/table，未配置返回 None
+    class _Entity:
+        app_token = "tok"
+        table_id = "tbl"
+
+    async def _resolve_ok(db, entity_code, *, direction):
+        return SimpleNamespace(), _Entity()
+
+    monkeypatch.setattr(crud_service, "_resolve_runtime_entity", _resolve_ok)
+    ref = await crud_service.get_bitable_entity_reference(
+        SimpleNamespace(), "validation_qc_2026"
+    )
+    assert ref == {"app_token": "tok", "table_id": "tbl"}
+    assert crud_service.build_feishu_base_url("tok", "tbl") == (
+        "https://www.feishu.cn/base/tok?table=tbl"
+    )
+
+    async def _resolve_fail(db, entity_code, *, direction):
+        raise AppException("disabled")
+
+    monkeypatch.setattr(crud_service, "_resolve_runtime_entity", _resolve_fail)
+    assert (
+        await crud_service.get_bitable_entity_reference(
+            SimpleNamespace(), "validation_qc_2027"
+        )
+        is None
+    )
