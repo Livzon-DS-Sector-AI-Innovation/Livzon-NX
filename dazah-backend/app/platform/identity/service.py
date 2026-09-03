@@ -507,6 +507,21 @@ async def _effective_feishu_credentials(
     return app_id, app_secret, root_id, member_id
 
 
+def _environment_directory_credentials() -> tuple[str, str, str, str]:
+    """Resolve the platform directory app strictly from root environment settings."""
+    settings = get_settings()
+    app_id = settings.FEISHU_APP_ID.strip()
+    app_secret = settings.FEISHU_APP_SECRET.strip()
+    root_id = settings.FEISHU_SYNC_ROOT_DEPT_ID.strip() or "0"
+    member_id = settings.FEISHU_SYNC_MEMBER_DEPT_ID.strip() or root_id
+    if not app_id or not app_secret:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "飞书登录与通讯录 App ID 或 App Secret 未配置",
+        )
+    return app_id, app_secret, root_id, member_id
+
+
 def _diagnostic_status(steps: list[FeishuDiagnosticStep]) -> str:
     if any(step.status == "error" for step in steps):
         return "error"
@@ -868,9 +883,15 @@ async def _save_diagnostic_result(
     await db.flush()
 
 
-async def run_livzon_feishu_sync_all(
+async def _run_feishu_directory_sync_all(
     db: AsyncSession,
     *,
+    app_id: str,
+    app_secret: str,
+    root_id: str,
+    member_id: str,
+    user_id_type: str,
+    status_config: FeishuConfig | None,
     actor_id: UUID | None = None,
 ) -> JsonObject:
     from app.platform.integrations.feishu.contact import get_contact_scope
@@ -880,14 +901,15 @@ async def run_livzon_feishu_sync_all(
         sync_users_by_ids,
     )
 
-    config = await _feishu_config_repo.get_active(db)
-    app_id, app_secret, root_id, member_id = await _effective_feishu_credentials(db)
-
     scope: JsonObject = {}
     scope_department_ids: list[str] = []
     scope_user_ids: list[str] = []
     try:
-        scope = await get_contact_scope(app_id=app_id, app_secret=app_secret)
+        scope = await get_contact_scope(
+            user_id_type=user_id_type,
+            app_id=app_id,
+            app_secret=app_secret,
+        )
         scope_department_ids = scope.get("department_ids") or []
         scope_user_ids = scope.get("user_ids") or []
     except Exception:
@@ -907,6 +929,7 @@ async def run_livzon_feishu_sync_all(
             dept_results.append(
                 await sync_departments(
                     department_id,
+                    user_id_type=user_id_type,
                     app_id=app_id,
                     app_secret=app_secret,
                 )
@@ -922,6 +945,7 @@ async def run_livzon_feishu_sync_all(
             member_results.append(
                 await sync_members(
                     department_id,
+                    user_id_type=user_id_type,
                     app_id=app_id,
                     app_secret=app_secret,
                 )
@@ -934,7 +958,7 @@ async def run_livzon_feishu_sync_all(
     if scope_user_ids:
         direct_user_result = await sync_users_by_ids(
             scope_user_ids,
-            user_id_type="user_id",
+            user_id_type=user_id_type,
             app_id=app_id,
             app_secret=app_secret,
         )
@@ -955,10 +979,10 @@ async def run_livzon_feishu_sync_all(
         )
         if all_errors:
             message = f"{message} 错误：{'; '.join(all_errors)}"
-        if config is not None:
-            config.last_sync_status = "error"
-            config.last_sync_message = message
-            config.last_synced_at = datetime.now(UTC)
+        if status_config is not None:
+            status_config.last_sync_status = "error"
+            status_config.last_sync_message = message
+            status_config.last_synced_at = datetime.now(UTC)
             await db.flush()
         raise HTTPException(status.HTTP_400_BAD_REQUEST, message)
 
@@ -979,10 +1003,10 @@ async def run_livzon_feishu_sync_all(
         sync_message = (
             f"{sync_message} 发现 {conflict_count} 个身份绑定冲突，请处理后重试。"
         )
-    if config is not None:
-        config.last_sync_status = sync_status
-        config.last_sync_message = sync_message
-        config.last_synced_at = datetime.now(UTC)
+    if status_config is not None:
+        status_config.last_sync_status = sync_status
+        status_config.last_sync_message = sync_message
+        status_config.last_synced_at = datetime.now(UTC)
         await db.flush()
     return {
         "scope": {
@@ -1009,6 +1033,45 @@ async def run_livzon_feishu_sync_all(
         "status": sync_status,
         "message": sync_message,
     }
+
+
+async def run_livzon_feishu_sync_all(
+    db: AsyncSession,
+    *,
+    actor_id: UUID | None = None,
+) -> JsonObject:
+    """Sync the Livzon integration using its persisted configuration."""
+    config = await _feishu_config_repo.get_active(db)
+    app_id, app_secret, root_id, member_id = await _effective_feishu_credentials(db)
+    return await _run_feishu_directory_sync_all(
+        db,
+        app_id=app_id,
+        app_secret=app_secret,
+        root_id=root_id,
+        member_id=member_id,
+        user_id_type="user_id",
+        status_config=config,
+        actor_id=actor_id,
+    )
+
+
+async def run_environment_feishu_user_sync(
+    db: AsyncSession,
+    *,
+    actor_id: UUID | None = None,
+) -> JsonObject:
+    """Sync user management strictly with root environment credentials."""
+    app_id, app_secret, root_id, member_id = _environment_directory_credentials()
+    return await _run_feishu_directory_sync_all(
+        db,
+        app_id=app_id,
+        app_secret=app_secret,
+        root_id=root_id,
+        member_id=member_id,
+        user_id_type="open_id",
+        status_config=None,
+        actor_id=actor_id,
+    )
 
 
 async def list_livzon_identity_conflicts(

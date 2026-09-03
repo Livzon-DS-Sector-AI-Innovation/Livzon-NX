@@ -42,16 +42,13 @@ def start_ws_client(
     """启动飞书 WebSocket 长连接（非阻塞，在后台线程运行）。
 
     Args:
-        app_id: 飞书应用 ID，默认使用全局 FEISHU_APP_ID
-        app_secret: 飞书应用密钥，默认使用全局 FEISHU_APP_SECRET
+        app_id: 所属模块显式提供的飞书应用 ID
+        app_secret: 所属模块显式提供的飞书应用密钥
         event_handler: 事件处理器，默认使用全局 build_event_handler()
         name: 线程名称，用于区分多个 WS 实例
     """
-    from app.core.config import get_settings
-
-    settings = get_settings()
-    resolved_app_id = app_id or settings.FEISHU_APP_ID
-    resolved_app_secret = app_secret or settings.FEISHU_APP_SECRET
+    resolved_app_id = app_id
+    resolved_app_secret = app_secret
 
     if not resolved_app_id or not resolved_app_secret:
         logger.warning(

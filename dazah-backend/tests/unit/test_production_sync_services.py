@@ -245,9 +245,16 @@ async def test_dr_feishu_sync_empty_sheet() -> None:
 async def test_fa_acid_sync_run_empty() -> None:
     module = importlib.import_module("app.modules.production.fa_acid_sync")
     session = _session()
-    with patch.object(module, "_token", new=AsyncMock(return_value="token")):
-        with patch.object(module, "_read", new=AsyncMock(return_value=[])):
-            result = await module.run(session)
+    with (
+        patch.object(module, "_read", new=AsyncMock(return_value=[])),
+        patch(
+            "app.modules.production.fa_feishu_scheduler._get_fa_spreadsheet_config",
+            new=AsyncMock(
+                return_value={"app_id": "app-id", "app_secret": "app-secret"}
+            ),
+        ),
+    ):
+        result = await module.run(session)
     assert isinstance(result, dict)
 
 

@@ -893,11 +893,11 @@ async def push_contract_expiring_notify(
                     )
 
                 try:
+                    from app.modules.hr.feishu.notification import (
+                        send_user_card_with_message_id,
+                    )
                     from app.modules.hr.feishu_settings_service import (
                         get_hr_feishu_app_credentials,
-                    )
-                    from app.platform.integrations.feishu.notification import (
-                        send_user_card_with_message_id,
                     )
 
                     app_id, app_secret = await get_hr_feishu_app_credentials(session)

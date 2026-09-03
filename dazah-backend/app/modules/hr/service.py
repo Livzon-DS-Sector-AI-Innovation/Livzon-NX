@@ -2037,7 +2037,7 @@ class OffboardingRecordService:
         # 自动发送离职材料
         try:
             if employee.feishu_open_id:
-                from app.platform.integrations.feishu import notification as feishu_n
+                from app.modules.hr.feishu import notification as feishu_n
 
                 app_id, app_secret = await get_hr_feishu_app_credentials(self.session)
 
@@ -3582,7 +3582,7 @@ class PositionTransferRecordService:
         await cache_set(notify_key, "1", ex=3600)  # 1小时过期
 
         try:
-            from app.platform.integrations.feishu.notification import (
+            from app.modules.hr.feishu.notification import (
                 send_user_card_with_message_id,
             )
 
@@ -3691,7 +3691,7 @@ class PositionTransferRecordService:
                 )
                 return
 
-            from app.platform.integrations.feishu.notification import (
+            from app.modules.hr.feishu.notification import (
                 send_user_card_with_message_id,
             )
 

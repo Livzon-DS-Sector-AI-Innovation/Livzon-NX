@@ -167,9 +167,7 @@ def test_raw_mapping_and_filter_validation() -> None:
 
 
 @pytest.mark.asyncio
-async def test_config_and_table_error_boundaries(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_config_and_table_error_boundaries() -> None:
     service = _service()
     service.repo.get_any_feishu_config.side_effect = RuntimeError("db")
     with pytest.raises(RuntimeError):
@@ -658,7 +656,11 @@ async def test_material_record_edit_detail_and_delete_paths(
             }
         )
     )
-    service._get_feishu_client = AsyncMock(return_value=service.feishu_client)
+    monkeypatch.setattr(
+        service,
+        "_get_feishu_client",
+        AsyncMock(return_value=service.feishu_client),
+    )
 
     detail = await service.get_material_page_record_detail("raw-summary", "r1")
     assert detail["record_id"] == "r1"
@@ -699,7 +701,11 @@ async def test_feishu_fetch_sync_inventory_and_dashboard_paths(
 ) -> None:
     service = _service()
     service.feishu_client = SimpleNamespace(request=AsyncMock())
-    service._get_material_client = AsyncMock(return_value=service.feishu_client)
+    monkeypatch.setattr(
+        service,
+        "_get_material_client",
+        AsyncMock(return_value=service.feishu_client),
+    )
     service.feishu_client.request.side_effect = [
         {"items": [{"field_name": "名称"}], "has_more": True, "page_token": "next"},
         {"items": [{"field_name": "数量"}], "has_more": False},

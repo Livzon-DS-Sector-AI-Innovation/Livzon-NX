@@ -173,6 +173,7 @@ async def _get_existing_user(open_id: str) -> Any:
 async def sync_departments(
     root_dept_id: str,
     *,
+    user_id_type: str = "user_id",
     app_id: str | None = None,
     app_secret: str | None = None,
 ) -> dict[str, Any]:
@@ -192,6 +193,7 @@ async def sync_departments(
     async def fetch_depts() -> list[dict[str, Any]]:
         return await get_all_departments(
             root_department_id=root_dept_id or "0",
+            user_id_type=user_id_type,
             app_id=app_id,
             app_secret=app_secret,
         )
@@ -271,6 +273,7 @@ async def sync_departments(
 async def sync_members(
     target_dept_id: str,
     *,
+    user_id_type: str = "user_id",
     app_id: str | None = None,
     app_secret: str | None = None,
 ) -> dict[str, Any]:
@@ -293,6 +296,7 @@ async def sync_members(
     try:
         all_depts = await get_all_departments(
             root_department_id=target_dept_id or "0",
+            user_id_type=user_id_type,
             app_id=app_id,
             app_secret=app_secret,
         )
@@ -312,6 +316,7 @@ async def sync_members(
             try:
                 users = await find_users_by_department(
                     dept_id,
+                    user_id_type=user_id_type,
                     app_id=app_id,
                     app_secret=app_secret,
                 )

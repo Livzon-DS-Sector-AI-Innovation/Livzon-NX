@@ -14,9 +14,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.modules.equipment import repository as repo
+from app.modules.equipment.feishu.message import send_group_card
 from app.modules.equipment.feishu.notification import send_user_card
 from app.modules.equipment.models.inspection import InspectionTask
-from app.platform.integrations.feishu.message import send_group_card
 
 if TYPE_CHECKING:
     from app.modules.equipment.models.equipment import Equipment

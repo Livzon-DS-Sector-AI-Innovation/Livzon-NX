@@ -311,6 +311,9 @@ async def test_discovery_page_binding_and_config_compatibility_paths(
 async def test_feishu_page_fetch_pagination_and_error_fallbacks() -> None:
     repo = _Repo()
     instance = _service(repo)
+    instance._get_material_client = AsyncMock(
+        side_effect=lambda _app_token: instance.feishu_client
+    )
 
     class _Client:
         def __init__(self) -> None:

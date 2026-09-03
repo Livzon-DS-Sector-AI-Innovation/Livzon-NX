@@ -9,6 +9,7 @@ from uuid import uuid4
 import pytest
 from openpyxl import Workbook, load_workbook
 
+from app.core.exceptions import AppException
 from app.modules.registration.models import RegistrationCertificateEntry
 from app.modules.registration.service import certificate
 from app.modules.registration.service.certificate import CertificateWorkbookService
@@ -168,58 +169,16 @@ def test_certificate_workbook_parser_and_sheet_writer() -> None:
 
 
 @pytest.mark.asyncio
-async def test_certificate_reminder_batches_filter_and_send() -> None:
-    due = _entry(expiry_date=(date.today() + timedelta(days=2)).strftime("%Y.%m.%d"))
-    expired = _entry(expiry_date="2000.01.01")
-    repo = SimpleNamespace(
-        count_entries=AsyncMock(return_value=2),
-        get_reminder_setting=AsyncMock(
-            return_value=SimpleNamespace(
-                is_enabled=True,
-                reminder_days=90,
-                recipient_open_id="open-1",
-                recipient_name="QA",
-                recipient_department="QA",
-            )
-        ),
-        list_entries=AsyncMock(return_value=[due, expired]),
-        reminder_notification_exists=AsyncMock(return_value=False),
-        create_reminder_notifications=AsyncMock(),
-    )
-    service = CertificateWorkbookService(SimpleNamespace(commit=AsyncMock()))
-    service.repository = repo
-    service._get_qa_reminder_recipient_by_open_id = AsyncMock(
-        return_value=SimpleNamespace(
-            open_id="open-1",
-            name="QA",
-            department="QA",
-            enterprise_email="qa@example.test",
-        )
-    )
-    batches = await service.find_due_reminder_batch()
-    assert batches[0]["recipient_receive_id"] == "qa@example.test"
-    assert batches[0]["entries"] == [due]
-
-    from app.modules.registration.service import certificate as certificate_module
-
-    monkeypatch = pytest.MonkeyPatch()
-    monkeypatch.setattr(
-        certificate_module, "send_user_card", AsyncMock(return_value=True)
-    )
-    try:
-        await service.send_due_reminder_batch(batches[0])
-    finally:
-        monkeypatch.undo()
-    repo.create_reminder_notifications.assert_awaited_once()
-
-    repo.get_reminder_setting.return_value = SimpleNamespace(
-        is_enabled=False,
-        reminder_days=90,
-        recipient_open_id=None,
-        recipient_name=None,
-        recipient_department=None,
-    )
+async def test_certificate_reminder_batches_are_disabled_without_marking_sent() -> None:
+    service = CertificateWorkbookService(AsyncMock())
+    service.repository = AsyncMock()
+    service.ensure_seeded = AsyncMock()
     assert await service.find_due_reminder_batch() == []
+    with pytest.raises(AppException) as exc:
+        await service.send_due_reminder_batch({})
+    assert exc.value.status_code == 503
+    service.ensure_seeded.assert_not_awaited()
+    service.repository.create_reminder_notifications.assert_not_awaited()
 
 
 @pytest.mark.asyncio

@@ -613,12 +613,12 @@ class QualityFeishuSync:
                 .all()
             )
         except (OperationalError, ProgrammingError):
-            # 数据表尚未迁移时，回退到环境变量配置，避免设置页接口导致同步链路整体报错。
+            # 无模块配置时禁用同步；不得回退登录应用。
             app_model = None
             rows = []
 
-        app_id = settings.FEISHU_APP_ID
-        app_secret = settings.FEISHU_APP_SECRET
+        app_id = ""
+        app_secret = ""
         legacy_app_token = settings.QUALITY_FEISHU_APP_TOKEN
         is_app_enabled = bool(app_id and app_secret)
         if (

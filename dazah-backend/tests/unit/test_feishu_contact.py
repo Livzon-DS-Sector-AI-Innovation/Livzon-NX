@@ -72,20 +72,20 @@ async def test_contact_scope_collects_authorized_ids(monkeypatch: Any) -> None:
         msg="",
         data=data,
     )
+    scope_api: Any = SimpleNamespace(alist=AsyncMock(return_value=response))
     client: Any = SimpleNamespace(
         contact=SimpleNamespace(
-            v3=SimpleNamespace(
-                scope=SimpleNamespace(alist=AsyncMock(return_value=response))
-            )
+            v3=SimpleNamespace(scope=scope_api)
         )
     )
     monkeypatch.setattr(contact, "_get_feishu_client", AsyncMock(return_value=client))
     monkeypatch.setattr(contact, "_get_tenant_token", AsyncMock(return_value="token"))
-    assert await contact.get_contact_scope() == {
+    assert await contact.get_contact_scope(user_id_type="open_id") == {
         "department_ids": ["d1"],
         "user_ids": ["u1"],
         "group_ids": ["g1"],
     }
+    assert scope_api.alist.await_args.args[0].user_id_type == "open_id"
 
 
 @pytest.mark.asyncio
@@ -126,10 +126,14 @@ async def test_get_all_departments_deduplicates_and_normalizes_root(
     monkeypatch.setattr(contact, "_get_feishu_client", AsyncMock(return_value=client))
     monkeypatch.setattr(contact, "_get_tenant_token", AsyncMock(return_value="token"))
 
-    departments = await contact.get_all_departments(root_department_id="root")
+    departments = await contact.get_all_departments(
+        root_department_id="root",
+        user_id_type="open_id",
+    )
     assert len(departments) == 1
     assert departments[0]["department_id"] == "d1"
     assert departments[0]["parent_department_id"] == ""
+    assert department_api.achildren.await_args.args[0].user_id_type == "open_id"
 
 
 @pytest.mark.asyncio
@@ -242,22 +246,22 @@ async def test_find_users_by_department_maps_nested_fields(monkeypatch: Any) -> 
         msg="",
         data=data,
     )
+    user_api: Any = SimpleNamespace(
+        afind_by_department=AsyncMock(return_value=response)
+    )
     client: Any = SimpleNamespace(
         contact=SimpleNamespace(
-            v3=SimpleNamespace(
-                user=SimpleNamespace(
-                    afind_by_department=AsyncMock(return_value=response)
-                )
-            )
+            v3=SimpleNamespace(user=user_api)
         )
     )
     monkeypatch.setattr(contact, "_get_feishu_client", AsyncMock(return_value=client))
     monkeypatch.setattr(contact, "_get_tenant_token", AsyncMock(return_value="token"))
 
-    users = await contact.find_users_by_department("d1")
+    users = await contact.find_users_by_department("d1", user_id_type="open_id")
     assert users[0]["positions"][0]["position_name"] == "工程师"
     assert users[0]["department_path"][0]["department_name"] == "生产部"
     assert users[0]["is_frozen"] is False
+    assert user_api.afind_by_department.await_args.args[0].user_id_type == "open_id"
 
 
 @pytest.mark.asyncio
