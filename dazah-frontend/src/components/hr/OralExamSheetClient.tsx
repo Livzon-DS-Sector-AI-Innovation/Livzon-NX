@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Alert, App, Button, Input, Space } from 'antd'
-import { PlusOutlined, DeleteOutlined, DownloadOutlined, RobotOutlined } from '@ant-design/icons'
+import { PlusOutlined, DeleteOutlined, DownloadOutlined, RobotOutlined, CloseCircleOutlined } from '@ant-design/icons'
 import type { ExportedDoc, TrainingDocExporter, TrainingSessionData } from '@/types/hr'
 import { upsertTrainingSession, upsertTrainingDocument, generateOralExamResult } from '@/actions/hr'
 import { downloadBytes } from '@/lib/download'
@@ -90,7 +90,7 @@ export default function OralExamSheetClient({ sessionData, initialPayload, onSes
               department: unify201Dept(deptMap[n]),
               question_nos: '',
               result: '' as const,
-              remark: '',
+              remark: '—',
             }
           )
         }),
@@ -203,6 +203,14 @@ export default function OralExamSheetClient({ sessionData, initialPayload, onSes
         </Button>
         <Button icon={<DeleteOutlined />} disabled={questions.length <= 1} onClick={() => setQuestions((q) => q.slice(0, -1))}>
           删除问题行
+        </Button>
+        <Button icon={<DeleteOutlined />} disabled={persons.filter((p) => p.manual).length === 0} onClick={() => setPersons((arr) => {
+          for (let i = arr.length - 1; i >= 0; i--) {
+            if (arr[i].manual) return [...arr.slice(0, i), ...arr.slice(i + 1)]
+          }
+          return arr
+        })}>
+          删除人员行
         </Button>
         <Button
           type="primary"
@@ -350,15 +358,20 @@ export default function OralExamSheetClient({ sessionData, initialPayload, onSes
                   <i className="cb-box">{p.result === '不合格' ? '☑' : '□'}</i>不合格
                 </span>
               </td>
-              <td colSpan={2}>
+              <td>
                 <Input value={p.remark} onChange={(e) => setPersons((arr) => arr.map((x, j) => (j === i ? { ...x, remark: e.target.value } : x)))} />
+              </td>
+              <td>
+                {p.manual ? (
+                  <Button type="link" danger size="small" icon={<CloseCircleOutlined />} onClick={() => setPersons((arr) => arr.filter((_, j) => j !== i))} />
+                ) : null}
               </td>
             </tr>
           ))}
           <tr
             style={{ cursor: 'pointer' }}
             title="点击添加人员行"
-            onClick={() => setPersons((arr) => [...arr, { name: '', department: '', question_nos: '', result: '', remark: '', manual: true }])}
+            onClick={() => setPersons((arr) => [...arr, { name: '', department: '', question_nos: '', result: '', remark: '—', manual: true }])}
           >
             <td className="doc-idx">……</td>
             <td colSpan={6} style={{ textAlign: 'center', color: '#64748b' }}>……（点击添加人员行）</td>

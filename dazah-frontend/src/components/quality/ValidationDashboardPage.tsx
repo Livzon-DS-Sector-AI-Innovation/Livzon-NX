@@ -13,6 +13,7 @@ import {
   ExperimentOutlined,
   ClearOutlined,
   AppstoreOutlined,
+  FileDoneOutlined,
 } from '@ant-design/icons'
 import ReactECharts from 'echarts-for-react'
 import type { ValidationDashboardStats } from '@/types/quality'
@@ -40,6 +41,7 @@ const validationLinks = [
   { href: '/quality/validation/process-validation', label: '工艺验证', icon: <ExperimentOutlined /> },
   { href: '/quality/validation/cleaning-validation', label: '清洁验证', icon: <ClearOutlined /> },
   { href: '/quality/validation/other-validations', label: '其他验证', icon: <AppstoreOutlined /> },
+  { href: '/quality/validation/qc-validation', label: 'QC验证', icon: <FileDoneOutlined /> },
 ]
 
 const chartColors = ['#5b8ff9', '#61ddaa', '#65789b', '#f6bd16', '#7262fd', '#78d3f8', '#9661bc']

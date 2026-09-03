@@ -27,12 +27,14 @@ from app.modules.quality.api.deps import (
 from app.modules.quality.schemas import (
     CreateHistoricalDeviationRequest,
     HistoricalDeviationAttachmentOut,
+    HistoricalDeviationBatchImportResult,
     HistoricalDeviationDetail,
     HistoricalDeviationListItem,
     UpdateHistoricalDeviationRequest,
 )
 from app.modules.quality.service.historical_deviation import (
     ai_extract_historical_deviation,
+    batch_import_historical_deviations,
     create_historical_deviation,
     delete_historical_deviation,
     delete_historical_deviation_attachment,
@@ -171,6 +173,28 @@ async def upload_historical_deviation_attachment_api(
     )
     result = await upload_historical_deviation_attachment(db, record_id, file, user_id)
     return success_response(data=result.model_dump(mode="json"), message="上传成功")
+
+
+@router.post(
+    "/historical-deviations/batch-import",
+    summary="批量导入历史偏差（转 MD + 建记录 + 解析编号 + AI 提取）",
+    response_model=ApiResponseEnvelope[HistoricalDeviationBatchImportResult],
+)
+async def batch_import_historical_deviations_api(
+    files: list[UploadFile] = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> JSONResponse:
+    user_id = _current_user_id(_require_user(current_user))
+    await _assert_quality_edit_scope(
+        db,
+        current_user,
+        scope_permission=QUALITY_QA_SCOPE_PERMISSIONS["system_qa"],
+    )
+    result = await batch_import_historical_deviations(db, files, user_id)
+    return success_response(
+        data=result.model_dump(mode="json"), message="批量导入完成"
+    )
 
 
 @router.delete(

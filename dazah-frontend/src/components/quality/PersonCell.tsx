@@ -2,7 +2,6 @@
 
 import { qualityTokens } from './themeTokens'
 import { Avatar } from 'antd'
-import { UserOutlined } from '@ant-design/icons'
 
 interface PersonCellProps {
   name?: string | null
@@ -20,18 +19,13 @@ function stringToColor(str: string): string {
 
 export function PersonCell({ name, avatarUrl }: PersonCellProps) {
   if (!name || name === '-') {
-    return <span style={{ color: '#bbb' }}>-</span>
+    return <span style={{ color: qualityTokens.textMuted }}>-</span>
   }
   const firstName = name.trim().charAt(0)
   const bgColor = stringToColor(name)
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-      <Avatar
-        size={24}
-        src={avatarUrl || undefined}
-        style={{ backgroundColor: bgColor, flexShrink: 0 }}
-        icon={!avatarUrl ? <UserOutlined /> : undefined}
-      >
+      <Avatar size={24} src={avatarUrl || undefined} style={{ backgroundColor: bgColor, flexShrink: 0 }}>
         {firstName}
       </Avatar>
       <span>{name}</span>

@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.exceptions import AppException
 from app.core.llm.encryption import decrypt_api_key, encrypt_api_key, mask_api_key
+from app.core.llm.exceptions import LLMConfigError
 from app.modules.quality.models import (
     QualityFeishuAppSettings,
     QualityFeishuEntitySetting,
@@ -110,6 +111,18 @@ DEFAULT_QUALITY_FEISHU_ENTITIES: list[tuple[str, str, str, int]] = [
     ("validation_process", "工艺验证", "验证与确认", 90),
     ("validation_cleaning", "清洁验证", "验证与确认", 100),
     ("validation_other", "其他验证", "验证与确认", 110),
+    # 验证主计划/QC验证 年度子表：按年各配一张飞书表，未配置年度实体时页面
+    # 回落到验证总表（主计划）或提示未配置（QC验证）
+    ("validation_master_plan_2024", "验证主计划-2024年", "验证与确认", 111),
+    ("validation_master_plan_2025", "验证主计划-2025年", "验证与确认", 112),
+    ("validation_master_plan_2026", "验证主计划-2026年", "验证与确认", 113),
+    ("validation_master_plan_2027", "验证主计划-2027年", "验证与确认", 114),
+    ("validation_master_plan_2028", "验证主计划-2028年", "验证与确认", 115),
+    ("validation_qc_2024", "QC验证-2024年", "验证与确认", 116),
+    ("validation_qc_2025", "QC验证-2025年", "验证与确认", 117),
+    ("validation_qc_2026", "QC验证-2026年", "验证与确认", 118),
+    ("validation_qc_2027", "QC验证-2027年", "验证与确认", 119),
+    ("validation_qc_2028", "QC验证-2028年", "验证与确认", 120),
     ("change_ledger", "变更台账", "变更控制", 120),
     ("change_action_plan", "变更计划", "变更控制", 130),
     # OOS/OOT 管理
@@ -316,6 +329,15 @@ QUALITY_FEISHU_ENTITY_ENV_PREFILLS: dict[str, dict[str, str]] = {
         "table_id_setting": "QUALITY_VALIDATION_FEISHU_TABLE_ID",
         "table_name": "验证总表",
         "source_note": "验证与确认共用同一张飞书源表，平台按验证类型截取到不同模块。",
+    },
+    # QC验证 2026 年表固定绑定专用 Base；其余年份由用户在同步设置中自行绑定
+    "validation_qc_2026": {
+        "app_token": "GMFmbYxSlaVv16szQHHc51Dwn4d",
+        "table_id": "tbl39A8QUDCrC1TJ",
+        "table_name": "2026年",
+        "source_note": (
+            "QC验证按年分表，2026 年已固定绑定飞书源表；其余年份请在同步设置中配置。"
+        ),
     },
     # OOS/OOT 管理（复用主 Base QUALITY_FEISHU_APP_TOKEN）
     "oos_oot_report_record": {
@@ -1120,12 +1142,26 @@ async def _get_entity_settings_model(
     return result.scalar_one_or_none()
 
 
+def _decrypt_stored_app_secret(encrypted: str | None) -> str:
+    """解密存量 App Secret；密钥轮换导致解密失败时返回空串。
+
+    返回空串而非抛错，保证设置页可加载、可重新保存覆盖损坏的存量密文。
+    """
+    if not encrypted:
+        return ""
+    try:
+        return decrypt_api_key(encrypted)
+    except LLMConfigError:
+        logger.warning("质量飞书 App Secret 解密失败（加密密钥已轮换），需重新保存")
+        return ""
+
+
 def _build_app_settings_detail(
     model: QualityFeishuAppSettings | None,
 ) -> QualityFeishuAppSettingsDetail:
     if not model:
         return QualityFeishuAppSettingsDetail()
-    decrypted_secret = decrypt_api_key(model.app_secret) if model.app_secret else ""
+    decrypted_secret = _decrypt_stored_app_secret(model.app_secret)
     return QualityFeishuAppSettingsDetail(
         app_id=model.app_id or "",
         app_secret_masked=mask_api_key(decrypted_secret),
@@ -1462,11 +1498,11 @@ async def update_quality_feishu_app_settings(
         else:
             model.app_id = data.app_id.strip()
             model.is_enabled = data.is_enabled
-            current_secret = (
-                decrypt_api_key(model.app_secret) if model.app_secret else ""
-            )
+            current_secret = _decrypt_stored_app_secret(model.app_secret)
             # The UI sends the masked value back when the secret was not
             # changed. Never encrypt the mask as if it were a new credential.
+            # 存量密文解密失败时 current_secret 为空串（掩码为 ****），
+            # 用户重新输入的密钥按新值写入，避免"存不进"死锁。
             if app_secret and app_secret != mask_api_key(current_secret):
                 model.app_secret = encrypt_api_key(app_secret)
             # 保留已存值：仅当请求显式携带该字段时写入（空字符串也按空字符
@@ -1500,10 +1536,19 @@ async def test_quality_feishu_app_settings(
     if not model:
         raise AppException(message="请先保存飞书应用信息")
     checked_at = datetime.now(UTC)
+    stored_secret = _decrypt_stored_app_secret(model.app_secret)
+    if model.app_secret and not stored_secret:
+        raise AppException(
+            message=(
+                "已保存的 App Secret 无法解密（加密密钥已轮换），"
+                "请重新输入 App Secret 并保存后再测试连接"
+            ),
+            status_code=400,
+        )
     try:
         await FeishuAuth.get_tenant_access_token(
             app_id=model.app_id,
-            app_secret=decrypt_api_key(model.app_secret),
+            app_secret=stored_secret,
         )
         model.last_test_status = "success"
         model.last_test_error = None

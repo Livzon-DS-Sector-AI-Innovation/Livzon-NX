@@ -47,6 +47,7 @@ from app.modules.quality.schemas.document_catalog import (
     DocumentEntryLookupOut,
     DocumentEntryOut,
     DocumentEntryResolveItem,
+    DocumentEntryResolveQuery,
     DocumentEntryResolveRequest,
     DocumentEntryResolveResult,
     ResolveAttachmentContent,
@@ -216,7 +217,7 @@ async def lookup_latest_document_entry(
 
 @router.post(
     "/document-entries/resolve-content",
-    summary="按文件名称批量解析条目并读取附件内容",
+    summary="批量解析文件条目并读取附件内容",
     response_model=DocumentEntryResolveResult,
 )
 async def resolve_document_entry_content(
@@ -224,25 +225,40 @@ async def resolve_document_entry_content(
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = None,
 ) -> Any:
-    """供培训口试 AI 出题使用：按文件名称解析最新版条目并读取附件标准 MD 内容。
+    """供培训 AI 出题使用：解析勾选条目并读取附件标准 MD 内容。
 
-    每个文件名称独立匹配：命中则返回条目 ID/编码/附件 MD 内容；未命中 matched=false。
+    entries 中带 entry_id 的项严格按 ID 读取（培训勾选时已锁定条目，
+    不做名称模糊匹配，避免同名/近名文件误配到其他条目）；entry_id 未命中
+    （已删除）视为未匹配，不回退名称匹配。仅提供 names 的旧客户端沿用
+    名称匹配最新版。
     """
     _require_user(current_user)
     items: list[DocumentEntryResolveItem] = []
-    for name in body.names:
-        core = (name or "").strip()
+    queries = list(body.entries) or [
+        DocumentEntryResolveQuery(name=name) for name in body.names
+    ]
+    for query in queries:
+        core = (query.name or "").strip()
         item = DocumentEntryResolveItem(name=core)
-        if core:
+        entry = None
+        if query.entry_id is not None:
+            result = await db.execute(
+                select(DocumentEntry).where(
+                    DocumentEntry.id == query.entry_id,
+                    DocumentEntry.is_deleted.is_(False),
+                )
+            )
+            entry = result.scalar_one_or_none()
+        elif core:
             entry = await crud.find_latest_entry_by_name(db, core)
-            if entry is not None:
-                item.code = entry.code
-                item.entry_id = entry.id
-                item.matched = True
-                item.attachments = [
-                    ResolveAttachmentContent.model_validate(attachment)
-                    for attachment in read_entry_md_contents(entry)
-                ]
+        if entry is not None:
+            item.code = entry.code
+            item.entry_id = entry.id
+            item.matched = True
+            item.attachments = [
+                ResolveAttachmentContent.model_validate(attachment)
+                for attachment in read_entry_md_contents(entry)
+            ]
         items.append(item)
     return success_response(data=DocumentEntryResolveResult(results=items))
 

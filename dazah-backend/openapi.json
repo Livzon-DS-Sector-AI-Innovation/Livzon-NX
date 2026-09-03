@@ -4661,6 +4661,40 @@
         "title": "ApiResponseEnvelope[HistoricalDeviationAttachmentOut]",
         "type": "object"
       },
+      "ApiResponseEnvelope_HistoricalDeviationBatchImportResult_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/HistoricalDeviationBatchImportResult"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[HistoricalDeviationBatchImportResult]",
+        "type": "object"
+      },
       "ApiResponseEnvelope_HistoricalDeviationDetail_": {
         "properties": {
           "code": {
@@ -10174,6 +10208,23 @@
           "files"
         ],
         "title": "Body_batch_import_document_attachments_api_v1_quality_document_catalog_attachments_import_post",
+        "type": "object"
+      },
+      "Body_batch_import_historical_deviations_api_api_v1_quality_historical_deviations_batch_import_post": {
+        "properties": {
+          "files": {
+            "items": {
+              "contentMediaType": "application/octet-stream",
+              "type": "string"
+            },
+            "title": "Files",
+            "type": "array"
+          }
+        },
+        "required": [
+          "files"
+        ],
+        "title": "Body_batch_import_historical_deviations_api_api_v1_quality_historical_deviations_batch_import_post",
         "type": "object"
       },
       "Body_confirm_capa_import_api_v1_quality_capas_import_confirm_post": {
@@ -21264,6 +21315,17 @@
       },
       "CreateDeviationWorkbenchRequest": {
         "properties": {
+          "affected_items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Affected Items"
+          },
           "attachments": {
             "items": {
               "$ref": "#/components/schemas/DeviationWorkbenchAttachmentIn"
@@ -21298,6 +21360,17 @@
             "pattern": "^(report_record|manual)$",
             "title": "Source Type",
             "type": "string"
+          },
+          "supplement_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supplement Text"
           }
         },
         "title": "CreateDeviationWorkbenchRequest",
@@ -29280,22 +29353,54 @@
         "title": "DocumentEntryResolveItem",
         "type": "object"
       },
-      "DocumentEntryResolveRequest": {
-        "description": "按文件名称批量解析条目并读取附件内容请求（供培训口试 AI 出题使用）。",
+      "DocumentEntryResolveQuery": {
+        "description": "单个待解析文件的查询项（培训勾选时锁定的条目）。",
         "properties": {
+          "entry_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "勾选时锁定的条目 ID；提供时严格按 ID 读取，未命中不回退名称匹配",
+            "title": "Entry Id"
+          },
+          "name": {
+            "description": "文件名称（展示与 entry_id 未提供时的名称匹配兜底）",
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "DocumentEntryResolveQuery",
+        "type": "object"
+      },
+      "DocumentEntryResolveRequest": {
+        "description": "批量解析文件条目并读取附件内容请求（供培训 AI 出题使用）。",
+        "properties": {
+          "entries": {
+            "description": "按勾选条目解析（优先；entry_id 精确读取，杜绝名称误匹配）",
+            "items": {
+              "$ref": "#/components/schemas/DocumentEntryResolveQuery"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
           "names": {
-            "description": "文件名称列表",
+            "description": "按文件名称解析（旧客户端兜底，取名称最新版）",
             "items": {
               "type": "string"
             },
-            "minItems": 1,
             "title": "Names",
             "type": "array"
           }
         },
-        "required": [
-          "names"
-        ],
         "title": "DocumentEntryResolveRequest",
         "type": "object"
       },
@@ -35610,7 +35715,7 @@
           },
           "training_name": {
             "description": "培训名称",
-            "maxLength": 512,
+            "maxLength": 4096,
             "title": "Training Name",
             "type": "string"
           },
@@ -35807,7 +35912,7 @@
           "training_name": {
             "anyOf": [
               {
-                "maxLength": 512,
+                "maxLength": 4096,
                 "type": "string"
               },
               {
@@ -42048,6 +42153,64 @@
           "file_name"
         ],
         "title": "HistoricalDeviationAttachmentOut",
+        "type": "object"
+      },
+      "HistoricalDeviationBatchImportResult": {
+        "properties": {
+          "failed": {
+            "title": "Failed",
+            "type": "integer"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/HistoricalDeviationBatchImportResultItem"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "succeeded": {
+            "title": "Succeeded",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "succeeded",
+          "failed"
+        ],
+        "title": "HistoricalDeviationBatchImportResult",
+        "type": "object"
+      },
+      "HistoricalDeviationBatchImportResultItem": {
+        "properties": {
+          "code": {
+            "default": "",
+            "title": "Code",
+            "type": "string"
+          },
+          "file_name": {
+            "title": "File Name",
+            "type": "string"
+          },
+          "message": {
+            "default": "",
+            "title": "Message",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file_name",
+          "status"
+        ],
+        "title": "HistoricalDeviationBatchImportResultItem",
         "type": "object"
       },
       "HistoricalDeviationDetail": {
@@ -54870,7 +55033,7 @@
           "training_content": {
             "anyOf": [
               {
-                "maxLength": 512,
+                "maxLength": 4096,
                 "type": "string"
               },
               {
@@ -55092,7 +55255,7 @@
           "training_content": {
             "anyOf": [
               {
-                "maxLength": 512,
+                "maxLength": 4096,
                 "type": "string"
               },
               {
@@ -71039,7 +71202,7 @@
           "training_content": {
             "anyOf": [
               {
-                "maxLength": 512,
+                "maxLength": 4096,
                 "type": "string"
               },
               {
@@ -72151,7 +72314,7 @@
           "training_content": {
             "anyOf": [
               {
-                "maxLength": 512,
+                "maxLength": 4096,
                 "type": "string"
               },
               {
@@ -72464,7 +72627,7 @@
           "training_content": {
             "anyOf": [
               {
-                "maxLength": 512,
+                "maxLength": 4096,
                 "type": "string"
               },
               {
@@ -72475,10 +72638,17 @@
             "title": "Training Content"
           },
           "training_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "description": "培训日期",
-            "format": "date",
-            "title": "Training Date",
-            "type": "string"
+            "title": "Training Date"
           },
           "training_datetime": {
             "anyOf": [
@@ -72507,10 +72677,17 @@
             "title": "Training Method"
           },
           "training_subject": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "description": "培训课程/主题",
-            "maxLength": 256,
-            "title": "Training Subject",
-            "type": "string"
+            "title": "Training Subject"
           },
           "training_type": {
             "anyOf": [
@@ -72526,10 +72703,6 @@
             "title": "Training Type"
           }
         },
-        "required": [
-          "training_date",
-          "training_subject"
-        ],
         "title": "TrainingLedgerCreate",
         "type": "object"
       },
@@ -72820,7 +72993,7 @@
           "training_content": {
             "anyOf": [
               {
-                "maxLength": 512,
+                "maxLength": 4096,
                 "type": "string"
               },
               {
@@ -161664,7 +161837,7 @@
     },
     "/api/v1/quality/document-entries/resolve-content": {
       "post": {
-        "description": "供培训口试 AI 出题使用：按文件名称解析最新版条目并读取附件标准 MD 内容。\n\n每个文件名称独立匹配：命中则返回条目 ID/编码/附件 MD 内容；未命中 matched=false。",
+        "description": "供培训 AI 出题使用：解析勾选条目并读取附件标准 MD 内容。\n\nentries 中带 entry_id 的项严格按 ID 读取（培训勾选时已锁定条目，\n不做名称模糊匹配，避免同名/近名文件误配到其他条目）；entry_id 未命中\n（已删除）视为未匹配，不回退名称匹配。仅提供 names 的旧客户端沿用\n名称匹配最新版。",
         "operationId": "resolve_document_entry_content_api_v1_quality_document_entries_resolve_content_post",
         "parameters": [
           {
@@ -161716,7 +161889,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "按文件名称批量解析条目并读取附件内容",
+        "summary": "批量解析文件条目并读取附件内容",
         "tags": [
           "质量管理",
           "Quality-Document-Catalog"
@@ -163371,6 +163544,26 @@
             }
           },
           {
+            "description": "年度表，留空读总表",
+            "in": "query",
+            "name": "year",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 2100,
+                  "minimum": 2000,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "年度表，留空读总表",
+              "title": "Year"
+            }
+          },
+          {
             "in": "cookie",
             "name": "auth_token",
             "required": false,
@@ -164335,6 +164528,26 @@
             }
           },
           {
+            "description": "年度表，留空读总表",
+            "in": "query",
+            "name": "year",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 2100,
+                  "minimum": 2000,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "年度表，留空读总表",
+              "title": "Year"
+            }
+          },
+          {
             "in": "query",
             "name": "page",
             "required": false,
@@ -164405,6 +164618,26 @@
       "post": {
         "operationId": "create_feishu_validation_api_v1_quality_feishu_validations_post",
         "parameters": [
+          {
+            "description": "年度表，留空写总表",
+            "in": "query",
+            "name": "year",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 2100,
+                  "minimum": 2000,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "年度表，留空写总表",
+              "title": "Year"
+            }
+          },
           {
             "in": "cookie",
             "name": "auth_token",
@@ -164494,6 +164727,26 @@
             }
           },
           {
+            "description": "年度表，留空写总表",
+            "in": "query",
+            "name": "year",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 2100,
+                  "minimum": 2000,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "年度表，留空写总表",
+              "title": "Year"
+            }
+          },
+          {
             "in": "cookie",
             "name": "auth_token",
             "required": false,
@@ -164567,6 +164820,26 @@
             }
           },
           {
+            "description": "年度表，留空读总表",
+            "in": "query",
+            "name": "year",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 2100,
+                  "minimum": 2000,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "年度表，留空读总表",
+              "title": "Year"
+            }
+          },
+          {
             "in": "cookie",
             "name": "auth_token",
             "required": false,
@@ -164637,6 +164910,26 @@
                 }
               ],
               "title": "Validation Type"
+            }
+          },
+          {
+            "description": "年度表，留空写总表",
+            "in": "query",
+            "name": "year",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 2100,
+                  "minimum": 2000,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "年度表，留空写总表",
+              "title": "Year"
             }
           },
           {
@@ -165176,6 +165469,66 @@
           }
         },
         "summary": "创建历史偏差",
+        "tags": [
+          "质量管理",
+          "Quality-Management"
+        ]
+      }
+    },
+    "/api/v1/quality/historical-deviations/batch-import": {
+      "post": {
+        "operationId": "batch_import_historical_deviations_api_api_v1_quality_historical_deviations_batch_import_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_batch_import_historical_deviations_api_api_v1_quality_historical_deviations_batch_import_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_HistoricalDeviationBatchImportResult_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "批量导入历史偏差（转 MD + 建记录 + 解析编号 + AI 提取）",
         "tags": [
           "质量管理",
           "Quality-Management"
@@ -180466,6 +180819,662 @@
         "tags": [
           "质量管理",
           "Quality-Validation"
+        ]
+      }
+    },
+    "/api/v1/quality/validation-qc/fields": {
+      "get": {
+        "operationId": "api_get_qc_validation_fields_api_v1_quality_validation_qc_fields_get",
+        "parameters": [
+          {
+            "description": "QC验证年度",
+            "in": "query",
+            "name": "year",
+            "required": false,
+            "schema": {
+              "default": 2026,
+              "description": "QC验证年度",
+              "title": "Year",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Api Get Qc Validation Fields Api V1 Quality Validation Qc Fields Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "获取QC验证字段元数据",
+        "tags": [
+          "质量管理",
+          "Quality-Validation-QC"
+        ]
+      }
+    },
+    "/api/v1/quality/validation-qc/records": {
+      "get": {
+        "operationId": "api_list_qc_validation_records_api_v1_quality_validation_qc_records_get",
+        "parameters": [
+          {
+            "description": "QC验证年度",
+            "in": "query",
+            "name": "year",
+            "required": false,
+            "schema": {
+              "default": 2026,
+              "description": "QC验证年度",
+              "title": "Year",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "关键词（按全部字段模糊匹配）",
+            "in": "query",
+            "name": "keyword",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "关键词（按全部字段模糊匹配）",
+              "title": "Keyword"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Api List Qc Validation Records Api V1 Quality Validation Qc Records Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "获取QC验证记录列表",
+        "tags": [
+          "质量管理",
+          "Quality-Validation-QC"
+        ]
+      },
+      "post": {
+        "operationId": "api_create_qc_validation_record_api_v1_quality_validation_qc_records_post",
+        "parameters": [
+          {
+            "description": "QC验证年度",
+            "in": "query",
+            "name": "year",
+            "required": false,
+            "schema": {
+              "default": 2026,
+              "description": "QC验证年度",
+              "title": "Year",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InspectionFeishuRecordBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Api Create Qc Validation Record Api V1 Quality Validation Qc Records Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "新增QC验证记录（同步到多维表格）",
+        "tags": [
+          "质量管理",
+          "Quality-Validation-QC"
+        ]
+      }
+    },
+    "/api/v1/quality/validation-qc/records/share-links": {
+      "post": {
+        "operationId": "api_batch_create_qc_validation_share_links_api_v1_quality_validation_qc_records_share_links_post",
+        "parameters": [
+          {
+            "description": "QC验证年度",
+            "in": "query",
+            "name": "year",
+            "required": false,
+            "schema": {
+              "default": 2026,
+              "description": "QC验证年度",
+              "title": "Year",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InspectionFeishuRecordBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Api Batch Create Qc Validation Share Links Api V1 Quality Validation Qc Records Share Links Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "批量生成QC验证记录分享链接（跳转飞书对应行）",
+        "tags": [
+          "质量管理",
+          "Quality-Validation-QC"
+        ]
+      }
+    },
+    "/api/v1/quality/validation-qc/records/{record_id}": {
+      "delete": {
+        "operationId": "api_delete_qc_validation_record_api_v1_quality_validation_qc_records__record_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "title": "Record Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "QC验证年度",
+            "in": "query",
+            "name": "year",
+            "required": false,
+            "schema": {
+              "default": 2026,
+              "description": "QC验证年度",
+              "title": "Year",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Api Delete Qc Validation Record Api V1 Quality Validation Qc Records  Record Id  Delete"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "删除QC验证记录（同步到多维表格）",
+        "tags": [
+          "质量管理",
+          "Quality-Validation-QC"
+        ]
+      },
+      "get": {
+        "operationId": "api_get_qc_validation_record_api_v1_quality_validation_qc_records__record_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "title": "Record Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "QC验证年度",
+            "in": "query",
+            "name": "year",
+            "required": false,
+            "schema": {
+              "default": 2026,
+              "description": "QC验证年度",
+              "title": "Year",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Api Get Qc Validation Record Api V1 Quality Validation Qc Records  Record Id  Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "获取QC验证记录详情",
+        "tags": [
+          "质量管理",
+          "Quality-Validation-QC"
+        ]
+      },
+      "put": {
+        "operationId": "api_update_qc_validation_record_api_v1_quality_validation_qc_records__record_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "title": "Record Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "QC验证年度",
+            "in": "query",
+            "name": "year",
+            "required": false,
+            "schema": {
+              "default": 2026,
+              "description": "QC验证年度",
+              "title": "Year",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InspectionFeishuRecordBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Api Update Qc Validation Record Api V1 Quality Validation Qc Records  Record Id  Put"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "编辑QC验证记录（同步到多维表格）",
+        "tags": [
+          "质量管理",
+          "Quality-Validation-QC"
+        ]
+      }
+    },
+    "/api/v1/quality/validation-qc/records/{record_id}/attachments/{file_token}/content": {
+      "get": {
+        "operationId": "api_get_qc_validation_attachment_content_api_v1_quality_validation_qc_records__record_id__attachments__file_token__content_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "title": "Record Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "file_token",
+            "required": true,
+            "schema": {
+              "title": "File Token",
+              "type": "string"
+            }
+          },
+          {
+            "description": "QC验证年度",
+            "in": "query",
+            "name": "year",
+            "required": false,
+            "schema": {
+              "default": 2026,
+              "description": "QC验证年度",
+              "title": "Year",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Api Get Qc Validation Attachment Content Api V1 Quality Validation Qc Records  Record Id  Attachments  File Token  Content Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "下载QC验证记录附件（后端代理，携带飞书 token）",
+        "tags": [
+          "质量管理",
+          "Quality-Validation-QC"
+        ]
+      }
+    },
+    "/api/v1/quality/validation-qc/years": {
+      "get": {
+        "operationId": "api_get_qc_validation_years_api_v1_quality_validation_qc_years_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Api Get Qc Validation Years Api V1 Quality Validation Qc Years Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "获取QC验证年度表配置状态",
+        "tags": [
+          "质量管理",
+          "Quality-Validation-QC"
         ]
       }
     },
