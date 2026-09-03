@@ -253,6 +253,12 @@ class Settings(BaseSettings):
         return self.APP_ENV == "production"
 
     @property
+    def cookie_secure(self) -> bool:
+        """Secure cookies require HTTPS; browsers silently drop them on
+        HTTP deployments (e.g. bare-IP environments without TLS)."""
+        return self.FRONTEND_URL.startswith("https")
+
+    @property
     def effective_local_login_mode(
         self,
     ) -> Literal["disabled", "admin_only", "enabled"]:

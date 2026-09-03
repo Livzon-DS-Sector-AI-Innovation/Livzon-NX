@@ -43,6 +43,7 @@ desktop.ini
 !/scripts/ci.sh
 !/scripts/check-branch-policy.sh
 !/scripts/dev.ps1
+!/scripts/dev-native.ps1
 !/scripts/deploy-production.ps1
 !/scripts/deploy-production-remote.sh
 !/scripts/check-coverage-floor.py
@@ -119,6 +120,7 @@ desktop.ini
 !**/.env.local.example
 *.log
 *.pid
+/.dev-data/
 
 # Runtime data
 dazah-backend/data/

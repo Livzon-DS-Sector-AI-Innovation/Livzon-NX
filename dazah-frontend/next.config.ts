@@ -8,6 +8,8 @@ const extraDevOrigins =
 const nextConfig: NextConfig = {
   output: 'standalone',
   reactCompiler: false,
+  // 开发错误仍输出到终端和浏览器控制台，仅隐藏页面左下角的 Next.js 悬浮入口。
+  devIndicators: false,
   allowedDevOrigins: [
     '172.28.215.130',
     'localhost',

@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
+import { useEffect, useState } from 'react'
 import { qualityTokens } from '../themeTokens'
-import { Avatar, Space } from 'antd'
+import { Avatar, Image, Space } from 'antd'
 import type { App } from 'antd'
 import dayjs from 'dayjs'
 
@@ -81,6 +82,85 @@ function formatCheckboxValue(value: unknown): string {
   return String(value)
 }
 
+const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg']
+
+function isImageAttachment(att: FeishuAttachment): boolean {
+  const ext = (att.name || '').split('.').pop()?.toLowerCase() || ''
+  return IMAGE_EXTENSIONS.includes(ext)
+}
+
+/** 图片附件内联预览：从后端代理拉取字节转 blob，点击可放大；失败回退为下载链接 */
+function AttachmentImage({
+  entityCode,
+  recordId,
+  attachment,
+  attachmentUrlBuilder,
+  message,
+}: {
+  entityCode: string
+  recordId: string
+  attachment: FeishuAttachment
+  attachmentUrlBuilder: FeishuAttachmentUrlBuilder
+  message: FeishuMessage
+}) {
+  const [src, setSrc] = useState<string | null>(null)
+  const [failed, setFailed] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    let objectUrl: string | null = null
+    if (!attachment.file_token || !recordId) {
+      if (attachment.url) setSrc(attachment.url)
+      return
+    }
+    ;(async () => {
+      try {
+        const res = await fetch(
+          attachmentUrlBuilder(entityCode, recordId, attachment.file_token!)
+        )
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const blob = await res.blob()
+        if (cancelled) return
+        objectUrl = URL.createObjectURL(blob)
+        setSrc(objectUrl)
+      } catch {
+        if (!cancelled) setFailed(true)
+      }
+    })()
+    return () => {
+      cancelled = true
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [attachment, entityCode, recordId, attachmentUrlBuilder])
+
+  if (failed) {
+    return (
+      <button
+        type="button"
+        style={{
+          padding: 0,
+          border: 'none',
+          background: 'transparent',
+          color: qualityTokens.primary,
+          textAlign: 'left',
+          cursor: 'pointer',
+        }}
+        onClick={() => void openFeishuAttachment(entityCode, recordId, attachment, message, attachmentUrlBuilder)}
+      >
+        {attachment.name || '附件'}
+      </button>
+    )
+  }
+  return (
+    <Image
+      src={src || undefined}
+      alt={attachment.name || '附件'}
+      style={{ maxWidth: 200, maxHeight: 200, objectFit: 'cover', borderRadius: 4 }}
+      preview={{ mask: '点击查看' }}
+    />
+  )
+}
+
 /** 把飞书字段值渲染为可读内容：附件可点击、链接可点击、人员显示姓名、其余为文本。 */
 export function renderFeishuValue(
   value: unknown,
@@ -96,9 +176,22 @@ export function renderFeishuValue(
     if (value.length === 0) return '-'
     if (value.some((v) => (v as FeishuAttachment)?.url || (v as FeishuAttachment)?.file_token)) {
       return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {value.map((v, i) => {
             const att = v as FeishuAttachment
+            // 图片附件直接内联预览（点击放大），非图片走下载链接
+            if (isImageAttachment(att)) {
+              return (
+                <AttachmentImage
+                  key={i}
+                  entityCode={entityCode ?? ''}
+                  recordId={String(record.record_id ?? '')}
+                  attachment={att}
+                  attachmentUrlBuilder={attachmentUrlBuilder}
+                  message={message}
+                />
+              )
+            }
             return (
               <button
                 key={i}

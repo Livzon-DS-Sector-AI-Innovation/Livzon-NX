@@ -101,15 +101,15 @@ async def test_years_report_configuration_status(
     resp = await client.get("/api/v1/quality/validation-qc/years")
     assert resp.status_code == 200
     years = resp.json()["data"]["years"]
-    assert [item["year"] for item in years] == [2024, 2025, 2026, 2027, 2028]
+    assert [item["year"] for item in years] == [2026, 2027, 2028]
     by_year = {item["year"]: item for item in years}
     assert by_year[2026]["table_configured"] is True
     assert (
         by_year[2026]["feishu_url"]
         == "https://www.feishu.cn/base/tok_2026?table=tbl_2026"
     )
-    assert by_year[2025]["table_configured"] is False
-    assert by_year[2025]["feishu_url"] is None
+    assert by_year[2027]["table_configured"] is False
+    assert by_year[2027]["feishu_url"] is None
 
 
 @pytest.mark.anyio

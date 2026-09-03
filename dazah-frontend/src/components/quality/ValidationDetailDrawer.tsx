@@ -1,6 +1,6 @@
 'use client'
 
-import { Drawer, Descriptions, Space, Tag, Tooltip } from 'antd'
+import { Drawer, Descriptions, Space, Tag, Tooltip, Avatar } from 'antd'
 
 const validationTypeLabelMap: Record<string, string> = {
   equipment_qualification: '设备确认',
@@ -30,6 +30,63 @@ function renderText(value: string | string[] | null | undefined): string {
   if (value === null || value === undefined || value === '') return '-'
   if (Array.isArray(value)) return value.length ? value.join('、') : '-'
   return value
+}
+
+interface PersonLike {
+  name?: string
+  avatar_url?: string
+  id?: string
+}
+
+/** 渲染群组：结构化数组（含群名）→ 群名；纯文本 → 原样 */
+function renderGroupChatValue(value: unknown): React.ReactNode {
+  if (Array.isArray(value) && value.length > 0) {
+    const groups = value.filter(
+      (item): item is { name?: string; avatar_url?: string } =>
+        !!item && typeof item === 'object'
+    )
+    if (groups.length > 0) {
+      return (
+        <Space size={6} wrap>
+          {groups.map((group, index) => (
+            <span key={group.name || index} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              {group.avatar_url ? (
+                <Avatar size={20} src={group.avatar_url} />
+              ) : null}
+              <span>{group.name || '-'}</span>
+            </span>
+          ))}
+        </Space>
+      )
+    }
+    return value.map((v) => (typeof v === 'string' ? v : '')).join('、') || '-'
+  }
+  return renderText(value as string | null | undefined)
+}
+
+/** 渲染人员：结构化数组（含头像）→ 头像+姓名；纯文本 → 原样显示 */
+function renderPersonValue(value: unknown): React.ReactNode {
+  if (Array.isArray(value) && value.length > 0) {
+    const persons = value.filter(
+      (item): item is PersonLike => !!item && typeof item === 'object'
+    )
+    if (persons.length > 0) {
+      return (
+        <Space size={6} wrap>
+          {persons.map((person, index) => (
+            <span key={person.id || index} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <Avatar size={20} src={person.avatar_url || undefined}>
+                {person.name?.slice(0, 1) || '?'}
+              </Avatar>
+              <span>{person.name || '-'}</span>
+            </span>
+          ))}
+        </Space>
+      )
+    }
+    return value.join('、') || '-'
+  }
+  return renderText(value as string | null | undefined)
 }
 
 interface ValidationDetailDrawerProps {
@@ -90,9 +147,9 @@ export function ValidationDetailDrawer({
         '-'
       ),
     },
-    { label: '群组', content: renderText(record.group_chat as string) },
-    { label: '人员', content: renderText(record.participants as string) },
-    { label: '负责人', content: renderText(record.owner_name as string) },
+    { label: '群组', content: renderGroupChatValue(record.group_chat) },
+    { label: '人员', content: renderPersonValue(record.participants) },
+    { label: '负责人', content: renderPersonValue(record.owner_name) },
     { label: '方案名称', content: renderText(record.plan_name as string) },
     { label: '方案编码', content: renderText(record.plan_code as string) },
     { label: '起草时间', content: formatDate(record.drafted_at as string) },
