@@ -113,7 +113,7 @@ async def test_send_user_card_prefers_explicit_credentials() -> None:
 
     assert ok is True
     client_mock.assert_awaited_once_with("cli_hr_test", "hr_secret_plain")
-    token_mock.assert_awaited_once_with(fake_client, "cli_hr_test", "hr_secret_plain")
+    token_mock.assert_awaited_once_with("cli_hr_test", "hr_secret_plain")
 
 
 @pytest.mark.asyncio

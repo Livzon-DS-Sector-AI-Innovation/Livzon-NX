@@ -4185,6 +4185,74 @@
         "title": "ApiResponseEnvelope[DeviationAiSessionOut]",
         "type": "object"
       },
+      "ApiResponseEnvelope_DeviationBatchDeleteResult_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/DeviationBatchDeleteResult"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[DeviationBatchDeleteResult]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_DeviationCreateResult_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/DeviationCreateResult"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[DeviationCreateResult]",
+        "type": "object"
+      },
       "ApiResponseEnvelope_DeviationDetail_": {
         "properties": {
           "code": {
@@ -6327,6 +6395,44 @@
           "data"
         ],
         "title": "ApiResponseEnvelope[list[DeviationReportRecordListItem]]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_list_DeviationReporterOption__": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/DeviationReporterOption"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[list[DeviationReporterOption]]",
         "type": "object"
       },
       "ApiResponseEnvelope_list_DeviationWorkbenchReportListItem__": {
@@ -26671,6 +26777,65 @@
         "title": "DeviationAiSessionResultPayload",
         "type": "object"
       },
+      "DeviationBatchDeleteRequest": {
+        "properties": {
+          "ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "ids"
+        ],
+        "title": "DeviationBatchDeleteRequest",
+        "type": "object"
+      },
+      "DeviationBatchDeleteResult": {
+        "properties": {
+          "deleted": {
+            "title": "Deleted",
+            "type": "integer"
+          },
+          "failed": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Failed",
+            "type": "array"
+          }
+        },
+        "required": [
+          "deleted"
+        ],
+        "title": "DeviationBatchDeleteResult",
+        "type": "object"
+      },
+      "DeviationCreateResult": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "code"
+        ],
+        "title": "DeviationCreateResult",
+        "type": "object"
+      },
       "DeviationDetail": {
         "properties": {
           "affected_items": {
@@ -28607,6 +28772,29 @@
         "title": "DeviationReportRecordListItem",
         "type": "object"
       },
+      "DeviationReporterOption": {
+        "properties": {
+          "department": {
+            "title": "Department",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "open_id": {
+            "title": "Open Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "open_id",
+          "name",
+          "department"
+        ],
+        "title": "DeviationReporterOption",
+        "type": "object"
+      },
       "DeviationStatistics": {
         "properties": {
           "capaTotal": {
@@ -29535,6 +29723,65 @@
           }
         },
         "title": "DrugUpdate",
+        "type": "object"
+      },
+      "EffectivePageGrantOut": {
+        "properties": {
+          "data_scope": {
+            "$ref": "#/components/schemas/PageDataScopeInput"
+          },
+          "module_code": {
+            "title": "Module Code",
+            "type": "string"
+          },
+          "page_key": {
+            "title": "Page Key",
+            "type": "string"
+          },
+          "permissions": {
+            "items": {
+              "enum": [
+                "access",
+                "query",
+                "operate"
+              ],
+              "type": "string"
+            },
+            "title": "Permissions",
+            "type": "array"
+          },
+          "sensitive_actions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Sensitive Actions",
+            "type": "array"
+          },
+          "source": {
+            "enum": [
+              "super_admin",
+              "user",
+              "role",
+              "none"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "source_role_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Role Names",
+            "type": "array"
+          }
+        },
+        "required": [
+          "page_key",
+          "module_code",
+          "data_scope",
+          "source"
+        ],
+        "title": "EffectivePageGrantOut",
         "type": "object"
       },
       "EhsChangeCreate": {
@@ -54302,6 +54549,200 @@
         "title": "PackagingMaterialResponse",
         "type": "object"
       },
+      "PageDataScopeInput": {
+        "properties": {
+          "department_ids": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 500,
+            "title": "Department Ids",
+            "type": "array"
+          },
+          "scope_type": {
+            "default": "department_tree",
+            "enum": [
+              "not_applicable",
+              "department_tree",
+              "departments",
+              "all",
+              "self"
+            ],
+            "title": "Scope Type",
+            "type": "string"
+          }
+        },
+        "title": "PageDataScopeInput",
+        "type": "object"
+      },
+      "PageGrantInput": {
+        "properties": {
+          "data_scope": {
+            "$ref": "#/components/schemas/PageDataScopeInput"
+          },
+          "mode": {
+            "default": "custom",
+            "enum": [
+              "inherit",
+              "custom"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "page_key": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Page Key",
+            "type": "string"
+          },
+          "permissions": {
+            "items": {
+              "enum": [
+                "access",
+                "query",
+                "operate"
+              ],
+              "type": "string"
+            },
+            "maxItems": 3,
+            "title": "Permissions",
+            "type": "array"
+          },
+          "sensitive_actions": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Sensitive Actions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "page_key"
+        ],
+        "title": "PageGrantInput",
+        "type": "object"
+      },
+      "PagePermissionDefinitionOut": {
+        "properties": {
+          "module_code": {
+            "title": "Module Code",
+            "type": "string"
+          },
+          "page_key": {
+            "title": "Page Key",
+            "type": "string"
+          },
+          "page_name": {
+            "title": "Page Name",
+            "type": "string"
+          },
+          "route_path": {
+            "title": "Route Path",
+            "type": "string"
+          },
+          "sensitive_actions": {
+            "items": {
+              "$ref": "#/components/schemas/SensitiveActionDefinitionOut"
+            },
+            "title": "Sensitive Actions",
+            "type": "array"
+          },
+          "supported_scope_types": {
+            "items": {
+              "enum": [
+                "not_applicable",
+                "department_tree",
+                "departments",
+                "all",
+                "self"
+              ],
+              "type": "string"
+            },
+            "title": "Supported Scope Types",
+            "type": "array"
+          }
+        },
+        "required": [
+          "page_key",
+          "module_code",
+          "page_name",
+          "route_path"
+        ],
+        "title": "PagePermissionDefinitionOut",
+        "type": "object"
+      },
+      "PagePermissionSimulationOut": {
+        "properties": {
+          "allowed": {
+            "title": "Allowed",
+            "type": "boolean"
+          },
+          "effective": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EffectivePageGrantOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "allowed",
+          "reason"
+        ],
+        "title": "PagePermissionSimulationOut",
+        "type": "object"
+      },
+      "PagePermissionSimulationRequest": {
+        "properties": {
+          "page_key": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Page Key",
+            "type": "string"
+          },
+          "permission": {
+            "enum": [
+              "access",
+              "query",
+              "operate"
+            ],
+            "title": "Permission",
+            "type": "string"
+          },
+          "sensitive_action": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sensitive Action"
+          },
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "page_key",
+          "permission"
+        ],
+        "title": "PagePermissionSimulationRequest",
+        "type": "object"
+      },
       "PasswordResetRequest": {
         "properties": {
           "password": {
@@ -54426,6 +54867,185 @@
           "created_at"
         ],
         "title": "PermissionAuditItem",
+        "type": "object"
+      },
+      "PermissionModulePublishRequest": {
+        "properties": {
+          "confirmed": {
+            "const": true,
+            "title": "Confirmed",
+            "type": "boolean"
+          },
+          "expected_version": {
+            "minimum": 0.0,
+            "title": "Expected Version",
+            "type": "integer"
+          },
+          "preview_hash": {
+            "maxLength": 128,
+            "minLength": 16,
+            "title": "Preview Hash",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "expected_version",
+          "preview_hash",
+          "reason",
+          "confirmed"
+        ],
+        "title": "PermissionModulePublishRequest",
+        "type": "object"
+      },
+      "PermissionModuleRollbackRequest": {
+        "properties": {
+          "confirmed": {
+            "const": true,
+            "title": "Confirmed",
+            "type": "boolean"
+          },
+          "expected_version": {
+            "minimum": 0.0,
+            "title": "Expected Version",
+            "type": "integer"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "expected_version",
+          "reason",
+          "confirmed"
+        ],
+        "title": "PermissionModuleRollbackRequest",
+        "type": "object"
+      },
+      "PermissionModuleRolloutOut": {
+        "properties": {
+          "last_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Reason"
+          },
+          "module_code": {
+            "title": "Module Code",
+            "type": "string"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
+          "published_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published By"
+          },
+          "status": {
+            "enum": [
+              "legacy",
+              "draft",
+              "enforced"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "module_code",
+          "status",
+          "version"
+        ],
+        "title": "PermissionModuleRolloutOut",
+        "type": "object"
+      },
+      "PermissionModuleRolloutPreviewOut": {
+        "properties": {
+          "catalog_gaps": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Catalog Gaps",
+            "type": "array"
+          },
+          "current_status": {
+            "enum": [
+              "legacy",
+              "draft",
+              "enforced"
+            ],
+            "title": "Current Status",
+            "type": "string"
+          },
+          "current_version": {
+            "title": "Current Version",
+            "type": "integer"
+          },
+          "module_code": {
+            "title": "Module Code",
+            "type": "string"
+          },
+          "page_count": {
+            "title": "Page Count",
+            "type": "integer"
+          },
+          "preview_hash": {
+            "title": "Preview Hash",
+            "type": "string"
+          },
+          "user_count": {
+            "title": "User Count",
+            "type": "integer"
+          },
+          "users_without_access": {
+            "title": "Users Without Access",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "module_code",
+          "current_status",
+          "current_version",
+          "preview_hash",
+          "page_count",
+          "user_count",
+          "users_without_access"
+        ],
+        "title": "PermissionModuleRolloutPreviewOut",
         "type": "object"
       },
       "PermissionSimulateRequest": {
@@ -63649,6 +64269,68 @@
         "title": "RoleMenusRequest",
         "type": "object"
       },
+      "RolePagePermissionsOut": {
+        "properties": {
+          "definitions": {
+            "items": {
+              "$ref": "#/components/schemas/PagePermissionDefinitionOut"
+            },
+            "title": "Definitions",
+            "type": "array"
+          },
+          "grant_version": {
+            "title": "Grant Version",
+            "type": "integer"
+          },
+          "grants": {
+            "items": {
+              "$ref": "#/components/schemas/EffectivePageGrantOut"
+            },
+            "title": "Grants",
+            "type": "array"
+          },
+          "role_id": {
+            "format": "uuid",
+            "title": "Role Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "role_id",
+          "grant_version"
+        ],
+        "title": "RolePagePermissionsOut",
+        "type": "object"
+      },
+      "RolePagePermissionsUpdate": {
+        "properties": {
+          "expected_grant_version": {
+            "minimum": 0.0,
+            "title": "Expected Grant Version",
+            "type": "integer"
+          },
+          "grants": {
+            "items": {
+              "$ref": "#/components/schemas/PageGrantInput"
+            },
+            "maxItems": 1000,
+            "title": "Grants",
+            "type": "array"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "expected_grant_version",
+          "reason"
+        ],
+        "title": "RolePagePermissionsUpdate",
+        "type": "object"
+      },
       "RolePermissionsRequest": {
         "properties": {
           "permission_ids": {
@@ -66224,6 +66906,42 @@
           "body"
         ],
         "title": "SendOfferEmailPayload",
+        "type": "object"
+      },
+      "SensitiveActionDefinitionOut": {
+        "properties": {
+          "category": {
+            "enum": [
+              "decision",
+              "destructive",
+              "bulk_change",
+              "sensitive_export",
+              "integration_admin",
+              "permission_admin"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "name",
+          "category",
+          "description"
+        ],
+        "title": "SensitiveActionDefinitionOut",
         "type": "object"
       },
       "SetCriticalRequest": {
@@ -72627,6 +73345,7 @@
           "training_content": {
             "anyOf": [
               {
+                "maxLength": 4096,
                 "type": "string"
               },
               {
@@ -72992,6 +73711,7 @@
           "training_content": {
             "anyOf": [
               {
+                "maxLength": 4096,
                 "type": "string"
               },
               {
@@ -78468,6 +79188,20 @@
             "title": "Name",
             "type": "string"
           },
+          "page_permission_rollouts": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Page Permission Rollouts",
+            "type": "object"
+          },
+          "page_permissions": {
+            "items": {
+              "$ref": "#/components/schemas/EffectivePageGrantOut"
+            },
+            "title": "Page Permissions",
+            "type": "array"
+          },
           "permissions": {
             "items": {
               "type": "string"
@@ -78793,6 +79527,95 @@
         "title": "UserModulePermissionsUpdate",
         "type": "object"
       },
+      "UserPagePermissionsOut": {
+        "properties": {
+          "custom_page_keys": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Custom Page Keys",
+            "type": "array"
+          },
+          "definitions": {
+            "items": {
+              "$ref": "#/components/schemas/PagePermissionDefinitionOut"
+            },
+            "title": "Definitions",
+            "type": "array"
+          },
+          "grant_version": {
+            "title": "Grant Version",
+            "type": "integer"
+          },
+          "grants": {
+            "items": {
+              "$ref": "#/components/schemas/EffectivePageGrantOut"
+            },
+            "title": "Grants",
+            "type": "array"
+          },
+          "module_rollouts": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Module Rollouts",
+            "type": "object"
+          },
+          "role_grants": {
+            "items": {
+              "$ref": "#/components/schemas/EffectivePageGrantOut"
+            },
+            "title": "Role Grants",
+            "type": "array"
+          },
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "grant_version"
+        ],
+        "title": "UserPagePermissionsOut",
+        "type": "object"
+      },
+      "UserPagePermissionsUpdate": {
+        "properties": {
+          "expected_grant_version": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Grant Version"
+          },
+          "grants": {
+            "items": {
+              "$ref": "#/components/schemas/PageGrantInput"
+            },
+            "maxItems": 1000,
+            "title": "Grants",
+            "type": "array"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "UserPagePermissionsUpdate",
+        "type": "object"
+      },
       "UserResponse": {
         "properties": {
           "auth_source": {
@@ -78967,6 +79790,20 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "page_permission_rollouts": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Page Permission Rollouts",
+            "type": "object"
+          },
+          "page_permissions": {
+            "items": {
+              "$ref": "#/components/schemas/EffectivePageGrantOut"
+            },
+            "title": "Page Permissions",
+            "type": "array"
           },
           "permissions": {
             "items": {
@@ -121282,6 +122119,317 @@
         ]
       }
     },
+    "/api/v1/identity/admin/page-permissions/modules": {
+      "get": {
+        "operationId": "list_page_permission_rollouts_api_v1_identity_admin_page_permissions_modules_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PermissionModuleRolloutOut"
+                  },
+                  "title": "Response List Page Permission Rollouts Api V1 Identity Admin Page Permissions Modules Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "页面权限模块发布状态",
+        "tags": [
+          "权限管理",
+          "权限管理"
+        ]
+      }
+    },
+    "/api/v1/identity/admin/page-permissions/modules/{module_code}/preview": {
+      "get": {
+        "operationId": "preview_page_permission_rollout_api_v1_identity_admin_page_permissions_modules__module_code__preview_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "module_code",
+            "required": true,
+            "schema": {
+              "title": "Module Code",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PermissionModuleRolloutPreviewOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "预览模块页面权限发布影响",
+        "tags": [
+          "权限管理",
+          "权限管理"
+        ]
+      }
+    },
+    "/api/v1/identity/admin/page-permissions/modules/{module_code}/publish": {
+      "post": {
+        "operationId": "publish_page_permission_rollout_api_v1_identity_admin_page_permissions_modules__module_code__publish_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "module_code",
+            "required": true,
+            "schema": {
+              "title": "Module Code",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PermissionModulePublishRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PermissionModuleRolloutOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "发布模块页面权限",
+        "tags": [
+          "权限管理",
+          "权限管理"
+        ]
+      }
+    },
+    "/api/v1/identity/admin/page-permissions/modules/{module_code}/rollback": {
+      "post": {
+        "operationId": "rollback_page_permission_rollout_api_v1_identity_admin_page_permissions_modules__module_code__rollback_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "module_code",
+            "required": true,
+            "schema": {
+              "title": "Module Code",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PermissionModuleRollbackRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PermissionModuleRolloutOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "紧急回退模块页面权限",
+        "tags": [
+          "权限管理",
+          "权限管理"
+        ]
+      }
+    },
+    "/api/v1/identity/admin/page-permissions/simulate": {
+      "post": {
+        "operationId": "simulate_page_permission_api_v1_identity_admin_page_permissions_simulate_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PagePermissionSimulationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PagePermissionSimulationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "按页面和业务动作验证权限",
+        "tags": [
+          "权限管理",
+          "权限管理"
+        ]
+      }
+    },
     "/api/v1/identity/admin/permission-simulate": {
       "post": {
         "operationId": "simulate_permission_api_v1_identity_admin_permission_simulate_post",
@@ -121788,6 +122936,134 @@
         ]
       }
     },
+    "/api/v1/identity/admin/roles/{role_id}/page-permissions": {
+      "get": {
+        "operationId": "get_role_page_permissions_api_v1_identity_admin_roles__role_id__page_permissions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "role_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Role Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RolePagePermissionsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "查看角色页面权限",
+        "tags": [
+          "权限管理",
+          "权限管理"
+        ]
+      },
+      "put": {
+        "operationId": "replace_role_page_permissions_api_v1_identity_admin_roles__role_id__page_permissions_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "role_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Role Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RolePagePermissionsUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RolePagePermissionsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "替换角色页面权限",
+        "tags": [
+          "权限管理",
+          "权限管理"
+        ]
+      }
+    },
     "/api/v1/identity/admin/roles/{role_id}/permissions": {
       "post": {
         "operationId": "set_role_permissions_api_v1_identity_admin_roles__role_id__permissions_post",
@@ -121937,6 +123213,134 @@
           }
         },
         "summary": "用户列表（含角色）",
+        "tags": [
+          "权限管理",
+          "权限管理"
+        ]
+      }
+    },
+    "/api/v1/identity/admin/users/{user_id}/page-permissions": {
+      "get": {
+        "operationId": "get_user_page_permissions_api_v1_identity_admin_users__user_id__page_permissions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPagePermissionsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "查看用户页面权限",
+        "tags": [
+          "权限管理",
+          "权限管理"
+        ]
+      },
+      "put": {
+        "operationId": "replace_user_page_permissions_api_v1_identity_admin_users__user_id__page_permissions_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserPagePermissionsUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPagePermissionsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "替换用户页面权限覆盖",
         "tags": [
           "权限管理",
           "权限管理"
@@ -123566,6 +124970,55 @@
           }
         },
         "summary": "管理员创建本地用户",
+        "tags": [
+          "用户信息",
+          "用户信息"
+        ]
+      }
+    },
+    "/api/v1/identity/users/sync-feishu": {
+      "post": {
+        "description": "Only this user-management action uses the root Feishu environment app.",
+        "operationId": "sync_user_management_from_feishu_api_v1_identity_users_sync_feishu_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "使用环境变量凭证同步用户管理飞书通讯录",
         "tags": [
           "用户信息",
           "用户信息"
@@ -159650,7 +161103,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseEnvelope_DeviationDetail_"
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_DeviationCreateResult_"
                 }
               }
             },
@@ -159759,9 +161212,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "additionalProperties": true,
-                "title": "Data",
-                "type": "object"
+                "$ref": "#/components/schemas/DeviationBatchDeleteRequest"
               }
             }
           },
@@ -159772,7 +161223,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseEnvelope_dict_str__Any__"
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_DeviationBatchDeleteResult_"
                 }
               }
             },
@@ -160393,6 +161844,96 @@
         "tags": [
           "质量管理",
           "Quality-Management-Compatibility"
+        ]
+      }
+    },
+    "/api/v1/quality/deviations/reporter-options": {
+      "get": {
+        "operationId": "list_deviation_reporters_api_v1_quality_deviations_reporter_options_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "keyword",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Keyword"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_list_DeviationReporterOption__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "查询可选偏差报告人",
+        "tags": [
+          "质量管理",
+          "Quality-Management"
         ]
       }
     },

@@ -57,7 +57,7 @@ async def test_offboarding_create_updates_employee_and_sends_materials(
     instance._sync_to_feishu = AsyncMock()
     notification = AsyncMock()
     monkeypatch.setattr(
-        "app.platform.integrations.feishu.notification.send_user_card", notification
+        "app.modules.hr.feishu.notification.send_user_card", notification
     )
     # 离职材料卡片改由人事专属应用发送：隔离 DB 凭证解析
     monkeypatch.setattr(
@@ -190,7 +190,7 @@ async def test_position_transfer_notifications_and_approval_filters(
     monkeypatch.setattr("app.core.redis.cache_set", cache_set)
     send_card = AsyncMock(return_value="msg-1")
     monkeypatch.setattr(
-        "app.platform.integrations.feishu.notification.send_user_card_with_message_id",
+        "app.modules.hr.feishu.notification.send_user_card_with_message_id",
         send_card,
     )
     await instance._notify_next_approver(record)

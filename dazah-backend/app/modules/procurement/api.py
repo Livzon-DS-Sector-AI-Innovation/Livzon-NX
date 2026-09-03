@@ -29,6 +29,7 @@ from app.modules.procurement.material_source import (
     MaterialSourceConflictError,
     MaterialSourceError,
     MaterialSourceNotConfiguredError,
+    ensure_material_source_sync_enabled,
     get_material_source_config,
     list_material_catalog,
     list_material_options,
@@ -159,6 +160,7 @@ async def test_material_source_config_record(
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     try:
+        ensure_material_source_sync_enabled()
         probe = await test_material_source_config(db, payload)
     except MaterialSourceError as exc:
         raise _material_source_error(exc) from exc
@@ -181,6 +183,7 @@ async def save_material_source_config_record(
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     try:
+        ensure_material_source_sync_enabled()
         config = await save_material_source_config(
             db,
             payload,
@@ -335,6 +338,10 @@ async def sync_material_source_record(
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ) -> Any:
+    try:
+        ensure_material_source_sync_enabled()
+    except MaterialSourceError as exc:
+        raise _material_source_error(exc) from exc
     config = await get_material_source_config(db)
     if config is None:
         raise _material_source_error(
@@ -997,6 +1004,9 @@ async def list_contract_generation_records(
     response_model=ContractTemplateMetadata,
 )
 async def get_contract_template(category: ContractCategory) -> Any:
+    from app.modules.procurement.page_access import constrain_contract_category
+
+    constrain_contract_category(category.value)
     metadata = get_contract_template_metadata(category)
     return success_response(data=metadata.model_dump(mode="json"))
 

@@ -107,9 +107,9 @@ async def scan_timeout_work_orders() -> None:
 
     from app.core.config import get_settings
     from app.core.database import async_session_factory
+    from app.modules.equipment.feishu.message import send_timeout_notification
     from app.modules.equipment.models.work_order import WorkOrder
     from app.platform.integrations.feishu.contact import get_department_leader
-    from app.platform.integrations.feishu.message import send_timeout_notification
 
     settings = get_settings()
     dept_id = settings.FEISHU_EQUIPMENT_DEPT_ID

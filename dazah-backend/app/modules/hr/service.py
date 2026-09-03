@@ -65,6 +65,7 @@ from app.modules.hr.models import (
     TrainingPersonnelConfig,
     TrainingSession,
 )
+from app.modules.hr.page_access import assert_employee_department, employee_page_scope
 from app.modules.hr.repository import (
     AnnualTrainingPlanItemRepository,
     AnnualTrainingPlanRepository,
@@ -382,16 +383,57 @@ class EmployeeService:
             app_secret=app_secret,
         )
 
-    async def get_employee(self, employee_id: UUID) -> Employee:
-        employee = await self.repo.get_by_id(employee_id)
+    async def get_employee(
+        self, employee_id: UUID, *, for_update: bool = False
+    ) -> Employee:
+        employee = (
+            await self.repo.get_by_id(employee_id, for_update=True)
+            if for_update
+            else await self.repo.get_by_id(employee_id)
+        )
         if not employee:
             raise NotFoundException("员工", str(employee_id))
+        await self._assert_employee_scope(employee.department, employee.sub_department)
         return employee
+
+    async def _assert_employee_scope(
+        self, department: str | None, sub_department: str | None
+    ) -> None:
+        from app.platform.identity.data_scope import current_page_key
+
+        if current_page_key.get() is None:
+            return
+        scope = await employee_page_scope(self.session)
+        assert_employee_department(scope, department, sub_department)
+
+    async def _audit_employee_page_change(
+        self, employee: Employee, action: str, changed_fields: list[str] | None = None
+    ) -> None:
+        from app.platform.audit.service import record_audit_log
+        from app.platform.identity.data_scope import (
+            current_page_actor,
+            current_page_key,
+        )
+
+        page_key = current_page_key.get()
+        if page_key is None:
+            return
+        actor = current_page_actor.get()
+        assert actor is not None
+        await record_audit_log(
+            self.session,
+            action=action,
+            user_id=actor.id,
+            resource_type="hr.employee",
+            resource_id=employee.id,
+            extra={"page_key": page_key, "changed_fields": changed_fields or []},
+        )
 
     async def get_employee_by_number(self, employee_number: str) -> Employee:
         employee = await self.repo.get_by_employee_number(employee_number)
         if not employee:
             raise NotFoundException("员工", employee_number)
+        await self._assert_employee_scope(employee.department, employee.sub_department)
         return employee
 
     async def get_employee_stats(
@@ -402,6 +444,7 @@ class EmployeeService:
     async def create_employee(
         self, data: EmployeeCreate
     ) -> Employee | tuple[Employee, str]:
+        await self._assert_employee_scope(data.department, data.sub_department)
         # 空字符串工号转为 None，避免唯一索引冲突
         employee_number = getattr(data, "employee_number", None)
         if employee_number is not None and employee_number.strip() == "":
@@ -463,6 +506,7 @@ class EmployeeService:
 
         if not hasattr(self, "session"):
             return result
+        await self._audit_employee_page_change(result, "创建员工档案")
         return result, sync_status
 
     async def approve_employee(self, employee_number: str) -> Employee:
@@ -485,11 +529,29 @@ class EmployeeService:
     async def update_employee(
         self, employee_id: UUID, data: EmployeeUpdate
     ) -> Employee | tuple[Employee, str]:
-        employee = await self.get_employee(employee_id)
+        from app.platform.identity.data_scope import current_page_key
+
+        employee = (
+            await self.get_employee(employee_id, for_update=True)
+            if current_page_key.get() is not None
+            else await self.get_employee(employee_id)
+        )
         employee_number = getattr(data, "employee_number", None)
         if employee_number is not None and employee_number.strip() == "":
             data.employee_number = None
         update_data = data.model_dump(exclude_unset=True)
+        if current_page_key.get() is not None:
+            from app.core.exceptions import ForbiddenException
+
+            for field in ("status", "contract_opinion"):
+                if field in update_data and update_data[field] != getattr(
+                    employee, field
+                ):
+                    raise ForbiddenException("员工状态和合同意见请通过对应业务流程调整")
+        await self._assert_employee_scope(
+            update_data.get("department", employee.department),
+            update_data.get("sub_department", employee.sub_department),
+        )
 
         if "employee_number" in update_data:
             existing = await self.repo.get_by_employee_number(
@@ -540,10 +602,19 @@ class EmployeeService:
 
         if not hasattr(self, "session"):
             return result
+        await self._audit_employee_page_change(
+            result, "修改员工档案", sorted(update_data)
+        )
         return result, sync_status
 
     async def delete_employee(self, employee_id: UUID) -> str:
-        employee = await self.get_employee(employee_id)
+        from app.platform.identity.data_scope import current_page_key
+
+        employee = (
+            await self.get_employee(employee_id, for_update=True)
+            if current_page_key.get() is not None
+            else await self.get_employee(employee_id)
+        )
         employee_number = employee.employee_number
         await self.repo.soft_delete(employee)
 
@@ -560,6 +631,7 @@ class EmployeeService:
             logger.warning("Feishu sync failed for employee deleted: %s", e)
             sync_status = f"failed: {str(e)}"
 
+        await self._audit_employee_page_change(employee, "删除员工档案")
         return sync_status
 
     async def list_employees(
@@ -788,8 +860,16 @@ class EmployeeService:
         return stats
 
     async def sync_to_feishu(self, employee_id: UUID) -> str:
-        employee = await self.get_employee(employee_id)
-        return await self._sync_single_to_feishu(employee)
+        from app.platform.identity.data_scope import current_page_key
+
+        employee = (
+            await self.get_employee(employee_id, for_update=True)
+            if current_page_key.get() is not None
+            else await self.get_employee(employee_id)
+        )
+        result = await self._sync_single_to_feishu(employee)
+        await self._audit_employee_page_change(employee, "同步员工档案")
+        return result
 
     async def list_contract_expiring(
         self,
@@ -1957,7 +2037,7 @@ class OffboardingRecordService:
         # 自动发送离职材料
         try:
             if employee.feishu_open_id:
-                from app.platform.integrations.feishu import notification as feishu_n
+                from app.modules.hr.feishu import notification as feishu_n
 
                 app_id, app_secret = await get_hr_feishu_app_credentials(self.session)
 
@@ -3502,7 +3582,7 @@ class PositionTransferRecordService:
         await cache_set(notify_key, "1", ex=3600)  # 1小时过期
 
         try:
-            from app.platform.integrations.feishu.notification import (
+            from app.modules.hr.feishu.notification import (
                 send_user_card_with_message_id,
             )
 
@@ -3611,7 +3691,7 @@ class PositionTransferRecordService:
                 )
                 return
 
-            from app.platform.integrations.feishu.notification import (
+            from app.modules.hr.feishu.notification import (
                 send_user_card_with_message_id,
             )
 

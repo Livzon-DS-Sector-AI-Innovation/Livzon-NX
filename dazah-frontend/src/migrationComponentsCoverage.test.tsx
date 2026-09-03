@@ -1115,6 +1115,8 @@ describe('migrated component coverage', () => {
     const userView = renderClient(createElement(UserRoleManager, { initialRoles: [role, systemRole], initialDepartments: departments }))
     await settle()
     const userButton = (text: string) => Array.from(userView.container.querySelectorAll('button')).find((button) => button.textContent?.includes(text))
+    expect(userButton('页面权限')).toBeUndefined()
+    expect(userButton('模块访问')).toBeDefined()
     userButton('分配角色')?.click()
     await settle()
     userView.container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]').forEach((input) => input.click())

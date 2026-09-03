@@ -27,6 +27,10 @@ from app.core.llm import (
 )
 from app.core.response import error_response
 from app.platform.audit import AuditMiddleware
+from app.platform.identity.page_policy import (
+    collect_http_route_catalog,
+    register_api_catalog_provider,
+)
 
 settings = get_settings()
 
@@ -340,9 +344,9 @@ app.add_middleware(
 
 app.add_middleware(AuditMiddleware)
 
-# Enforce the same RBAC decision used by the permission simulator. In the
-# current default ``MODULE_ACCESS_MODE=all`` it keeps the existing behavior;
-# deployments opting into ``roles`` get path-level read/write enforcement.
+# Enforce the same RBAC decision used by the permission simulator. Module
+# access defaults to explicit grants; ``MODULE_ACCESS_MODE=all`` is retained
+# only as an intentional compatibility override.
 from app.platform.identity.permission_middleware import PermissionMiddleware  # noqa: E402
 
 app.add_middleware(PermissionMiddleware)
@@ -450,3 +454,10 @@ async def health() -> dict[str, str]:
 @app.get("/", include_in_schema=False)
 async def root() -> RedirectResponse:
     return RedirectResponse(url=settings.FRONTEND_URL)
+
+
+def _page_permission_api_catalog() -> list[tuple[str, str]]:
+    return collect_http_route_catalog(app.routes)
+
+
+register_api_catalog_provider(_page_permission_api_catalog)

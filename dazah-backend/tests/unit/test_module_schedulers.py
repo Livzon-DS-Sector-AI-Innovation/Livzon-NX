@@ -342,7 +342,7 @@ async def test_equipment_timeout_scan_notifies_only_expired_orders(
     )
     notify: Any = AsyncMock()
     monkeypatch.setattr(
-        "app.platform.integrations.feishu.message.send_timeout_notification",
+        "app.modules.equipment.feishu.message.send_timeout_notification",
         notify,
     )
 

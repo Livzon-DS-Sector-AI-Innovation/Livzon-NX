@@ -15,7 +15,6 @@ from app.core.exceptions import (
     AppException,
 )
 from app.core.response import success_response
-from app.modules.quality import repository as repo
 from app.modules.quality import service
 from app.modules.quality.api.deps import (
     IMPORT_FILE_MAX_SIZE,
@@ -56,9 +55,21 @@ from app.modules.quality.schemas import (
     UpdateDeviationInvestigationPushRecordRequest,
     UpdateDeviationRequest,
 )
+from app.modules.quality.schemas.deviations import (
+    DeviationBatchDeleteRequest,
+    DeviationBatchDeleteResult,
+    DeviationCreateResult,
+    DeviationReporterOption,
+)
+from app.modules.quality.service import quality_deviation as deviation_service
 from app.modules.quality.service import quality_import_export as ie_service
 from app.modules.quality.service.deviation_ledger_export import (
     generate_deviation_ledger_export_docx,
+)
+from app.platform.audit.service import record_audit_log
+from app.platform.identity.data_scope import (
+    current_page_key,
+    resolve_user_department_scope,
 )
 from app.shared.schemas import ApiResponseEnvelope
 
@@ -141,40 +152,35 @@ async def export_deviations(
     assert current_user is not None
     scope = await _resolve_quality_list_scope(db, current_user)
 
-    deviations, _ = await repo.get_deviations(
+    result = await service.get_deviation_list(
         db,
         status=status,
         level=level,
         department=department,
         keyword=keyword,
+        deviation_code=deviation_code,
+        product_keyword=product_keyword,
+        has_occurred_before=has_occurred_before,
+        is_closed=is_closed,
+        investigation_completed_from=investigation_completed_from,
+        investigation_completed_to=investigation_completed_to,
+        root_cause_keyword=root_cause_keyword,
+        corrective_actions_keyword=corrective_actions_keyword,
         page=1,
         page_size=10000,
         scope=scope,
     )
-
-    # Convert Deviation objects to dicts
-    items = []
-    for d in deviations:
-        items.append(
-            {
-                "deviation_code": d.deviation_code or "",
-                "description": d.description or d.title or "",
-                "title": d.title or "",
-                "has_occurred_before": d.has_occurred_before,
-                "previous_occurrence_code": d.previous_occurrence_code,
-                "root_cause_analysis": d.root_cause_analysis or "",
-                "level": d.level or "",
-                "investigation_completed_at": d.investigation_completed_at,
-                "corrective_actions": d.corrective_actions or "",
-                "material_disposition": d.material_disposition or "",
-                # 偏差没有 is_closed 字段，用 status 推断
-                "status": d.status or "draft",
-                "affected_items": d.affected_items or "",
-                "batch_number": d.batch_number or "",
-            }
-        )
-
-    data = generate_deviation_ledger_export_docx(items)
+    if result["total"] > 10000:
+        raise AppException(message="导出超过一万条，请缩小筛选范围后重试")
+    data = generate_deviation_ledger_export_docx(result["items"])
+    await record_audit_log(
+        db,
+        action="导出偏差台账",
+        user_id=current_user.id,
+        resource_type="quality.deviation",
+        extra={"page_key": current_page_key.get(), "count": len(result["items"])},
+    )
+    await db.commit()
     return StreamingResponse(
         BytesIO(data),
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -366,6 +372,30 @@ async def get_stopped_departments(
 
 
 @router.get(
+    "/deviations/reporter-options",
+    summary="查询可选偏差报告人",
+    response_model=ApiResponseEnvelope[list[DeviationReporterOption]],
+)
+async def list_deviation_reporters(
+    keyword: str | None = Query(None, max_length=100),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> JSONResponse:
+    _require_user(current_user)
+    assert current_user is not None
+    scope = await resolve_user_department_scope(db, current_user)
+    result = await deviation_service.get_deviation_reporters(
+        db, keyword=keyword, page=page, page_size=page_size, scope=scope
+    )
+    return success_response(
+        data=[item.model_dump() for item in result.items],
+        meta={"total": result.total, "page": page, "page_size": page_size},
+    )
+
+
+@router.get(
     "/deviations/{deviation_id}",
     summary="获取偏差详情",
     response_model=ApiResponseEnvelope[DeviationDetail],
@@ -398,7 +428,7 @@ async def get_related_capas(
 @router.post(
     "/deviations",
     summary="创建偏差",
-    response_model=ApiResponseEnvelope[DeviationDetail],
+    response_model=ApiResponseEnvelope[DeviationCreateResult],
 )
 async def create_deviation(
     data: CreateDeviationRequest,
@@ -454,10 +484,10 @@ async def delete_deviation(
 @router.post(
     "/deviations/batch-delete",
     summary="批量删除偏差",
-    response_model=ApiResponseEnvelope[dict[str, Any]],
+    response_model=ApiResponseEnvelope[DeviationBatchDeleteResult],
 )
 async def batch_delete_deviations(
-    data: dict[str, Any],
+    data: DeviationBatchDeleteRequest,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = None,
 ) -> JSONResponse:
@@ -468,22 +498,10 @@ async def batch_delete_deviations(
         scope_permission=QUALITY_QA_SCOPE_PERMISSIONS["system_qa"],
     )
 
-    ids = data.get("ids", [])
-    if not ids:
-        raise AppException(message="请选择要删除的记录")
-
-    deleted = 0
-    failed_ids = []
-
-    for id_str in ids:
-        try:
-            await service.delete_deviation(db, uuid.UUID(id_str), deleted_by=user_id)
-            deleted += 1
-        except Exception as e:
-            logger.warning(f"批量删除偏差失败 id={id_str}: {e}")
-            failed_ids.append(id_str)
-
-    return success_response(data={"deleted": deleted, "failed": failed_ids})
+    result = await deviation_service.batch_delete_deviations(
+        db, data.ids, deleted_by=user_id
+    )
+    return success_response(data=result.model_dump(mode="json"))
 
 
 @router.post(

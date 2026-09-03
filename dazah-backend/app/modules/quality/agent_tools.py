@@ -49,6 +49,7 @@ from app.modules.quality.service import (
     feishu_capa,
     inspection,
     oos_oot,
+    quality_deviation,
     quality_feishu_pages,
     quality_feishu_sync,
     quality_management,
@@ -397,13 +398,14 @@ def _without(data: BaseModel, *fields: str) -> dict[str, Any]:
     input_model=DeviationListInput,
     method="GET",
     path="/quality/deviations",
+    page_keys=("quality:deviations:deviation-ledger",),
     output_schema=DeviationListOutput.model_json_schema(),
 )
 async def list_deviations(
     context: ToolContext, data: DeviationListInput
 ) -> dict[str, Any]:
     return _dump_object(
-        await quality_management.get_deviation_list(context.db, **data.model_dump())
+        await quality_deviation.get_deviation_list(context.db, **data.model_dump())
     )
 
 
@@ -413,10 +415,11 @@ async def list_deviations(
     input_model=DeviationIdInput,
     method="GET",
     path="/quality/deviations/{deviation_id}",
+    page_keys=("quality:deviations:deviation-ledger",),
 )
 async def get_deviation(context: ToolContext, data: DeviationIdInput) -> dict[str, Any]:
     return _dump_object(
-        await quality_management.get_deviation_detail(context.db, data.deviation_id)
+        await quality_deviation.get_deviation_detail(context.db, data.deviation_id)
     )
 
 
@@ -445,12 +448,13 @@ async def list_deviation_report_records(
     input_model=DeviationIdInput,
     method="GET",
     path="/quality/deviations/{deviation_id}/related-capas",
+    page_keys=("quality:deviations:deviation-ledger",),
 )
 async def get_related_capas(
     context: ToolContext, data: DeviationIdInput
 ) -> list[dict[str, Any]]:
     return _dump_list(
-        await quality_management.get_related_capas_for_deviation(
+        await quality_deviation.get_related_capas_for_deviation(
             context.db, data.deviation_id
         )
     )
@@ -476,12 +480,13 @@ async def get_deviation_statistics(
     risk_level="medium",
     method="POST",
     path="/quality/deviations",
+    page_keys=("quality:deviations:deviation-ledger",),
 )
 async def create_deviation(
     context: ToolContext, data: CreateDeviationRequest
 ) -> dict[str, Any]:
     return _dump_object(
-        await quality_management.create_deviation(
+        await quality_deviation.create_deviation(
             context.db,
             data,
             _user_id(context),
@@ -498,13 +503,14 @@ async def create_deviation(
     risk_level="medium",
     method="PUT",
     path="/quality/deviations/{deviation_id}",
+    page_keys=("quality:deviations:deviation-ledger",),
 )
 async def update_deviation(
     context: ToolContext, data: DeviationUpdateInput
 ) -> dict[str, Any]:
     payload = UpdateDeviationRequest.model_validate(_without(data, "deviation_id"))
     return _dump_object(
-        await quality_management.update_deviation(
+        await quality_deviation.update_deviation(
             context.db,
             data.deviation_id,
             payload,

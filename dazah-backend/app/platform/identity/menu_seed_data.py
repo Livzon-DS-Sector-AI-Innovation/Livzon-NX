@@ -10,6 +10,8 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any
 
 
@@ -34,7 +36,7 @@ def _n(
     }
 
 
-SEED_MENUS: list[dict[str, Any]] = [
+_LEGACY_SEED_MENUS: list[dict[str, Any]] = [
     # ── 生产管理 ────────────────────────────────────────────────
     _n(
         "production",
@@ -1344,4 +1346,14 @@ SEED_MENUS: list[dict[str, Any]] = [
             ),
         ],
     ),
+]
+
+# The first batch follows the live frontend menu through a reproducible export.
+# Existing database menu records are still preserved by seed_menus().
+_PAGE_MENU_CATALOG: list[dict[str, Any]] = json.loads(
+    Path(__file__).with_name("page_menu_catalog.json").read_text(encoding="utf-8")
+)
+_PAGE_MENU_BY_KEY = {node["key"]: node for node in _PAGE_MENU_CATALOG}
+SEED_MENUS: list[dict[str, Any]] = [
+    _PAGE_MENU_BY_KEY.get(node["key"], node) for node in _LEGACY_SEED_MENUS
 ]

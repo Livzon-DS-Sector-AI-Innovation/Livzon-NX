@@ -3,27 +3,14 @@
  * 使用 API_BASE_URL 环境变量（Docker 内部网络）
  */
 
-import { cookies } from 'next/headers'
+import { getAuthHeaders } from '@/lib/auth'
 
 const API_BASE_URL = process.env.API_BASE_URL || 'http://dazah-backend-app-1:8000'
 const QUALITY_SERVER_REQUEST_TIMEOUT_MS = 15000
 
-/** 由 auth_token 构造 Bearer 请求头；无 token 时返回 undefined（不带鉴权） */
-export function buildAuthHeaders(
-  token: string | null | undefined
-): Record<string, string> | undefined {
-  return token ? { Authorization: `Bearer ${token}` } : undefined
-}
-
 /** 服务端读取 auth_token cookie，供请求后端时携带 Bearer 认证头 */
 async function getAuthHeadersForServer(): Promise<Record<string, string> | undefined> {
-  try {
-    const cookieStore = await cookies()
-    return buildAuthHeaders(cookieStore.get('auth_token')?.value)
-  } catch {
-    // 无请求上下文（构建期/测试）等价于未登录，不带鉴权头
-    return undefined
-  }
+  return getAuthHeaders()
 }
 
 interface ApiEnvelope<T> {
@@ -91,11 +78,7 @@ const SERVER_API_BASE =
 async function serverFetch<T>(path: string): Promise<T> {
   const url = `${SERVER_API_BASE}${path}`
   const response = await globalThis.fetch(url, {
-    headers: {
-      'Content-Type': 'application/json',
-      // 携带登录凭证；缺失会导致后端 401、页面被 catch 成空数据
-      ...(await getAuthHeadersForServer()),
-    },
+    headers: { 'Content-Type': 'application/json' },
     next: { revalidate: 0 },
   })
   if (!response.ok) {

@@ -823,10 +823,10 @@ async def update_contract_approval_card(
 
     from app.core.database import async_session_factory
     from app.core.redis import cache_get
+    from app.modules.hr.feishu.notification import update_card
     from app.modules.hr.feishu_settings_service import (
         get_hr_feishu_app_credentials,
     )
-    from app.platform.integrations.feishu.notification import update_card
 
     # 卡片由人事应用发送，必须由人事应用更新（卡片归属应用一致）
     # 未配置时跳过置灰（回调仍返回 toast，不阻断审批结果提示）
@@ -973,11 +973,11 @@ async def _send_supervisor_card_task(employee_number: str) -> None:
         ]
         try:
             # 卡片由人事应用发送，必须由人事应用发送（卡片归属应用一致）
+            from app.modules.hr.feishu.notification import (
+                send_user_card_with_message_id,
+            )
             from app.modules.hr.feishu_settings_service import (
                 get_hr_feishu_app_credentials,
-            )
-            from app.platform.integrations.feishu.notification import (
-                send_user_card_with_message_id,
             )
 
             app_id, app_secret = await get_hr_feishu_app_credentials(session)
@@ -1069,10 +1069,10 @@ async def _send_contract_result_task(employee_number: str) -> None:
             f"- 分管领导：{record.supervisor_name or '-'}"
         )
 
+        from app.modules.hr.feishu.notification import send_user_card
         from app.modules.hr.feishu_settings_service import (
             get_hr_feishu_app_credentials,
         )
-        from app.platform.integrations.feishu.notification import send_user_card
 
         app_id, app_secret = await get_hr_feishu_app_credentials(session)
 

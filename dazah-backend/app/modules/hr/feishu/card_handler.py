@@ -269,8 +269,8 @@ async def _update_position_transfer_card_by_id(
     """审批后用指定的 message_id 更新飞书卡片状态。"""
     try:
         from app.core.database import async_session_factory
+        from app.modules.hr.feishu.notification import update_card
         from app.modules.hr.feishu_settings_service import get_hr_feishu_app_credentials
-        from app.platform.integrations.feishu.notification import update_card
 
         async with async_session_factory() as session:
             app_id, app_secret = await get_hr_feishu_app_credentials(session)

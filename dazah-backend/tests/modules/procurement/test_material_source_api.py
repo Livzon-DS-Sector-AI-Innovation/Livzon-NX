@@ -45,6 +45,15 @@ def _config() -> SimpleNamespace:
     )
 
 
+@pytest.fixture(autouse=True)
+def simulate_future_procurement_application(monkeypatch):
+    # Existing API workflow tests simulate an enabled independent application.
+    # The disabled-boundary test below restores the real guard explicitly.
+    monkeypatch.setattr(
+        procurement_api, "ensure_material_source_sync_enabled", lambda: None
+    )
+
+
 @pytest.fixture
 async def admin_client(client: AsyncClient) -> Any:
     async def _override_current_user() -> Any:
@@ -587,10 +596,11 @@ async def test_material_option_external_failures_have_stable_status(
 
     monkeypatch.setattr(procurement_api, "list_material_options", list_options)
     response = await admin_client.get(
-        "/api/v1/procurement/material-options?keyword=MAT"
+        "/api/v1/procurement/material-options?keyword=MAT",
+        headers={"X-Dazah-Page-Key": "purchasing:request:request-hardware"},
     )
 
-    assert response.status_code == status_code
+    assert response.status_code == status_code, response.text
     assert response.json()["message"] in {
         "飞书多维表格访问失败",
         "飞书多维表格请求超时",
@@ -607,10 +617,11 @@ async def test_material_options_timeout_returns_504(
 
     monkeypatch.setattr(procurement_api, "list_material_options", list_options)
     response = await admin_client.get(
-        "/api/v1/procurement/material-options?keyword=MAT"
+        "/api/v1/procurement/material-options?keyword=MAT",
+        headers={"X-Dazah-Page-Key": "purchasing:request:request-hardware"},
     )
 
-    assert response.status_code == 504
+    assert response.status_code == 504, response.text
     assert response.json()["message"] == "飞书物料数据源请求超时"
 
 
@@ -749,3 +760,30 @@ async def test_sync_endpoint_serializes_real_orm_config_after_commit(
                 app.dependency_overrides.pop(get_current_user, None)
     finally:
         await engine.dispose(close=False)
+
+
+@pytest.mark.anyio
+async def test_disabled_feishu_sync_returns_503_before_database_or_background_task(
+    admin_client, monkeypatch
+):
+    from app.modules.procurement import material_source
+
+    monkeypatch.setattr(
+        procurement_api,
+        "ensure_material_source_sync_enabled",
+        material_source.ensure_material_source_sync_enabled,
+    )
+    read = AsyncMock()
+    monkeypatch.setattr(procurement_api, "get_material_source_config", read)
+    response = await admin_client.post(
+        "/api/v1/procurement/material-source-config/sync"
+    )
+    assert response.status_code == 503
+    assert "暂未启用" in response.text
+    read.assert_not_awaited()
+    response = await admin_client.post(
+        "/api/v1/procurement/material-source-config/test",
+        json={"source_url": _config().source_url},
+    )
+    assert response.status_code == 503
+    assert "暂未启用" in response.text

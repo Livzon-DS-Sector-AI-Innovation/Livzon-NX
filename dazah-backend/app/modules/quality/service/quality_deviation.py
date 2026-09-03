@@ -7,17 +7,23 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
+import httpx
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import AppException, NotFoundException
+from app.core.exceptions import AppException, ForbiddenException, NotFoundException
 from app.modules.quality import repository
 from app.modules.quality.models import (
     CAPA,
     DepartmentWeeklyConfirmation,
     Deviation,
 )
+from app.modules.quality.page_access import (
+    assert_deviation_department,
+    deviation_page_scope,
+)
+from app.modules.quality.repository.quality_management import get_deviations_for_update
 from app.modules.quality.schemas import (
     CreateDeviationRequest,
     DepartmentWeeklyConfirmationOut,
@@ -28,6 +34,11 @@ from app.modules.quality.schemas import (
     SubmitReviewRequest,
     UpdateDeviationRequest,
 )
+from app.modules.quality.schemas.deviations import (
+    DeviationBatchDeleteResult,
+    DeviationReporterOption,
+    DeviationReporterPage,
+)
 from app.modules.quality.service.department_contacts import (
     get_department_contact_list_from_feishu,
 )
@@ -37,7 +48,7 @@ from app.modules.quality.service.quality_common import (
     _parse_datetime_filter_end_exclusive,
 )
 from app.platform.audit.service import record_audit_log
-from app.platform.identity.data_scope import DepartmentScope
+from app.platform.identity.data_scope import DepartmentScope, current_page_key
 from app.platform.identity.models import User
 
 logger = logging.getLogger(__name__)
@@ -106,7 +117,7 @@ STATUS_TO_PENDING = {
 
 
 async def _build_deviation_list_items(
-    db: AsyncSession, items: list[Deviation]
+    db: AsyncSession, items: list[Deviation], scope: DepartmentScope | None = None
 ) -> list[dict[str, Any]]:
     item_dicts: list[dict[str, Any]] = []
     for item in items:
@@ -114,6 +125,8 @@ async def _build_deviation_list_items(
         related_capas = await repository.get_related_capas_for_deviation(
             db, item.id, item.deviation_code
         )
+        if scope is not None:
+            related_capas = [c for c in related_capas if scope.allows(c.department)]
         item_dict["related_capa_codes"] = [capa.capa_code for capa in related_capas]
         item_dict["related_capas"] = [
             {"id": capa.id, "capa_code": capa.capa_code} for capa in related_capas
@@ -471,6 +484,11 @@ async def get_deviation_list(
     page_size: int = 20,
     scope: DepartmentScope | None = None,
 ) -> dict[str, Any]:
+    page_scope = await deviation_page_scope(db)
+    if page_scope is not None:
+        scope = page_scope
+        if department is not None:
+            assert_deviation_department(scope, department)
     items, total = await repository.get_deviations(
         db,
         status=status,
@@ -495,7 +513,7 @@ async def get_deviation_list(
     )
 
     return _build_page_result(
-        await _build_deviation_list_items(db, items),
+        await _build_deviation_list_items(db, items, scope=scope),
         total,
         page,
         page_size,
@@ -517,6 +535,7 @@ async def get_deviation_report_record_list(
 async def get_deviation_detail(
     db: AsyncSession, deviation_id: uuid.UUID
 ) -> DeviationDetail:
+    scope = await deviation_page_scope(db)
     result = await db.execute(
         select(Deviation).where(
             Deviation.id == deviation_id, Deviation.is_deleted.is_(False)
@@ -525,6 +544,7 @@ async def get_deviation_detail(
     deviation = result.scalar_one_or_none()
     if not deviation:
         raise NotFoundException(resource="偏差", resource_id=str(deviation_id))
+    assert_deviation_department(scope, deviation.department)
     return DeviationDetail.model_validate(deviation)
 
 
@@ -539,9 +559,11 @@ async def get_related_capas_for_deviation(
     from app.modules.quality.repository import quality_management as repository
     from app.modules.quality.schemas.capa import CapaListItem
 
+    scope = await deviation_page_scope(db)
     deviation = await db.get(Deviation, deviation_id)
     if not deviation or deviation.is_deleted:
         raise NotFoundException(resource="偏差")
+    assert_deviation_department(scope, deviation.department)
 
     capas = await repository.get_related_capas_for_deviation(
         db, deviation.id, deviation.deviation_code
@@ -549,6 +571,8 @@ async def get_related_capas_for_deviation(
     unique: list[CAPA] = []
     seen: set[uuid.UUID] = set()
     for capa in capas:
+        if scope is not None and not scope.allows(capa.department):
+            continue
         if capa.id in seen:
             continue
         seen.add(capa.id)
@@ -570,8 +594,8 @@ async def _resolve_selected_reporter_contact(
     if not normalized_open_id:
         raise AppException(message="报告人不能为空")
 
-    feishu_contact_result = await get_department_contact_list_from_feishu(
-        db, page=1, page_size=1000
+    feishu_contact_result = await _reporter_contacts(
+        db, open_id=normalized_open_id, page_size=2
     )
     for contact in feishu_contact_result.get("items", []):
         if str(contact.get("open_id") or "").strip() == normalized_open_id:
@@ -584,15 +608,78 @@ async def _resolve_selected_reporter_contact(
     raise AppException(message="所选报告人不存在于部门联系人台账中")
 
 
+async def _reporter_contacts(
+    db: AsyncSession,
+    *,
+    page: int = 1,
+    page_size: int = 50,
+    scope: DepartmentScope | None = None,
+    keyword: str | None = None,
+    open_id: str | None = None,
+) -> dict[str, Any]:
+    try:
+        return await get_department_contact_list_from_feishu(
+            db,
+            page=page,
+            page_size=page_size,
+            scope=scope,
+            keyword=keyword,
+            open_id=open_id,
+            reporter_only=True,
+        )
+    except httpx.TimeoutException as exc:
+        raise AppException(
+            status_code=504, message="报告人目录响应超时，请稍后重试"
+        ) from exc
+    except (httpx.HTTPError, RuntimeError) as exc:
+        raise AppException(
+            status_code=502, message="报告人目录暂不可用，请稍后重试"
+        ) from exc
+
+
+async def get_deviation_reporters(
+    db: AsyncSession,
+    *,
+    page: int = 1,
+    page_size: int = 50,
+    keyword: str | None = None,
+    scope: DepartmentScope | None = None,
+) -> DeviationReporterPage:
+    page_scope = await deviation_page_scope(db)
+    result = await _reporter_contacts(
+        db,
+        page=page,
+        page_size=page_size,
+        keyword=keyword,
+        scope=page_scope if page_scope is not None else scope,
+    )
+    return DeviationReporterPage(
+        items=[
+            DeviationReporterOption.model_validate(item) for item in result["items"]
+        ],
+        total=result["total"],
+        page=page,
+        page_size=page_size,
+    )
+
+
 async def create_deviation(
     db: AsyncSession,
     data: CreateDeviationRequest,
     user_id: str,
     current_user: User | None = None,
 ) -> dict[str, str]:
+    scope = await deviation_page_scope(db)
+    assert_deviation_department(scope, (data.department or "").strip())
+    if scope is not None and (data.is_closed or data.close_time):
+        raise ForbiddenException("偏差关闭请通过对应业务流程执行")
     reporter_contact = await _resolve_selected_reporter_contact(
         db, data.reporter_open_id
     )
+    if scope is not None:
+        assert_deviation_department(scope, reporter_contact.department)
+        if reporter_contact.department != (data.department or "").strip():
+            raise AppException(message="报告人部门已变化，请重新选择报告人后提交")
     description = (data.description or "").strip()
     product_batch = (data.affected_items or "").strip()
     department = (data.department or "").strip()
@@ -643,6 +730,16 @@ async def create_deviation(
     )
     db.add(deviation)
     try:
+        if scope is not None:
+            await db.flush()
+            await record_audit_log(
+                db,
+                action="创建偏差记录",
+                user_id=uuid.UUID(user_id),
+                resource_type="quality.deviation",
+                resource_id=deviation.id,
+                extra={"page_key": current_page_key.get()},
+            )
         await db.commit()
 
     except Exception:
@@ -663,16 +760,40 @@ async def update_deviation(
     data: UpdateDeviationRequest,
     user_id: str,
 ) -> dict[str, bool]:
+    scope = await deviation_page_scope(db)
     result = await db.execute(
-        select(Deviation).where(
-            Deviation.id == deviation_id, Deviation.is_deleted.is_(False)
-        )
+        select(Deviation)
+        .where(Deviation.id == deviation_id, Deviation.is_deleted.is_(False))
+        .with_for_update()
+        .execution_options(populate_existing=True)
     )
     deviation = result.scalar_one_or_none()
     if not deviation:
         raise NotFoundException(resource="偏差", resource_id=str(deviation_id))
 
     update_data = data.model_dump(exclude_unset=True)
+    assert_deviation_department(scope, deviation.department)
+    assert_deviation_department(
+        scope, update_data.get("department", deviation.department)
+    )
+    if scope is not None:
+        for field in (
+            "status",
+            "review_opinions",
+            "final_code",
+            "returned_step",
+            "is_closed",
+            "close_time",
+            "report_versions",
+            "ai_analysis",
+            "investigation_records",
+            "needs_cross_dept_review",
+            "cross_dept_reviewers",
+        ):
+            if field in update_data and update_data[field] != getattr(
+                deviation, field, None
+            ):
+                raise ForbiddenException("审批、关闭和流程记录请通过对应业务流程调整")
     # 日期字段：前端传 ISO 字符串，需转换为 datetime，否则 SQLAlchemy 类型绑定失败
     date_fields = ["discovery_date", "investigation_completed_at", "close_time"]
     for field, value in update_data.items():
@@ -698,6 +819,18 @@ async def update_deviation(
         deviation.status_updated_at = datetime.now(UTC)
 
     try:
+        if scope is not None:
+            await record_audit_log(
+                db,
+                action="修改偏差记录",
+                user_id=uuid.UUID(user_id),
+                resource_type="quality.deviation",
+                resource_id=deviation.id,
+                extra={
+                    "page_key": current_page_key.get(),
+                    "fields": sorted(update_data),
+                },
+            )
         await db.commit()
     except Exception:
         await db.rollback()
@@ -711,14 +844,17 @@ async def update_deviation(
 async def delete_deviation(
     db: AsyncSession, deviation_id: uuid.UUID, deleted_by: uuid.UUID | None = None
 ) -> dict[str, bool]:
+    scope = await deviation_page_scope(db)
     result = await db.execute(
-        select(Deviation).where(
-            Deviation.id == deviation_id, Deviation.is_deleted.is_(False)
-        )
+        select(Deviation)
+        .where(Deviation.id == deviation_id, Deviation.is_deleted.is_(False))
+        .with_for_update()
+        .execution_options(populate_existing=True)
     )
     deviation = result.scalar_one_or_none()
     if not deviation:
         raise NotFoundException(resource="偏差", resource_id=str(deviation_id))
+    assert_deviation_department(scope, deviation.department)
     deviation.is_deleted = True
     deviation.deleted_by = deleted_by
     deviation.deleted_at = datetime.now(UTC)
@@ -734,6 +870,7 @@ async def delete_deviation(
             "title": deviation.title,
             "status": deviation.status,
         },
+        extra={"page_key": current_page_key.get()},
     )
     try:
         await db.commit()
@@ -743,6 +880,38 @@ async def delete_deviation(
 
         raise
     return {"success": True}
+
+
+async def batch_delete_deviations(
+    db: AsyncSession, ids: list[uuid.UUID], *, deleted_by: uuid.UUID
+) -> DeviationBatchDeleteResult:
+    """Validate the whole locked set before writing; commit records and audit once."""
+    scope = await deviation_page_scope(db)
+    rows = await get_deviations_for_update(db, ids)
+    for row in rows:
+        assert_deviation_department(scope, row.department)
+    if len(rows) != len(ids):
+        raise NotFoundException(resource="所选偏差记录（可能已删除）")
+    try:
+        now = datetime.now(UTC)
+        for row in rows:
+            row.is_deleted = True
+            row.deleted_by = deleted_by
+            row.deleted_at = now
+            row.updated_at = now
+            await record_audit_log(
+                db,
+                action="批量删除偏差记录",
+                user_id=deleted_by,
+                resource_type="quality.deviation",
+                resource_id=row.id,
+                extra={"page_key": current_page_key.get(), "batch_size": len(rows)},
+            )
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
+    return DeviationBatchDeleteResult(deleted=len(rows))
 
 
 async def submit_investigation(

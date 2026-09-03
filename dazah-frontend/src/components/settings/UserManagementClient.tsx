@@ -18,16 +18,16 @@ import {
   LockOutlined,
   PlusOutlined,
   ReloadOutlined,
-  SafetyCertificateOutlined,
+  TeamOutlined,
   UserSwitchOutlined,
 } from '@ant-design/icons'
 import {
   createUser,
   getUsers,
   resetUserPassword,
+  syncFeishuUsers,
   updateUser,
 } from '@/actions/users'
-import ModulePermissionsDrawer from './ModulePermissionsDrawer'
 import type {
   LocalUserCreate,
   UserManagementItem,
@@ -38,7 +38,7 @@ const { Text } = Typography
 
 const roleOptions = [
   { value: 'user', label: '普通用户' },
-  { value: 'admin', label: '管理员' },
+  { value: 'admin', label: '系统管理员' },
 ]
 
 const statusOptions = [
@@ -47,15 +47,14 @@ const statusOptions = [
 ]
 
 export default function UserManagementClient() {
-  const { message } = App.useApp()
+  const { message, modal } = App.useApp()
   const [users, setUsers] = useState<UserManagementItem[]>([])
   const [loading, setLoading] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
   const [editingUser, setEditingUser] = useState<UserManagementItem | null>(null)
   const [saving, setSaving] = useState(false)
+  const [syncing, setSyncing] = useState(false)
   const [passwordUser, setPasswordUser] = useState<UserManagementItem | null>(null)
-  const [permissionUser, setPermissionUser] =
-    useState<UserManagementItem | null>(null)
   const [keyword, setKeyword] = useState('')
   const [form] = Form.useForm()
   const [passwordForm] = Form.useForm()
@@ -83,6 +82,32 @@ export default function UserManagementClient() {
     form.resetFields()
     form.setFieldsValue({ role: 'user', status: 'active' })
     setModalOpen(true)
+  }
+
+  const handleSyncFeishuUsers = () => {
+    modal.confirm({
+      title: '同步飞书通讯录用户',
+      content:
+        '将使用服务端环境变量中的飞书登录与通讯录应用凭证（存在激活的系统配置时优先使用系统配置）读取已授权范围，并更新本地用户、部门和飞书身份信息。现有本地角色与账号状态不会被覆盖。',
+      okText: '开始同步',
+      cancelText: '取消',
+      async onOk() {
+        setSyncing(true)
+        try {
+          const result = await syncFeishuUsers()
+          if (result.status === 'warning') message.warning(result.message)
+          else message.success(result.message)
+          await loadUsers()
+        } catch (error) {
+          message.error(
+            error instanceof Error ? error.message : '飞书用户同步失败'
+          )
+          throw error
+        } finally {
+          setSyncing(false)
+        }
+      },
+    })
   }
 
   const handleEdit = (record: UserManagementItem) => {
@@ -177,7 +202,7 @@ export default function UserManagementClient() {
       width: 110,
       render: (role: string) => (
         <Tag color={role === 'admin' ? 'purple' : 'default'}>
-          {role === 'admin' ? '管理员' : '普通用户'}
+          {role === 'admin' ? '系统管理员' : '普通用户'}
         </Tag>
       ),
     },
@@ -214,7 +239,7 @@ export default function UserManagementClient() {
     {
       title: '操作',
       key: 'actions',
-      width: 350,
+      width: 250,
       fixed: 'right' as const,
       render: (_: unknown, record: UserManagementItem) => (
         <Space>
@@ -227,13 +252,6 @@ export default function UserManagementClient() {
             onClick={() => setPasswordUser(record)}
           >
             重置密码
-          </Button>
-          <Button
-            size="small"
-            icon={<SafetyCertificateOutlined />}
-            onClick={() => setPermissionUser(record)}
-          >
-            模块权限
           </Button>
           <Popconfirm
             title={record.status === 'active' ? '确认禁用该用户？' : '确认启用该用户？'}
@@ -270,6 +288,13 @@ export default function UserManagementClient() {
           />
           <Button icon={<ReloadOutlined />} onClick={loadUsers}>
             刷新
+          </Button>
+          <Button
+            icon={<TeamOutlined />}
+            loading={syncing}
+            onClick={handleSyncFeishuUsers}
+          >
+            同步飞书用户
           </Button>
           <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
             新建用户
@@ -373,12 +398,6 @@ export default function UserManagementClient() {
           </Form.Item>
         </Form>
       </Modal>
-
-      <ModulePermissionsDrawer
-        user={permissionUser}
-        open={!!permissionUser}
-        onClose={() => setPermissionUser(null)}
-      />
     </div>
   )
 }

@@ -11,6 +11,7 @@ import {
   QualityAiAnalysisLog,
 } from '@/types/quality'
 import { API_BASE_URL, actionFetch } from './quality-shared'
+import type { components } from '@/types/generated/schema'
 
 function revalidateDeviationAiPaths(deviationId: string) {
   revalidatePath('/quality')
@@ -20,7 +21,7 @@ function revalidateDeviationAiPaths(deviationId: string) {
 }
 
 export async function createDeviation(data: CreateDeviationRequest) {
-  const result = await actionFetch(`${API_BASE_URL}/api/v1/quality/deviations`, {
+  const result = await actionFetch<components['schemas']['DeviationCreateResult']>(`${API_BASE_URL}/api/v1/quality/deviations`, {
     method: 'POST',
     body: JSON.stringify(data),
   })
@@ -99,7 +100,7 @@ export async function resubmitDeviation(deviationId: string) {
 }
 
 export async function batchDeleteDeviations(ids: string[]) {
-  const result = await actionFetch<{ deleted?: number }>(
+  const result = await actionFetch<components['schemas']['DeviationBatchDeleteResult']>(
     `${API_BASE_URL}/api/v1/quality/deviations/batch-delete`,
     {
       method: 'POST',

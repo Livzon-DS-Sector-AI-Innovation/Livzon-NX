@@ -8,7 +8,9 @@ const mocks = vi.hoisted(() => ({
   }),
 }))
 
-vi.mock('next/headers', () => ({ cookies: mocks.cookies }))
+vi.mock('next/headers', () => ({ cookies: mocks.cookies,
+  headers: vi.fn(async () => new Headers({ 'X-Dazah-Page-Path': '/hr/position-transfers' })),
+}))
 
 import * as admin from './server/admin'
 import * as hr from './server/hr'
@@ -43,6 +45,9 @@ describe('migrated server API contracts', () => {
     await admin.serverFetchAdminUsers()
 
     await hr.fetchPositionTransfersServer({ keyword: '张', approval_status: 'pending', page: 2 })
+    expect(vi.mocked(fetch).mock.calls.at(-1)?.[1]?.headers).toEqual(expect.objectContaining({
+      'X-Dazah-Page-Path': '/hr/position-transfers',
+    }))
     await hr.fetchJobPostingsServer({ keyword: 'QA', page: 2 })
     await hr.fetchCandidatesServer({ keyword: '李', fit_level: 'A', interview_status: 'pending' })
     await hr.fetchOnboardingServer({ keyword: '新员工' })

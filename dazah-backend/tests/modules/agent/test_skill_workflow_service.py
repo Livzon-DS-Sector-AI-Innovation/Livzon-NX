@@ -324,7 +324,10 @@ async def test_workflow_run_refetches_updated_state_before_response(
     user = User(
         name="工作流测试用户",
         username=f"workflow-{uuid.uuid4().hex[:12]}",
-        role="user",
+        # Workflow execution is not the subject of this regression test; use
+        # the administrator path so the page-publication gate is covered by
+        # its dedicated authorization tests instead.
+        role="admin",
         status="active",
         auth_source="local",
     )

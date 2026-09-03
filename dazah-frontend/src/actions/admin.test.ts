@@ -14,6 +14,16 @@ import * as adminActions from './admin'
 import { createRole } from './admin'
 
 describe('system permission server actions', () => {
+  it('sends the role authorization version and preserves conflict errors', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ message: '授权版本冲突' }), { status: 409 }))
+    vi.stubGlobal('fetch', fetchMock)
+    const payload = { expected_grant_version: 3, grants: [], reason: '恢复角色基线' }
+    await expect(adminActions.replaceRolePagePermissions('role-1', payload)).resolves.toEqual({ ok: false, status: 409, message: '授权版本冲突' })
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/roles/role-1/page-permissions'), expect.objectContaining({
+      method: 'PUT', body: JSON.stringify(payload),
+    }))
+    expect(mocks.revalidatePath).not.toHaveBeenCalled()
+  })
   afterEach(() => {
     vi.unstubAllGlobals()
     vi.clearAllMocks()

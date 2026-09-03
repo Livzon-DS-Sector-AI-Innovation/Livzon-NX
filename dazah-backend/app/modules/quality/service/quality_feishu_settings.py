@@ -1271,30 +1271,8 @@ async def _ensure_quality_feishu_app_settings_seeded(
     db: AsyncSession,
 ) -> QualityFeishuAppSettings | None:
     model = await _get_app_settings_model(db)
-    env_app_id = _get_setting_value("FEISHU_APP_ID")
-    env_app_secret = _get_setting_value("FEISHU_APP_SECRET")
-
     if model is None:
-        if not env_app_id or not env_app_secret:
-            return None
-        model = QualityFeishuAppSettings(
-            app_id=env_app_id,
-            app_secret=encrypt_api_key(env_app_secret),
-            app_token=None,
-            is_enabled=True,
-            deviation_report_form_url=DEVIATION_REPORT_FORM_URL,
-            deviation_investigation_push_form_url=DEVIATION_INVESTIGATION_PUSH_FORM_URL,
-            oos_oot_report_form_url=OOS_OOT_REPORT_FORM_URL,
-            oos_oot_investigation_push_form_url=OOS_OOT_INVESTIGATION_PUSH_FORM_URL,
-        )
-        db.add(model)
-        await db.commit()
-        result = await db.execute(
-            select(QualityFeishuAppSettings).where(
-                QualityFeishuAppSettings.id == model.id
-            )
-        )
-        return result.scalar_one()
+        return None
 
     # 回填默认偏差报告新建表单链接（仅当为空时回填，避免覆盖用户已保存的值）
     if not (model.deviation_report_form_url or "").strip():
@@ -1342,21 +1320,6 @@ async def _ensure_quality_feishu_app_settings_seeded(
         )
         model = result.scalar_one()
 
-    if (
-        env_app_id
-        and env_app_secret
-        and _looks_like_test_app_settings(model.app_id, model.app_secret)
-    ):
-        model.app_id = env_app_id
-        model.app_secret = encrypt_api_key(env_app_secret)
-        model.is_enabled = True
-        await db.commit()
-        result = await db.execute(
-            select(QualityFeishuAppSettings).where(
-                QualityFeishuAppSettings.id == model.id
-            )
-        )
-        model = result.scalar_one()
     return model
 
 

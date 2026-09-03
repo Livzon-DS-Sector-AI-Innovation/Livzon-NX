@@ -14,6 +14,7 @@ from app.modules.warehouse.feishu_material_pages import (
     FEISHU_HARDWARE_APP_TOKEN,
     FEISHU_WAREHOUSE_APP_TOKEN,
 )
+from app.modules.warehouse.page_access import assert_material_page
 from app.modules.warehouse.schemas import (
     PackagingMaterialResponse,
     ProductInventoryResponse,
@@ -47,7 +48,10 @@ from app.modules.warehouse.schemas import (
     WarehouseUpdateRecordRequest,
 )
 from app.modules.warehouse.service import WarehouseService
-from app.platform.identity.data_scope import resolve_user_department_scope
+from app.platform.identity.data_scope import (
+    current_page_key,
+    resolve_user_department_scope,
+)
 from app.platform.identity.deps import RequireUser
 from app.platform.identity.rbac import resolve_user_permissions
 from app.shared.module_api import create_module_router
@@ -670,13 +674,19 @@ async def get_material_page(
     response_model=WarehouseRecordDetailResponse,
 )
 async def get_material_page_record_detail(
+    current_user: RequireUser,
     page_key: str,
     record_id: str,
+    db: AsyncSession = Depends(get_db),
     service: WarehouseService = Depends(get_warehouse_service),
 ) -> Any:
     """获取单条记录在多维表格中的全部字段，含列表未展示字段与可写性信息。"""
+    assert_material_page(page_key)
+    scope = await resolve_user_department_scope(db, current_user)
     try:
-        data = await service.get_material_page_record_detail(page_key, record_id)
+        data = await service.get_material_page_record_detail(
+            page_key, record_id, scope=scope
+        )
     except HTTPException:
         raise
     except Exception as exc:
@@ -705,14 +715,15 @@ async def update_material_page_record(
     编辑权限按页面所属子领域（成品/五金/原辅料及包材）校验，
     由后台部门角色映射决定用户可编辑的子领域。
     """
-    from app.platform.identity.rbac import resolve_user_permissions
-
-    permissions = await resolve_user_permissions(db, current_user.id)
-    page_config = await service._get_material_page_config(page_key)
-    _assert_warehouse_edit_scope(page_config.app_token, permissions)
+    assert_material_page(page_key)
+    if current_page_key.get() is None:
+        permissions = await resolve_user_permissions(db, current_user.id)
+        page_config = await service._get_material_page_config(page_key)
+        _assert_warehouse_edit_scope(page_config.app_token, permissions)
+    scope = await resolve_user_department_scope(db, current_user)
     try:
         record = await service.update_material_page_record(
-            page_key, record_id, request.fields
+            page_key, record_id, request.fields, scope=scope
         )
     except HTTPException:
         raise
@@ -737,13 +748,14 @@ async def delete_material_page_record(
     service: WarehouseService = Depends(get_warehouse_service),
 ) -> Any:
     """从对应飞书多维表格删除该记录（编辑权限按子领域校验）。"""
-    from app.platform.identity.rbac import resolve_user_permissions
-
-    permissions = await resolve_user_permissions(db, current_user.id)
-    page_config = await service._get_material_page_config(page_key)
-    _assert_warehouse_edit_scope(page_config.app_token, permissions)
+    assert_material_page(page_key)
+    if current_page_key.get() is None:
+        permissions = await resolve_user_permissions(db, current_user.id)
+        page_config = await service._get_material_page_config(page_key)
+        _assert_warehouse_edit_scope(page_config.app_token, permissions)
+    scope = await resolve_user_department_scope(db, current_user)
     try:
-        await service.delete_material_page_record(page_key, record_id)
+        await service.delete_material_page_record(page_key, record_id, scope=scope)
     except HTTPException:
         raise
     except Exception as exc:

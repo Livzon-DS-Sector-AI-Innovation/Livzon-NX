@@ -22,6 +22,7 @@ import {
 import { importSupplierTable } from '@/actions/purchasing'
 import { fetchSuppliers } from '@/lib/api/purchasing'
 import type { SupplierListResponse, SupplierResponse } from '@/types/purchasing'
+import { useAuthStore } from '@/stores/auth'
 
 const { Dragger } = Upload
 const { Search } = Input
@@ -72,7 +73,8 @@ export function SupplierManagementClient({
   initialColumns,
   initialLoadFailed = false,
 }: SupplierManagementClientProps) {
-  const { message } = App.useApp()
+  const { message, modal } = App.useApp()
+  const canImport = useAuthStore((state) => state.hasPagePermission('purchasing:supplier', 'operate', 'bulk_import'))
   const [records, setRecords] = useState(initialRecords)
   const [columns, setColumns] = useState(
     initialColumns.length ? initialColumns : FALLBACK_COLUMNS
@@ -130,6 +132,10 @@ export function SupplierManagementClient({
   }
 
   const handleImport: UploadProps['beforeUpload'] = (file) => {
+    if (!canImport) {
+      message.warning('未获得供应商清单的批量导入权限')
+      return Upload.LIST_IGNORE
+    }
     if (!isSupportedSupplierFile(file.name)) {
       message.error('请上传 xlsx、xlsm、csv 或 tsv 文件')
       return Upload.LIST_IGNORE
@@ -139,31 +145,36 @@ export function SupplierManagementClient({
       return Upload.LIST_IGNORE
     }
 
-    setUploading(true)
-    const formData = new FormData()
-    formData.append('file', file)
-    void importSupplierTable(formData)
-      .then(async (response) => {
-        if (response.code >= 200 && response.code < 300) {
-          const importedCount = response.data?.imported_count ?? 0
-          const importedColumns = response.data?.columns ?? []
-          message.success(`已导入 ${importedCount} 条供应商记录`)
-          setKeyword('')
-          setSupplierName('')
-          setMaterialName('')
-          setPurchaseCategory(undefined)
-          setColumns(importedColumns.length ? importedColumns : columns)
-          await loadRecords(1, { resetFilters: true })
-        } else {
-          message.error(response.message || '供应商清单导入失败')
-        }
-      })
-      .catch(() => {
-        message.error('供应商清单导入失败')
-      })
-      .finally(() => {
-        setUploading(false)
-      })
+    modal.confirm({ title: '确认覆盖供应商清单？',
+      content: `将使用“${file.name}”替换当前供应商清单，共 ${total} 条现有记录可能被覆盖。`,
+      okText: '确认覆盖导入', cancelText: '取消', onOk: () => {
+        setUploading(true)
+        const formData = new FormData()
+        formData.append('file', file)
+        return importSupplierTable(formData)
+          .then(async (response) => {
+            if (response.code >= 200 && response.code < 300) {
+              const importedCount = response.data?.imported_count ?? 0
+              const importedColumns = response.data?.columns ?? []
+              message.success(`已导入 ${importedCount} 条供应商记录`)
+              setKeyword('')
+              setSupplierName('')
+              setMaterialName('')
+              setPurchaseCategory(undefined)
+              setColumns(importedColumns.length ? importedColumns : columns)
+              await loadRecords(1, { resetFilters: true })
+            } else {
+              message.error(response.message || '供应商清单导入失败')
+            }
+          })
+          .catch(() => {
+            message.error('供应商清单导入失败')
+          })
+          .finally(() => {
+            setUploading(false)
+          })
+      },
+    })
 
     return Upload.LIST_IGNORE
   }
@@ -261,14 +272,14 @@ export function SupplierManagementClient({
           <Dragger
             accept=".xlsx,.xlsm,.csv,.tsv"
             beforeUpload={handleImport}
-            disabled={uploading}
+            disabled={uploading || !canImport}
             maxCount={1}
             showUploadList={false}
           >
             <p className="ant-upload-drag-icon">
               <InboxOutlined />
             </p>
-            <p className="ant-upload-text">点击或拖拽供应商表格到此处</p>
+            <p className="ant-upload-text">{canImport ? '点击或拖拽供应商表格到此处' : '未获得批量导入权限，仅可查询供应商清单'}</p>
             <p className="ant-upload-hint">
               系统将按第一行表头读取字段，并保留原始列顺序。
             </p>
