@@ -7,6 +7,7 @@ import { AgentFloatingEntry } from "@/components/agent/AgentFloatingEntry"
 import { MappedMenuPageGate } from "@/components/feishu-data"
 import {
   getAuthorizedPageMenus,
+  getAuthorizedModuleMenus,
   getModuleByKey,
   getPageKeyByPath,
   moduleMenus,
@@ -50,7 +51,8 @@ export function AppShell({ children, user }: AppShellProps) {
       )
   const isModuleDenied = Boolean(
     currentModule &&
-      !authorizedModules.some(
+      user.role !== 'admin' &&
+      !getAuthorizedModuleMenus(user.module_codes).some(
         (module) => module.moduleCode === currentModule.moduleCode,
       ),
   )
@@ -83,7 +85,18 @@ export function AppShell({ children, user }: AppShellProps) {
           <Sidebar user={user} modules={authorizedModules} />
         </Suspense>
         <main className="flex-1 overflow-y-auto bg-[var(--color-surface)] p-6">
-          {isModuleDenied || isPageDenied ? (
+          {isModuleDenied ? (
+            <section className="mx-auto flex min-h-full max-w-xl items-center justify-center">
+              <div className="w-full rounded-[var(--rounded-lg)] border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-8 text-center">
+                <h1 className="text-[22px] font-semibold text-[var(--color-charcoal)]">
+                  暂无模块访问权限
+                </h1>
+                <p className="mt-3 text-[14px] leading-6 text-[var(--color-steel)]">
+                  当前账号未获“{currentModule?.label}”的查看权限，请联系管理员调整模块授权。
+                </p>
+              </div>
+            </section>
+          ) : isPageDenied ? (
             <section className="mx-auto flex min-h-full max-w-xl items-center justify-center">
               <div className="w-full rounded-[var(--rounded-lg)] border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-8 text-center">
                 <h1 className="text-[22px] font-semibold text-[var(--color-charcoal)]">

@@ -54,7 +54,8 @@ describe('application shell permission boundary', () => {
 
   it.each([undefined, []])('does not treat missing ordinary-user module grants as unrestricted: %j', (module_codes) => {
     const html = renderToStaticMarkup(<AppShell user={makeUser({ module_codes })}>业务内容</AppShell>)
-    expect(html).toContain('暂无页面访问权限')
+    expect(html).toContain('暂无模块访问权限')
+    expect(html).toContain('当前账号未获“采购管理”的查看权限')
     expect(html).not.toContain('业务内容')
   })
 

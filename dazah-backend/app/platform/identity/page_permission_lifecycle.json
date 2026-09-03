@@ -2839,37 +2839,70 @@
       "actions": { "sync_config": { "status": "active", "category": "integration_admin" } }
     },
     "warehouse:product-inventory:product-details:product-detail-l-phenylalanine": {
-      "status": "active", "module_code": "warehouse", "route_path": "/warehouse/product/details/l-phenylalanine", "actions": {}
+      "status": "active", "module_code": "warehouse", "route_path": "/warehouse/product/details/l-phenylalanine", "actions": {
+        "delete": { "status": "active", "category": "destructive" },
+        "sync_config": { "status": "active", "category": "integration_admin" }
+      }
     },
     "warehouse:product-inventory:product-details:product-detail-fumaric-acid": {
-      "status": "active", "module_code": "warehouse", "route_path": "/warehouse/product/details/fumaric-acid", "actions": {}
+      "status": "active", "module_code": "warehouse", "route_path": "/warehouse/product/details/fumaric-acid", "actions": {
+        "delete": { "status": "active", "category": "destructive" },
+        "sync_config": { "status": "active", "category": "integration_admin" }
+      }
     },
     "warehouse:product-inventory:product-details:product-detail-l-tryptophan": {
-      "status": "active", "module_code": "warehouse", "route_path": "/warehouse/product/details/l-tryptophan", "actions": {}
+      "status": "active", "module_code": "warehouse", "route_path": "/warehouse/product/details/l-tryptophan", "actions": {
+        "delete": { "status": "active", "category": "destructive" },
+        "sync_config": { "status": "active", "category": "integration_admin" }
+      }
     },
     "warehouse:product-inventory:product-details:product-detail-mevastatin": {
-      "status": "active", "module_code": "warehouse", "route_path": "/warehouse/product/details/mevastatin", "actions": {}
+      "status": "active", "module_code": "warehouse", "route_path": "/warehouse/product/details/mevastatin", "actions": {
+        "delete": { "status": "active", "category": "destructive" },
+        "sync_config": { "status": "active", "category": "integration_admin" }
+      }
     },
     "warehouse:product-inventory:product-details:product-detail-kitasamycin-hcl": {
-      "status": "active", "module_code": "warehouse", "route_path": "/warehouse/product/details/kitasamycin-hcl", "actions": {}
+      "status": "active", "module_code": "warehouse", "route_path": "/warehouse/product/details/kitasamycin-hcl", "actions": {
+        "delete": { "status": "active", "category": "destructive" },
+        "sync_config": { "status": "active", "category": "integration_admin" }
+      }
     },
     "warehouse:product-inventory:product-details:product-detail-doramectin": {
-      "status": "active", "module_code": "warehouse", "route_path": "/warehouse/product/details/doramectin", "actions": {}
+      "status": "active", "module_code": "warehouse", "route_path": "/warehouse/product/details/doramectin", "actions": {
+        "delete": { "status": "active", "category": "destructive" },
+        "sync_config": { "status": "active", "category": "integration_admin" }
+      }
     },
     "warehouse:product-inventory:product-details:product-detail-lovastatin": {
-      "status": "active", "module_code": "warehouse", "route_path": "/warehouse/product/details/lovastatin", "actions": {}
+      "status": "active", "module_code": "warehouse", "route_path": "/warehouse/product/details/lovastatin", "actions": {
+        "delete": { "status": "active", "category": "destructive" },
+        "sync_config": { "status": "active", "category": "integration_admin" }
+      }
     },
     "warehouse:product-inventory:product-details:product-detail-florfenicol-premix": {
-      "status": "active", "module_code": "warehouse", "route_path": "/warehouse/product/details/florfenicol-premix", "actions": {}
+      "status": "active", "module_code": "warehouse", "route_path": "/warehouse/product/details/florfenicol-premix", "actions": {
+        "delete": { "status": "active", "category": "destructive" },
+        "sync_config": { "status": "active", "category": "integration_admin" }
+      }
     },
     "warehouse:product-inventory:product-details:product-detail-demeclocycline-hcl": {
-      "status": "active", "module_code": "warehouse", "route_path": "/warehouse/product/details/demeclocycline-hcl", "actions": {}
+      "status": "active", "module_code": "warehouse", "route_path": "/warehouse/product/details/demeclocycline-hcl", "actions": {
+        "delete": { "status": "active", "category": "destructive" },
+        "sync_config": { "status": "active", "category": "integration_admin" }
+      }
     },
     "warehouse:product-inventory:product-details:product-detail-fenbendazole-powder": {
-      "status": "active", "module_code": "warehouse", "route_path": "/warehouse/product/details/fenbendazole-powder", "actions": {}
+      "status": "active", "module_code": "warehouse", "route_path": "/warehouse/product/details/fenbendazole-powder", "actions": {
+        "delete": { "status": "active", "category": "destructive" },
+        "sync_config": { "status": "active", "category": "integration_admin" }
+      }
     },
     "warehouse:product-inventory:product-inbound-detail": {
-      "status": "active", "module_code": "warehouse", "route_path": "/warehouse/product/inbound-detail", "actions": {}
+      "status": "active", "module_code": "warehouse", "route_path": "/warehouse/product/inbound-detail", "actions": {
+        "delete": { "status": "active", "category": "destructive" },
+        "sync_config": { "status": "active", "category": "integration_admin" }
+      }
     }
   }
 }

@@ -3,6 +3,7 @@
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.warehouse.feishu_material_pages import FEISHU_WAREHOUSE_MATERIAL_PAGES
 from app.platform.identity.data_scope import (
     DepartmentScope,
     current_page_actor,
@@ -17,6 +18,8 @@ from app.platform.identity.page_policy import (
 
 
 def assert_material_page(page_key: str) -> None:
+    if page_key not in FEISHU_WAREHOUSE_MATERIAL_PAGES:
+        raise HTTPException(404, "仓储飞书模板页不存在")
     authorized = current_page_key.get()
     if authorized is not None and (
         WAREHOUSE_MATERIAL_PAGE_ALIASES.get(authorized) != page_key

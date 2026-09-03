@@ -240,9 +240,9 @@ const server = createServer(async (request, response) => {
     }
 
     const user = authorization.includes('restricted')
-      ? { ...currentUser, module_codes: [] }
+      ? { ...currentUser, role: 'user', module_codes: [] }
       : authorization.includes('procurement-only')
-        ? { ...currentUser, module_codes: ['procurement'] }
+        ? { ...currentUser, role: 'user', module_codes: ['procurement'] }
         : currentUser
     response.end(JSON.stringify({ code: 200, message: 'success', data: user }))
     return
