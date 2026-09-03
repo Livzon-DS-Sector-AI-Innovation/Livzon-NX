@@ -668,8 +668,8 @@ async def test_hr_contract_expiry_task_and_training_exports_cover_real_paths(
     import app.core.redis as redis
     import app.modules.hr.contract_api as contract_api_module
     import app.modules.hr.contract_service as contract_service_module
+    import app.modules.hr.feishu.notification as notification
     import app.modules.hr.service as hr_service_module
-    import app.platform.integrations.feishu.notification as notification
 
     monkeypatch.setattr(jobs, "is_job_running", AsyncMock(return_value=False))
     monkeypatch.setattr(jobs, "submit_job", submit_job)
