@@ -4,11 +4,14 @@ from datetime import date
 from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock
 
 import openpyxl
 import pytest
 from docx import Document
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
 from fastapi import UploadFile
 from openpyxl import Workbook
 
@@ -60,7 +63,20 @@ def _oral_template(path: Path) -> None:
     add_row("1", {4: "合格□不合格□"})
     add_row("……")
     add_row(values={0: "评估人"})
+    # 模拟真实模板预置的可编辑例外标记（重复 ID 场景由克隆行放大）
+    question_cell = table.rows[1].cells[1]
+    start = OxmlElement("w:permStart")
+    start.set(qn("w:id"), "0")
+    start.set(qn("w:edGrp"), "everyone")
+    question_cell.paragraphs[0]._p.append(start)
+    end = OxmlElement("w:permEnd")
+    end.set(qn("w:id"), "0")
+    question_cell.paragraphs[0]._p.append(end)
     doc.save(path)
+
+
+def _perm_starts(element: Any) -> list[Any]:
+    return list(element.iter(qn("w:permStart")))
 
 
 def _notification_template(path: Path) -> None:
@@ -129,6 +145,20 @@ async def test_oral_evaluation_and_notification_generators(
     assert (
         oral_exam_document_generator._find_row(saved.tables[0], lambda row: False) == -1
     )
+    # 可编辑例外区：模板旧标记清空重建，ID 唯一且全部为"每个人"
+    starts = _perm_starts(saved.element.body)
+    marker_ids = [s.get(qn("w:id")) for s in starts]
+    assert "0" not in marker_ids
+    assert len(marker_ids) == len(set(marker_ids))
+    assert all(s.get(qn("w:edGrp")) == "everyone" for s in starts)
+    # 培训内容/日期、克隆出的问题行/人员行、评估人均可编辑
+    assert len(_perm_starts(saved.tables[0].cell(1, 1)._tc)) == 1
+    assert len(_perm_starts(saved.tables[0].cell(2, 1)._tc)) == 1
+    assert len(_perm_starts(saved.tables[0].cell(5, 1)._tc)) == 1
+    assert len(_perm_starts(saved.tables[0].cell(6, 5)._tc)) == 1
+    # 锁定区保持锁定：标题行、题头行、序号表头无任何例外标记
+    assert not _perm_starts(saved.tables[0].rows[0]._tr)
+    assert not _perm_starts(saved.tables[0].rows[3]._tr)
 
     notification_path = tmp_path / "notification.docx"
     _notification_template(notification_path)
