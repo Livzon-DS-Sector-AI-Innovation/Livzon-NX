@@ -792,11 +792,11 @@ class TrainingLedger(BaseModel):
     employee_number: Mapped[str | None] = mapped_column(
         String(32), nullable=True, comment="工号（培训级台账记录可为空）"
     )
-    training_date: Mapped[date] = mapped_column(
-        Date, nullable=False, comment="培训日期"
+    training_date: Mapped[date | None] = mapped_column(
+        Date, nullable=True, comment="培训日期"
     )
-    training_subject: Mapped[str] = mapped_column(
-        String(256), nullable=False, comment="培训课程/主题"
+    training_subject: Mapped[str | None] = mapped_column(
+        String(256), nullable=True, comment="培训课程/主题"
     )
     training_method: Mapped[str | None] = mapped_column(
         String(32), nullable=True, comment="培训方式"
@@ -829,7 +829,7 @@ class TrainingLedger(BaseModel):
         String(64), nullable=True, comment="培训时间（日期+时间）"
     )
     training_content: Mapped[str | None] = mapped_column(
-        String(512), nullable=True, comment="培训内容（含文件编号）"
+        String(4096), nullable=True, comment="培训内容（含文件编号）"
     )
     teaching_dept: Mapped[str | None] = mapped_column(
         String(128), nullable=True, comment="授课部门"
@@ -1616,7 +1616,7 @@ class TrainingEvaluation(BaseModel):
     __table_args__ = {"schema": "hr"}
 
     training_content: Mapped[str | None] = mapped_column(
-        String(512), nullable=True, comment="培训内容"
+        String(4096), nullable=True, comment="培训内容"
     )
     training_date: Mapped[date | None] = mapped_column(
         Date, nullable=True, comment="培训日期"
@@ -1890,7 +1890,7 @@ class PlanTrackingRecord(BaseModel):
         Integer, nullable=True, comment="排序"
     )
     training_content: Mapped[str | None] = mapped_column(
-        String(512), nullable=True, comment="培训内容"
+        String(4096), nullable=True, comment="培训内容"
     )
     actual_time: Mapped[str | None] = mapped_column(
         String(64), nullable=True, comment="实际培训时间"
@@ -1935,7 +1935,7 @@ class EsgTrainingRecord(BaseModel):
         Date, nullable=False, comment="培训日期"
     )
     training_name: Mapped[str] = mapped_column(
-        String(512), nullable=False, comment="培训名称"
+        String(4096), nullable=False, comment="培训名称"
     )
     training_method: Mapped[str | None] = mapped_column(
         String(32), nullable=True, comment="培训方式"

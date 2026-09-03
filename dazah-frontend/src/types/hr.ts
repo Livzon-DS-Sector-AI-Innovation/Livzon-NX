@@ -485,8 +485,8 @@ export interface TrainingSessionData {
   issue_date?: string
   /** 评估表选择的考核方式（笔试/口试/实操/写总结），驱动口试/实操表联动 */
   assessment_method?: string
-  /** 勾选附件培训内容条目（《名称》（编号）），口试 AI 出题的结构化文件来源 */
-  checked_content?: { name: string; code: string | null }[]
+  /** 勾选附件培训内容条目（《名称》（编号）），口试 AI 出题的结构化文件来源；entry_id 为勾选时锁定的文件管理条目 */
+  checked_content?: { name: string; code: string | null; entry_id?: string | null }[]
 }
 
 /** 培训人员配置-人员项（UI 展示类型） */

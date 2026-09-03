@@ -24,6 +24,9 @@ from app.modules.quality.service import (
 from app.modules.quality.service import (
     tracking_records as tracking_service,
 )
+from app.modules.quality.service import (
+    validation_classification as validation_classification_service,
+)
 from app.platform.audit.service import record_audit_log
 from app.platform.integrations.feishu.bitable import BitableClient
 
@@ -1051,8 +1054,18 @@ VALIDATION_TYPE_CODE_TO_FEISHU: dict[str, str] = {
 }
 
 
-def _entity_code_for_validation_type(validation_type: str) -> str:
-    return VALIDATION_TYPE_ENTITY_MAP.get(validation_type, "validation_master_plan")
+def _entity_code_for_validation_type(
+    validation_type: str | None,
+    year: int | None = None,
+) -> str:
+    base = (
+        VALIDATION_TYPE_ENTITY_MAP.get(validation_type, "validation_master_plan")
+        if validation_type
+        else "validation_master_plan"
+    )
+    if year:
+        return f"{base}_{year}"
+    return base
 
 
 async def _get_department_contacts_cache(db: AsyncSession) -> list[dict[str, Any]]:
@@ -1159,13 +1172,25 @@ def _map_validation_base_item(
     elif isinstance(product_codes_raw, str) and product_codes_raw.strip():
         product_codes = [product_codes_raw.strip()]
 
-    feishu_val_type = _parse_feishu_text_field(fields.get("验证类别")) or ""
-    validation_type = _translate_validation_type_f2c(feishu_val_type)
+    feishu_val_type_raw = fields.get("验证类别")
+    parsed_val_type = _parse_feishu_text_field(feishu_val_type_raw) or ""
+    if parsed_val_type:
+        validation_type = _translate_validation_type_f2c(parsed_val_type)
+        validation_type_source = "feishu"
+    else:
+        # 真实年度台账没有"验证类别"列（或值为空）→ 标记待 AI 按名称分类
+        validation_type = "other_validation"
+        validation_type_source = "inferred"
 
     drafted_date = parse_date(fields.get("起草时间"))
     approved_date = parse_date(fields.get("批准时间"))
-    drafted_date_1 = parse_date(fields.get("报告起草时间"))
-    approved_date_1 = parse_date(fields.get("报告批准时间"))
+    # 验证总表用 报告起草时间/报告批准时间，真实年度台账用 起草时间1/批准时间1
+    drafted_date_1 = parse_date(fields.get("报告起草时间")) or parse_date(
+        fields.get("起草时间1")
+    )
+    approved_date_1 = parse_date(fields.get("报告批准时间")) or parse_date(
+        fields.get("批准时间1")
+    )
     # 验证到期时间是文本字段（如 "2026.02"），不是日期
     planned_end_text = _parse_feishu_text_field(fields.get("验证到期时间"))
 
@@ -1212,6 +1237,7 @@ def _map_validation_base_item(
         "record_id": str(record.get("record_id") or ""),
         "table_id": None,
         "validation_type": validation_type,
+        "validation_type_source": validation_type_source,
         "record_code": "",  # 飞书表中无此字段
         "title": _parse_feishu_text_field(fields.get("确认名称")) or "",
         "status": normalize_text(fields.get("任务状态")),
@@ -1350,6 +1376,72 @@ async def _build_validation_feishu_fields(
     return fields
 
 
+async def _apply_ai_validation_categories(
+    db: AsyncSession,
+    items: list[dict[str, Any]],
+) -> None:
+    """对缺少"验证类别"列的记录按确认名称做 AI 分类（带 DB 缓存）。"""
+    inferred_titles = sorted(
+        {
+            str(item.get("title") or "").strip()
+            for item in items
+            if item.get("validation_type_source") == "inferred"
+            and str(item.get("title") or "").strip()
+        }
+    )
+    if not inferred_titles:
+        return
+    try:
+        resolve = validation_classification_service.resolve_validation_categories
+        categories = await resolve(db, inferred_titles)
+    except Exception:
+        logger.exception("验证名称 AI 分类失败，保持其他验证归类")
+        categories = {}
+    for item in items:
+        if item.get("validation_type_source") != "inferred":
+            continue
+        category = categories.get(str(item.get("title") or "").strip())
+        if category in validation_classification_service.VALIDATION_CATEGORY_CODES:
+            item["validation_type"] = category
+        item.pop("validation_type_source", None)
+
+
+async def _search_validation_records_safe(
+    db: AsyncSession,
+    entity_code: str,
+) -> list[dict[str, Any]]:
+    """搜索验证记录；全字段搜索被高级权限受限字段拒绝时按白名单字段重试。
+
+    真实年度台账可能含"无权限访问字段"等应用不可读的特殊列，飞书对
+    含受限字段的全字段搜索会整体拒绝，此时排除受限字段后重试。
+    """
+    try:
+        return await _search_entity_records(db, entity_code)
+    except Exception:
+        pass
+    try:
+        _, entity = await _resolve_runtime_entity(db, entity_code, direction="pull")
+        runtime = await feishu_sync_service.feishu_sync._resolve_runtime(db)
+        from app.platform.integrations.feishu.bitable import BitableClient
+
+        client = BitableClient(
+            app_token=entity.app_token,
+            app_id=runtime.app_id,
+            app_secret=runtime.app_secret,
+        )
+        safe_names = [
+            str(item.get("field_name") or "")
+            for item in await client.list_fields(entity.table_id)
+            if item.get("field_name")
+            and not str(item.get("field_name")).startswith("无权限")
+        ]
+        if not safe_names:
+            return []
+        return await _search_entity_records(db, entity_code, field_names=safe_names)
+    except Exception:
+        return []
+
+
 async def list_validation_records_from_feishu(
     db: AsyncSession,
     *,
@@ -1362,27 +1454,22 @@ async def list_validation_records_from_feishu(
     planned_end_date_to: str | None = None,
     drafted_at_from: str | None = None,
     drafted_at_to: str | None = None,
+    year: int | None = None,
     page: int = 1,
     page_size: int = 20,
 ) -> dict[str, Any]:
-    """从飞书拉取验证记录列表。"""
-    entity_code = (
-        _entity_code_for_validation_type(validation_type)
-        if validation_type
-        else "validation_master_plan"
-    )
+    """从飞书拉取验证记录列表。year 指定时严格读取对应年度表（未配置则为空）。"""
+    entity_code = _entity_code_for_validation_type(validation_type, year)
 
     try:
         _, entity = await _resolve_runtime_entity(db, entity_code, direction="pull")
     except AppException:
         return _build_page_result([], 0, page, page_size)
 
-    try:
-        records = await _search_entity_records(db, entity_code)
-    except Exception:
-        return _build_page_result([], 0, page, page_size)
+    records = await _search_validation_records_safe(db, entity_code)
 
     items = [_map_validation_base_item(record) for record in records]
+    await _apply_ai_validation_categories(db, items)
 
     # Filter by validation_type if specified (for child pages)
     if validation_type:
@@ -1464,41 +1551,99 @@ async def get_validation_record_from_feishu(
     db: AsyncSession,
     record_id: str,
     validation_type: str | None = None,
+    year: int | None = None,
 ) -> dict[str, Any]:
     """从飞书获取单条验证记录详情。"""
-    entity_code = (
-        _entity_code_for_validation_type(validation_type)
-        if validation_type
-        else "validation_master_plan"
-    )
+    entity_code = _entity_code_for_validation_type(validation_type, year)
 
     try:
         _, entity = await _resolve_runtime_entity(db, entity_code, direction="pull")
     except AppException:
+        if year:
+            raise AppException(
+                message=(
+                    f"{year} 年度验证飞书表未配置，"
+                    "请先在质量管理-飞书同步设置中绑定"
+                )
+            )
         raise AppException(message="验证与确认飞书 Base 未启用")
 
-    records = await _search_entity_records(db, entity_code)
+    records = await _search_validation_records_safe(db, entity_code)
     for record in records:
         if str(record.get("record_id") or "") == record_id:
-            return _map_validation_base_item(record)
+            item = _map_validation_base_item(record)
+            await _apply_ai_validation_categories(db, [item])
+            return item
     raise NotFoundException(resource="飞书验证记录")
+
+
+# 报告日期字段别名：验证总表 vs 真实年度台账字段名不同
+_VALIDATION_FIELD_ALIASES: dict[str, str] = {
+    "报告起草时间": "起草时间1",
+    "报告批准时间": "批准时间1",
+}
+
+
+async def _adapt_validation_fields_to_remote(
+    db: AsyncSession,
+    entity_code: str,
+    fields: dict[str, Any],
+) -> dict[str, Any]:
+    """按远端表结构适配写入字段。
+
+    - 报告日期字段别名：验证总表与真实年度台账列名不同（起草时间1/批准时间1）
+    - 远端不存在的字段直接丢弃（如年度台账没有"验证类别"列），避免整次写入被飞书拒绝
+    - 单选字段收到列表值时取第一项
+    """
+    try:
+        _, entity = await _resolve_runtime_entity(db, entity_code, direction="push")
+        runtime = await feishu_sync_service.feishu_sync._resolve_runtime(db)
+        from app.platform.integrations.feishu.bitable import BitableClient
+
+        client = BitableClient(
+            app_token=entity.app_token,
+            app_id=runtime.app_id,
+            app_secret=runtime.app_secret,
+        )
+        remote_map: dict[str, dict[str, Any]] = {
+            str(item.get("field_name") or ""): item
+            for item in await client.list_fields(entity.table_id)
+            if item.get("field_name")
+        }
+    except Exception:
+        return fields
+    adapted = dict(fields)
+    for src, dst in _VALIDATION_FIELD_ALIASES.items():
+        if src in adapted and src not in remote_map and dst in remote_map:
+            adapted[dst] = adapted.pop(src)
+    for name in list(adapted):
+        meta = remote_map.get(name)
+        if meta is None:
+            adapted.pop(name)
+            continue
+        f_type = meta.get("type")
+        ui_type = str(meta.get("ui_type") or "")
+        is_single_select = f_type == 3 or ui_type == "SingleSelect"
+        if is_single_select and isinstance(adapted[name], list):
+            adapted[name] = adapted[name][0] if adapted[name] else None
+            if adapted[name] is None:
+                adapted.pop(name)
+    return adapted
 
 
 async def create_validation_record_in_feishu(
     db: AsyncSession,
     payload: dict[str, Any],
+    year: int | None = None,
 ) -> dict[str, Any]:
-    """在飞书中创建验证记录。"""
+    """在飞书中创建验证记录。year 指定时写入对应年度表。"""
     title = str(payload.get("title") or "").strip()
     if not title:
         raise AppException(message="确认名称不能为空")
     validation_type = str(payload.get("validation_type") or "").strip()
-    entity_code = (
-        _entity_code_for_validation_type(validation_type)
-        if validation_type
-        else "validation_master_plan"
-    )
+    entity_code = _entity_code_for_validation_type(validation_type, year)
     fields = await _build_validation_feishu_fields(db, payload)
+    fields = await _adapt_validation_fields_to_remote(db, entity_code, fields)
     created = await _create_entity_record(
         db,
         entity_code,
@@ -1506,7 +1651,7 @@ async def create_validation_record_in_feishu(
         search_conditions=[("确认名称", title)],
     )
     return await get_validation_record_from_feishu(
-        db, created["record_id"], validation_type
+        db, created["record_id"], validation_type, year
     )
 
 
@@ -1515,21 +1660,21 @@ async def update_validation_record_in_feishu(
     record_id: str,
     payload: dict[str, Any],
     validation_type: str | None = None,
+    year: int | None = None,
 ) -> dict[str, Any]:
     """更新飞书中的验证记录。"""
-    entity_code = (
-        _entity_code_for_validation_type(validation_type)
-        if validation_type
-        else "validation_master_plan"
-    )
+    entity_code = _entity_code_for_validation_type(validation_type, year)
 
-    current = await get_validation_record_from_feishu(db, record_id, validation_type)
+    current = await get_validation_record_from_feishu(
+        db, record_id, validation_type, year
+    )
     merged = {**current, **payload}
     title = str(merged.get("title") or "").strip()
     if not title:
         raise AppException(message="飞书验证记录缺少确认名称")
 
     fields = await _build_validation_feishu_fields(db, merged)
+    fields = await _adapt_validation_fields_to_remote(db, entity_code, fields)
     await _update_entity_record(
         db,
         entity_code,
@@ -1537,7 +1682,9 @@ async def update_validation_record_in_feishu(
         fields,
         search_conditions=[("确认名称", title)],
     )
-    return await get_validation_record_from_feishu(db, record_id, validation_type)
+    return await get_validation_record_from_feishu(
+        db, record_id, validation_type, year
+    )
 
 
 async def delete_validation_record_in_feishu(
@@ -1545,13 +1692,10 @@ async def delete_validation_record_in_feishu(
     record_id: str,
     validation_type: str | None = None,
     actor_user_id: uuid.UUID | None = None,
+    year: int | None = None,
 ) -> None:
     """删除飞书中的验证记录。"""
-    entity_code = (
-        _entity_code_for_validation_type(validation_type)
-        if validation_type
-        else "validation_master_plan"
-    )
+    entity_code = _entity_code_for_validation_type(validation_type, year)
 
     await _delete_entity_record(db, entity_code, record_id, actor_user_id)
 
@@ -1559,13 +1703,10 @@ async def delete_validation_record_in_feishu(
 async def pull_validation_records_from_feishu(
     db: AsyncSession,
     validation_type: str | None = None,
+    year: int | None = None,
 ) -> dict[str, int]:
     """从飞书拉取验证记录并返回拉取结果。"""
-    entity_code = (
-        _entity_code_for_validation_type(validation_type)
-        if validation_type
-        else "validation_master_plan"
-    )
+    entity_code = _entity_code_for_validation_type(validation_type, year)
 
     try:
         _, _entity = await _resolve_runtime_entity(db, entity_code, direction="pull")
@@ -1579,6 +1720,7 @@ async def pull_validation_records_from_feishu(
         result = await list_validation_records_from_feishu(
             db,
             validation_type=validation_type,
+            year=year,
             page=1,
             page_size=10000,
         )

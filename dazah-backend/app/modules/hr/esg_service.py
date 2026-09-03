@@ -87,33 +87,22 @@ class EsgTrainingRecordService:
         """
         from datetime import date as date_type
 
-        from sqlalchemy import and_, or_, select
+        from sqlalchemy import select
 
-        from app.modules.hr.models import Employee, TrainingLedger
+        from app.modules.hr.models import Employee
 
-        # 1. 查询选中部门归属的未删除培训台账（口径同台账页面列表；
-        #    201二车间 家族 MC/DR 不互见；有拆分副本时隐藏裸名总副本）
+        # 1. 查询选中部门归属的未删除培训台账（口径与台账页面列表完全一致：
+        #    ledger_department 命中；空值回退 teaching_dept（201 家族裸名除外）；
+        #    201 家族裸名「201二车间」按 trainees 在飞书联系人中的部门归属 MC/DR；
+        #    有拆分副本时隐藏裸名总副本）
         from app.modules.hr.repository import TrainingLedgerRepository
         from app.modules.hr.training_dept_resolver import (
-            ledger_dept_read_family,
             resolve_training_department,
         )
 
-        dept_values = await ledger_dept_read_family(self.session, department)
-        stmt = select(TrainingLedger).where(
-            or_(
-                TrainingLedger.ledger_department.in_(dept_values),
-                and_(
-                    TrainingLedger.ledger_department.is_(None),
-                    TrainingLedger.teaching_dept.in_(dept_values),
-                ),
-            ),
-            TrainingLedger.is_deleted.is_(False),
+        ledgers, _ = await TrainingLedgerRepository(self.session).list_by_department(
+            department=department, page=1, page_size=100000
         )
-        if department in ("201二车间（MC）", "201二车间（DR）"):
-            stmt = stmt.where(TrainingLedgerRepository.bare201_hidden_when_split())
-        ledgers_result = await self.session.execute(stmt)
-        ledgers = ledgers_result.scalars().all()
 
         # 选中部门归一（培训规范名幂等），供重名时区分比较
         norm_dept = await resolve_training_department(self.session, department)

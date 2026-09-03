@@ -57,3 +57,19 @@ class HistoricalDeviationAiExtractResult(BaseModel):
     deviation_content: str | None = None
     direct_cause: str | None = None
     root_cause: str | None = None
+
+
+class HistoricalDeviationBatchImportResultItem(BaseModel):
+    file_name: str
+    code: str = ""
+    status: str
+    message: str = ""
+
+
+class HistoricalDeviationBatchImportResult(BaseModel):
+    total: int
+    succeeded: int
+    failed: int
+    results: list[HistoricalDeviationBatchImportResultItem] = Field(
+        default_factory=list
+    )

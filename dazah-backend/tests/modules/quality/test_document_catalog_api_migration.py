@@ -215,6 +215,71 @@ async def test_document_lookup_and_content_resolution_choose_latest_revision(
 
 
 @pytest.mark.anyio
+async def test_resolve_content_prefers_pinned_entry_id_without_name_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """培训勾选锁定的 entry_id 必须严格按 ID 读取：命中其他同名条目也不许名称兜底。"""
+    from pydantic import ValidationError
+
+    from app.modules.quality.schemas.document_catalog import (
+        DocumentEntryResolveQuery,
+    )
+
+    user = _user()
+    monkeypatch.setattr(api, "_require_user", Mock())
+    picked = _entry(uuid4(), code="SMP-005/06")
+    picked.name = "多拉菌素提炼工艺规程"
+    monkeypatch.setattr(
+        api.crud, "find_latest_entry_by_name", AsyncMock()
+    )
+    monkeypatch.setattr(
+        api,
+        "read_entry_md_contents",
+        Mock(return_value=[{"file_name": "工艺规程.md", "md_text": "# 005/06 正文"}]),
+    )
+
+    resolved = await api.resolve_document_entry_content(
+        DocumentEntryResolveRequest(
+            entries=[
+                DocumentEntryResolveQuery(
+                    name="多拉菌素提炼工艺规程", entry_id=picked.id
+                )
+            ]
+        ),
+        _Db(_Result(picked)),
+        user,
+    )
+    body = _response_body(resolved)
+    first = body["data"]["results"][0]
+    assert first["matched"] is True
+    assert first["code"] == "SMP-005/06"
+    assert str(first["entry_id"]) == str(picked.id)
+    assert first["attachments"][0]["md_text"] == "# 005/06 正文"
+    api.crud.find_latest_entry_by_name.assert_not_called()
+
+    # entry_id 未命中（条目已删除）：视为未匹配，不得回退名称模糊匹配
+    miss = await api.resolve_document_entry_content(
+        DocumentEntryResolveRequest(
+            entries=[
+                DocumentEntryResolveQuery(
+                    name="多拉菌素提炼工艺规程", entry_id=uuid4()
+                )
+            ]
+        ),
+        _Db(_Result(None)),
+        user,
+    )
+    miss_body = _response_body(miss)
+    assert miss_body["data"]["results"][0]["matched"] is False
+    assert miss_body["data"]["results"][0]["entry_id"] is None
+    api.crud.find_latest_entry_by_name.assert_not_called()
+
+    # entries 与 names 均为空：请求校验拒绝
+    with pytest.raises(ValidationError):
+        DocumentEntryResolveRequest()
+
+
+@pytest.mark.anyio
 async def test_document_entry_crud_list_and_export_paths(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

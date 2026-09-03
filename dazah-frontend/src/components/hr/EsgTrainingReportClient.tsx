@@ -353,7 +353,7 @@ export default function EsgTrainingReportClient({ department, dateFrom, dateTo, 
   const columns = [
     { title: '培训日期', dataIndex: 'training_date', width: 110, render: (v: string) => v ? dayjs(v).format(HR_DISPLAY_DATE_FORMAT) : '-' },
     {
-      title: '培训名称', dataIndex: 'training_name', width: 220, ellipsis: true,
+      title: '培训名称', dataIndex: 'training_name', width: 300,
       ...textFilter('training_name', '搜索培训名称'),
     },
     {

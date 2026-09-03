@@ -8,6 +8,8 @@ import type { DocumentDepartmentItem, DocumentEntryItem } from '@/types/quality'
 export interface DocumentCatalogPick {
   name: string
   code: string | null
+  /** 文件管理条目 ID：培训勾选时锁定，后续 AI 出题按此 ID 精确读取内容 */
+  entryId: string
 }
 
 interface Props {
@@ -140,7 +142,7 @@ export default function DocumentCatalogPickerModal({ open, onClose, onConfirm, e
             setSelected((prev) => {
               const next = new Map(prev)
               items.forEach((i) => next.delete(i.id))
-              rows.forEach((r) => next.set(r.id, { name: r.name, code: r.code }))
+              rows.forEach((r) => next.set(r.id, { name: r.name, code: r.code, entryId: r.id }))
               return next
             })
           },

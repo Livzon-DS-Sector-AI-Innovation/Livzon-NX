@@ -776,6 +776,8 @@ export interface ValidationListQuery {
   planned_end_date_to?: string;
   drafted_at_from?: string;
   drafted_at_to?: string;
+  /** 年度表；留空读验证总表 */
+  year?: number;
 }
 
 export type ValidationListItem = CreateValidationRequest & {
@@ -884,6 +886,47 @@ export interface FeishuValidationItem {
 export interface FeishuValidationPullResult {
   synced: number;
   failed: number;
+}
+
+/** QC验证（按年分表）字段元数据 */
+export interface QcValidationFieldMeta {
+  field_name: string;
+  ui_type: string;
+  editable: boolean;
+  /** 单选/多选字段的可选项（飞书字段 property.options） */
+  options?: Array<{ name: string }> | null;
+}
+
+/** QC验证字段元数据结果 */
+export interface QcValidationFieldsResult {
+  fields: QcValidationFieldMeta[];
+  can_push: boolean;
+}
+
+/** QC验证记录（字段名 = 飞书表真实字段名，值已归一化） */
+export interface QcValidationRecord {
+  record_id: string;
+  created_at?: string | null;
+  updated_at?: string | null;
+  [field: string]: unknown;
+}
+
+/** QC验证记录列表结果（含年度表是否已配置标记） */
+export interface QcValidationRecordsResult {
+  items: QcValidationRecord[];
+  total: number;
+  page: number;
+  page_size: number;
+  table_configured: boolean;
+}
+
+/** QC验证年度表配置状态 */
+export interface QcValidationYearStatus {
+  year: number;
+  entity_code: string;
+  table_configured: boolean;
+  /** 对应年度多维表格链接（未配置时为 null） */
+  feishu_url?: string | null;
 }
 
 export interface QualityAiApplicableField {
@@ -1673,3 +1716,4 @@ export type DeviationWorkbenchStatus = 'processing' | 'completed' | 'failed';
 export type DeviationWorkbenchReportListItem = components['schemas']['DeviationWorkbenchReportListItem'];
 export type DeviationWorkbenchReportDetail = components['schemas']['DeviationWorkbenchReportDetail'];
 export type CreateDeviationWorkbenchPayload = components['schemas']['CreateDeviationWorkbenchRequest'];
+export type HistoricalDeviationBatchImportResult = components['schemas']['HistoricalDeviationBatchImportResult'];

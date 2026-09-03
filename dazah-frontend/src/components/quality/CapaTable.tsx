@@ -3,7 +3,7 @@
 import { TableEmptyState } from './TableEmptyState'
 import { qualityTokens } from './themeTokens'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { App, Table, Space, Button, Input, Select, Tooltip, DatePicker } from 'antd'
 import { EditOutlined, DeleteOutlined, SearchOutlined, ImportOutlined, ExportOutlined, FilterOutlined, ReloadOutlined } from '@ant-design/icons'
 import { useQueryClient } from '@tanstack/react-query'
@@ -11,8 +11,8 @@ import { CapaListItem, CapaWorkflowStatus, CapaSource } from '@/types/quality'
 import { useCapaStore } from '@/stores/quality'
 import { deleteCapa, batchDeleteFeishuCapas } from '@/actions/quality-capa'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { CapaImportDrawer } from './CapaImportDrawer'
-import { buildResizableColumns, ResizableHeaderCell } from './ResizableTableHeader'
 import dayjs, { Dayjs } from 'dayjs'
 
 const statusConfig: Record<CapaWorkflowStatus, { color: string; bgColor: string; label: string }> = {
@@ -61,32 +61,24 @@ const evaluationResultOptions = [
   { label: '无效', value: '无效' },
 ]
 
-interface CapaTableProps {
-  capas: CapaListItem[]
-  total: number
-  loading?: boolean
-}
-
-const COLUMN_WIDTH_STORAGE_KEY = 'quality-capa-table-column-widths-v2'
-
-const defaultColumnWidths: Record<string, number> = {
-  capa_code: 150,
-  created_at: 140,
+// 固定列宽（不支持拖拽调整）；选择列约 32px
+const COLUMN_WIDTHS = {
+  capa_code: 130,
+  created_at: 110,
   department: 110,
   affected_product: 150,
   source_code: 140,
   title: 420,
+  plan_count: 80,
   action: 120,
-}
+} as const
 
-const minColumnWidths: Record<string, number> = {
-  capa_code: 120,
-  created_at: 130,
-  department: 90,
-  affected_product: 120,
-  source_code: 120,
-  title: 260,
-  action: 100,
+const TABLE_SCROLL_X = 32 + Object.values(COLUMN_WIDTHS).reduce((sum, width) => sum + width, 0)
+
+interface CapaTableProps {
+  capas: CapaListItem[]
+  total: number
+  loading?: boolean
 }
 
 function formatDate(v: string | null | undefined): string {
@@ -99,10 +91,10 @@ function formatDate(v: string | null | undefined): string {
 export function CapaTable({ capas, total, loading = false }: CapaTableProps) {
   const { message, modal } = App.useApp()
   const queryClient = useQueryClient()
+  const router = useRouter()
   const [importOpen, setImportOpen] = useState(false)
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([])
-  const [columnWidths, setColumnWidths] = useState<Record<string, number>>(defaultColumnWidths)
   const {
     page,
     pageSize,
@@ -133,6 +125,12 @@ export function CapaTable({ capas, total, loading = false }: CapaTableProps) {
     setQaConfirmerFilter,
     resetFilters,
   } = useCapaStore()
+
+  const goToPlan = useCallback((record: CapaListItem) => {
+    const params = new URLSearchParams()
+    if (record.capa_code) params.set('capa_code', record.capa_code)
+    router.push(`/quality/capas/plans?${params.toString()}`)
+  }, [router])
 
   const handleDelete = useCallback((record: CapaListItem) => {
     modal.confirm({
@@ -221,56 +219,6 @@ export function CapaTable({ capas, total, loading = false }: CapaTableProps) {
     })
   }, [message, modal, queryClient, selectedRowKeys])
 
-  useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem(COLUMN_WIDTH_STORAGE_KEY)
-      if (!raw) return
-      const saved = JSON.parse(raw) as Record<string, number>
-      const normalized = Object.fromEntries(
-        Object.entries({ ...defaultColumnWidths, ...saved }).map(([key, width]) => [
-          key,
-          Math.max(minColumnWidths[key] ?? 80, Number(width) || defaultColumnWidths[key] || 120),
-        ]),
-      )
-      setColumnWidths(normalized)
-    } catch {
-      setColumnWidths(defaultColumnWidths)
-    }
-  }, [])
-
-  useEffect(() => {
-    window.localStorage.setItem(COLUMN_WIDTH_STORAGE_KEY, JSON.stringify(columnWidths))
-  }, [columnWidths])
-
-  const handleResizeStart = useCallback((columnKey: string, event: React.MouseEvent<HTMLDivElement>) => {
-    event.preventDefault()
-    event.stopPropagation()
-    const startX = event.clientX
-    const startWidth = columnWidths[columnKey] ?? defaultColumnWidths[columnKey] ?? 120
-
-    const handleMouseMove = (moveEvent: MouseEvent) => {
-      const delta = moveEvent.clientX - startX
-      const nextWidth = Math.max(minColumnWidths[columnKey] ?? 80, startWidth + delta)
-      setColumnWidths((prev) => ({
-        ...prev,
-        [columnKey]: nextWidth,
-      }))
-    }
-
-    const handleMouseUp = () => {
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
-    }
-    document.addEventListener('mousemove', handleMouseMove)
-    document.addEventListener('mouseup', handleMouseUp)
-  }, [columnWidths])
-
-  const resetColumnWidths = useCallback(() => {
-    setColumnWidths(defaultColumnWidths)
-    window.localStorage.removeItem(COLUMN_WIDTH_STORAGE_KEY)
-    message.success('已恢复默认列宽')
-  }, [message])
-
   const resetAllFilters = useCallback(() => {
     resetFilters()
     message.success('已清空筛选条件')
@@ -281,51 +229,78 @@ export function CapaTable({ capas, total, loading = false }: CapaTableProps) {
     return [dayjs(closureDateFrom), dayjs(closureDateTo)]
   }, [closureDateFrom, closureDateTo])
 
-  const baseColumns = useMemo(() => [
+  const columns = useMemo(() => [
     {
       title: 'CAPA编号',
       dataIndex: 'capa_code',
       key: 'capa_code',
-      width: defaultColumnWidths.capa_code,
+      width: COLUMN_WIDTHS.capa_code,
       fixed: 'start' as const,
     },
     {
       title: '启动日期',
       dataIndex: 'created_at',
       key: 'created_at',
-      width: defaultColumnWidths.created_at,
+      width: COLUMN_WIDTHS.created_at,
       render: (v: string) => formatDate(v),
     },
     {
       title: '事件部门',
       dataIndex: 'department',
       key: 'department',
-      width: defaultColumnWidths.department,
+      width: COLUMN_WIDTHS.department,
       render: (v: string | null) => v || '-',
     },
     {
       title: '涉及产品',
       dataIndex: 'affected_product',
       key: 'affected_product',
-      width: defaultColumnWidths.affected_product,
+      width: COLUMN_WIDTHS.affected_product,
       render: (v: string | null) => v || '-',
     },
     {
       title: '来源编号',
       dataIndex: 'source_code',
       key: 'source_code',
-      width: defaultColumnWidths.source_code,
+      width: COLUMN_WIDTHS.source_code,
       render: (v: string | null) => v || '-',
+    },
+    {
+      title: '计划数',
+      key: 'plan_count',
+      width: COLUMN_WIDTHS.plan_count,
+      render: (_: unknown, record: CapaListItem) => {
+        const count = record.linked_plan_tracks?.length ?? 0
+        return (
+          <Button type="link" style={{ padding: 0 }} onClick={() => goToPlan(record)}>
+            {count}
+          </Button>
+        )
+      },
     },
     {
       title: 'CAPA简述',
       dataIndex: 'title',
       key: 'title',
-      width: defaultColumnWidths.title,
+      width: COLUMN_WIDTHS.title,
       render: (text: string | null, record: CapaListItem) => (
-        <Tooltip title={text} placement="topLeft">
+        <Tooltip
+          title={text ? <div style={{ whiteSpace: 'pre-line', maxWidth: 360 }}>{text}</div> : text}
+          placement="topLeft"
+        >
           <Link href={`/quality/capas/${record.id}`} className="text-blue-600 hover:text-blue-800">
-            <div style={{ whiteSpace: 'normal', wordBreak: 'break-all', lineHeight: 1.5 }}>
+            <div
+              style={{
+                whiteSpace: 'pre-line',
+                wordBreak: 'break-all',
+                lineHeight: 1.5,
+                display: '-webkit-box',
+                WebkitLineClamp: 5,
+                WebkitBoxOrient: 'vertical',
+                overflow: 'hidden',
+                maxHeight: 110,
+              }}
+            >
               {text || '-'}
             </div>
           </Link>
@@ -335,7 +310,7 @@ export function CapaTable({ capas, total, loading = false }: CapaTableProps) {
     {
       title: '操作',
       key: 'action',
-      width: defaultColumnWidths.action,
+      width: COLUMN_WIDTHS.action,
       fixed: 'end' as const,
       render: (_: unknown, record: CapaListItem) => (
         <Space>
@@ -350,17 +325,7 @@ export function CapaTable({ capas, total, loading = false }: CapaTableProps) {
         </Space>
       ),
     },
-  ], [handleDelete])
-
-  const columns = useMemo(
-    () =>
-      buildResizableColumns(baseColumns, {
-        widths: columnWidths,
-        minWidths: minColumnWidths,
-        onResizeStart: handleResizeStart,
-      }),
-    [baseColumns, columnWidths, handleResizeStart],
-  )
+  ], [handleDelete, goToPlan])
 
   return (
     <div>
@@ -407,9 +372,6 @@ export function CapaTable({ capas, total, loading = false }: CapaTableProps) {
         </Button>
         <Button danger disabled={selectedRowKeys.length === 0} onClick={handleBatchDelete}>
           批量删除
-        </Button>
-        <Button onClick={resetColumnWidths}>
-          恢复默认列宽
         </Button>
         <Button icon={<ExportOutlined />} onClick={handleExport}>
           导出
@@ -486,18 +448,13 @@ export function CapaTable({ capas, total, loading = false }: CapaTableProps) {
           emptyText: <TableEmptyState hasFilters={Boolean(keyword || statusFilter || categoryFilter)} />,
         }}
         rowKey="id"
-        components={{
-          header: {
-            cell: ResizableHeaderCell,
-          },
-        }}
         rowSelection={{
           selectedRowKeys,
           onChange: (keys) => setSelectedRowKeys(keys as string[]),
         }}
         size="small"
         loading={loading}
-        scroll={{ x: 'max-content' }}
+        scroll={{ x: TABLE_SCROLL_X }}
         pagination={{
           current: page,
           pageSize: pageSize,

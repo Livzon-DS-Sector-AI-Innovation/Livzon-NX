@@ -406,7 +406,7 @@ export interface TrainingSessionVM {
   actual_count?: number | null
   employee_names?: string[] | null
   employee_dept_map?: Record<string, string> | null
-  checked_content?: { name: string; code: string | null }[] | null
+  checked_content?: { name: string; code: string | null; entry_id?: string | null }[] | null
 }
 
 export interface TrainingDocumentVM {

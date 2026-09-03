@@ -14,6 +14,7 @@ vi.mock('./quality-shared', () => ({
 import {
   aiExtractHistoricalDeviation,
   analyzeDeviationWorkbench,
+  batchImportHistoricalDeviations,
   createHistoricalDeviation,
   deleteDeviationWorkbenchAttachment,
   deleteDeviationWorkbenchReport,
@@ -122,6 +123,27 @@ describe('quality deviation workbench server actions', () => {
       2,
       'http://backend.test/api/v1/quality/deviation-workbench/attachments?keys=sk%2F1&keys=md%202',
       expect.objectContaining({ method: 'DELETE' }),
+    )
+  })
+
+  it('batch imports historical deviation attachments via multipart', async () => {
+    mocks.actionFetch.mockResolvedValue({
+      total: 2,
+      succeeded: 1,
+      failed: 1,
+      results: [{ file_name: 'a.docx', status: 'succeeded' }],
+    })
+    const formData = new FormData()
+    formData.append('files', new File(['x'], 'a.docx'))
+
+    const result = await batchImportHistoricalDeviations(formData)
+    expect(result?.total).toBe(2)
+    expect(mocks.actionFetch).toHaveBeenCalledWith(
+      'http://backend.test/api/v1/quality/historical-deviations/batch-import',
+      expect.objectContaining({ method: 'POST', body: formData }),
+    )
+    expect(mocks.revalidatePath).toHaveBeenCalledWith(
+      '/quality/deviations/history',
     )
   })
 })

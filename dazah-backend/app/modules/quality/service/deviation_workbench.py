@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import io
 import logging
+import re
 import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -93,13 +94,15 @@ _5M1E_DIMS = ["人", "机", "料", "法", "环", "测"]
 
 DEFAULT_REPORT_SYSTEM_PROMPT = """\
 你是原料药工厂质量管理调查专家。请基于提供的偏差信息（来源报告记录 / 用户输入 /
-附件内容）以及检索到的参考内容（历史偏差、文件管理制度），结合你掌握的通用行业
-知识，从"人、机、料、法、环、测"（5M1E）六个维度展开调查分析，得出偏差的直接
-原因与根本原因，并生成完整调查报告。
+附件内容）以及检索到的参考内容（历史偏差、文件管理制度、人员培训记录），结合你
+掌握的通用行业知识，从"人、机、料、法、环、测"（5M1E）六个维度展开调查分析，
+得出偏差的直接原因与根本原因，并生成完整调查报告。
 
 约束：
 - 只能基于提供的信息与你的行业知识分析，不得虚构不存在的证据；
+- "人"维度分析须结合检索到的培训台账记录，评估人员培训与资质是否到位；
 - 直接原因关注直接触发偏差的环节，根本原因关注深层/系统性因素；
+- 引用历史偏差、体系文件或培训记录时注明来源（编号或名称）；
 - 对不确定的信息明确标注"待核实"。
 
 请严格输出 JSON，字段必须完整：
@@ -118,7 +121,7 @@ DEFAULT_REPORT_SYSTEM_PROMPT = """\
   "conclusion": "调查结论",
   "recommendations": ["纠正预防建议1", "纠正预防建议2"],
   "referenced_sources": [
-    "参考来源描述1（如：历史偏差 HD-xxx / 文件 SOP-xxx / 模型通用知识）"
+    "参考来源描述1（如：历史偏差 HD-xxx / 文件 SOP-xxx / 培训记录 / 模型通用知识）"
   ]
 }"""
 
@@ -483,24 +486,42 @@ async def _attachment_context_text(attachment: dict[str, Any]) -> str:
 # ─── 上下文构建与检索 ────────────────────────────────────────────────
 
 
-async def _retrieve_historical_deviations(
-    db: AsyncSession, keyword: str
-) -> list[dict[str, Any]]:
-    keyword = (keyword or "").strip()
-    if not keyword:
+def _split_keywords(text: str) -> list[str]:
+    """切分检索关键词：按空白/标点分隔，去重，过滤过短词，最多 8 个。"""
+    if not text:
         return []
-    pattern = f"%{_escape_like(keyword[:20])}%"
+    raw = re.split(r"[\s，。；、,.;:：!！?？/\\|（）()\[\]【】\"'\n\r]+", text)
+    keywords: list[str] = []
+    for item in raw:
+        kw = item.strip()
+        if len(kw) < 2 or kw in keywords:
+            continue
+        keywords.append(kw)
+        if len(keywords) >= 8:
+            break
+    return keywords
+
+
+async def _retrieve_historical_deviations(
+    db: AsyncSession, keywords: list[str]
+) -> list[dict[str, Any]]:
+    if not keywords:
+        return []
+    match_clause = or_(
+        *[
+            column.ilike(f"%{_escape_like(kw)}%")
+            for column in (
+                HistoricalDeviation.deviation_event,
+                HistoricalDeviation.deviation_content,
+                HistoricalDeviation.direct_cause,
+                HistoricalDeviation.root_cause,
+            )
+            for kw in keywords
+        ]
+    )
     result = await db.execute(
         select(HistoricalDeviation)
-        .where(
-            HistoricalDeviation.is_deleted.is_(False),
-            or_(
-                HistoricalDeviation.deviation_event.ilike(pattern),
-                HistoricalDeviation.deviation_content.ilike(pattern),
-                HistoricalDeviation.direct_cause.ilike(pattern),
-                HistoricalDeviation.root_cause.ilike(pattern),
-            ),
-        )
+        .where(HistoricalDeviation.is_deleted.is_(False), match_clause)
         .order_by(HistoricalDeviation.created_at.desc())
         .limit(RETRIEVAL_LIMIT)
     )
@@ -517,33 +538,51 @@ async def _retrieve_historical_deviations(
 
 
 async def _retrieve_documents(
-    db: AsyncSession, keyword: str
+    db: AsyncSession, keywords: list[str]
 ) -> list[dict[str, Any]]:
-    keyword = (keyword or "").strip()
-    if not keyword:
+    if not keywords:
         return []
-    entries, _ = await list_document_entries(
-        db,
-        department_id=None,
-        keyword=keyword[:20],
-        page=1,
-        page_size=RETRIEVAL_LIMIT,
-        scope_dept_ids=None,
-    )
-    results: list[dict[str, Any]] = []
-    for entry in entries:
-        contents = read_entry_md_contents(entry)
-        md_text = "\n\n".join(
-            item.get("md_text") or "" for item in contents
-        ).strip()
-        results.append(
-            {
+    seen: dict[str, dict[str, Any]] = {}
+    for kw in keywords:
+        entries, _ = await list_document_entries(
+            db,
+            department_id=None,
+            keyword=kw[:20],
+            page=1,
+            page_size=RETRIEVAL_LIMIT,
+            scope_dept_ids=None,
+        )
+        for entry in entries:
+            key = str(entry.id)
+            if key in seen:
+                continue
+            contents = read_entry_md_contents(entry)
+            md_text = "\n\n".join(
+                item.get("md_text") or "" for item in contents
+            ).strip()
+            seen[key] = {
                 "code": entry.code or "",
                 "name": entry.name or "",
                 "content": _truncate(md_text, 2000),
             }
-        )
-    return results
+        if len(seen) >= RETRIEVAL_LIMIT:
+            break
+    return list(seen.values())[:RETRIEVAL_LIMIT]
+
+
+async def _retrieve_training_ledgers(
+    db: AsyncSession, keywords: list[str]
+) -> list[dict[str, Any]]:
+    """检索人事培训台账（跨模块只读，hr 模块异常时降级为空）。"""
+    if not keywords:
+        return []
+    try:
+        from app.modules.hr.public_api import query_training_ledgers
+
+        return await query_training_ledgers(db, keywords, limit=RETRIEVAL_LIMIT)
+    except Exception:  # noqa: BLE001
+        logger.warning("培训台账检索失败，已降级跳过", exc_info=True)
+        return []
 
 
 def _escape_like(value: str) -> str:
@@ -558,6 +597,7 @@ async def _build_context(
         "source": {},
         "historical_deviations": [],
         "documents": [],
+        "training_ledgers": [],
     }
     input_parts: list[str] = []
     search_keyword = (data.manual_text or "").strip() or ""
@@ -587,7 +627,10 @@ async def _build_context(
                 ],
             }
             deviation_summary = source.get("description") or ""
-            search_keyword = search_keyword or deviation_summary
+            product_batch = source.get("product_batch") or ""
+            search_keyword = " ".join(
+                x for x in (search_keyword, deviation_summary, product_batch) if x
+            )
             input_parts.append(
                 "【来源：偏差管理报告记录】\n"
                 f"偏差编号：{source.get('deviation_code') or '-'}\n"
@@ -602,6 +645,16 @@ async def _build_context(
         if not deviation_summary:
             deviation_summary = data.manual_text.strip()
 
+    if data.affected_items and data.affected_items.strip():
+        snapshot["source"]["affected_items"] = data.affected_items.strip()
+        search_keyword = f"{search_keyword} {data.affected_items.strip()}".strip()
+        input_parts.append(f"【涉及产品名称/批号】\n{data.affected_items.strip()}")
+
+    if data.supplement_text and data.supplement_text.strip():
+        snapshot["source"]["supplement_text"] = data.supplement_text.strip()
+        search_keyword = f"{search_keyword} {data.supplement_text.strip()}".strip()
+        input_parts.append(f"【补充说明】\n{data.supplement_text.strip()}")
+
     for attachment in data.attachments:
         context_text = await _attachment_context_text(attachment.model_dump())
         if context_text.strip():
@@ -610,10 +663,14 @@ async def _build_context(
             )
 
     if search_keyword:
+        keywords = _split_keywords(search_keyword)
         snapshot["historical_deviations"] = await _retrieve_historical_deviations(
-            db, search_keyword
+            db, keywords
         )
-        snapshot["documents"] = await _retrieve_documents(db, search_keyword)
+        snapshot["documents"] = await _retrieve_documents(db, keywords)
+        snapshot["training_ledgers"] = await _retrieve_training_ledgers(
+            db, keywords
+        )
         if snapshot["historical_deviations"]:
             input_parts.append(
                 "【检索到的历史偏差】\n"
@@ -630,6 +687,18 @@ async def _build_context(
                 + "\n".join(
                     f"- {item['code']} {item['name']}: {item['content'] or '-'}"
                     for item in snapshot["documents"]
+                )
+            )
+        if snapshot["training_ledgers"]:
+            input_parts.append(
+                "【检索到的培训台账】\n"
+                + "\n".join(
+                    f"- {item.get('training_date') or ''} "
+                    f"{item.get('training_subject') or '-'}"
+                    f"（{item.get('training_type') or '未分类'}，"
+                    f"授课：{item.get('teaching_dept') or '-'}）："
+                    f"{item.get('training_content') or '-'}"
+                    for item in snapshot["training_ledgers"]
                 )
             )
 
@@ -800,6 +869,10 @@ async def analyze_workbench(
     except LLMProviderError:
         report.status = "failed"
         report.error_message = "AI 服务调用失败，请稍后重试"
+    except AppException as exc:
+        # 覆盖 _validate_report 等业务校验失败：落 failed 记录而非让 502 逃逸
+        report.status = "failed"
+        report.error_message = exc.message
 
     await db.commit()
     result = await db.execute(
