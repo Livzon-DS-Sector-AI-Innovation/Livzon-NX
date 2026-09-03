@@ -28,7 +28,7 @@ import {
 } from './inspection/renderFeishuValue'
 import { TableEmptyState } from './TableEmptyState'
 
-const QC_YEARS = Array.from({ length: 5 }, (_, i) => 2024 + i)
+const QC_YEARS = [2026, 2027, 2028]
 
 function qcAttachmentUrlBuilder(year: number): FeishuAttachmentUrlBuilder {
   return (_entityCode, recordId, fileToken) =>

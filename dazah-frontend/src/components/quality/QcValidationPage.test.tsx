@@ -154,10 +154,6 @@ describe('QcValidationPage', () => {
     expect(text).toContain('备注')
     expect(text).toContain('封面照片')
     expect(text).toContain('是')
-    const attachmentButton = Array.from(document.body.querySelectorAll('button')).find(
-      (button) => (button.textContent || '') === 'cover.jpeg',
-    )
-    expect(attachmentButton).toBeTruthy()
   })
 
   it('warns when the year table is not configured', async () => {
@@ -250,11 +246,12 @@ describe('QcValidationPage', () => {
     expect(document.body.textContent).toContain('生成飞书记录链接失败')
   })
 
-  it('downloads drawer attachments through the page proxy builder', async () => {
+  it('previews drawer image attachments inline via proxy (no download button)', async () => {
     const blob = new Blob(['x'], { type: 'image/jpeg' })
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, blob: async () => blob }))
+    const createObjectURL = vi.fn(() => 'blob:proxy')
     Object.defineProperty(URL, 'createObjectURL', {
-      value: vi.fn(() => 'blob:proxy'),
+      value: createObjectURL,
       configurable: true,
     })
     const openMock = vi.fn()
@@ -267,18 +264,13 @@ describe('QcValidationPage', () => {
       titleLink?.click()
       await new Promise((resolve) => setTimeout(resolve, 30))
     })
-    const attachmentButton = Array.from(document.body.querySelectorAll('button')).find(
+    // 图片附件走代理拉取并内联显示（createObjectURL），不渲染下载按钮
+    expect(createObjectURL).toHaveBeenCalled()
+    const noDownloadButton = Array.from(document.body.querySelectorAll('button')).some(
       (button) => (button.textContent || '') === 'cover.jpeg',
     )
-    expect(attachmentButton).toBeTruthy()
-    await act(async () => {
-      attachmentButton?.click()
-      await new Promise((resolve) => setTimeout(resolve, 30))
-    })
-    expect(fetchMockHits(fetch)).toContain(
-      '/api/v1/quality/validation-qc/records/rec-1/attachments/ft-1/content?year=2026',
-    )
-    expect(openMock).toHaveBeenCalledWith('blob:proxy', '_blank')
+    expect(noDownloadButton).toBe(false)
+    expect(openMock).not.toHaveBeenCalled()
   })
 
   it('confirms, deletes and invalidates the list', async () => {
@@ -424,14 +416,14 @@ describe('QcValidationPage', () => {
       await new Promise((resolve) => setTimeout(resolve, 30))
     })
     const option = Array.from(document.body.querySelectorAll('.ant-select-item-option')).find(
-      (item) => (item.textContent || '').includes('2025年'),
+      (item) => (item.textContent || '').includes('2027年'),
     ) as HTMLElement | null
     expect(option).toBeTruthy()
     await act(async () => {
       option?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
       await new Promise((resolve) => setTimeout(resolve, 100))
     })
-    expect(apiClient.fetchQcValidationRecords).toHaveBeenLastCalledWith(2025, {
+    expect(apiClient.fetchQcValidationRecords).toHaveBeenLastCalledWith(2027, {
       keyword: undefined,
       page: 1,
       page_size: 20,
@@ -583,7 +575,3 @@ describe('QcValidationPage', () => {
     expect(apiClient.fetchDepartmentContacts).toHaveBeenCalled()
   })
 })
-
-function fetchMockHits(fetchMock: unknown): string[] {
-  return (fetchMock as ReturnType<typeof vi.fn>).mock.calls.map((call) => String(call[0]))
-}

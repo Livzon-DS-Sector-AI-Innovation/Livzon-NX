@@ -44,7 +44,7 @@ from app.modules.quality.service.inspection_feishu_crud import (
 
 router = APIRouter()
 
-QC_VALIDATION_YEARS: list[int] = list(range(2024, 2029))
+QC_VALIDATION_YEARS: list[int] = list(range(2026, 2029))
 
 
 def _qc_entity_code(year: int) -> str:

@@ -164,7 +164,7 @@ async def resolve_validation_categories(
     titles: list[str],
 ) -> dict[str, str]:
     """返回每个确认名称的验证分类（带缓存，AI 推断，失败降级关键词）。"""
-    normalized = {str(t).strip(): t for t in titles if str(t).strip()}
+    normalized = {str(t).strip(): str(t).strip() for t in titles if str(t).strip()}
     if not normalized:
         return {}
 
