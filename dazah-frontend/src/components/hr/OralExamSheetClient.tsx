@@ -63,7 +63,8 @@ export default function OralExamSheetClient({ sessionData, initialPayload, onSes
       setTrainingDate(initialPayload.training_date || '')
       setAssessor(initialPayload.assessor || '')
       if (initialPayload.questions?.length) setQuestions(initialPayload.questions)
-      if (initialPayload.persons?.length) setPersons(initialPayload.persons)
+      if (initialPayload.persons?.length)
+        setPersons(initialPayload.persons.map((p) => ({ ...p, remark: p.remark || '—' })))
       return
     }
     // 仅当考核方式为"口试"时才随签到表自动填充；评估人/日期落款由用户手填，不自动带出
@@ -204,12 +205,13 @@ export default function OralExamSheetClient({ sessionData, initialPayload, onSes
         <Button icon={<DeleteOutlined />} disabled={questions.length <= 1} onClick={() => setQuestions((q) => q.slice(0, -1))}>
           删除问题行
         </Button>
-        <Button icon={<DeleteOutlined />} disabled={persons.filter((p) => p.manual).length === 0} onClick={() => setPersons((arr) => {
-          for (let i = arr.length - 1; i >= 0; i--) {
-            if (arr[i].manual) return [...arr.slice(0, i), ...arr.slice(i + 1)]
-          }
-          return arr
-        })}>
+        <Button
+          icon={<PlusOutlined />}
+          onClick={() => setPersons((arr) => [...arr, { name: '', department: '', question_nos: '', result: '', remark: '—', manual: true }])}
+        >
+          增加人员行
+        </Button>
+        <Button icon={<DeleteOutlined />} disabled={persons.length === 0} onClick={() => setPersons((arr) => arr.slice(0, -1))}>
           删除人员行
         </Button>
         <Button

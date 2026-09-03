@@ -272,7 +272,7 @@
       "actions": {}
     },
     "rd:bayesian": {
-      "status": "active",
+      "status": "retired",
       "module_code": "research",
       "route_path": "/rd/bayesian",
       "actions": {}
