@@ -23,6 +23,8 @@ install_dependencies() {
 
 run_quality() {
   install_dependencies
+  echo "== Page authorization lifecycle =="
+  uv run --no-sync python "${repository_dir}/scripts/check-page-permission-lifecycle.py"
   echo "== AgentBackend V2 residual scan =="
   uv run --no-sync python "${repository_dir}/scripts/check-agent-v2-residuals.py"
   echo "== Backend Ruff lint (PR additions and modifications only) =="
