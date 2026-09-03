@@ -147,7 +147,23 @@ class AgentAccessScopeService:
                 if spec.workflow_allowed and not spec.human_decision_required:
                     workflow_tool_names.append(spec.name)
                 continue
-            # 平台页面在草稿期可兼容旧规则，业务工具不可绕过页面发布门禁。
+            # 首批模块仍处于草稿期时，继续执行原有模块权限规则；发布为
+            # enforced 后才切换到上面的页面权限规则。
+            grant = grants_by_module.get(spec.module)
+            if grant is None:
+                continue
+            permissions = set(grant.permissions or [])
+            if "module.view" not in permissions:
+                continue
+            if spec.permission_key and spec.permission_key not in permissions:
+                continue
+            tool_names.append(spec.name)
+            if (
+                "module.agent.automate" in permissions
+                and spec.workflow_allowed
+                and not spec.human_decision_required
+            ):
+                workflow_tool_names.append(spec.name)
 
         snapshot = await self.get_snapshot(db, user_id=user_id, for_update=True)
         now = datetime.now(UTC)

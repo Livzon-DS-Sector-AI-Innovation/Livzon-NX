@@ -271,6 +271,12 @@
       "route_path": "/rd/ich-analysis",
       "actions": {}
     },
+    "rd:bayesian": {
+      "status": "active",
+      "module_code": "research",
+      "route_path": "/rd/bayesian",
+      "actions": {}
+    },
     "registration:project:project-ledger:international-associated-review": {
       "status": "active",
       "module_code": "registration",
@@ -1007,6 +1013,12 @@
       "status": "active",
       "module_code": "quality",
       "route_path": "/quality/validation/other-validations",
+      "actions": {}
+    },
+    "quality:validation:qc-validation": {
+      "status": "active",
+      "module_code": "quality",
+      "route_path": "/quality/validation/qc-validation",
       "actions": {}
     },
     "hr:departments": {
