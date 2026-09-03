@@ -37,50 +37,6 @@ EXPOSE 8000
 CMD [".venv/bin/uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/app/app"]
 
 
-FROM python:3.9-slim-bookworm AS edbo
-
-WORKDIR /app
-
-RUN groupadd --system app \
-    && useradd --system --gid app --home-dir /app app \
-    && pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple patchelf \
-    && pip install --no-cache-dir torch==1.10.0 \
-       --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pytorch-wheels/cpu
-
-COPY dazah-backend/edbo_service/requirements.txt ./requirements.txt
-RUN pip install --no-cache-dir \
-    -i https://pypi.tuna.tsinghua.edu.cn/simple \
-    --trusted-host pypi.tuna.tsinghua.edu.cn \
-    -r requirements.txt
-
-COPY dazah-backend/edboplus-main /tmp/edboplus-main
-RUN pip install --no-cache-dir \
-    -i https://pypi.tuna.tsinghua.edu.cn/simple \
-    --trusted-host pypi.tuna.tsinghua.edu.cn \
-    /tmp/edboplus-main \
-    && rm -rf /tmp/edboplus-main
-
-ENV PYTORCH_JIT=0 \
-    TORCH_DISABLE_JIT=1
-
-RUN set -e; \
-    iteration=0; \
-    while ! python -c "import torch" 2>/tmp/torch_error.log; do \
-      iteration=$((iteration + 1)); \
-      if [ "$iteration" -gt 20 ]; then cat /tmp/torch_error.log; exit 1; fi; \
-      so_file=$(grep -oP 'lib\w+\.so' /tmp/torch_error.log | head -1); \
-      if [ -z "$so_file" ]; then cat /tmp/torch_error.log; exit 1; fi; \
-      find /usr/local/lib/python3.9/site-packages/torch -name "$so_file" \
-        -exec patchelf --clear-execstack {} \;; \
-    done
-
-COPY --chown=app:app dazah-backend/edbo_service/ ./
-
-USER app
-EXPOSE 8000
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
-
-
 FROM node:20-alpine AS frontend
 
 WORKDIR /app

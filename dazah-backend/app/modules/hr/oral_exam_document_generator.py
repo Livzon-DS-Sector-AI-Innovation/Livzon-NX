@@ -174,13 +174,15 @@ def generate_oral_exam_result(data: OralExamExportRequest) -> BytesIO:
                     replace_text_in_cell(row.cells[4], "合格□", "合格☑")
                 elif p.result == "不合格":
                     replace_text_in_cell(row.cells[4], "不合格□", "不合格☑")
-                fill_whole_cell(row.cells[6], p.remark or "—", fmt_src)
+                remark = p.remark
             else:
                 fill_whole_cell(row.cells[0], "", fmt_src)
                 fill_whole_cell(row.cells[1], "", fmt_src)
                 fill_whole_cell(row.cells[2], "", fmt_src)
                 fill_whole_cell(row.cells[3], "", fmt_src)
-                fill_whole_cell(row.cells[6], "—", fmt_src)
+                remark = None
+            # 备注：空值统一填 "—"（有多少人就有多少—，备用空行同样填）
+            fill_whole_cell(row.cells[6], remark or "—", fmt_src)
 
     # ── 落款：评估人/日期（标签在后栏，值填入其后空白格） ──
     sig = _find_row(table, lambda r: "评估人" in "".join(_row_texts(r)))

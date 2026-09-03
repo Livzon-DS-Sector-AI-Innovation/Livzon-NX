@@ -25,7 +25,6 @@ Windows 本地需要安装并可直接调用：
 
 - Python/uv 依赖层；
 - Node/pnpm 依赖层；
-- EDBO 的 Torch 层；
 - Hermes-Lite 的 Lark CLI、上游 Hermes 和 Python 依赖层。
 
 不要为了清理磁盘而随意执行 `docker builder prune`；它会删除这些构建缓存。

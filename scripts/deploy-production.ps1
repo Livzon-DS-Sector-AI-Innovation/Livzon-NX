@@ -122,7 +122,6 @@ function Prepare-Release {
     "dazah/frontend:$Version"
   )
   if (-not $ReuseUnchangedFrom) {
-    $images += "dazah/edbo:$Version"
     $images += "dazah/hermes-lite:$Version"
   }
   docker save @images -o $TarPath
@@ -180,9 +179,9 @@ function Tag-Remote-UnchangedImages {
     return
   }
   Assert-Version $ReuseUnchangedFrom
-  Write-Step "复用未变化的 EDBO 与 Hermes 镜像: $ReuseUnchangedFrom"
+  Write-Step "复用未变化的 Hermes 镜像: $ReuseUnchangedFrom"
   $docker = if ($NoSudo) { 'docker' } else { 'sudo docker' }
-  Invoke-Ssh "$docker image inspect dazah/edbo:$ReuseUnchangedFrom dazah/hermes-lite:$ReuseUnchangedFrom >/dev/null; $docker tag dazah/edbo:$ReuseUnchangedFrom dazah/edbo:$Version; $docker tag dazah/hermes-lite:$ReuseUnchangedFrom dazah/hermes-lite:$Version"
+  Invoke-Ssh "$docker image inspect dazah/hermes-lite:$ReuseUnchangedFrom >/dev/null; $docker tag dazah/hermes-lite:$ReuseUnchangedFrom dazah/hermes-lite:$Version"
 }
 
 function Build-Action {
@@ -196,7 +195,6 @@ function Build-Action {
   Build-Image 'backend' 'dazah/backend'
   Build-Image 'frontend' 'dazah/frontend'
   if (-not $ReuseUnchangedFrom) {
-    Build-Image 'edbo' 'dazah/edbo'
     Build-Image 'hermes' 'dazah/hermes-lite'
   }
   $releaseDir = Prepare-Release
