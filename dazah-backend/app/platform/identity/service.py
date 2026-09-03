@@ -230,7 +230,11 @@ def verify_password(password: str, stored_hash: str | None) -> bool:
 
 
 def _split_identifiers(raw: str) -> set[str]:
-    return {item.strip().lower() for item in raw.split(",") if item.strip()}
+    return {
+        item.strip().lower()
+        for item in re.split(r"[,;\s]+", raw or "")
+        if item.strip()
+    }
 
 
 def _matches_admin_whitelist(user: User, raw_identifiers: str) -> bool:
@@ -241,6 +245,7 @@ def _matches_admin_whitelist(user: User, raw_identifiers: str) -> bool:
         user.username,
         user.feishu_open_id,
         user.feishu_user_id,
+        user.feishu_union_id,
         user.email,
         user.enterprise_email,
         user.mobile,
@@ -1463,6 +1468,7 @@ async def handle_oauth_callback(
                     name=name,
                     feishu_user_id=user_id,
                     feishu_open_id=open_id,
+                    feishu_union_id=union_id,
                     email=email,
                     enterprise_email=enterprise_email,
                     mobile=mobile,
@@ -1495,7 +1501,7 @@ async def handle_oauth_callback(
         user.auth_source = user.auth_source or "feishu"
         user.role = (
             "admin"
-            if _matches_admin_whitelist(
+            if user.role == "admin" or _matches_admin_whitelist(
                 user,
                 get_settings().SSO_ADMIN_IDENTIFIERS,
             )

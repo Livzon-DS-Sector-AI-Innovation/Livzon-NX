@@ -6,7 +6,7 @@ from uuid import uuid4
 
 import jwt
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, Header, HTTPException
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import delete, select
 
@@ -430,6 +430,12 @@ def _strict_app(monkeypatch):
     async def warehouse_record_write():
         return {"ok": True}
 
+    @test_app.get("/api/v1/agent/llm/models")
+    async def agent_llm_models(authorization: str | None = Header(default=None)):
+        if authorization != "Bearer service-token":
+            raise HTTPException(status_code=401, detail="service token required")
+        return {"ok": True}
+
     return test_app, test_factory
 
 
@@ -463,6 +469,23 @@ async def test_middleware_public_auth_path(_strict_app) -> None:
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         resp = await ac.get("/api/v1/identity/auth/login")
         assert resp.status_code == 200, resp.text
+
+
+@pytest.mark.asyncio
+async def test_middleware_allows_agent_service_token_route_to_validate_at_endpoint(
+    _strict_app,
+) -> None:
+    test_app, _ = _strict_app
+    transport = ASGITransport(app=test_app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        resp = await ac.get(
+            "/api/v1/agent/llm/models",
+            headers={"Authorization": "Bearer service-token"},
+        )
+        missing = await ac.get("/api/v1/agent/llm/models")
+
+    assert resp.status_code == 200, resp.text
+    assert missing.status_code == 401, missing.text
 
 
 @pytest.mark.asyncio

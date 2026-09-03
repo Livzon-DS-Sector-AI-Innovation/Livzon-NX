@@ -85,6 +85,11 @@ async def test_get_material_page_returns_configured_title(client: AsyncClient) -
     ):
         response = await client.get(
             f"/api/v1/warehouse/material-pages/{PAGE_KEY}",
+            headers={
+                "X-Dazah-Page-Key": (
+                    "warehouse:product-inventory:product-inbound-detail"
+                )
+            },
             params={"page": 1, "page_size": 20, "source": "feishu"},
         )
 
@@ -144,7 +149,12 @@ async def test_get_record_detail_route_reachable(client: AsyncClient) -> None:
         new=AsyncMock(return_value=detail_payload),
     ):
         response = await client.get(
-            f"/api/v1/warehouse/material-pages/{PAGE_KEY}/records/rec_inbound_1"
+            f"/api/v1/warehouse/material-pages/{PAGE_KEY}/records/rec_inbound_1",
+            headers={
+                "X-Dazah-Page-Key": (
+                    "warehouse:product-inventory:product-inbound-detail"
+                )
+            },
         )
 
     assert response.status_code == 200
@@ -161,7 +171,10 @@ async def test_get_record_detail_route_reachable(client: AsyncClient) -> None:
 async def test_unregistered_page_key_returns_404(client: AsyncClient) -> None:
     """未注册的 pageKey 属可预期输入错误，必须返回 404 而非 500。"""
     response = await client.get(
-        "/api/v1/warehouse/material-pages/product-inbound-not-exist"
+        "/api/v1/warehouse/material-pages/product-inbound-not-exist",
+        headers={
+            "X-Dazah-Page-Key": "warehouse:product-inventory:product-inbound-detail"
+        },
     )
 
     assert response.status_code == 404

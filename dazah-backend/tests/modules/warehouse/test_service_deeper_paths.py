@@ -137,6 +137,7 @@ async def test_warehouse_feishu_pagination_and_material_page_scope_paths() -> No
             ]
         )
     )
+    instance._get_material_client = AsyncMock(return_value=instance.feishu_client)
     fields = await instance.fetch_feishu_table_fields(app_token="app", table_id="tbl")
     records = await instance.fetch_feishu_table_records(
         app_token="app", table_id="tbl", page_size=50
@@ -145,7 +146,7 @@ async def test_warehouse_feishu_pagination_and_material_page_scope_paths() -> No
     assert [item["record_id"] for item in records] == ["r1", "r2"]
 
     config = SimpleNamespace(
-        page_key="hardware-detail",
+        page_key="hardware-101-1-workshop",
         title="五金明细",
         app_token="app",
         table_id="tbl",
@@ -175,7 +176,7 @@ async def test_warehouse_feishu_pagination_and_material_page_scope_paths() -> No
     )
     instance._build_material_page_response = Mock(return_value={"rows": ["r1"]})
     result = await instance.get_feishu_material_page(
-        "hardware-detail",
+        "hardware-101-1-workshop",
         scope=DepartmentScope(is_all=False, department_names={"一车间"}),
     )
     assert result == {"rows": ["r1"]}
@@ -183,13 +184,15 @@ async def test_warehouse_feishu_pagination_and_material_page_scope_paths() -> No
     instance._page_cache.clear()
     instance.fetch_material_page_from_feishu.side_effect = RuntimeError("offline")
     instance.get_local_material_page = AsyncMock(return_value={"source": "local"})
-    fallback = await instance.get_feishu_material_page("hardware-detail")
+    fallback = await instance.get_feishu_material_page("hardware-101-1-workshop")
     assert fallback == {"source": "local"}
     instance.get_local_material_page.assert_awaited_once()
 
     instance._resolve_material_page_source.return_value = "feishu"
     with pytest.raises(HTTPException) as exc_info:
-        await instance.get_feishu_material_page("hardware-detail", force=True)
+        await instance.get_feishu_material_page(
+            "hardware-101-1-workshop", force=True
+        )
     assert exc_info.value.status_code == 502
 
 

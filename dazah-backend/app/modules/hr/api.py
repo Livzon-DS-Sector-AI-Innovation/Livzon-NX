@@ -68,6 +68,7 @@ from app.modules.hr.onboarding_evaluation_document_generator import (
     generate_onboarding_evaluation,
 )
 from app.modules.hr.oral_exam_document_generator import generate_oral_exam_result
+from app.modules.hr.page_access import EMPLOYEE_PAGE_KEY, employee_page_scope
 from app.modules.hr.plan_tracking_api import router as plan_tracking_router
 from app.modules.hr.position_training_api import router as position_training_router
 from app.modules.hr.position_training_mapping_api import (
@@ -248,6 +249,10 @@ async def _assert_employee_page_access(
     """
     _require_user(current_user)
     assert current_user is not None
+    from app.platform.identity.data_scope import current_page_key
+
+    if current_page_key.get() == EMPLOYEE_PAGE_KEY:
+        return  # Mounted dependency has already checked the exact page/API grant.
     from app.platform.identity.rbac import resolve_user_permissions
 
     perms = await resolve_user_permissions(db, current_user.id)
@@ -294,6 +299,12 @@ async def _resolve_visible_scope(
     from app.modules.hr.training_dept_resolver import resolve_visible_dept_alias_set
 
     _require_user(current_user)
+    from app.platform.identity.data_scope import current_page_key
+
+    if current_page_key.get() == EMPLOYEE_PAGE_KEY:
+        scope = await employee_page_scope(db)
+        assert scope is not None
+        return None if scope.is_all else scope.department_names
     return await resolve_visible_dept_alias_set(db, current_user)
 
 

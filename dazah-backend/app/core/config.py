@@ -264,7 +264,7 @@ class Settings(BaseSettings):
     def effective_module_access_mode(self) -> Literal["roles", "all"]:
         if self.MODULE_ACCESS_MODE is not None:
             return self.MODULE_ACCESS_MODE
-        return "all"
+        return "roles"
 
     def check(self) -> None:
         """启动时校验关键配置，避免漏配导致运行时异常。"""

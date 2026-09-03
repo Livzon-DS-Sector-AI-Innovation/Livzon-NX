@@ -854,10 +854,13 @@ class MenuRepository:
         )
         return result.scalar_one_or_none()
 
-    async def get_by_key(self, session: AsyncSession, key: str) -> Menu | None:
-        result = await session.execute(
-            select(Menu).where(Menu.key == key, Menu.is_deleted.is_(False))
-        )
+    async def get_by_key(
+        self, session: AsyncSession, key: str, *, include_deleted: bool = False
+    ) -> Menu | None:
+        statement = select(Menu).where(Menu.key == key)
+        if not include_deleted:
+            statement = statement.where(Menu.is_deleted.is_(False))
+        result = await session.execute(statement)
         return result.scalar_one_or_none()
 
     async def list_children(self, session: AsyncSession, menu_id: UUID) -> list[Menu]:

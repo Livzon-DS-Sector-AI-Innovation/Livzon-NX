@@ -12,18 +12,29 @@ from fastapi import (
     Header,
     HTTPException,
     Query,
+    Request,
     status,
 )
 from fastapi.responses import JSONResponse, RedirectResponse
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
 from app.core.database import get_db
 from app.core.response import success_response
+from app.platform.audit.service import record_audit_log
+from app.platform.identity.authorization_guard import lock_authorization_actor
+from app.platform.identity.data_scope import publish_data_scope_changed
 from app.platform.identity.deps import AdminUser, CurrentUser
-from app.platform.identity.models import Department
-from app.platform.identity.rbac import resolve_user_permissions, resolve_user_roles
+from app.platform.identity.models import Department, Role, UserRole
+from app.platform.identity.permission_cache import publish_permissions_changed
+from app.platform.identity.permission_repository import PermissionGrantRepository
+from app.platform.identity.rbac import (
+    active_system_admin_count,
+    resolve_user_permissions,
+    resolve_user_roles,
+)
 from app.platform.identity.repository import (
     DepartmentRepository,
     ExternalIdentityBindingRepository,
@@ -80,8 +91,24 @@ def _login_error_redirect(settings: Settings, error: str) -> RedirectResponse:
     )
 
 
+def _is_secure_request(request: Request) -> bool:
+    """Match cookie security to the public protocol seen by the browser.
+
+    Production can be intentionally exposed over plain HTTP on an internal
+    network.  ``APP_ENV=production`` must not by itself mark cookies as
+    ``Secure`` because browsers then omit them from an HTTP OAuth callback.
+    The deployment proxy supplies ``X-Forwarded-Proto``; direct requests use
+    the ASGI request scheme.
+    """
+    forwarded_proto = request.headers.get("x-forwarded-proto")
+    if forwarded_proto:
+        return forwarded_proto.split(",", 1)[0].strip().lower() == "https"
+    return request.url.scheme.lower() == "https"
+
+
 @auth_router.get("/login", summary="飞书授权登录入口")
 async def login(
+    request: Request,
     next: str | None = Query(None, description="登录成功后的站内跳转路径"),
     settings: Settings = Depends(get_settings),
 ) -> RedirectResponse:
@@ -107,7 +134,7 @@ async def login(
         OAUTH_STATE_COOKIE,
         state,
         httponly=True,
-        secure=settings.is_production,
+        secure=_is_secure_request(request),
         samesite="lax",
         max_age=300,
         path="/api/v1/identity/auth",
@@ -117,6 +144,7 @@ async def login(
 
 @auth_router.post("/local/login", summary="本地账号登录", response_model=TokenResponse)
 async def local_login(
+    request: Request,
     payload: LocalLoginRequest,
     db: AsyncSession = Depends(get_db),
     settings: Settings = Depends(get_settings),
@@ -152,7 +180,7 @@ async def local_login(
         AUTH_TOKEN_COOKIE,
         token,
         httponly=True,
-        secure=settings.is_production,
+        secure=_is_secure_request(request),
         samesite="lax",
         max_age=getattr(settings, "JWT_EXPIRE_SECONDS", 86400),
         path="/",
@@ -162,6 +190,7 @@ async def local_login(
 
 @auth_router.get("/callback", summary="飞书 SSO 回调")
 async def auth_callback(
+    request: Request,
     code: str | None = Query(None),
     state: str = Query(""),
     error: str | None = Query(None),
@@ -214,7 +243,7 @@ async def auth_callback(
             AUTH_TOKEN_COOKIE,
             token,
             httponly=True,
-            secure=settings.is_production,
+            secure=_is_secure_request(request),
             samesite="lax",
             max_age=getattr(settings, "JWT_EXPIRE_SECONDS", 86400),
             path="/",
@@ -246,15 +275,28 @@ async def get_me(
     """Return the current platform user."""
     if current_user is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Login required")
+    from app.platform.identity.page_permission_repository import (
+        PagePermissionRepository,
+    )
+    from app.platform.identity.page_permissions import PagePermissionService
     from app.platform.identity.permission_repository import PermissionGrantRepository
 
     response = UserResponse.model_validate(current_user)
     roles = await resolve_user_roles(db, current_user.id)
     response.roles = [role.code for role in roles]
     response.permissions = await resolve_user_permissions(db, current_user.id)
+    page_service = PagePermissionService()
+    response.page_permissions = await page_service.effective_grants(
+        db, user=current_user
+    )
+    rollouts = await PagePermissionRepository().list_rollouts(db)
+    response.page_permission_rollouts = {
+        item.module_code: item.status for item in rollouts
+    }
+    is_super_admin = await page_service.is_super_admin(db, user_id=current_user.id)
     if settings.effective_module_access_mode == "all":
         response.module_codes = sorted(MODULES_BY_CODE)
-    elif current_user.role == "admin":
+    elif is_super_admin:
         response.module_codes = sorted(MODULES_BY_CODE)
     else:
         grants = await PermissionGrantRepository().list_grants(
@@ -304,6 +346,37 @@ async def list_users(
 
 
 @user_router.post(
+    "/users/sync-feishu",
+    summary="使用环境变量凭证同步用户管理飞书通讯录",
+)
+async def sync_user_management_from_feishu(
+    db: AsyncSession = Depends(get_db),
+    current_user: AdminUser = None,
+) -> JSONResponse:
+    """Only this user-management action uses the root Feishu environment app."""
+    from app.platform.audit.models import AuditLog
+    from app.platform.identity.service import run_environment_feishu_user_sync
+
+    data = await run_environment_feishu_user_sync(db, actor_id=current_user.id)
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            method="POST",
+            path="/api/v1/identity/users/sync-feishu",
+            status_code=200,
+            resource_type="external_identity_binding",
+            action="sync_user_management_feishu_directory",
+            extra={
+                "status": data.get("status"),
+                "created_bindings": data.get("bindings", {}).get("created", 0),
+                "conflict_count": len(data.get("bindings", {}).get("conflicts", [])),
+            },
+        )
+    )
+    return success_response(data=data)
+
+
+@user_router.post(
     "/users", summary="管理员创建本地用户", response_model=UserManagementItem
 )
 async def create_local_user(
@@ -313,6 +386,9 @@ async def create_local_user(
 ) -> JSONResponse:
     from app.platform.identity.service import hash_password
 
+    current_user = await lock_authorization_actor(db, current_user)
+    if current_user.role != "admin":
+        raise HTTPException(403, "当前账号已无系统管理员权限")
     repo = UserRepository()
     existing = await repo.get_by_username(db, payload.username)
     if existing is not None:
@@ -349,19 +425,71 @@ async def update_user(
     db: AsyncSession = Depends(get_db),
     current_user: AdminUser = None,
 ) -> JSONResponse:
-    repo = UserRepository()
-    user = await repo.get_by_id(db, user_id)
+    permission_repo = PermissionGrantRepository()
+    current_user = await lock_authorization_actor(db, current_user)
+    if current_user.role != "admin":
+        raise HTTPException(403, "当前账号已无系统管理员权限")
+    user = await permission_repo.get_user_for_update(db, user_id)
     if user is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "用户不存在")
 
     updates = payload.model_dump(exclude_unset=True)
-    role_changed = "role" in updates and updates["role"] != user.role
+    if user.id == current_user.id and (
+        {"role", "status", "department"} & updates.keys()
+    ):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "管理员不能修改自己的管理角色、账号状态或授权关联部门",
+        )
+    if (
+        user.role == "admin"
+        and user.status == "active"
+        and (updates.get("status") == "disabled" or updates.get("role") == "user")
+    ):
+        if await active_system_admin_count(db) <= 1:
+            raise HTTPException(409, "不能停用或移除最后一个可用的系统管理员")
+    authorization_changes = {
+        field: getattr(user, field)
+        for field in ("role", "status", "department")
+        if field in updates and updates[field] != getattr(user, field)
+    }
     for field, value in updates.items():
         setattr(user, field, value)
-    if role_changed:
+    if updates.get("role") == "user":
+        # A demotion must revoke the historical wildcard binding as well.
+        await db.execute(
+            update(UserRole)
+            .where(
+                UserRole.user_id == user.id,
+                UserRole.role_id.in_(select(Role.id).where(Role.code == "super_admin")),
+                UserRole.is_deleted.is_(False),
+            )
+            .values(is_deleted=True)
+        )
+    if authorization_changes:
         user.grant_version += 1
+        await permission_repo.create_outbox_event(
+            db,
+            user_id=user.id,
+            grant_version=user.grant_version,
+            actor_id=current_user.id,
+            event_type="identity.user_page_grants.changed.v1",
+        )
+        await record_audit_log(
+            db,
+            action="update_user_authorization_context",
+            user_id=current_user.id,
+            resource_type="identity.user_page_permissions",
+            resource_id=user.id,
+            old_value=authorization_changes,
+            new_value={field: updates[field] for field in authorization_changes},
+        )
     user.updated_by = current_user.id
     await db.flush()
+    if authorization_changes:
+        await db.commit()
+        await publish_permissions_changed(user.id)
+        await publish_data_scope_changed("user", user.id)
     return success_response(
         data=UserManagementItem.model_validate(user).model_dump(mode="json")
     )
@@ -602,6 +730,9 @@ async def replace_user_module_permissions(
     from app.modules.agent.access_scope import AgentAccessScopeService
     from app.platform.identity.permissions import IdentityPermissionService
 
+    current_user = await lock_authorization_actor(db, current_user)
+    if current_user.role != "admin":
+        raise HTTPException(403, "当前账号已无系统管理员权限")
     permission_service = IdentityPermissionService()
     target, grants, event = await permission_service.replace_user_permissions(
         db,
@@ -633,6 +764,8 @@ async def replace_user_module_permissions(
     else:
         result.livzon_sync_status = "failed"
         result.livzon_last_error = event.last_error
+    await db.commit()
+    await publish_permissions_changed(user_id)
     return success_response(data=result.model_dump(mode="json"))
 
 

@@ -8,6 +8,39 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 UserRole = Literal["admin", "user"]
 UserStatus = Literal["active", "disabled"]
 AuthSource = Literal["local", "feishu"]
+PagePermissionLevel = Literal["access", "query", "operate"]
+PageGrantMode = Literal["inherit", "custom"]
+PageScopeType = Literal[
+    "not_applicable", "department_tree", "departments", "all", "self"
+]
+
+
+class PageDataScopeInput(BaseModel):
+    scope_type: PageScopeType = "department_tree"
+    department_ids: list[str] = Field(default_factory=list, max_length=500)
+
+    @field_validator("department_ids", mode="after")
+    @classmethod
+    def clean_department_ids(cls: Any, value: list[str]) -> list[str]:
+        return list(dict.fromkeys(item.strip() for item in value if item.strip()))
+
+    @model_validator(mode="after")
+    def validate_selected_departments(self) -> "PageDataScopeInput":
+        if self.scope_type == "departments" and not self.department_ids:
+            raise ValueError("指定部门范围至少选择一个部门")
+        if self.scope_type != "departments" and self.department_ids:
+            raise ValueError("仅指定部门范围可以提交 department_ids")
+        return self
+
+
+class EffectivePageGrantOut(BaseModel):
+    page_key: str
+    module_code: str
+    permissions: list[PagePermissionLevel] = Field(default_factory=list)
+    sensitive_actions: list[str] = Field(default_factory=list)
+    data_scope: PageDataScopeInput
+    source: Literal["super_admin", "user", "role", "none"]
+    source_role_names: list[str] = Field(default_factory=list)
 
 
 class ExternalIdentityBindingCreate(BaseModel):
@@ -105,6 +138,8 @@ class UserResponse(BaseModel):
     module_codes: list[str] = Field(default_factory=list)
     roles: list[str] = Field(default_factory=list)
     permissions: list[str] = Field(default_factory=list)
+    page_permissions: list[EffectivePageGrantOut] = Field(default_factory=list)
+    page_permission_rollouts: dict[str, str] = Field(default_factory=dict)
 
     model_config = {"from_attributes": True}
 
@@ -237,6 +272,112 @@ class LivzonAccessScopeOut(BaseModel):
     modules: list[LivzonModuleScopeOut] = Field(default_factory=list)
     tool_names: list[str] = Field(default_factory=list)
     workflow_tool_names: list[str] = Field(default_factory=list)
+
+
+class PageGrantInput(BaseModel):
+    page_key: str = Field(min_length=1, max_length=255)
+    mode: PageGrantMode = "custom"
+    permissions: list[PagePermissionLevel] = Field(default_factory=list, max_length=3)
+    sensitive_actions: list[str] = Field(default_factory=list, max_length=100)
+    data_scope: PageDataScopeInput = Field(default_factory=PageDataScopeInput)
+
+
+class UserPagePermissionsUpdate(BaseModel):
+    expected_grant_version: int | None = Field(default=None, ge=0)
+    grants: list[PageGrantInput] = Field(default_factory=list, max_length=1000)
+    reason: str = Field(min_length=1, max_length=500)
+
+
+class RolePagePermissionsUpdate(BaseModel):
+    expected_grant_version: int = Field(ge=0)
+    grants: list[PageGrantInput] = Field(default_factory=list, max_length=1000)
+    reason: str = Field(min_length=1, max_length=500)
+
+
+class SensitiveActionDefinitionOut(BaseModel):
+    key: str
+    name: str
+    category: Literal[
+        "decision",
+        "destructive",
+        "bulk_change",
+        "sensitive_export",
+        "integration_admin",
+        "permission_admin",
+    ]
+    description: str
+
+
+class PagePermissionDefinitionOut(BaseModel):
+    page_key: str
+    module_code: str
+    page_name: str
+    route_path: str
+    supported_scope_types: list[PageScopeType] = Field(default_factory=list)
+    sensitive_actions: list[SensitiveActionDefinitionOut] = Field(default_factory=list)
+
+
+class UserPagePermissionsOut(BaseModel):
+    user_id: UUID
+    grant_version: int
+    definitions: list[PagePermissionDefinitionOut] = Field(default_factory=list)
+    grants: list[EffectivePageGrantOut] = Field(default_factory=list)
+    role_grants: list[EffectivePageGrantOut] = Field(default_factory=list)
+    custom_page_keys: list[str] = Field(default_factory=list)
+    module_rollouts: dict[str, str] = Field(default_factory=dict)
+
+
+class RolePagePermissionsOut(BaseModel):
+    role_id: UUID
+    grant_version: int
+    definitions: list[PagePermissionDefinitionOut] = Field(default_factory=list)
+    grants: list[EffectivePageGrantOut] = Field(default_factory=list)
+
+
+class PagePermissionSimulationRequest(BaseModel):
+    user_id: UUID
+    page_key: str = Field(min_length=1, max_length=255)
+    permission: PagePermissionLevel
+    sensitive_action: str | None = Field(default=None, max_length=128)
+
+
+class PagePermissionSimulationOut(BaseModel):
+    allowed: bool
+    reason: str
+    effective: EffectivePageGrantOut | None = None
+
+
+class PermissionModuleRolloutOut(BaseModel):
+    module_code: str
+    status: Literal["legacy", "draft", "enforced"]
+    version: int
+    published_at: datetime | None = None
+    published_by: UUID | None = None
+    last_reason: str | None = None
+
+
+class PermissionModuleRolloutPreviewOut(BaseModel):
+    module_code: str
+    current_status: Literal["legacy", "draft", "enforced"]
+    current_version: int
+    preview_hash: str
+    page_count: int
+    user_count: int
+    users_without_access: int
+    catalog_gaps: list[str] = Field(default_factory=list)
+
+
+class PermissionModulePublishRequest(BaseModel):
+    expected_version: int = Field(ge=0)
+    preview_hash: str = Field(min_length=16, max_length=128)
+    reason: str = Field(min_length=1, max_length=500)
+    confirmed: Literal[True]
+
+
+class PermissionModuleRollbackRequest(BaseModel):
+    expected_version: int = Field(ge=0)
+    reason: str = Field(min_length=1, max_length=500)
+    confirmed: Literal[True]
 
 
 # ── Department ──────────────────────────────────────────────────────
@@ -469,6 +610,7 @@ class RoleResponse(BaseModel):
     description: str | None = None
     is_system: bool = False
     permissions: list[str] = Field(default_factory=list)
+    grant_version: int = 0
 
     model_config = {"from_attributes": True}
 
@@ -527,6 +669,8 @@ class DeptRuleResponse(BaseModel):
     role_code: str | None = None
     feishu_department_id: str | None = None
     department_name: str | None = None
+
+    model_config = {"from_attributes": True}
 
 
 class MenuCreateRequest(BaseModel):

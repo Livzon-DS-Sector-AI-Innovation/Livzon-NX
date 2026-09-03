@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 
-import { getPublicOrigin } from "@/lib/public-origin"
+import { getPublicOrigin, isSecurePublicRequest } from "@/lib/public-origin"
 import { getLocalLoginMode } from "@/lib/local-auth"
 import { getBackendFallbackUrls } from "@/lib/server-api"
 
@@ -27,14 +27,15 @@ function tokenRedirectResponse(
   token: string,
   nextPath: string,
 ) {
-  const targetUrl = new URL(nextPath, getPublicOrigin(request))
+  const completionPath = `/login/complete?next=${encodeURIComponent(nextPath)}`
+  const targetUrl = new URL(completionPath, getPublicOrigin(request))
   const response = NextResponse.redirect(targetUrl, 303)
   response.cookies.set("auth_token", token, {
     httpOnly: true,
     maxAge: AUTH_COOKIE_MAX_AGE,
     path: "/",
     sameSite: "lax",
-    secure: request.nextUrl.protocol === "https:",
+    secure: isSecurePublicRequest(request),
   })
   return response
 }

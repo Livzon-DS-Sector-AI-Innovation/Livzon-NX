@@ -2,7 +2,7 @@
 
 import { getServerApiBaseUrl } from '@/lib/server-api'
 import { revalidatePath } from 'next/cache'
-import { getServerToken } from '@/lib/auth'
+import { getAuthHeaders } from '@/lib/auth'
 import type {
   ContractGenerateRequest,
   InvoiceRecognitionRecordDeleteResponse,
@@ -22,14 +22,16 @@ import type {
 
 const API_BASE = getServerApiBaseUrl()
 
+async function procurementHeaders(json = false): Promise<Record<string, string>> {
+  const headers = await getAuthHeaders()
+  if (!json) delete headers['Content-Type']
+  return headers
+}
+
 export async function recognizeInvoicePdf(
   formData: FormData
 ): Promise<InvoiceRecognitionResponse> {
-  const token = await getServerToken()
-  const headers: HeadersInit = {}
-  if (token) {
-    headers.Authorization = `Bearer ${token}`
-  }
+  const headers = await procurementHeaders()
 
   const response = await fetch(`${API_BASE}/api/v1/procurement/invoices/recognize`, {
     method: 'POST',
@@ -44,11 +46,7 @@ export async function recognizeInvoicePdf(
 export async function importSupplierTable(
   formData: FormData
 ): Promise<SupplierImportResponse> {
-  const token = await getServerToken()
-  const headers: HeadersInit = {}
-  if (token) {
-    headers.Authorization = `Bearer ${token}`
-  }
+  const headers = await procurementHeaders()
 
   const response = await fetch(`${API_BASE}/api/v1/procurement/suppliers/import`, {
     method: 'POST',
@@ -69,11 +67,7 @@ export async function importSupplierTable(
 export async function importPurchaseRequestTable(
   formData: FormData
 ): Promise<PurchaseRequestImportResponse> {
-  const token = await getServerToken()
-  const headers: HeadersInit = {}
-  if (token) {
-    headers.Authorization = `Bearer ${token}`
-  }
+  const headers = await procurementHeaders()
 
   const response = await fetch(
     `${API_BASE}/api/v1/procurement/purchase-requests/import`,
@@ -97,11 +91,7 @@ export async function importPurchaseRequestTable(
 export async function deleteInvoiceRecognitionRecord(
   recordId: string
 ): Promise<InvoiceRecognitionRecordDeleteResponse> {
-  const token = await getServerToken()
-  const headers: HeadersInit = {}
-  if (token) {
-    headers.Authorization = `Bearer ${token}`
-  }
+  const headers = await procurementHeaders()
 
   const response = await fetch(
     `${API_BASE}/api/v1/procurement/invoices/recognition-records/${recordId}`,
@@ -121,13 +111,7 @@ export async function deleteInvoiceRecognitionRecord(
 export async function deleteInvoiceRecognitionRecords(
   recordIds: string[]
 ): Promise<InvoiceRecognitionRecordDeleteResponse> {
-  const token = await getServerToken()
-  const headers: HeadersInit = {
-    'Content-Type': 'application/json',
-  }
-  if (token) {
-    headers.Authorization = `Bearer ${token}`
-  }
+  const headers = await procurementHeaders(true)
 
   const response = await fetch(
     `${API_BASE}/api/v1/procurement/invoices/recognition-records/batch-delete`,
@@ -253,13 +237,7 @@ export type ContractGenerateActionResult =
 export async function generateProcurementContract(
   payload: ContractGenerateRequest
 ): Promise<ContractGenerateActionResult> {
-  const token = await getServerToken()
-  const headers: HeadersInit = {
-    'Content-Type': 'application/json',
-  }
-  if (token) {
-    headers.Authorization = `Bearer ${token}`
-  }
+  const headers = await procurementHeaders(true)
 
   const response = await fetch(`${API_BASE}/api/v1/procurement/contracts/generate`, {
     method: 'POST',
@@ -355,13 +333,7 @@ async function procurementJsonFetch<T extends { code: number; message: string }>
   options: RequestInit,
   fallbackMessage: string
 ): Promise<T> {
-  const token = await getServerToken()
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  }
-  if (token) {
-    headers.Authorization = `Bearer ${token}`
-  }
+  const headers = await procurementHeaders(true)
 
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,

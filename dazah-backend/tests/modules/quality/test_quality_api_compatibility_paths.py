@@ -23,7 +23,7 @@ async def test_quality_deviation_api_compatibility_success_paths(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     user = SimpleNamespace(id="user-1")
-    db = SimpleNamespace()
+    db = SimpleNamespace(commit=AsyncMock())
     deviation_id = uuid.uuid4()
     monkeypatch.setattr(deviation_api, "_require_user", Mock(return_value="user-1"))
     monkeypatch.setattr(
@@ -58,10 +58,11 @@ async def test_quality_deviation_api_compatibility_success_paths(
         batch_number=None,
     )
     monkeypatch.setattr(
-        deviation_api.repo,
-        "get_deviations",
-        AsyncMock(return_value=([row], 1)),
+        deviation_api.service,
+        "get_deviation_list",
+        AsyncMock(return_value={**_page(), "items": [vars(row)], "total": 1}),
     )
+    monkeypatch.setattr(deviation_api, "record_audit_log", AsyncMock())
     monkeypatch.setattr(
         deviation_api,
         "generate_deviation_ledger_export_docx",
@@ -171,6 +172,16 @@ async def test_quality_deviation_api_compatibility_success_paths(
             deviation_api.service, name, AsyncMock(return_value={"ok": True})
         )
 
+    from app.modules.quality.schemas.deviations import (
+        DeviationBatchDeleteRequest,
+        DeviationBatchDeleteResult,
+    )
+
+    monkeypatch.setattr(
+        deviation_api.deviation_service,
+        "batch_delete_deviations",
+        AsyncMock(return_value=DeviationBatchDeleteResult(deleted=1)),
+    )
     batch_request = _data_object(deviation_ids=[deviation_id], target_status="closed")
     assert (
         await deviation_api.batch_update_deviation_status(
@@ -211,7 +222,7 @@ async def test_quality_deviation_api_compatibility_success_paths(
     ).status_code == 200
     assert (
         await deviation_api.batch_delete_deviations(
-            {"ids": [str(deviation_id)]}, db=db, current_user=user
+            DeviationBatchDeleteRequest(ids=[deviation_id]), db=db, current_user=user
         )
     ).status_code == 200
     assert (

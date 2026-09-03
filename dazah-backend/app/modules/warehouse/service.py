@@ -50,6 +50,13 @@ from app.modules.warehouse.models import (
     ProductInventory,
     RawMaterialInventory,
 )
+from app.modules.warehouse.page_access import (
+    assert_department_filters,
+    assert_material_page,
+    assert_material_refresh,
+    assert_record_department,
+    material_page_scope,
+)
 from app.modules.warehouse.repository import WarehouseRepository
 from app.modules.warehouse.schemas import (
     WarehouseFeishuColumn,
@@ -60,7 +67,7 @@ from app.modules.warehouse.schemas import (
     WarehouseRecordDetailResponse,
     WarehouseRecordFieldValue,
 )
-from app.platform.identity.data_scope import DepartmentScope
+from app.platform.identity.data_scope import DepartmentScope, current_page_key
 from app.platform.integrations.feishu.bitable import BitableClient
 from app.platform.integrations.feishu.client import FeishuClient
 
@@ -459,6 +466,28 @@ class WarehouseService:
         # 仪表盘聚合结果缓存：冷启动全量拉取耗时长，TTL 放宽到 300s，force 可强制刷新
         self._dashboard_cache = _DASHBOARD_CACHE
 
+    async def _material_page_scope(
+        self, page_key: str, fallback: DepartmentScope | None = None
+    ) -> DepartmentScope | None:
+        assert_material_page(page_key)
+        if current_page_key.get() is None:
+            return fallback
+        return await material_page_scope(self.repo.session, page_key, fallback)
+
+    @staticmethod
+    def _scope_material_rows(
+        page_key: str,
+        rows: list[dict[str, object | None]],
+        scope: DepartmentScope | None,
+    ) -> list[dict[str, object | None]]:
+        if page_key not in HARDWARE_DEPT_PAGE_KEYS or scope is None or scope.is_all:
+            return rows
+        return [
+            row
+            for row in rows
+            if str(row.get("车间") or "").strip() in scope.department_names
+        ]
+
     async def _get_feishu_client(self) -> FeishuClient:
         config = await self._get_active_feishu_config_or_raise()
         return FeishuClient(
@@ -473,7 +502,6 @@ class WarehouseService:
             app_id=client.app_id,
             app_secret=client.app_secret,
         )
-
     async def list_raw_materials(self) -> list[RawMaterialInventory]:
         return await self.repo.list_raw_materials()
 
@@ -1346,7 +1374,11 @@ class WarehouseService:
         warning_status: str | None = None,
         material_category: str | None = None,
         advanced_filters: list[dict[str, str]] | None = None,
+        scope: DepartmentScope | None = None,
     ) -> WarehouseFeishuMaterialPageResponse:
+        scope = await self._material_page_scope(page_key, scope)
+        if page_key in HARDWARE_DEPT_PAGE_KEYS:
+            assert_department_filters(scope, advanced_filters)
         snapshot = await self.repo.get_material_page_snapshot(page_key)
         if not snapshot:
             raise HTTPException(
@@ -1378,6 +1410,7 @@ class WarehouseService:
             normalized_row["__record_id"] = row.source_record_id
             normalized_rows.append(normalized_row)
 
+        normalized_rows = self._scope_material_rows(page_key, normalized_rows, scope)
         filtered_rows = self._filter_material_page_rows(
             page_key,
             normalized_rows,
@@ -1440,8 +1473,13 @@ class WarehouseService:
         filters: str | None = None,
         scope: DepartmentScope | None = None,
     ) -> WarehouseFeishuMaterialPageResponse:
-        resolved_source = await self._resolve_material_page_source(source)
+        scope = await self._material_page_scope(page_key, scope)
+        if force and current_page_key.get() is not None:
+            await assert_material_refresh(self.repo.session)
         advanced_filters = self._parse_advanced_filters(filters)
+        if page_key in HARDWARE_DEPT_PAGE_KEYS:
+            assert_department_filters(scope, advanced_filters)
+        resolved_source = await self._resolve_material_page_source(source)
         # 本地快照模式：force=1（手动刷新）先做增量同步到本地镜像（秒级，
         # 只拉变更/新增），再读镜像返回。删除与历史修改由每日 00:00-06:00
         # 全量兜底对账，刷新不再全量拉取大表。其余情况直接读本地快照（秒回）。
@@ -1462,6 +1500,7 @@ class WarehouseService:
                 warning_status=warning_status,
                 material_category=material_category,
                 advanced_filters=advanced_filters,
+                scope=scope,
             )
 
         cache_key = page_key
@@ -1514,6 +1553,7 @@ class WarehouseService:
                     warning_status=warning_status,
                     material_category=material_category,
                     advanced_filters=advanced_filters,
+                    scope=scope,
                 )
 
         filtered_rows = self._filter_material_page_rows(
@@ -1530,18 +1570,7 @@ class WarehouseService:
             material_category=material_category,
             advanced_filters=advanced_filters,
         )
-        # 部门数据隔离（行级）：五金车间明细页按行"车间"字段值 ∈ 可见部门过滤；
-        # 原辅料/成品无部门归属字段，不隔离；汇总/记录页为厂级共享，不隔离
-        if (
-            scope is not None
-            and not scope.is_all
-            and page_key in HARDWARE_DEPT_PAGE_KEYS
-        ):
-            filtered_rows = [
-                row
-                for row in filtered_rows
-                if scope.allows(str(row.get("车间") or "").strip())
-            ]
+        filtered_rows = self._scope_material_rows(page_key, filtered_rows, scope)
         sort_date_field = _DATE_SORT_DESC_FIELDS.get(page_key)
         if sort_date_field:
             filtered_rows.sort(
@@ -2404,8 +2433,11 @@ class WarehouseService:
         self,
         page_key: str,
         record_id: str,
+        *,
+        scope: DepartmentScope | None = None,
     ) -> dict[str, Any]:
         """获取单条记录的全部字段（含列表未展示字段）与可写性元信息。"""
+        scope = await self._material_page_scope(page_key, scope)
         page_config = await self._get_material_page_config(page_key)
         fields_meta = await self._get_page_field_meta(page_config)
         option_map = await self._build_page_option_map(page_config, fields_meta)
@@ -2417,6 +2449,13 @@ class WarehouseService:
         field_map = record.get("fields", {}) or {}
         if not isinstance(field_map, dict):
             field_map = {}
+        if page_key in HARDWARE_DEPT_PAGE_KEYS:
+            assert_record_department(
+                scope,
+                normalize_feishu_cell_value(
+                    resolve_option_ids(field_map.get("车间"), option_map)
+                ),
+            )
 
         meta_by_name = {str(f.get("field_name", "")): f for f in fields_meta}
         ordered_names = [str(f.get("field_name", "")) for f in fields_meta]
@@ -2471,12 +2510,35 @@ class WarehouseService:
         page_key: str,
         record_id: str,
         fields: dict[str, Any],
+        *,
+        scope: DepartmentScope | None = None,
     ) -> dict[str, Any]:
         """将页面编辑值按字段类型转换后写回飞书多维表格。
 
         公式/系统字段与人员/附件/关联字段为不可写字段，静默跳过并记日志，
         保证页面与多维表格不会出现静默不一致。
         """
+        scope = await self._material_page_scope(page_key, scope)
+        if (
+            scope is not None
+            and not scope.is_all
+            and page_key in HARDWARE_DEPT_PAGE_KEYS
+        ):
+            existing = await self.get_material_page_record_detail(
+                page_key, record_id, scope=scope
+            )
+            if "车间" in fields:
+                # 归属变更会改变记录可见性；禁止受限授权通过写入转移部门。
+                department = next(
+                    (
+                        field["value"]
+                        for field in existing["fields"]
+                        if field["field_name"] == "车间"
+                    ),
+                    None,
+                )
+                if not isinstance(fields["车间"], str) or fields["车间"] != department:
+                    raise HTTPException(403, "受限部门授权不能修改记录归属车间")
         page_config = await self._get_material_page_config(page_key)
         fields_meta = await self._get_page_field_meta(page_config)
         meta_by_name = {str(f.get("field_name", "")): f for f in fields_meta}
@@ -2529,8 +2591,17 @@ class WarehouseService:
         self._invalidate_page_cache(page_key)
         return record
 
-    async def delete_material_page_record(self, page_key: str, record_id: str) -> None:
+    async def delete_material_page_record(
+        self, page_key: str, record_id: str, *, scope: DepartmentScope | None = None
+    ) -> None:
         """删除飞书多维表格中的记录。"""
+        scope = await self._material_page_scope(page_key, scope)
+        if (
+            scope is not None
+            and not scope.is_all
+            and page_key in HARDWARE_DEPT_PAGE_KEYS
+        ):
+            await self.get_material_page_record_detail(page_key, record_id, scope=scope)
         page_config = await self._get_material_page_config(page_key)
         client = await self._get_material_client(page_config.app_token)
         try:

@@ -1,11 +1,11 @@
 "use client"
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Menu } from "antd"
 import type { MenuProps } from "antd"
 import type { ModuleMenu, SubMenuItem } from "@/lib/menu-config"
-import { SettingOutlined } from "@ant-design/icons"
+import { LoadingOutlined, SettingOutlined } from "@ant-design/icons"
 import type { User } from "@/types/user"
 
 type MenuItem = Required<MenuProps>['items'][number]
@@ -206,9 +206,27 @@ export function Sidebar({ user, modules }: SidebarProps) {
   const currentModule = modules.find((module) => module.key === moduleKey)
   const queryString = searchParams.toString()
   const query = useMemo(() => new URLSearchParams(queryString), [queryString])
+  const currentHref = `${pathname}${queryString ? `?${queryString}` : ""}`
+  const [pendingNavigation, setPendingNavigation] = useState<{
+    fromHref: string
+    targetHref: string
+  } | null>(null)
+  const pendingHref = pendingNavigation?.fromHref === currentHref
+    ? pendingNavigation.targetHref
+    : null
   const [openKeys, setOpenKeys] = useState<string[]>(() =>
     currentModule ? collectAncestorKeys(currentModule.children, pathname, query) : []
   )
+
+  useEffect(() => {
+    if (!pendingNavigation) return
+    if (pendingNavigation.fromHref !== currentHref) {
+      const frame = window.requestAnimationFrame(() => setPendingNavigation(null))
+      return () => window.cancelAnimationFrame(frame)
+    }
+    const timeout = window.setTimeout(() => setPendingNavigation(null), 60_000)
+    return () => window.clearTimeout(timeout)
+  }, [currentHref, pendingNavigation])
 
   const moduleChildren = useMemo(
     () => filterMenuItemsByRole(currentModule?.children || [], user.role === "admin"),
@@ -246,9 +264,16 @@ export function Sidebar({ user, modules }: SidebarProps) {
     setOpenKeys(keys)
   }
 
+  const navigateTo = (path: string) => {
+    const href = withAuthToken(path)
+    if (href === currentHref) return
+    setPendingNavigation({ fromHref: currentHref, targetHref: href })
+    router.push(href)
+  }
+
   const handleClick: MenuProps['onClick'] = ({ key }) => {
     const path = keyPathMap.get(key)
-    if (path) router.push(withAuthToken(path))
+    if (path) navigateTo(path)
   }
 
   if (!currentModule) return null
@@ -257,7 +282,7 @@ export function Sidebar({ user, modules }: SidebarProps) {
     <aside className="w-56 bg-[var(--color-canvas)] border-r border-[var(--color-hairline)] flex flex-col shrink-0 overflow-y-auto">
       <div
         className={`px-4 pt-5 pb-3${moduleKey === "safety" ? " cursor-pointer group" : ""}`}
-        onClick={moduleKey === "safety" ? () => router.push(currentModule.path) : undefined}
+        onClick={moduleKey === "safety" ? () => navigateTo(currentModule.path) : undefined}
       >
         <h2
           className={`text-[18px] font-semibold text-[var(--color-charcoal)]${
@@ -267,6 +292,17 @@ export function Sidebar({ user, modules }: SidebarProps) {
           {currentModule.label}
         </h2>
       </div>
+
+      {pendingHref && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="mx-3 mb-2 flex min-h-8 items-center gap-2 rounded-[var(--rounded-sm)] bg-[var(--color-surface)] px-3 text-[12px] text-[var(--color-steel)]"
+        >
+          <LoadingOutlined spin aria-hidden />
+          <span>正在打开页面…</span>
+        </div>
+      )}
 
       <Menu
         mode="inline"
@@ -300,7 +336,7 @@ export function Sidebar({ user, modules }: SidebarProps) {
         </p>
         {user?.role === "admin" && (
           <button
-            onClick={() => router.push(withAuthToken("/settings"))}
+            onClick={() => navigateTo("/settings")}
             className="inline-flex min-h-8 items-center gap-1.5 rounded-[var(--rounded-sm)] px-2 text-[12px] font-medium text-[var(--color-stone)] transition-colors hover:bg-[var(--color-surface)] hover:text-[var(--color-primary)]"
             title="系统设置"
           >

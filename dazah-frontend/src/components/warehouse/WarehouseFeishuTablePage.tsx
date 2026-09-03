@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import {
   App,
+  Alert,
   Avatar,
   Button,
   Card,
@@ -44,6 +45,8 @@ import type {
   WarehouseRecordFieldValue,
 } from '@/types/warehouse'
 import { usePermission } from '@/hooks/usePermission'
+import { useAuthStore } from '@/stores/auth'
+import { getPageKeyByPath } from '@/lib/menu-config'
 import {
   warehouseScopeOf,
   warehouseScopeWritePermission,
@@ -966,12 +969,24 @@ export function WarehouseFeishuTablePage({
   const [isPending, startTransition] = useTransition()
   const currentKeyword = searchParams.get('keyword') ?? ''
   const resolvedPageKey = pageKey ?? data.page_key
+  const { user, hasPagePermission } = useAuthStore()
+  const permissionPageKey = getPageKeyByPath(pathname) ?? ''
+  const pagePolicyEnforced = user?.page_permission_rollouts?.warehouse === 'enforced'
+  const canQueryThisPage = !pagePolicyEnforced || hasPagePermission(permissionPageKey, 'query')
   // 编辑权限：本页面所属子领域（成品/五金/原辅料及包材）细分码或模块级 write；
   // 由后台部门角色映射决定，无权限时隐藏写按钮（后端端点校验为最终边界）
-  const canEditThisPage = hasAny([
+  const canEditThisPage = pagePolicyEnforced
+    ? hasPagePermission(permissionPageKey, 'operate')
+    : hasAny([
     warehouseScopeWritePermission(warehouseScopeOf(resolvedPageKey)),
     'warehouse:write',
   ])
+  const canDeleteThisPage = pagePolicyEnforced
+    ? hasPagePermission(permissionPageKey, 'operate', 'delete')
+    : canEditThisPage
+  const canSyncThisPage = pagePolicyEnforced
+    ? hasPagePermission(permissionPageKey, 'operate', 'sync_config')
+    : canEditThisPage
   const isCompactPage = Boolean(PAGE_COLUMN_RULES[resolvedPageKey]?.length)
   const currentDateField = searchParams.get('date_field') ?? ''
   const currentDateFilterType = (searchParams.get('date_filter_type') as DateFilterType | null) ?? ''
@@ -1364,6 +1379,7 @@ export function WarehouseFeishuTablePage({
     queryKey,
     queryFn: () => fetchWarehouseMaterialPage(resolvedPageKey, buildQueryParams()),
     initialData: data,
+    enabled: canQueryThisPage,
   })
 
   // 查询结果同步到 localData（与上方 useEffect(() => setLocalData(data)) 的 SSR prop 同步并存：
@@ -1403,15 +1419,16 @@ export function WarehouseFeishuTablePage({
   // 自动轮询定时器不会在每次渲染时被重置（属性访问写法会触发 exhaustive-deps 误报，故禁用该规则）
   const refreshData = useCallback(
     (force: boolean) => {
+      if (!canQueryThisPage || (force && !canSyncThisPage)) return
       setRefreshing(true)
       refreshMutation.mutate(force)
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [refreshMutation.mutate]
+    [refreshMutation.mutate, canQueryThisPage, canSyncThisPage]
   )
 
   const handleRefresh = () => {
-    void refreshData(true)
+    void refreshData(false)
   }
 
   // 自动轮询：默认关闭，开启后每 60s 拉取一次最新数据（命中后端缓存，开销小）
@@ -1434,7 +1451,7 @@ export function WarehouseFeishuTablePage({
   }
 
   const handleStartEdit = () => {
-    if (!detailData) {
+    if (!detailData || !canEditThisPage) {
       return
     }
     const initial: Record<string, unknown> = {}
@@ -1462,7 +1479,7 @@ export function WarehouseFeishuTablePage({
   }
 
   const handleSave = async () => {
-    if (!detailData) {
+    if (!detailData || !canEditThisPage) {
       return
     }
     setSaving(true)
@@ -1482,7 +1499,7 @@ export function WarehouseFeishuTablePage({
   }
 
   const handleDelete = async () => {
-    if (!detailData) {
+    if (!detailData || !canDeleteThisPage) {
       return
     }
     setDeleting(true)
@@ -1758,6 +1775,10 @@ export function WarehouseFeishuTablePage({
     pushWithParams(nextParams)
   }
 
+  if (!canQueryThisPage) {
+    return <Alert type="warning" showIcon title="此页面未获得查询数据权限" description="请联系权限管理员调整页面授权。" />
+  }
+
   return (
     <div className="w-full">
       <style>{`
@@ -1879,11 +1900,16 @@ export function WarehouseFeishuTablePage({
             />
             <Button
               icon={<ReloadOutlined />}
-              onClick={() => void refreshData(true)}
+              onClick={handleRefresh}
               loading={refreshing}
             >
               刷新
             </Button>
+            {canSyncThisPage ? (
+              <Popconfirm title="同步当前页面的最新数据？" description="将从飞书重新读取此页面数据并更新共享缓存。" onConfirm={() => refreshData(true)} okText="同步" cancelText="取消">
+                <Button loading={refreshing}>同步最新数据</Button>
+              </Popconfirm>
+            ) : null}
           </Space>
         }
       >
@@ -2143,7 +2169,7 @@ export function WarehouseFeishuTablePage({
               cancelText="取消"
               onConfirm={() => void handleDelete()}
             >
-              {canEditThisPage ? (
+              {canDeleteThisPage ? (
                 <Button danger loading={deleting}>
                   删除记录
                 </Button>

@@ -28,7 +28,12 @@ from app.modules.agent.repository import AgentRepository
 from app.modules.agent.schemas import AgentAutomationDraftCreate
 from app.modules.agent.tools import tool_registry
 from app.platform.audit.models import AuditLog
-from app.platform.identity.models import PermissionOutboxEvent, User, UserModuleGrant
+from app.platform.identity.models import (
+    PermissionOutboxEvent,
+    User,
+    UserModuleGrant,
+    UserPageGrant,
+)
 from app.platform.identity.permissions import IdentityPermissionService
 from app.platform.identity.schemas import (
     ModulePermissionGrantInput,
@@ -73,6 +78,17 @@ async def _grant_automation(
         ),
         current_user=admin,
     )
+    db_session.add(
+        UserPageGrant(
+            user_id=owner.id,
+            page_key="quality:deviations:deviation-ledger",
+            permissions=["access", "query"],
+            sensitive_actions=[],
+            scope_type="not_applicable",
+            department_ids=[],
+        )
+    )
+    await db_session.flush()
 
 
 def _draft_payload(

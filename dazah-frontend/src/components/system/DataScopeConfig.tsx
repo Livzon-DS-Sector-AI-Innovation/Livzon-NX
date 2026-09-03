@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo } from "react"
+import { PAGE_DATA_SCOPE_VISIBLE } from "@/lib/page-permission-editor"
 import { Radio, Tree } from "antd"
 import type { TreeDataNode } from "antd"
 import type { DepartmentItem } from "@/lib/api/server/admin"
@@ -41,6 +42,8 @@ export function DataScopeConfig({ departments, value, onChange }: DataScopeConfi
         }))
     return build("")
   }, [departments])
+
+  if (!PAGE_DATA_SCOPE_VISIBLE) return null
 
   return (
     <div>

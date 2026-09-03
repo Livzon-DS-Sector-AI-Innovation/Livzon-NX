@@ -1,7 +1,7 @@
 'use server'
 
-import { cookies } from 'next/headers'
 import { revalidatePath } from 'next/cache'
+import { getAuthHeaders } from '@/lib/auth'
 import type { WarehousePageFeishuConfig } from '@/types/warehouse'
 
 type WarehouseFeishuConfigInput = {
@@ -54,14 +54,11 @@ const API_BASE =
  */
 
 async function authedFetch(path: string, init?: RequestInit): Promise<Response> {
-  const cookieStore = await cookies()
-  const token = cookieStore.get('auth_token')
+  const authHeaders = await getAuthHeaders()
+  if (init?.body instanceof FormData) delete authHeaders['Content-Type']
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
+    ...authHeaders,
     ...(init?.headers as Record<string, string> | undefined),
-  }
-  if (token?.value) {
-    headers['Authorization'] = `Bearer ${token.value}`
   }
   return fetch(`${API_BASE}/api/v1${path}`, { ...init, headers, cache: 'no-store' })
 }

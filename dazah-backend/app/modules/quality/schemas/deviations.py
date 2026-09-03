@@ -4,7 +4,41 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+
+class DeviationBatchDeleteRequest(BaseModel):
+    ids: list[uuid.UUID] = Field(min_length=1, max_length=100)
+
+    @field_validator("ids")
+    @classmethod
+    def unique_ids(cls, values: list[uuid.UUID]) -> list[uuid.UUID]:
+        if len(set(values)) != len(values):
+            raise ValueError("不能重复选择同一偏差记录")
+        return values
+
+
+class DeviationBatchDeleteResult(BaseModel):
+    deleted: int
+    failed: list[uuid.UUID] = Field(default_factory=list)
+
+
+class DeviationCreateResult(BaseModel):
+    id: uuid.UUID
+    code: str
+
+
+class DeviationReporterOption(BaseModel):
+    open_id: str
+    name: str
+    department: str
+
+
+class DeviationReporterPage(BaseModel):
+    items: list[DeviationReporterOption]
+    total: int
+    page: int
+    page_size: int
 
 
 class AiAnalysis(BaseModel):

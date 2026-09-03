@@ -24,8 +24,10 @@ from app.core.database import async_session_factory
 from app.core.response import error_response
 from app.platform.identity.access_check import check_access
 from app.platform.identity.deps import get_current_user
+from app.platform.identity.page_permission_repository import PagePermissionRepository
 from app.platform.identity.rbac import (
     is_public_path,
+    match_module,
     resolve_user_permissions,
 )
 
@@ -37,7 +39,17 @@ JWT_RENEW_THRESHOLD_SECONDS = 3600  # JWT 剩余 < 1h 自动续签
 AUTH_PATH_PREFIX = "/api/v1/identity/auth/"
 LOGIN_RATE_LIMIT = 10  # 每分钟最多 10 次
 LOGIN_RATE_WINDOW_SECONDS = 60
-ROUTE_AUTH_PATH_PREFIXES = ("/api/v1/agent/internal/",)
+# Agent-to-Agent endpoints authenticate with their own service token at the
+# endpoint boundary.  They must bypass the end-user JWT gate here; otherwise a
+# valid Hermes service token is mistaken for a browser JWT and rejected before
+# the endpoint can validate it.
+ROUTE_AUTH_PATH_PREFIXES = (
+    "/api/v1/agent/internal/",
+    "/api/v1/agent/tools/",
+    "/api/v1/agent/confirmations/",
+    "/api/v1/agent/llm/",
+)
+ROUTE_AUTH_EXACT_PATHS = ("/api/v1/agent/skills/resolve",)
 
 
 def _matches_registered_route(request: Request) -> bool:
@@ -96,7 +108,7 @@ class PermissionMiddleware(BaseHTTPMiddleware):
 
         # Internal Agent routes authenticate with their own service token at
         # the endpoint boundary rather than with an end-user JWT.
-        if path.startswith(ROUTE_AUTH_PATH_PREFIXES):
+        if path in ROUTE_AUTH_EXACT_PATHS or path.startswith(ROUTE_AUTH_PATH_PREFIXES):
             return await call_next(request)
 
         # Authentication middleware must not turn an absent route into 401.
@@ -125,31 +137,52 @@ class PermissionMiddleware(BaseHTTPMiddleware):
         except jwt.InvalidTokenError:
             return self._unauthorized()
 
-        open_id = payload.get("open_id")
-        if not open_id:
-            return self._unauthorized()
-
         # 解析用户权限（缓存优先）
+        user_id = payload.get("sub")
+        if not user_id:
+            return self._unauthorized()
         async with async_session_factory() as db:
-            user_id = payload.get("sub")
-            if not user_id:
-                return self._unauthorized()
             from app.platform.identity.permission_cache import (
                 get_cached_permissions,
                 set_cached_permissions,
             )
+            from app.platform.identity.repository import UserRepository
 
-            permissions = await get_cached_permissions(user_id)
+            user = await UserRepository().get_by_id(db, user_id)
+            if user is None or user.status != "active":
+                return self._unauthorized()
+            # The unified identity is authoritative even if a pre-merge cache
+            # still lacks the wildcard. Never trust a cached wildcard on demotion.
+            permissions = (
+                ["*"] if user.role == "admin" else await get_cached_permissions(user_id)
+            )
+            if user.role != "admin" and permissions and "*" in permissions:
+                permissions = None
             if permissions is None:
                 permissions = await resolve_user_permissions(db, user_id)
                 await set_cached_permissions(user_id, permissions)
+            module_code = match_module(path)
+            rollout = (
+                await PagePermissionRepository().get_rollout(
+                    db, module_code=module_code
+                )
+                if module_code
+                else None
+            )
+            page_policy_enforced = rollout is not None and rollout.status == "enforced"
+
+        # New page authorization replaces legacy business permissions. The
+        # mounted module dependency authenticates the user and checks the exact
+        # page/API contract; bypassing only the obsolete RBAC decision is safe.
+        if page_policy_enforced:
+            return await self._maybe_renew(request, call_next, payload, user_id)
 
         # Preserve the current deployment's explicit "all authenticated
         # users" mode. RBAC enforcement is enabled when MODULE_ACCESS_MODE is
         # switched to roles; the route-level module wrapper still requires a
         # logged-in user in both modes.
         if settings.effective_module_access_mode == "all":
-            return await self._maybe_renew(request, call_next, payload, open_id)
+            return await self._maybe_renew(request, call_next, payload, user_id)
 
         # 准入判定统一收敛到 check_access（与接口权限模拟器共用同一套逻辑）。
         # 未命中模块、通配、identity 子路径、常规模块、写操作细分放行均由其判定，
@@ -158,10 +191,10 @@ class PermissionMiddleware(BaseHTTPMiddleware):
         if not decision.allowed:
             return self._forbidden(decision.required or decision.reason)
 
-        return await self._maybe_renew(request, call_next, payload, open_id)
+        return await self._maybe_renew(request, call_next, payload, user_id)
 
     async def _maybe_renew(
-        self, request: Any, call_next: Any, payload: dict[str, Any], open_id: str
+        self, request: Any, call_next: Any, payload: dict[str, Any], user_id: str
     ) -> Any:
         """JWT 剩余 < 1h 时续签并 Set-Cookie。续签失败不阻断请求。"""
         response = await call_next(request)
@@ -178,7 +211,7 @@ class PermissionMiddleware(BaseHTTPMiddleware):
 
             async with async_session_factory() as db:
                 repo = UserRepository()
-                user = await repo.get_by_feishu_open_id(db, open_id)
+                user = await repo.get_by_id(db, user_id)
                 if user is None:
                     return response
                 new_token = generate_jwt(user)
@@ -192,7 +225,7 @@ class PermissionMiddleware(BaseHTTPMiddleware):
                 samesite="lax",
                 secure=str(request.url).startswith("https:"),
             )
-            logger.info("JWT renewed for open_id=%s", open_id)
+            logger.info("JWT renewed for user_id=%s", user_id)
         except Exception:
             logger.exception("JWT renew failed (non-blocking)")
         return response

@@ -295,6 +295,7 @@ async def test_admin_grant_change_syncs_livzon_scope_with_versioned_outbox(
     assert event.event_type == "identity.user_module_grants.changed.v1"
     assert snapshot.source_grant_version == 1
     assert snapshot.sync_status == "synced"
+    # 质量模块仍处于草稿期，Agent 快照继续按旧模块授权规则派生工具能力。
     assert "quality.list_deviations" in snapshot.tool_names
     assert "quality.list_deviations" in snapshot.workflow_tool_names
     assert snapshot.modules == [

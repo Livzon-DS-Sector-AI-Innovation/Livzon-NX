@@ -11,7 +11,7 @@ from app.core.redaction import REDACTED_VALUE
 from app.modules.agent.automation_service import AgentAutomationService
 from app.modules.agent.models import AgentWorkflow
 from app.modules.agent.schemas import AgentAutomationDraftCreate
-from app.platform.identity.models import User
+from app.platform.identity.models import User, UserPageGrant
 from app.platform.identity.permissions import IdentityPermissionService
 from app.platform.identity.schemas import (
     ModulePermissionGrantInput,
@@ -75,6 +75,17 @@ async def _grant_quality_automation(
         ),
         current_user=admin,
     )
+    db_session.add(
+        UserPageGrant(
+            user_id=user.id,
+            page_key="quality:deviations:deviation-ledger",
+            permissions=["access", "query"],
+            sensitive_actions=[],
+            scope_type="not_applicable",
+            department_ids=[],
+        )
+    )
+    await db_session.flush()
 
 
 @pytest.mark.anyio

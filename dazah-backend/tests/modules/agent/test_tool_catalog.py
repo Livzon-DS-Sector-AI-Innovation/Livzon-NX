@@ -72,7 +72,8 @@ class ConfigurableAccessScope:
 async def test_access_scope_selects_workflow_tool_allowlist() -> None:
     service = AgentAccessScopeService()
 
-    async def current_scope(db: Any, *, user: Any) -> Any:
+    async def current_scope(db: Any, *, user: Any, rebuild_if_stale: bool) -> Any:
+        assert rebuild_if_stale is False
         return SimpleNamespace(
             tool_names=[],
             workflow_tool_names=["quality.list_deviations"],

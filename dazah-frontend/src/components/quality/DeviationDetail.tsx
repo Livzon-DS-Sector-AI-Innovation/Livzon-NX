@@ -1,14 +1,15 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
-import { App, Card, Button, Space, Form, Input, Select, DatePicker, Radio } from 'antd'
+import { Alert, App, Card, Button, Space, Form, Input, Select, DatePicker, Radio } from 'antd'
 import { ArrowLeftOutlined, DeleteOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import dayjs from 'dayjs'
 import { fetchDeviation } from '@/lib/api/client/quality'
 import { updateDeviation, deleteDeviation } from '@/actions/quality-deviation'
 import type { DeviationDetail as DeviationDetailType, DeviationStatus } from '@/types/quality'
+import { useDeviationPermissions } from './useDeviationPermissions'
 
 /** JSON 列视图类型：后端以 JSON 存储（generated 类型为 unknown[]），此处补充视图层类型 */
 type DeviationJsonView = Omit<DeviationDetailType, 'investigation_records' | 'review_opinions'> & {
@@ -71,12 +72,15 @@ export function DeviationDetail(props: DeviationDetailProps = {}) {
   const { message, modal } = App.useApp()
   const queryClient = useQueryClient()
   const id = params.id as string
+  const { canQuery, canOperate, canDelete, workflowFieldsReadOnly, authorizationKey } = useDeviationPermissions()
+  const [initialAuthorizationKey] = useState(authorizationKey)
 
   const { data: deviation, isLoading: loading, error } = useQuery<DeviationJsonView>({
-    queryKey: ['quality-deviation', 'detail', id],
+    queryKey: ['quality-deviation', 'detail', id, authorizationKey],
     queryFn: () => fetchDeviation(id),
-    enabled: !!id,
-    initialData: (props.initialDeviation ?? undefined) as DeviationJsonView | undefined,
+    enabled: !!id && canQuery,
+    initialData: canQuery && initialAuthorizationKey === authorizationKey
+      ? (props.initialDeviation ?? undefined) as DeviationJsonView | undefined : undefined,
   })
 
   const [editForm] = Form.useForm()
@@ -99,7 +103,7 @@ export function DeviationDetail(props: DeviationDetailProps = {}) {
 
   // 数据加载后回填表单（对齐桌面台账：可编辑区域直接展示可编辑内容）
   useEffect(() => {
-    if (deviation) {
+    if (canQuery && deviation) {
       editForm.setFieldsValue({
         affected_items: deviation.affected_items,
         batch_number: deviation.batch_number,
@@ -113,10 +117,13 @@ export function DeviationDetail(props: DeviationDetailProps = {}) {
         material_disposition: deviation.material_disposition,
         is_closed: deviation.status === 'closed',
       })
+    } else {
+      editForm.resetFields()
     }
-  }, [deviation, editForm])
+  }, [canQuery, deviation, editForm])
 
   const handleSaveEdit = async () => {
+    if (!canOperate || !deviation) return
     try {
       const values = await editForm.validateFields()
       // 组装更新数据：可编辑列对齐桌面台账
@@ -135,7 +142,9 @@ export function DeviationDetail(props: DeviationDetailProps = {}) {
         corrective_actions: values.corrective_actions,
         material_disposition: values.material_disposition,
         // 是否关闭：选择"是"时置为已关闭，否则恢复为草稿/进行中
-        status: values.is_closed === true ? 'closed' : values.is_closed === false && deviation!.status === 'closed' ? 'draft' : deviation!.status,
+        ...(workflowFieldsReadOnly ? {} : {
+          status: values.is_closed === true ? 'closed' : values.is_closed === false && deviation!.status === 'closed' ? 'draft' : deviation!.status,
+        }),
       })
       message.success('保存成功')
       queryClient.invalidateQueries({ queryKey: ['quality-deviation', 'detail', id] })
@@ -146,9 +155,10 @@ export function DeviationDetail(props: DeviationDetailProps = {}) {
   }
 
   const handleDelete = () => {
+    if (!canDelete || !deviation) return
     modal.confirm({
       title: '确认删除',
-      content: '确定要删除此偏差吗？此操作不可恢复。',
+      content: '确定要删除此偏差吗？删除后记录将从台账隐藏，并保留操作审计。',
       okText: '删除',
       okType: 'danger',
       cancelText: '取消',
@@ -162,6 +172,10 @@ export function DeviationDetail(props: DeviationDetailProps = {}) {
         }
       },
     })
+  }
+
+  if (!canQuery) {
+    return <Alert type="info" showIcon title="尚未获得偏差台账查询权限，请联系系统管理员。" />
   }
 
   if (loading) {
@@ -182,17 +196,17 @@ export function DeviationDetail(props: DeviationDetailProps = {}) {
           <h2 style={{ margin: 0 }}>{deviation.deviation_code}</h2>
         </Space>
         <Space>
-          <Button type="primary" onClick={handleSaveEdit}>
+          {canOperate && <Button type="primary" onClick={handleSaveEdit}>
             保存
-          </Button>
-          <Button danger icon={<DeleteOutlined />} onClick={handleDelete}>
+          </Button>}
+          {canDelete && <Button danger icon={<DeleteOutlined />} onClick={handleDelete}>
             删除
-          </Button>
+          </Button>}
         </Space>
       </div>
 
-      <Card title="偏差台账编辑" style={{ marginBottom: 16 }}>
-        <Form form={editForm} layout="vertical">
+      <Card title={canOperate ? '偏差台账编辑' : '偏差台账详情（只读）'} style={{ marginBottom: 16 }}>
+        <Form form={editForm} layout="vertical" disabled={!canOperate}>
           <Form.Item label="偏差编号">
             <Input value={deviation.deviation_code} disabled />
           </Form.Item>
@@ -242,8 +256,9 @@ export function DeviationDetail(props: DeviationDetailProps = {}) {
           <Form.Item name="material_disposition" label="产品/物料处理结果">
             <TextArea rows={3} placeholder="请输入产品/物料处理结果" />
           </Form.Item>
-          <Form.Item name="is_closed" label="是否关闭">
+          <Form.Item name="is_closed" label="是否关闭" extra={workflowFieldsReadOnly ? '关闭状态由业务流程维护，不能通过普通编辑修改。' : undefined}>
             <Select
+              disabled={!canOperate || workflowFieldsReadOnly}
               placeholder="请选择是否关闭"
               options={[
                 { label: '是', value: true },
