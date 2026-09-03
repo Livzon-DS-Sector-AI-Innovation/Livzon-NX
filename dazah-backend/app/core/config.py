@@ -59,7 +59,7 @@ class Settings(BaseSettings):
     # Audit
     AUDIT_RETENTION_DAYS: int = 7
 
-    # Feishu / Lark — only SSO and department/user directory access.
+    # Feishu / Lark — platform app shared by SSO, org sync, IM and common Bitable.
     FEISHU_APP_ID: str = ""
     FEISHU_APP_SECRET: str = ""
     FEISHU_REDIRECT_URI: str = ""

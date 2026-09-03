@@ -829,7 +829,7 @@ class TrainingLedger(BaseModel):
         String(64), nullable=True, comment="培训时间（日期+时间）"
     )
     training_content: Mapped[str | None] = mapped_column(
-        String(4096), nullable=True, comment="培训内容（含文件编号）"
+        Text, nullable=True, comment="培训内容（含文件编号）"
     )
     teaching_dept: Mapped[str | None] = mapped_column(
         String(128), nullable=True, comment="授课部门"

@@ -76,3 +76,19 @@ def test_import_alias_resolves_presented_header() -> None:
     mapping = _map_headers_by_alias(["是否呈现", "培训日期"])
     assert mapping["0"] == "is_presented"
     assert mapping["1"] == "training_date"
+
+
+def test_training_content_schema_accepts_long_text() -> None:
+    """培训内容已解除 4096 上限：超长内容新建/更新 schema 均不再被拒。"""
+    from app.modules.hr.schemas import TrainingLedgerCreate
+
+    long_content = "培训内容详情。" * 1200  # 7200 字符 > 4096
+    created = TrainingLedgerCreate(
+        training_content=long_content,
+        ledger_department="质量部",
+        source_type="manual",
+    )
+    assert created.training_content == long_content
+    updated = TrainingLedgerUpdate(training_content=long_content)
+    assert updated.training_content == long_content
+
