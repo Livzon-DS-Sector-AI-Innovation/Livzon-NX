@@ -93,18 +93,6 @@ class TestCreateReview:
         assert data["files"] == []
         assert data["id"]
 
-    @pytest.mark.anyio
-    async def test_create_entry_review_missing_entry_id(
-        self, client: AsyncClient
-    ) -> None:
-        response = await client.post(
-            "/api/v1/quality/validation-reviews",
-            json={"review_mode": "entry"},
-        )
-        assert response.status_code == 422
-        assert "必须指定目录条目" in response.json()["message"]
-
-
 class TestUploadFile:
     @pytest.mark.anyio
     async def test_upload_markdown(self, client: AsyncClient) -> None:

@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Any
 
 from docx import Document
+from docx.enum.section import WD_ORIENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
 from docx.shared import Pt
@@ -18,6 +19,7 @@ CATEGORY_LABELS: dict[str, str] = {
     "content_consistency": "内容一致性",
     "format_issue": "格式/编号问题",
     "numeric_check": "数值核对",
+    "basis_content_mismatch": "依据内容不一致",
 }
 SEVERITY_LABELS: dict[str, str] = {
     "high": "高",
@@ -95,8 +97,13 @@ def _format_time(value: Any) -> str:
 
 
 def build_review_docx(out_data: dict[str, Any]) -> bytes:
-    """根据审核结果组装 docx 报告字节流。"""
+    """根据审核结果组装 docx 报告字节流（横向 A4，适配宽表格）。"""
     doc = Document()
+    section = doc.sections[0]
+    page_width, page_height = section.page_width, section.page_height
+    section.orientation = WD_ORIENT.LANDSCAPE
+    section.page_width = page_height
+    section.page_height = page_width
 
     _add_paragraph(
         doc, "验证方案与报告 AI 审核报告", bold=True, size=16,
@@ -106,7 +113,7 @@ def build_review_docx(out_data: dict[str, Any]) -> bytes:
     meta = [
         ("审核记录", str(out_data.get("id") or "")[:8]),
         ("标题", out_data.get("title") or ""),
-        ("来源", "文件管理" if out_data.get("review_mode") == "entry" else "页面上传"),
+        ("来源", "页面上传"),
         ("状态", _status_label(out_data.get("status") or "")),
         ("生成时间", _format_time(out_data.get("last_generated_at"))),
     ]
@@ -156,12 +163,28 @@ def build_review_docx(out_data: dict[str, Any]) -> bytes:
                     str(finding.get("location") or ""),
                     str(finding.get("quote") or ""),
                     "已核" if finding.get("quote_verified") else "未核",
+                    str(finding.get("validation_quote") or "")
+                    if finding.get("category") == "basis_content_mismatch"
+                    else "",
+                    str(finding.get("basis_quote") or "")
+                    if finding.get("category") == "basis_content_mismatch"
+                    else "",
                     str(finding.get("detail") or ""),
                 ]
             )
         _add_table(
             doc,
-            ["序号", "分类", "严重度", "位置", "原文", "引文校验", "说明"],
+            [
+                "序号",
+                "分类",
+                "严重度",
+                "位置",
+                "原文",
+                "引文校验",
+                "验证文档原文",
+                "依据规程原文",
+                "说明",
+            ],
             rows,
         )
 
