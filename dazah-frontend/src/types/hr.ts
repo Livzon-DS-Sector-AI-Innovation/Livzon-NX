@@ -612,6 +612,8 @@ export interface TrainingLedgerRecord {
   plan_source?: string | null
   drug_category?: string | null
   score_summary?: string | null
+  /** 参训人员统计：关联会话真实名单数；无名单时按培训对象文本分隔计数（详情展示/导出用） */
+  attendance_count?: number | null
   // 台账多部门管理字段
   ledger_department?: string | null
   owner_deleted?: boolean | null
