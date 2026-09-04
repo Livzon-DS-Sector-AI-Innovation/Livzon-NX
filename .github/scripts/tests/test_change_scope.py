@@ -22,7 +22,7 @@ class ChangeScopeTests(unittest.TestCase):
                 "dazah-frontend/src/app/page.tsx",
                 "dazah-backend/app/main.py",
                 "Hermes-Lite/tools/dazah_platform.py",
-                "dazah-backend/Dockerfile",
+                "Dockerfile",
             }
         )
         self.assertTrue(scopes["frontend_changed"])

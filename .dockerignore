@@ -32,4 +32,5 @@
 /.dev-data/
 /.deploy-tmp/
 /.deploy-cache/
+/Hermes-Lite/temp/
 release

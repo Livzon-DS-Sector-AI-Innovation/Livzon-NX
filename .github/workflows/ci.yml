@@ -169,8 +169,12 @@ jobs:
       - name: Validate Compose and build frontend image
         run: |
           docker compose --env-file /dev/null \
-            -f docker-compose.yml config --no-env-resolution --quiet
-          docker build --tag "dazah-frontend:ci-${GITHUB_SHA}" .
+            -f ../compose.dev.yml config --no-interpolate --quiet
+          docker build \
+            --file ../Dockerfile \
+            --target frontend \
+            --tag "dazah-frontend:ci-${GITHUB_SHA}" \
+            ..
 
       - name: Upload frontend coverage
         if: ${{ always() && hashFiles('dazah-frontend/coverage/**') != '' }}
@@ -496,8 +500,10 @@ jobs:
             --load \
             --cache-from type=gha \
             --cache-to type=gha,mode=max \
+            --file Dockerfile \
+            --target backend \
             --tag "$IMAGE_TAG" \
-            ./dazah-backend
+            .
 
       - name: Generate complete image vulnerability report
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25

@@ -139,6 +139,10 @@ Copy-Item .env.local.example .env.local
 docker compose --env-file .env.local -f compose.dev.yml up -d --build
 ```
 
+The development frontend reconciles its named `node_modules` volume with
+`pnpm-lock.yaml` on every start, so dependency changes do not require manual
+volume removal.
+
 Environment files are runtime inputs and are intentionally excluded from the
 Docker build context. Never copy production credentials into an image. Use
 `.env.example` and `.env.local.example` as templates.
@@ -154,6 +158,6 @@ docker compose --env-file .env -f compose.yml up -d
 
 Production services use `pull_policy: never`, so deployment does not depend on
 the server reaching an image registry. The root Compose runs Alembic migrations
-to `head` before starting the backend. The subproject Compose files are retained
-for historical compatibility, read `../.env.local`/`../.env`, and are not
-workspace deployment entry points.
+to `head` before starting the backend. Dockerfiles, `.dockerignore` files and
+Compose files in the frontend, backend and Hermes-Lite directories have been
+removed; all container builds and orchestration must use these root files.

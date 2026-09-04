@@ -101,7 +101,7 @@ pnpm test:unit
 pnpm test:coverage
 pnpm test:e2e:critical
 pnpm build
-docker build --tag dazah-frontend:ci .
+docker build --file ../Dockerfile --target frontend --tag dazah-frontend:ci ..
 ```
 
 - `pnpm lint` 对应 CI `Lint` 中的 ESLint。新增和修改代码必须零 error，且不得增加 warning；历史 warning 渐进清理，不得通过放宽规则或批量忽略消除。
