@@ -68,6 +68,7 @@ describe('quality migrated menu contract', () => {
       'cleaning-validation',
       'other-validations',
       'qc-validation',
+      'validation-ai-review',
     ])
     expect(children.find((item) => item.key === 'change')?.children?.map((item) => item.key)).toEqual([
       'change-ledger',

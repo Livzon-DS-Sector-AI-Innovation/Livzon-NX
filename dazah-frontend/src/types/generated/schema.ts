@@ -18541,6 +18541,127 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/quality/validation-reviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 分页列出验证 AI 审核会话 */
+        get: operations["list_reviews_endpoint_api_v1_quality_validation_reviews_get"];
+        put?: never;
+        /** 新建验证 AI 审核会话 */
+        post: operations["create_review_endpoint_api_v1_quality_validation_reviews_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/validation-reviews/job/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查询验证 AI 审核任务进度与结果 */
+        get: operations["get_review_job_endpoint_api_v1_quality_validation_reviews_job__job_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/validation-reviews/{review_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 获取验证 AI 审核详情 */
+        get: operations["get_review_detail_endpoint_api_v1_quality_validation_reviews__review_id__get"];
+        put?: never;
+        post?: never;
+        /** 删除验证 AI 审核会话（软删除） */
+        delete: operations["delete_review_endpoint_api_v1_quality_validation_reviews__review_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/validation-reviews/{review_id}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 导出验证 AI 审核报告（docx） */
+        post: operations["export_review_endpoint_api_v1_quality_validation_reviews__review_id__export_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/validation-reviews/{review_id}/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 上传 VP/VR 文档到审核会话 */
+        post: operations["upload_review_file_endpoint_api_v1_quality_validation_reviews__review_id__files_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/validation-reviews/{review_id}/rerun": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 重新运行验证 AI 审核 */
+        post: operations["rerun_review_endpoint_api_v1_quality_validation_reviews__review_id__rerun_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/validation-reviews/{review_id}/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 发起验证 AI 审核（后台任务） */
+        post: operations["run_review_endpoint_api_v1_quality_validation_reviews__review_id__run_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/quality/validations": {
         parameters: {
             query?: never;
@@ -27350,6 +27471,78 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /** ApiResponseEnvelope[ValidationReviewFileUploadedOut] */
+        ApiResponseEnvelope_ValidationReviewFileUploadedOut_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["ValidationReviewFileUploadedOut"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[ValidationReviewJobStatusResponse] */
+        ApiResponseEnvelope_ValidationReviewJobStatusResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["ValidationReviewJobStatusResponse"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[ValidationReviewOut] */
+        ApiResponseEnvelope_ValidationReviewOut_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["ValidationReviewOut"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[ValidationReviewRunOut] */
+        ApiResponseEnvelope_ValidationReviewRunOut_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["ValidationReviewRunOut"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
         /** ApiResponseEnvelope[ValidationStatistics] */
         ApiResponseEnvelope_ValidationStatistics_: {
             /**
@@ -28177,6 +28370,25 @@ export interface components {
             code: number;
             /** Data */
             data: components["schemas"]["ValidationListItem"][];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[list[ValidationReviewListItem]] */
+        ApiResponseEnvelope_list_ValidationReviewListItem__: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            /** Data */
+            data: components["schemas"]["ValidationReviewListItem"][];
             /**
              * Message
              * @default success
@@ -30059,6 +30271,13 @@ export interface components {
         };
         /** Body_upload_regulation_document_api_v1_safety_regulations__regulation_id__upload_post */
         Body_upload_regulation_document_api_v1_safety_regulations__regulation_id__upload_post: {
+            /** File */
+            file: string;
+        };
+        /** Body_upload_review_file_endpoint_api_v1_quality_validation_reviews__review_id__files_post */
+        Body_upload_review_file_endpoint_api_v1_quality_validation_reviews__review_id__files_post: {
+            /** Doc Kind */
+            doc_kind?: string | null;
             /** File */
             file: string;
         };
@@ -56888,6 +57107,241 @@ export interface components {
             updated_at: string;
             /** Validation Type */
             validation_type: string;
+        };
+        /**
+         * ValidationReviewCreateRequest
+         * @description 新建一次 AI 审核会话。entry 模式需传 entry_id（文件管理目录条目）。
+         */
+        ValidationReviewCreateRequest: {
+            /** Entry Id */
+            entry_id?: string | null;
+            /**
+             * Review Mode
+             * @default upload
+             * @enum {string}
+             */
+            review_mode: "upload" | "entry";
+            /** Title */
+            title?: string | null;
+        };
+        /** ValidationReviewFileOut */
+        ValidationReviewFileOut: {
+            /** Doc Kind */
+            doc_kind: string;
+            /** File Name */
+            file_name: string;
+            /** File Size */
+            file_size: number;
+            /** File Type */
+            file_type: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Parse Error */
+            parse_error?: string | null;
+            /** Parse Status */
+            parse_status: string;
+            /** Sort Order */
+            sort_order: number;
+            /** Source */
+            source: string;
+        };
+        /** ValidationReviewFileUploadedOut */
+        ValidationReviewFileUploadedOut: {
+            /** Doc Kind */
+            doc_kind: string;
+            /** File Name */
+            file_name: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Parse Status */
+            parse_status: string;
+        };
+        /** ValidationReviewFindingOut */
+        ValidationReviewFindingOut: {
+            /** Basis Match Type */
+            basis_match_type?: string | null;
+            /** Basis Source */
+            basis_source?: string | null;
+            /**
+             * Category
+             * @enum {string}
+             */
+            category: "reference_missing" | "version_mismatch" | "plan_report_mismatch" | "content_consistency" | "format_issue" | "numeric_check";
+            /**
+             * Detail
+             * @default
+             */
+            detail: string;
+            /**
+             * Location
+             * @default
+             */
+            location: string;
+            /**
+             * Quote
+             * @default
+             */
+            quote: string;
+            /**
+             * Quote Verified
+             * @default false
+             */
+            quote_verified: boolean;
+            /**
+             * Severity
+             * @default medium
+             * @enum {string}
+             */
+            severity: "high" | "medium" | "low";
+        };
+        /** ValidationReviewJobStatusResponse */
+        ValidationReviewJobStatusResponse: {
+            /** Error Message */
+            error_message?: string | null;
+            /** Job Id */
+            job_id: string;
+            /**
+             * Progress
+             * @default
+             */
+            progress: string;
+            /** Review Id */
+            review_id?: string | null;
+            /** State */
+            state: string;
+            /** Status */
+            status?: string | null;
+        };
+        /** ValidationReviewListItem */
+        ValidationReviewListItem: {
+            /** Created At */
+            created_at?: string | null;
+            /** Error Message */
+            error_message?: string | null;
+            /**
+             * File Count
+             * @default 0
+             */
+            file_count: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Model Name */
+            model_name?: string | null;
+            /** Review Mode */
+            review_mode: string;
+            /** Status */
+            status: string;
+            /** Title */
+            title: string;
+            /** Updated At */
+            updated_at?: string | null;
+        };
+        /** ValidationReviewOut */
+        ValidationReviewOut: {
+            /**
+             * Basis Used
+             * @default []
+             */
+            basis_used: {
+                [key: string]: unknown;
+            }[];
+            /** Created At */
+            created_at?: string | null;
+            /** Error Message */
+            error_message?: string | null;
+            /**
+             * Files
+             * @default []
+             */
+            files: components["schemas"]["ValidationReviewFileOut"][];
+            /**
+             * Findings
+             * @default []
+             */
+            findings: components["schemas"]["ValidationReviewFindingOut"][];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Input Snapshot */
+            input_snapshot?: {
+                [key: string]: unknown;
+            } | null;
+            /** Job Id */
+            job_id?: string | null;
+            /** Last Generated At */
+            last_generated_at?: string | null;
+            /** Model Name */
+            model_name?: string | null;
+            /** Review Mode */
+            review_mode: string;
+            stats?: components["schemas"]["ValidationReviewStatsOut"] | null;
+            /** Status */
+            status: string;
+            /** Summary */
+            summary?: string | null;
+            /** Title */
+            title: string;
+            /** Updated At */
+            updated_at?: string | null;
+        };
+        /** ValidationReviewRunOut */
+        ValidationReviewRunOut: {
+            /** Job Id */
+            job_id: string;
+            /**
+             * Review Id
+             * Format: uuid
+             */
+            review_id: string;
+        };
+        /** ValidationReviewStatsOut */
+        ValidationReviewStatsOut: {
+            /**
+             * High
+             * @default 0
+             */
+            high: number;
+            /**
+             * Low
+             * @default 0
+             */
+            low: number;
+            /**
+             * Medium
+             * @default 0
+             */
+            medium: number;
+            /**
+             * Plan Report Checked
+             * @default false
+             */
+            plan_report_checked: boolean;
+            /**
+             * References Checked
+             * @default 0
+             */
+            references_checked: number;
+            /**
+             * References Matched
+             * @default 0
+             */
+            references_matched: number;
+            /**
+             * Total Findings
+             * @default 0
+             */
+            total_findings: number;
         };
         /** ValidationStatistics */
         ValidationStatistics: {
@@ -107591,6 +108045,310 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_reviews_endpoint_api_v1_quality_validation_reviews_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_list_ValidationReviewListItem__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_review_endpoint_api_v1_quality_validation_reviews_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ValidationReviewCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_ValidationReviewOut_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_review_job_endpoint_api_v1_quality_validation_reviews_job__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_ValidationReviewJobStatusResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_review_detail_endpoint_api_v1_quality_validation_reviews__review_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                review_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_ValidationReviewOut_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_review_endpoint_api_v1_quality_validation_reviews__review_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                review_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_review_endpoint_api_v1_quality_validation_reviews__review_id__export_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                review_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_review_file_endpoint_api_v1_quality_validation_reviews__review_id__files_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                review_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_review_file_endpoint_api_v1_quality_validation_reviews__review_id__files_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_ValidationReviewFileUploadedOut_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rerun_review_endpoint_api_v1_quality_validation_reviews__review_id__rerun_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                review_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_ValidationReviewRunOut_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_review_endpoint_api_v1_quality_validation_reviews__review_id__run_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                review_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_ValidationReviewRunOut_"];
                 };
             };
             /** @description Validation Error */
