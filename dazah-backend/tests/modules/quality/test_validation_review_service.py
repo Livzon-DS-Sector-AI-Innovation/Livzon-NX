@@ -671,9 +671,6 @@ class TestBasisContentPipeline:
     async def test_select_key_bases_filters_unknown(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from app.modules.quality.service.validation_basis_resolver import (
-            load_basis_contents,
-        )
 
         monkeypatch.setattr(
             svc,
@@ -842,3 +839,146 @@ class TestQualityDataLinkage:
             db_session, {}, {"plan": "无关键词文本"}
         )
         assert summary == []
+
+
+class TestFullPipeline:
+    @pytest.mark.anyio
+    async def test_execute_review_with_basis_content_compare(
+        self, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """全管线：引用命中 → 拉依据正文 → 筛选 → 正文比对 → 汇总落库。"""
+        from app.modules.quality.service.validation_basis_resolver import (
+            BasisEntry,
+            DocumentBasis,
+        )
+
+        record = await _seed_record(db_session)
+        plan_text = (
+            "## 清洁步骤\n按《方锥混合机操作规程》（SOP-FT3-017/04）执行，"
+            "主轴转速 5-15rpm。"
+        )
+        row = ValidationReviewFile(
+            id=uuid.uuid4(),
+            review_id=record.id,
+            doc_kind="plan",
+            source="upload",
+            file_name="VP-FT3-CV1902-01 方案.md",
+            file_type="text/markdown",
+            file_size=100,
+            storage_key="",
+            parsed_text=plan_text,
+            parse_status="completed",
+            sort_order=0,
+        )
+        db_session.add(row)
+        await db_session.commit()
+
+        entry_id = uuid.uuid4()
+        basis = DocumentBasis(
+            entries=[
+                BasisEntry(
+                    id=entry_id,
+                    code="SOP-FT3-017/04",
+                    name="方锥混合机操作规程",
+                    effective_date=None,
+                    updated_at=None,
+                )
+            ],
+            prefixes={"SOP"},
+        )
+        monkeypatch.setattr(svc, "load_document_basis", AsyncMock(return_value=basis))
+        monkeypatch.setattr(
+            svc,
+            "load_basis_contents",
+            AsyncMock(return_value={entry_id: "主轴转速 2-10rpm，最大装料 2000kg。"}),
+        )
+        monkeypatch.setattr(
+            svc, "get_config", AsyncMock(return_value=SimpleNamespace(model_name="m"))
+        )
+        # 三次 LLM 调用顺序：P2 筛选 → P3 比对 → P1 总审核
+        call_results = [
+            {"selected": [{"code": "SOP-FT3-017/04", "reason": "清洁步骤来源"}]},
+            {
+                "findings": [
+                    {
+                        "validation_quote": "主轴转速 5-15rpm",
+                        "basis_quote": "主轴转速 2-10rpm",
+                        "dimension": "参数",
+                        "severity": "high",
+                        "detail": "转速范围与规程不一致",
+                    }
+                ]
+            },
+            {"findings": []},
+        ]
+        chat_mock = AsyncMock(side_effect=call_results)
+        monkeypatch.setattr(type(svc.llm_client), "chat_json", chat_mock)
+        monkeypatch.setattr(svc, "get_changes", AsyncMock(return_value=([], 0)))
+        monkeypatch.setattr(
+            svc, "get_deviations", AsyncMock(return_value=([], 0))
+        )
+
+        await svc._execute_review(
+            db_session, record, "job:p1", uuid.uuid4(), "重点核转速"
+        )
+        await db_session.commit()
+
+        payload = record.output_payload or {}
+        findings = payload.get("findings") or []
+        mismatch = [f for f in findings if f["category"] == "basis_content_mismatch"]
+        assert len(mismatch) == 1
+        assert mismatch[0]["validation_quote"] == "主轴转速 5-15rpm"
+        assert mismatch[0]["basis_quote"] == "主轴转速 2-10rpm"
+        assert mismatch[0]["basis_quote_verified"] is True
+        comparison = payload.get("basis_comparison") or []
+        assert len(comparison) == 1
+        assert comparison[0]["reason"] == "清洁步骤来源"
+        assert record.input_snapshot.get("focus_points") == "重点核转速"
+
+
+class TestExtractQualityKeywords:
+    def test_extracts_workshop_segment(self) -> None:
+        identities = {
+            "plan": {
+                "file_name": "VP-FT3-CV1902-01 方案",
+                "doc_number": "VP-FT3-CV1902-01",
+            }
+        }
+        assert svc._extract_quality_keywords(identities, {}) == ["FT3"]
+
+    def test_extracts_product_segment(self) -> None:
+        identities = {
+            "plan": {
+                "file_name": "VP-MC-PV1902-01 方案",
+                "doc_number": "VP-MC-PV1902-01",
+            }
+        }
+        assert svc._extract_quality_keywords(identities, {}) == ["MC"]
+
+    def test_no_keywords(self) -> None:
+        assert svc._extract_quality_keywords({}, {"plan": "普通文本"}) == []
+
+
+class TestBuildSummaryBasisBranch:
+    def test_summary_mentions_basis_comparison(self) -> None:
+        stats = {
+            "references_checked": 1,
+            "references_matched": 1,
+            "total_findings": 0,
+            "high": 0,
+            "medium": 0,
+            "low": 0,
+            "plan_report_checked": True,
+        }
+        summary = svc._build_summary(
+            stats,
+            [
+                {
+                    "code": "SOP-FT3-017/04",
+                    "name": "方锥混合机操作规程",
+                    "mismatch_count": 2,
+                }
+            ],
+        )
+        assert "依据文件正文比对" in summary
+        assert "方锥混合机操作规程" in summary
