@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import re
 import uuid
 from dataclasses import dataclass, field
@@ -287,3 +288,32 @@ def resolve_references(
             )
         )
     return items
+
+
+# 单份依据正文传给 LLM 前的最大字符数
+BASIS_CONTENT_LIMIT = 20000
+
+
+async def load_basis_contents(
+    db: AsyncSession, entry_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, str]:
+    """按目录条目 ID 拉取附件受控正文（word 转 MD 产物），返回 {entry_id: 正文}。
+
+    一个条目多份附件时按顺序合并；正文超长截断到 BASIS_CONTENT_LIMIT。
+    """
+    from app.modules.quality.service.document_catalog_attachment import (
+        read_entry_md_contents,
+    )
+
+    contents: dict[uuid.UUID, str] = {}
+    for entry_id in entry_ids:
+        entry = await db.get(DocumentEntry, entry_id)
+        if not entry or entry.is_deleted:
+            continue
+        pieces = await asyncio.to_thread(read_entry_md_contents, entry)
+        merged = "\n\n".join(
+            piece.get("md_text") or "" for piece in pieces
+        ).strip()
+        if merged:
+            contents[entry_id] = merged[:BASIS_CONTENT_LIMIT]
+    return contents

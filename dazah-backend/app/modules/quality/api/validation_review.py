@@ -33,6 +33,7 @@ from app.modules.quality.schemas.validation_review import (
     ValidationReviewListItem,
     ValidationReviewOut,
     ValidationReviewRunOut,
+    ValidationReviewRunRequest,
 )
 from app.modules.quality.service.validation_review import (
     add_uploaded_review_file,
@@ -119,9 +120,8 @@ async def create_review_endpoint(
     record = await create_review_record(
         db,
         user_id=user_id,
-        review_mode=body.review_mode,
-        entry_id=body.entry_id,
         title=body.title,
+        focus_points=body.focus_points,
     )
     await db.commit()
     files = await get_review_files(db, record.id)
@@ -164,32 +164,7 @@ async def upload_review_file_endpoint(
 )
 async def run_review_endpoint(
     review_id: uuid.UUID,
-    current_user: CurrentUser = None,
-    db: AsyncSession = Depends(get_db),
-) -> Any:
-    user_id = _require_user(current_user)
-    await _assert_review_write(db, current_user)
-    record = await get_review_record(db, review_id)
-    locked = await try_acquire_action_lock(
-        f"validation-review:{review_id}", timeout=300
-    )
-    if not locked:
-        raise AppException(
-            status_code=429, message="该审核正在运行中，请勿重复操作"
-        )
-    await _check_run_rate_limit(user_id)
-    job_id = await run_review(db, record, user_id=user_id)
-    await db.commit()
-    return success_response(data={"job_id": job_id, "review_id": str(record.id)})
-
-
-@router.post(
-    "/validation-reviews/{review_id}/rerun",
-    summary="重新运行验证 AI 审核",
-    response_model=ApiResponseEnvelope[ValidationReviewRunOut],
-)
-async def rerun_review_endpoint(
-    review_id: uuid.UUID,
+    body: ValidationReviewRunRequest | None = None,
     current_user: CurrentUser = None,
     db: AsyncSession = Depends(get_db),
 ) -> Any:
@@ -205,7 +180,43 @@ async def rerun_review_endpoint(
         )
     await _check_run_rate_limit(user_id)
     job_id = await run_review(
-        db, record, user_id=user_id, audit_action="validation_review.rerun"
+        db,
+        record,
+        user_id=user_id,
+        focus_points=(body.focus_points if body else None),
+    )
+    await db.commit()
+    return success_response(data={"job_id": job_id, "review_id": str(record.id)})
+
+
+@router.post(
+    "/validation-reviews/{review_id}/rerun",
+    summary="重新运行验证 AI 审核",
+    response_model=ApiResponseEnvelope[ValidationReviewRunOut],
+)
+async def rerun_review_endpoint(
+    review_id: uuid.UUID,
+    body: ValidationReviewRunRequest | None = None,
+    current_user: CurrentUser = None,
+    db: AsyncSession = Depends(get_db),
+) -> Any:
+    user_id = _require_user(current_user)
+    await _assert_review_write(db, current_user)
+    record = await get_review_record(db, review_id)
+    locked = await try_acquire_action_lock(
+        f"validation-review:{review_id}", timeout=300
+    )
+    if not locked:
+        raise AppException(
+            status_code=429, message="该审核正在运行中，请勿重复操作"
+        )
+    await _check_run_rate_limit(user_id)
+    job_id = await run_review(
+        db,
+        record,
+        user_id=user_id,
+        audit_action="validation_review.rerun",
+        focus_points=(body.focus_points if body else None),
     )
     await db.commit()
     return success_response(data={"job_id": job_id, "review_id": str(record.id)})
