@@ -63,7 +63,10 @@ def test_lark_cli_manifest_and_dockerfile_are_exact() -> None:
     windows_manifest = installer.load_manifest(
         MANIFEST_PATH, platform_key="windows-amd64"
     )
-    dockerfile = (PROJECT_ROOT / "Dockerfile").read_text(encoding="utf-8")
+    dockerfile = (PROJECT_ROOT.parent / "Dockerfile").read_text(encoding="utf-8")
+    lark_stage = dockerfile.split(
+        "FROM python:3.12-slim-bookworm AS hermes-lark-cli", 1
+    )[1].split("FROM python:3.12-slim-bookworm AS hermes-upstream", 1)[0]
 
     assert linux_manifest["version"] == "1.0.76"
     assert (
@@ -75,9 +78,9 @@ def test_lark_cli_manifest_and_dockerfile_are_exact() -> None:
         windows_manifest["archive_sha256"]
         == "cf59dcf3224a0753b1b11cae14f0513242ef7eab02f9c7d35c26427647ed6145"
     )
-    assert "install_pinned_lark_cli.py" in dockerfile
-    assert "apt-get" not in dockerfile
-    assert "npm install" not in dockerfile
+    assert "install_pinned_lark_cli.py" in lark_stage
+    assert "apt-get" not in lark_stage
+    assert "npm install" not in lark_stage
 
 
 def test_installer_verifies_and_extracts_binary(tmp_path: Path) -> None:

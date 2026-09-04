@@ -87,7 +87,7 @@ def _fake_manifest(tmp_path: Path, archive_hash: str) -> Path:
 
 def test_pinned_manifest_and_dockerfile_use_exact_release() -> None:
     manifest = installer.load_manifest(MANIFEST_PATH)
-    dockerfile = (PROJECT_ROOT / "Dockerfile").read_text(encoding="utf-8")
+    dockerfile = (PROJECT_ROOT.parent / "Dockerfile").read_text(encoding="utf-8")
 
     assert manifest["release_tag"] == "v2026.7.7.2"
     assert manifest["release_version"] == "0.18.2"

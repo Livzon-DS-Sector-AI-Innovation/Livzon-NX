@@ -98,16 +98,17 @@ COPY Hermes-Lite/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY Hermes-Lite/ ./
+COPY docker/hermes-entrypoint.sh /usr/local/bin/hermes-entrypoint.sh
 
 RUN useradd --create-home --shell /usr/sbin/nologin hermes \
     && mkdir -p /data/hermes /run/hermes-feishu /data/hermes/feishu-files \
-    && chmod +x /app/docker-entrypoint.sh \
+    && chmod +x /usr/local/bin/hermes-entrypoint.sh \
     && chown -R hermes:hermes /data/hermes /run/hermes-feishu /app
 
 USER hermes
 ENV WATCHFILES_POLL_DELAY_MS=2000
 EXPOSE 8100
-ENTRYPOINT ["/app/docker-entrypoint.sh"]
+ENTRYPOINT ["/usr/local/bin/hermes-entrypoint.sh"]
 # Watch explicit runtime paths, including root Python modules. Uvicorn's
 # --reload-exclude filters events after scanning, so it would still poll the
 # bind-mounted .venv, tests and temporary data when watching all of /app.

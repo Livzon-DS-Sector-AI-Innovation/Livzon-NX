@@ -85,31 +85,21 @@ run_integration() {
     --minimum 80
 }
 
-compose_file() {
-  local candidate
-  for candidate in compose.yml compose.yaml docker-compose.yml docker-compose.yaml; do
-    if [[ -f "$candidate" ]]; then
-      printf '%s\n' "$candidate"
-      return 0
-    fi
-  done
-  echo "No supported Compose file found." >&2
-  return 1
-}
-
 run_container() {
   require_command docker
   local file commit_sha
-  file="$(compose_file)"
+  file="${repository_dir}/compose.dev.yml"
   commit_sha="${GITHUB_SHA:-$(git rev-parse HEAD)}"
 
   echo "== Backend Compose validation: ${file} =="
-  docker compose --env-file /dev/null -f "$file" config --no-env-resolution --quiet
+  docker compose --env-file /dev/null -f "$file" config --no-interpolate --quiet
   echo "== Backend image build: dazah-backend:ci-${commit_sha} =="
   docker build \
     --pull=false \
+    --file "${repository_dir}/Dockerfile" \
+    --target backend \
     --tag "dazah-backend:ci-${commit_sha}" \
-    .
+    "${repository_dir}"
 }
 
 run_security() {

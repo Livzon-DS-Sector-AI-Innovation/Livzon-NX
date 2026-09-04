@@ -632,7 +632,8 @@ uvicorn services.dazah_agent_service:app --host 0.0.0.0 --port 8100
 Docker 开发环境启动：
 
 ```bash
-docker compose -f docker-compose.dev.yml up -d --build
+# 在工作区根目录执行
+docker compose --env-file .env.local -f compose.dev.yml up -d --build hermes-lite
 ```
 
 健康检查：

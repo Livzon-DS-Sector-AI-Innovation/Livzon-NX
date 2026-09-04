@@ -182,7 +182,7 @@ uv run alembic upgrade head
 uv run pytest --cov=app --cov-branch --cov-report=term-missing --cov-report=xml
 uv run python ../scripts/check-coverage-floor.py --coverage-file coverage.xml --min-lines 60 --min-branches 33.5
 uv run python ../scripts/check-diff-coverage.py --coverage-file coverage.xml --path-prefix dazah-backend/app --minimum 80
-docker build --tag dazah-backend:ci .
+docker build --file ../Dockerfile --target backend --tag dazah-backend:ci ..
 ```
 
 - `alembic heads` 必须且只能有一个 head；结构变更还要验证空库升级、`upgrade()`、`downgrade()` 和模块 schema 创建。

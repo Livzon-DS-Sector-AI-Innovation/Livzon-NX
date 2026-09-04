@@ -939,8 +939,9 @@ def test_inbound_receipt_key_distinguishes_reaction_actions() -> None:
 
 def test_read_only_container_keeps_gateway_lock_in_private_tmpfs() -> None:
     project_root = Path(__file__).resolve().parents[1]
-    dockerfile = (project_root / "Dockerfile").read_text(encoding="utf-8")
-    compose = (project_root / "docker-compose.yml").read_text(encoding="utf-8")
+    workspace_root = project_root.parent
+    dockerfile = (workspace_root / "Dockerfile").read_text(encoding="utf-8")
+    compose = (workspace_root / "compose.yml").read_text(encoding="utf-8")
     env_example = (project_root / ".env.example").read_text(encoding="utf-8")
 
     expected = "HERMES_GATEWAY_LOCK_DIR=/run/hermes-feishu/gateway-locks"

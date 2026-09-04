@@ -81,18 +81,18 @@ uvicorn services.dazah_agent_service:app --host 0.0.0.0 --port 8100
 Run the adapter with Docker:
 
 ```bash
-docker build -t hermes-lite:prod .
+# Run these commands from the workspace root.
+docker build --file Dockerfile --target hermes -t hermes-lite:prod .
 docker run --rm -p 8100:8100 --env-file .env hermes-lite:prod
 ```
 
-For local Dazah development, after the Dazah backend compose stack has created
-the `dazah-backend_default` network, run:
+For local Dazah development, run the root development Compose stack:
 
 ```bash
-docker compose -f docker-compose.dev.yml up -d --build
+docker compose --env-file .env.local -f compose.dev.yml up -d --build hermes-lite
 ```
 
-The development compose file mounts the repository into `/app` and starts
+The root development Compose file mounts the repository into `/app` and starts
 Uvicorn with `--reload`, so Python source edits are picked up automatically
 after the first image build. Rebuild only when dependencies, Dockerfile, or
 entrypoint files change.
@@ -101,8 +101,8 @@ When running inside the Dazah production compose network, use service names
 instead of localhost:
 
 ```bash
-DAZAH_API_BASE_URL=http://backend:8000/api/v1
-DAZAH_LLM_BASE_URL=http://backend:8000/api/v1/agent/llm
+DAZAH_API_BASE_URL=http://app:8000/api/v1
+DAZAH_LLM_BASE_URL=http://app:8000/api/v1/agent/llm
 ```
 
 Security boundaries:

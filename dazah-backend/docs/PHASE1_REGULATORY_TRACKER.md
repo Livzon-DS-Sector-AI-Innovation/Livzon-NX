@@ -693,7 +693,7 @@ POST /api/sync-jobs/backfill
 新用户下载项目后：
 
 ```text
-docker compose up -d
+docker compose --env-file .env.local -f compose.dev.yml up -d
 ```
 
 即可得到完整法规数据。
@@ -704,12 +704,12 @@ docker compose up -d
 
 # 12. Docker部署要求
 
-必须提供：
+必须在工作区根目录提供：
 
 ```text
 Dockerfile
 
-docker-compose.yml
+compose.yml / compose.dev.yml
 
 README.md
 
