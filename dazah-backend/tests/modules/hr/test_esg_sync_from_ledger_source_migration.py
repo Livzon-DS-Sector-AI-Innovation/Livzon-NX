@@ -334,7 +334,10 @@ async def test_sync_family_splits_personnel_by_roster(
 async def test_create_record_splits_bare_into_mc_and_dr_copies(
     db_session: AsyncSession,
 ) -> None:
-    """写端归一：涉及裸名 201二车间 时拆 MC+DR 两副本，主记录归 MC。"""
+    """写端归一：涉及裸名 201二车间 时拆 MC+DR 两副本，主记录归 MC。
+
+    新口径（按参训人员收敛）：两个半边都要有可识别的参训人员才各建副本。
+    """
     from uuid import uuid4
 
     from sqlalchemy import select
@@ -346,6 +349,12 @@ async def test_create_record_splits_bare_into_mc_and_dr_copies(
     sid = uuid4()
     # session_id 外键指向 training_sessions，先造空壳会话
     db_session.add(TrainingSession(id=sid))
+    db_session.add_all(
+        [
+            _feishu("测MC人", "201二车间"),  # 裸名飞书部门 → 归 MC
+            _feishu("测DR人", "201二车间（多拉）"),  # → 归 DR
+        ]
+    )
     await db_session.flush()
     data = TrainingLedgerCreate(
         employee_number="SPEC-LEDGER-CREATE",
@@ -354,7 +363,7 @@ async def test_create_record_splits_bare_into_mc_and_dr_copies(
         training_method="面授",
         teaching_dept="QA",
         involved_depts="201二车间、QA",
-        trainees="测MC人",
+        trainees="测MC人、测DR人",
         session_id=sid,
         ledger_department="201二车间",
     )
@@ -399,3 +408,38 @@ async def test_bare_hidden_when_split_copies_exist(
     rows = [r for r in resp.json()["data"] if r["training_subject"] == _SUBJ4]
     # DR 无副本且裸名被隐藏；MC 副本不串到 DR
     assert rows == []
+
+
+@pytest.mark.asyncio
+async def test_sync_person_override_routes_archive_other_dept_person(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """person 覆写优先于员工档案：档案归 QA 的人员按覆写计入 DR 报表。"""
+    from datetime import date as _date
+
+    subj = "SPEC覆写同步"
+    d = _date(2031, 12, 20)
+    db_session.add_all(
+        [
+            _emp("测李四", "质量管理部", "QC", "lisi-ovr"),  # 档案归一 → QA
+            _ledger(_DR, subj, d, "测李四"),
+            TrainingDeptMapping(
+                source_name="测李四",
+                target_name="201二车间（DR）",
+                match_level="both",
+                mapping_type="person",
+                priority=10,
+            ),
+        ]
+    )
+    await db_session.flush()
+    invalidate_training_dept_mapping_cache()
+
+    resp = await client.post(_SYNC_URL, params={"department": "201二车间（DR）"})
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert data["created"] == 1
+    assert data["skipped_other_dept"] == 0
+
+    rows = await _esg_rows(client, "201二车间（DR）", subj)
+    assert [r["employee_name"] for r in rows] == ["测李四"]

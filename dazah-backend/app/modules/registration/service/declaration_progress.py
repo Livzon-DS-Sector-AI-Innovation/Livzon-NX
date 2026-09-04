@@ -424,13 +424,9 @@ def _header_matches(
     return True
 
 
-def _parse_workbook_definitions() -> tuple[
-    list[DeclarationProgressSheetDefinition], datetime
-]:
-    workbook_path = _get_workbook_path()
-    if not workbook_path.exists():
-        raise NotFoundException("申报进度统计表", str(workbook_path))
-
+def _build_definitions_from_templates() -> (
+    list[DeclarationProgressSheetDefinition]
+):
     definitions: list[DeclarationProgressSheetDefinition] = []
     for template in DECLARATION_PROGRESS_SHEET_TEMPLATES:
         definitions.append(
@@ -443,8 +439,25 @@ def _parse_workbook_definitions() -> tuple[
                 columns=_build_columns(template),
             )
         )
+    return definitions
 
-    return definitions, datetime.fromtimestamp(workbook_path.stat().st_mtime)
+
+def _parse_workbook_definitions() -> tuple[
+    list[DeclarationProgressSheetDefinition], datetime | None
+]:
+    workbook_path = _get_workbook_path()
+    if not workbook_path.exists():
+        logger.warning(
+            "申报进度统计表不存在（%s），使用静态模板定义；请先通过页面导入台账。",
+            workbook_path,
+        )
+        # 列定义本就来自静态模板；文件缺失时仅无法取 mtime
+        return _build_definitions_from_templates(), None
+
+    return (
+        _build_definitions_from_templates(),
+        datetime.fromtimestamp(workbook_path.stat().st_mtime),
+    )
 
 
 def _find_sheet_definition(sheet_key: str) -> DeclarationProgressSheetDefinition:
@@ -478,7 +491,12 @@ def _get_product_name_key(definition: DeclarationProgressSheetDefinition) -> str
 
 
 def _load_seed_versions() -> list[RegistrationDeclarationProgressWorkbookVersion]:
-    return _load_versions_from_workbook_path(_get_workbook_path())
+    """从配置路径加载种子版本；文件缺失时跳过种子（DB 保持空，页面展示空态）。"""
+    workbook_path = _get_workbook_path()
+    if not workbook_path.exists():
+        logger.info("申报进度种子文件缺失，跳过种子加载")
+        return []
+    return _load_versions_from_workbook_path(workbook_path)
 
 
 def _load_versions_from_worksheet(
@@ -1107,6 +1125,19 @@ class DeclarationProgressWorkbookService:
             await self.session.rollback()
             raise
 
+        # 配置文件缺失时，将本次上传落盘到配置路径（create-if-missing，绝不覆盖）
+        config_path = _get_workbook_path()
+        if not config_path.exists():
+            try:
+                config_path.parent.mkdir(parents=True, exist_ok=True)
+                config_path.write_bytes(content)
+                logger.info("申报进度配置文件已从上传创建: %s", config_path)
+            except OSError as exc:
+                logger.warning(
+                    "申报进度配置文件落盘失败（%s），数据已入库但导出/种子将不可用",
+                    exc,
+                )
+
         sheet_record_counts = Counter(
             version.sheet_key for version in versions if version.version_number == 1
         )
@@ -1120,7 +1151,10 @@ class DeclarationProgressWorkbookService:
         await self.ensure_seeded()
         workbook_path = _get_workbook_path()
         if not workbook_path.exists():
-            raise NotFoundException("申报进度统计表", str(workbook_path))
+            raise NotFoundException(
+                "申报进度统计表",
+                f"{workbook_path}（请先在页面导入台账文件后再导出）",
+            )
 
         definitions, _ = _parse_workbook_definitions()
         temp_dir = Path(tempfile.mkdtemp(prefix="declaration-progress-export-"))

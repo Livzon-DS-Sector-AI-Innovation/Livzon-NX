@@ -111,7 +111,7 @@ async def resolve_training_department(
 
 async def training_dept_aliases_of(session: AsyncSession, norm: str) -> list[str]:
     "规范名的全部别名（含自身），用于 SQL IN 匹配（如 2"
-    "01二车间（MC）→ 裸名/霉酚酸/201三车间）."
+    "01二车间（MC）→ 裸名/霉酚酸；201二车间（DR）→ 多拉/201三车间）."
     aliases = {norm}
     for m in _resolve_mappings(await _load_mappings(session)):
         # 仅使用 resolve 类型（special/alias），排除 split/exclude/candidate_source
@@ -138,6 +138,67 @@ async def split_ledger_departments(session: AsyncSession, name: str) -> list[str
         return [name]
     # MC 优先，其余按字母序
     return sorted(targets, key=lambda t: (0 if "（MC）" in t else 1, t))
+
+
+# 201 二车间是唯一按产品线拆台账的部门：DR/MC 是台账线维度，
+# 授课部门语义上是车间实体，归一为裸名（仅此部门特殊处理）
+_201_BARE_NAME = "201二车间"
+
+
+async def split_targets_of(session: AsyncSession, source_name: str) -> set[str]:
+    """split 配置的规范名目标集合（source 未配置拆分时为空集）."""
+    return {
+        m["target_name"]
+        for m in await _load_mappings(session)
+        if m["mapping_type"] == "split"
+        and m["source_name"] == source_name
+        and m["target_name"]
+    }
+
+
+async def base_201_department(session: AsyncSession, name: str | None) -> str | None:
+    """授课部门归一：201 家族规范名（MC/DR）→ 裸名「201二车间」，其余原样返回.
+
+    培训师表登记或导入所选 Tab 可能是「201二车间（MC）/（DR）」，
+    但授课部门应显示车间实体名；DR/MC 归属由 ledger_department /
+    受训人员飞书部门决定。空值安全。
+    """
+    if not name:
+        return name
+    targets = await split_targets_of(session, _201_BARE_NAME)
+    return _201_BARE_NAME if name in targets else name
+
+
+async def split_target_names(session: AsyncSession) -> set[str]:
+    """全部 split 目标的规范名集合（识别 MC/DR 等「半边」规范名）.
+
+    拆分副本按参训人员飞书部门归属收敛时，用本集合识别半边规范名；
+    未配置任何拆分映射（如全新环境）时为空集，调用方据此跳过收敛逻辑。
+    """
+    return {
+        m["target_name"]
+        for m in await _load_mappings(session)
+        if m["mapping_type"] == "split" and m["target_name"]
+    }
+
+
+async def get_person_overrides(session: AsyncSession) -> dict[str, str]:
+    """人员归属覆写：{人员姓名: 台账规范部门}（mapping_type=person）.
+
+    人员临时调线而飞书部门未更新时，在培训部门映射中配置 person 行
+    （source_name=人员姓名，target_name=台账规范部门）即可让台账落线
+    跟随配置；同名多条按 priority 升序取第一条。复用部门映射缓存与
+    写后失效机制，停用（enabled=false）的行不参与覆写。
+    """
+    rows = [
+        m
+        for m in await _load_mappings(session)
+        if m["mapping_type"] == "person" and m["target_name"]
+    ]
+    overrides: dict[str, str] = {}
+    for row in sorted(rows, key=lambda r: (r["priority"], r["source_name"])):
+        overrides.setdefault(row["source_name"], row["target_name"])
+    return overrides
 
 
 async def ledger_dept_read_family(session: AsyncSession, selected: str) -> list[str]:

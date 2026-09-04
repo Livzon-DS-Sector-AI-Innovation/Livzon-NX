@@ -513,7 +513,8 @@ async def test_hr_import_export_public_create_and_candidate_notice_routes(
     assert preview["data"]["sheets"][0]["data_row_count"] == 1  # type: ignore[index]
     assert preview["data"]["sheets"][0]["mapping"]  # type: ignore[index]
 
-    monkeypatch.setattr(api, "_import_rows_with_mapping", AsyncMock(return_value=1))
+    import_rows_mock = AsyncMock(return_value=(1, 0))
+    monkeypatch.setattr(api, "_import_rows_with_mapping", import_rows_mock)
     confirmed = await api.confirm_training_import(
         UploadFile(filename="training.xlsx", file=BytesIO(workbook_bytes)),
         "质量部",

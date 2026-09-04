@@ -686,6 +686,7 @@ export interface DeptMappingItem {
     | 'modal_no_expand'
     | 'exclude'
     | 'force_show'
+    | 'person'
   priority: number
   enabled: boolean
   remark: string | null

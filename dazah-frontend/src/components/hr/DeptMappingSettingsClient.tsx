@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import {
-  App, Card, Button, Space, Table, Tag, Typography, Select, Input,
+  App, Card, Button, Space, Table, Tabs, Tag, Typography, Select, Input,
   Popconfirm, Result, Modal, Tooltip,
 } from 'antd'
 import { PlusOutlined, ReloadOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons'
@@ -19,6 +19,7 @@ import {
   type TrainingDeptMappingCreateInput,
   type TrainingDeptMappingUpdateInput,
 } from '@/actions/hr'
+import PersonDeptMappingClient from './PersonDeptMappingClient'
 import {
   refreshDeptMappings,
   ensureDeptMappings,
@@ -330,87 +331,114 @@ export default function DeptMappingSettingsClient() {
 
   return (
     <div className="space-y-4">
-      <Card>
-        <div className="space-y-3">
-          <div>
-            <Typography.Title level={5} style={{ marginTop: 0 }}>
-              培训部门映射对照表
-            </Typography.Title>
-            <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-              每行是一个源部门，每列是该部门在对应培训页面的显示名。点击任意数据格编辑该行统一目标
-              （所有列同步）；“人员配置弹窗”列用下拉选择 正常/不参与/不展开/额外补行。
-              新增飞书部门会自动出现在表中，无需改代码。
-            </Typography.Paragraph>
-          </div>
-          <Space>
-            <Button type="primary" icon={<PlusOutlined />} onClick={openNew}>新增映射</Button>
-            <Button icon={<ReloadOutlined />} onClick={loadData}>刷新</Button>
-          </Space>
-        </div>
-      </Card>
+      <Tabs
+        defaultActiveKey="dept"
+        items={[
+          {
+            key: 'dept',
+            label: '部门映射',
+            children: (
+              <div className="space-y-4">
+                <Card>
+                  <div className="space-y-3">
+                    <div>
+                      <Typography.Title level={5} style={{ marginTop: 0 }}>
+                        培训部门映射对照表
+                      </Typography.Title>
+                      <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+                        每行是一个源部门，每列是该部门在对应培训页面的显示名。点击任意数据格编辑该行统一目标
+                        （所有列同步）；“人员配置弹窗”列用下拉选择 正常/不参与/不展开/额外补行。
+                        新增飞书部门会自动出现在表中，无需改代码。
+                      </Typography.Paragraph>
+                    </div>
+                    <Space>
+                      <Button type="primary" icon={<PlusOutlined />} onClick={openNew}>新增映射</Button>
+                      <Button icon={<ReloadOutlined />} onClick={loadData}>刷新</Button>
+                    </Space>
+                  </div>
+                </Card>
 
-      <Card>
-        <Table
-          rowKey="source"
-          loading={loading}
-          columns={columns}
-          dataSource={rows}
-          scroll={{ x: 1500 }}
-          pagination={{ pageSize: 30, showSizeChanger: false }}
-          rowClassName={(r: RowVM) => (r.color ? '' : '')}
-          onRow={(r: RowVM) => ({ style: { background: r.color } })}
-          locale={{ emptyText: '暂无部门，等待飞书同步或新增映射。' }}
-        />
-      </Card>
+                <Card>
+                  <Table
+                    rowKey="source"
+                    loading={loading}
+                    columns={columns}
+                    dataSource={rows}
+                    scroll={{ x: 1500 }}
+                    pagination={{ pageSize: 30, showSizeChanger: false }}
+                    rowClassName={(r: RowVM) => (r.color ? '' : '')}
+                    onRow={(r: RowVM) => ({ style: { background: r.color } })}
+                    locale={{ emptyText: '暂无部门，等待飞书同步或新增映射。' }}
+                  />
+                </Card>
 
-      <Modal
-        title={editingSource ? `编辑部门映射：${editingSource}` : '新增部门映射'}
-        open={modalOpen}
-        onCancel={() => setModalOpen(false)}
-        onOk={handleSubmit}
-        confirmLoading={saving}
-        width={640}
-        okText="保存"
-        cancelText="取消"
-      >
-        <div className="space-y-3">
-          {!editingSource && (
-            <div>
-              <Typography.Text strong>飞书联系人（源部门）</Typography.Text>
-              <Input
-                className="mt-1"
-                placeholder="如：103一车间 / 201二车间（多拉）"
-                value={newSource}
-                onChange={(e) => setNewSource(e.target.value)}
-                maxLength={128}
-              />
-            </div>
-          )}
-          <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-            设置这个飞书部门在每个培训页面显示的部门名称。下面 7 个数据页面共用一个部门；签到表/通知/考核可单独设置。
-          </Typography.Paragraph>
-          {PAGE_COLS.map((col) => {
-            const isSignin = col.key === 'signin'
-            const value = isSignin ? signinTarget : dataTarget
-            const onChange = isSignin ? setSigninTarget : setDataTarget
-            return (
-              <div key={col.key} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <Typography.Text style={{ width: 150, flexShrink: 0 }}>{col.title}</Typography.Text>
-                <Select
-                  style={{ flex: 1 }}
-                  showSearch
-                  allowClear
-                  placeholder="留空 = 显示原名"
-                  value={value || undefined}
-                  onChange={(v) => onChange(v || '')}
-                  options={deptOptions}
-                  optionFilterProp="label"
-                />
+                <Modal
+                  title={editingSource ? `编辑部门映射：${editingSource}` : '新增部门映射'}
+                  open={modalOpen}
+                  onCancel={() => setModalOpen(false)}
+                  onOk={handleSubmit}
+                  confirmLoading={saving}
+                  width={640}
+                  okText="保存"
+                  cancelText="取消"
+                >
+                  <div className="space-y-3">
+                    {!editingSource && (
+                      <div>
+                        <Typography.Text strong>飞书联系人（源部门）</Typography.Text>
+                        <Input
+                          className="mt-1"
+                          placeholder="如：103一车间 / 201二车间（多拉）"
+                          value={newSource}
+                          onChange={(e) => setNewSource(e.target.value)}
+                          maxLength={128}
+                        />
+                      </div>
+                    )}
+                    <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+                      设置这个飞书部门在每个培训页面显示的部门名称。下面 7 个数据页面共用一个部门；签到表/通知/考核可单独设置。
+                    </Typography.Paragraph>
+                    {PAGE_COLS.map((col) => {
+                      const isSignin = col.key === 'signin'
+                      const value = isSignin ? signinTarget : dataTarget
+                      const onChange = isSignin ? setSigninTarget : setDataTarget
+                      return (
+                        <div key={col.key} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                          <Typography.Text style={{ width: 150, flexShrink: 0 }}>{col.title}</Typography.Text>
+                          <Select
+                            style={{ flex: 1 }}
+                            showSearch
+                            allowClear
+                            placeholder="留空 = 显示原名"
+                            value={value || undefined}
+                            onChange={(v) => onChange(v || '')}
+                            options={deptOptions}
+                            optionFilterProp="label"
+                          />
+                        </div>
+                      )
+                    })}
+                  </div>
+                </Modal>
               </div>
-            )
-          })}
-        </div>
-      </Modal>
+            ),
+          },
+          {
+            key: 'person',
+            label: '人员归属',
+            children: (
+              <Card>
+                <PersonDeptMappingClient
+                  mappings={mappings}
+                  trainingDepts={trainingDepts}
+                  loading={loading}
+                  onChanged={afterMutate}
+                />
+              </Card>
+            ),
+          },
+        ]}
+      />
     </div>
   )
 }

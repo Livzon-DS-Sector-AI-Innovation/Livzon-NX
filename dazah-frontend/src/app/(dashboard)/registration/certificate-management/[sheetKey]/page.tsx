@@ -1,8 +1,9 @@
 import { notFound } from 'next/navigation'
 
 import { CertificateSheetPage } from '@/components/registration'
-import { fetchCertificateSheetDetailServer } from '@/lib/api/server/registration'
+import { ServerApiError, fetchCertificateSheetDetailServer } from '@/lib/api/server/registration'
 import { isRegistrationCertificateSheetKey } from '@/lib/registration-certificate'
+import type { CertificateSheetDetail } from '@/types/registration'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,7 +20,16 @@ export default async function RegistrationCertificateSheetPage({
     notFound()
   }
 
-  const detail = await fetchCertificateSheetDetailServer(sheetKey)
+  let detail: CertificateSheetDetail
+  try {
+    detail = await fetchCertificateSheetDetailServer(sheetKey)
+  } catch (error) {
+    if (error instanceof ServerApiError && error.status === 404) {
+      // 子表不存在 → 404 页面，而非渲染崩溃
+      notFound()
+    }
+    throw error
+  }
 
   return <CertificateSheetPage detail={detail} />
 }

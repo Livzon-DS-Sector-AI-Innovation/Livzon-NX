@@ -9684,6 +9684,25 @@
         "title": "BatchDeleteMergedRowsRequest",
         "type": "object"
       },
+      "BatchDeleteRequest": {
+        "description": "批量删除请求（培训台账/ESG 记录共用）.",
+        "properties": {
+          "ids": {
+            "description": "要删除的记录 ID 列表",
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "ids"
+        ],
+        "title": "BatchDeleteRequest",
+        "type": "object"
+      },
       "BatchImportAttachmentResultItem": {
         "description": "单个附件文件的导入结果。",
         "properties": {
@@ -42898,6 +42917,12 @@
             },
             "title": "Echo Sheets",
             "type": "array"
+          },
+          "trainee_matched": {
+            "default": 0,
+            "description": "按受训人员飞书部门自动识别归属的条数（仅201二车间家族）",
+            "title": "Trainee Matched",
+            "type": "integer"
           }
         },
         "title": "ImportConfirmResponseData",
@@ -80827,26 +80852,23 @@
         "type": "object"
       },
       "ValidationReviewCreateRequest": {
-        "description": "新建一次 AI 审核会话。entry 模式需传 entry_id（文件管理目录条目）。",
+        "description": "新建一次 AI 审核会话（上传 VP/VR 文档，类型与编号自动识别）。",
         "properties": {
-          "entry_id": {
+          "focus_points": {
             "anyOf": [
               {
-                "format": "uuid",
+                "maxLength": 2000,
                 "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Entry Id"
+            "title": "Focus Points"
           },
           "review_mode": {
+            "const": "upload",
             "default": "upload",
-            "enum": [
-              "upload",
-              "entry"
-            ],
             "title": "Review Mode",
             "type": "string"
           },
@@ -80968,6 +80990,11 @@
             ],
             "title": "Basis Match Type"
           },
+          "basis_quote": {
+            "default": "",
+            "title": "Basis Quote",
+            "type": "string"
+          },
           "basis_source": {
             "anyOf": [
               {
@@ -80986,7 +81013,8 @@
               "plan_report_mismatch",
               "content_consistency",
               "format_issue",
-              "numeric_check"
+              "numeric_check",
+              "basis_content_mismatch"
             ],
             "title": "Category",
             "type": "string"
@@ -81019,6 +81047,11 @@
               "low"
             ],
             "title": "Severity",
+            "type": "string"
+          },
+          "validation_quote": {
+            "default": "",
+            "title": "Validation Quote",
             "type": "string"
           }
         },
@@ -81167,6 +81200,15 @@
       },
       "ValidationReviewOut": {
         "properties": {
+          "basis_comparison": {
+            "default": [],
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Basis Comparison",
+            "type": "array"
+          },
           "basis_used": {
             "default": [],
             "items": {
@@ -81214,6 +81256,17 @@
             },
             "title": "Findings",
             "type": "array"
+          },
+          "focus_points": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Focus Points"
           },
           "id": {
             "format": "uuid",
@@ -81338,6 +81391,25 @@
           "review_id"
         ],
         "title": "ValidationReviewRunOut",
+        "type": "object"
+      },
+      "ValidationReviewRunRequest": {
+        "description": "发起审核：可选附用户特别关注点（与默认审核维度一并生效）。",
+        "properties": {
+          "focus_points": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Focus Points"
+          }
+        },
+        "title": "ValidationReviewRunRequest",
         "type": "object"
       },
       "ValidationReviewStatsOut": {
@@ -110102,6 +110174,65 @@
         ]
       }
     },
+    "/api/v1/hr/esg-training-records/batch-delete": {
+      "post": {
+        "operationId": "batch_delete_esg_records_api_v1_hr_esg_training_records_batch_delete_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchDeleteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Batch Delete Esg Records Api V1 Hr Esg Training Records Batch Delete Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "批量删除ESG培训记录（软删除）",
+        "tags": [
+          "人事管理"
+        ]
+      }
+    },
     "/api/v1/hr/esg-training-records/export": {
       "get": {
         "operationId": "export_esg_records_api_v1_hr_esg_training_records_export_get",
@@ -119266,6 +119397,65 @@
           }
         },
         "summary": "创建培训台账记录",
+        "tags": [
+          "人事管理"
+        ]
+      }
+    },
+    "/api/v1/hr/training-ledgers/batch-delete": {
+      "post": {
+        "operationId": "batch_delete_training_ledgers_api_v1_hr_training_ledgers_batch_delete_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchDeleteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Batch Delete Training Ledgers Api V1 Hr Training Ledgers Batch Delete Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "批量删除培训台账记录（软删除）",
         "tags": [
           "人事管理"
         ]
@@ -184163,6 +184353,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ValidationReviewRunRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {
@@ -184223,6 +184430,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ValidationReviewRunRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {
