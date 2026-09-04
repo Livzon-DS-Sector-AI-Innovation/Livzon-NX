@@ -397,6 +397,35 @@ def test_image_attachment_builds_multimodal_user_content() -> None:
     assert content[1]["image_url"]["url"] == "data:image/png;base64,YWJj"
 
 
+def test_multiple_image_attachments_keep_distinct_proxy_image_parts() -> None:
+    payload = _payload(
+        message="请分析这些附件",
+        attachments=[
+            {
+                "filename": "第一张.png",
+                "content_type": "image/png",
+                "size": 3,
+                "kind": "image",
+                "data_base64": "YWJj",
+            },
+            {
+                "filename": "第二张.png",
+                "content_type": "image/png",
+                "size": 3,
+                "kind": "image",
+                "data_base64": "ZGVm",
+            },
+        ],
+    )
+
+    content = _user_message_with_attachments(payload)
+
+    assert isinstance(content, list)
+    assert [part["type"] for part in content] == ["text", "image_url", "image_url"]
+    assert content[1]["image_url"]["url"] == "data:image/png;base64,YWJj"
+    assert content[2]["image_url"]["url"] == "data:image/png;base64,ZGVm"
+
+
 def test_gateway_cached_image_is_loaded_only_from_hermes_cache(
     tmp_path: Path,
     monkeypatch,

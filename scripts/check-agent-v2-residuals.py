@@ -13,7 +13,6 @@ SCAN_ROOTS = (
     ROOT / "Hermes-Lite" / "README.md",
     ROOT / "Hermes-Lite" / "docs",
     ROOT / "dazah-backend" / "app",
-    ROOT / "dazah-backend" / ".env.example",
     ROOT / "dazah-frontend" / "src",
 )
 RULES = {
