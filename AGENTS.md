@@ -143,6 +143,12 @@ date before merging”。除非已经确认的紧急流程明确授权，不允�
    `[docs]`、`[refactor]`、`[test]` 或 `[chore]`。描述包含背景、变更范围、验证
    命令与结果、未执行项、migration/OpenAPI/环境变量/生成文件影响，以及风险
    和回滚注意事项；不得虚构验证结果。没有实际差异时不创建空 PR。
+   在 PowerShell 中写入 PR 描述必须使用包含真实换行的 here-string，并通过
+   `gh pr create ... --body-file -` 或 `gh pr edit ... --body-file -` 从标准输入
+   传递；禁止使用 `--body "...\n..."` 伪造换行，因为 PowerShell 会把 `\n` 作为
+   普通字符写入。创建或更新后必须回读
+   `gh pr view <PR> --json body --jq .body`，确认 Markdown 换行和列表正常，并
+   确认正文不包含字面量 `\n`；可用 PowerShell 的 `$body.Contains('\n')` 检查。
 7. **跟踪 CI 并处理失败**：持续跟踪该 PR 最新 head SHA 对应的 GitHub Actions
    与必需状态检查，及时报告状态变化。若 GitHub 报告 feature 分支落后于 `main`，
    必须更新 feature 分支并重新运行受影响验证；不能以本地此前通过的检查代替更新
