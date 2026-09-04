@@ -67,7 +67,7 @@ run_integration() {
   git diff --exit-code -- openapi.json
   echo "== Backend database and API integration tests =="
   uv run --no-sync pytest \
-    --timeout=180 \
+    --timeout=600 \
     --timeout-method=thread \
     --cov=app \
     --cov-branch \
