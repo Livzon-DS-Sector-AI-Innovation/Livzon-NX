@@ -12,12 +12,11 @@ import {
   Form,
   Modal,
   Popconfirm,
-  Select,
+  Input,
   Space,
   Spin,
   Statistic,
   Table,
-  Tabs,
   Tag,
   Tooltip,
   Typography,
@@ -41,7 +40,6 @@ import {
   uploadValidationReviewFile,
 } from '@/actions/validation-review'
 import {
-  fetchDocumentEntries,
   fetchValidationReviewDetail,
   fetchValidationReviewJob,
   fetchValidationReviews,
@@ -70,27 +68,17 @@ function statusTag(status: string) {
   )
 }
 
-interface EntryOption {
-  id: string
-  code?: string | null
-  name: string
-}
-
 export function ValidationAiReviewPanel() {
   const { message } = App.useApp()
   const queryClient = useQueryClient()
   const [page, setPage] = useState(1)
   const [pageSize] = useState(20)
   const [createOpen, setCreateOpen] = useState(false)
-  const [createMode, setCreateMode] = useState<'upload' | 'entry'>('upload')
   const [detailId, setDetailId] = useState<string | null>(null)
   const [pollerJobId, setPollerJobId] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [uploadFiles, setUploadFiles] = useState<UploadFile[]>([])
-  const [entryOptions, setEntryOptions] = useState<EntryOption[]>([])
-  const [entrySearching, setEntrySearching] = useState(false)
-  const [entryId, setEntryId] = useState<string | null>(null)
-  const [title, setTitle] = useState('')
+  const [focusPoints, setFocusPoints] = useState('')
   const [exportingId, setExportingId] = useState<string | null>(null)
 
   const listQuery = useQuery({
@@ -215,27 +203,26 @@ export function ValidationAiReviewPanel() {
   )
 
   const handleCreate = useCallback(async () => {
+    if (uploadFiles.length === 0) {
+      message.warning('请先选择要上传的验证方案 / 验证报告')
+      return
+    }
     setSubmitting(true)
     try {
       const created = await createValidationReview({
-        review_mode: createMode,
-        ...(createMode === 'entry' ? { entry_id: entryId as string } : {}),
-        title: title.trim() || undefined,
+        review_mode: 'upload',
+        focus_points: focusPoints.trim() || undefined,
       })
       if (!created?.id) throw new Error('创建审核会话失败')
-      // 上传模式逐个提交文件
-      if (createMode === 'upload' && uploadFiles.length > 0) {
-        for (const file of uploadFiles) {
-          if (!file.originFileObj) continue
-          const formData = new FormData()
-          formData.append('file', file.originFileObj)
-          await uploadValidationReviewFile(created.id, formData)
-        }
+      for (const file of uploadFiles) {
+        if (!file.originFileObj) continue
+        const formData = new FormData()
+        formData.append('file', file.originFileObj)
+        await uploadValidationReviewFile(created.id, formData)
       }
       setCreateOpen(false)
       setUploadFiles([])
-      setEntryId(null)
-      setTitle('')
+      setFocusPoints('')
       queryClient.invalidateQueries({ queryKey: REVIEW_LIST_KEY })
       openDetail(created.id)
       message.success('审核会话已创建，可点击开始审核')
@@ -244,29 +231,7 @@ export function ValidationAiReviewPanel() {
     } finally {
       setSubmitting(false)
     }
-  }, [createMode, entryId, title, uploadFiles, queryClient, openDetail, message])
-
-  const searchEntries = useCallback(async (keyword: string) => {
-    setEntrySearching(true)
-    try {
-      const result = await fetchDocumentEntries({
-        keyword: keyword || undefined,
-        page: 1,
-        page_size: 20,
-      })
-      setEntryOptions(
-        (result.items ?? []).map((item) => ({
-          id: item.id,
-          code: item.code ?? null,
-          name: item.name,
-        }))
-      )
-    } catch {
-      setEntryOptions([])
-    } finally {
-      setEntrySearching(false)
-    }
-  }, [])
+  }, [focusPoints, uploadFiles, queryClient, openDetail, message])
 
   const columns = [
     {
@@ -386,91 +351,45 @@ export function ValidationAiReviewPanel() {
         title="新建验证 AI 审核"
         open={createOpen}
         onCancel={() => setCreateOpen(false)}
-        afterOpenChange={(open) => {
-          if (open && createMode === 'entry') {
-            searchEntries('')
-          }
-        }}
         onOk={handleCreate}
-        okText={createMode === 'upload' ? '创建并上传文件' : '创建并开始核对'}
+        okText="创建并上传文件"
         confirmLoading={submitting}
         width={640}
         destroyOnHidden
       >
-        <Tabs
-          activeKey={createMode}
-          onChange={(key) => setCreateMode(key as 'upload' | 'entry')}
-          items={[
-            {
-              key: 'upload',
-              label: '上传文件',
-              children: (
-                <>
-                  <Upload.Dragger
-                    multiple
-                    beforeUpload={() => false}
-                    fileList={uploadFiles}
-                    onChange={({ fileList }) => setUploadFiles(fileList)}
-                    accept=".doc,.docx,.md,.wps,.txt"
-                    maxCount={4}
-                  >
-                    <p className="ant-upload-drag-icon">
-                      <UploadOutlined />
-                    </p>
-                    <p className="ant-upload-text">点击或拖拽上传 VP/VR 文档</p>
-                    <p className="ant-upload-hint">
-                      支持 .doc/.docx/.md/.wps/.txt，单个不超过 20MB；文件名以 VP/VR 开头自动识别方案/报告
-                    </p>
-                  </Upload.Dragger>
-                  <Alert
-                    style={{ marginTop: 12 }}
-                    type="info"
-                    showIcon
-                    message="一次上传同编号的方案（VP）与报告（VR）可同时做一致性核对。"
-                  />
-                </>
-              ),
-            },
-            {
-              key: 'entry',
-              label: '从文件管理选择',
-              children: (
-                <Form layout="vertical" style={{ marginTop: 12 }}>
-                  <Form.Item
-                    label="选择文件管理目录条目（取其附件正文做核对）"
-                    required
-                  >
-                    <Select
-                      showSearch
-                      value={entryId ?? undefined}
-                      placeholder="输入文件名称或编号搜索"
-                      notFoundContent={entrySearching ? <Spin size="small" /> : '无匹配条目'}
-                      filterOption={false}
-                      loading={entrySearching}
-                      onSearch={searchEntries}
-                      onSelect={(value: string) => setEntryId(value)}
-                      options={entryOptions.map((option) => ({
-                        value: option.id,
-                        label: option.code ? `${option.code} ${option.name}` : option.name,
-                      }))}
-                    />
-                  </Form.Item>
-                </Form>
-              ),
-            },
-          ]}
-        />
-        <Form layout="vertical" style={{ marginTop: 8 }}>
-          <Form.Item label="审核标题（可选）">
-            <input
-              className="ant-input"
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              placeholder="例如：201二车间设备清洁验证"
-              maxLength={100}
+        <Upload.Dragger
+          multiple
+          beforeUpload={() => false}
+          fileList={uploadFiles}
+          onChange={({ fileList }) => setUploadFiles(fileList)}
+          accept=".doc,.docx,.md,.wps,.txt"
+          maxCount={4}
+        >
+          <p className="ant-upload-drag-icon">
+            <UploadOutlined />
+          </p>
+          <p className="ant-upload-text">点击或拖拽上传验证方案 / 验证报告</p>
+          <p className="ant-upload-hint">
+            支持 .doc/.docx/.md/.wps/.txt，单个不超过 20MB；系统自动识别方案（VP）与报告（VR）并匹配文件管理依据
+          </p>
+        </Upload.Dragger>
+        <Form layout="vertical" style={{ marginTop: 12 }}>
+          <Form.Item label="审核关注点（可选）">
+            <Input.TextArea
+              value={focusPoints}
+              onChange={(event) => setFocusPoints(event.target.value)}
+              placeholder="例如：重点核对清洁限度计算依据；检查再验证周期与偏差处理"
+              rows={3}
+              maxLength={2000}
+              showCount
             />
           </Form.Item>
         </Form>
+        <Alert
+          type="info"
+          showIcon
+          message="AI 将自动识别文档类型与编号，匹配文件管理依据并做正文一致性核查；也可在上方补充您特别关注的审核内容。"
+        />
       </Modal>
 
       <Drawer
@@ -618,6 +537,38 @@ export function ValidationAiReviewPanel() {
             <Card size="small" title="发现问题">
               <ValidationReviewFindingsTable findings={findings} />
             </Card>
+
+            {(record?.basis_comparison ?? []).length > 0 ? (
+              <Card size="small" title="基准正文一致性核查">
+                <Table
+                  rowKey="entry_id"
+                  size="small"
+                  pagination={false}
+                  dataSource={record?.basis_comparison ?? []}
+                  columns={[
+                    { title: '依据文件', dataIndex: 'name', ellipsis: true },
+                    { title: '编号', dataIndex: 'code', width: 170 },
+                    {
+                      title: '入选理由',
+                      dataIndex: 'reason',
+                      ellipsis: true,
+                      render: (value: string) => value || '—',
+                    },
+                    {
+                      title: '比对结果',
+                      dataIndex: 'mismatch_count',
+                      width: 110,
+                      render: (value: number) =>
+                        value > 0 ? (
+                          <Tag color="red">{value} 处不一致</Tag>
+                        ) : (
+                          <Tag color="green">一致</Tag>
+                        ),
+                    },
+                  ]}
+                />
+              </Card>
+            ) : null}
 
             {basisUsed.length > 0 ? (
               <Card size="small" title="引用文件核对明细">

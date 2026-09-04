@@ -1742,6 +1742,7 @@ export const VALIDATION_REVIEW_CATEGORY_LABELS: Record<string, string> = {
   content_consistency: '内容一致性',
   format_issue: '格式/编号问题',
   numeric_check: '数值核对',
+  basis_content_mismatch: '依据内容不一致',
 };
 
 export const VALIDATION_REVIEW_SEVERITY_LABELS: Record<string, string> = {

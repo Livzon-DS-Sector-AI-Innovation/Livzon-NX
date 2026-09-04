@@ -116,6 +116,14 @@ function findButton(label: string): HTMLElement | undefined {
   )
 }
 
+function chooseFile(container: HTMLElement, name = 'VP-FT3-CV1902-01 方案.docx') {
+  const input = document.body.querySelector('input[type="file"]')
+  if (!input) return
+  const file = new File(['docx-content'], name)
+  Object.defineProperty(input, 'files', { value: [file] })
+  input.dispatchEvent(new Event('change', { bubbles: true }))
+}
+
 function setupMocks() {
   apiClient.fetchValidationReviews.mockResolvedValue({
     items: REVIEW_LIST,
@@ -221,7 +229,8 @@ describe('ValidationAiReviewPanel', () => {
     })
     await act(flushRenders)
     expect(bodyText()).toContain('新建验证 AI 审核')
-    // 点击"创建并上传文件"提交（上传列表为空时仍可创建）
+    chooseFile(container)
+    await act(flushRenders)
     const okButton = findButton('创建并上传文件')
     act(() => {
       okButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
@@ -230,6 +239,7 @@ describe('ValidationAiReviewPanel', () => {
     expect(reviewActions.createValidationReview).toHaveBeenCalledWith({
       review_mode: 'upload',
       title: undefined,
+      focus_points: undefined,
     })
   })
 
@@ -394,12 +404,13 @@ describe('ValidationAiReviewPanel', () => {
       createButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     await act(flushRenders)
+    chooseFile(container)
+    await act(flushRenders)
     const okButton = findButton('创建并上传文件')
     act(() => {
       okButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     await act(flushRenders)
-    // createValidationReview 被调用（未抛错到组件外部）
     expect(reviewActions.createValidationReview).toHaveBeenCalled()
   })
 
