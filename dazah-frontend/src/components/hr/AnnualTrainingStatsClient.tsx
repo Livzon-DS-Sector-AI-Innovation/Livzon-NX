@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type Key } from 'react'
 import { App, Button, Drawer, Modal, Popconfirm, Spin, Table, Descriptions, Form, Input, Select, DatePicker, Tag, Space, Tooltip, Switch } from 'antd'
 import { EditOutlined, DeleteOutlined, EyeOutlined, FolderOpenOutlined, DownloadOutlined, FileExcelOutlined, PlusOutlined } from '@ant-design/icons'
 import { useRouter } from 'next/navigation'
@@ -9,7 +9,7 @@ import { HR_DISPLAY_DATE_FORMAT, fmtTrainingDatetime } from '@/lib/dayjs-config'
 import type { TrainingLedgerRecord } from '@/types/hr'
 import { fetchTrainingLedgersByDept } from '@/lib/api/hr'
 import { fetchSessionDocuments, fetchTrainingSession } from '@/lib/api/client/hr'
-import { updateTrainingLedger, deleteTrainingLedger, createSecondLevelTraining, generateOralExamResult, generatePracticalExamResult, createTrainingLedger } from '@/actions/hr'
+import { updateTrainingLedger, deleteTrainingLedger, batchDeleteTrainingLedgers, createSecondLevelTraining, generateOralExamResult, generatePracticalExamResult, createTrainingLedger } from '@/actions/hr'
 import { downloadBytes } from '@/lib/download'
 import ImportExamScoresModal from './ImportExamScoresModal'
 
@@ -69,7 +69,7 @@ async function fetchAllLedgers(
 }
 
 export default function AnnualTrainingStatsClient({ department, dateFrom, dateTo, periodLabel, printRequest }: Props) {
-  const { message } = App.useApp()
+  const { message, modal } = App.useApp()
   const [records, setRecords] = useState<TrainingLedgerRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [detailRecord, setDetailRecord] = useState<TrainingLedgerRecord | null>(null)
@@ -80,6 +80,8 @@ export default function AnnualTrainingStatsClient({ department, dateFrom, dateTo
   const [page, setPage] = useState(1)
   const [pageSize] = useState(50)
   const [total, setTotal] = useState(0)
+  // 多选批量删除（跨页保留已选）
+  const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([])
   const [form] = Form.useForm()
   const [createForm] = Form.useForm()
   const router = useRouter()
@@ -159,8 +161,36 @@ export default function AnnualTrainingStatsClient({ department, dateFrom, dateTo
   useEffect(() => {
     // 依赖变化时同步回到第一页加载：loadData 内部 setLoading 为首个同步步骤
     // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSelectedRowKeys([])
     loadData(1)
   }, [loadData])
+
+  // 批量删除：二次确认后删除选中记录
+  const handleBatchDelete = () => {
+    if (selectedRowKeys.length === 0) return
+    modal.confirm({
+      title: '确认批量删除',
+      content: `确定要删除选中的 ${selectedRowKeys.length} 条培训台账记录吗？删除后不可恢复。`,
+      okText: '确认删除',
+      cancelText: '取消',
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        try {
+          const res = await batchDeleteTrainingLedgers(selectedRowKeys.map(String))
+          const failedCount = res.data?.failed?.length ?? 0
+          if (failedCount > 0) {
+            message.warning(`已删除 ${res.data.deleted} 条，${failedCount} 条不存在或已删除`)
+          } else {
+            message.success(res.message || `已删除 ${res.data.deleted} 条记录`)
+          }
+          setSelectedRowKeys([])
+          loadData(page)
+        } catch (e) {
+          message.error((e instanceof Error ? e.message : '') || '批量删除失败')
+        }
+      },
+    })
+  }
 
   // 按导出内容打印：新窗口渲染与导出 Excel 一致的表格后调起打印
   const doPrint = async () => {
@@ -369,9 +399,27 @@ export default function AnnualTrainingStatsClient({ department, dateFrom, dateTo
         <Button type="primary" icon={<PlusOutlined />} onClick={handleCreateOpen}>
           新增台账记录
         </Button>
+        <Button
+          danger
+          icon={<DeleteOutlined />}
+          disabled={selectedRowKeys.length === 0}
+          onClick={handleBatchDelete}
+        >
+          批量删除{selectedRowKeys.length > 0 ? `（已选 ${selectedRowKeys.length} 条）` : ''}
+        </Button>
+        {selectedRowKeys.length > 0 && (
+          <Button type="text" size="small" onClick={() => setSelectedRowKeys([])}>
+            取消选择
+          </Button>
+        )}
       </Space>
       <Table
         rowKey="id"
+        rowSelection={{
+          selectedRowKeys,
+          onChange: (keys) => setSelectedRowKeys(keys),
+          preserveSelectedRowKeys: true,
+        }}
         dataSource={records}
         columns={columns}
         scroll={{ x: 1400 }}

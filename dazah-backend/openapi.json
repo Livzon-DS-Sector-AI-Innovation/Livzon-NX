@@ -9684,6 +9684,25 @@
         "title": "BatchDeleteMergedRowsRequest",
         "type": "object"
       },
+      "BatchDeleteRequest": {
+        "description": "批量删除请求（培训台账/ESG 记录共用）.",
+        "properties": {
+          "ids": {
+            "description": "要删除的记录 ID 列表",
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "ids"
+        ],
+        "title": "BatchDeleteRequest",
+        "type": "object"
+      },
       "BatchImportAttachmentResultItem": {
         "description": "单个附件文件的导入结果。",
         "properties": {
@@ -42898,6 +42917,12 @@
             },
             "title": "Echo Sheets",
             "type": "array"
+          },
+          "trainee_matched": {
+            "default": 0,
+            "description": "按受训人员飞书部门自动识别归属的条数（仅201二车间家族）",
+            "title": "Trainee Matched",
+            "type": "integer"
           }
         },
         "title": "ImportConfirmResponseData",
@@ -110149,6 +110174,65 @@
         ]
       }
     },
+    "/api/v1/hr/esg-training-records/batch-delete": {
+      "post": {
+        "operationId": "batch_delete_esg_records_api_v1_hr_esg_training_records_batch_delete_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchDeleteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Batch Delete Esg Records Api V1 Hr Esg Training Records Batch Delete Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "批量删除ESG培训记录（软删除）",
+        "tags": [
+          "人事管理"
+        ]
+      }
+    },
     "/api/v1/hr/esg-training-records/export": {
       "get": {
         "operationId": "export_esg_records_api_v1_hr_esg_training_records_export_get",
@@ -119313,6 +119397,65 @@
           }
         },
         "summary": "创建培训台账记录",
+        "tags": [
+          "人事管理"
+        ]
+      }
+    },
+    "/api/v1/hr/training-ledgers/batch-delete": {
+      "post": {
+        "operationId": "batch_delete_training_ledgers_api_v1_hr_training_ledgers_batch_delete_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchDeleteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Batch Delete Training Ledgers Api V1 Hr Training Ledgers Batch Delete Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "批量删除培训台账记录（软删除）",
         "tags": [
           "人事管理"
         ]

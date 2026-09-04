@@ -30,6 +30,7 @@ from app.core.response import paginated_response, success_response
 from app.core.upload_security import read_upload_secure
 from app.modules.hr.esg_service import EsgTrainingRecordService
 from app.modules.hr.schemas import (
+    BatchDeleteRequest,
     EsgListFilters,
     EsgTrainingRecordCreate,
     EsgTrainingRecordResponse,
@@ -532,6 +533,24 @@ async def delete_esg_record(
     _require_user(current_user)
     await service.delete_record(record_id)
     return success_response(message="ESG培训记录删除成功")
+
+
+@router.post(
+    "/esg-training-records/batch-delete", summary="批量删除ESG培训记录（软删除）"
+)
+async def batch_delete_esg_records(
+    payload: BatchDeleteRequest,
+    service: EsgTrainingRecordService = Depends(get_esg_service),
+    current_user: CurrentUser = None,
+) -> Any:
+    _require_user(current_user)
+    if not payload.ids:
+        raise AppException(status_code=400, message="请先选择要删除的记录")
+    result = await service.batch_delete_records(payload.ids)
+    message = f"已删除{result['deleted']}条ESG培训记录"
+    if result["failed"]:
+        message += f"，{len(result['failed'])}条不存在或已删除"
+    return success_response(data=result, message=message)
 
 
 def _require_user(current_user: CurrentUser) -> None:

@@ -7,7 +7,7 @@ import dayjs from 'dayjs'
 import { HR_DISPLAY_DATE_FORMAT } from '@/lib/dayjs-config'
 import type { EsgTrainingRecord } from '@/types/hr'
 import { fetchEsgRecordsByDept, fetchEsgFilterOptions, type EsgRecordFilters } from '@/lib/api/hr'
-import { updateEsgTrainingRecord, deleteEsgTrainingRecord } from '@/actions/hr'
+import { updateEsgTrainingRecord, deleteEsgTrainingRecord, batchDeleteEsgTrainingRecords } from '@/actions/hr'
 
 interface Props {
   department: string
@@ -73,7 +73,7 @@ interface FilterDropdownRenderProps {
 }
 
 export default function EsgTrainingReportClient({ department, dateFrom, dateTo, periodLabel, printRequest }: Props) {
-  const { message } = App.useApp()
+  const { message, modal } = App.useApp()
   const [records, setRecords] = useState<EsgTrainingRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [editingRecord, setEditingRecord] = useState<EsgTrainingRecord | null>(null)
@@ -83,6 +83,8 @@ export default function EsgTrainingReportClient({ department, dateFrom, dateTo, 
   const [total, setTotal] = useState(0)
   const [filters, setFilters] = useState<EsgRecordFilters>({})
   const [filterOptions, setFilterOptions] = useState<Record<string, string[]>>({})
+  // 多选批量删除（跨页保留已选）
+  const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([])
   const [form] = Form.useForm()
 
   const activeFilterCount = Object.values(filters).filter(
@@ -125,8 +127,36 @@ export default function EsgTrainingReportClient({ department, dateFrom, dateTo, 
   useEffect(() => {
     // 依赖变化时同步回到第一页加载：loadData 内部 setLoading 为首个同步步骤
     // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSelectedRowKeys([])
     loadData(1)
   }, [loadData])
+
+  // 批量删除：二次确认后删除选中记录
+  const handleBatchDelete = () => {
+    if (selectedRowKeys.length === 0) return
+    modal.confirm({
+      title: '确认批量删除',
+      content: `确定要删除选中的 ${selectedRowKeys.length} 条ESG培训记录吗？删除后不可恢复。`,
+      okText: '确认删除',
+      cancelText: '取消',
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        try {
+          const res = await batchDeleteEsgTrainingRecords(selectedRowKeys.map(String))
+          const failedCount = res.data?.failed?.length ?? 0
+          if (failedCount > 0) {
+            message.warning(`已删除 ${res.data.deleted} 条，${failedCount} 条不存在或已删除`)
+          } else {
+            message.success(res.message || `已删除 ${res.data.deleted} 条记录`)
+          }
+          setSelectedRowKeys([])
+          loadData(page)
+        } catch (e) {
+          message.error((e instanceof Error ? e.message : '') || '批量删除失败')
+        }
+      },
+    })
+  }
 
   // 按导出内容打印：新窗口渲染与导出 Excel 一致的表格后调起打印（含当前列筛选）
   const doPrint = async () => {
@@ -425,6 +455,20 @@ export default function EsgTrainingReportClient({ department, dateFrom, dateTo, 
 
   return (
     <>
+      <div className="no-print mb-2 flex items-center gap-2">
+        <Button
+          danger
+          disabled={selectedRowKeys.length === 0}
+          onClick={handleBatchDelete}
+        >
+          批量删除{selectedRowKeys.length > 0 ? `（已选 ${selectedRowKeys.length} 条）` : ''}
+        </Button>
+        {selectedRowKeys.length > 0 && (
+          <Button type="text" size="small" onClick={() => setSelectedRowKeys([])}>
+            取消选择
+          </Button>
+        )}
+      </div>
       {activeFilterCount > 0 && (
         <div className="no-print mb-2 flex items-center gap-2 text-sm text-gray-600">
           <FilterOutlined style={{ color: '#1677ff' }} />
@@ -434,6 +478,11 @@ export default function EsgTrainingReportClient({ department, dateFrom, dateTo, 
       )}
       <Table
         rowKey="id"
+        rowSelection={{
+          selectedRowKeys,
+          onChange: (keys) => setSelectedRowKeys(keys),
+          preserveSelectedRowKeys: true,
+        }}
         dataSource={records}
         columns={columns}
         loading={loading}

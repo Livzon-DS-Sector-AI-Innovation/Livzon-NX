@@ -3264,7 +3264,10 @@ describe('migrated component coverage', () => {
     await settle()
     Array.from(report.container.querySelectorAll('button')).find((button) => button.textContent === '确定')?.click()
     await settle()
-    reportButton('删除')?.click()
+    // 精确匹配行内「删除」按钮：工具栏「批量删除」按钮包含"删除"子串，不能误点
+    Array.from(report.container.querySelectorAll('button'))
+      .find((button) => button.textContent?.trim() === '删除')
+      ?.click()
     await settle()
     expect(getMock('actions/hr', 'updateEsgTrainingRecord')).toHaveBeenCalled()
     expect(getMock('actions/hr', 'deleteEsgTrainingRecord')).toHaveBeenCalled()

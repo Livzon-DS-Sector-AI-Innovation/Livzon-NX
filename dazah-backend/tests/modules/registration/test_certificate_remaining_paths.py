@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 from io import BytesIO
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from uuid import uuid4
@@ -324,3 +325,50 @@ async def test_certificate_reminder_settings_and_recipient_fallbacks(
         recipient_department="QA部",
     )
     assert (await service.get_reminder_settings()).pending_count == 0
+
+
+@pytest.mark.asyncio
+async def test_certificate_empty_db_and_missing_file_degrades_gracefully(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """空库 + 台账文件缺失：overview/reminder 正常返回空态，导入可建档并落盘。"""
+    config_path = tmp_path / "2. 药政证书台账.xlsx"
+    monkeypatch.setattr(
+        certificate, "_get_certificate_workbook_path", lambda: config_path
+    )  # type: ignore[union-attr]
+
+    session = SimpleNamespace(
+        commit=AsyncMock(), rollback=AsyncMock(), flush=AsyncMock()
+    )
+    repo = SimpleNamespace(
+        count_entries=AsyncMock(return_value=0),
+        list_entries=AsyncMock(return_value=[]),
+        soft_delete_many=AsyncMock(return_value=0),
+        create_entries=AsyncMock(return_value=[]),
+        get_reminder_setting=AsyncMock(return_value=None),
+    )
+    service = CertificateWorkbookService(session)
+    service.repository = repo
+
+    # 文件缺失 + 空库 → overview 全零、reminder 默认值，均不抛 404
+    overview = await service.get_overview()
+    assert overview.total_records == 0
+    assert overview.updated_at is None
+    assert overview.sheet_count == len(certificate.CERTIFICATE_SHEET_CONFIG)
+    reminder = await service.get_reminder_settings()
+    assert reminder.is_enabled is False
+    assert reminder.reminder_days == 90
+
+    # 导入建档：无源文件也可导入，且上传内容落盘到配置路径
+    upload = SimpleNamespace(filename="import.xlsx")
+    monkeypatch.setattr(
+        certificate,
+        "read_upload_secure",
+        AsyncMock(return_value=("import.xlsx", _certificate_workbook())),
+    )
+    imported = await service.import_workbook(upload)
+    assert imported.imported_record_count > 0
+    assert config_path.exists()
+    assert config_path.stat().st_size > 0
+    assert config_path.read_bytes()[:2] == b'PK'  # 合法 xlsx（zip）文件头

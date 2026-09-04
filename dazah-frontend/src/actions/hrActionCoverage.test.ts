@@ -320,4 +320,21 @@ describe('migrated HR server action coverage', () => {
     expect(fetchMock.mock.calls.length).toBeGreaterThan(100)
     expect(mocks.revalidatePath).not.toHaveBeenCalledWith('/hr/recruitment')
   })
+
+  it('touches ledger and esg batch-delete actions', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => response())
+    vi.stubGlobal('fetch', fetchMock)
+
+    await call('batchDeleteTrainingLedgers', ['ledger-1', 'ledger-2'])
+    await call('batchDeleteEsgTrainingRecords', ['esg-1'])
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    const ledgerCall = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body))
+    const esgCall = JSON.parse(String((fetchMock.mock.calls[1][1] as RequestInit).body))
+    expect(ledgerCall).toEqual({ ids: ['ledger-1', 'ledger-2'] })
+    expect(esgCall).toEqual({ ids: ['esg-1'] })
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/training-ledgers/batch-delete')
+    expect(String(fetchMock.mock.calls[1][0])).toContain('/esg-training-records/batch-delete')
+    expect(mocks.revalidatePath).toHaveBeenCalledWith('/hr/training/ledger')
+  })
 })

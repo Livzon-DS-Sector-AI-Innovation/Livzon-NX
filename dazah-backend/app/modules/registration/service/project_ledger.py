@@ -62,6 +62,89 @@ PROJECT_LEDGER_SHEET_CONFIG: dict[str, tuple[str, str]] = {
     ),
 }
 
+# 源工作簿缺失时的静态列回退（与源文件各子表表头一致），
+# 保证无文件时子表定义仍存在、页面可渲染空数据结构。
+PROJECT_LEDGER_FALLBACK_COLUMNS: dict[str, list[str]] = {
+    "1.国际注册（关联审评机制）": [
+        "序号",
+        "产品",
+        "项目名称",
+        "药物类型（无菌/非无菌，原料药/中间体，人用药/兽用药）",
+        "质量标准",
+        "批量/包装规格",
+        "国家/受理机构",
+        "程序类型1",
+        "RMS/CMS个数2",
+        "MF官方登记号（如果是MRP/DCP，填写RMS分配的号码）",
+        "与制剂关联审评历史，被官方批准历史",
+        "交费/时间",
+        "药政活动类型（首次递交/缺陷信回复/变更/年度报告/再注册/委托生产/撤销）",
+        "",
+        "MF内部编号",
+        "我司文件递交时间",
+        "代理机构",
+        "制剂公司",
+        "LOA签署日期和我司递交官方日期",
+        "制剂剂型/规格/官方登记号",
+        "是否为第一供应商，是否涉及首仿",
+        "制剂文件递交时间",
+        "（该项目）审评结果/API和制剂分别被批准的时间/正式批准信函或证书情况",
+    ],
+    "2.国际注册（原料药单独审评机制）": [
+        "序号",
+        "项目名称",
+        "产品",
+        "药物类型（无菌/非无菌，原料药/中间体，人用药/兽用药）",
+        "质量标准",
+        "批量/包装规格",
+        "国家/受理机构",
+        "MF内部编号",
+        "MF官方登记号",
+        "交费/时间",
+        "药政活动类型（首次递交/缺陷信回复/变更/年度报告/再注册/委托生产/撤销）",
+        "文件递交日期",
+        "是否获得证书",
+        "证书名称",
+        "证书编号",
+        "证书效期",
+        "备注",
+    ],
+    "3.国内注册（关联审评机制）": [
+        "序号",
+        "项目名称",
+        "产品",
+        "药物类型（无菌/非无菌，原料药/中间体，人用药/兽用药）",
+        "质量标准",
+        "批量/包装规格",
+        "国家/受理机构",
+        "MF内部编号",
+        "官方登记号/批准文号",
+        "药政活动类型（首次递交/缺陷信回复/变更/年度报告/再注册/委托生产/撤销）",
+        "我司文件递交时间",
+        "制剂公司",
+        "制剂剂型/规格/官方登记号",
+        "制剂递交时间",
+        "（该项目）审评结果/批准情况",
+    ],
+    "4.国内注册（原料药单独审评机制）": [
+        "序号",
+        "项目名称",
+        "产品",
+        "药物类型（无菌/非无菌，原料药/中间体，人用药/兽用药）",
+        "质量标准",
+        "批量/包装规格",
+        "受理机构",
+        "注册资料内部编号",
+        "注册资料官方登记号/受理号",
+        "药政活动类型（首次递交/缺陷信回复/变更/年度报告/再注册/委托生产/撤销）",
+        "文件递交日期",
+        "是否获得证书",
+        "证书名称",
+        "证书编号",
+        "证书效期",
+    ],
+}
+
 
 @dataclass(slots=True)
 class ProjectLedgerSheetDefinition:
@@ -159,12 +242,41 @@ def _resolve_sheet_key_and_name(worksheet_title: str) -> tuple[str, str]:
     )
 
 
-def _parse_workbook_definitions() -> tuple[
-    list[ProjectLedgerSheetDefinition], datetime
-]:
-    workbook_path = _get_workbook_path()
+def _parse_workbook_definitions(
+    workbook_path: Path | None = None,
+) -> tuple[list[ProjectLedgerSheetDefinition], datetime | None]:
+    """解析工作簿定义；文件缺失时回退静态列定义（updated_at 为 None）。"""
+    if workbook_path is None:
+        workbook_path = _get_workbook_path()
     if not workbook_path.exists():
-        raise NotFoundException("注册台账文件", str(workbook_path))
+        logger.warning(
+            "注册台账文件不存在（%s），使用静态列定义；请先通过页面导入台账。",
+            workbook_path,
+        )
+        definitions: list[ProjectLedgerSheetDefinition] = []
+        for worksheet_title, (sheet_key, sheet_name) in (
+            PROJECT_LEDGER_SHEET_CONFIG.items()
+        ):
+            labels = PROJECT_LEDGER_FALLBACK_COLUMNS.get(worksheet_title, [])
+            if not labels:
+                continue
+            used_keys: set[str] = set()
+            definitions.append(
+                ProjectLedgerSheetDefinition(
+                    sheet_key=sheet_key,
+                    sheet_name=sheet_name,
+                    sheet_title=sheet_name,
+                    worksheet_title=worksheet_title,
+                    columns=[
+                        ProjectLedgerColumn(
+                            key=_build_column_key(label, used_keys),
+                            label=label,
+                        )
+                        for label in _normalize_header_labels(labels)
+                    ],
+                )
+            )
+        return definitions, None
 
     workbook = load_workbook(workbook_path, data_only=True)
     try:
@@ -222,7 +334,12 @@ def _find_sheet_definition(sheet_key: str) -> ProjectLedgerSheetDefinition:
 
 
 def _load_seed_versions() -> list[RegistrationProjectLedgerVersion]:
-    return _load_versions_from_workbook_path(_get_workbook_path())
+    """从配置路径加载种子版本；文件缺失时跳过种子（DB 保持空，页面展示空态）。"""
+    workbook_path = _get_workbook_path()
+    if not workbook_path.exists():
+        logger.info("注册台账种子文件缺失，跳过种子加载")
+        return []
+    return _load_versions_from_workbook_path(workbook_path)
 
 
 def _load_versions_from_worksheet(
@@ -329,8 +446,19 @@ def _load_versions_from_worksheet(
 
 def _load_versions_from_workbook_path(
     workbook_path: Path,
+    definitions: list[ProjectLedgerSheetDefinition] | None = None,
 ) -> list[RegistrationProjectLedgerVersion]:
-    definitions, _ = _parse_workbook_definitions()
+    if definitions is None:
+        if _get_workbook_path().exists():
+            # 有源文件：上传文件须匹配源文件结构（原有校验规则）
+            definitions, _ = _parse_workbook_definitions()
+        else:
+            # 无源文件：导入建档，以上传文件自身结构为准
+            definitions, _ = _parse_workbook_definitions(
+                workbook_path=workbook_path
+            )
+    if not definitions:
+        return []
     definition_map = {
         definition.worksheet_title: definition for definition in definitions
     }
@@ -794,6 +922,19 @@ class ProjectLedgerWorkbookService:
             await self.session.rollback()
             raise
 
+        # 配置文件缺失时，将本次上传落盘到配置路径（create-if-missing，绝不覆盖）
+        config_path = _get_workbook_path()
+        if not config_path.exists():
+            try:
+                config_path.parent.mkdir(parents=True, exist_ok=True)
+                config_path.write_bytes(content)
+                logger.info("注册台账配置文件已从上传创建: %s", config_path)
+            except OSError as exc:
+                logger.warning(
+                    "注册台账配置文件落盘失败（%s），数据已入库但导出/种子将不可用",
+                    exc,
+                )
+
         sheet_record_counts = Counter(
             version.sheet_key for version in versions if version.version_number == 1
         )
@@ -807,7 +948,10 @@ class ProjectLedgerWorkbookService:
         await self.ensure_seeded()
         workbook_path = _get_workbook_path()
         if not workbook_path.exists():
-            raise NotFoundException("注册台账文件", str(workbook_path))
+            raise NotFoundException(
+                "注册台账文件",
+                f"{workbook_path}（请先在页面导入台账文件后再导出）",
+            )
 
         definitions, _ = _parse_workbook_definitions()
         temp_dir = Path(tempfile.mkdtemp(prefix="project-ledger-export-"))

@@ -4767,6 +4767,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/hr/esg-training-records/batch-delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 批量删除ESG培训记录（软删除） */
+        post: operations["batch_delete_esg_records_api_v1_hr_esg_training_records_batch_delete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/hr/esg-training-records/export": {
         parameters: {
             query?: never;
@@ -6549,6 +6566,23 @@ export interface paths {
         put?: never;
         /** 创建培训台账记录 */
         post: operations["create_training_ledger_api_v1_hr_training_ledgers_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/hr/training-ledgers/batch-delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 批量删除培训台账记录（软删除） */
+        post: operations["batch_delete_training_ledgers_api_v1_hr_training_ledgers_batch_delete_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -29409,6 +29443,17 @@ export interface components {
             rows?: components["schemas"]["DeleteMergedRowRequest"][];
         };
         /**
+         * BatchDeleteRequest
+         * @description 批量删除请求（培训台账/ESG 记录共用）.
+         */
+        BatchDeleteRequest: {
+            /**
+             * Ids
+             * @description 要删除的记录 ID 列表
+             */
+            ids: string[];
+        };
+        /**
          * BatchImportAttachmentResultItem
          * @description 单个附件文件的导入结果。
          */
@@ -41878,6 +41923,12 @@ export interface components {
              * @description 已确认的工作表配置
              */
             echo_sheets?: components["schemas"]["ImportSheetConfirm"][];
+            /**
+             * Trainee Matched
+             * @description 按受训人员飞书部门自动识别归属的条数（仅201二车间家族）
+             * @default 0
+             */
+            trainee_matched: number;
         };
         /**
          * ImportFeishuMembersRequest
@@ -71538,6 +71589,41 @@ export interface operations {
             };
         };
     };
+    batch_delete_esg_records_api_v1_hr_esg_training_records_batch_delete_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BatchDeleteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     export_esg_records_api_v1_hr_esg_training_records_export_get: {
         parameters: {
             query: {
@@ -76084,6 +76170,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["TrainingLedgerCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    batch_delete_training_ledgers_api_v1_hr_training_ledgers_batch_delete_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BatchDeleteRequest"];
             };
         };
         responses: {

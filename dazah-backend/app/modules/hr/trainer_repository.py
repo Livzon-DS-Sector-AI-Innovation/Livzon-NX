@@ -39,7 +39,7 @@ class TrainerRepository:
             count_query = count_query.where(Trainer.department.in_(dept_alias_set))
         elif department:
             # 部门归一匹配：选中部门（规范名）展开为全部别名（如 201二车间（MC）→
-            # 裸名/霉酚酸/201三车间）
+            # 裸名/霉酚酸；DR：多拉/201三车间）
             dept_values = await training_dept_aliases_of(self.session, department)
             query = query.where(Trainer.department.in_(dept_values))
             count_query = count_query.where(Trainer.department.in_(dept_values))
@@ -75,13 +75,18 @@ class TrainerRepository:
     async def create(self, trainer: Trainer) -> Trainer:
         self.session.add(trainer)
         await self.session.flush()
+        # server_default 时间戳在 flush 后被过期，序列化前显式刷新（避免隐式 IO 报错）
+        await self.session.refresh(trainer)
         return trainer
 
     async def update(self, trainer: Trainer, data: dict[str, Any]) -> Trainer:
+        # 按「显式出现的字段」应用：PUT 显式传 null 即清空字段；
+        # 导入路径已在 service 层过滤 None（缺省字段保留原值）
         for key, value in data.items():
-            if value is not None:
-                setattr(trainer, key, value)
+            setattr(trainer, key, value)
         await self.session.flush()
+        # onupdate 的 updated_at 在 flush 后被过期，显式刷新（避免隐式 IO 报错）
+        await self.session.refresh(trainer)
         return trainer
 
     async def delete(self, trainer: Trainer) -> None:
