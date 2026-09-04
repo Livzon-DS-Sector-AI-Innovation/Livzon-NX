@@ -4,6 +4,7 @@ import {
   fetchDeptApprovalConfigNames,
   fetchEmployeeDepartments,
   fetchOnboardingAttachmentContent,
+  fetchTrainingDeptMappings,
 } from './hr'
 
 function jsonResponse(body: unknown, status = 200) {
@@ -102,5 +103,47 @@ describe('hr client onboarding/dept fetchers', () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ detail: '权限不足' }, 403))
     vi.stubGlobal('fetch', fetchMock)
     await expect(fetchEmployeeDepartments()).rejects.toThrow('权限不足')
+  })
+})
+
+describe('hr client training dept mappings', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('passes through person mapping type entries from the dept mappings endpoint', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          data: [
+            {
+              id: 'rule-1',
+              source_name: '赵双',
+              target_name: '201二车间',
+              mapping_type: 'person' as const,
+              priority: 1,
+              enabled: true,
+              remark: null,
+            },
+          ],
+        }),
+      ),
+    )
+    const items = await fetchTrainingDeptMappings()
+    expect(items).toHaveLength(1)
+    expect(items[0].mapping_type).toBe('person')
+    expect(items[0].source_name).toBe('赵双')
+  })
+
+  it('throws a readable message when the dept mappings endpoint fails', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ message: '配置加载失败' }), {
+          status: 500,
+          headers: { 'content-type': 'application/json' },
+        }),
+      ),
+    )
+    await expect(fetchTrainingDeptMappings()).rejects.toThrow('配置加载失败')
   })
 })

@@ -118,22 +118,15 @@ alembic downgrade -1
 
 ## Docker Deployment
 
+Run Docker commands from the workspace root. The backend image and Compose
+service are defined by the root `Dockerfile` and `compose.dev.yml`/`compose.yml`.
+
 ```bash
-# Start database and Redis
-docker compose --profile db up -d
+# Development stack (from the workspace root)
+docker compose --env-file .env.local -f compose.dev.yml up -d --build app
 
-# Run migrations
-docker compose run --rm app uv run alembic upgrade head
-
-# Seed data
-docker compose run --rm app uv run python scripts/seed_regulatory_tracker.py
-docker compose run --rm app uv run python scripts/seed_regulatory_documents.py
-
-# Install Playwright in container
-docker compose run --rm app uv run playwright install chromium
-
-# Start application
-docker compose --profile app up -d
+# Production stack (from the workspace root)
+docker compose --env-file .env -f compose.yml up -d app
 ```
 
 ## Environment Variables

@@ -18,3 +18,11 @@ def test_native_launcher_preserves_frontend_cache_unless_reset_is_requested() ->
     assert "if (-not $ResetCache)" in script
     assert "-ResetCache:$ResetFrontendCache" in script
     assert "Remove-Item -LiteralPath $DevDirectory -Recurse -Force" in script
+
+
+def test_docker_frontend_reconciles_named_dependency_volume_on_start() -> None:
+    compose = (ROOT / "compose.dev.yml").read_text(encoding="utf-8")
+
+    assert "pnpm install --frozen-lockfile --prefer-offline" in compose
+    assert "exec pnpm dev --hostname 0.0.0.0 --port 3000" in compose
+    assert "frontend_node_modules:/app/node_modules" in compose

@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 @pytest.mark.parametrize(
-    "filename", ["compose.yml", "compose.dev.yml", "dazah-backend/docker-compose.yml"]
+    "filename", ["compose.yml", "compose.dev.yml"]
 )
 def test_application_can_start_without_optimization_service(filename: str) -> None:
     services = yaml.safe_load((ROOT / filename).read_text(encoding="utf-8"))["services"]

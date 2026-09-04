@@ -18,14 +18,18 @@
 # Install dependencies
 pnpm install
 
-# Start development server
-docker compose -f docker-compose.dev.yml up -d --build
+# Start development server (run this command from the workspace root)
+docker compose --env-file .env.local -f compose.dev.yml up -d --build frontend
 
 # Or run directly
 pnpm dev --port 3000
 ```
 
 Access at http://localhost:3000
+
+The root development Compose service runs `pnpm install --frozen-lockfile`
+before Next.js starts, keeping the named `node_modules` volume aligned with
+`pnpm-lock.yaml` after dependency changes.
 
 ## Architecture
 
@@ -71,20 +75,20 @@ The frontend connects to `dazah-backend` (FastAPI):
 ## Development
 
 ```bash
-# Development with hot reload (recommended)
-docker compose -f docker-compose.dev.yml up -d --build
+# Development with hot reload (run from the workspace root)
+docker compose --env-file .env.local -f compose.dev.yml up -d --build frontend
 
-# Production build
-docker compose up -d --build
+# Production stack (run from the workspace root; images are built separately)
+docker compose --env-file .env -f compose.yml up -d frontend
 ```
 
-**Important**: Always use `docker-compose.dev.yml` for daily development to get hot reload.
+Use the root `compose.dev.yml` for daily development to get hot reload.
 
 If file changes are still not reflected immediately in Docker Desktop/Windows,
 recreate the dev container so the polling watcher settings are applied:
 
 ```bash
-docker compose -f docker-compose.dev.yml up -d --force-recreate frontend
+docker compose --env-file .env.local -f compose.dev.yml up -d --force-recreate frontend
 ```
 
 When accessing the dev server through a LAN IP or custom host, add it to

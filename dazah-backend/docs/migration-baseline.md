@@ -92,8 +92,9 @@ psql -U postgres -d your_db -c "UPDATE public.alembic_version SET version_num = 
 
 ```bash
 # 删库重建，启动时自动执行 baseline
-docker compose down -v
-docker compose up -d
+# Run from the workspace root.
+docker compose --env-file .env.local -f compose.dev.yml down -v
+docker compose --env-file .env.local -f compose.dev.yml up -d
 ```
 
 ### 情况 C：服务器空库部署
