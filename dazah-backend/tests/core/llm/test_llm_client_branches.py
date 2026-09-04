@@ -7,6 +7,7 @@ tools 响应解析与流式 reasoning/content 分片。不发真实网络请求�
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
+import httpx
 import pytest
 
 from app.core.llm.client import LLMClient
@@ -106,11 +107,22 @@ async def test_chat_enable_thinking_from_config(
 async def test_chat_explicit_timeout_uses_dedicated_client_and_maps_errors(
     client: LLMClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # 真实构造超时 client 指向本机不可达端口 → RequestError → 502 包装
-    _patch_config(monkeypatch, _config(api_base_url="http://127.0.0.1:9"))
+    # Use a deterministic provider timeout instead of relying on a local port.
+    class TimeoutClient:
+        def __init__(self, *_args: Any, **_kwargs: Any) -> None:
+            pass
+
+        async def post(self, *_args: Any, **_kwargs: Any) -> Any:
+            raise httpx.ReadTimeout("test timeout")
+
+        async def aclose(self) -> None:
+            return None
+
+    _patch_config(monkeypatch, _config())
+    monkeypatch.setattr("app.core.llm.client.httpx.AsyncClient", TimeoutClient)
     with pytest.raises(LLMProviderError) as exc:
         await client.chat([{"role": "user", "content": "x"}], timeout=2)
-    assert exc.value.status_code == 502
+    assert exc.value.status_code == 504
 
 
 async def test_chat_rate_limit_and_provider_error(
@@ -179,6 +191,43 @@ async def test_chat_with_tools_rejects_empty_or_bad_message(
     _pair(monkeypatch, client, badmsg, cfg)
     with pytest.raises(LLMProviderError, match="格式错误"):
         await client.chat_with_tools([{"role": "user", "content": "x"}], tools=[])
+
+
+async def test_chat_vision_orders_images_before_prompt_for_kimi(
+    client: LLMClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cfg = _config(config_type="vision", model_name="moonshotai/Kimi-K2.6")
+    http_client = _chat_body(
+        _resp({"choices": [{"message": {"content": "ok"}}]})
+    )
+    _pair(monkeypatch, client, http_client, cfg)
+
+    await client.chat_vision("describe this image", ["data:image/png;base64,YQ=="])
+
+    body = http_client.post.await_args.kwargs["json"]
+    assert body["messages"][0]["content"] == [
+        {
+            "type": "image_url",
+            "image_url": {"url": "data:image/png;base64,YQ=="},
+        },
+        {"type": "text", "text": "describe this image"},
+    ]
+
+
+async def test_chat_vision_uses_completion_tokens_for_gpt5_model(
+    client: LLMClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cfg = _config(config_type="vision", model_name="GPT-5.6-Luna")
+    http_client = _chat_body(
+        _resp({"choices": [{"message": {"content": "ok"}}]})
+    )
+    _pair(monkeypatch, client, http_client, cfg)
+
+    await client.chat_vision("describe this image", ["data:image/png;base64,YQ=="])
+
+    body = http_client.post.await_args.kwargs["json"]
+    assert body["max_completion_tokens"] == 16384
+    assert "max_tokens" not in body
 
 
 class _StreamResp:

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import {
   confirmationExecutionFeedback,
   confirmationNarrative,
+  getAgentStreamTimeoutMs,
 } from "./AgentFloatingAssistant"
 import type { AgentConfirmation } from "@/lib/api/agent"
 
@@ -46,5 +47,14 @@ describe("Feishu native confirmation feedback", () => {
     expect(feedback).toContain("回读验证未通过")
     expect(feedback).toContain("未确认")
     expect(feedback).not.toContain("已执行")
+  })
+})
+
+describe("agent stream timeout", () => {
+  it("allows image analysis more time than ordinary text requests", () => {
+    expect(getAgentStreamTimeoutMs([])).toBe(90_000)
+    expect(
+      getAgentStreamTimeoutMs([{ content_type: "image/png" }]),
+    ).toBe(300_000)
   })
 })

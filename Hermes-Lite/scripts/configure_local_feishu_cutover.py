@@ -36,29 +36,25 @@ def _set_values(path: Path, updates: dict[str, str]) -> None:
 
 
 def configure(project_root: Path) -> None:
-    hermes_env = project_root / "Hermes-Lite" / ".env"
-    backend_env = project_root / "dazah-backend" / ".env"
-    _, hermes_values = _read_values(hermes_env)
+    env_file = project_root / ".env.local"
+    if not env_file.is_file():
+        raise FileNotFoundError(
+            f"Missing {env_file}; copy .env.local.example to .env.local first."
+        )
 
-    encryption_key = hermes_values.get("HERMES_FEISHU_CREDENTIAL_KEY")
+    _, env_values = _read_values(env_file)
+
+    encryption_key = env_values.get("HERMES_FEISHU_CREDENTIAL_KEY")
     if not encryption_key:
         encryption_key = Fernet.generate_key().decode("ascii")
-    internal_token = hermes_values.get("HERMES_INTERNAL_TOKEN")
+    internal_token = env_values.get("HERMES_INTERNAL_TOKEN")
     if not internal_token:
         internal_token = secrets.token_urlsafe(48)
 
     _set_values(
-        hermes_env,
+        env_file,
         {
             "HERMES_FEISHU_CREDENTIAL_KEY": encryption_key,
-            "HERMES_INTERNAL_TOKEN": internal_token,
-            "HERMES_FEISHU_GATEWAY_ENABLED": "true",
-        },
-    )
-    _set_values(
-        backend_env,
-        {
-            "HERMES_INTERNAL_URL": "http://hermes-lite:8100",
             "HERMES_INTERNAL_TOKEN": internal_token,
         },
     )

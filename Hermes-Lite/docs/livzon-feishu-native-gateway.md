@@ -149,7 +149,8 @@ tmpfs 配置并热重启 Gateway；失败时保留旧版本。
 uv run python scripts/configure_local_feishu_cutover.py
 ```
 
-该脚本生成但不输出 Hermes 凭证加密密钥和内部服务 Token。重建后端与
+该脚本只更新工作区根目录 `.env.local`，不会创建 Hermes-Lite 或
+dazah-backend 子目录环境文件；生成但不输出 Hermes 凭证加密密钥和内部服务 Token。重建后端与
 Hermes 容器后，需要在平台
 “系统设置 → 飞书设置”重新保存一次现有凭证，使平台将凭证安全推送到
 Hermes。确认 Hermes `/internal/feishu/status` 返回
