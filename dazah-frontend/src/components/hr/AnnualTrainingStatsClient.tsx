@@ -409,6 +409,9 @@ export default function AnnualTrainingStatsClient({ department, dateFrom, dateTo
             <Descriptions.Item label="一级/二级">{detailRecord.level_category || '-'}</Descriptions.Item>
             <Descriptions.Item label="涉及部门">{detailRecord.involved_depts || '-'}</Descriptions.Item>
             <Descriptions.Item label="培训对象">{detailRecord.trainees || '-'}</Descriptions.Item>
+            <Descriptions.Item label="参训人员统计">
+              {detailRecord.attendance_count != null ? `${detailRecord.attendance_count} 人` : '-'}
+            </Descriptions.Item>
             <Descriptions.Item label="培训类型">{detailRecord.training_type || '-'}</Descriptions.Item>
             <Descriptions.Item label="考核方式">{detailRecord.ledger_assessment_method || '-'}</Descriptions.Item>
             <Descriptions.Item label="部门/公司计划">{detailRecord.plan_source || '-'}</Descriptions.Item>

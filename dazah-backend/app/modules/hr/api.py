@@ -2452,6 +2452,44 @@ async def init_dept_approval_configs_from_departments(
 # ─── TrainingLedger Routes ───
 
 
+async def _attach_ledger_attendance(
+    db: AsyncSession, records: list[Any]
+) -> None:
+    """按培训会话参训名单统计参训人数并附加到台账记录。
+
+    有 session_id 的记录以会话真实名单（employee_names）长度为统计值；
+    无会话的手工台账按培训对象（trainees）文本的分隔片段计数；均不可数则为 None。
+    """
+    if not records:
+        return
+    session_ids = {r.session_id for r in records if r.session_id}
+    name_map: dict[UUID, int] = {}
+    if session_ids:
+        result = await db.execute(
+            select(TrainingSession.id, TrainingSession.employee_names).where(
+                TrainingSession.id.in_(session_ids)
+            )
+        )
+        for sid, names in result.all():
+            if names:
+                name_map[sid] = len(names)
+    for rec in records:
+        count: int | None = None
+        if rec.session_id and rec.session_id in name_map:
+            count = name_map[rec.session_id]
+        else:
+            text = (rec.trainees or "").strip()
+            if text:
+                parts = [
+                    part.strip()
+                    for part in re.split(r"[、,，;；\n\r]+", text)
+                    if part.strip()
+                ]
+                if len(parts) > 1:
+                    count = len(parts)
+        rec.attendance_count = count
+
+
 @router.get("/training-ledgers", summary="培训台账列表")
 async def list_training_ledgers(
     employee_number: str | None = Query(None, description="工号筛选"),
@@ -2471,6 +2509,7 @@ async def list_training_ledgers(
             page=page_params.page,
             page_size=page_params.page_size,
         )
+        await _attach_ledger_attendance(db, records)
         return success_response(
             data=[
                 TrainingLedgerResponse.model_validate(r).model_dump(mode="json")
@@ -2499,6 +2538,7 @@ async def list_training_ledgers(
             sort_order="asc",
             dept_alias_set=alias_set,
         )
+    await _attach_ledger_attendance(db, records)
     data = [
         TrainingLedgerResponse.model_validate(r).model_dump(mode="json")
         for r in records
@@ -3108,6 +3148,7 @@ _DEPT_LEDGER_HEADERS = [
     "一级/二级",
     "涉及部门",
     "培训对象",
+    "参训人员统计",
     "培训类型",
     "考核方式",
     "部门/公司计划",
@@ -3125,6 +3166,7 @@ _DEPT_LEDGER_FIELDS = [
     "level_category",
     "involved_depts",
     "trainees",
+    "attendance_count",
     "training_type",
     "ledger_assessment_method",
     "plan_source",
@@ -3356,6 +3398,7 @@ async def export_training_ledger_by_dept(
         ]
     if date_to:
         records = [r for r in records if r.training_date and r.training_date <= date_to]
+    await _attach_ledger_attendance(db, records)
     record_dicts = [
         TrainingLedgerResponse.model_validate(r).model_dump(mode="json")
         for r in records

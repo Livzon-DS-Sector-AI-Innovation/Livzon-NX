@@ -392,6 +392,7 @@ def test_generate_department_ledger_excel_uses_expected_headers_and_dates() -> N
                 "duration_hours": 1.5,
                 "training_content": "GMP",
                 "instructor": "张三",
+                "attendance_count": 5,
             }
         ],
     )
@@ -402,6 +403,11 @@ def test_generate_department_ledger_excel_uses_expected_headers_and_dates() -> N
     assert ws["A2"].value == "培训时间"
     assert ws["B3"].value == "2026-08-20"
     assert ws["D3"].value == "GMP"
+    # 参训人员统计列：表头存在且数据行写入统计值
+    headers = [ws.cell(row=2, column=c).value for c in range(1, ws.max_column + 1)]
+    assert "参训人员统计" in headers
+    col_idx = headers.index("参训人员统计") + 1
+    assert ws.cell(row=3, column=col_idx).value == 5
 
 
 def test_generate_annual_plan_excel_pads_template_and_formats_confirmation() -> None:
