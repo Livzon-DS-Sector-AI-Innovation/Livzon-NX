@@ -56,7 +56,8 @@ Start the backend locally:
 uv run uvicorn app.main:app --reload
 ```
 
-The local application should use these URLs from `.env`:
+The native launcher loads the root `.env.local` and converts the container
+hostnames to local host URLs for the application process:
 
 ```env
 DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/dazah
@@ -91,8 +92,8 @@ The `migrate` service runs `alembic upgrade head` before `app` starts Uvicorn.
 The application uses the Docker service hostnames from `.env.local`:
 
 ```env
-APP_DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/dazah
-APP_REDIS_URL=redis://redis:6379/0
+DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/dazah
+REDIS_URL=redis://redis:6379/0
 ```
 
 ## Useful Commands

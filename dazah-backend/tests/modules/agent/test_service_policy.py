@@ -1,3 +1,4 @@
+import base64
 import json
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -7,8 +8,11 @@ from typing import Any, cast
 
 import pytest
 from docx import Document
+from fastapi import HTTPException, status
 
+from app.core.llm import LLMProviderError
 from app.modules.agent.schemas import (
+    AgentAttachmentIn,
     AgentBackendV2Event,
     AgentChatRequest,
     AgentToolExecuteRequest,
@@ -338,6 +342,167 @@ class FakeAgentRepository:
 class PolicyOnlyAgentService(AgentService):
     async def _call_hermes(self: Any, **kwargs: Any) -> Any:
         raise AssertionError("policy-blocked messages must not reach Hermes")
+
+
+def _direct_image_request() -> tuple[AgentChatRequest, list[dict[str, Any]]]:
+    raw = b"\x89PNG\r\n\x1a\nimage"
+    encoded = base64.b64encode(raw).decode()
+    return (
+        AgentChatRequest(
+            message="请分析这些附件",
+            attachments=[
+                AgentAttachmentIn(
+                    filename="现场.png",
+                    content_type="image/png",
+                    size=len(raw),
+                    data_base64=encoded,
+                )
+            ],
+        ),
+        [
+            {
+                "attachment_id": str(uuid.uuid4()),
+                "filename": "现场.png",
+                "content_type": "image/png",
+                "size": len(raw),
+                "kind": "image",
+                "data_base64": encoded,
+            }
+        ],
+    )
+
+
+def test_direct_vision_route_is_limited_to_analysis_only_images() -> None:
+    image = [{"kind": "image", "content_type": "image/png"}]
+    document = [
+        {"kind": "image", "content_type": "image/png"},
+        {"kind": "document", "content_type": "text/plain"},
+    ]
+
+    assert AgentService._should_direct_vision_analyze("请分析图片", image) is True
+    assert (
+        AgentService._should_direct_vision_analyze("请根据图片查询库存", image)
+        is False
+    )
+    assert (
+        AgentService._should_direct_vision_analyze(
+            "search inventory from this image", image
+        )
+        is False
+    )
+    assert AgentService._should_direct_vision_analyze("请分析附件", document) is False
+
+
+@pytest.mark.anyio
+async def test_stream_chat_sends_analysis_images_directly_to_vision_client(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo: Any = FakeAgentRepository()
+    service = AgentService(settings=SimpleNamespace(), repo=repo)
+    user: Any = SimpleNamespace(id=uuid.uuid4(), name="测试用户")
+    request, prepared = _direct_image_request()
+
+    async def prepare(_request: Any) -> Any:
+        return prepared, [{"filename": "现场.png", "kind": "image"}], []
+
+    calls: list[dict[str, Any]] = []
+
+    async def chat_vision(prompt: str, image_urls: list[str], **kwargs: Any) -> str:
+        calls.append({"prompt": prompt, "image_urls": image_urls, **kwargs})
+        return "图片分析结果"
+
+    async def forbidden_hermes(**_kwargs: Any) -> Any:
+        raise AssertionError("direct image analysis must not reach Hermes")
+        yield  # pragma: no cover
+
+    monkeypatch.setattr(service, "_prepare_attachments", prepare)
+    monkeypatch.setattr("app.modules.agent.service.llm_client.chat_vision", chat_vision)
+    monkeypatch.setattr(service, "_call_hermes_stream", forbidden_hermes)
+
+    frames = [
+        frame
+        async for frame in service.stream_chat(
+            FakeDb(), request=request, current_user=user
+        )
+    ]
+    events = parse_sse_events(frames)
+
+    assert [event for event, _ in events] == [
+        "accepted",
+        "thinking",
+        "text_delta",
+        "finished",
+    ]
+    assert events[2][1]["data"]["text"] == "图片分析结果"
+    assert events[3][1]["data"]["message"]["content"] == "图片分析结果"
+    assert calls[0]["image_urls"] == [
+        f"data:image/png;base64,{prepared[0]['data_base64']}"
+    ]
+    assert calls[0]["max_tokens"] == 4096
+    assert repo.messages[-1].message_metadata["source"] == "direct_vision"
+
+
+@pytest.mark.anyio
+async def test_stream_chat_maps_direct_vision_timeout_to_stable_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo: Any = FakeAgentRepository()
+    service = AgentService(settings=SimpleNamespace(), repo=repo)
+    user: Any = SimpleNamespace(id=uuid.uuid4(), name="测试用户")
+    request, prepared = _direct_image_request()
+
+    async def prepare(_request: Any) -> Any:
+        return prepared, [{"filename": "现场.png", "kind": "image"}], []
+
+    async def timeout(**_kwargs: Any) -> str:
+        raise HTTPException(
+            status.HTTP_504_GATEWAY_TIMEOUT,
+            "视觉模型响应超时，请稍后重试或适当增加模型超时时间。",
+        )
+
+    monkeypatch.setattr(service, "_prepare_attachments", prepare)
+    monkeypatch.setattr(service, "_call_direct_vision", timeout)
+
+    frames = [
+        frame
+        async for frame in service.stream_chat(
+            FakeDb(), request=request, current_user=user
+        )
+    ]
+    events = parse_sse_events(frames)
+
+    assert [event for event, _ in events] == ["accepted", "thinking", "error"]
+    assert events[-1][1]["data"] == {
+        "code": "agent.vision_timeout",
+        "message": "视觉模型响应超时，请稍后重试或适当增加模型超时时间。",
+    }
+    assert [message.role for message in repo.messages] == ["user"]
+
+
+@pytest.mark.anyio
+async def test_direct_vision_preserves_provider_timeout_status(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = AgentService(settings=SimpleNamespace(), repo=FakeAgentRepository())
+    _, prepared = _direct_image_request()
+
+    async def timeout(
+        _prompt: str, _image_urls: list[str], **_kwargs: Any
+    ) -> str:
+        raise LLMProviderError("provider timeout", status_code=504)
+
+    monkeypatch.setattr("app.modules.agent.service.llm_client.chat_vision", timeout)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await service._call_direct_vision(
+            message="请分析图片",
+            attachments=prepared,
+        )
+
+    assert exc_info.value.status_code == status.HTTP_504_GATEWAY_TIMEOUT
+    assert exc_info.value.detail == (
+        "视觉模型响应超时，请稍后重试或适当增加模型超时时间。"
+    )
 
 
 @pytest.mark.anyio

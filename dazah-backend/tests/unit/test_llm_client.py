@@ -35,6 +35,14 @@ def test_apply_temperature_omits_kimi_model_temperature() -> None:
     assert "temperature" not in body
 
 
+def test_apply_temperature_omits_gpt5_model_temperature() -> None:
+    body: dict[Any, Any] = {}
+
+    _apply_temperature(body, 0.1, "GPT-5.6-Luna")
+
+    assert "temperature" not in body
+
+
 async def test_chat_json_rejects_non_object_response(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

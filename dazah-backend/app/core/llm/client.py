@@ -18,6 +18,20 @@ def _model_name_suggests_kimi(model_name: str) -> bool:
     return "kimi" in lower or "moonshot" in lower
 
 
+def _model_name_uses_completion_tokens(model_name: str) -> bool:
+    normalized = model_name.strip().lower().rsplit("/", 1)[-1]
+    return normalized.startswith("gpt-5")
+
+
+def _set_max_tokens(body: JsonObject, max_tokens: int, model_name: str) -> None:
+    field = (
+        "max_completion_tokens"
+        if _model_name_uses_completion_tokens(model_name)
+        else "max_tokens"
+    )
+    body[field] = max_tokens
+
+
 def _apply_temperature(
     body: JsonObject,
     temperature: float | None,
@@ -28,6 +42,7 @@ def _apply_temperature(
         temperature is not None
         and temperature > 0
         and not _model_name_suggests_kimi(model_name)
+        and not _model_name_uses_completion_tokens(model_name)
     ):
         body["temperature"] = temperature
 
@@ -86,6 +101,7 @@ class LLMClient:
         """
         client, config = await self._get_client_and_config(config_type)
         if timeout is not None:
+            await client.aclose()
             client = httpx.AsyncClient(
                 base_url=config.api_base_url.rstrip("/"),
                 headers={
@@ -124,8 +140,8 @@ class LLMClient:
             body: JsonObject = {
                 "model": config.model_name,
                 "messages": msgs,
-                "max_tokens": max_tokens,
             }
+            _set_max_tokens(body, max_tokens, config.model_name)
             _apply_temperature(body, temp, config.model_name)
             if response_format:
                 body["response_format"] = {"type": response_format}
@@ -193,8 +209,8 @@ class LLMClient:
                 "model": config.model_name,
                 "messages": msgs,
                 "tools": [dict(tool) for tool in tools],
-                "max_tokens": max_tokens,
             }
+            _set_max_tokens(body, max_tokens, config.model_name)
             _apply_temperature(body, temperature, config.model_name)
             if thinking:
                 body["thinking"] = {"type": "enabled"}
@@ -328,15 +344,22 @@ class LLMClient:
         try:
             temp = temperature if temperature is not None else config.temperature
 
-            content_parts: list[JsonObject] = [{"type": "text", "text": text_prompt}]
+            image_parts: list[JsonObject] = []
             for url in image_urls:
-                content_parts.append({"type": "image_url", "image_url": {"url": url}})
+                image_parts.append({"type": "image_url", "image_url": {"url": url}})
+            text_part = {"type": "text", "text": text_prompt}
+            # Kimi's multimodal adapter expects image parts before text.
+            content_parts = (
+                image_parts + [text_part]
+                if _model_name_suggests_kimi(config.model_name)
+                else [text_part] + image_parts
+            )
 
             body: JsonObject = {
                 "model": config.model_name,
                 "messages": [{"role": "user", "content": content_parts}],
-                "max_tokens": max_tokens,
             }
+            _set_max_tokens(body, max_tokens, config.model_name)
             _apply_temperature(body, temp, config.model_name)
 
             try:
@@ -480,9 +503,9 @@ class LLMClient:
         body: JsonObject = {
             "model": config.model_name,
             "messages": msgs,
-            "max_tokens": max_tokens,
             "stream": True,
         }
+        _set_max_tokens(body, max_tokens, config.model_name)
         _apply_temperature(body, temp, config.model_name)
         if thinking:
             body["thinking"] = {"type": "enabled"}

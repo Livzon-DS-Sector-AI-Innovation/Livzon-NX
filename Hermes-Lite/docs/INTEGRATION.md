@@ -27,17 +27,20 @@ Hermes-Lite Agent Core
 
 ```bash
 pip install -r requirements.txt
-cp .env.example .env
 ```
 
-For standalone development, fill the provider API key values in `.env`. For
-Dazah central-agent deployment, do not store real model-provider API keys in
-Hermes-Lite; use the Dazah LLM proxy token described below.
+For Dazah development, use the workspace root `.env.local` with
+`compose.dev.yml`. For standalone development, provide the required values
+through the process environment. For Dazah central-agent deployment, do not
+store real model-provider API keys in Hermes-Lite; use the Dazah LLM proxy
+token described below.
 
 ## Configuration
 
 - `config.yaml` contains the default provider and runtime settings.
-- `.env` contains secrets and deployment-specific API keys.
+- The workspace root `.env.local` contains development secrets and
+  deployment-specific API keys; standalone runs may use process environment
+  variables.
 - Runtime state such as sessions, memories, and caches should stay local and is
   ignored by git.
 
@@ -61,7 +64,7 @@ Hermes-Lite services.dazah_agent_service:/v2/agent/runs
         +-- Tool execute: Dazah /api/v1/agent/tools/execute
 ```
 
-Required Hermes-Lite `.env` values:
+For a standalone adapter process, provide these environment values:
 
 ```bash
 HERMES_AGENT_TOKEN=change-me
@@ -83,7 +86,9 @@ Run the adapter with Docker:
 ```bash
 # Run these commands from the workspace root.
 docker build --file Dockerfile --target hermes -t hermes-lite:prod .
-docker run --rm -p 8100:8100 --env-file .env hermes-lite:prod
+# Supply the variables above through the process environment or an external
+# untracked env file; do not create an env file inside Hermes-Lite.
+docker run --rm -p 8100:8100 hermes-lite:prod
 ```
 
 For local Dazah development, run the root development Compose stack:
@@ -107,7 +112,8 @@ DAZAH_LLM_BASE_URL=http://app:8000/api/v1/agent/llm
 
 Security boundaries:
 
-- Hermes-Lite only stores service-to-service tokens, not model-provider keys.
+- In Dazah central-agent deployment, Hermes-Lite only receives
+  service-to-service tokens, not model-provider keys.
 - The active text model is resolved by Dazah backend from the platform LLM
   configuration table on every request.
 - The `dazah` toolset only calls the Dazah Agent tool gateway.
