@@ -1294,6 +1294,10 @@ class TrainingLedgerResponse(TrainingLedgerBase):
     id: UUID
     created_at: datetime | None = None
     updated_at: datetime | None = None
+    attendance_count: int | None = Field(
+        None,
+        description="参训人员统计：关联培训会话的真实名单数；无名单时按培训对象文本分隔计数",
+    )
 
 
 class TrainingLedgerListResponse(BaseModel):
