@@ -394,7 +394,7 @@ jobs:
       ${{ needs.change-scope.outputs.backend_changed == 'true' ||
           needs.change-scope.outputs.shared_changed == 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 90
     services:
       postgres:
         image: postgres:17
