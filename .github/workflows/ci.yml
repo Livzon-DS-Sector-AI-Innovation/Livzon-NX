@@ -322,6 +322,7 @@ jobs:
     services:
       postgres:
         image: postgres:17
+        command: postgres -c max_connections=300 -c idle_in_transaction_session_timeout=60000 -c idle_session_timeout=180000
         env:
           POSTGRES_USER: dazah_ci
           POSTGRES_PASSWORD: dazah_ci_test
@@ -394,7 +395,7 @@ jobs:
       ${{ needs.change-scope.outputs.backend_changed == 'true' ||
           needs.change-scope.outputs.shared_changed == 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 90
     services:
       postgres:
         image: postgres:17
@@ -404,6 +405,7 @@ jobs:
           POSTGRES_DB: dazah_ci_test
         ports:
           - 5432:5432
+        command: postgres -c max_connections=300 -c idle_in_transaction_session_timeout=60000 -c idle_session_timeout=180000
         options: >-
           --health-cmd "pg_isready -U dazah_ci -d dazah_ci_test"
           --health-interval 5s
@@ -694,6 +696,7 @@ jobs:
           POSTGRES_DB: dazah_ci_test
         ports:
           - 5432:5432
+        command: postgres -c max_connections=300 -c idle_in_transaction_session_timeout=60000 -c idle_session_timeout=180000
         options: >-
           --health-cmd "pg_isready -U dazah_ci -d dazah_ci_test"
           --health-interval 5s

@@ -38,6 +38,7 @@ run_quality() {
   uv run --no-sync alembic upgrade head
   echo "== Backend unit tests =="
   uv run --no-sync pytest \
+    -p no:anyio \
     tests/unit tests/core \
     -m "not integration" \
     -ra \
@@ -67,6 +68,7 @@ run_integration() {
   git diff --exit-code -- openapi.json
   echo "== Backend database and API integration tests =="
   uv run --no-sync pytest \
+    -p no:anyio \
     --cov=app \
     --cov-branch \
     --cov-report=term-missing \
