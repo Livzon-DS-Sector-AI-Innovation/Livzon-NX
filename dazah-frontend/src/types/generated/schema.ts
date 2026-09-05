@@ -57110,17 +57110,17 @@ export interface components {
         };
         /**
          * ValidationReviewCreateRequest
-         * @description 新建一次 AI 审核会话。entry 模式需传 entry_id（文件管理目录条目）。
+         * @description 新建一次 AI 审核会话（上传 VP/VR 文档，类型与编号自动识别）。
          */
         ValidationReviewCreateRequest: {
-            /** Entry Id */
-            entry_id?: string | null;
+            /** Focus Points */
+            focus_points?: string | null;
             /**
              * Review Mode
              * @default upload
-             * @enum {string}
+             * @constant
              */
-            review_mode: "upload" | "entry";
+            review_mode: "upload";
             /** Title */
             title?: string | null;
         };
@@ -57166,13 +57166,18 @@ export interface components {
         ValidationReviewFindingOut: {
             /** Basis Match Type */
             basis_match_type?: string | null;
+            /**
+             * Basis Quote
+             * @default
+             */
+            basis_quote: string;
             /** Basis Source */
             basis_source?: string | null;
             /**
              * Category
              * @enum {string}
              */
-            category: "reference_missing" | "version_mismatch" | "plan_report_mismatch" | "content_consistency" | "format_issue" | "numeric_check";
+            category: "reference_missing" | "version_mismatch" | "plan_report_mismatch" | "content_consistency" | "format_issue" | "numeric_check" | "basis_content_mismatch";
             /**
              * Detail
              * @default
@@ -57199,6 +57204,11 @@ export interface components {
              * @enum {string}
              */
             severity: "high" | "medium" | "low";
+            /**
+             * Validation Quote
+             * @default
+             */
+            validation_quote: string;
         };
         /** ValidationReviewJobStatusResponse */
         ValidationReviewJobStatusResponse: {
@@ -57248,6 +57258,13 @@ export interface components {
         /** ValidationReviewOut */
         ValidationReviewOut: {
             /**
+             * Basis Comparison
+             * @default []
+             */
+            basis_comparison: {
+                [key: string]: unknown;
+            }[];
+            /**
              * Basis Used
              * @default []
              */
@@ -57268,6 +57285,8 @@ export interface components {
              * @default []
              */
             findings: components["schemas"]["ValidationReviewFindingOut"][];
+            /** Focus Points */
+            focus_points?: string | null;
             /**
              * Id
              * Format: uuid
@@ -57304,6 +57323,14 @@ export interface components {
              * Format: uuid
              */
             review_id: string;
+        };
+        /**
+         * ValidationReviewRunRequest
+         * @description 发起审核：可选附用户特别关注点（与默认审核维度一并生效）。
+         */
+        ValidationReviewRunRequest: {
+            /** Focus Points */
+            focus_points?: string | null;
         };
         /** ValidationReviewStatsOut */
         ValidationReviewStatsOut: {
@@ -108307,7 +108334,11 @@ export interface operations {
                 auth_token?: string | null;
             };
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ValidationReviewRunRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -108340,7 +108371,11 @@ export interface operations {
                 auth_token?: string | null;
             };
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ValidationReviewRunRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
