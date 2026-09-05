@@ -671,10 +671,6 @@ class TestBasisContentPipeline:
     async def test_select_key_bases_filters_unknown(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from app.modules.quality.service.validation_basis_resolver import (
-            load_basis_contents,
-        )
-
         monkeypatch.setattr(
             svc,
             "get_config",
