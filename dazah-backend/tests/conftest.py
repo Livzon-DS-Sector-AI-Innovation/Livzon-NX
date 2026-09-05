@@ -1,4 +1,5 @@
 from collections.abc import AsyncIterator
+from typing import Any
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -26,8 +27,13 @@ _test_session_factory = async_sessionmaker(
 
 
 @pytest.fixture
-def anyio_backend() -> str:
-    return "asyncio"
+def anyio_backend() -> tuple[str, dict[str, Any]]:
+    # 强制标准 asyncio loop：CI(Linux) 装有 uvloop，anyio 默认会选用它，
+    # 而 pytest-asyncio 驱动的测试与 app 全局 engine 走标准 asyncio——
+    # 两套 loop 并存时 asyncpg 连接的 Future 跨 loop，报
+    # "got Future attached to a different loop"（347 errors 的根因）。
+    # Windows 本地无 uvloop 天然不复现。
+    return "asyncio", {"use_uvloop": False}
 
 
 @pytest.fixture(autouse=True)
