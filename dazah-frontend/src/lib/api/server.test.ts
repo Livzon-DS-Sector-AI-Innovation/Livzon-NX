@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('next/headers', () => ({ cookies: mocks.cookies }))
 
 import { serverFetchRoles } from './server/admin'
+import { serverApiGet } from './server/registration'
 
 describe('migrated server API clients', () => {
   afterEach(() => vi.unstubAllGlobals())
@@ -30,5 +31,18 @@ describe('migrated server API clients', () => {
         cache: 'no-store',
       }),
     )
+  })
+
+  it('wraps non-2xx registration responses in ServerApiError with status', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response('record not found', { status: 404 }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(serverApiGet('/api/v1/registration/whatever')).rejects.toMatchObject({
+      name: 'ServerApiError',
+      status: 404,
+      message: 'record not found',
+    })
   })
 })
