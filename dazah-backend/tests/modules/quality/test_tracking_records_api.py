@@ -27,6 +27,8 @@ from app.modules.quality.service import tracking_records as tracking_service
 
 @pytest.fixture(autouse=True)
 async def _clean_tracking_tables(db_session: AsyncSession) -> AsyncIterator[Any]:
+    # 防御性 DDL 的等锁保护：CI 上前序测试偶发遗留持锁会话时快速失败而非挂死
+    await db_session.execute(text("SET lock_timeout = '90s'"))
     await db_session.execute(text("CREATE SCHEMA IF NOT EXISTS quality"))
     await db_session.execute(
         text(
