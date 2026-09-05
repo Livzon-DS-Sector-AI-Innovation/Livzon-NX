@@ -16,7 +16,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.main import app
+from app.modules.hr.esg_service import EsgTrainingRecordService
 from app.modules.hr.models import EsgTrainingRecord, TrainingLedger
+from app.modules.hr.service import TrainingLedgerService
 
 _LEDGER_URL = "/api/v1/hr/training-ledgers/batch-delete"
 _ESG_URL = "/api/v1/hr/esg-training-records/batch-delete"
@@ -113,3 +115,35 @@ async def test_batch_delete_rejects_empty_ids(client: AsyncClient):
         resp = await client.post(url, json={"ids": []})
         assert resp.status_code == 400
         assert "请先选择" in resp.json()["message"]
+
+
+@pytest.mark.asyncio
+async def test_ledger_batch_delete_service_tracks_missing_as_failed(
+    db_session: AsyncSession,
+):
+    """台账批量删除 service 层：不存在的 ID 计入 failed，不中断。"""
+    ledger = _ledger(f"{_SUBJ}-srv")
+    db_session.add(ledger)
+    await db_session.flush()
+    missing = uuid4()
+
+    result = await TrainingLedgerService(db_session).batch_delete_records(
+        [ledger.id, missing]
+    )
+    assert result == {"deleted": 1, "failed": [str(missing)]}
+
+
+@pytest.mark.asyncio
+async def test_esg_batch_delete_service_tracks_missing_as_failed(
+    db_session: AsyncSession,
+):
+    """ESG 批量删除 service 层：不存在的 ID 计入 failed，不中断。"""
+    record = _esg_record(f"{_NAME}-srv")
+    db_session.add(record)
+    await db_session.flush()
+    missing = uuid4()
+
+    result = await EsgTrainingRecordService(db_session).batch_delete_records(
+        [record.id, missing]
+    )
+    assert result == {"deleted": 1, "failed": [str(missing)]}
