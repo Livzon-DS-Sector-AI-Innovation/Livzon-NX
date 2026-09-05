@@ -315,13 +315,16 @@ async def test_import_rows_with_mapping_creates_records_and_skips_blanks() -> No
         4: "remarks",
     }
     record_service: Any = AsyncMock()
-    record_service.create_many = AsyncMock(side_effect=lambda data_list: len(data_list))
+    record_service.create_many = AsyncMock(
+        side_effect=lambda data_list: (len(data_list), 0)
+    )
 
-    created = await api._import_rows_with_mapping(
+    created, trainee_matched = await api._import_rows_with_mapping(
         ws, 1, col_map, "质量部", record_service
     )
 
     assert created == 2
+    assert trainee_matched == 0  # 质量部非 201 家族，不做受训人员自动归属
     record_service.create_many.assert_awaited_once()
     batch = record_service.create_many.await_args.args[0]
     first, second = batch[0], batch[1]

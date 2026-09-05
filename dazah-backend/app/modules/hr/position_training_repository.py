@@ -39,7 +39,7 @@ class PositionTrainingListRepository:
             )
         if department:
             # 部门归一匹配：选中部门（规范名）展开为全部别名（如 201二车间（MC）→
-            # 裸名/霉酚酸/201三车间）
+            # 裸名/霉酚酸；DR：多拉/201三车间）
             dept_values = await training_dept_aliases_of(self.session, department)
             query = query.where(PositionTrainingList.department.in_(dept_values))
             count_query = count_query.where(

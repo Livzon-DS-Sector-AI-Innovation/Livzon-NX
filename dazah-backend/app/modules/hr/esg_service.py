@@ -44,6 +44,19 @@ class EsgTrainingRecordService:
         record = await self.get_record(record_id)
         await self.repo.soft_delete(record)
 
+    async def batch_delete_records(self, record_ids: list[UUID]) -> dict[str, Any]:
+        """批量软删除 ESG 记录，返回 {deleted, failed}；未命中 ID 计入 failed."""
+        deleted = 0
+        failed: list[str] = []
+        for record_id in record_ids:
+            record = await self.repo.get_by_id(record_id)
+            if record is None:
+                failed.append(str(record_id))
+                continue
+            await self.repo.soft_delete(record)
+            deleted += 1
+        return {"deleted": deleted, "failed": failed}
+
     async def list_by_department(
         self,
         department: str,
@@ -97,6 +110,7 @@ class EsgTrainingRecordService:
         #    有拆分副本时隐藏裸名总副本）
         from app.modules.hr.repository import TrainingLedgerRepository
         from app.modules.hr.training_dept_resolver import (
+            get_person_overrides,
             resolve_training_department,
         )
 
@@ -106,6 +120,8 @@ class EsgTrainingRecordService:
 
         # 选中部门归一（培训规范名幂等），供重名时区分比较
         norm_dept = await resolve_training_department(self.session, department)
+        # 人员归属覆写优先：person 映射的人员按覆写部门判定归属
+        person_overrides = await get_person_overrides(self.session)
 
         created = 0
         skipped_existing = 0
@@ -136,17 +152,29 @@ class EsgTrainingRecordService:
                 emps = list(emp_result.scalars().all())
 
                 # 5. 员工档案匹配：仅录入归一后归属部门等于选中部门的人员
-                #    （resolve_training_department 为 async，需显式循环）
+                #    （人员归属覆写优先：person 映射的人员按覆写部门判定，
+                #    档案仅提供层级/年龄等字段；resolve_training_department
+                #    为 async，需显式循环）
                 emp = None
-                for e in emps:
-                    resolved = await resolve_training_department(
-                        self.session, e.department, e.sub_department
-                    )
-                    if resolved == norm_dept:
-                        emp = e
-                        break
+                override = person_overrides.get(name)
+                if override is not None:
+                    if override != norm_dept:
+                        skipped_other_dept += 1
+                        continue
+                    emp = emps[0] if emps else None
+                else:
+                    for e in emps:
+                        resolved = await resolve_training_department(
+                            self.session, e.department, e.sub_department
+                        )
+                        if resolved == norm_dept:
+                            emp = e
+                            break
                 if emp is None:
-                    if emps:
+                    if override is not None and override != norm_dept:
+                        # 覆写指向其他部门：跨部门参训不计入本部门报表
+                        skipped_other_dept += 1
+                    elif emps:
                         # 档案存在但归属其他部门：跨部门参训不计入本部门报表
                         skipped_other_dept += 1
                     else:

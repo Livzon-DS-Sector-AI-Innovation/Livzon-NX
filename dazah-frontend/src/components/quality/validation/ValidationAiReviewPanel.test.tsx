@@ -184,7 +184,21 @@ describe('ValidationAiReviewPanel', () => {
     expect(bodyText()).toContain('已完成')
   })
 
-  it('打开详情抽屉并展示审核结论与发现问题', async () => {
+  it('打开详情抽屉并展示基准正文比对结果', async () => {
+    apiClient.fetchValidationReviewDetail.mockResolvedValue({
+      ...REVIEW_DETAIL,
+      basis_comparison: [
+        {
+          entry_id: 'entry-1',
+          code: 'SOP-FT3-017/04',
+          name: '方锥混合机操作规程',
+          reason: '清洁步骤来源',
+          content_length: 2000,
+          mismatch_count: 2,
+          status: 'completed',
+        },
+      ],
+    })
     act(() => {
       root.render(
         <QueryClientProvider client={new QueryClient()}>
@@ -209,6 +223,34 @@ describe('ValidationAiReviewPanel', () => {
     expect(bodyText()).toContain('本次 AI 审核共核对引用文件 1 项')
     expect(bodyText()).toContain('引用版本不一致')
     expect(bodyText()).toContain('SMP-QA-105/02')
+    expect(bodyText()).toContain('基准正文一致性核查')
+    expect(bodyText()).toContain('方锥混合机操作规程')
+    expect(bodyText()).toContain('2 处不一致')
+  })
+
+  it('未选择文件时点击创建给出提示且不创建', async () => {
+    act(() => {
+      root.render(
+        <QueryClientProvider client={new QueryClient()}>
+          <App>
+            <ValidationAiReviewPanel />
+          </App>
+        </QueryClientProvider>
+      )
+    })
+    await act(flushRenders)
+    const createButton = findButton('新建审核')
+    act(() => {
+      createButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await act(flushRenders)
+    const okButton = findButton('创建并上传文件')
+    act(() => {
+      okButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await act(flushRenders)
+    expect(bodyText()).toContain('请先选择要上传的验证方案 / 验证报告')
+    expect(reviewActions.createValidationReview).not.toHaveBeenCalled()
   })
 
   it('新建审核弹窗可打开并触发创建', async () => {

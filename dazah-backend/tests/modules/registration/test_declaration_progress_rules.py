@@ -202,8 +202,10 @@ def test_parse_definitions_find_keys_and_missing_file(
     monkeypatch.setattr(
         progress, "_get_workbook_path", lambda: tmp_path / "missing.xlsx"
     )
-    with pytest.raises(NotFoundException):
-        progress._parse_workbook_definitions()
+    # 文件缺失时使用静态模板定义 + None 时间，不再抛 404
+    definitions, updated_at = progress._parse_workbook_definitions()
+    assert len(definitions) == len(progress.DECLARATION_PROGRESS_SHEET_TEMPLATES)
+    assert updated_at is None
 
 
 def test_load_complete_progress_workbook_with_styles(
@@ -358,3 +360,27 @@ def test_export_rows_without_subrecords_keeps_each_snapshot() -> None:
     item = _version()
     rows = progress._build_export_rows(definition, [item])
     assert rows[0].values
+
+
+def test_seed_versions_skipped_when_file_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """文件缺失时种子加载返回空列表，页面展示空态而非 404。"""
+    monkeypatch.setattr(
+        progress, "_get_workbook_path", lambda: tmp_path / "missing.xlsx"
+    )
+    assert progress._load_seed_versions() == []
+
+
+def test_load_versions_from_upload_without_config_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """配置文件缺失时，导入仍可用静态模板定义解析上传文件并建档。"""
+    monkeypatch.setattr(
+        progress, "_get_workbook_path", lambda: tmp_path / "missing.xlsx"
+    )
+    upload_path = tmp_path / "upload.xlsx"
+    _save_full_workbook(upload_path)
+    versions = progress._load_versions_from_workbook_path(upload_path)
+    assert versions
+    assert any(version.version_number == 2 for version in versions)
