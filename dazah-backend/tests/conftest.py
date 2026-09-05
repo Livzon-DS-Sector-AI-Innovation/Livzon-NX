@@ -1,5 +1,4 @@
 from collections.abc import AsyncIterator
-from typing import Any
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -27,25 +26,19 @@ _test_session_factory = async_sessionmaker(
 
 
 @pytest.fixture
-def anyio_backend() -> tuple[str, dict[str, Any]]:
-    # 强制标准 asyncio loop：CI(Linux) 装有 uvloop，anyio 默认会选用它，
-    # 而 pytest-asyncio 驱动的测试与 app 全局 engine 走标准 asyncio——
-    # 两套 loop 并存时 asyncpg 连接的 Future 跨 loop，报
-    # "got Future attached to a different loop"（347 errors 的根因）。
-    # Windows 本地无 uvloop 天然不复现。
-    return "asyncio", {"use_uvloop": False}
+def anyio_backend() -> str:
+    return "asyncio"
 
 
 @pytest.fixture(autouse=True)
 async def _dispose_app_engine_pools() -> AsyncIterator[None]:
-    """每个测试结束后释放 app 全局 engine 与测试引擎的池连接。
+    """每个测试结束后释放 app 全局 engine 的池连接。
 
     app 的全局 engine 使用 QueuePool（pool_size=10 + max_overflow=20），集成测试
     通过 ASGITransport 触发其连接；pytest 的每个测试运行在独立事件循环上，绑定
     到已关闭循环的池连接不会被复用。Linux CI 上这些孤儿连接依赖 GC 回收，累积
     后会打满 PostgreSQL 的 max_connections（TooManyConnectionsError）。测试结束
-    时显式 dispose，保证池连接不跨测试累积。测试引擎（NullPool）也随测试 dispose，
-    避免跨事件循环的未完成关闭产生孤儿连接。
+    时显式 dispose，保证池连接不跨测试累积。
     """
     yield
     try:
@@ -53,10 +46,6 @@ async def _dispose_app_engine_pools() -> AsyncIterator[None]:
 
         await engine.dispose()
     except Exception:  # noqa: BLE001 —— 清理失败不应影响测试结果
-        pass
-    try:
-        await _test_engine.dispose()
-    except Exception:  # noqa: BLE001
         pass
 
 
