@@ -22,6 +22,9 @@ from app.modules.quality.api.inspection_feishu_crud import (
 from app.modules.quality.api.inspection_submodules import (
     router as inspection_submodules_router,
 )
+from app.modules.quality.api.notification_settings import (
+    router as notification_settings_router,
+)
 from app.modules.quality.api.oos_oot import router as oos_oot_router
 from app.modules.quality.api.oos_oot_feishu import router as oos_oot_feishu_router
 from app.modules.quality.api.oot_limit import router as oot_limit_router
@@ -103,6 +106,9 @@ router.include_router(
 router.include_router(quality_change_router, tags=["Quality-Management"])
 router.include_router(quality_capa_router, tags=["Quality-Management"])
 router.include_router(quality_feishu_sync_router, tags=["Quality-Management"])
+router.include_router(
+    notification_settings_router, tags=["Quality-Notification-Settings"]
+)
 router.include_router(quality_ai_router, tags=["Quality-Management"])
 router.include_router(quality_contacts_router, tags=["Quality-Management"])
 router.include_router(validation_router, tags=["Quality-Validation"])

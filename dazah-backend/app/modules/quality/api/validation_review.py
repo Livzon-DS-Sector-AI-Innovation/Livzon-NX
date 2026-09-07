@@ -291,6 +291,9 @@ async def get_review_detail_endpoint(
 async def list_reviews_endpoint(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
+    keyword: str | None = Query(default=None, max_length=100),
+    status: str | None = Query(default=None),
+    review_mode: str | None = Query(default=None),
     current_user: CurrentUser = None,
     db: AsyncSession = Depends(get_db),
 ) -> Any:
@@ -302,6 +305,9 @@ async def list_reviews_endpoint(
         page=page,
         page_size=page_size,
         all_visible=all_visible,
+        keyword=keyword,
+        status=status,
+        review_mode=review_mode,
     )
     items = []
     for record in records:

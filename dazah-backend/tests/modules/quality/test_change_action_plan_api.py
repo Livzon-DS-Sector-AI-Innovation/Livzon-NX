@@ -417,7 +417,7 @@ async def test_change_action_plan_reminder_api_flow(
     client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _fake_send(plan: Any) -> Any:  # noqa: ANN001
+    async def _fake_send(plan: Any, **kwargs: Any) -> Any:  # noqa: ANN001
         return "om_reminder_001"
 
     async def _fake_patch(plan: Any) -> Any:  # noqa: ANN001

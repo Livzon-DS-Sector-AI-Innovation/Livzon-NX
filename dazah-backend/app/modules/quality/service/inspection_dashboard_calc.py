@@ -48,6 +48,9 @@ from app.modules.quality.service.quality_feishu_pages import (
     _resolve_runtime_entity,
     _search_entity_records,
 )
+from app.modules.quality.service.quality_notification_settings import (
+    load_inspection_trend_alert_config,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -378,10 +381,28 @@ async def _resolve_dashboard_recipients(
     *,
     entity_code: str,
     batch_no: str,
+    line_config: dict[str, Any] | None = None,
 ) -> list[dict[str, str | None]]:
+    # 通知设置中该产品线配置了接收人时优先生效
+    configured: list[Any] = (
+        line_config.get("recipients") if isinstance(line_config, dict) else None
+    ) or []
+    if configured:
+        recipients: list[dict[str, str | None]] = []
+        for item in configured:
+            recipients.append(
+                await _resolve_recipient_by_name(
+                    db,
+                    name=str(item.get("name") or ""),
+                    open_id=item.get("open_id"),
+                    email=item.get("email"),
+                )
+            )
+        return recipients
+
     override_configs = FINISHED_DASHBOARD_RECIPIENT_OVERRIDES.get(entity_code)
     if override_configs:
-        recipients: list[dict[str, str | None]] = []
+        recipients = []
         for item in override_configs:
             recipients.append(
                 await _resolve_recipient_by_name(
@@ -747,11 +768,13 @@ async def _retry_incomplete_dashboard_notification(
     mean: float | None,
     std_dev: float | None,
     spec_lines: list[dict[str, float | str]],
+    line_config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     recipients = await _resolve_dashboard_recipients(
         db,
         entity_code=notification.entity_code,
         batch_no=notification.batch_no,
+        line_config=line_config,
     )
     if not recipients:
         return _serialize_dashboard_alert(
@@ -830,6 +853,45 @@ async def _retry_incomplete_dashboard_notification(
     )
 
 
+def _build_paused_dashboard_alert(
+    *,
+    entity_code: str,
+    batch_no: str,
+    metric_key: str,
+    metric_label: str,
+    actual_value: float,
+    mean: float | None,
+    std_dev: float | None,
+    upper_control_limit: float | None,
+    lower_control_limit: float | None,
+    spec_lines: list[dict[str, float | str]],
+    error: str,
+) -> dict[str, Any]:
+    """通知停用（全局或该产品线）时的告警展示：不发送、不落通知记录。"""
+    return InspectionDashboardAlert(
+        entity_code=entity_code,
+        batch_no=batch_no,
+        metric_key=metric_key,
+        metric_label=metric_label,
+        actual_value=actual_value,
+        mean=mean,
+        std_dev=std_dev,
+        upper_control_limit=upper_control_limit,
+        lower_control_limit=lower_control_limit,
+        spec_lines=[
+            InspectionDashboardSpecLine.model_validate(item) for item in spec_lines
+        ],
+        recipient_name=None,
+        recipient_open_id=None,
+        notification_status="paused",
+        notification_sent=False,
+        notification_deduplicated=False,
+        notification_error=error,
+        feishu_message_id=None,
+        notified_at=None,
+    ).model_dump(mode="json")
+
+
 async def _materialize_dashboard_alert(
     db: AsyncSession,
     *,
@@ -846,6 +908,11 @@ async def _materialize_dashboard_alert(
     lower_control_limit: float | None,
     spec_lines: list[dict[str, float | str]],
 ) -> dict[str, Any]:
+    trend_config = await load_inspection_trend_alert_config(db)
+    line_config = trend_config.lines.get(entity_code)
+    notifications_paused = not trend_config.is_enabled
+    line_paused = bool(line_config and not line_config.get("enabled", True))
+
     existing = await _get_existing_dashboard_notification(
         db,
         entity_code,
@@ -853,6 +920,15 @@ async def _materialize_dashboard_alert(
         metric_key,
     )
     if existing:
+        if notifications_paused or line_paused:
+            # 停用期间不补发（不重试），保持既有记录的展示状态
+            return _serialize_dashboard_alert(
+                notification=existing,
+                mean=mean,
+                std_dev=std_dev,
+                spec_lines=spec_lines,
+                notification_deduplicated=True,
+            )
         if existing.notification_status in {"unmapped", "missing_open_id"}:
             return await _retry_incomplete_dashboard_notification(
                 db,
@@ -866,6 +942,7 @@ async def _materialize_dashboard_alert(
                 mean=mean,
                 std_dev=std_dev,
                 spec_lines=spec_lines,
+                line_config=line_config,
             )
         return _serialize_dashboard_alert(
             notification=existing,
@@ -875,10 +952,31 @@ async def _materialize_dashboard_alert(
             notification_deduplicated=True,
         )
 
+    if notifications_paused or line_paused:
+        error = (
+            "该产品线趋势异常提醒已停用"
+            if line_paused
+            else "趋势异常提醒通知已停用"
+        )
+        return _build_paused_dashboard_alert(
+            entity_code=entity_code,
+            batch_no=batch_no,
+            metric_key=metric_key,
+            metric_label=metric_label,
+            actual_value=actual_value,
+            mean=mean,
+            std_dev=std_dev,
+            upper_control_limit=upper_control_limit,
+            lower_control_limit=lower_control_limit,
+            spec_lines=spec_lines,
+            error=error,
+        )
+
     recipients = await _resolve_dashboard_recipients(
         db,
         entity_code=entity_code,
         batch_no=batch_no,
+        line_config=line_config,
     )
     if not recipients:
         record = await _create_dashboard_notification(

@@ -75,6 +75,17 @@ function formatDate(value: string | null | undefined): string {
   })
 }
 
+/** 列宽压缩后被省略号截断的文本：悬停显示完整内容 */
+function renderTruncatedText(value: string | null | undefined): React.ReactNode {
+  const text = (value ?? '').toString()
+  if (!text) return '-'
+  return (
+    <Tooltip title={text} placement="topLeft">
+      <span>{text}</span>
+    </Tooltip>
+  )
+}
+
 function renderStatus(status: string | null) {
   if (!status) return '-'
   const normalized = statusLabelMap[status] ?? status
@@ -89,12 +100,22 @@ function renderStatus(status: string | null) {
 
 function renderProductCodes(codes: string[] | string | null | undefined) {
   if (!codes) return '-'
-  const list = Array.isArray(codes) ? codes : [codes]
+  const raw = Array.isArray(codes) ? codes : [codes]
+  // 飞书多产品可能是 "A / B / C" 纯文本，拆分后逐个渲染，避免单个长 Tag 撑宽表格
+  const list = raw
+    .flatMap((item) => String(item).split(' / '))
+    .map((item) => item.trim())
+    .filter(Boolean)
   if (list.length === 0) return '-'
   return (
-    <Space wrap>
+    <Space wrap size={4}>
       {list.map((code) => (
-        <Tag key={code}>{code}</Tag>
+        <Tag
+          key={code}
+          style={{ marginInlineEnd: 0, whiteSpace: 'normal', wordBreak: 'break-all' }}
+        >
+          {code}
+        </Tag>
       ))}
     </Space>
   )
@@ -183,7 +204,7 @@ export function ValidationTable({
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([])
 
-  // 年度选项：2024-2028（未配置的年度表列表为空，可在飞书同步设置中绑定）
+  // 年度选项：2024-2028（未配置的年度表列表为空，可在质量设置-飞书设置中绑定）
   const yearOptions = [
     { label: '总表（全部年份）', value: '' },
     ...Array.from({ length: 5 }, (_, i) => 2024 + i).map((year) => ({
@@ -260,12 +281,12 @@ export function ValidationTable({
     })
   }, [onFilterChange])
 
-  // 验证计划页面列配置
+  // 验证计划页面列配置：各列保持内容单行可读，确认名称给固定合理宽度
   const planColumns: ColumnsType<ValidationListItem> = [
     {
       title: '确认名称',
       dataIndex: 'title',
-      width: 280,
+      width: 300,
       render: (value: string, record: ValidationListItem) => (
         <Tooltip title={value}>
           <div style={{ whiteSpace: 'normal', wordBreak: 'break-all' }}>
@@ -281,47 +302,50 @@ export function ValidationTable({
     {
       title: '验证类别',
       dataIndex: 'validation_type' as never,
-      width: 130,
+      width: 100,
       render: (value: string | null) => validationTypeLabelMap[value ?? ''] ?? value ?? '-',
     },
     {
       title: '产品代码',
       dataIndex: 'product_codes',
-      width: 160,
+      width: 120,
       render: renderProductCodes,
     },
     {
       title: '部门名称',
       dataIndex: 'department',
-      width: 130,
-      render: (value: string | null) => value || '-',
+      width: 110,
+      ellipsis: true,
+      render: renderTruncatedText,
     },
     {
       title: '设备编码',
       dataIndex: 'equipment_code',
-      width: 140,
-      render: (value: string | null) => value || '-',
+      width: 165,
+      ellipsis: true,
+      render: renderTruncatedText,
     },
     {
       title: '验证到期时间',
       dataIndex: 'planned_end_date' as never,
-      width: 130,
-      render: formatDate,
+      width: 105,
+      render: (value: string | null | undefined) => renderTruncatedText(formatDate(value)),
     },
     {
       title: '任务状态',
       dataIndex: 'status',
-      width: 110,
+      width: 90,
       render: (value: string | null) => renderStatus(value),
     },
   ]
 
-  // 设备确认/工艺验证/清洁验证/其他验证 列配置
+  // 设备确认/工艺验证/清洁验证/其他验证 列配置：
+  // 表格只展示确认名称到批准时间，报告编号/起草时间1/批准时间1/再验证周期收进详情抽屉
   const detailColumns: ColumnsType<ValidationListItem> = [
     {
       title: '确认名称',
       dataIndex: 'title',
-      width: 280,
+      width: '14%',
       render: (value: string) => (
         <Tooltip title={value}>
           <div style={{ whiteSpace: 'normal', wordBreak: 'break-all' }}>{value}</div>
@@ -331,80 +355,61 @@ export function ValidationTable({
     {
       title: '产品代码',
       dataIndex: 'product_codes',
-      width: 160,
+      width: '7%',
       render: renderProductCodes,
     },
     {
       title: '部门名称',
       dataIndex: 'department',
-      width: 130,
-      render: (value: string | null) => value || '-',
+      width: '7%',
+      ellipsis: true,
+      render: renderTruncatedText,
     },
     {
       title: '群组',
       dataIndex: 'group_chat',
-      width: 140,
+      width: '7%',
       render: (value: unknown) => renderGroupChat(value),
     },
     {
       title: '人员',
       dataIndex: 'participants',
-      width: 140,
+      width: '7%',
       render: (value: unknown) => renderParticipants(value),
     },
     {
       title: '负责人',
       dataIndex: 'owner_name',
-      width: 120,
+      width: '6%',
       render: (value: unknown) => renderParticipants(value),
     },
     {
       title: '方案名称',
       dataIndex: 'plan_name',
-      width: 200,
-      render: (value: string | null) => value || '-',
+      width: '15%',
+      ellipsis: true,
+      render: renderTruncatedText,
     },
     {
       title: '方案编码',
       dataIndex: 'plan_code',
-      width: 140,
-      render: (value: string | null) => value || '-',
+      width: '8%',
+      ellipsis: true,
+      render: renderTruncatedText,
     },
     {
       title: '起草时间',
       dataIndex: 'drafted_at',
-      width: 130,
-      render: formatDate,
+      width: '8%',
+      ellipsis: true,
+      render: (value: string | null | undefined) => renderTruncatedText(formatDate(value)),
     },
     {
       title: '批准时间',
       dataIndex: 'approved_at',
-      width: 130,
-      render: formatDate,
-    },
-    {
-      title: '报告编号',
-      dataIndex: 'report_no',
-      width: 140,
-      render: (value: string | null) => value || '-',
-    },
-    {
-      title: '起草时间 1',
-      dataIndex: 'drafted_at_1',
-      width: 130,
-      render: formatDate,
-    },
-    {
-      title: '批准时间 1',
-      dataIndex: 'approved_at_1',
-      width: 130,
-      render: formatDate,
-    },
-    {
-      title: '再验证周期（几年）',
-      dataIndex: 'revalidation_cycle_years',
-      width: 140,
-      render: (value: number | null) => (value != null ? `${value}年` : '-'),
+      width: '8%',
+      ellipsis: true,
+      render: (value: string | null | undefined) => renderTruncatedText(formatDate(value)),
     },
   ]
 
@@ -417,15 +422,33 @@ export function ValidationTable({
     {
       title: '操作',
       key: 'action',
-      fixed: 'right' as const,
-      width: onDetail ? 150 : 120,
+      width: 133,
       render: (_: unknown, record: ValidationListItem) => (
-        <Space size="small">
+        <Space size={0} wrap>
           {onDetail && (
-            <Button type="text" icon={<EyeOutlined />} onClick={() => onDetail(record)} />
+            <Button
+              size="small"
+              type="text"
+              icon={<EyeOutlined />}
+              style={{ paddingInline: 4 }}
+              onClick={() => onDetail(record)}
+            />
           )}
-          <Button type="text" icon={<EditOutlined />} onClick={() => onEdit(record)} />
-          <Button type="text" danger icon={<DeleteOutlined />} onClick={() => onDelete(record)} />
+          <Button
+            size="small"
+            type="text"
+            icon={<EditOutlined />}
+            style={{ paddingInline: 4 }}
+            onClick={() => onEdit(record)}
+          />
+          <Button
+            size="small"
+            type="text"
+            danger
+            icon={<DeleteOutlined />}
+            style={{ paddingInline: 4 }}
+            onClick={() => onDelete(record)}
+          />
         </Space>
       ),
     },
@@ -475,15 +498,13 @@ export function ValidationTable({
             options={validationTypeOptions}
           />
         )}
-        {mode === 'master' && (
-          <Select
-            placeholder="年度"
-            style={{ width: 150 }}
-            value={filters.year || ''}
-            onChange={(value) => onFilterChange({ year: value ?? '' })}
-            options={yearOptions}
-          />
-        )}
+        <Select
+          placeholder="年度"
+          style={{ width: 150 }}
+          value={filters.year || ''}
+          onChange={(value) => onFilterChange({ year: value ?? '' })}
+          options={yearOptions}
+        />
         <Button icon={<FilterOutlined />} onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}>
           {showAdvancedFilters ? '收起筛选' : '高级筛选'}
         </Button>
@@ -575,7 +596,7 @@ export function ValidationTable({
         }}
         columns={columnsWithAction}
         rowSelection={rowSelection}
-        scroll={{ x: mode === 'master' ? 1500 : 2200 }}
+        tableLayout="fixed"
         pagination={{
           current: page,
           pageSize,

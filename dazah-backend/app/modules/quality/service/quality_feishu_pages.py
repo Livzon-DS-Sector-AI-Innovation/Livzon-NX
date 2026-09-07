@@ -4,7 +4,7 @@ import json
 import logging
 import re
 import uuid
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import select
@@ -1056,18 +1056,93 @@ VALIDATION_TYPE_CODE_TO_FEISHU: dict[str, str] = {
 }
 
 
+# 验证主计划按年分表的固定年度范围（年度实体 validation_master_plan_YYYY）
+VALIDATION_MASTER_PLAN_YEARS: list[int] = [2024, 2025, 2026, 2027, 2028]
+
+
 def _entity_code_for_validation_type(
     validation_type: str | None,
     year: int | None = None,
 ) -> str:
+    if year:
+        # 年度台账（验证主计划年度表）包含全部验证类别；指定年份时统一读
+        # 对应年度表，验证类别在结果内按 validation_type 过滤
+        return f"validation_master_plan_{year}"
     base = (
         VALIDATION_TYPE_ENTITY_MAP.get(validation_type, "validation_master_plan")
         if validation_type
         else "validation_master_plan"
     )
-    if year:
-        return f"{base}_{year}"
     return base
+
+
+# 任务状态（飞书自由文本列）视为已完成的文案集合
+VALIDATION_COMPLETED_STATUSES: set[str] = {
+    "完成",
+    "已完成",
+    "completed",
+    "finished",
+    "done",
+}
+
+
+def _is_validation_completed(status: Any) -> bool:
+    """判断验证记录状态是否已完成。状态为空时视为未完成（待办提醒）。"""
+    if status is None:
+        return False
+    normalized = str(status).strip().lower()
+    if not normalized:
+        return False
+    return normalized in {s.lower() for s in VALIDATION_COMPLETED_STATUSES}
+
+
+def _parse_validation_due_date(raw: Any) -> date | None:
+    """解析验证主计划"验证到期时间"文本列，兼容多种写法并归一化为 date。
+
+    支持 "2026.02"、"2026.02.15"、"2026/02/15"、"2026-02"、"2026年2月"、
+    "2026年2月15日"、ISO 日期 "2026-02-15"、8 位 "20260215" 及日期/时间戳对象；
+    无法解析时返回 None，不抛出异常。
+    """
+    if raw in (None, ""):
+        return None
+    if isinstance(raw, datetime):
+        return raw.date()
+    if isinstance(raw, date):
+        return raw
+    if isinstance(raw, (int, float)):
+        try:
+            return datetime.fromtimestamp(float(raw) / 1000, tz=UTC).date()
+        except (ValueError, OverflowError, OSError):
+            return None
+    text = str(raw).strip()
+    if not text:
+        return None
+    text = re.sub(r"年|月", "-", text)
+    text = text.replace("日", "")
+    for sep in (".", "/"):
+        text = text.replace(sep, "-")
+    parts = [p for p in text.split("-") if p.strip()]
+    if not parts:
+        return None
+    try:
+        if len(parts) == 1:
+            if len(parts[0]) == 8 and parts[0].isdigit():
+                return date(
+                    int(parts[0][:4]), int(parts[0][4:6]), int(parts[0][6:8])
+                )
+            if len(parts[0]) == 4 and parts[0].isdigit():
+                return date(int(parts[0]), 1, 1)
+            return None
+        year_part = parts[0]
+        # 年份必须是 4 位数字，避免 "99.01" 之类被解析成公元 99 年
+        if not (len(year_part) == 4 and year_part.isdigit()):
+            return None
+        year = int(year_part)
+        month = int(parts[1]) if len(parts) > 1 else 1
+        day = int(parts[2]) if len(parts) > 2 else 1
+        return date(year, month, day)
+    except (ValueError, TypeError):
+        return None
 
 
 async def _invalidate_validation_list_cache(entity_code: str) -> None:
@@ -1606,6 +1681,7 @@ async def list_validation_records_from_feishu(
     planned_end_date_to: str | None = None,
     drafted_at_from: str | None = None,
     drafted_at_to: str | None = None,
+    exclude_completed: bool = False,
     year: int | None = None,
     page: int = 1,
     page_size: int = 20,
@@ -1618,7 +1694,10 @@ async def list_validation_records_from_feishu(
     entity_code = _entity_code_for_validation_type(validation_type, year)
     cache_key = (
         f"quality:validation:list:{entity_code}:{validation_type or ''}:"
-        f"{status or ''}:{department or ''}:{keyword or ''}:{page}:{page_size}"
+        f"{status or ''}:{department or ''}:{keyword or ''}:"
+        f"{planned_end_date_from or ''}:{planned_end_date_to or ''}:"
+        f"{drafted_at_from or ''}:{drafted_at_to or ''}:"
+        f"{int(bool(exclude_completed))}:{page}:{page_size}"
     )
     cached = await cache_get(cache_key)
     if cached is not None:
@@ -1649,6 +1728,12 @@ async def list_validation_records_from_feishu(
     # Additional filters
     if status:
         items = [item for item in items if item.get("status") == status]
+    if exclude_completed:
+        items = [
+            item
+            for item in items
+            if not _is_validation_completed(item.get("status"))
+        ]
     if department:
         items = [item for item in items if item.get("department") == department]
     if keyword:
@@ -1674,13 +1759,7 @@ async def list_validation_records_from_feishu(
     drafted_to = _parse_filter_date(drafted_at_to)
 
     def _planned_end_date(item: dict[str, Any]) -> date | None:
-        raw = str(item.get("planned_end_date") or "").strip().replace(".", "-")
-        if len(raw) == 7:
-            raw = f"{raw}-01"
-        try:
-            return date.fromisoformat(raw) if raw else None
-        except ValueError:
-            return None
+        return _parse_validation_due_date(item.get("planned_end_date"))
 
     if planned_from:
         items = [
@@ -1910,40 +1989,57 @@ async def pull_validation_records_from_feishu(
 
 async def get_validation_statistics_from_feishu(
     db: AsyncSession,
+    *,
+    days: int = 30,
+    year_from: int = 2024,
 ) -> dict[str, Any]:
-    """从飞书获取验证统计数据。"""
-    try:
-        result = await list_validation_records_from_feishu(
-            db,
-            page=1,
-            page_size=10000,
-        )
-    except Exception:
-        return {
-            "total": 0,
-            "typeDistribution": [],
-            "statusDistribution": [],
-            "executionDistribution": [],
-            "revalidationUpcoming": 0,
-        }
+    """聚合验证主计划各年度台账的统计数据。
 
-    items = result.get("items", [])
-    total = len(items)
+    days 为"近期待再验证"阈值：到期时间不超过今天 + days 天且未完成的记录
+    计入 revalidationUpcoming。year_from 为起始年份（固定范围 2024-2028），
+    未绑定/无数据的年度仍出现在 year_summaries 中且计数为 0。
+    实体未绑定（AppException）按该年度无数据处理；其他异常上抛，由统一
+    异常机制转换为业务错误，不伪造成功响应。
+    """
+    years = [y for y in VALIDATION_MASTER_PLAN_YEARS if y >= year_from]
+    all_items: list[dict[str, Any]] = []
+    year_counts: dict[int, int] = {}
+    year_completed: dict[int, int] = {}
+
+    for year in years:
+        try:
+            result = await list_validation_records_from_feishu(
+                db,
+                year=year,
+                page=1,
+                page_size=10000,
+            )
+        except AppException:
+            items = []
+        else:
+            items = result.get("items", [])
+        all_items.extend(items)
+        year_counts[year] = len(items)
+        year_completed[year] = sum(
+            1
+            for item in items
+            if _is_validation_completed(item.get("status"))
+        )
+
+    total = len(all_items)
 
     # 按验证类别分组
     type_counts: dict[str, int] = {}
-    for item in items:
+    # 按状态分组
+    status_counts: dict[str, int] = {}
+    for item in all_items:
         vtype = item.get("validation_type") or "unknown"
         type_counts[vtype] = type_counts.get(vtype, 0) + 1
+        status = item.get("status") or "unknown"
+        status_counts[status] = status_counts.get(status, 0) + 1
     type_distribution = [
         {"validation_type": k, "count": v} for k, v in type_counts.items()
     ]
-
-    # 按状态分组
-    status_counts: dict[str, int] = {}
-    for item in items:
-        status = item.get("status") or "unknown"
-        status_counts[status] = status_counts.get(status, 0) + 1
     status_distribution = [{"status": k, "count": v} for k, v in status_counts.items()]
 
     # 执行子表分布（按验证类别）
@@ -1951,20 +2047,15 @@ async def get_validation_statistics_from_feishu(
         {"validation_type": k, "count": v} for k, v in type_counts.items()
     ]
 
-    # 近期待再验证（30 天内到期）
-    from datetime import date, timedelta
-
-    upcoming_deadline = date.today() + timedelta(days=30)
+    # 近期待再验证：到期时间在阈值内且未完成（文本格式日期由解析器识别）
+    upcoming_deadline = date.today() + timedelta(days=days)
     revalidation_upcoming = 0
-    for item in items:
-        planned_end = item.get("planned_end_date")
-        if planned_end:
-            try:
-                end_date = date.fromisoformat(planned_end)
-                if end_date <= upcoming_deadline:
-                    revalidation_upcoming += 1
-            except (ValueError, TypeError):
-                pass
+    for item in all_items:
+        if _is_validation_completed(item.get("status")):
+            continue
+        end_date = _parse_validation_due_date(item.get("planned_end_date"))
+        if end_date is not None and end_date <= upcoming_deadline:
+            revalidation_upcoming += 1
 
     return {
         "total": total,
@@ -1972,7 +2063,58 @@ async def get_validation_statistics_from_feishu(
         "statusDistribution": status_distribution,
         "executionDistribution": execution_distribution,
         "revalidationUpcoming": revalidation_upcoming,
+        "year_summaries": [
+            {
+                "year": year,
+                "total": year_counts.get(year, 0),
+                "completed": year_completed.get(year, 0),
+            }
+            for year in years
+        ],
     }
+
+
+async def list_validation_revalidation_upcoming_from_feishu(
+    db: AsyncSession,
+    *,
+    days: int = 30,
+    year_from: int = 2024,
+    page: int = 1,
+    page_size: int = 20,
+) -> dict[str, Any]:
+    """近期待再验证明细：聚合验证主计划各年度台账中到期时间不超过
+    今天 + days 且未完成的记录。
+
+    与统计口径一致：逐年度复用列表服务的 planned_end_date_to 过滤
+    （含文本日期归一化），并剔除已完成记录，合并后按到期时间排序分页。
+    """
+    upcoming_deadline = date.today() + timedelta(days=days)
+    years = [y for y in VALIDATION_MASTER_PLAN_YEARS if y >= year_from]
+    all_items: list[dict[str, Any]] = []
+    for year in years:
+        try:
+            result = await list_validation_records_from_feishu(
+                db,
+                year=year,
+                planned_end_date_to=upcoming_deadline.isoformat(),
+                exclude_completed=True,
+                page=1,
+                page_size=10000,
+            )
+        except AppException:
+            continue
+        all_items.extend(result.get("items", []))
+
+    all_items.sort(
+        key=lambda item: str(item.get("planned_end_date") or ""),
+    )
+    start = (page - 1) * page_size
+    return _build_page_result(
+        all_items[start : start + page_size],
+        len(all_items),
+        page,
+        page_size,
+    )
 
 
 # ============ CAPA 台账 / CAPA 计划跟踪 Feishu Sync ============

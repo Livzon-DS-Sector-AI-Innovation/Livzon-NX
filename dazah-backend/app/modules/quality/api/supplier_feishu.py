@@ -26,6 +26,7 @@ from app.modules.quality.api.deps import require_user as _require_user
 from app.modules.quality.schemas.supplier_qualification import (
     CreateSupplierQualificationRequest,
     SupplierDashboardStatsOut,
+    SupplierExpiryBucket,
     SupplierPullResult,
     SupplierQualificationOut,
     UpdateSupplierQualificationRequest,
@@ -56,6 +57,10 @@ async def api_list_supplier_qualification(
     material_type: str | None = Query(None, description="物料类型筛选"),
     qualification_name: str | None = Query(None, description="资质名称筛选"),
     is_completed: bool | None = Query(None, description="是否完成"),
+    expiry_bucket: SupplierExpiryBucket | None = Query(
+        None,
+        description="到期分桶筛选：expired=已过期，due_30=30天内到期，due_60=31~60天，due_90=61~90天（与仪表盘统计口径一致）",
+    ),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=200),
     current_user: CurrentUser = None,
@@ -70,6 +75,7 @@ async def api_list_supplier_qualification(
             material_type=material_type,
             qualification_name=qualification_name,
             is_completed=is_completed,
+            expiry_bucket=expiry_bucket,
             page=page,
             page_size=page_size,
         )

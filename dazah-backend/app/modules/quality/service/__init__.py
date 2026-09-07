@@ -228,6 +228,13 @@ from app.modules.quality.service.quality_feishu_sync import (
     sync_deviation_report_record_to_feishu,
     sync_deviation_to_feishu,
 )
+from app.modules.quality.service.quality_notification_settings import (
+    ensure_quality_notification_settings,
+    list_quality_notification_settings,
+    load_change_action_plan_due_config,
+    load_inspection_trend_alert_config,
+    update_quality_notification_setting,
+)
 from app.modules.quality.service.quality_statistics import (
     get_capa_statistics,
     get_change_statistics,
@@ -501,4 +508,10 @@ __all__ = [
     "get_tryptophan_dashboard_data",
     "get_formulations_dashboard_data",
     "get_water_dashboard_data",
+    # Notification settings
+    "ensure_quality_notification_settings",
+    "list_quality_notification_settings",
+    "load_change_action_plan_due_config",
+    "load_inspection_trend_alert_config",
+    "update_quality_notification_setting",
 ]

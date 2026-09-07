@@ -643,4 +643,114 @@ describe('ValidationAiReviewPanel', () => {
       { method: 'POST' }
     )
   })
+
+  it('输入搜索关键词后列表按 keyword 查询', async () => {
+    act(() => {
+      root.render(
+        <QueryClientProvider client={new QueryClient()}>
+          <App>
+            <ValidationAiReviewPanel />
+          </App>
+        </QueryClientProvider>
+      )
+    })
+    await act(flushRenders)
+    const input = document.querySelector('input[placeholder="按标题搜索"]') as HTMLInputElement
+    expect(input).toBeTruthy()
+    const setter = Object.getOwnPropertyDescriptor(
+      window.HTMLInputElement.prototype,
+      'value'
+    )?.set
+    act(() => {
+      setter?.call(input, '清洁验证')
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(flushRenders)
+    act(() => {
+      input.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true })
+      )
+    })
+    await act(flushRenders)
+    expect(apiClient.fetchValidationReviews).toHaveBeenLastCalledWith(
+      expect.objectContaining({ keyword: '清洁验证' })
+    )
+  })
+
+  it('状态下拉与来源下拉已渲染', async () => {
+    act(() => {
+      root.render(
+        <QueryClientProvider client={new QueryClient()}>
+          <App>
+            <ValidationAiReviewPanel />
+          </App>
+        </QueryClientProvider>
+      )
+    })
+    await act(flushRenders)
+    expect(document.body.textContent).toContain('已完成')
+    expect(document.body.textContent).toContain('页面上传')
+  })
+
+  it('选择状态下拉后按 status 查询', async () => {
+    act(() => {
+      root.render(
+        <QueryClientProvider client={new QueryClient()}>
+          <App>
+            <ValidationAiReviewPanel />
+          </App>
+        </QueryClientProvider>
+      )
+    })
+    await act(flushRenders)
+    const statusSelect = [...document.querySelectorAll('.ant-select')].find(
+      (el) => el.textContent?.includes('状态')
+    )
+    act(() => {
+      statusSelect?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    })
+    await act(flushRenders)
+    await act(flushRenders)
+    const option = [...document.body.querySelectorAll('.ant-select-item-option')].find(
+      (el) => el.textContent?.trim() === '已完成'
+    )
+    act(() => {
+      option?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await act(flushRenders)
+    expect(apiClient.fetchValidationReviews).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: 'completed' })
+    )
+  })
+
+  it('选择来源下拉后按 review_mode 查询', async () => {
+    act(() => {
+      root.render(
+        <QueryClientProvider client={new QueryClient()}>
+          <App>
+            <ValidationAiReviewPanel />
+          </App>
+        </QueryClientProvider>
+      )
+    })
+    await act(flushRenders)
+    const modeSelect = [...document.querySelectorAll('.ant-select')].find(
+      (el) => el.textContent?.includes('来源')
+    )
+    act(() => {
+      modeSelect?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    })
+    await act(flushRenders)
+    await act(flushRenders)
+    const option = [...document.body.querySelectorAll('.ant-select-item-option')].find(
+      (el) => el.textContent?.trim() === '页面上传'
+    )
+    act(() => {
+      option?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await act(flushRenders)
+    expect(apiClient.fetchValidationReviews).toHaveBeenLastCalledWith(
+      expect.objectContaining({ review_mode: 'upload' })
+    )
+  })
 })

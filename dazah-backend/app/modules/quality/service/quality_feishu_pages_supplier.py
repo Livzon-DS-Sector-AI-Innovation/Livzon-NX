@@ -1,24 +1,34 @@
 """Supplier Qualification Feishu pages service.
 
-Operates directly on Feishu Bitable for supplier qualification management.
+读路径改为本模块镜像表 ``quality.supplier_qualification_records``（由
+``quality_feishu_supplier_mirror`` 定时/手动回拉），列表与仪表盘不再每次实时
+拉飞书；写路径仍以飞书为准：创建/更新/删除后同步回写镜像，保证即时可见。
+
+``_map_supplier_qualification`` 与 ``_build_supplier_qualification_fields`` 是
+飞书记录 <-> 响应 dict <-> 飞书写入 fields 的映射，保留供测试与写路径复用。
 """
 
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from sqlalchemy import ColumnElement, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AppException, NotFoundException
+from app.modules.quality.models.external_quality import SupplierQualificationMirror
 from app.modules.quality.service import quality_feishu_sync as feishu_sync_service
 from app.modules.quality.service.quality_feishu_pages import (
     _build_page_result,
     _create_entity_record,
     _delete_entity_record,
     _resolve_runtime_entity,
-    _search_entity_records,
+)
+from app.modules.quality.service.quality_feishu_supplier_mirror import (
+    map_record_to_mirror_fields,
+    pull_supplier_qualification_mirror,
 )
 from app.platform.integrations.feishu.bitable import BitableClient
 
@@ -27,63 +37,80 @@ logger = logging.getLogger(__name__)
 ENTITY_SUPPLIER_QUALIFICATION = "supplier_qualification"
 
 
-def _map_nested_user(value: Any) -> str | None:
-    return feishu_sync_service._normalize_text(value)
-
-
-def _map_checkbox(value: Any) -> bool:
-    return value is True or str(value).strip().lower() in ("true", "是", "已确认", "1")
-
-
 def _map_supplier_qualification(
     record: dict[str, Any],
     entity: feishu_sync_service.QualityFeishuEntityRuntimeConfig,
 ) -> dict[str, Any]:
-    fields = record.get("fields") or {}
-    field_value = feishu_sync_service._get_mapped_field_value
-    normalize_text = feishu_sync_service._normalize_text
-    parse_datetime = feishu_sync_service._parse_feishu_datetime
-    modified_at = feishu_sync_service._get_record_modified_at(record)
-    created_at = (
-        parse_datetime(record.get("created_time")) or modified_at or datetime.now(UTC)
-    )
-
-    # 负责人 - user field
-    responsible_raw = field_value(entity, fields, "负责人")
-    responsible: str | None = None
-    if isinstance(responsible_raw, list):
-        names = []
-        for item in responsible_raw:
-            if isinstance(item, dict):
-                name = item.get("name", "") or item.get("text", "")
-                if name:
-                    names.append(name)
-            elif isinstance(item, str) and item.strip():
-                names.append(item.strip())
-        responsible = "、".join(names) if names else None
-    elif responsible_raw:
-        responsible = normalize_text(responsible_raw)
-
-    # 到期状态 - formula, read-only
-    expiry_status = normalize_text(field_value(entity, fields, "到期状态"))
-
+    """飞书记录 -> 页面响应行（与镜像映射共用中文字段口径）。"""
+    mapped = map_record_to_mirror_fields(record, entity)
     return {
         "record_id": str(record.get("record_id") or ""),
-        "supplier_name": normalize_text(field_value(entity, fields, "供应商名称")),
-        "material_name": normalize_text(field_value(entity, fields, "物料名称")),
-        "material_type": normalize_text(field_value(entity, fields, "物料类型")),
-        "qualification_name": normalize_text(field_value(entity, fields, "资质名称")),
-        "qualification_file": normalize_text(field_value(entity, fields, "资质文件")),
-        "is_completed": _map_checkbox(field_value(entity, fields, "是否完成")),
-        "deadline": (lambda dt: dt.isoformat() if dt else None)(
-            parse_datetime(field_value(entity, fields, "截止日期"))
-        ),
-        "responsible_person": responsible,
-        "remark": normalize_text(field_value(entity, fields, "备注")),
-        "expiry_status": expiry_status,
-        "created_at": created_at,
-        "updated_at": modified_at or created_at,
+        **mapped,
+        "created_at": mapped.get("source_created_at"),
+        "updated_at": mapped.get("source_updated_at"),
     }
+
+
+def _mirror_row(mirror: SupplierQualificationMirror) -> dict[str, Any]:
+    """镜像表行 -> 页面响应行。"""
+    return {
+        "record_id": mirror.feishu_record_id,
+        "supplier_name": mirror.supplier_name,
+        "material_name": mirror.material_name,
+        "material_type": mirror.material_type,
+        "qualification_name": mirror.qualification_name,
+        "qualification_file": mirror.qualification_file,
+        "is_completed": mirror.is_completed,
+        "deadline": mirror.deadline,
+        "responsible_person": mirror.responsible_person,
+        "remark": mirror.remark,
+        "expiry_status": mirror.expiry_status,
+        "created_at": mirror.source_created_at,
+        "updated_at": mirror.source_updated_at,
+    }
+
+
+def _escape_like(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def _expiry_bucket_conditions(
+    bucket: str | None,
+) -> list[ColumnElement[bool]]:
+    """按截止日期把镜像表行分到 expired/due_30/due_60/due_90 四个区间。
+
+    deadline 列存的是 UTC ISO 字符串（datetime.isoformat()，格式统一带
+    +00:00 偏移与秒），字典序与时间序一致，故可直接做字符串比较，与
+    get_supplier_statistics 的 Python 分桶保持同一口径：
+    - expired：截止日期已过（days_left < 0）
+    - due_30：今天起 0~30 天内到期
+    - due_60：31~60 天内到期
+    - due_90：61~90 天内到期
+    无 deadline 的行不属于任何分桶（与统计的 normal_count 一致）。
+    """
+    if not bucket:
+        return []
+    now = datetime.now(UTC)
+    mirror = SupplierQualificationMirror
+    deadline = mirror.deadline
+    bounds: dict[str, tuple[str | None, str]] = {
+        "expired": (None, now.isoformat()),
+        "due_30": (now.isoformat(), (now + timedelta(days=31)).isoformat()),
+        "due_60": (
+            (now + timedelta(days=31)).isoformat(),
+            (now + timedelta(days=61)).isoformat(),
+        ),
+        "due_90": (
+            (now + timedelta(days=61)).isoformat(),
+            (now + timedelta(days=91)).isoformat(),
+        ),
+    }
+    lower, upper = bounds[bucket]
+    conditions: list[ColumnElement[bool]] = [deadline.is_not(None)]
+    if lower is not None:
+        conditions.append(deadline >= lower)
+    conditions.append(deadline < upper)
+    return conditions
 
 
 async def list_supplier_qualification_records(
@@ -94,91 +121,118 @@ async def list_supplier_qualification_records(
     material_type: str | None = None,
     qualification_name: str | None = None,
     is_completed: bool | None = None,
+    expiry_bucket: str | None = None,
     page: int = 1,
     page_size: int = 20,
 ) -> dict[str, Any]:
-    _, entity = await _resolve_runtime_entity(
-        db, ENTITY_SUPPLIER_QUALIFICATION, direction="pull"
-    )
-    records = await _search_entity_records(db, ENTITY_SUPPLIER_QUALIFICATION)
-    items = [_map_supplier_qualification(record, entity) for record in records]
+    """查询本地镜像表（列表页与仪表盘共用）。
 
-    if keyword:
-        kw = keyword.lower()
-        items = [
-            item
-            for item in items
-            if any(
-                kw in (str(item.get(f) or "")).lower()
-                for f in (
-                    "supplier_name",
-                    "material_name",
-                    "material_type",
-                    "qualification_name",
-                    "qualification_file",
-                    "responsible_person",
-                    "remark",
-                )
-            )
-        ]
-
+    expiry_bucket 可选 expired/due_30/due_60/due_90，按截止日期分桶筛选，
+    与 get_supplier_statistics 计数口径一致；None 表示不按到期分桶过滤。
+    """
+    mirror = SupplierQualificationMirror
+    conditions: list[ColumnElement[bool]] = [mirror.is_deleted.is_(False)]
     if supplier_name:
-        items = [item for item in items if item.get("supplier_name") == supplier_name]
+        conditions.append(mirror.supplier_name == supplier_name)
     if material_type:
-        items = [item for item in items if item.get("material_type") == material_type]
+        conditions.append(mirror.material_type == material_type)
     if qualification_name:
-        items = [
-            item
-            for item in items
-            if item.get("qualification_name") == qualification_name
-        ]
+        conditions.append(mirror.qualification_name == qualification_name)
     if is_completed is not None:
-        items = [item for item in items if item.get("is_completed") == is_completed]
+        conditions.append(mirror.is_completed == is_completed)
+    if keyword:
+        pattern = f"%{_escape_like(keyword)}%"
+        conditions.append(
+            or_(
+                mirror.supplier_name.ilike(pattern),
+                mirror.material_name.ilike(pattern),
+                mirror.material_type.ilike(pattern),
+                mirror.qualification_name.ilike(pattern),
+                mirror.qualification_file.ilike(pattern),
+                mirror.responsible_person.ilike(pattern),
+                mirror.remark.ilike(pattern),
+            )
+        )
+    conditions.extend(_expiry_bucket_conditions(expiry_bucket))
 
-    # Sort by deadline or updated_at (handle mixed types: str vs datetime)
-    def _sort_key(x: Any) -> Any:
-        deadline = x.get("deadline")
-        updated = x.get("updated_at")
-        # Convert to comparable format
-        if deadline and isinstance(deadline, str):
-            return deadline
-        if deadline and isinstance(deadline, datetime):
-            return deadline.isoformat()
-        if updated and isinstance(updated, datetime):
-            return updated.isoformat()
-        return ""
+    total = (
+        await db.execute(
+            select(func.count())
+            .select_from(mirror)
+            .where(*conditions)
+        )
+    ).scalar() or 0
 
-    items.sort(key=_sort_key, reverse=True)
-    start = (page - 1) * page_size
-    return _build_page_result(
-        items[start : start + page_size], len(items), page, page_size
+    offset = (page - 1) * page_size
+    rows = (
+        (
+            await db.execute(
+                select(mirror)
+                .where(*conditions)
+                .order_by(
+                    mirror.deadline.desc().nulls_last(),
+                    mirror.source_updated_at.desc().nulls_last(),
+                )
+                .offset(offset)
+                .limit(page_size)
+            )
+        )
+        .scalars()
+        .all()
     )
+    items = [_mirror_row(row) for row in rows]
+    return _build_page_result(items, total, page, page_size)
 
 
 async def get_supplier_qualification_record(
     db: AsyncSession,
     record_id: str,
 ) -> dict[str, Any]:
-    runtime, entity = await _resolve_runtime_entity(
-        db, ENTITY_SUPPLIER_QUALIFICATION, direction="pull"
-    )
-    # 优先用 get_record 直接获取单条（避免搜索索引延迟）
-    client = BitableClient(
-        app_token=entity.app_token,
-        app_id=runtime.app_id,
-        app_secret=runtime.app_secret,
-    )
-    record = await client.get_record(
-        feishu_sync_service._require_table_id(entity), record_id
-    )
-    if record:
-        return _map_supplier_qualification(record, entity)
-    # fallback: 搜索
-    records = await _search_entity_records(db, ENTITY_SUPPLIER_QUALIFICATION)
-    for rec in records:
-        if str(rec.get("record_id") or "") == record_id:
-            return _map_supplier_qualification(rec, entity)
-    raise NotFoundException(resource="供应商资质记录")
+    """读取单条镜像记录。"""
+    row = await _get_mirror_by_record_id(db, record_id)
+    if row is None:
+        raise NotFoundException(resource="供应商资质记录")
+    return _mirror_row(row)
+
+
+async def _get_mirror_by_record_id(
+    db: AsyncSession, record_id: str
+) -> SupplierQualificationMirror | None:
+    return (
+        await db.execute(
+            select(SupplierQualificationMirror).where(
+                SupplierQualificationMirror.feishu_record_id == record_id,
+                SupplierQualificationMirror.is_deleted.is_(False),
+            )
+        )
+    ).scalar_one_or_none()
+
+
+async def _write_mirror_from_remote(
+    db: AsyncSession,
+    client: BitableClient,
+    table_id: str,
+    record_id: str,
+    entity: feishu_sync_service.QualityFeishuEntityRuntimeConfig,
+) -> dict[str, Any]:
+    """从飞书读取指定记录并回写镜像表，返回响应行。
+
+    写路径（创建/更新后）即时回写，避免等到定时轮才可见；失败仅记录，
+    不阻断主写入（飞书为事实源，定时回拉兜底）。
+    """
+    record = await client.get_record(table_id, record_id)
+    if not record:
+        raise NotFoundException(resource="供应商资质记录")
+    mapped = map_record_to_mirror_fields(record, entity)
+    row = await _get_mirror_by_record_id(db, record_id)
+    if row is None:
+        row = SupplierQualificationMirror(feishu_record_id=record_id)
+        db.add(row)
+    for column, value in mapped.items():
+        setattr(row, column, value)
+    await db.flush()
+    await db.commit()
+    return _mirror_row(row)
 
 
 def _build_supplier_qualification_fields(payload: dict[str, Any]) -> dict[str, Any]:
@@ -197,19 +251,16 @@ def _build_supplier_qualification_fields(payload: dict[str, Any]) -> dict[str, A
         if val:
             fields[feishu_key] = val
 
-    # Checkbox
     is_completed = payload.get("is_completed")
     if is_completed is not None:
         fields["是否完成"] = bool(is_completed)
 
-    # Date
     deadline = payload.get("deadline")
     if deadline not in (None, ""):
         fields["截止日期"] = feishu_sync_service._to_ms_timestamp(
             feishu_sync_service._parse_feishu_datetime(deadline)
         )
 
-    # User field - 负责人
     responsible = payload.get("responsible_person")
     if responsible:
         if isinstance(responsible, dict) and responsible.get("id"):
@@ -232,8 +283,38 @@ async def create_supplier_qualification_record(
     if not qualification_name:
         raise AppException(message="资质名称不能为空")
     fields = _build_supplier_qualification_fields(payload)
+    runtime, entity = await _resolve_runtime_entity(
+        db, ENTITY_SUPPLIER_QUALIFICATION, direction="push"
+    )
     created = await _create_entity_record(db, ENTITY_SUPPLIER_QUALIFICATION, fields)
-    return await get_supplier_qualification_record(db, created["record_id"])
+    record_id = created["record_id"]
+    try:
+        client = BitableClient(
+            app_token=entity.app_token,
+            app_id=runtime.app_id,
+            app_secret=runtime.app_secret,
+        )
+        return await _write_mirror_from_remote(
+            db, client, created["table_id"], record_id, entity
+        )
+    except (NotFoundException, AppException):
+        # 飞书写入成功但镜像回写失败：返回飞书 record_id 兜底行，不重复写飞书
+        logger.exception("supplier_qualification create mirror write-back failed")
+        return {
+            "record_id": record_id,
+            "supplier_name": payload.get("supplier_name"),
+            "material_name": payload.get("material_name"),
+            "material_type": payload.get("material_type"),
+            "qualification_name": payload.get("qualification_name"),
+            "qualification_file": payload.get("qualification_file"),
+            "is_completed": bool(payload.get("is_completed")),
+            "deadline": payload.get("deadline"),
+            "responsible_person": payload.get("responsible_person"),
+            "remark": payload.get("remark"),
+            "expiry_status": None,
+            "created_at": None,
+            "updated_at": None,
+        }
 
 
 async def update_supplier_qualification_record(
@@ -252,10 +333,15 @@ async def update_supplier_qualification_record(
         app_id=runtime.app_id,
         app_secret=runtime.app_secret,
     )
-    await client.update_record(
-        feishu_sync_service._require_table_id(entity), record_id, fields
-    )
-    return await get_supplier_qualification_record(db, record_id)
+    table_id = feishu_sync_service._require_table_id(entity)
+    await client.update_record(table_id, record_id, fields)
+    try:
+        return await _write_mirror_from_remote(
+            db, client, table_id, record_id, entity
+        )
+    except (NotFoundException, AppException):
+        logger.exception("supplier_qualification update mirror write-back failed")
+        return await get_supplier_qualification_record(db, record_id)
 
 
 async def delete_supplier_qualification_record(
@@ -263,24 +349,34 @@ async def delete_supplier_qualification_record(
     record_id: str,
 ) -> None:
     await _delete_entity_record(db, ENTITY_SUPPLIER_QUALIFICATION, record_id)
+    # 飞书已物理删除，镜像同步软删
+    row = await _get_mirror_by_record_id(db, record_id)
+    if row is not None:
+        row.is_deleted = True
+        await db.commit()
 
 
-async def pull_supplier_qualification_records(db: AsyncSession) -> dict[str, int]:
-    try:
-        _, _entity = await _resolve_runtime_entity(
-            db, ENTITY_SUPPLIER_QUALIFICATION, direction="pull"
-        )
-    except AppException:
-        return {"synced": 0, "failed": 0}
-    try:
-        result = await list_supplier_qualification_records(db, page=1, page_size=10000)
-    except Exception:
-        return {"synced": 0, "failed": 0}
-    return {"synced": len(result.get("items", [])), "failed": 0}
+async def pull_supplier_qualification_records(
+    db: AsyncSession,
+    *,
+    full: bool = True,
+) -> dict[str, int]:
+    """手动回拉（“从飞书拉取”按钮）：委托镜像回拉服务，真实写库。
+
+    full 默认 True —— 手动按钮语义为全量同步；定时增量轮由 scheduled 调用
+    full=False。
+    """
+    result = await pull_supplier_qualification_mirror(db, full=full)
+    return {
+        "synced": result["synced"],
+        "failed": result["failed"],
+        "removed": result["removed"],
+        "total": result["total"],
+    }
 
 
 async def get_supplier_statistics(db: AsyncSession) -> dict[str, Any]:
-    """Get supplier qualification dashboard statistics with GMP metrics."""
+    """基于镜像表计算供应商资质 GMP 指标。"""
     try:
         result = await list_supplier_qualification_records(db, page=1, page_size=99999)
     except AppException:
@@ -291,20 +387,11 @@ async def get_supplier_statistics(db: AsyncSession) -> dict[str, Any]:
     completed = sum(1 for item in items if item.get("is_completed"))
     pending = total - completed
 
-    from datetime import UTC, datetime, timedelta
-
     now = datetime.now(UTC)
 
-    # 供应商维度的统计
-    supplier_stats: dict[
-        str, dict[str, int]
-    ] = {}  # {name: {total, completed, pending, expired, due30, due60, due90}}
-    material_type_stats: dict[
-        str, dict[str, int]
-    ] = {}  # {type: {total, completed, pending, expired}}
-    qualification_stats: dict[
-        str, dict[str, int]
-    ] = {}  # {name: {total, completed, pending}}
+    supplier_stats: dict[str, dict[str, int]] = {}
+    material_type_stats: dict[str, dict[str, int]] = {}
+    qualification_stats: dict[str, dict[str, int]] = {}
 
     expired_count = 0
     due_30_count = 0
@@ -318,7 +405,6 @@ async def get_supplier_statistics(db: AsyncSession) -> dict[str, Any]:
         qn = (item.get("qualification_name") or "未知").strip()
         is_done = item.get("is_completed")
 
-        # Supplier stats
         if sn not in supplier_stats:
             supplier_stats[sn] = {
                 "total": 0,
@@ -332,7 +418,6 @@ async def get_supplier_statistics(db: AsyncSession) -> dict[str, Any]:
         supplier_stats[sn]["total"] += 1
         supplier_stats[sn]["completed" if is_done else "pending"] += 1
 
-        # Material type stats
         if mt not in material_type_stats:
             material_type_stats[mt] = {
                 "total": 0,
@@ -343,13 +428,11 @@ async def get_supplier_statistics(db: AsyncSession) -> dict[str, Any]:
         material_type_stats[mt]["total"] += 1
         material_type_stats[mt]["completed" if is_done else "pending"] += 1
 
-        # Qualification stats
         if qn not in qualification_stats:
             qualification_stats[qn] = {"total": 0, "completed": 0, "pending": 0}
         qualification_stats[qn]["total"] += 1
         qualification_stats[qn]["completed" if is_done else "pending"] += 1
 
-        # Expiry analysis
         deadline = item.get("deadline")
         if deadline:
             if isinstance(deadline, str):
@@ -376,7 +459,6 @@ async def get_supplier_statistics(db: AsyncSession) -> dict[str, Any]:
         else:
             normal_count += 1
 
-    # 供应商风险排名（按过期+待完成排序，取前10）
     supplier_risk = sorted(
         [
             {
@@ -393,7 +475,6 @@ async def get_supplier_statistics(db: AsyncSession) -> dict[str, Any]:
         key=lambda x: -float(str(x["risk_score"])),
     )[:10]
 
-    # 物料类型合规率
     material_type_compliance = [
         {
             "type": k,
@@ -408,7 +489,6 @@ async def get_supplier_statistics(db: AsyncSession) -> dict[str, Any]:
         for k, v in sorted(material_type_stats.items(), key=lambda x: -x[1]["total"])
     ]
 
-    # 资质类型完成率
     qualification_compliance = [
         {
             "name": k,
@@ -422,7 +502,6 @@ async def get_supplier_statistics(db: AsyncSession) -> dict[str, Any]:
         for k, v in sorted(qualification_stats.items(), key=lambda x: -x[1]["total"])
     ]
 
-    # 到期趋势（按截止日期月份汇总）
     expiry_timeline: dict[str, int] = {}
     for item in items:
         deadline = item.get("deadline")
@@ -434,7 +513,6 @@ async def get_supplier_statistics(db: AsyncSession) -> dict[str, Any]:
                 expiry_timeline[month_key] = expiry_timeline.get(month_key, 0) + 1
 
     timeline_sorted = sorted(expiry_timeline.items())
-    # 只取最近12个月 + 未来12个月
     recent_timeline = [
         {"month": k, "count": v}
         for k, v in timeline_sorted

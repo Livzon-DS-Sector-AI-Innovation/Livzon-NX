@@ -184,7 +184,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         OffboardingReminderGenerator,
         ResumeFolderScanner,
     )
-    from app.modules.quality.scheduled import ChangeActionPlanReminderGenerator
+    from app.modules.quality.scheduled import (
+        ChangeActionPlanReminderGenerator,
+        SupplierQualificationMirrorFullSyncGenerator,
+        SupplierQualificationMirrorSyncGenerator,
+    )
     from app.modules.registration.scheduled import CertificateReminderGenerator
     from app.modules.warehouse.scheduler import (
         WarehouseFeishuAnalysisGenerator,
@@ -209,6 +213,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     scheduler_registry.register_generator(QualityFeishuReadDailySyncGenerator())
     scheduler_registry.register_generator(CertificateReminderGenerator())
     scheduler_registry.register_generator(ChangeActionPlanReminderGenerator())
+    scheduler_registry.register_generator(
+        SupplierQualificationMirrorSyncGenerator()
+    )
+    scheduler_registry.register_generator(
+        SupplierQualificationMirrorFullSyncGenerator()
+    )
     scheduler_registry.register_generator(OffboardingReminderGenerator())
     scheduler_registry.register_generator(ContractExpiryReminderGenerator())
     scheduler_registry.register_generator(ContractSignReminderGenerator())

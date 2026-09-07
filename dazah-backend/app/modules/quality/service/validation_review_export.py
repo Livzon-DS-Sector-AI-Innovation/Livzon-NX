@@ -211,6 +211,28 @@ def build_review_docx(out_data: dict[str, Any]) -> bytes:
             )
         _add_table(doc, ["序号", "引用编号", "目录文件", "目录编号", "核对结果"], rows)
 
+    basis_comparison = out_data.get("basis_comparison") or []
+    if isinstance(basis_comparison, list) and basis_comparison:
+        _add_heading(doc, "基准正文一致性核查", level=1)
+        rows = []
+        for item in basis_comparison:
+            if not isinstance(item, dict):
+                continue
+            count = item.get("mismatch_count") or 0
+            rows.append(
+                [
+                    str(item.get("code") or ""),
+                    str(item.get("name") or ""),
+                    str(item.get("reason") or "—"),
+                    f"{count} 处不一致" if count else "一致",
+                ]
+            )
+        _add_table(
+            doc,
+            ["依据编号", "依据文件", "入选理由", "比对结果"],
+            rows,
+        )
+
     _add_paragraph(doc, "")
     _add_paragraph(
         doc,

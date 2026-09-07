@@ -207,11 +207,6 @@ async def test_external_feishu_services_cover_list_crud_pull_and_statistics(
         "_resolve_runtime_entity",
         AsyncMock(return_value=(runtime, entity)),
     )
-    monkeypatch.setattr(
-        supplier,
-        "_resolve_runtime_entity",
-        AsyncMock(return_value=(runtime, entity)),
-    )
     complaint_rows = [
         _record(
             {"投诉编号": "CMP-001", "投诉内容": "包装破损", "品名": "产品A"},
@@ -225,86 +220,43 @@ async def test_external_feishu_services_cover_list_crud_pull_and_statistics(
     ledger_rows = [
         _record({"品名": "产品A", "产品批号": "B001", "经办人": "张三"}, "ledger-1")
     ]
-    supplier_rows = [
-        _record(
-            {
-                "供应商名称": "供应商A",
-                "物料名称": "原料A",
-                "物料类型": "原料",
-                "资质名称": "营业执照",
-                "是否完成": True,
-                "截止日期": "2026-07-01",
-            },
-            "supplier-1",
-        ),
-        _record(
-            {
-                "供应商名称": "供应商B",
-                "物料名称": "包材B",
-                "物料类型": "包材",
-                "资质名称": "审计报告",
-                "是否完成": False,
-                "截止日期": "2030-01-01",
-            },
-            "supplier-2",
-        ),
-    ]
 
     async def search(_db: object, entity_code: str) -> list[dict[str, object]]:
         return {
             complaint.ENTITY_COMPLAINT_LEDGER: complaint_rows,
             complaint.ENTITY_RETURN_APPLICATION: return_rows,
             complaint.ENTITY_RETURN_LEDGER: ledger_rows,
-            supplier.ENTITY_SUPPLIER_QUALIFICATION: supplier_rows,
         }[entity_code]
 
     monkeypatch.setattr(complaint, "_search_entity_records", search)
-    monkeypatch.setattr(supplier, "_search_entity_records", search)
+    # 供应商资质的列表/写路径/回拉已改为本地镜像表（无 db 即无法运行），
+    # 由 tests/modules/quality/test_supplier_qualification_mirror.py 覆盖。
 
     complaints = await complaint.list_complaint_ledger_records(
         db, keyword="包装", page=1, page_size=1
     )
     returns = await complaint.list_return_application_records(db, keyword="破损")
     ledgers = await complaint.list_return_ledger_records(db, keyword="产品A")
-    suppliers = await supplier.list_supplier_qualification_records(
-        db,
-        keyword="供应商",
-        supplier_name="供应商A",
-        material_type="原料",
-        qualification_name="营业执照",
-        is_completed=True,
-    )
     assert complaints["total"] == returns["total"] == ledgers["total"] == 1
-    assert suppliers["items"][0]["supplier_name"] == "供应商A"
 
-    for service, entity_code, payload, rows, record_id in (
+    for service, entity_code, payload, record_id in (
         (
             complaint,
             complaint.ENTITY_COMPLAINT_LEDGER,
             {"complaint_content": "投诉内容", "complaint_number": "CMP-003"},
-            complaint_rows,
             "complaint-1",
         ),
         (
             complaint,
             complaint.ENTITY_RETURN_APPLICATION,
             {"product_name": "产品A", "return_reason": "破损"},
-            return_rows,
             "return-1",
         ),
         (
             complaint,
             complaint.ENTITY_RETURN_LEDGER,
             {"product_name": "产品A", "quantity": "2"},
-            ledger_rows,
             "ledger-1",
-        ),
-        (
-            supplier,
-            supplier.ENTITY_SUPPLIER_QUALIFICATION,
-            {"supplier_name": "供应商A", "qualification_name": "营业执照"},
-            supplier_rows,
-            "supplier-1",
         ),
     ):
         monkeypatch.setattr(
@@ -312,12 +264,7 @@ async def test_external_feishu_services_cover_list_crud_pull_and_statistics(
             "_create_entity_record",
             AsyncMock(return_value={"record_id": record_id}),
         )
-        if service is supplier:
-            _BitableClient.record = rows[0]
-            monkeypatch.setattr(service, "BitableClient", _BitableClient)
-            created = await service.create_supplier_qualification_record(db, payload)
-            assert created["record_id"] == "supplier-1"
-        elif entity_code == complaint.ENTITY_COMPLAINT_LEDGER:
+        if entity_code == complaint.ENTITY_COMPLAINT_LEDGER:
             created = await complaint.create_complaint_ledger_record(db, payload)
             assert created["record_id"] == "complaint-1"
         elif entity_code == complaint.ENTITY_RETURN_APPLICATION:
@@ -344,17 +291,10 @@ async def test_external_feishu_services_cover_list_crud_pull_and_statistics(
     )
     assert updated_ledger["record_id"] == "ledger-1"
 
-    monkeypatch.setattr(supplier, "BitableClient", _BitableClient)
-    _BitableClient.record = supplier_rows[0]
-    updated_supplier = await supplier.update_supplier_qualification_record(
-        db, "supplier-1", {"remark": "更新"}
-    )
-    assert updated_supplier["record_id"] == "supplier-1"
     for service, entity_code, record_id in (
         (complaint, complaint.ENTITY_COMPLAINT_LEDGER, "complaint-1"),
         (complaint, complaint.ENTITY_RETURN_APPLICATION, "return-1"),
         (complaint, complaint.ENTITY_RETURN_LEDGER, "ledger-1"),
-        (supplier, supplier.ENTITY_SUPPLIER_QUALIFICATION, "supplier-1"),
     ):
         deleted = AsyncMock()
         monkeypatch.setattr(service, "_delete_entity_record", deleted)
@@ -362,10 +302,8 @@ async def test_external_feishu_services_cover_list_crud_pull_and_statistics(
             await complaint.delete_complaint_ledger_record(db, record_id)
         elif entity_code == complaint.ENTITY_RETURN_APPLICATION:
             await complaint.delete_return_application_record(db, record_id)
-        elif entity_code == complaint.ENTITY_RETURN_LEDGER:
-            await complaint.delete_return_ledger_record(db, record_id)
         else:
-            await supplier.delete_supplier_qualification_record(db, record_id)
+            await complaint.delete_return_ledger_record(db, record_id)
         deleted.assert_awaited_once_with(db, entity_code, record_id)
 
     monkeypatch.setattr(
@@ -383,11 +321,6 @@ async def test_external_feishu_services_cover_list_crud_pull_and_statistics(
         "list_return_ledger_records",
         AsyncMock(return_value={"items": ledger_rows}),
     )
-    monkeypatch.setattr(
-        supplier,
-        "list_supplier_qualification_records",
-        AsyncMock(return_value={"items": supplier_rows}),
-    )
     assert await complaint.pull_complaint_ledger_records(db) == {
         "synced": 2,
         "failed": 0,
@@ -397,10 +330,6 @@ async def test_external_feishu_services_cover_list_crud_pull_and_statistics(
         "failed": 0,
     }
     assert await complaint.pull_return_ledger_records(db) == {"synced": 1, "failed": 0}
-    assert await supplier.pull_supplier_qualification_records(db) == {
-        "synced": 2,
-        "failed": 0,
-    }
 
     stats_rows = [
         {

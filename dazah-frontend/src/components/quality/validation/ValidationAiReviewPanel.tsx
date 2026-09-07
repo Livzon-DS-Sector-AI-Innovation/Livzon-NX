@@ -13,6 +13,7 @@ import {
   Modal,
   Popconfirm,
   Input,
+  Select,
   Space,
   Spin,
   Statistic,
@@ -80,10 +81,20 @@ export function ValidationAiReviewPanel() {
   const [uploadFiles, setUploadFiles] = useState<UploadFile[]>([])
   const [focusPoints, setFocusPoints] = useState('')
   const [exportingId, setExportingId] = useState<string | null>(null)
+  const [keyword, setKeyword] = useState('')
+  const [statusFilter, setStatusFilter] = useState<string>('')
+  const [modeFilter, setModeFilter] = useState<string>('')
 
   const listQuery = useQuery({
-    queryKey: [...REVIEW_LIST_KEY, page, pageSize],
-    queryFn: () => fetchValidationReviews({ page, page_size: pageSize }),
+    queryKey: [...REVIEW_LIST_KEY, page, pageSize, keyword, statusFilter, modeFilter],
+    queryFn: () =>
+      fetchValidationReviews({
+        page,
+        page_size: pageSize,
+        keyword: keyword || undefined,
+        status: statusFilter || undefined,
+        review_mode: modeFilter || undefined,
+      }),
   })
 
   const detailQuery = useQuery({
@@ -328,7 +339,47 @@ export function ValidationAiReviewPanel() {
         </Typography.Paragraph>
       </Card>
 
-      <Card>
+      <Card
+        title={
+          <Space wrap>
+            <Input.Search
+              allowClear
+              placeholder="按标题搜索"
+              style={{ width: 260 }}
+              onSearch={(value) => {
+                setKeyword(value.trim())
+                setPage(1)
+              }}
+            />
+            <Select
+              allowClear
+              placeholder="状态"
+              style={{ width: 130 }}
+              value={statusFilter || undefined}
+              onChange={(value) => {
+                setStatusFilter(value ?? '')
+                setPage(1)
+              }}
+              options={Object.entries(VALIDATION_REVIEW_STATUS_LABELS).map(
+                ([value, label]) => ({ value, label })
+              )}
+            />
+            <Select
+              allowClear
+              placeholder="来源"
+              style={{ width: 130 }}
+              value={modeFilter || undefined}
+              onChange={(value) => {
+                setModeFilter(value ?? '')
+                setPage(1)
+              }}
+              options={Object.entries(VALIDATION_REVIEW_MODE_LABELS).map(
+                ([value, label]) => ({ value, label })
+              )}
+            />
+          </Space>
+        }
+      >
         <Table<ValidationReviewListItem>
           rowKey="id"
           columns={columns}

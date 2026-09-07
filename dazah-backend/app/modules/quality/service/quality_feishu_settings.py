@@ -304,6 +304,26 @@ QUALITY_FEISHU_ENTITY_ENV_PREFILLS: dict[str, dict[str, str]] = {
         "table_name": "验证总表",
         "source_note": "验证与确认共用同一张飞书源表，平台按验证类型截取到不同模块。",
     },
+    # 验证主计划年度台账：2024/2025 已固定绑定到"验证主计划"Base 的对应年度表；
+    # 其余年份用户在同步设置中绑定或由平台按年度展示为 0。
+    "validation_master_plan_2024": {
+        "app_token": "KIBabvgEdaHxLEsxnxacQqhgnTN",
+        "table_id": "tbl0GGbbhJzUkJH5",
+        "table_name": "2024年验证台账",
+        "source_note": "验证主计划年度台账（2024）。",
+    },
+    "validation_master_plan_2025": {
+        "app_token": "KIBabvgEdaHxLEsxnxacQqhgnTN",
+        "table_id": "tblXZV1cr4Y8vZhW",
+        "table_name": "2025年验证台账",
+        "source_note": "验证主计划年度台账（2025）。",
+    },
+    "validation_master_plan_2026": {
+        "app_token": "KIBabvgEdaHxLEsxnxacQqhgnTN",
+        "table_id": "tbliZx3GGrKEbLJv",
+        "table_name": "2026年验证台账",
+        "source_note": "验证主计划年度台账（2026）。",
+    },
     "validation_equipment_qualification": {
         "app_token_setting": "QUALITY_VALIDATION_FEISHU_APP_TOKEN",
         "table_id_setting": "QUALITY_VALIDATION_FEISHU_TABLE_ID",

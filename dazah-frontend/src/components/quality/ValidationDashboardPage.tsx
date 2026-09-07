@@ -1,9 +1,25 @@
 'use client'
 
 import { qualityTokens } from './themeTokens'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Card, Col, Empty, Progress, Row, Spin, Statistic } from 'antd'
+import {
+  Alert,
+  Card,
+  Col,
+  Empty,
+  InputNumber,
+  Modal,
+  Progress,
+  Row,
+  Select,
+  Space,
+  Spin,
+  Statistic,
+  Table,
+} from 'antd'
+import type { ColumnsType } from 'antd/es/table'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import {
   CheckCircleOutlined,
   ClockCircleOutlined,
@@ -16,7 +32,14 @@ import {
   FileDoneOutlined,
 } from '@ant-design/icons'
 import ReactECharts from 'echarts-for-react'
-import type { ValidationDashboardStats } from '@/types/quality'
+import {
+  fetchFeishuValidationDashboardStats,
+  fetchFeishuValidationUpcoming,
+} from '@/lib/api/client/quality'
+import type {
+  ValidationDashboardStats,
+  ValidationUpcomingItem,
+} from '@/types/quality'
 
 const validationTypeLabelMap: Record<string, string> = {
   equipment_qualification: '设备确认',
@@ -35,6 +58,19 @@ const statusLabelMap: Record<string, string> = {
   unknown: '未知',
 }
 
+/** 与后端"近期待再验证"排除口径保持一致的任务状态集合 */
+const COMPLETED_STATUSES = new Set([
+  '完成',
+  '已完成',
+  'completed',
+  'finished',
+  'done',
+])
+
+function isCompletedStatus(status: string): boolean {
+  return COMPLETED_STATUSES.has(status.trim().toLowerCase())
+}
+
 const validationLinks = [
   { href: '/quality/validation/plans', label: '验证主计划', icon: <FileTextOutlined /> },
   { href: '/quality/validation/equipment-qualification', label: '设备确认', icon: <ToolOutlined /> },
@@ -46,19 +82,107 @@ const validationLinks = [
 
 const chartColors = ['#5b8ff9', '#61ddaa', '#65789b', '#f6bd16', '#7262fd', '#78d3f8', '#9661bc']
 
+const UPCOMING_DAYS_OPTIONS = [
+  { value: 30, label: '30天' },
+  { value: 60, label: '60天' },
+  { value: 90, label: '90天' },
+  { value: 180, label: '180天' },
+]
+
+/** 仪表盘默认统计今年 */
+const DEFAULT_YEAR_FROM = new Date().getFullYear()
+
+/** 飞书"验证到期时间"为文本列（如 2026.02），展示时统一为连字符日期 */
+function formatDueDate(value: string | null): string {
+  if (!value) return '—'
+  return value.replace(/\./g, '-')
+}
+
 export function ValidationDashboardClient({
   initialStats,
 }: {
   initialStats: ValidationDashboardStats | null
 }) {
-  const [stats, setStats] = useState<ValidationDashboardStats | null>(initialStats)
-  const [loading, setLoading] = useState(false)
+  const [days, setDays] = useState(30)
+  const [yearFrom, setYearFrom] = useState(DEFAULT_YEAR_FROM)
+  const [upcomingOpen, setUpcomingOpen] = useState(false)
+  const [upcomingPage, setUpcomingPage] = useState(1)
+
+  const { data: stats, isFetching: statsLoading, isError: statsError } = useQuery({
+    queryKey: ['quality-validation', 'dashboard', days, yearFrom],
+    queryFn: () => fetchFeishuValidationDashboardStats(days, yearFrom),
+    placeholderData: keepPreviousData,
+    ...(initialStats && days === 30 && yearFrom === DEFAULT_YEAR_FROM
+      ? { initialData: initialStats }
+      : {}),
+  })
+
+  const upcomingQuery = useQuery({
+    queryKey: ['quality-validation', 'upcoming', days, yearFrom, upcomingPage],
+    queryFn: () =>
+      fetchFeishuValidationUpcoming(days, yearFrom, {
+        page: upcomingPage,
+        page_size: 10,
+      }),
+    enabled: upcomingOpen,
+    placeholderData: keepPreviousData,
+  })
 
   const total = stats?.total ?? 0
-  const completedCount = stats?.statusDistribution
-    .filter((s) => s.status === '完成' || s.status === 'completed')
-    .reduce((sum, s) => sum + s.count, 0) ?? 0
+  const completedCount =
+    stats?.statusDistribution
+      .filter((s) => isCompletedStatus(s.status))
+      .reduce((sum, s) => sum + s.count, 0) ?? 0
   const completionRate = total > 0 ? Math.round((completedCount / total) * 100) : 0
+
+  const upcomingColumns: ColumnsType<ValidationUpcomingItem> = useMemo(
+    () => [
+      {
+        title: '验证名称',
+        dataIndex: 'title',
+        key: 'title',
+        ellipsis: true,
+        width: 260,
+      },
+      {
+        title: '类型',
+        dataIndex: 'validation_type',
+        key: 'validation_type',
+        width: 110,
+        render: (v: string) => validationTypeLabelMap[v] ?? v,
+      },
+      {
+        title: '状态',
+        dataIndex: 'status',
+        key: 'status',
+        width: 100,
+        render: (v: string) => (v ? (statusLabelMap[v] ?? v) : '未知'),
+      },
+      {
+        title: '到期时间',
+        dataIndex: 'planned_end_date',
+        key: 'planned_end_date',
+        width: 120,
+        render: (v: string | null) => formatDueDate(v),
+      },
+      {
+        title: '部门',
+        dataIndex: 'department',
+        key: 'department',
+        width: 130,
+        ellipsis: true,
+        render: (v: string | null) => v || '—',
+      },
+      {
+        title: '方案名称',
+        dataIndex: 'plan_name',
+        key: 'plan_name',
+        ellipsis: true,
+        render: (v: string | null) => v || '—',
+      },
+    ],
+    [],
+  )
 
   const typeChartOption = {
     tooltip: {
@@ -133,9 +257,38 @@ export function ValidationDashboardClient({
 
   return (
     <div>
-      <div style={{ marginBottom: 16 }}>
-        <p className="mb-2 text-[13px] text-[var(--color-stone)]">质量管理 / 验证与确认</p>
-        <h1 style={{ fontSize: 22, fontWeight: 600, margin: 0 }}>验证与确认仪表盘</h1>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 12,
+          marginBottom: 16,
+        }}
+      >
+        <div>
+          <p className="mb-2 text-[13px] text-[var(--color-stone)]">质量管理 / 验证与确认</p>
+          <h1 style={{ fontSize: 22, fontWeight: 600, margin: 0 }}>验证与确认仪表盘</h1>
+        </div>
+        <Space wrap>
+          <span style={{ color: '#666', fontSize: 13 }}>起始年份</span>
+          <InputNumber
+            value={yearFrom}
+            min={2000}
+            max={2100}
+            style={{ width: 110 }}
+            onChange={(v) => setYearFrom(v ?? DEFAULT_YEAR_FROM)}
+          />
+          <span style={{ color: '#666', fontSize: 13 }}>近期待再验证窗口</span>
+          <Select
+            value={days}
+            onChange={setDays}
+            options={UPCOMING_DAYS_OPTIONS}
+            style={{ width: 96 }}
+            aria-label="近期待再验证窗口"
+          />
+        </Space>
       </div>
 
       {/* 快捷导航 */}
@@ -157,7 +310,7 @@ export function ValidationDashboardClient({
         ))}
       </Row>
 
-      <Spin spinning={loading}>
+      <Spin spinning={statsLoading}>
         <Row gutter={[16, 16]}>
           {/* 核心指标卡片 */}
           <Col xs={24} md={6}>
@@ -191,7 +344,11 @@ export function ValidationDashboardClient({
             </Card>
           </Col>
           <Col xs={24} md={6}>
-            <Card style={{ borderRadius: 8 }}>
+            <Card
+              hoverable
+              style={{ borderRadius: 8, cursor: 'pointer' }}
+              onClick={() => setUpcomingOpen(true)}
+            >
               <Statistic
                 title={<span style={{ fontSize: 14 }}>近期待再验证</span>}
                 value={stats?.revalidationUpcoming ?? 0}
@@ -200,6 +357,17 @@ export function ValidationDashboardClient({
               />
             </Card>
           </Col>
+
+          {statsError && (
+            <Col span={24}>
+              <Alert
+                type="error"
+                showIcon
+                title="统计数据加载失败，请稍后重试"
+                style={{ borderRadius: 8 }}
+              />
+            </Col>
+          )}
 
           {/* 完成率进度条 */}
           <Col span={24}>
@@ -223,7 +391,10 @@ export function ValidationDashboardClient({
               {stats?.typeDistribution.length ? (
                 <ReactECharts option={typeChartOption} style={{ height: 300 }} />
               ) : (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无数据" />
+                <Empty
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  description="暂无数据，请确认已在同步设置中绑定验证主计划年度飞书表"
+                />
               )}
             </Card>
           </Col>
@@ -234,7 +405,10 @@ export function ValidationDashboardClient({
               {stats?.statusDistribution.length ? (
                 <ReactECharts option={statusChartOption} style={{ height: 300 }} />
               ) : (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无数据" />
+                <Empty
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  description="暂无数据，请确认已在同步设置中绑定验证主计划年度飞书表"
+                />
               )}
             </Card>
           </Col>
@@ -274,12 +448,52 @@ export function ValidationDashboardClient({
                   })}
                 </Row>
               ) : (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无数据" />
+                <Empty
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  description="暂无数据，请确认已在同步设置中绑定验证主计划年度飞书表"
+                />
               )}
             </Card>
           </Col>
         </Row>
       </Spin>
+
+      {/* 近期待再验证明细弹窗 */}
+      <Modal
+        title={`近期待再验证（未来 ${days} 天内，${yearFrom} 年起）`}
+        open={upcomingOpen}
+        onCancel={() => setUpcomingOpen(false)}
+        footer={null}
+        width={880}
+      >
+        <p style={{ color: '#888', fontSize: 13, marginBottom: 12 }}>
+          仅展示验证主计划各年度台账中「未完成且到期时间不超过 {days} 天」的验证项。
+        </p>
+        {upcomingQuery.isError && (
+          <Alert
+            type="error"
+            showIcon
+            title="明细加载失败，请稍后重试"
+            style={{ marginBottom: 12, borderRadius: 8 }}
+          />
+        )}
+        <Table
+          rowKey="record_id"
+          columns={upcomingColumns}
+          dataSource={upcomingQuery.data?.items ?? []}
+          loading={upcomingQuery.isFetching}
+          size="small"
+          tableLayout="fixed"
+          pagination={{
+            current: upcomingPage,
+            pageSize: 10,
+            total: upcomingQuery.data?.total ?? 0,
+            showSizeChanger: false,
+            showTotal: (t) => `共 ${t} 条`,
+            onChange: (p) => setUpcomingPage(p),
+          }}
+        />
+      </Modal>
     </div>
   )
 }

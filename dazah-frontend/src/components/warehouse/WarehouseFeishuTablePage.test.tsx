@@ -291,7 +291,7 @@ describe('WarehouseFeishuTablePage', () => {
     expect(button('删除记录')).toBeUndefined()
     expect(button('同步最新数据')).toBeUndefined()
     await act(async () => button('刷新')?.click())
-    expect(mocks.fetchWarehouseMaterialPage).toHaveBeenLastCalledWith('raw-summary', expect.objectContaining({ force: false }), 60000)
+    expect(mocks.fetchWarehouseMaterialPage).toHaveBeenLastCalledWith('raw-summary', expect.objectContaining({ incremental: true, force: undefined }), 60000)
   })
 
   it('requires explicit confirmation before authorized remote synchronization', async () => {
