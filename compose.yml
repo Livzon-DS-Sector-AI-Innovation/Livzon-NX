@@ -145,7 +145,7 @@ services:
       - backend_uploads:/app/uploads
       - backend_storage:/app/storage
     tmpfs:
-      - /tmp:mode=1777,size=256m
+      - /tmp:mode=1777,size=1g
     networks:
       - backend
     ports:
