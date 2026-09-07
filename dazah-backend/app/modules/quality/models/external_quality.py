@@ -15,6 +15,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     Uuid,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, synonym
 
@@ -143,6 +144,74 @@ class SupplierQualification(ExternalQualityBaseModel):
         String(100), nullable=True, comment="责任人"
     )
     remark: Mapped[str | None] = mapped_column(Text, nullable=True, comment="备注")
+
+
+class SupplierQualificationMirror(ExternalQualityBaseModel):
+    """供应商资质飞书子表的本地镜像（回拉快照）。
+
+    列表页与仪表盘读取本表，避免每次实时全量拉取飞书；业务键为
+    ``feishu_record_id``（仅未删除行唯一），``source_updated_at`` 保存
+    飞书记录最后修改时间，作为增量水位。写路径仍以飞书为准：推送
+    成功后同步回写镜像，定时回拉兜底远端直接改表的场景。
+    """
+
+    __tablename__ = "supplier_qualification_records"
+    __table_args__ = (
+        Index(
+            "uq_quality_supplier_qualification_records_feishu_active",
+            "feishu_record_id",
+            unique=True,
+            postgresql_where=text("is_deleted = false"),
+        ),
+        Index(
+            "ix_quality_supplier_qualification_records_deadline",
+            "is_deleted",
+            "deadline",
+        ),
+        {"schema": "quality"},
+    )
+
+    feishu_record_id: Mapped[str] = mapped_column(
+        String(64), nullable=False, comment="飞书记录ID"
+    )
+    supplier_name: Mapped[str | None] = mapped_column(
+        String(500), nullable=True, comment="供应商名称"
+    )
+    material_name: Mapped[str | None] = mapped_column(
+        String(500), nullable=True, comment="物料名称"
+    )
+    material_type: Mapped[str | None] = mapped_column(
+        String(200), nullable=True, comment="物料类型"
+    )
+    qualification_name: Mapped[str | None] = mapped_column(
+        String(500), nullable=True, comment="资质名称"
+    )
+    qualification_file: Mapped[str | None] = mapped_column(
+        String(1000), nullable=True, comment="资质文件"
+    )
+    is_completed: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+        comment="是否完成",
+    )
+    deadline: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, comment="截止日期（ISO 文本）"
+    )
+    responsible_person: Mapped[str | None] = mapped_column(
+        String(500), nullable=True, comment="负责人"
+    )
+    remark: Mapped[str | None] = mapped_column(Text, nullable=True, comment="备注")
+    expiry_status: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, comment="到期状态（飞书公式列，只读）"
+    )
+    source_created_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="飞书创建时间"
+    )
+    source_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="飞书最后修改时间（增量水位）"
+    )
 
 
 class ComplaintRecord(ExternalQualityBaseModel):

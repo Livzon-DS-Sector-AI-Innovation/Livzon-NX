@@ -1,9 +1,12 @@
 """Supplier qualification schemas (Feishu Bitable)."""
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+
+SupplierExpiryBucket = Literal["expired", "due_30", "due_60", "due_90"]
+"""按截止日期划分的到期分桶（与 get_supplier_statistics 计数口径一致）。"""
 
 
 class SupplierQualificationBase(BaseModel):
@@ -80,7 +83,9 @@ class SupplierDashboardStatsOut(BaseModel):
 
 
 class SupplierPullResult(BaseModel):
-    """Supplier pull sync result."""
+    """Supplier qualification mirror pull result."""
 
     synced: int = 0
     failed: int = 0
+    removed: int = 0
+    total: int = 0

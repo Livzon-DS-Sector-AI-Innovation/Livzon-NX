@@ -1,4 +1,4 @@
-import { ValidationDashboardClient } from '@/components/quality'
+import { ValidationDashboardClient, QualityQueryProvider } from '@/components/quality'
 import { fetchFeishuValidationDashboardStatsServer } from '@/lib/api/server/quality'
 
 
@@ -12,5 +12,9 @@ export default async function QualityValidationDashboardPage() {
     // 数据加载失败时显示空状态
   }
 
-  return <ValidationDashboardClient initialStats={stats} />
+  return (
+    <QualityQueryProvider>
+      <ValidationDashboardClient initialStats={stats} />
+    </QualityQueryProvider>
+  )
 }

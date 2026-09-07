@@ -25,9 +25,10 @@ def test_entity_code_for_validation_type_appends_year_suffix() -> None:
         pages._entity_code_for_validation_type(None, 2026)
         == "validation_master_plan_2026"
     )
+    # 指定年份时统一读验证主计划年度表（年度表含全部验证类别）
     assert (
         pages._entity_code_for_validation_type("process_validation", 2025)
-        == "validation_process_2025"
+        == "validation_master_plan_2025"
     )
     assert (
         pages._entity_code_for_validation_type("cleaning_validation")

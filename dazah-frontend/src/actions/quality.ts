@@ -44,6 +44,8 @@ import {
   CreateOosOotRecordRequest,
   CloseOosOotRecordRequest,
   OosOotFeishuSyncOut,
+  QualityNotificationSettingItem,
+  UpdateQualityNotificationSettingPayload,
 } from '@/types/quality'
 import type { components } from '@/types/generated/schema'
 import type { LabelVerification } from '@/types/label-verification'
@@ -623,6 +625,28 @@ export async function testQualityFeishuEntitySetting(entityCode: string): Promis
     method: 'POST',
   })
   if (!result) throw new Error('未收到飞书测试结果')
+  return result
+}
+
+// ============ 通知设置 Actions ============
+
+export async function fetchQualityNotificationSettings(): Promise<QualityNotificationSettingItem[]> {
+  const result = await actionFetch<QualityNotificationSettingItem[]>(
+    `${API_BASE_URL}/api/v1/quality/notification-settings`
+  )
+  if (!result) throw new Error('未收到通知设置')
+  return result
+}
+
+export async function updateQualityNotificationSetting(
+  notificationType: string,
+  data: UpdateQualityNotificationSettingPayload
+): Promise<QualityNotificationSettingItem> {
+  const result = await actionFetch<QualityNotificationSettingItem>(
+    `${API_BASE_URL}/api/v1/quality/notification-settings/${notificationType}`,
+    { method: 'PUT', body: JSON.stringify(data) }
+  )
+  if (!result) throw new Error('未收到通知设置保存结果')
   return result
 }
 

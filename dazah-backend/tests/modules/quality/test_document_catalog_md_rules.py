@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import builtins
+import subprocess
 from io import BytesIO
 from typing import Any
 
@@ -200,3 +201,132 @@ def test_convert_word_attachment_runs_legacy_conversion_for_doc_and_wps(
     assert md.convert_word_attachment("标准.doc", b"doc")[0] == "# 标准.doc"
     assert md.convert_word_attachment("标准.WPS", b"wps")[0] == "# 标准.WPS"
     assert legacy_calls == ["标准.doc", "标准.WPS"]
+
+
+class TestV21Robustness:
+    """v2.1 新增分支：soffice 重试/超时/文本兜底/OOXML 优先。"""
+
+    def test_soffice_timeout_retries_and_returns_empty(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from app.modules.quality.service import document_catalog_md as md
+
+        monkeypatch.setattr(md, "_find_soffice", lambda: "/usr/bin/soffice")
+        monkeypatch.setattr(md, "_SOFFICE_RETRIES", 1)
+
+        calls = {"n": 0}
+
+        def _fake_run(*args, **kwargs):
+            calls["n"] += 1
+            raise subprocess.TimeoutExpired(cmd="soffice", timeout=60)
+
+        monkeypatch.setattr(md.subprocess, "run", _fake_run)
+        assert md._convert_doc_via_soffice(b"doc", "a.doc") == b""
+        assert calls["n"] == 2  # 首次 + 重试一次
+
+    def test_soffice_nonzero_retries_and_returns_empty(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from app.modules.quality.service import document_catalog_md as md
+
+        monkeypatch.setattr(md, "_find_soffice", lambda: "/usr/bin/soffice")
+        monkeypatch.setattr(md, "_SOFFICE_RETRIES", 1)
+        calls = {"n": 0}
+
+        class _R:
+            returncode = 1
+
+        def _fake_run(*args, **kwargs):
+            calls["n"] += 1
+            return _R()
+
+        monkeypatch.setattr(md.subprocess, "run", _fake_run)
+        assert md._convert_doc_via_soffice(b"doc", "a.doc") == b""
+        assert calls["n"] == 2
+
+    def test_text_fallback_via_catdoc(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from app.modules.quality.service import document_catalog_md as md
+
+        monkeypatch.setattr(md.shutil, "which", lambda name: "/usr/bin/catdoc")
+
+        class _R:
+            returncode = 0
+            stdout = b"\xe6\xb8\x85\xe6\xb4\x97\xe8\xa7\x84\xe7\xa8\x8b"  # 清洁规程
+
+        monkeypatch.setattr(md.subprocess, "run", lambda *a, **k: _R())
+        text = md._convert_doc_via_text_fallback(b"doc", "a.doc")
+        assert text is not None
+        assert "文本提取模式" in text
+        assert "清洗规程" in text
+
+    def test_text_fallback_missing_tool(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from app.modules.quality.service import document_catalog_md as md
+
+        monkeypatch.setattr(md.shutil, "which", lambda name: None)
+        assert md._convert_doc_via_text_fallback(b"doc", "a.doc") is None
+
+    def test_text_fallback_nonzero(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from app.modules.quality.service import document_catalog_md as md
+
+        monkeypatch.setattr(md.shutil, "which", lambda name: "/usr/bin/catdoc")
+
+        class _R:
+            returncode = 1
+            stdout = b""
+
+        monkeypatch.setattr(md.subprocess, "run", lambda *a, **k: _R())
+        assert md._convert_doc_via_text_fallback(b"doc", "a.doc") is None
+
+    def test_try_ooxml_direct_non_zip(self) -> None:
+        from app.modules.quality.service import document_catalog_md as md
+
+        assert md._try_ooxml_direct(b"notzip", "a.doc") is None
+
+    def test_try_ooxml_direct_zip_failure_fallback(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from app.modules.quality.service import document_catalog_md as md
+
+        monkeypatch.setattr(
+            md, "convert_docx_content_to_md",
+            lambda content, name: (_ for _ in ()).throw(RuntimeError("bad docx")),
+        )
+        assert md._try_ooxml_direct(b"PK\x03\x04fake", "a.doc") is None
+
+    def test_convert_word_attachment_text_fallback_path(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from app.modules.quality.service import document_catalog_md as md
+
+        monkeypatch.setattr(md, "_try_ooxml_direct", lambda c, n: None)
+        monkeypatch.setattr(
+            md, "convert_legacy_to_docx",
+            lambda c, n: (_ for _ in ()).throw(
+                __import__(
+                    "app.core.exceptions", fromlist=["AppException"]
+                ).AppException("x")
+            ),
+        )
+        monkeypatch.setattr(
+            md, "_convert_doc_via_text_fallback", lambda c, n: "# 文本兜底"
+        )
+        md_text, images = md.convert_word_attachment("a.doc", b"doc")
+        assert md_text == "# 文本兜底"
+        assert images == []
+
+    def test_convert_word_attachment_all_fail_raises(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from app.core.exceptions import AppException
+        from app.modules.quality.service import document_catalog_md as md
+
+        monkeypatch.setattr(md, "_try_ooxml_direct", lambda c, n: None)
+        monkeypatch.setattr(
+            md, "convert_legacy_to_docx",
+            lambda c, n: (_ for _ in ()).throw(AppException("不支持")),
+        )
+        monkeypatch.setattr(md, "_convert_doc_via_text_fallback", lambda c, n: None)
+        with pytest.raises(AppException):
+            md.convert_word_attachment("a.wps", b"wps")

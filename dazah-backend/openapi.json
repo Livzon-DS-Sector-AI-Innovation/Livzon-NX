@@ -5511,6 +5511,40 @@
         "title": "ApiResponseEnvelope[QualityAiAnalysisLogOut]",
         "type": "object"
       },
+      "ApiResponseEnvelope_QualityNotificationSettingItem_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/QualityNotificationSettingItem"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[QualityNotificationSettingItem]",
+        "type": "object"
+      },
       "ApiResponseEnvelope_ReturnRecallOut_": {
         "properties": {
           "code": {
@@ -7329,6 +7363,44 @@
           "data"
         ],
         "title": "ApiResponseEnvelope[list[QualityAiAnalysisLogOut]]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_list_QualityNotificationSettingItem__": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/QualityNotificationSettingItem"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[list[QualityNotificationSettingItem]]",
         "type": "object"
       },
       "ApiResponseEnvelope_list_ReturnRecallOut__": {
@@ -43917,6 +43989,36 @@
         "title": "InspectionFeishuRecordBody",
         "type": "object"
       },
+      "InspectionLineNotificationPayload": {
+        "properties": {
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "entity_code": {
+            "title": "Entity Code",
+            "type": "string"
+          },
+          "entity_label": {
+            "default": "",
+            "title": "Entity Label",
+            "type": "string"
+          },
+          "recipients": {
+            "items": {
+              "$ref": "#/components/schemas/QualityNotificationRecipientItem"
+            },
+            "title": "Recipients",
+            "type": "array"
+          }
+        },
+        "required": [
+          "entity_code"
+        ],
+        "title": "InspectionLineNotificationPayload",
+        "type": "object"
+      },
       "InspectionRecordOut": {
         "description": "Inspection record output.",
         "properties": {
@@ -62795,6 +62897,80 @@
         "title": "QualityFeishuTableOption",
         "type": "object"
       },
+      "QualityNotificationRecipientItem": {
+        "properties": {
+          "name": {
+            "default": "",
+            "title": "Name",
+            "type": "string"
+          },
+          "open_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Open Id"
+          }
+        },
+        "title": "QualityNotificationRecipientItem",
+        "type": "object"
+      },
+      "QualityNotificationSettingItem": {
+        "properties": {
+          "fallback_recipients": {
+            "items": {
+              "$ref": "#/components/schemas/QualityNotificationRecipientItem"
+            },
+            "title": "Fallback Recipients",
+            "type": "array"
+          },
+          "inspection_lines": {
+            "items": {
+              "$ref": "#/components/schemas/InspectionLineNotificationPayload"
+            },
+            "title": "Inspection Lines",
+            "type": "array"
+          },
+          "is_enabled": {
+            "title": "Is Enabled",
+            "type": "boolean"
+          },
+          "lead_days": {
+            "title": "Lead Days",
+            "type": "integer"
+          },
+          "notification_label": {
+            "title": "Notification Label",
+            "type": "string"
+          },
+          "notification_type": {
+            "title": "Notification Type",
+            "type": "string"
+          },
+          "repeat_interval_days": {
+            "title": "Repeat Interval Days",
+            "type": "integer"
+          },
+          "send_time": {
+            "title": "Send Time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "notification_type",
+          "notification_label",
+          "is_enabled",
+          "lead_days",
+          "repeat_interval_days",
+          "send_time"
+        ],
+        "title": "QualityNotificationSettingItem",
+        "type": "object"
+      },
       "RawMaterialResponse": {
         "properties": {
           "available": {
@@ -78362,6 +78538,84 @@
           }
         },
         "title": "UpdateQualityFeishuEntitySettingRequest",
+        "type": "object"
+      },
+      "UpdateQualityNotificationSettingRequest": {
+        "properties": {
+          "fallback_recipients": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/QualityNotificationRecipientItem"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fallback Recipients"
+          },
+          "inspection_lines": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/InspectionLineNotificationPayload"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inspection Lines"
+          },
+          "is_enabled": {
+            "default": true,
+            "title": "Is Enabled",
+            "type": "boolean"
+          },
+          "lead_days": {
+            "anyOf": [
+              {
+                "maximum": 365.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lead Days"
+          },
+          "repeat_interval_days": {
+            "anyOf": [
+              {
+                "maximum": 30.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repeat Interval Days"
+          },
+          "send_time": {
+            "anyOf": [
+              {
+                "pattern": "^(?:[01]\\d|2[0-3]):[0-5]\\d$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "每天发送时间 HH:MM（Asia/Shanghai）",
+            "title": "Send Time"
+          }
+        },
+        "title": "UpdateQualityNotificationSettingRequest",
         "type": "object"
       },
       "UpdateReturnRecallRequest": {
@@ -166804,6 +167058,34 @@
         "operationId": "get_feishu_validation_statistics_endpoint_api_v1_quality_feishu_statistics_validations_get",
         "parameters": [
           {
+            "description": "近期待再验证天数阈值",
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "description": "近期待再验证天数阈值",
+              "maximum": 365,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "统计起始年份",
+            "in": "query",
+            "name": "year_from",
+            "required": false,
+            "schema": {
+              "default": 2024,
+              "description": "统计起始年份",
+              "maximum": 2100,
+              "minimum": 2000,
+              "title": "Year From",
+              "type": "integer"
+            }
+          },
+          {
             "in": "cookie",
             "name": "auth_token",
             "required": false,
@@ -167099,6 +167381,107 @@
           }
         },
         "summary": "在飞书中创建验证记录",
+        "tags": [
+          "质量管理",
+          "Quality-Validation"
+        ]
+      }
+    },
+    "/api/v1/quality/feishu/validations/revalidation-upcoming": {
+      "get": {
+        "operationId": "list_feishu_validation_revalidation_upcoming_api_v1_quality_feishu_validations_revalidation_upcoming_get",
+        "parameters": [
+          {
+            "description": "近期待再验证天数阈值",
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "description": "近期待再验证天数阈值",
+              "maximum": 365,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "统计起始年份",
+            "in": "query",
+            "name": "year_from",
+            "required": false,
+            "schema": {
+              "default": 2024,
+              "description": "统计起始年份",
+              "maximum": 2100,
+              "minimum": 2000,
+              "title": "Year From",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_list_dict_str__Any___"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "从飞书获取近期待再验证明细（未完成且到期临近）",
         "tags": [
           "质量管理",
           "Quality-Validation"
@@ -174285,6 +174668,125 @@
         "tags": [
           "质量管理",
           "Quality-Inspection-Submodules"
+        ]
+      }
+    },
+    "/api/v1/quality/notification-settings": {
+      "get": {
+        "operationId": "list_quality_notification_settings_api_v1_quality_notification_settings_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_list_QualityNotificationSettingItem__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "获取质量模块通知设置列表",
+        "tags": [
+          "质量管理",
+          "Quality-Notification-Settings"
+        ]
+      }
+    },
+    "/api/v1/quality/notification-settings/{notification_type}": {
+      "put": {
+        "operationId": "update_quality_notification_setting_api_v1_quality_notification_settings__notification_type__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notification_type",
+            "required": true,
+            "schema": {
+              "title": "Notification Type",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateQualityNotificationSettingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_QualityNotificationSettingItem_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "保存质量模块通知设置",
+        "tags": [
+          "质量管理",
+          "Quality-Notification-Settings"
         ]
       }
     },
@@ -181945,6 +182447,30 @@
             }
           },
           {
+            "description": "到期分桶筛选：expired=已过期，due_30=30天内到期，due_60=31~60天，due_90=61~90天（与仪表盘统计口径一致）",
+            "in": "query",
+            "name": "expiry_bucket",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "expired",
+                    "due_30",
+                    "due_60",
+                    "due_90"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "到期分桶筛选：expired=已过期，due_30=30天内到期，due_60=31~60天，due_90=61~90天（与仪表盘统计口径一致）",
+              "title": "Expiry Bucket"
+            }
+          },
+          {
             "in": "query",
             "name": "page",
             "required": false,
@@ -183911,6 +184437,55 @@
               "minimum": 1,
               "title": "Page Size",
               "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "keyword",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Keyword"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "review_mode",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Review Mode"
             }
           },
           {
@@ -213421,14 +213996,26 @@
             }
           },
           {
-            "description": "强制绕过缓存从飞书拉取最新数据",
+            "description": "强制绕过缓存全量拉取飞书最新数据（同步最新数据按钮）",
             "in": "query",
             "name": "force",
             "required": false,
             "schema": {
               "default": false,
-              "description": "强制绕过缓存从飞书拉取最新数据",
+              "description": "强制绕过缓存全量拉取飞书最新数据（同步最新数据按钮）",
               "title": "Force",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "增量同步飞书变更后读取本地快照（刷新按钮）",
+            "in": "query",
+            "name": "incremental",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "增量同步飞书变更后读取本地快照（刷新按钮）",
+              "title": "Incremental",
               "type": "boolean"
             }
           },

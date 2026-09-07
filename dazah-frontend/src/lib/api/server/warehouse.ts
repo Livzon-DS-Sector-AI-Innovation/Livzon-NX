@@ -187,6 +187,9 @@ export async function fetchWarehouseMaterialPage(
   if (params?.force) {
     searchParams.set('force', '1')
   }
+  if (params?.incremental) {
+    searchParams.set('incremental', '1')
+  }
   if (params?.keyword) {
     searchParams.set('keyword', params.keyword)
   }

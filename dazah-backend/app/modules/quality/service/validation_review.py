@@ -97,6 +97,9 @@ DOC_KIND_REPORT = "report"
 
 # LLM 语义审核重试（限流指数退避）
 _LLM_MAX_RETRIES = 3
+# 解析与审核超时保护（秒）：防 soffice/转换/LLM 挂死导致永久 pending
+_PARSE_FILE_TIMEOUT = 240
+_REVIEW_TOTAL_TIMEOUT = 1800
 
 
 # ─── 本地存储（MinIO/uploads 双通道，key 前缀 validation-review/） ───────
@@ -326,11 +329,24 @@ async def list_review_records(
     page: int,
     page_size: int,
     all_visible: bool = False,
+    keyword: str | None = None,
+    status: str | None = None,
+    review_mode: str | None = None,
 ) -> tuple[list[ValidationReviewRecord], int]:
-    """分页列出审核会话；all_visible=True 时返回全部（QA 可见），否则仅本人创建。"""
+    """分页列出审核会话。
+
+    all_visible=True 时返回全部（QA 可见），否则仅本人创建。
+    keyword 按标题模糊匹配；status/review_mode 精确筛选。
+    """
     filters: list[Any] = [ValidationReviewRecord.is_deleted.is_(False)]
     if not all_visible:
         filters.append(ValidationReviewRecord.created_by == user_id)
+    if keyword:
+        filters.append(ValidationReviewRecord.title.ilike(f"%{keyword}%"))
+    if status:
+        filters.append(ValidationReviewRecord.status == status)
+    if review_mode:
+        filters.append(ValidationReviewRecord.review_mode == review_mode)
     total_result = await db.execute(
         select(func.count())
         .select_from(ValidationReviewRecord)
@@ -409,9 +425,19 @@ async def _run_review_job(
         if record is None:
             return {"status": STATUS_FAILED, "error": "审核记录不存在"}
         try:
-            await _execute_review(db, record, job_id, user_id, focus_points)
+            # 整单总超时保护：解析/转换/LLM 任一环节挂死都会强制 failed，
+            # 避免记录永久停留在 processing（生产 soffice 崩溃曾导致此问题）
+            await asyncio.wait_for(
+                _execute_review(db, record, job_id, user_id, focus_points),
+                timeout=_REVIEW_TOTAL_TIMEOUT,
+            )
             await db.commit()
             return {"status": record.status}
+        except TimeoutError:
+            record.status = STATUS_FAILED
+            record.error_message = "审核超时（整体超过预算时间），请重试"
+            await db.commit()
+            return {"status": STATUS_FAILED, "error": record.error_message}
         except LLMRateLimitError:
             record.status = STATUS_FAILED
             record.error_message = "LLM 速率限制，重试耗尽"
@@ -447,13 +473,22 @@ async def _execute_review(
             row.parse_status = PARSE_FAILED
             row.parse_error = "原文件缺失"
         else:
-            text, err = await _extract_upload_text(row.file_name, content)
-            if text:
-                row.parsed_text = text
-                row.parse_status = PARSE_COMPLETED
-            else:
+            # 单文件解析超时保护：soffice/转换挂死时强制 failed，不阻塞后续
+            try:
+                text, err = await asyncio.wait_for(
+                    _extract_upload_text(row.file_name, content),
+                    timeout=_PARSE_FILE_TIMEOUT,
+                )
+            except TimeoutError:
                 row.parse_status = PARSE_FAILED
-                row.parse_error = err or "解析失败"
+                row.parse_error = "解析超时"
+            else:
+                if text:
+                    row.parsed_text = text
+                    row.parse_status = PARSE_COMPLETED
+                else:
+                    row.parse_status = PARSE_FAILED
+                    row.parse_error = err or "解析失败"
         db.add(row)
     await db.flush()
 
@@ -465,7 +500,9 @@ async def _execute_review(
     for row in files:
         if row.parse_status != PARSE_COMPLETED or not row.parsed_text:
             continue
-        texts[row.doc_kind] = texts.get(row.doc_kind, "") + row.parsed_text
+        # doc_kind 二次确认：文件名无 VP/VR 前缀时用正文关键词判定方案/报告
+        kind = _refine_doc_kind(row.file_name, row.parsed_text)
+        texts[kind] = texts.get(kind, "") + row.parsed_text
         ident: dict[str, Any] = {
             "file_name": row.file_name,
             "doc_number": extract_document_number(row.file_name),
@@ -473,7 +510,7 @@ async def _execute_review(
         content_code, content_title = extract_content_identity(row.parsed_text)
         ident["content_code"] = content_code
         ident["content_title"] = content_title
-        identities.setdefault(row.doc_kind, ident)
+        identities.setdefault(kind, ident)
         # 排除文档自身编号：自己引用自己不算"引用其他文件"
         own_number = extract_document_number(row.file_name)
         resolved = resolve_references(basis, row.parsed_text)
@@ -576,6 +613,29 @@ async def _execute_review(
         basis_comparison = _build_basis_comparison(
             key_bases, compare_findings, basis_contents
         )
+    elif texts and reference_items:
+        # 有引用但无可用基准正文：显式提示，不静默（旧项目 missing_basis 精华）
+        matched_codes = [
+            item.code
+            for item in reference_items
+            if item.matched and item.entry_id not in basis_contents
+        ]
+        if matched_codes:
+            findings.append(
+                {
+                    "category": "content_consistency",
+                    "severity": "low",
+                    "location": "基准正文比对",
+                    "quote": "、".join(matched_codes[:5]),
+                    "quote_verified": True,
+                    "basis_source": None,
+                    "basis_match_type": "missing_basis",
+                    "detail": (
+                        "以下引用文件命中目录但无可用附件正文，未做正文一致性比对："
+                        + "、".join(matched_codes[:5])
+                    ),
+                }
+            )
 
     # 5. 质量数据联动（偏差/变更摘要）
     quality_data_summary = await _collect_quality_data_summary(db, identities, texts)
@@ -628,11 +688,45 @@ async def _execute_review(
         "basis_comparison": basis_comparison,
         "focus_points": focus_points,
     }
+    # 标题自动生成：未手动传标题时用文档编号+标题（plan 优先），可追溯可查询
+    if not (record.title or "").strip():
+        record.title = _auto_generate_title(identities)
     record.status = STATUS_COMPLETED
     record.model_name = model_name
     record.error_message = None
     record.last_generated_at = datetime.now(UTC)
     db.add(record)
+
+
+def _auto_generate_title(identities: dict[str, dict[str, Any]]) -> str:
+    """从文档身份生成业务标题：优先方案，其次报告。
+
+    形如 "VP-FT3-CV1902-01 设备清洁验证方案"；无法提取时返回空由调用方保持原值。
+    """
+    ident = identities.get(DOC_KIND_PLAN) or identities.get(DOC_KIND_REPORT)
+    if not ident:
+        return ""
+    number = ident.get("doc_number") or ident.get("content_code") or ""
+    title_text = ident.get("content_title") or ident.get("file_name") or ""
+    if not number and not title_text:
+        return ""
+    return f"{number} {title_text}".strip()[:255]
+
+
+def _refine_doc_kind(file_name: str, parsed_text: str) -> str:
+    """doc_kind 二次确认：文件名带 VP/VR 前缀直接判定；否则用正文关键词。
+
+    文件名识别不到时，正文头部出现"方案/计划"判方案，"报告/结果/结论"判报告。
+    """
+    name_match = re.match(r"^\s*(VP|VR)[-\s_]", file_name or "")
+    if name_match:
+        return DOC_KIND_REPORT if name_match.group(1).upper() == "VR" else DOC_KIND_PLAN
+    head = (parsed_text or "")[:800]
+    if re.search(r"(报告|结果|结论)", head):
+        return DOC_KIND_REPORT
+    if re.search(r"(方案|计划)", head):
+        return DOC_KIND_PLAN
+    return DOC_KIND_PLAN
 
 
 def _collect_hit_entries(reference_items: list[ReferenceCheckItem]) -> list[uuid.UUID]:
@@ -686,13 +780,28 @@ async def _select_key_bases(
     candidate_bases: list[dict[str, Any]],
     focus_points: str | None,
 ) -> tuple[list[dict[str, Any]], str | None]:
-    """P2：AI 筛选实质相关的关键依据（1 次调用）。"""
+    """P2：AI 筛选实质相关的关键依据（1 次调用）。
+
+    LLM 失败时降级：取前 MAX_CONTENT_COMPARE_BASES 份候选直接比对，
+    不因筛选失败导致整单审核失败。
+    """
     if not candidate_bases:
         return [], None
-    prompt = build_basis_selection_prompt(
-        document_summary=document_summary, candidate_bases=candidate_bases
-    )
-    raw, model_name = await _call_llm_with_retry(prompt)
+    try:
+        prompt = build_basis_selection_prompt(
+            document_summary=document_summary, candidate_bases=candidate_bases
+        )
+        raw, model_name = await _call_llm_with_retry(prompt)
+    except (LLMConfigError, LLMOutputError, LLMProviderError, LLMRateLimitError) as exc:
+        logger.warning(
+            "basis selection llm failed, degrade to top candidates",
+            extra={"component": "quality", "error": str(exc)},
+        )
+        top = candidate_bases[:MAX_CONTENT_COMPARE_BASES]
+        return [
+            {**item, "reason": "AI 筛选不可用，按候选顺序取前 N 份"}
+            for item in top
+        ], None
     selected = raw.get("selected") or []
     by_code = {
         _compact(item.get("code") or ""): item for item in candidate_bases
@@ -766,6 +875,7 @@ async def _compare_basis_contents(
                         f"{basis.get('code')} {basis.get('name') or ''}".strip()
                     ),
                     "basis_match_type": "content_compare",
+                    "basis_entry_id": str(entry_id),
                     "detail": str(item.get("detail") or "")[:500],
                     "validation_quote": validation_quote,
                     "basis_quote": basis_quote,
@@ -793,16 +903,19 @@ def _build_basis_comparison(
     compare_findings: list[dict[str, Any]],
     basis_contents: dict[uuid.UUID, str],
 ) -> list[dict[str, Any]]:
-    """基准比对区块：每份关键依据的筛选理由与比对结果。"""
+    """基准比对区块：每份关键依据的筛选理由与比对结果。
+
+    mismatch_count 用 basis_entry_id 精确关联（P3 生成时写入），避免
+    编号子串误计/漏计。
+    """
     rows: list[dict[str, Any]] = []
     for basis in key_bases:
         entry_id = basis["entry_id"]
         count = sum(
             1
             for finding in compare_findings
-            if finding.get("basis_source")
-            and basis.get("code")
-            and str(basis.get("code")) in str(finding.get("basis_source"))
+            if finding.get("basis_entry_id")
+            and str(finding.get("basis_entry_id")) == str(entry_id)
         )
         rows.append(
             {

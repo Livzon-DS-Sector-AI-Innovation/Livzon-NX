@@ -7,7 +7,6 @@ describe('quality migrated menu contract', () => {
     const children = quality?.children ?? []
 
     expect(children.map((item) => item.key)).toEqual([
-      'feishu-settings',
       'documents',
       'deviations',
       'capas',
@@ -20,12 +19,21 @@ describe('quality migrated menu contract', () => {
       'suppliers',
       'change',
       'validation',
+      'quality-settings',
     ])
     expect(children.find((item) => item.key === 'product-quality')).toMatchObject({
       label: '产品质量回顾',
       path: '/quality/product-quality',
     })
-    expect(children.find((item) => item.key === 'feishu-settings')?.placement).toBeUndefined()
+    // 「飞书设置」升级为「质量设置」并移到质量管理菜单末尾
+    expect(children.find((item) => item.key === 'quality-settings')).toMatchObject({
+      label: '质量设置',
+      path: '/quality/settings',
+    })
+    expect(
+      children.find((item) => item.key === 'quality-settings')?.placement,
+    ).toBeUndefined()
+    expect(children.some((item) => item.key === 'feishu-settings')).toBe(false)
     expect(children.some((item) => item.key === 'cpv' || item.key === 'feishu-data')).toBe(false)
 
     expect(children.find((item) => item.key === 'deviations')?.children?.map((item) => item.key)).toEqual([

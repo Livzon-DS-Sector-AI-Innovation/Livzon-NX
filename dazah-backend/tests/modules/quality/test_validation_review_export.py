@@ -116,3 +116,36 @@ class TestBuildReviewDocx:
         payload["last_generated_at"] = datetime(2026, 9, 3, 10, 5)
         content = build_review_docx(payload)
         assert len(content) > 5000
+
+
+class TestExportBasisComparisonSection:
+    def test_basis_comparison_block_rendered(self) -> None:
+        payload = _full_payload()
+        payload["basis_comparison"] = [
+            {
+                "entry_id": "entry-1",
+                "code": "SOP-FT3-017/04",
+                "name": "方锥混合机操作规程",
+                "reason": "清洁步骤来源",
+                "content_length": 2000,
+                "mismatch_count": 2,
+                "status": "completed",
+            },
+            {
+                "entry_id": "entry-2",
+                "code": "SMP-QA-105/03",
+                "name": "清洁验证管理程序",
+                "reason": "限度标准来源",
+                "content_length": 1500,
+                "mismatch_count": 0,
+                "status": "completed",
+            },
+        ]
+        content = build_review_docx(payload)
+        assert len(content) > 1000
+        # 渲染不抛错即可（docx 二进制无文本断言）
+
+    def test_empty_basis_comparison_ok(self) -> None:
+        payload = _full_payload()
+        payload["basis_comparison"] = []
+        assert len(build_review_docx(payload)) > 5000

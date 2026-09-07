@@ -15,31 +15,31 @@ async def test_validation_statistics_groups_types_statuses_and_deadlines(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     today = date.today()
-    monkeypatch.setattr(
-        pages,
-        "list_validation_records_from_feishu",
-        AsyncMock(
-            return_value={
-                "items": [
-                    {
-                        "validation_type": "process_validation",
-                        "status": "进行中",
-                        "planned_end_date": today.isoformat(),
-                    },
-                    {
-                        "validation_type": "process_validation",
-                        "status": None,
-                        "planned_end_date": (today + timedelta(days=31)).isoformat(),
-                    },
-                    {
-                        "validation_type": None,
-                        "status": "已完成",
-                        "planned_end_date": "not-a-date",
-                    },
-                ]
-            }
-        ),
-    )
+    sample_items = [
+        {
+            "validation_type": "process_validation",
+            "status": "进行中",
+            "planned_end_date": today.isoformat(),
+        },
+        {
+            "validation_type": "process_validation",
+            "status": None,
+            "planned_end_date": (today + timedelta(days=31)).isoformat(),
+        },
+        {
+            "validation_type": None,
+            "status": "已完成",
+            "planned_end_date": "not-a-date",
+        },
+    ]
+
+    async def _fake_list(db, *, year=None, **kwargs):
+        # 样例数据仅来自 2026 年度台账，其余年度无数据
+        if year == 2026:
+            return {"items": [dict(item) for item in sample_items]}
+        return {"items": []}
+
+    monkeypatch.setattr(pages, "list_validation_records_from_feishu", _fake_list)
     result = await pages.get_validation_statistics_from_feishu(SimpleNamespace())
     assert result["total"] == 3
     assert {
@@ -55,15 +55,28 @@ async def test_validation_statistics_groups_types_statuses_and_deadlines(
     }
     assert result["executionDistribution"] == result["typeDistribution"]
     assert result["revalidationUpcoming"] == 1
+    year_totals = {s["year"]: s["total"] for s in result["year_summaries"]}
+    assert year_totals[2026] == 3
+    assert set(year_totals) == {2024, 2025, 2026, 2027, 2028}
+
+    # 年度实体未绑定（AppException）→ 该年度按无数据处理
+    async def _fake_list_unbound(db, *, year=None, **kwargs):
+        raise AppException(message="disabled")
 
     monkeypatch.setattr(
-        pages,
-        "list_validation_records_from_feishu",
-        AsyncMock(side_effect=RuntimeError("down")),
+        pages, "list_validation_records_from_feishu", _fake_list_unbound
     )
-    failed = await pages.get_validation_statistics_from_feishu(SimpleNamespace())
-    assert failed["total"] == 0
-    assert failed["revalidationUpcoming"] == 0
+    empty = await pages.get_validation_statistics_from_feishu(SimpleNamespace())
+    assert empty["total"] == 0
+    assert empty["revalidationUpcoming"] == 0
+
+    # 其他异常上抛，不伪造成功响应
+    async def _fake_list_down(db, *, year=None, **kwargs):
+        raise RuntimeError("down")
+
+    monkeypatch.setattr(pages, "list_validation_records_from_feishu", _fake_list_down)
+    with pytest.raises(RuntimeError):
+        await pages.get_validation_statistics_from_feishu(SimpleNamespace())
 
 
 @pytest.mark.asyncio

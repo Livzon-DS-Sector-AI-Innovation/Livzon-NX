@@ -116,6 +116,28 @@ function getManualMappingFields(
   })
 }
 
+export type FeishuUrlFillOutcome =
+  | { kind: 'empty' }
+  | { kind: 'invalid' }
+  | { kind: 'partial'; app_token: string }
+  | { kind: 'full'; app_token: string; base_table_id: string }
+
+/** 把粘贴的 Base 网址解析为填充动作：table 参数可选（缺失时仅填 App Token）。 */
+export function resolveFeishuUrlFill(url: string): FeishuUrlFillOutcome {
+  const trimmed = url.trim()
+  if (!trimmed) return { kind: 'empty' }
+  const parsed = parseFeishuBitableUrl(trimmed)
+  if (!parsed) return { kind: 'invalid' }
+  if (!parsed.table_id) {
+    return { kind: 'partial', app_token: parsed.app_token }
+  }
+  return {
+    kind: 'full',
+    app_token: parsed.app_token,
+    base_table_id: parsed.table_id,
+  }
+}
+
 export function HrFeishuSettingsPage() {
   const { message } = App.useApp()
   const queryClient = useQueryClient()
@@ -381,21 +403,27 @@ export function HrFeishuSettingsPage() {
 
   const handleFillFromUrl = useCallback(() => {
     if (!fillUrlEntityCode) return
-    const url = fillUrlValue.trim()
-    if (!url) {
+    const outcome = resolveFeishuUrlFill(fillUrlValue)
+    if (outcome.kind === 'empty') {
       message.warning('请先粘贴多维表格网址')
       return
     }
-    const parsed = parseFeishuBitableUrl(url)
-    if (!parsed) {
+    if (outcome.kind === 'invalid') {
       message.error('无法识别该网址，请检查格式')
       return
     }
-    patchEntityDraft(fillUrlEntityCode, {
-      app_token: parsed.app_token,
-      base_table_id: parsed.table_id,
-    })
-    message.success('已填充 App Token 和 Table ID，请确认后点击保存')
+    if (outcome.kind === 'partial') {
+      patchEntityDraft(fillUrlEntityCode, { app_token: outcome.app_token })
+      message.warning(
+        '已填充 App Token；该网址未包含子表信息，请粘贴具体子表链接，或点击「读取表」选择子表',
+      )
+    } else {
+      patchEntityDraft(fillUrlEntityCode, {
+        app_token: outcome.app_token,
+        base_table_id: outcome.base_table_id,
+      })
+      message.success('已填充 App Token 和 Table ID，请确认后点击保存')
+    }
     setFillUrlEntityCode(null)
     setFillUrlValue('')
   }, [fillUrlEntityCode, fillUrlValue, message, patchEntityDraft])

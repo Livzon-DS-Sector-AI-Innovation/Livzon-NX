@@ -289,21 +289,26 @@ async def test_incremental_fetch_dual_route_single_page_dedup(
 async def test_incremental_fetch_no_changes_returns_empty(
     db_session: AsyncSession,
 ) -> None:
-    """两路页面内所有记录都早于水线：返回空列表（零写库）。"""
+    """两路页面内所有记录都早于水线（业务日期早于当天零点）：返回空列表（零写库）。"""
     service = WarehouseService(db_session)
     service.feishu_client = AsyncMock()
     service._get_material_client = AsyncMock(
         side_effect=lambda _app_token: service.feishu_client
     )
     watermark = datetime.now(UTC) - timedelta(minutes=10)
-    last_synced_ms = int(watermark.timestamp() * 1000)
+    # 业务日期水线按「上次同步当天零点」比较，因此真正的旧数据是早于
+    # 当天零点的记录（如昨天）；当天任何时刻的记录都应被归为新数据。
+    day_start = datetime.combine(watermark.date(), datetime.min.time(), tzinfo=UTC)
+    yesterday_ms = int(
+        (day_start - timedelta(days=1)).timestamp() * 1000
+    )
     service.feishu_client.request = AsyncMock(
         side_effect=[
             {
                 "items": [
                     {
                         "record_id": "rec-old",
-                        "fields": {"入库日期": last_synced_ms - 1_000},
+                        "fields": {"入库日期": yesterday_ms},
                     }
                 ],
                 "has_more": False,
@@ -313,7 +318,7 @@ async def test_incremental_fetch_no_changes_returns_empty(
                     {
                         "record_id": "rec-old-2",
                         "fields": {},
-                        "last_modified_time": last_synced_ms - 1_000,
+                        "last_modified_time": yesterday_ms,
                     }
                 ],
                 "has_more": False,
@@ -331,6 +336,60 @@ async def test_incremental_fetch_no_changes_returns_empty(
 
     assert items == []
     assert service.feishu_client.request.await_count == 2
+
+
+async def test_incremental_fetch_keeps_today_records(
+    db_session: AsyncSession,
+) -> None:
+    """当天新录入记录（业务日期=当天零点，早于上次同步时刻）必须被拉取。
+
+    回归用例：飞书日期字段为当天零点时间戳，而 last_synced_at 是精确时刻。
+    若直接以同步时刻为水线比较，当天所有记录会被误判为旧数据漏拉；
+    业务日期水线应为「上次同步当天零点」。
+    """
+    service = WarehouseService(db_session)
+    service.feishu_client = AsyncMock()
+    service._get_material_client = AsyncMock(
+        side_effect=lambda _app_token: service.feishu_client
+    )
+    watermark = datetime.now(UTC) - timedelta(minutes=10)
+    # 业务日期为当天零点（绝对早于 watermark 时刻），应被判定为新数据
+    today_ms = int(
+        datetime.combine(watermark.date(), datetime.min.time(), tzinfo=UTC).timestamp()
+        * 1000
+    )
+    service.feishu_client.request = AsyncMock(
+        side_effect=[
+            {
+                "items": [
+                    {
+                        "record_id": "rec-today",
+                        "fields": {"入库日期": today_ms},
+                    }
+                ],
+                "has_more": False,
+            },
+            {
+                "items": [
+                    {
+                        "record_id": "rec-today-2",
+                        "fields": {"入库日期": today_ms},
+                    }
+                ],
+                "has_more": False,
+            },
+        ]
+    )
+
+    items = await service.fetch_feishu_table_records_incremental(
+        app_token="app-x",
+        table_id="tbl-x",
+        page_size=500,
+        sort_field="入库日期",
+        last_synced_at=watermark,
+    )
+
+    assert [item["record_id"] for item in items] == ["rec-today", "rec-today-2"]
 
 
 async def test_incremental_fetch_second_route_error_tolerated(

@@ -1,13 +1,20 @@
-/** 解析飞书多维表格 URL，提取 app_token 和 table_id */
-export function parseFeishuBitableUrl(url: string): { app_token: string; table_id: string } | null {
+/** 解析飞书多维表格 URL：有 /base/<app_token> 即识别成功；table/view 参数可选 */
+export interface ParsedFeishuBitableUrl {
+  app_token: string
+  table_id: string | null
+  view_id: string | null
+}
+
+export function parseFeishuBitableUrl(url: string): ParsedFeishuBitableUrl | null {
   try {
     const parsed = new URL(url.trim())
     const baseMatch = parsed.pathname.match(/\/base\/([^/]+)/)
     if (!baseMatch) return null
-    const app_token = baseMatch[1]
-    const table_id = parsed.searchParams.get('table')
-    if (!table_id) return null
-    return { app_token, table_id }
+    return {
+      app_token: baseMatch[1],
+      table_id: parsed.searchParams.get('table'),
+      view_id: parsed.searchParams.get('view'),
+    }
   } catch {
     return null
   }

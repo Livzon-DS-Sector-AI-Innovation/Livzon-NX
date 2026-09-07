@@ -128,8 +128,13 @@ export async function fetchDeviationServer(id: string): Promise<any | null> {
   }
 }
 
-export async function fetchFeishuValidationDashboardStatsServer(): Promise<import('@/types/quality').ValidationDashboardStats> {
-  return serverFetch<import('@/types/quality').ValidationDashboardStats>('/api/v1/quality/feishu/statistics/validations')
+export async function fetchFeishuValidationDashboardStatsServer(
+  days = 30,
+  yearFrom = new Date().getFullYear(),
+): Promise<import('@/types/quality').ValidationDashboardStats> {
+  return serverFetch<import('@/types/quality').ValidationDashboardStats>(
+    `/api/v1/quality/feishu/statistics/validations?days=${days}&year_from=${yearFrom}`
+  )
 }
 
 // ============ Document Catalog (文件管理) ============

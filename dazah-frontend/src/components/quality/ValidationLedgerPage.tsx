@@ -67,7 +67,8 @@ export function ValidationLedgerPage({
     planned_end_date_to: '',
     drafted_at_from: '',
     drafted_at_to: '',
-    year: '',
+    // 子台账默认筛选当年年度表；主计划默认总表（全部年份）
+    year: mode === 'child' ? String(new Date().getFullYear()) : '',
   })
   const [editorOpen, setEditorOpen] = useState(false)
   const [editingRecord, setEditingRecord] = useState<ValidationRow | null>(null)
@@ -77,9 +78,9 @@ export function ValidationLedgerPage({
   /** 主计划模式：写入/删除统一走验证主计划实体（年度表含全部验证类别） */
   const mutationValidationType =
     mode === 'child' ? validationType : undefined
-  /** 主计划模式选择年度后读写对应年度表 */
+  /** 选择年度后读写对应年度表（主计划与子台账一致） */
   const mutationYear =
-    mode === 'master' && filters.year ? Number(filters.year) : undefined
+    filters.year ? Number(filters.year) : undefined
 
   const { data, isLoading: loading, error } = useQuery<{ items: ValidationRow[]; total: number }>({
     queryKey: ['quality-validation', 'list', {
@@ -118,6 +119,7 @@ export function ValidationLedgerPage({
             department: filters.department || undefined,
             drafted_at_from: filters.drafted_at_from || undefined,
             drafted_at_to: filters.drafted_at_to || undefined,
+            year: filters.year ? Number(filters.year) : undefined,
             page,
             page_size: pageSize,
           }),

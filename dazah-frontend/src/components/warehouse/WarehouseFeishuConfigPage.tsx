@@ -6,6 +6,7 @@ import { EditOutlined, LinkOutlined, SaveOutlined } from '@ant-design/icons'
 import type { WarehousePageFeishuConfig } from '@/types/warehouse'
 import { fetchWarehousePageFeishuConfigs } from '@/lib/api/client/warehouse'
 import { updateWarehousePageFeishuConfigAction } from '@/actions/warehouse'
+import { parseFeishuBitableUrl } from '@/lib/feishu-url'
 
 interface WarehouseFeishuConfigPageProps {
   initialConfigs: WarehousePageFeishuConfig[]
@@ -28,22 +29,6 @@ function buildFeishuTableUrl(config: WarehousePageFeishuConfig): string {
     url += `&view=${config.view_id}`
   }
   return url
-}
-
-/** 解析飞书多维表格 URL，提取 app_token / table_id / view_id */
-function parseFeishuBitableUrl(url: string): { app_token: string; table_id: string; view_id?: string } | null {
-  try {
-    const parsed = new URL(url.trim())
-    const baseMatch = parsed.pathname.match(/\/base\/([^/]+)/)
-    if (!baseMatch) return null
-    const app_token = baseMatch[1]
-    const table_id = parsed.searchParams.get('table')
-    if (!table_id) return null
-    const view_id = parsed.searchParams.get('view') || undefined
-    return { app_token, table_id, view_id }
-  } catch {
-    return null
-  }
 }
 
 export function WarehouseFeishuConfigPage({ initialConfigs }: WarehouseFeishuConfigPageProps) {
@@ -129,6 +114,15 @@ export function WarehouseFeishuConfigPage({ initialConfigs }: WarehouseFeishuCon
         message.error('无法识别该网址，请检查格式')
         return
       }
+      if (!parsed.table_id) {
+        message.warning(
+          '已识别 App Token，但网址未含子表信息：批量更新会把整组页面指向同一张子表，请粘贴具体子表链接（含 ?table= 参数）',
+        )
+        return
+      }
+      const appToken = parsed.app_token
+      const tableId = parsed.table_id
+      const viewId = parsed.view_id
 
       const group = groupedConfigs.find((g) => g.base === baseName)
       if (!group || group.items.length === 0) return
@@ -142,14 +136,14 @@ export function WarehouseFeishuConfigPage({ initialConfigs }: WarehouseFeishuCon
               将把「{baseName}」分组下 <b>{group.items.length}</b> 条记录的配置更新为：
             </p>
             <p className="mt-1 text-[13px]">
-              app_token：<code>{parsed.app_token}</code>
+              app_token：<code>{appToken}</code>
             </p>
             <p className="text-[13px]">
-              table_id：<code>{parsed.table_id}</code>
+              table_id：<code>{tableId}</code>
             </p>
-            {parsed.view_id && (
+            {viewId && (
               <p className="text-[13px]">
-                view_id：<code>{parsed.view_id}</code>
+                view_id：<code>{viewId}</code>
               </p>
             )}
           </div>
@@ -161,10 +155,10 @@ export function WarehouseFeishuConfigPage({ initialConfigs }: WarehouseFeishuCon
           const results = await Promise.allSettled(
             group.items.map((item) =>
               updateWarehousePageFeishuConfigAction(item.page_key, {
-                app_token: parsed.app_token,
-                table_id: parsed.table_id,
+                app_token: appToken,
+                table_id: tableId,
                 table_name: item.table_name,
-                view_id: parsed.view_id,
+                view_id: viewId,
               }),
             ),
           )
@@ -299,7 +293,7 @@ export function WarehouseFeishuConfigPage({ initialConfigs }: WarehouseFeishuCon
         <Input
           size="small"
           style={{ width: 420 }}
-          placeholder="粘贴多维表格网址，自动填充 app_token 和 table_id"
+          placeholder="粘贴子表链接（含 ?table= 参数），批量填充本组 app_token 和 table_id"
           value={urlValue}
           onChange={(e) =>
             setGroupUrlInputs((prev) => ({ ...prev, [base]: e.target.value }))
@@ -309,7 +303,8 @@ export function WarehouseFeishuConfigPage({ initialConfigs }: WarehouseFeishuCon
         />
         {parsed && (
           <span className="text-[12px] text-green-600">
-            ✓ {parsed.app_token} / {parsed.table_id}
+            ✓ {parsed.app_token}
+            {parsed.table_id ? ` / ${parsed.table_id}` : '（未识别到子表，请粘贴子表链接）'}
           </span>
         )}
         <Button

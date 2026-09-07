@@ -1390,17 +1390,18 @@ export function WarehouseFeishuTablePage({
     }
   }, [queryData])
 
-  // 刷新从「直接 fetch」改为 mutation（签名不变，所有调用点零改动）：
-  // force=true 直连飞书拉最新，force=false 走后端缓存；成功后同步 localData 并回写 query 缓存。
+  // 刷新/同步走 mutation：force=true 全量拉飞书最新；incremental=true 增量同步后
+  // 读本地快照；两者都 false 直接读本地快照（自动轮询）。成功后同步 localData。
   const refreshMutation = useMutation({
-    mutationFn: (force: boolean) =>
+    mutationFn: (options: { force?: boolean; incremental?: boolean }) =>
       fetchWarehouseMaterialPage(
         resolvedPageKey,
         {
           ...buildQueryParams(),
-          force,
+          force: options.force,
+          incremental: options.incremental,
         },
-        60000 // 60 秒超时：后端已支持按日期增量拉取（秒级），首次全量/异常时留足余量
+        60000 // 60 秒超时：全量拉取大表/异常时留足余量
       ),
     onSuccess: (latest) => {
       setLocalData(latest)
@@ -1421,14 +1422,21 @@ export function WarehouseFeishuTablePage({
     (force: boolean) => {
       if (!canQueryThisPage || (force && !canSyncThisPage)) return
       setRefreshing(true)
-      refreshMutation.mutate(force)
+      refreshMutation.mutate({ force })
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [refreshMutation.mutate, canQueryThisPage, canSyncThisPage]
   )
 
+  const refreshIncremental = useCallback(() => {
+    if (!canQueryThisPage) return
+    setRefreshing(true)
+    refreshMutation.mutate({ incremental: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshMutation.mutate, canQueryThisPage])
+
   const handleRefresh = () => {
-    void refreshData(false)
+    refreshIncremental()
   }
 
   // 自动轮询：默认关闭，开启后每 60s 拉取一次最新数据（命中后端缓存，开销小）
@@ -1489,7 +1497,7 @@ export function WarehouseFeishuTablePage({
       setDetailOpen(false)
       setDetailData(null)
       setEditMode(false)
-      void refreshData(false)
+      refreshIncremental()
     } catch (error) {
       const detail = error instanceof Error ? error.message : '未知错误'
       message.error(`保存失败：${detail}，请重试`)
@@ -1508,7 +1516,7 @@ export function WarehouseFeishuTablePage({
       message.success('删除成功，已从飞书多维表格移除')
       setDetailOpen(false)
       setDetailData(null)
-      void refreshData(false)
+      refreshIncremental()
     } catch (error) {
       const detail = error instanceof Error ? error.message : '未知错误'
       message.error(`删除失败：${detail}，请重试`)
@@ -2034,9 +2042,6 @@ export function WarehouseFeishuTablePage({
                 loading={isPending}
               >
                 高级筛选
-              </Button>
-              <Button onClick={handleRefresh} loading={isPending}>
-                刷新
               </Button>
             </Space>
           </div>

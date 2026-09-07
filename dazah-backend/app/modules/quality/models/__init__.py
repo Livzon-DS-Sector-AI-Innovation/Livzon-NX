@@ -35,6 +35,7 @@ from app.modules.quality.models.document_catalog import (
 from app.modules.quality.models.external_quality import (
     ProductQualityStandardItem,
     SupplierQualification,
+    SupplierQualificationMirror,
 )
 from app.modules.quality.models.feishu_read_mirror import (
     QualityFeishuReadField,
@@ -61,6 +62,7 @@ from app.modules.quality.models.lab_item import LabItem
 from app.modules.quality.models.liquid_material_inspection import (
     LiquidMaterialInspection,
 )
+from app.modules.quality.models.notification_settings import QualityNotificationSetting
 from app.modules.quality.models.oos_oot import OosOotRecord
 from app.modules.quality.models.oot_limit import OotLimitItem, OotLimitProduct
 from app.modules.quality.models.product_quality import ProductQualityRecord
@@ -130,6 +132,7 @@ __all__ = [
     "CpvValue",
     "CpvImportTask",
     "SupplierQualification",
+    "SupplierQualificationMirror",
     "ProductQualityStandardItem",
     "QualityFeishuReadSourceRoot",
     "QualityFeishuReadResource",
@@ -137,4 +140,5 @@ __all__ = [
     "QualityFeishuReadRecord",
     "QualityFeishuReadPageBinding",
     "QualityFeishuReadSyncRun",
+    "QualityNotificationSetting",
 ]

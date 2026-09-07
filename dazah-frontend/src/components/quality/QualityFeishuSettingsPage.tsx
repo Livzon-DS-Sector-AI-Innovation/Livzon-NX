@@ -155,7 +155,7 @@ function matchTableForEntity(
   return tables.find((t) => names.some((n) => t.table_name.includes(n) || n.includes(t.table_name)))
 }
 
-export function QualityFeishuSettingsPage() {
+export function QualityFeishuSettingsPage({ embedded = false }: { embedded?: boolean }) {
   const { message, modal } = App.useApp()
   const queryClient = useQueryClient()
   const [resultNotice, setResultNotice] = useState<ResultNotice>(null)
@@ -478,6 +478,15 @@ export function QualityFeishuSettingsPage() {
       message.error('无法识别该网址，请检查格式')
       return
     }
+    if (!parsed.table_id) {
+      patchEntityDraft(fillUrlEntityCode, { app_token: parsed.app_token })
+      message.warning(
+        '已填充 App Token；该网址未包含子表信息，请粘贴具体子表链接，或使用「读取表」选择子表',
+      )
+      setFillUrlEntityCode(null)
+      setFillUrlValue('')
+      return
+    }
     patchEntityDraft(fillUrlEntityCode, {
       app_token: parsed.app_token,
       base_table_id: parsed.table_id,
@@ -500,6 +509,14 @@ export function QualityFeishuSettingsPage() {
         message.error('无法识别该网址，请检查格式')
         return
       }
+      if (!parsed.table_id) {
+        message.warning(
+          '已识别 App Token，但网址未含子表信息：批量更新会把整组实体指向同一张子表，如需为每个实体匹配各自子表，请改用「按名称匹配」；确需指向同一子表，请在飞书中打开该子表后复制完整链接',
+        )
+        return
+      }
+      const appToken = parsed.app_token
+      const tableId = parsed.table_id
       const group = groupedEntities.find(([name]) => name === groupName)
       if (!group || group[1].length === 0) return
 
@@ -511,10 +528,10 @@ export function QualityFeishuSettingsPage() {
               将把「{groupName}」分组下 <b>{group[1].length}</b> 个实体的配置更新为：
             </p>
             <p className="mt-1 text-[13px]">
-              app_token：<code>{parsed.app_token}</code>
+              app_token：<code>{appToken}</code>
             </p>
             <p className="text-[13px]">
-              table_id：<code>{parsed.table_id}</code>
+              table_id：<code>{tableId}</code>
             </p>
           </div>
         ),
@@ -526,8 +543,8 @@ export function QualityFeishuSettingsPage() {
             group[1].map((item) =>
               updateQualityFeishuEntitySetting(item.entity_code, {
                 ...(entityDrafts[item.entity_code] ?? createEntityDraft(item)),
-                app_token: parsed.app_token,
-                base_table_id: parsed.table_id,
+                app_token: appToken,
+                base_table_id: tableId,
               }),
             ),
           )
@@ -670,7 +687,7 @@ export function QualityFeishuSettingsPage() {
         <Input
           size="small"
           style={{ width: 380 }}
-          placeholder="粘贴多维表格网址，批量填充本组 App Token 和 Table ID"
+          placeholder="粘贴多维表格网址（Base 根链接或子表链接），「批量更新」需子表链接，「按名称匹配」支持 Base 根链接"
           value={urlValue}
           onChange={(e) => setGroupUrlInputs((prev) => ({ ...prev, [group]: e.target.value }))}
           onPressEnter={() => void handleBatchUpdate(group)}
@@ -678,7 +695,8 @@ export function QualityFeishuSettingsPage() {
         />
         {parsed && (
           <span className="text-[12px] text-green-600">
-            ✓ {parsed.app_token} / {parsed.table_id}
+            ✓ {parsed.app_token}
+            {parsed.table_id ? ` / ${parsed.table_id}` : '（未识别到子表，请用「按名称匹配」）'}
           </span>
         )}
         <Button
@@ -966,14 +984,16 @@ export function QualityFeishuSettingsPage() {
 
   return (
     <Space orientation="vertical" size={16} style={{ display: 'flex' }}>
-      <div>
-        <Typography.Title level={4} style={{ marginBottom: 8 }}>
-          飞书设置
-        </Typography.Title>
-        <Typography.Text type="secondary">
-          在这里维护质量模块的飞书应用信息、各台账对应的 Base 表，以及手动执行回拉验证。
-        </Typography.Text>
-      </div>
+      {embedded ? null : (
+        <div>
+          <Typography.Title level={4} style={{ marginBottom: 8 }}>
+            飞书设置
+          </Typography.Title>
+          <Typography.Text type="secondary">
+            在这里维护质量模块的飞书应用信息、各台账对应的 Base 表，以及手动执行回拉验证。
+          </Typography.Text>
+        </div>
+      )}
 
       {loadError ? (
         <Alert

@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
 import uuid
 from dataclasses import dataclass, field
@@ -22,6 +23,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.quality.models.document_catalog import DocumentEntry
+
+logger = logging.getLogger(__name__)
 
 # 候选文件编号：前缀(2-4大写字母)-若干字母数字段-2~3位数字，可选修订号 /NN 或 -NN
 _REF_CODE_RE = re.compile(
@@ -292,28 +295,85 @@ def resolve_references(
 
 # 单份依据正文传给 LLM 前的最大字符数
 BASIS_CONTENT_LIMIT = 20000
+# 单条目基准正文拉取超时（秒）：防止存储/转换挂死阻塞整单审核
+_BASIS_FETCH_TIMEOUT = 120
 
 
 async def load_basis_contents(
     db: AsyncSession, entry_ids: list[uuid.UUID]
 ) -> dict[uuid.UUID, str]:
-    """按目录条目 ID 拉取附件受控正文（word 转 MD 产物），返回 {entry_id: 正文}。
+    """按目录条目 ID 拉取附件受控正文，返回 {entry_id: 正文}。
 
-    一个条目多份附件时按顺序合并；正文超长截断到 BASIS_CONTENT_LIMIT。
+    优先读 word 转换产物（converted_md_key）；无转换产物的附件现场提取兜底
+    （soffice 管线 → catdoc/antiword 文本兜底）。单条超时/失败不阻塞整单。
     """
+    contents: dict[uuid.UUID, str] = {}
+    for entry_id in entry_ids:
+        try:
+            entry = await db.get(DocumentEntry, entry_id)
+            if not entry or entry.is_deleted:
+                continue
+            merged = await asyncio.wait_for(
+                _load_entry_content(entry), timeout=_BASIS_FETCH_TIMEOUT
+            )
+        except TimeoutError:
+            logger.warning(
+                "basis content fetch timed out",
+                extra={"component": "quality", "entry_id": str(entry_id)},
+            )
+            continue
+        except Exception as exc:  # noqa: BLE001 —— 单条失败不阻塞整单
+            logger.warning(
+                "basis content fetch failed",
+                extra={
+                    "component": "quality",
+                    "entry_id": str(entry_id),
+                    "error": str(exc),
+                },
+            )
+            continue
+        if merged:
+            contents[entry_id] = merged[:BASIS_CONTENT_LIMIT]
+    return contents
+
+
+async def _load_entry_content(entry: DocumentEntry) -> str:
+    """读单个条目的附件正文：转换产物优先，缺失时现场提取（word→MD/文本兜底）。"""
     from app.modules.quality.service.document_catalog_attachment import (
         read_entry_md_contents,
     )
 
-    contents: dict[uuid.UUID, str] = {}
-    for entry_id in entry_ids:
-        entry = await db.get(DocumentEntry, entry_id)
-        if not entry or entry.is_deleted:
-            continue
-        pieces = await asyncio.to_thread(read_entry_md_contents, entry)
-        merged = "\n\n".join(
-            piece.get("md_text") or "" for piece in pieces
-        ).strip()
-        if merged:
-            contents[entry_id] = merged[:BASIS_CONTENT_LIMIT]
-    return contents
+    pieces = await asyncio.to_thread(read_entry_md_contents, entry)
+    texts = [piece.get("md_text") or "" for piece in pieces]
+    if not any(texts):
+        # 无转换产物（转换失败/未转）：现场用存储原文件提取
+        from app.modules.quality.service.document_catalog_attachment import _read_file
+        from app.modules.quality.service.document_catalog_md import (
+            convert_word_attachment,
+        )
+
+        for attachment in entry.attachments or []:
+            storage_key = attachment.get("storage_key")
+            file_name = attachment.get("file_name") or ""
+            if not storage_key or not file_name:
+                continue
+            stored = await asyncio.to_thread(_read_file, storage_key)
+            if not stored:
+                continue
+            data, _content_type = stored
+            try:
+                md_text, _ = await asyncio.to_thread(
+                    convert_word_attachment, file_name, data
+                )
+                if md_text and md_text.strip():
+                    texts.append(md_text)
+            except Exception as exc:  # noqa: BLE001 —— 单附件失败跳过
+                logger.warning(
+                    "basis attachment live extract failed",
+                    extra={
+                        "component": "quality",
+                        "file_name": file_name,
+                        "error": str(exc),
+                    },
+                )
+    return "\n\n".join(texts).strip()

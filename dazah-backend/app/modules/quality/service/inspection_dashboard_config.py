@@ -892,3 +892,29 @@ FINISHED_DASHBOARD_RECIPIENT_OVERRIDES: dict[str, tuple[dict[str, str], ...]] = 
         {"name": "严红玲"},
     ),
 }
+
+
+# 成品检验趋势异常提醒的产品线目录（通知设置用）：
+# (entity_code, 展示名称)，覆盖全部趋势仪表盘产品线。
+FINISHED_DASHBOARD_LINE_CATALOG: tuple[tuple[str, str], ...] = (
+    (MPA_INTERNAL_DASHBOARD_ENTITY_CODE, "霉酚酸（内控）"),
+    (MPA_HIGH_SPEC_DASHBOARD_ENTITY_CODE, "霉酚酸（高规）"),
+    (MVT_DASHBOARD_ENTITY_CODE, MVT_DASHBOARD_SOURCE_LABEL),
+    (LFT_EP_DASHBOARD_ENTITY_CODE, "洛伐他汀（EP）"),
+    (LFT_USP_DASHBOARD_ENTITY_CODE, "洛伐他汀（USP）"),
+    (DLS_GB_DASHBOARD_ENTITY_CODE, "多拉菌素（GB）"),
+    (DLS_VET_DASHBOARD_ENTITY_CODE, "多拉菌素（兽药）"),
+    (LKMS_VET_DASHBOARD_ENTITY_CODE, LKMS_VET_DASHBOARD_SOURCE_LABEL),
+    (BBAS_FCC14_DASHBOARD_ENTITY_CODE, "FCC14"),
+    (BBAS_HANGUANG_K1_DASHBOARD_ENTITY_CODE, "汉光（K1）"),
+    (TRYPTOPHAN_POWDER_DASHBOARD_ENTITY_CODE, "色氨酸粉末"),
+    (TRYPTOPHAN_GRANULE_DASHBOARD_ENTITY_CODE, "色氨酸颗粒"),
+    (FORMULATIONS_FLU_DASHBOARD_ENTITY_CODE, "2%氟苯尼考预混剂"),
+    (FORMULATIONS_FEN_DASHBOARD_ENTITY_CODE, "5%芬苯达唑粉"),
+    (WATER_PURE_DASHBOARD_ENTITY_CODE, "纯化水"),
+)
+
+
+def get_finished_dashboard_line_labels() -> dict[str, str]:
+    """返回 entity_code -> 产品线展示名称。"""
+    return dict(FINISHED_DASHBOARD_LINE_CATALOG)

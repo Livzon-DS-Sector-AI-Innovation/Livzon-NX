@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import gc
 import logging
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -29,6 +31,10 @@ _WAREHOUSE_FULL_SYNC_TIMEOUT_SECONDS = 7200
 # 因此用窗口限定只在该时段执行，错过窗口则等次日凌晨。
 _FULL_SYNC_WINDOW_START_HOUR = 0
 _FULL_SYNC_WINDOW_END_HOUR = 6
+
+# 全量兜底每表同步后的缓冲秒数：给 GC/OS 时间归还内存，避免 47 页
+# 连续拉取时进程 RSS 持续攀升（2C4G 服务器上曾把 app 进程推到 OOM）。
+_FULL_SYNC_TABLE_GAP_SECONDS = 3
 
 
 def _in_full_sync_window(now_cn: datetime) -> bool:
@@ -76,6 +82,12 @@ async def _run_warehouse_full_sync() -> None:
 
     只全量 material-page 台账（含大表），库存表由高频任务负责。
     仅在凌晨窗口（北京 00:00-06:00）执行；错过窗口则跳过，等次日凌晨。
+
+    内存安全（2C4G 部署实测教训）：每张表使用独立 DB session，commit 后
+    立即关闭——单 session 跑完全部 47 页会把所有 ORM 行对象累积在
+    identity map 里（4 万+ 行），叠加飞书拉取的临时数据导致进程 OOM、
+    app 容器被杀、兜底中断。每表之间主动 gc.collect() 并短暂缓冲，
+    让 RSS 回落后再拉下一页。
     """
     global _full_sync_running
     now_cn = datetime.now(ZoneInfo("Asia/Shanghai"))
@@ -86,21 +98,31 @@ async def _run_warehouse_full_sync() -> None:
         )
         return
     _full_sync_running = True
+    synced = failed = 0
     try:
-        async with async_session_factory() as session:
-            service = WarehouseService(session)
-            for page_key in FEISHU_WAREHOUSE_MATERIAL_PAGES:
-                try:
+        for page_key in FEISHU_WAREHOUSE_MATERIAL_PAGES:
+            try:
+                async with async_session_factory() as session:
+                    service = WarehouseService(session)
                     await service.sync_material_page_to_local(
                         page_key, incremental=False
                     )
-                except Exception:
-                    logger.exception(
-                        "warehouse page full sync failed (scheduled)",
-                        extra={"page": page_key},
-                    )
-            await session.commit()
-            logger.info("warehouse scheduled full sync completed")
+                    await session.commit()
+                synced += 1
+            except Exception:
+                failed += 1
+                logger.exception(
+                    "warehouse page full sync failed (scheduled)",
+                    extra={"page": page_key},
+                )
+            # 表间缓冲：本表 session 已关闭，主动回收临时对象并归还内存
+            gc.collect()
+            await asyncio.sleep(_FULL_SYNC_TABLE_GAP_SECONDS)
+        logger.info(
+            "warehouse scheduled full sync completed: synced=%d failed=%d",
+            synced,
+            failed,
+        )
     except Exception:
         logger.exception("warehouse scheduled full sync failed")
     finally:

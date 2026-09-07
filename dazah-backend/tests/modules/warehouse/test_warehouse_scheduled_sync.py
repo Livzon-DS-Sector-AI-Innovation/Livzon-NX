@@ -83,18 +83,37 @@ async def test_full_sync_skips_outside_window(
 async def test_full_sync_runs_in_window_and_resets_flag(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """窗口内执行全量：逐页全量（单页失败不阻断）、提交一次、标志复位。"""
+    """窗口内执行全量：逐页全量（单页失败不阻断）、标志复位。
 
+    内存安全语义（2C4G 部署 OOM 教训）：每张表独立 session + 每表提交后
+    关闭，表间执行 gc.collect() 与缓冲 sleep——禁止回退为单 session 跑
+    全部页面（identity map 累积 4 万+ 行会把 app 进程推到 OOM）。
+    """
     class _FixedDatetime(datetime):
         @classmethod
         def now(cls, tz: object | None = None) -> datetime:  # noqa: ARG003
             return _cn(1)
 
     monkeypatch.setattr(scheduled, "datetime", _FixedDatetime)
-    fake_session = _FakeSession()
-    monkeypatch.setattr(scheduled, "async_session_factory", lambda: fake_session)
 
     first_key = next(iter(FEISHU_WAREHOUSE_MATERIAL_PAGES))
+    total_pages = len(FEISHU_WAREHOUSE_MATERIAL_PAGES)
+    sessions: list[_FakeSession] = []
+    commits = 0
+
+    class _CountingSession(_FakeSession):
+        async def commit(self) -> None:
+            nonlocal commits
+            commits += 1
+            self.committed = True
+
+    def _session_factory() -> _CountingSession:
+        session = _CountingSession()
+        sessions.append(session)
+        return session
+
+    monkeypatch.setattr(scheduled, "async_session_factory", _session_factory)
+
     calls: list[tuple[str, bool]] = []
 
     class _FakeService:
@@ -110,11 +129,27 @@ async def test_full_sync_runs_in_window_and_resets_flag(
 
     monkeypatch.setattr(scheduled, "WarehouseService", _FakeService)
 
+    # mock 缓冲与 gc：断言每表之后都缓冲（47 页 × 3s 真实 sleep 会拖垮测试）
+    sleeps: list[float] = []
+    gc_calls: list[bool] = []
+
+    async def _fake_sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+
+    monkeypatch.setattr(scheduled.asyncio, "sleep", _fake_sleep)
+    monkeypatch.setattr(scheduled.gc, "collect", lambda: gc_calls.append(True))
+
     await scheduled._run_warehouse_full_sync()
 
-    assert len(calls) == len(FEISHU_WAREHOUSE_MATERIAL_PAGES)
+    # 逐页全量、单页失败不阻断
+    assert len(calls) == total_pages
     assert all(incremental is False for _, incremental in calls)
-    assert fake_session.committed is True
+    # 每表独立 session、成功页各自 commit（失败页不 commit）
+    assert len(sessions) == total_pages
+    assert commits == total_pages - 1
+    # 每表之后都有 gc 回收 + 缓冲
+    assert len(gc_calls) == total_pages
+    assert sleeps == [scheduled._FULL_SYNC_TABLE_GAP_SECONDS] * total_pages
     assert scheduled._full_sync_running is False
 
 
