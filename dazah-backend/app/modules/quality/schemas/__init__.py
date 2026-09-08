@@ -141,6 +141,12 @@ from app.modules.quality.schemas.inspection_dashboard import (
     InspectionDashboardSpecLine,
     InspectionDashboardSummary,
 )
+from app.modules.quality.schemas.notification_settings import (
+    InspectionLineNotificationPayload,
+    QualityNotificationRecipientItem,
+    QualityNotificationSettingItem,
+    UpdateQualityNotificationSettingRequest,
+)
 from app.modules.quality.schemas.quality_ai import (
     QualityAiAnalysisLogOut,
     QualityAiApplicableField,
@@ -178,6 +184,10 @@ from app.modules.quality.schemas.validation import (
 __all__ = [
     # Shared
     "PageParams",
+    "InspectionLineNotificationPayload",
+    "QualityNotificationRecipientItem",
+    "QualityNotificationSettingItem",
+    "UpdateQualityNotificationSettingRequest",
     "CpvBatchResponse",
     "CpvBatchWideResponse",
     "CpvParameterCreate",

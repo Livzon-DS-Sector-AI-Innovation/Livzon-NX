@@ -191,7 +191,7 @@ export default function OosOotInvestigationPushPage() {
   const handleCreateNew = useCallback(() => {
     const url = appSettings?.oos_oot_investigation_push_form_url
     if (!url) {
-      message.warning('尚未配置OOS/OOT调查推送表单链接，请先在飞书设置中配置')
+      message.warning('尚未配置OOS/OOT调查推送表单链接，请先在质量设置-飞书设置中配置')
       return
     }
     window.open(url, '_blank')

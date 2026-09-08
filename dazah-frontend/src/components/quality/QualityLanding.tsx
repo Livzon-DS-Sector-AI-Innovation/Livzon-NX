@@ -22,9 +22,9 @@ import {
 export function QualityLanding() {
   const cards = [
     {
-      title: '飞书设置',
-      description: '配置质量模块飞书应用和各台账同步映射',
-      href: '/quality/feishu-settings',
+      title: '质量设置',
+      description: '配置质量模块飞书应用、台账同步映射与通知提醒',
+      href: '/quality/settings',
       icon: <SettingOutlined style={{ fontSize: 32, color: '#0958d9' }} />,
     },
     {

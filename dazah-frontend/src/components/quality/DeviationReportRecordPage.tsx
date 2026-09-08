@@ -337,7 +337,7 @@ export function DeviationReportRecordPage({
   const handleCreateNew = useCallback(() => {
     const url = (appSettings?.deviation_report_form_url || '').trim()
     if (!url) {
-      message.warning('请在飞书设置中配置新建表单链接')
+      message.warning('请在质量设置-飞书设置中配置新建表单链接')
       return
     }
     window.open(url, '_blank', 'noopener,noreferrer')

@@ -70,7 +70,7 @@ export function QcValidationDetailDrawer({
   const fields = buildDetailFields(fieldMetas)
 
   return (
-    <Drawer open={open} title="QC验证记录详情" width={680} onClose={onClose}>
+    <Drawer open={open} title="QC验证记录详情" size={680} onClose={onClose}>
       {record && (
         <Descriptions bordered size="small" column={1} styles={{ label: { width: 150 } }}>
           {fields.map((field) => {

@@ -4767,6 +4767,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/hr/esg-training-records/batch-delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 批量删除ESG培训记录（软删除） */
+        post: operations["batch_delete_esg_records_api_v1_hr_esg_training_records_batch_delete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/hr/esg-training-records/export": {
         parameters: {
             query?: never;
@@ -6549,6 +6566,23 @@ export interface paths {
         put?: never;
         /** 创建培训台账记录 */
         post: operations["create_training_ledger_api_v1_hr_training_ledgers_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/hr/training-ledgers/batch-delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 批量删除培训台账记录（软删除） */
+        post: operations["batch_delete_training_ledgers_api_v1_hr_training_ledgers_batch_delete_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -15710,6 +15744,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/quality/feishu/validations/revalidation-upcoming": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 从飞书获取近期待再验证明细（未完成且到期临近） */
+        get: operations["list_feishu_validation_revalidation_upcoming_api_v1_quality_feishu_validations_revalidation_upcoming_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/quality/feishu/validations/{record_id}": {
         parameters: {
             query?: never;
@@ -17035,6 +17086,40 @@ export interface paths {
         post?: never;
         /** 删除液体物料检验记录 */
         delete: operations["delete_item_api_v1_quality_liquid_material_inspections__record_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/notification-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 获取质量模块通知设置列表 */
+        get: operations["list_quality_notification_settings_api_v1_quality_notification_settings_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quality/notification-settings/{notification_type}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 保存质量模块通知设置 */
+        put: operations["update_quality_notification_setting_api_v1_quality_notification_settings__notification_type__put"];
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -27381,6 +27466,24 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /** ApiResponseEnvelope[QualityNotificationSettingItem] */
+        ApiResponseEnvelope_QualityNotificationSettingItem_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["QualityNotificationSettingItem"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
         /** ApiResponseEnvelope[ReturnRecallOut] */
         ApiResponseEnvelope_ReturnRecallOut_: {
             /**
@@ -28294,6 +28397,25 @@ export interface components {
             code: number;
             /** Data */
             data: components["schemas"]["QualityAiAnalysisLogOut"][];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[list[QualityNotificationSettingItem]] */
+        ApiResponseEnvelope_list_QualityNotificationSettingItem__: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            /** Data */
+            data: components["schemas"]["QualityNotificationSettingItem"][];
             /**
              * Message
              * @default success
@@ -29407,6 +29529,17 @@ export interface components {
         BatchDeleteMergedRowsRequest: {
             /** Rows */
             rows?: components["schemas"]["DeleteMergedRowRequest"][];
+        };
+        /**
+         * BatchDeleteRequest
+         * @description 批量删除请求（培训台账/ESG 记录共用）.
+         */
+        BatchDeleteRequest: {
+            /**
+             * Ids
+             * @description 要删除的记录 ID 列表
+             */
+            ids: string[];
         };
         /**
          * BatchImportAttachmentResultItem
@@ -41878,6 +42011,12 @@ export interface components {
              * @description 已确认的工作表配置
              */
             echo_sheets?: components["schemas"]["ImportSheetConfirm"][];
+            /**
+             * Trainee Matched
+             * @description 按受训人员飞书部门自动识别归属的条数（仅201二车间家族）
+             * @default 0
+             */
+            trainee_matched: number;
         };
         /**
          * ImportFeishuMembersRequest
@@ -42287,6 +42426,23 @@ export interface components {
             fields?: {
                 [key: string]: unknown;
             };
+        };
+        /** InspectionLineNotificationPayload */
+        InspectionLineNotificationPayload: {
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /** Entity Code */
+            entity_code: string;
+            /**
+             * Entity Label
+             * @default
+             */
+            entity_label: string;
+            /** Recipients */
+            recipients?: components["schemas"]["QualityNotificationRecipientItem"][];
         };
         /**
          * InspectionRecordOut
@@ -50637,6 +50793,35 @@ export interface components {
             /** Table Name */
             table_name: string;
         };
+        /** QualityNotificationRecipientItem */
+        QualityNotificationRecipientItem: {
+            /**
+             * Name
+             * @default
+             */
+            name: string;
+            /** Open Id */
+            open_id?: string | null;
+        };
+        /** QualityNotificationSettingItem */
+        QualityNotificationSettingItem: {
+            /** Fallback Recipients */
+            fallback_recipients?: components["schemas"]["QualityNotificationRecipientItem"][];
+            /** Inspection Lines */
+            inspection_lines?: components["schemas"]["InspectionLineNotificationPayload"][];
+            /** Is Enabled */
+            is_enabled: boolean;
+            /** Lead Days */
+            lead_days: number;
+            /** Notification Label */
+            notification_label: string;
+            /** Notification Type */
+            notification_type: string;
+            /** Repeat Interval Days */
+            repeat_interval_days: number;
+            /** Send Time */
+            send_time: string;
+        };
         /** RawMaterialResponse */
         RawMaterialResponse: {
             /** Available */
@@ -56467,6 +56652,27 @@ export interface components {
              */
             is_enabled: boolean;
         };
+        /** UpdateQualityNotificationSettingRequest */
+        UpdateQualityNotificationSettingRequest: {
+            /** Fallback Recipients */
+            fallback_recipients?: components["schemas"]["QualityNotificationRecipientItem"][] | null;
+            /** Inspection Lines */
+            inspection_lines?: components["schemas"]["InspectionLineNotificationPayload"][] | null;
+            /**
+             * Is Enabled
+             * @default true
+             */
+            is_enabled: boolean;
+            /** Lead Days */
+            lead_days?: number | null;
+            /** Repeat Interval Days */
+            repeat_interval_days?: number | null;
+            /**
+             * Send Time
+             * @description 每天发送时间 HH:MM（Asia/Shanghai）
+             */
+            send_time?: string | null;
+        };
         /**
          * UpdateReturnRecallRequest
          * @description Update return/recall request.
@@ -57110,17 +57316,17 @@ export interface components {
         };
         /**
          * ValidationReviewCreateRequest
-         * @description 新建一次 AI 审核会话。entry 模式需传 entry_id（文件管理目录条目）。
+         * @description 新建一次 AI 审核会话（上传 VP/VR 文档，类型与编号自动识别）。
          */
         ValidationReviewCreateRequest: {
-            /** Entry Id */
-            entry_id?: string | null;
+            /** Focus Points */
+            focus_points?: string | null;
             /**
              * Review Mode
              * @default upload
-             * @enum {string}
+             * @constant
              */
-            review_mode: "upload" | "entry";
+            review_mode: "upload";
             /** Title */
             title?: string | null;
         };
@@ -57166,13 +57372,18 @@ export interface components {
         ValidationReviewFindingOut: {
             /** Basis Match Type */
             basis_match_type?: string | null;
+            /**
+             * Basis Quote
+             * @default
+             */
+            basis_quote: string;
             /** Basis Source */
             basis_source?: string | null;
             /**
              * Category
              * @enum {string}
              */
-            category: "reference_missing" | "version_mismatch" | "plan_report_mismatch" | "content_consistency" | "format_issue" | "numeric_check";
+            category: "reference_missing" | "version_mismatch" | "plan_report_mismatch" | "content_consistency" | "format_issue" | "numeric_check" | "basis_content_mismatch";
             /**
              * Detail
              * @default
@@ -57199,6 +57410,11 @@ export interface components {
              * @enum {string}
              */
             severity: "high" | "medium" | "low";
+            /**
+             * Validation Quote
+             * @default
+             */
+            validation_quote: string;
         };
         /** ValidationReviewJobStatusResponse */
         ValidationReviewJobStatusResponse: {
@@ -57248,6 +57464,13 @@ export interface components {
         /** ValidationReviewOut */
         ValidationReviewOut: {
             /**
+             * Basis Comparison
+             * @default []
+             */
+            basis_comparison: {
+                [key: string]: unknown;
+            }[];
+            /**
              * Basis Used
              * @default []
              */
@@ -57268,6 +57491,8 @@ export interface components {
              * @default []
              */
             findings: components["schemas"]["ValidationReviewFindingOut"][];
+            /** Focus Points */
+            focus_points?: string | null;
             /**
              * Id
              * Format: uuid
@@ -57304,6 +57529,14 @@ export interface components {
              * Format: uuid
              */
             review_id: string;
+        };
+        /**
+         * ValidationReviewRunRequest
+         * @description 发起审核：可选附用户特别关注点（与默认审核维度一并生效）。
+         */
+        ValidationReviewRunRequest: {
+            /** Focus Points */
+            focus_points?: string | null;
         };
         /** ValidationReviewStatsOut */
         ValidationReviewStatsOut: {
@@ -71511,6 +71744,41 @@ export interface operations {
             };
         };
     };
+    batch_delete_esg_records_api_v1_hr_esg_training_records_batch_delete_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BatchDeleteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     export_esg_records_api_v1_hr_esg_training_records_export_get: {
         parameters: {
             query: {
@@ -76057,6 +76325,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["TrainingLedgerCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    batch_delete_training_ledgers_api_v1_hr_training_ledgers_batch_delete_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BatchDeleteRequest"];
             };
         };
         responses: {
@@ -99485,7 +99788,12 @@ export interface operations {
     };
     get_feishu_validation_statistics_endpoint_api_v1_quality_feishu_statistics_validations_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 近期待再验证天数阈值 */
+                days?: number;
+                /** @description 统计起始年份 */
+                year_from?: number;
+            };
             header?: never;
             path?: never;
             cookie?: {
@@ -99575,6 +99883,44 @@ export interface operations {
                 };
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_list_dict_str__Any___"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_feishu_validation_revalidation_upcoming_api_v1_quality_feishu_validations_revalidation_upcoming_get: {
+        parameters: {
+            query?: {
+                /** @description 近期待再验证天数阈值 */
+                days?: number;
+                /** @description 统计起始年份 */
+                year_from?: number;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -103181,6 +103527,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiResponseEnvelope_dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_quality_notification_settings_api_v1_quality_notification_settings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_list_QualityNotificationSettingItem__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_quality_notification_setting_api_v1_quality_notification_settings__notification_type__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                notification_type: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateQualityNotificationSettingRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_QualityNotificationSettingItem_"];
                 };
             };
             /** @description Validation Error */
@@ -107100,6 +107514,8 @@ export interface operations {
                 qualification_name?: string | null;
                 /** @description 是否完成 */
                 is_completed?: boolean | null;
+                /** @description 到期分桶筛选：expired=已过期，due_30=30天内到期，due_60=31~60天，due_90=61~90天（与仪表盘统计口径一致） */
+                expiry_bucket?: ("expired" | "due_30" | "due_60" | "due_90") | null;
                 page?: number;
                 page_size?: number;
             };
@@ -108063,6 +108479,9 @@ export interface operations {
             query?: {
                 page?: number;
                 page_size?: number;
+                keyword?: string | null;
+                status?: string | null;
+                review_mode?: string | null;
             };
             header?: never;
             path?: never;
@@ -108307,7 +108726,11 @@ export interface operations {
                 auth_token?: string | null;
             };
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ValidationReviewRunRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -108340,7 +108763,11 @@ export interface operations {
                 auth_token?: string | null;
             };
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ValidationReviewRunRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -122857,8 +123284,10 @@ export interface operations {
                 filters?: string | null;
                 /** @description 可选 feishu 或 local；不传时由后端默认配置决定 */
                 source?: string | null;
-                /** @description 强制绕过缓存从飞书拉取最新数据 */
+                /** @description 强制绕过缓存全量拉取飞书最新数据（同步最新数据按钮） */
                 force?: boolean;
+                /** @description 增量同步飞书变更后读取本地快照（刷新按钮） */
+                incremental?: boolean;
             };
             header?: never;
             path: {

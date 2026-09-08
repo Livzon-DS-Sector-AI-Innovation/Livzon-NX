@@ -33,15 +33,7 @@ run_quality() {
   uv run --no-sync python -m compileall -q app tests scripts
   echo "== Backend mypy (core infrastructure baseline) =="
   uv run --no-sync mypy app/core
-  echo "== Prepare isolated unit-test database =="
-  bash "${repository_dir}/scripts/wait-for-database.sh"
-  uv run --no-sync alembic upgrade head
-  echo "== Backend unit tests =="
-  uv run --no-sync pytest \
-    tests/unit tests/core \
-    -m "not integration" \
-    -ra \
-    --junitxml=.pytest_cache/backend-quality-junit.xml
+  # Unit/core tests run once in run_integration's complete coverage suite.
 }
 
 run_integration() {
@@ -67,6 +59,7 @@ run_integration() {
   git diff --exit-code -- openapi.json
   echo "== Backend database and API integration tests =="
   uv run --no-sync pytest \
+    -p no:anyio \
     --cov=app \
     --cov-branch \
     --cov-report=term-missing \

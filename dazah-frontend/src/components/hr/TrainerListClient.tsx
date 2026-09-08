@@ -66,8 +66,15 @@ export default function TrainerListClient() {
   const handleEdit = (trainer: Trainer) => {
     setEditingTrainer(trainer)
     form.setFieldsValue({
-      ...trainer,
-      approval_date: trainer.approval_date ? dayjs(trainer.approval_date) : undefined,
+      name: trainer.name,
+      // tags 模式以数组形态回填，提交时归一为单个字符串
+      department: trainer.department ? [trainer.department] : [],
+      position: trainer.position,
+      approval_date:
+        trainer.approval_date && dayjs(trainer.approval_date).isValid()
+          ? dayjs(trainer.approval_date)
+          : undefined,
+      remarks: trainer.remarks,
     })
     setModalOpen(true)
   }
@@ -85,11 +92,18 @@ export default function TrainerListClient() {
   const handleSubmit = async () => {
     try {
       const values = await form.validateFields()
+      const department = Array.isArray(values.department)
+        ? values.department[0]
+        : values.department
+      // 显式 null：后端按「显式出现的字段」应用，允许清空部门/岗位/批准时间/备注
       const data: TrainerCreateInput = {
-        ...values,
+        name: values.name,
+        department: department ?? null,
+        position: values.position ?? null,
         approval_date: values.approval_date
           ? values.approval_date.format('YYYY-MM-DD')
-          : undefined,
+          : null,
+        remarks: values.remarks ?? null,
       }
 
       if (editingTrainer) {
@@ -101,14 +115,13 @@ export default function TrainerListClient() {
       }
       setModalOpen(false)
       loadData()
-      // 新建可能输入新部门（tags），刷新部门下拉
-      if (!editingTrainer) {
-        fetchTrainingDepartments()
-          .then(setDepartments)
-          .catch((e) => console.error('刷新部门列表失败', e))
-      }
+      // 新建/编辑可能输入新部门（tags），刷新部门下拉
+      fetchTrainingDepartments()
+        .then(setDepartments)
+        .catch((e) => console.error('刷新部门列表失败', e))
     } catch (error) {
-      message.error('操作失败')
+      // 透传真实失败原因（如 403 权限、422 校验），不再笼统提示
+      message.error((error instanceof Error ? error.message : '') || '操作失败')
     }
   }
 
@@ -283,7 +296,6 @@ export default function TrainerListClient() {
               maxCount={1}
               placeholder="选择或输入部门"
               options={departments.map((d) => ({ label: d, value: d }))}
-              onChange={(v) => form.setFieldValue('department', v?.[0] || undefined)}
             />
           </Form.Item>
           <Form.Item name="position" label="岗位">

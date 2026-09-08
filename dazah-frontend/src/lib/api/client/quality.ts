@@ -39,6 +39,7 @@ import type {
   ValidationFilters,
   ValidationExecutionItem,
   ValidationListItem,
+  ValidationUpcomingItem,
   FeishuCapaLedgerItem,
   FeishuCapaPlanTrackItem,
   FeishuListResponse,
@@ -90,12 +91,16 @@ export async function fetchProductQualityStandards(
  * 供应商资质 - 客户端只读 API (GET)
  */
 
+/** 到期分桶（与后端仪表盘统计口径一致） */
+export type SupplierExpiryBucket = 'expired' | 'due_30' | 'due_60' | 'due_90'
+
 export async function fetchSupplierQualifications(params?: {
   keyword?: string
   supplier_name?: string
   material_type?: string
   qualification_name?: string
   is_completed?: boolean
+  expiry_bucket?: SupplierExpiryBucket
   page?: number
   page_size?: number
 }): Promise<{ items: SupplierQualificationItem[]; total: number }> {
@@ -106,12 +111,22 @@ export async function fetchSupplierQualifications(params?: {
     if (params.material_type) queryParts.push(`material_type=${encodeURIComponent(params.material_type)}`)
     if (params.qualification_name) queryParts.push(`qualification_name=${encodeURIComponent(params.qualification_name)}`)
     if (params.is_completed !== undefined) queryParts.push(`is_completed=${String(params.is_completed)}`)
+    if (params.expiry_bucket) queryParts.push(`expiry_bucket=${encodeURIComponent(params.expiry_bucket)}`)
     if (params.page) queryParts.push(`page=${encodeURIComponent(String(params.page))}`)
     if (params.page_size) queryParts.push(`page_size=${encodeURIComponent(String(params.page_size))}`)
   }
   const query = queryParts.length ? `?${queryParts.join('&')}` : ''
   const res = await fetch(`/api/v1/quality/supplier-qualification${query}`)
-  if (!res.ok) throw new Error(`获取供应商资质列表失败: ${res.statusText}`)
+  if (!res.ok) {
+    let detail = `获取供应商资质列表失败: ${res.status} ${res.statusText}`
+    try {
+      const body = (await res.json()) as { message?: string; detail?: string }
+      detail = body.message || body.detail || detail
+    } catch {
+      /* 响应体非 JSON 时保留默认信息 */
+    }
+    throw new Error(detail)
+  }
   const json = await res.json()
   return { items: json.data ?? [], total: json.meta?.total ?? 0 }
 }
@@ -530,11 +545,32 @@ export async function fetchValidationDashboardStats(): Promise<ValidationDashboa
   return json.data ?? json
 }
 
-export async function fetchFeishuValidationDashboardStats(): Promise<ValidationDashboardStats> {
-  const res = await fetch('/api/v1/quality/feishu/statistics/validations')
+export async function fetchFeishuValidationDashboardStats(
+  days = 30,
+  yearFrom = new Date().getFullYear(),
+): Promise<ValidationDashboardStats> {
+  const res = await fetch(
+    `/api/v1/quality/feishu/statistics/validations?days=${days}&year_from=${yearFrom}`
+  )
   if (!res.ok) throw new Error(`请求失败: ${res.status}`)
   const json = await res.json()
   return json.data ?? json
+}
+
+export async function fetchFeishuValidationUpcoming(
+  days: number,
+  yearFrom: number,
+  params?: { page?: number; page_size?: number },
+): Promise<{ items: ValidationUpcomingItem[]; total: number }> {
+  const search = new URLSearchParams({ days: String(days), year_from: String(yearFrom) })
+  if (params?.page) search.set('page', String(params.page))
+  if (params?.page_size) search.set('page_size', String(params.page_size))
+  const res = await fetch(
+    `/api/v1/quality/feishu/validations/revalidation-upcoming?${search.toString()}`
+  )
+  if (!res.ok) throw new Error(`请求失败: ${res.status}`)
+  const json = await res.json()
+  return { items: json.data ?? [], total: json.meta?.total ?? 0 }
 }
 
 // ---- CAPA ----
@@ -914,10 +950,16 @@ export async function fetchNextChangeCode(changeType: string = 'technical'): Pro
 export async function fetchValidationReviews(params?: {
   page?: number
   page_size?: number
+  keyword?: string
+  status?: string
+  review_mode?: string
 }): Promise<{ items: ValidationReviewListItem[]; total: number }> {
   const queryParts: string[] = []
   if (params?.page) queryParts.push(`page=${params.page}`)
   if (params?.page_size) queryParts.push(`page_size=${params.page_size}`)
+  if (params?.keyword) queryParts.push(`keyword=${encodeURIComponent(params.keyword)}`)
+  if (params?.status) queryParts.push(`status=${params.status}`)
+  if (params?.review_mode) queryParts.push(`review_mode=${params.review_mode}`)
   const query = queryParts.length ? `?${queryParts.join('&')}` : ''
   const res = await fetch(`/api/v1/quality/validation-reviews${query}`)
   if (!res.ok) throw await parseError(res)
@@ -979,6 +1021,7 @@ export async function fetchValidationExecutions(
   if (params?.department) searchParams.set('department', params.department)
   if (params?.drafted_at_from) searchParams.set('drafted_at_from', params.drafted_at_from)
   if (params?.drafted_at_to) searchParams.set('drafted_at_to', params.drafted_at_to)
+  if (params?.year) searchParams.set('year', String(params.year))
   if (params?.page) searchParams.set('page', String(params.page))
   if (params?.page_size) searchParams.set('page_size', String(params.page_size))
   const query = searchParams.toString()

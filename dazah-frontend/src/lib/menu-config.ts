@@ -349,7 +349,6 @@ export const moduleMenus: ModuleMenu[] = [
     icon: "check-circle",
     path: "/quality",
     children: [
-      { key: "feishu-settings", label: "飞书设置", path: "/quality/feishu-settings" },
       { key: "documents", label: "文件管理", path: "/quality/documents" },
       {
         key: "deviations",
@@ -523,6 +522,7 @@ export const moduleMenus: ModuleMenu[] = [
           { key: "validation-ai-review", label: "验证AI审核", path: "/quality/validation/ai-review" },
         ],
       },
+      { key: "quality-settings", label: "质量设置", path: "/quality/settings" },
     ],
   },
   {

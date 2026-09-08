@@ -9,7 +9,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.exceptions import NotFoundException
+from app.core.exceptions import AppException, NotFoundException
 from app.modules.registration.models import ReferenceStandard
 from app.modules.registration.repository import ReferenceStandardRepository
 from app.modules.registration.schemas import (
@@ -41,7 +41,9 @@ def _get_upload_dir() -> Path:
 def _load_template() -> bytes:
     """加载说明表模板文件"""
     if not TEMPLATE_PATH.exists():
-        raise FileNotFoundError(f"模板文件不存在: {TEMPLATE_PATH}")
+        raise AppException(
+            message=f"对照物质说明表模板文件不存在（{TEMPLATE_PATH}），请联系管理员配置模板后重试"
+        )
     return TEMPLATE_PATH.read_bytes()
 
 

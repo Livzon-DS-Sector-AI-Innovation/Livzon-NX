@@ -78,6 +78,8 @@ const mocks = vi.hoisted(() => {
     get,
     moduleFactory,
     permissionAllowed: true,
+    // echarts-for-react mock 捕获各图表 onEvents，供测试触发图表点击
+    chartEventHandlers: [] as unknown[],
     message: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn(), loading: vi.fn() },
     modal: { confirm: vi.fn(({ onOk }: { onOk?: () => unknown }) => void onOk?.()) },
     router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn(), prefetch: vi.fn() },
@@ -160,7 +162,10 @@ vi.mock('@/lib/api/ai', () => ({
   generateOralExamQuestions: vi.fn(async () => ({ questions: [{ question: '口试问题', answer: '答案要点' }] })),
 }))
 vi.mock('docx-preview', () => ({ renderAsync: vi.fn(async () => undefined) }))
-vi.mock('@/lib/feishu-url', () => ({ parseFeishuBitableUrl: vi.fn(() => ({ app_token: 'bascn-test', table_id: 'tbl-test' })) }))
+vi.mock('@/lib/feishu-url', () => ({
+  parseFeishuBitableUrl: vi.fn((url: string) => ({ app_token: 'bascn-test', table_id: url.includes('?table=') ? 'tbl-test' : null, view_id: null })),
+  parseFeishuBaseUrl: vi.fn((url: string) => (url.includes('/base/') ? 'bascn-test' : null)),
+}))
 vi.mock('@/components/registration', () => ({
   AuthorizationLetterDashboard: () => createElement('div', null, '授权概览'),
   RegistrationSummaryHero: ({ children }: { children?: ReactNode }) => createElement('div', null, '注册总览', children),
@@ -170,7 +175,7 @@ vi.mock('@/components/registration', () => ({
   buildStackedBarOption: () => ({}),
   buildDonutOption: () => ({}),
 }))
-vi.mock('echarts-for-react', () => ({ default: ({ option }: { option?: unknown }) => createElement('pre', null, JSON.stringify(option ?? {})) }))
+vi.mock('echarts-for-react', () => ({ default: ({ option, onEvents }: { option?: unknown; onEvents?: unknown }) => { mocks.chartEventHandlers.push(onEvents); return createElement('pre', null, JSON.stringify(option ?? {})) } }))
 vi.mock('echarts', () => ({ graphic: { LinearGradient: class LinearGradient {} } }))
 vi.mock('./components/quality/DocumentEntryAttachmentModal', () => ({
   default: () => createElement('div', null, '附件管理'),
@@ -456,6 +461,7 @@ import OosOotProductDepartmentPage from './components/quality/OosOotProductDepar
 import ReturnApplicationPage from './components/quality/ReturnApplicationPage'
 import ReturnLedgerPage from './components/quality/ReturnLedgerPage'
 import SupplierQualificationPage from './components/quality/SupplierQualificationPage'
+import { SupplierDashboardPage } from './components/quality/SupplierDashboardPage'
 import { DeviationReportRecordPage } from './components/quality/DeviationReportRecordPage'
 import { DeviationHistoryPage } from './components/quality/DeviationHistoryPage'
 import { DeviationWorkbenchPage } from './components/quality/DeviationWorkbenchPage'
@@ -643,6 +649,7 @@ function isInteractiveComponentExport(name: string): boolean {
 describe('migrated component coverage', () => {
   beforeEach(() => {
     vi.resetAllMocks()
+    mocks.chartEventHandlers.length = 0
     mocks.permissionAllowed = true
     localStorage.clear()
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ code: 200, data: [], meta: { total: 0 } }), { status: 200, headers: { 'content-type': 'application/json' } })))
@@ -1543,7 +1550,7 @@ describe('migrated component coverage', () => {
     getMock('actions/quality', 'updateQualityFeishuEntitySetting').mockResolvedValue({ entity_name: '偏差' })
     const rendered = renderClient(createElement(QualityFeishuSettingsPage))
     await settle()
-    const groupInput = () => rendered.container.querySelector('input[placeholder*="粘贴多维表格网址，批量"]') as HTMLInputElement | null
+    const groupInput = () => rendered.container.querySelector('input[placeholder*="粘贴多维表格网址（Base"]') as HTMLInputElement | null
     const setGroupUrl = async (value: string) => {
       const input = groupInput()
       if (!input) return
@@ -1594,6 +1601,101 @@ describe('migrated component coverage', () => {
     getMock('lib/api/client/quality', 'fetchQualityFeishuEntityTables').mockRejectedValueOnce(new Error('读取表失败'))
     Array.from(rendered.container.querySelectorAll('button')).find((item) => item.textContent === '读取表')?.click()
     await settle()
+    closeRendered(rendered)
+  })
+
+  it('guides to name matching when a shared Base link lacks the sub-table param', async () => {
+    getMock('lib/api/client/quality', 'fetchQualityFeishuAppSettings').mockResolvedValue({ app_id: 'quality-app', app_secret_masked: '***', is_enabled: true })
+    getMock('lib/api/client/quality', 'fetchQualityFeishuEntitySettings').mockResolvedValue([
+      { entity_code: 'deviation', entity_name: '偏差', entity_group: '供应商管理', app_token: 'base-old', base_table_name: '旧偏差', base_table_id: 'tbl-old', is_enabled: true, enable_push_to_feishu: true, enable_pull_from_feishu: true, field_mappings: [], last_sync_status: 'success', last_synced_at: null },
+    ])
+    getMock('lib/api/client/quality', 'fetchQualityFeishuEntityTables').mockResolvedValue([{ table_name: '偏差表', table_id: 'tbl-shared' }])
+    getMock('actions/quality', 'updateQualityFeishuEntitySetting').mockResolvedValue({ entity_name: '偏差' })
+    const rendered = renderClient(createElement(QualityFeishuSettingsPage))
+    await settle()
+    const groupInput = () => rendered.container.querySelector('input[placeholder*="粘贴多维表格网址（Base"]') as HTMLInputElement | null
+    await act(async () => {
+      const input = groupInput()
+      if (!input) return
+      input.focus()
+      input.value = 'https://j0eukrlohu.feishu.cn/base/bascn-shared?from=from_copylink'
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+      input.dispatchEvent(new Event('change', { bubbles: true }))
+      await Promise.resolve()
+    })
+    const groupButton = (text: string) => Array.from(rendered.container.querySelectorAll('button')).find((item) => item.textContent === text)
+    groupButton('批量更新')?.click()
+    await settle()
+    expect(getMock('actions/quality', 'updateQualityFeishuEntitySetting')).not.toHaveBeenCalled()
+    expect(mocks.message.warning).toHaveBeenCalledWith(expect.stringContaining('按名称匹配'))
+    groupButton('按名称匹配')?.click()
+    await settle()
+    expect(getMock('actions/quality', 'updateQualityFeishuEntitySetting')).toHaveBeenCalledWith('deviation', expect.objectContaining({ app_token: 'bascn-test', base_table_id: 'tbl-shared' }))
+    closeRendered(rendered)
+  })
+
+  it('opens supplier dashboard expiry detail modal from cards and charts', async () => {
+    getMock('lib/api/client/quality', 'fetchSupplierStatistics').mockResolvedValue({
+      total: 5, completed: 1, pending: 4, completion_rate: 20,
+      expired_count: 1, due_30_count: 2, due_60_count: 1, due_90_count: 1, normal_count: 0,
+      supplier_count: 2,
+      material_type_compliance: [],
+      qualification_compliance: [{ name: '营业执照', total: 2, completed: 1, pending: 1, completion_rate: 50 }],
+      supplier_risk_ranking: [{ name: '测试供应商', total: 2, completed: 0, pending: 2, expired: 1, due30: 1, risk_score: 5 }],
+      expiry_timeline: [],
+    })
+    const detailRow = {
+      record_id: 'r-1', supplier_name: '测试供应商', material_name: '原料X', material_type: '原料',
+      qualification_name: '营业执照', qualification_file: null, is_completed: false,
+      deadline: '2025-01-01T00:00:00+00:00', responsible_person: '张三', remark: null,
+      expiry_status: '已延期', created_at: '', updated_at: '',
+    }
+    const detailMock = getMock('lib/api/client/quality', 'fetchSupplierQualifications')
+      .mockResolvedValue({ items: [detailRow], total: 1 })
+      .mockImplementationOnce(async () => {
+        // 明细请求可能晚于弹窗打开完成，避免测试依赖单轮事件循环。
+        await new Promise((resolve) => setTimeout(resolve, 40))
+        return { items: [detailRow], total: 1 }
+      })
+    const rendered = renderClient(createElement(SupplierDashboardPage))
+    await settle()
+    const roleButton = (text: string) =>
+      Array.from(rendered.container.querySelectorAll<HTMLDivElement>('div[role="button"]')).find((el) => el.textContent?.includes(text))
+    roleButton('已延期')?.click()
+    await settle()
+    expect(detailMock).toHaveBeenCalledWith(expect.objectContaining({ expiry_bucket: 'expired' }))
+    expect(queryElement(rendered.container, '[role="dialog"]')).not.toBeNull()
+    expect(rendered.container.textContent).toContain('已过截止日期')
+    await vi.waitFor(async () => {
+      await settle()
+      const detailTable = queryElement(rendered.container, '[role="dialog"] table')
+      expect(detailTable?.textContent).toContain('测试供应商')
+      expect(detailTable?.textContent).toContain('已过期')
+    })
+    Array.from(rendered.container.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')).find((b) => b.textContent === '取消')?.click()
+    await settle()
+    roleButton('即将到期')?.click()
+    await settle()
+    expect(detailMock).toHaveBeenLastCalledWith(expect.objectContaining({ expiry_bucket: 'due_30' }))
+    const tabButton = Array.from(rendered.container.querySelectorAll('button')).find((b) => b.textContent?.includes('31~60天到期'))
+    tabButton?.click()
+    await settle()
+    expect(detailMock).toHaveBeenLastCalledWith(expect.objectContaining({ expiry_bucket: 'due_60', page: 1 }))
+    Array.from(rendered.container.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')).find((b) => b.textContent === '取消')?.click()
+    await settle()
+    const clickHandlers = mocks.chartEventHandlers
+      .map((entry) => entry as { click?: (params: unknown) => void } | undefined)
+      .filter((entry) => typeof entry?.click === 'function')
+    expect(clickHandlers.length).toBeGreaterThanOrEqual(2)
+    // 每次渲染按 风险柱→环形图 顺序各推一条，取最新一对（闭包含已加载的 stats）
+    const riskClick = clickHandlers[clickHandlers.length - 2]?.click
+    const donutClick = clickHandlers[clickHandlers.length - 1]?.click
+    donutClick?.({ name: '30天内到期' })
+    await settle()
+    expect(detailMock).toHaveBeenLastCalledWith(expect.objectContaining({ expiry_bucket: 'due_30' }))
+    riskClick?.({ dataIndex: 0 })
+    await settle()
+    expect(detailMock).toHaveBeenLastCalledWith(expect.objectContaining({ supplier_name: '测试供应商', expiry_bucket: undefined }))
     closeRendered(rendered)
   })
 
@@ -2175,7 +2277,7 @@ describe('migrated component coverage', () => {
     await settle()
     expect(rendered.container.textContent).toContain('仓储页面飞书配置')
     const findButton = (text: string) => Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent?.includes(text))
-    const urlInput = rendered.container.querySelector('input[placeholder*="自动填充"]') as HTMLInputElement | null
+    const urlInput = rendered.container.querySelector('input[placeholder*="批量填充"]') as HTMLInputElement | null
     if (urlInput) {
       urlInput.value = 'https://example.feishu.cn/base/bascn-batch?table=tbl-batch&view=vew-batch'
       urlInput.dispatchEvent(new Event('change', { bubbles: true }))
@@ -3264,7 +3366,10 @@ describe('migrated component coverage', () => {
     await settle()
     Array.from(report.container.querySelectorAll('button')).find((button) => button.textContent === '确定')?.click()
     await settle()
-    reportButton('删除')?.click()
+    // 精确匹配行内「删除」按钮：工具栏「批量删除」按钮包含"删除"子串，不能误点
+    Array.from(report.container.querySelectorAll('button'))
+      .find((button) => button.textContent?.trim() === '删除')
+      ?.click()
     await settle()
     expect(getMock('actions/hr', 'updateEsgTrainingRecord')).toHaveBeenCalled()
     expect(getMock('actions/hr', 'deleteEsgTrainingRecord')).toHaveBeenCalled()

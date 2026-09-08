@@ -1294,6 +1294,10 @@ class TrainingLedgerResponse(TrainingLedgerBase):
     id: UUID
     created_at: datetime | None = None
     updated_at: datetime | None = None
+    attendance_count: int | None = Field(
+        None,
+        description="参训人员统计：关联培训会话的真实名单数；无名单时按培训对象文本分隔计数",
+    )
 
 
 class TrainingLedgerListResponse(BaseModel):
@@ -1301,6 +1305,19 @@ class TrainingLedgerListResponse(BaseModel):
     message: str
     data: list[TrainingLedgerResponse]
     meta: dict[str, Any] | None = None
+
+
+class BatchDeleteRequest(BaseModel):
+    """批量删除请求（培训台账/ESG 记录共用）."""
+
+    ids: list[UUID] = Field(..., description="要删除的记录 ID 列表")
+
+
+class BatchDeleteResponseData(BaseModel):
+    deleted: int = Field(0, description="成功删除条数")
+    failed: list[str] = Field(
+        default_factory=list, description="未命中或删除失败的记录 ID"
+    )
 
 
 # ─── Exam Score Import Schemas ───
@@ -1554,6 +1571,9 @@ class ImportPreviewResponse(BaseModel):
 
 class ImportConfirmResponseData(BaseModel):
     created: int = Field(0, description="导入总条数")
+    trainee_matched: int = Field(
+        0, description="按受训人员飞书部门自动识别归属的条数（仅201二车间家族）"
+    )
     echo_sheets: list[ImportSheetConfirm] = Field(
         default_factory=list, description="已确认的工作表配置"
     )
@@ -2686,6 +2706,8 @@ VALID_MAPPING_TYPES: set[str] = {
     "modal_no_expand",
     "exclude",
     "force_show",
+    # 人员归属覆写：source_name=人员姓名，target_name=台账规范部门
+    "person",
 }
 VALID_MATCH_LEVELS: set[str] = {"first", "second", "both"}
 

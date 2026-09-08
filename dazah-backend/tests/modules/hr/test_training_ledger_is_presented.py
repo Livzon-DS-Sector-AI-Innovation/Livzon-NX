@@ -7,14 +7,18 @@
 """
 
 from datetime import date
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
+import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.hr.api import (
     _DEPT_LEDGER_FIELDS,
     _DEPT_LEDGER_HEADER_ALIASES,
     _DEPT_LEDGER_HEADERS,
+    _attach_ledger_attendance,
     _map_headers_by_alias,
 )
 from app.modules.hr.models import TrainingLedger
@@ -91,4 +95,34 @@ def test_training_content_schema_accepts_long_text() -> None:
     assert created.training_content == long_content
     updated = TrainingLedgerUpdate(training_content=long_content)
     assert updated.training_content == long_content
+
+
+@pytest.mark.asyncio
+async def test_attach_ledger_attendance_session_names_then_trainees_fallback() -> None:
+    """参训人员统计：有会话按真实名单数；无会话按培训对象分隔计数；不可数则为 None。"""
+    sid_with_names = uuid4()
+    sid_without_names = uuid4()
+    records = [
+        TrainingLedger(session_id=sid_with_names, trainees="忽略"),
+        TrainingLedger(session_id=sid_without_names, trainees=""),
+        TrainingLedger(session_id=None, trainees="张三、李四、王五"),
+        TrainingLedger(session_id=None, trainees="生产部全体员工"),
+        TrainingLedger(session_id=None, trainees=None),
+    ]
+
+    class _Result:
+        def all(self) -> list[tuple[object, object]]:
+            return [
+                (sid_with_names, ["张三", "李四", "王五"]),
+                (sid_without_names, None),
+            ]
+
+    db = SimpleNamespace(execute=AsyncMock(return_value=_Result()))
+    await _attach_ledger_attendance(db, records)  # type: ignore[arg-type]
+
+    assert records[0].attendance_count == 3  # 会话名单 3 人
+    assert records[1].attendance_count is None  # 会话无名单
+    assert records[2].attendance_count == 3  # 培训对象顿号分隔 3 段
+    assert records[3].attendance_count is None  # 无分隔符的描述文本不可数
+    assert records[4].attendance_count is None
 

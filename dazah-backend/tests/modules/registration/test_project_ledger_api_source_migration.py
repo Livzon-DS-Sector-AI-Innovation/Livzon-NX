@@ -771,3 +771,22 @@ async def test_export_project_ledger_workbook_keeps_sub_record_rows_incremental(
         assert "C3:C4" in merged_ranges
     finally:
         workbook_with_merges.close()
+
+
+@pytest.mark.asyncio
+async def test_project_ledger_overview_degrades_when_workbook_missing(
+    client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """台账文件缺失时 overview 返回 200 + 静态子表定义（而非 404 崩溃页面）。"""
+    patch_project_ledger_workbook_path(monkeypatch, tmp_path / "missing.xlsx")
+    await reset_project_ledger_entries_via_api(client)
+
+    response = await client.get("/api/v1/registration/project-ledger/overview")
+
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    assert payload["workbook_name"] == "1. 注册台账.xlsx"
+    assert payload["updated_at"] is None
+    assert len(payload["sheets"]) == len(PROJECT_LEDGER_SHEET_KEYS)

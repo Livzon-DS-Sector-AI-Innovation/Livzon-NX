@@ -4295,17 +4295,38 @@ class TrainingLedgerService:
             record = TrainingLedger(**data.model_dump())
             return await self.repo.create(record)
 
-        from app.modules.hr.training_dept_resolver import split_ledger_departments
+        from app.modules.hr.training_dept_resolver import (
+            base_201_department,
+            split_ledger_departments,
+            split_target_names,
+        )
+
+        # ⓪ 201 家族拦截：涉及 201 车间但整份受训名单都无法从飞书联系人
+        # 识别出 MC/DR 线别时抛错，人工核对后再录入（签到转入/手动新增口径；
+        # Excel 导入不走此拦截，沿用回退与统计口径）
+        await self._guard_201_trainee_resolution(data)
 
         # ① 按培训师姓名查 Trainer 表确定 teaching_dept
         # （真实授课部门，所有副本一致，不再被篡改）
+        passed_dept = data.teaching_dept
         teaching_dept = await self._resolve_teaching_dept(
             data.instructor, data.teaching_dept
         )
-        data.teaching_dept = teaching_dept
+        # ①.2 201 半边授课部门统一记裸名车间（MC/DR 同属 201二车间，
+        # 避免培训师表旧数据把 DR 线培训的授课部门盖成 MC）
+        data.teaching_dept = await base_201_department(self.session, teaching_dept)
 
-        # ①.5 归属部门写端归一：裸名/历史变体存规范名
-        # （裸名主记录归 MC，DR 副本由下面拆分补齐）
+        # ①.5 归属部门半边修正：裸名展开 MC+DR 后取有参训人员的那半；
+        # 已落某半边但参训人员都不在该半边时挪到有人的半边；参训人员在
+        # 飞书联系人识别不到部门时维持原归一口径（裸名归 MC 优先）
+        await self._assign_half_ledger(data)
+        # 归属仍为空、且部门语境（表单/会话所在 Tab）是 201 家族规范名时，
+        # 按语境落归属兜底，避免记录在 MC/DR 两个 Tab 都不可见
+        if not data.ledger_department and passed_dept:
+            context_base = await base_201_department(self.session, passed_dept)
+            if context_base != passed_dept:
+                data.ledger_department = passed_dept
+        # 归一：历史别名（如 201二车间（多拉））存规范名
         if data.ledger_department:
             data.ledger_department = (
                 await split_ledger_departments(self.session, data.ledger_department)
@@ -4325,14 +4346,26 @@ class TrainingLedgerService:
         # ③ 按涉及部门拆分：为每个涉及部门创建一条完整副本
         # 核心规则：每条记录内容完全一致（授课部门/涉及部门/培训对象等
         # 都不变），仅 ledger_department 不同；涉及部门名先按
-        # split_ledger_departments 归一（裸 201二车间 拆 MC+DR 两副本）
+        # split_ledger_departments 归一（裸 201二车间 拆 MC+DR 两副本）。
+        # 人员收敛：拆分半边（MC/DR）副本按参训人员的飞书联系人部门判定，
+        # 该半边没有参训人员就不建副本（识别不到人员时兜底全建）。
         if data.involved_depts and data.session_id:
             depts = [d.strip() for d in data.involved_depts.split("、") if d.strip()]
             seen = {data.ledger_department}
+            trainee_norms: set[str] | None = None  # 惰性：仅出现半边时查飞书联系人
+            split_targets = await split_target_names(self.session)
             for dept in depts:
                 for canonical in await split_ledger_departments(self.session, dept):
                     if canonical in seen:
                         continue
+                    if canonical in split_targets:
+                        if trainee_norms is None:
+                            trainee_norms = (
+                                await self._resolve_trainee_feishu_norms(data.trainees)
+                                & split_targets
+                            )
+                        if trainee_norms and canonical not in trainee_norms:
+                            continue  # 该半边没有参训人员 → 不建副本
                     seen.add(canonical)
                     copy_data = data.model_dump()
                     copy_data["ledger_department"] = canonical
@@ -4341,25 +4374,52 @@ class TrainingLedgerService:
 
         return record
 
-    async def create_many(self, data_list: list[TrainingLedgerCreate]) -> int:
+    async def create_many(
+        self, data_list: list[TrainingLedgerCreate]
+    ) -> tuple[int, int]:
         """批量创建培训台账记录（含多部门拆分），单次 flush.
 
-        与 create_record 语义一致（预取 trainer、归属部门归一、多部门
-        pending 兜底与副本拆分），仅把逐行 DB 往返合并为一次 add_all+flush，
-        用于 Excel 批量导入，避免逐行 create 拖垮导入/服务器。
-        返回成功创建的"数据条数"（不含多部门拆分副本），与旧口径一致。
+        与 create_record 语义一致（预取 trainer、授课部门压平、半边归属
+        修正、导入按人补线、多部门 pending 兜底与副本拆分），仅把逐行 DB
+        往返合并为一次 add_all+flush，用于 Excel 批量导入，避免逐行
+        create_record 的 N 次 DB 往返拖垮导入/服务器。
+        返回 (成功创建的数据条数, 按参训人员飞书部门补上半边的行数)；
+        数据条数不含多部门拆分副本，与旧口径一致。
         """
-        from app.modules.hr.training_dept_resolver import split_ledger_departments
+        from app.modules.hr.training_dept_resolver import (
+            base_201_department,
+            split_ledger_departments,
+        )
 
         if not data_list:
-            return 0
+            return 0, 0
         trainer_map = await self._resolve_teaching_depts(
             [d.instructor for d in data_list]
         )
         all_records: list[TrainingLedger] = []
+        trainee_matched = 0
         for data in data_list:
-            teaching_dept = trainer_map.get(data.instructor or "") or data.teaching_dept
-            data.teaching_dept = teaching_dept
+            passed_dept = data.teaching_dept
+            teaching_dept = trainer_map.get(data.instructor or "") or passed_dept
+            # ①.2 201 家族授课部门压平为裸名车间（见 create_record 同名注释）
+            data.teaching_dept = await base_201_department(self.session, teaching_dept)
+
+            # ①.5 主记录半边归属修正（显式归属时）
+            await self._assign_half_ledger(data)
+
+            # ①.6 导入/无归属记录：授课部门为裸名 201二车间时按参训人员
+            # 飞书部门补半边，跨半边参训返回其余半边各建一条内容一致副本
+            assigned, extra_halves = await self._assign_import_half_ledger(data)
+            if assigned:
+                trainee_matched += 1
+
+            # 兜底：仍未落归属且部门语境（所选 Tab）是 201 家族规范名时
+            # 回退所选 Tab，保证记录在读端可见（读端裸名需受训人员命中才
+            # 动态归属，未命中记录靠归属部门兜底显示）
+            if not data.ledger_department and passed_dept:
+                context_base = await base_201_department(self.session, passed_dept)
+                if context_base != passed_dept:
+                    data.ledger_department = passed_dept
 
             if data.ledger_department:
                 data.ledger_department = (
@@ -4376,6 +4436,11 @@ class TrainingLedgerService:
                     data.second_level_status = "pending"
 
             all_records.append(TrainingLedger(**data.model_dump()))
+            # 跨半边参训：其余半边各建一条内容一致的副本
+            for half in extra_halves:
+                copy_data = data.model_dump()
+                copy_data["ledger_department"] = half
+                all_records.append(TrainingLedger(**copy_data))
 
             if data.involved_depts and data.session_id:
                 depts = [
@@ -4392,7 +4457,159 @@ class TrainingLedgerService:
                         all_records.append(TrainingLedger(**copy_data))
 
         await self.repo.add_all(all_records)
-        return len(data_list)
+        return len(data_list), trainee_matched
+
+    # ── 201 家族半边归属（口径移植自老项目 _assign_half_ledger 等） ──
+
+    async def _resolve_trainee_feishu_norms(self, trainees: str | None) -> set[str]:
+        """按飞书联系人解析培训对象的部门归属（201 半边副本的人员判定依据）.
+
+        从飞书通讯录缓存表（hr_feishu_members，一人多部门时每个部门一行）
+        按姓名查部门，经培训部门映射归一后返回规范名集合；培训对象为空或
+        通讯录中识别不到任何人员部门时返回空集，调用方据此走兜底（不收敛）。
+        人员归属覆写（mapping_type=person）优先于飞书部门：临时调线而
+        飞书未改的人员按覆写部门落线。
+        """
+        names = {n for n in re.split(r"[、,，;；/\s]+", trainees or "") if n}
+        if not names:
+            return set()
+
+        from app.modules.hr.training_dept_resolver import (
+            get_person_overrides,
+            resolve_training_department,
+        )
+
+        overrides = await get_person_overrides(self.session)
+        result = await self.session.execute(
+            select(HrFeishuMember.name, HrFeishuMember.department).where(
+                HrFeishuMember.name.in_(names),
+                HrFeishuMember.is_deleted.is_(False),
+            )
+        )
+        depts_by_name: dict[str, list[str]] = {}
+        for name, dept in result.all():
+            dept = (dept or "").strip()
+            if dept:
+                depts_by_name.setdefault(name, []).append(dept)
+
+        norms: set[str] = set()
+        for name in names:
+            override = overrides.get(name)
+            if override:
+                # 人员归属覆写优先：飞书旧部门不再影响落线
+                norms.add(override)
+                continue
+            for dept in depts_by_name.get(name, []):
+                # department/sub_department 传同名，兼容映射配置 first/second 两种形态
+                norm = await resolve_training_department(self.session, dept, dept)
+                if norm:
+                    norms.add(norm)
+        return norms
+
+    async def _assign_half_ledger(self, data: TrainingLedgerCreate) -> None:
+        """归属部门写端归一；201 半边主记录按参训人员飞书部门归属修正.
+
+        裸名（如 201二车间）展开为 MC+DR 后取有参训人员的那半；主记录已落
+        某半边但参训人员都不在该半边时，挪到有人的半边；参训人员在飞书联系
+        人识别不到部门时维持原归一口径（裸名归 MC 优先）。
+        """
+        from app.modules.hr.training_dept_resolver import (
+            split_ledger_departments,
+            split_target_names,
+        )
+
+        if not data.ledger_department:
+            return
+        split_targets = await split_target_names(self.session)
+        if not split_targets:
+            return
+        expanded_main = await split_ledger_departments(
+            self.session, data.ledger_department
+        )
+        if data.ledger_department not in split_targets and len(expanded_main) <= 1:
+            return  # 非 201 家族归属，不动作
+        half_norms = await self._resolve_trainee_feishu_norms(data.trainees)
+        half_norms &= split_targets
+        if half_norms:
+            hit = [d for d in expanded_main if d in half_norms]
+            data.ledger_department = hit[0] if hit else sorted(half_norms)[0]
+        else:
+            data.ledger_department = expanded_main[0]
+
+    async def _assign_import_half_ledger(
+        self, data: TrainingLedgerCreate
+    ) -> tuple[bool, list[str]]:
+        """导入/无归属记录：201 车间的按参训人员飞书部门补半边归属.
+
+        Excel 导入不带归属部门、涉及部门与会话，"拆副本按人员收敛"的流程
+        对导入记录从未触发（如 DR 线培训被导入 MC Tab）。此处对授课部门为
+        裸名"201二车间"且未落归属的记录，按参训人员飞书部门判定半边并写入
+        归属部门；跨半边参训时返回其余半边，由调用方各建一条内容一致的副本。
+        人员识别不到时不动作（返回 (False, [])，由调用方回退所选 Tab）。
+        """
+        from app.modules.hr.training_dept_resolver import (
+            _201_BARE_NAME,
+            split_target_names,
+        )
+
+        if data.ledger_department or data.teaching_dept != _201_BARE_NAME:
+            return False, []
+        split_targets = await split_target_names(self.session)
+        if not split_targets:
+            return False, []
+        half_norms = await self._resolve_trainee_feishu_norms(data.trainees)
+        half_norms &= split_targets
+        if not half_norms:
+            return False, []
+        ordered = sorted(half_norms, key=lambda t: (0 if "（MC）" in t else 1, t))
+        data.ledger_department = ordered[0]
+        return True, ordered[1:]
+
+    async def _guard_201_trainee_resolution(self, data: TrainingLedgerCreate) -> None:
+        """201 家族录入拦截：涉及 201 车间但整份受训名单都无法从飞书联系人
+        识别出 MC/DR 线别时抛错提示人工核对（签到转入/手动新增口径；
+        Excel 导入不走此拦截，沿用回退与统计口径）。"""
+        from app.modules.hr.training_dept_resolver import (
+            _201_BARE_NAME,
+            split_target_names,
+            training_dept_aliases_of,
+        )
+
+        split_targets = await split_target_names(self.session)
+        if not split_targets:
+            return
+        alias_line: dict[str, str] = {}
+        for target in sorted(split_targets):
+            for alias in await training_dept_aliases_of(self.session, target):
+                alias_line.setdefault(alias, target)
+        involved_parts = [
+            p.strip() for p in (data.involved_depts or "").split("、") if p.strip()
+        ]
+        context_values = [
+            v
+            for v in (data.ledger_department, data.teaching_dept, *involved_parts)
+            if v
+        ]
+        touched = any(
+            v == _201_BARE_NAME or v in alias_line or v in split_targets
+            for v in context_values
+        )
+        if not touched:
+            return
+        names = [n for n in re.split(r"[、,，;；/\s]+", data.trainees or "") if n]
+        if not names:
+            return  # 无名单可判定，走原归属口径
+        norms = await self._resolve_trainee_feishu_norms(data.trainees)
+        if norms & split_targets:
+            return  # 至少命中一条线
+        preview = "、".join(names[:10]) + ("等" if len(names) > 10 else "")
+        raise AppException(
+            status_code=400,
+            message=(
+                f"受训人员（{preview}）均未能从飞书联系人识别出 201二车间"
+                "（MC/DR）线别，请核对人员姓名或培训部门映射后再录入台账"
+            ),
+        )
 
     # 需要同步的核心字段（teaching_dept 除外，每条记录保持自己的部门）
     _SYNC_FIELDS = {
@@ -4458,6 +4675,22 @@ class TrainingLedgerService:
     async def delete_by_department(self, department: str) -> int:
         """清空部门全部台账（软删除），返回删除条数."""
         return await self.repo.delete_all_by_department(department)
+
+    async def batch_delete_records(self, record_ids: list[UUID]) -> dict[str, Any]:
+        """批量软删除台账记录，返回 {deleted, failed}.
+
+        单条逻辑与 delete_record 一致（主办方删除联动 owner_deleted）；
+        不存在的 ID 计入 failed，不中断整批。
+        """
+        deleted = 0
+        failed: list[str] = []
+        for record_id in record_ids:
+            try:
+                await self.delete_record(record_id)
+                deleted += 1
+            except NotFoundException:
+                failed.append(str(record_id))
+        return {"deleted": deleted, "failed": failed}
 
     # ── 培训时间冲突检测 ──
 
@@ -4994,6 +5227,7 @@ class EmployeeTrainingListService:
 
         from app.modules.hr.training_dept_resolver import (
             _load_mappings,
+            get_person_overrides,
             resolve_training_department,
         )
 
@@ -5003,6 +5237,8 @@ class EmployeeTrainingListService:
             for m in await _load_mappings(self.session)
             if m["mapping_type"] == "candidate_source" and m["target_name"]
         }
+        # 人员归属覆写优先：person 映射的人员落到覆写部门行（飞书旧部门不影响）
+        person_overrides = await get_person_overrides(self.session)
 
         stmt = _select(HrFeishuMember).where(HrFeishuMember.is_deleted.is_(False))
         rows = (await self.session.execute(stmt)).scalars().all()
@@ -5032,6 +5268,8 @@ class EmployeeTrainingListService:
             target = await resolve_training_department(self.session, feishu_dept)
             if not target:
                 continue
+            # 人员归属覆写：person 映射的人员按覆写部门行落库
+            target = person_overrides.get((member.name or "").strip(), target)
             if department and target != department:
                 # 候选来源覆写（如 IT←AI创新部）：指定部门导入时也检查目标部门
                 for tgt, src in candidate_source.items():

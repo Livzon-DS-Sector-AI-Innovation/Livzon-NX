@@ -1246,13 +1246,28 @@ class WarehouseService:
         """
         batch_size = min(max(page_size, 100), 500)
         last_synced_ms = int(last_synced_at.timestamp() * 1000) if last_synced_at else 0
+        # 飞书业务日期字段的取值为「当天零点」的时间戳（日期型字段无时刻），
+        # 而 last_synced_at 是精确到毫秒的同步时刻。直接用上次同步时刻做水线
+        # 会把当天新录入但日期为当天的记录（零点 < 同步时刻）误判为旧数据，
+        # 导致增量永远拉不到当天数据。因此业务日期水线改用「上次同步当天零点」。
+        last_synced_day_ms = (
+            int(
+                datetime.combine(
+                    last_synced_at.date(), datetime.min.time(), tzinfo=UTC
+                ).timestamp()
+                * 1000
+            )
+            if last_synced_at
+            else 0
+        )
 
         def _record_is_new(record: dict[str, Any]) -> bool:
             fields = record.get("fields") or {}
             date_value = fields.get(sort_field)
             modified_ms = record.get("last_modified_time")
             date_is_new = (
-                isinstance(date_value, (int, float)) and date_value >= last_synced_ms
+                isinstance(date_value, (int, float))
+                and date_value >= last_synced_day_ms
             )
             modified_is_new = (
                 isinstance(modified_ms, (int, float)) and modified_ms >= last_synced_ms
@@ -1462,6 +1477,7 @@ class WarehouseService:
         keyword: str | None = None,
         source: str | None = None,
         force: bool = False,
+        incremental: bool = False,
         start_date: str | None = None,
         end_date: str | None = None,
         date_field: str | None = None,
@@ -1480,11 +1496,16 @@ class WarehouseService:
         if page_key in HARDWARE_DEPT_PAGE_KEYS:
             assert_department_filters(scope, advanced_filters)
         resolved_source = await self._resolve_material_page_source(source)
-        # 本地快照模式：force=1（手动刷新）先做增量同步到本地镜像（秒级，
-        # 只拉变更/新增），再读镜像返回。删除与历史修改由每日 00:00-06:00
-        # 全量兜底对账，刷新不再全量拉取大表。其余情况直接读本地快照（秒回）。
+        # 本地快照模式：force=1（用户点击「同步最新数据」）执行全量同步到本地
+        # 镜像，保证与飞书一致性（含删除/历史修改）；incremental=1（用户点击
+        # 「刷新」）执行增量同步（秒级，只拉变更/新增），水线按当天零点比较
+        # 保证当天新增记录不被漏拉；两者同步完成后都读本地快照返回。既不 force
+        # 也不 incremental 时直接读本地快照（秒回，供自动轮询使用），每 10 分钟
+        # 定时增量 + 每日 00:00-06:00 全量兜底保证数据新鲜度。
         if resolved_source == "local":
             if force:
+                await self.sync_material_page_to_local(page_key, incremental=False)
+            elif incremental:
                 await self.sync_material_page_to_local(page_key, incremental=True)
             return await self.get_local_material_page(
                 page_key,

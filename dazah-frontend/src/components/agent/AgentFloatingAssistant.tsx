@@ -47,6 +47,7 @@ const suggestions = [
 
 const ASSISTANT_EXIT_ANIMATION_MS = 180
 const AGENT_STREAM_TIMEOUT_MS = 90_000
+const DIRECT_VISION_STREAM_TIMEOUT_MS = 300_000
 const MAX_ATTACHMENT_COUNT = 5
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
 const MAX_ATTACHMENTS_TOTAL_BYTES = 20 * 1024 * 1024
@@ -78,6 +79,14 @@ type AgentFileArtifact = {
   filename: string
   content_type: string
   base64: string
+}
+
+export function getAgentStreamTimeoutMs(
+  attachments: readonly Pick<AgentAttachmentInput, "content_type">[],
+) {
+  return attachments.some((attachment) => attachment.content_type.startsWith("image/"))
+    ? DIRECT_VISION_STREAM_TIMEOUT_MS
+    : AGENT_STREAM_TIMEOUT_MS
 }
 
 function riskColor(risk: string) {
@@ -703,10 +712,11 @@ export function AgentFloatingAssistant() {
     let hasDisplayedContent = false
     let doneFlushPromise: Promise<void> | null = null
     let streamTimedOut = false
+    const streamTimeoutMs = getAgentStreamTimeoutMs(submittedAttachments)
     const streamTimeoutId = window.setTimeout(() => {
       streamTimedOut = true
       abortController.abort()
-    }, AGENT_STREAM_TIMEOUT_MS)
+    }, streamTimeoutMs)
     resetStreamBuffer(true)
     addMessage({ id: assistantMessageId, role: "assistant", content: "" })
     setLoading(true)
@@ -784,7 +794,9 @@ export function AgentFloatingAssistant() {
           removeMessage(assistantMessageId)
         }
         if (streamTimedOut) {
-          setError("Livzon Agent 回复超过 90 秒，请重试；系统已结束本次等待。")
+          setError(
+            `Livzon Agent 回复超过 ${Math.round(streamTimeoutMs / 1000)} 秒，请重试；系统已结束本次等待。`,
+          )
         }
         return
       }

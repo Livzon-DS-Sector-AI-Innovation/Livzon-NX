@@ -1179,6 +1179,27 @@ export async function clearTrainingLedgersByDept(
   return res.json()
 }
 
+export async function batchDeleteTrainingLedgers(
+  ids: string[]
+): Promise<{
+  code: number
+  message: string
+  data: { deleted: number; failed: string[] }
+}> {
+  const res = await authedFetch(`${API_BASE}/api/v1/hr/training-ledgers/batch-delete`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids }),
+    cache: 'no-store',
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || err.message || '批量删除培训台账失败')
+  }
+  revalidatePath('/hr/training/ledger')
+  return res.json()
+}
+
 // ─── TrainingLedgerPage Actions ───
 
 export interface TrainingLedgerPageRecord {
@@ -1455,7 +1476,10 @@ export async function createTrainer(
     body: JSON.stringify(data),
     cache: 'no-store',
   })
-  if (!res.ok) throw new Error('创建培训师失败')
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || err.message || '创建培训师失败')
+  }
   revalidatePath('/hr/training/trainer')
   return res.json()
 }
@@ -1470,7 +1494,11 @@ export async function updateTrainer(
     body: JSON.stringify(data),
     cache: 'no-store',
   })
-  if (!res.ok) throw new Error('更新培训师失败')
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    // 透传后端真实原因（如 403 权限、422 校验），界面提示不再笼统
+    throw new Error(err.detail || err.message || '更新培训师失败')
+  }
   revalidatePath('/hr/training/trainer')
   return res.json()
 }
@@ -1482,7 +1510,10 @@ export async function deleteTrainer(
     method: 'DELETE',
     cache: 'no-store',
   })
-  if (!res.ok) throw new Error('删除培训师失败')
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || err.message || '删除培训师失败')
+  }
   revalidatePath('/hr/training/trainer')
   return res.json()
 }
@@ -1737,6 +1768,30 @@ export async function deleteEsgTrainingRecord(
     method: 'DELETE',
   })
   if (!res.ok) throw new Error('删除ESG培训记录失败')
+}
+
+export async function batchDeleteEsgTrainingRecords(
+  ids: string[]
+): Promise<{
+  code: number
+  message: string
+  data: { deleted: number; failed: string[] }
+}> {
+  const res = await authedFetch(
+    `${API_BASE}/api/v1/hr/esg-training-records/batch-delete`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids }),
+      cache: 'no-store',
+    }
+  )
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || err.message || '批量删除ESG培训记录失败')
+  }
+  revalidatePath('/hr/training/ledger')
+  return res.json()
 }
 
 export async function syncEsgFromLedger(department: string): Promise<{

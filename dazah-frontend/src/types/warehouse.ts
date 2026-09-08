@@ -235,7 +235,10 @@ export interface WarehouseMaterialPageQueryParams {
   page?: number
   page_size?: number
   source?: string
+  /** 全量同步飞书最新数据（「同步最新数据」按钮） */
   force?: boolean
+  /** 增量同步飞书变更后读取本地快照（「刷新」按钮） */
+  incremental?: boolean
   keyword?: string
   start_date?: string
   end_date?: string

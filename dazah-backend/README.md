@@ -28,9 +28,8 @@ uv sync
 # 2. Install Playwright (required for regulatory tracker crawler)
 playwright install chromium
 
-# 3. Configure environment
-cp .env.example .env
-# Edit .env with your database and Redis credentials
+# 3. Configure the workspace root environment
+# From the workspace root, copy .env.local.example to .env.local.
 
 # 4. Database migrations
 alembic upgrade head
@@ -131,14 +130,10 @@ docker compose --env-file .env -f compose.yml up -d app
 
 ## Environment Variables
 
-Key variables in `.env`:
-
-- `APP_DATABASE_URL` — PostgreSQL connection string
-- `APP_REDIS_URL` — Redis connection string
-- `SECRET_KEY` — JWT secret (change in production)
-- `API_BASE_URL` — Backend URL for frontend server-side requests
-
-See `.env.example` for the full list.
+The canonical templates are the workspace root `.env.example` (production) and
+`.env.local.example` (development). The root Compose files inject internal
+container URLs such as `API_BASE_URL`; separate backend `.env` files are not
+used.
 
 ### Feishu Module Boundaries and Utilities
 
@@ -156,7 +151,6 @@ FEISHU_APP_SECRET=your_feishu_app_secret
 FEISHU_REDIRECT_URI=http://localhost:8000/api/v1/identity/auth/callback
 FRONTEND_URL=http://localhost:3000
 FEISHU_SCOPES=contact:contact.base:readonly contact:user.base:readonly
-FEISHU_WS_ENABLED=true
 ```
 
 HR Bitable tables use the platform app credentials plus these table settings:

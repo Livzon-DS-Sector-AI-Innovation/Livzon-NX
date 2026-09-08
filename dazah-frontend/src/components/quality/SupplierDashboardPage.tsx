@@ -2,7 +2,10 @@
 
 import { qualityTokens } from './themeTokens'
 import Link from 'next/link'
-import { Col, Empty, Row, Spin, Tooltip } from 'antd'
+import { useEffect, useState } from 'react'
+import { App, Col, Empty, Modal, Row, Spin, Table, Tabs, Tag, Tooltip } from 'antd'
+import type { ColumnsType } from 'antd/es/table'
+import dayjs from 'dayjs'
 import {
   SafetyCertificateOutlined,
   CheckCircleOutlined,
@@ -14,8 +17,9 @@ import {
 } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import ReactECharts from 'echarts-for-react'
-import { fetchSupplierStatistics } from '@/lib/api/client/quality'
-import type { SupplierDashboardStats } from '@/types/quality'
+import { fetchSupplierQualifications, fetchSupplierStatistics } from '@/lib/api/client/quality'
+import type { SupplierExpiryBucket } from '@/lib/api/client/quality'
+import type { SupplierDashboardStats, SupplierQualificationItem } from '@/types/quality'
 
 /* ── 色板（GMP 审计风格）── */
 const C = {
@@ -41,6 +45,45 @@ export function SupplierDashboardPage() {
   })
 
   const hasData = (stats?.total ?? 0) > 0
+
+  /* ── 到期分桶/供应商明细弹窗 ── */
+  const [detailModal, setDetailModal] = useState<{
+    title: string
+    bucket: SupplierExpiryBucket | null
+    withTabs: boolean
+    supplierName: string | null
+  } | null>(null)
+
+  const openBucketModal = (
+    title: string,
+    bucket: SupplierExpiryBucket,
+    withTabs = false,
+  ) => setDetailModal({ title, bucket, withTabs, supplierName: null })
+
+  const openSupplierModal = (name: string) =>
+    setDetailModal({
+      title: `${name} — 全部资质`,
+      bucket: null,
+      withTabs: false,
+      supplierName: name,
+    })
+
+  const donutBucketMap: Record<string, SupplierExpiryBucket> = {
+    已延期: 'expired',
+    '30天内到期': 'due_30',
+    '60天内到期': 'due_60',
+    '90天内到期': 'due_90',
+  }
+
+  const handleDonutClick = (params: { name?: string }) => {
+    const bucket = params.name ? donutBucketMap[params.name] : undefined
+    if (bucket && params.name) openBucketModal(`到期状态：${params.name}`, bucket)
+  }
+
+  const handleRiskClick = (params: { dataIndex?: number }) => {
+    const item = stats?.supplier_risk_ranking?.[params.dataIndex ?? -1]
+    if (item) openSupplierModal(item.name)
+  }
 
   /* ── 物料类型合规率 柱状图 ── */
   const materialComplianceOption = () => {
@@ -208,8 +251,10 @@ export function SupplierDashboardPage() {
               </Col>
               {/* 已延期 */}
               <Col xs={12} sm={8} md={4}>
-                <Tooltip title="资质已过截止日期，存在GMP合规风险">
-                  <div style={{ background: '#fff', borderRadius: 12, padding: '20px 18px', border: `1px solid ${(stats?.expired_count ?? 0) > 0 ? '#fecaca' : qualityTokens.border}`, position: 'relative', overflow: 'hidden', cursor: 'help' }}>
+                <Tooltip title="资质已过截止日期，存在GMP合规风险，点击查看明细">
+                  <div role="button" tabIndex={0} onClick={() => openBucketModal('已延期资质（已过截止日期）', 'expired')}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') openBucketModal('已延期资质（已过截止日期）', 'expired') }}
+                    style={{ background: '#fff', borderRadius: 12, padding: '20px 18px', border: `1px solid ${(stats?.expired_count ?? 0) > 0 ? '#fecaca' : qualityTokens.border}`, position: 'relative', overflow: 'hidden', cursor: 'pointer' }}>
                     <div style={{ position: 'absolute', right: -16, top: -16, width: 64, height: 64, borderRadius: '50%', background: (stats?.expired_count ?? 0) > 0 ? '#fef2f2' : '#f8fafc' }} />
                     <div style={{ position: 'relative', zIndex: 1 }}>
                       <ExclamationCircleOutlined style={{ fontSize: 22, color: (stats?.expired_count ?? 0) > 0 ? C.danger : qualityTokens.textTertiary, marginBottom: 10 }} />
@@ -221,8 +266,10 @@ export function SupplierDashboardPage() {
               </Col>
               {/* 即将到期 */}
               <Col xs={12} sm={8} md={4}>
-                <Tooltip title={`30天: ${stats?.due_30_count ?? 0} | 60天: ${stats?.due_60_count ?? 0} | 90天: ${stats?.due_90_count ?? 0}`}>
-                  <div style={{ background: '#fff', borderRadius: 12, padding: '20px 18px', border: '1px solid #e2e8f0', position: 'relative', overflow: 'hidden', cursor: 'help' }}>
+                <Tooltip title={`30天: ${stats?.due_30_count ?? 0} | 60天: ${stats?.due_60_count ?? 0} | 90天: ${stats?.due_90_count ?? 0}，点击查看明细`}>
+                  <div role="button" tabIndex={0} onClick={() => openBucketModal('即将到期资质', 'due_30', true)}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') openBucketModal('即将到期资质', 'due_30', true) }}
+                    style={{ background: '#fff', borderRadius: 12, padding: '20px 18px', border: '1px solid #e2e8f0', position: 'relative', overflow: 'hidden', cursor: 'pointer' }}>
                     <div style={{ position: 'absolute', right: -16, top: -16, width: 64, height: 64, borderRadius: '50%', background: '#fffbeb' }} />
                     <div style={{ position: 'relative', zIndex: 1 }}>
                       <ClockCircleOutlined style={{ fontSize: 22, color: C.warning, marginBottom: 10 }} />
@@ -285,15 +332,15 @@ export function SupplierDashboardPage() {
               <Col xs={24} lg={14}>
                 <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: 20 }}>
                   <h3 style={{ fontSize: 15, fontWeight: 600, color: qualityTokens.textPrimary, margin: '0 0 4px' }}>供应商风险排名 TOP10</h3>
-                  <p style={{ fontSize: 12, color: qualityTokens.textTertiary, margin: '0 0 12px' }}>按逾期 + 待完成综合风险排序（红框 = 已延期项）</p>
-                  <ReactECharts option={riskRankingOption()} style={{ height: 320 }} />
+                  <p style={{ fontSize: 12, color: qualityTokens.textTertiary, margin: '0 0 12px' }}>按逾期 + 待完成综合风险排序（红框 = 已延期项），点击柱查看该供应商全部资质</p>
+                  <ReactECharts option={riskRankingOption()} onEvents={{ click: handleRiskClick }} style={{ height: 320 }} />
                 </div>
               </Col>
               <Col xs={24} lg={10}>
                 <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: 20 }}>
                   <h3 style={{ fontSize: 15, fontWeight: 600, color: qualityTokens.textPrimary, margin: '0 0 4px' }}>到期状态分布</h3>
-                  <p style={{ fontSize: 12, color: qualityTokens.textTertiary, margin: '0 0 12px' }}>截止日期与当前时间对比分析</p>
-                  <ReactECharts option={expiryDonutOption()} style={{ height: 320 }} />
+                  <p style={{ fontSize: 12, color: qualityTokens.textTertiary, margin: '0 0 12px' }}>截止日期与当前时间对比分析，点击扇区查看对应明细</p>
+                  <ReactECharts option={expiryDonutOption()} onEvents={{ click: handleDonutClick }} style={{ height: 320 }} />
                 </div>
               </Col>
             </Row>
@@ -332,9 +379,151 @@ export function SupplierDashboardPage() {
                 </div>
               </Col>
             </Row>
+
+            <SupplierExpiryDetailModal
+              key={
+                detailModal
+                  ? `${detailModal.supplierName ?? ''}|${detailModal.bucket ?? ''}|${detailModal.withTabs ? 'tabs' : 'single'}`
+                  : 'closed'
+              }
+              modal={detailModal}
+              counts={{
+                due_30: stats?.due_30_count,
+                due_60: stats?.due_60_count,
+                due_90: stats?.due_90_count,
+              }}
+              onClose={() => setDetailModal(null)}
+            />
           </>
         )}
       </Spin>
     </div>
+  )
+}
+
+/* ── 到期分桶/供应商明细弹窗 ── */
+
+interface ExpiryDetailModalState {
+  title: string
+  bucket: SupplierExpiryBucket | null
+  withTabs: boolean
+  supplierName: string | null
+}
+
+const BUCKET_TABS: { key: SupplierExpiryBucket; label: string }[] = [
+  { key: 'due_30', label: '30天内到期' },
+  { key: 'due_60', label: '31~60天到期' },
+  { key: 'due_90', label: '61~90天到期' },
+]
+
+function describeDaysLeft(deadline: string | null): { text: string; color: string } | null {
+  if (!deadline) return null
+  const d = dayjs(deadline)
+  if (!d.isValid()) return null
+  const diff = d.startOf('day').diff(dayjs().startOf('day'), 'day')
+  if (diff < 0) return { text: `已过期 ${-diff} 天`, color: '#e03131' }
+  if (diff === 0) return { text: '今天到期', color: '#d97706' }
+  if (diff <= 30) return { text: `剩 ${diff} 天`, color: '#d97706' }
+  return { text: `剩 ${diff} 天`, color: '#64748b' }
+}
+
+const EXPIRY_DETAIL_COLUMNS: ColumnsType<SupplierQualificationItem> = [
+  { title: '供应商名称', dataIndex: 'supplier_name', width: 180, render: (v: string | null) => v || '-' },
+  { title: '物料名称', dataIndex: 'material_name', width: 150, render: (v: string | null) => v || '-' },
+  { title: '物料类型', dataIndex: 'material_type', width: 100, render: (v: string | null) => v || '-' },
+  { title: '资质名称', dataIndex: 'qualification_name', width: 150, render: (v: string | null) => v || '-' },
+  {
+    title: '截止日期',
+    dataIndex: 'deadline',
+    width: 120,
+    render: (v: string | null) => (v ? dayjs(v).format('YYYY-MM-DD') : '-'),
+  },
+  {
+    title: '剩余天数',
+    key: 'days_left',
+    width: 120,
+    render: (_: unknown, record) => {
+      const info = describeDaysLeft(record.deadline)
+      if (!info) return '-'
+      return <span style={{ color: info.color, fontWeight: info.color === '#e03131' ? 600 : 400 }}>{info.text}</span>
+    },
+  },
+  {
+    title: '是否完成',
+    dataIndex: 'is_completed',
+    width: 90,
+    render: (v: boolean) => (v ? <Tag color="green">已完成</Tag> : <Tag color="orange">未完成</Tag>),
+  },
+  { title: '负责人', dataIndex: 'responsible_person', width: 110, render: (v: string | null) => v || '-' },
+]
+
+function SupplierExpiryDetailModal({
+  modal,
+  counts,
+  onClose,
+}: {
+  modal: ExpiryDetailModalState | null
+  counts: Partial<Record<SupplierExpiryBucket, number | undefined>>
+  onClose: () => void
+}) {
+  const { message } = App.useApp()
+  // 打开不同弹窗时通过外层 key 重挂载重置状态（避免 effect 内 setState）
+  const [activeBucket, setActiveBucket] = useState<SupplierExpiryBucket>(
+    modal?.bucket ?? 'due_30',
+  )
+  const [page, setPage] = useState(1)
+  const open = !!modal
+  const bucket = modal?.withTabs ? activeBucket : modal?.bucket ?? undefined
+
+  const query = useQuery({
+    queryKey: ['quality-supplier', 'expiry-detail', { bucket, supplierName: modal?.supplierName, page }],
+    queryFn: () =>
+      fetchSupplierQualifications({
+        expiry_bucket: bucket,
+        supplier_name: modal?.supplierName ?? undefined,
+        page,
+        page_size: 20,
+      }),
+    enabled: open,
+  })
+
+  useEffect(() => {
+    if (query.isError) {
+      message.error(query.error instanceof Error ? query.error.message : '加载资质明细失败')
+    }
+  }, [query.isError, query.error, message])
+
+  return (
+    <Modal open={open} title={modal?.title} onCancel={onClose} footer={null} width={1040}>
+      {modal?.withTabs && (
+        <Tabs
+          activeKey={activeBucket}
+          onChange={key => {
+            setActiveBucket(key as SupplierExpiryBucket)
+            setPage(1)
+          }}
+          items={BUCKET_TABS.map(tab => ({
+            key: tab.key,
+            label: `${tab.label}（${counts[tab.key] ?? 0}）`,
+          }))}
+        />
+      )}
+      <Table<SupplierQualificationItem>
+        size="small"
+        rowKey="record_id"
+        columns={EXPIRY_DETAIL_COLUMNS}
+        dataSource={query.data?.items ?? []}
+        loading={query.isFetching}
+        scroll={{ x: 960 }}
+        pagination={{
+          current: page,
+          pageSize: 20,
+          total: query.data?.total ?? 0,
+          showSizeChanger: false,
+          showTotal: total => `共 ${total} 条`,
+          onChange: setPage,
+        }}
+      />
+    </Modal>
   )
 }

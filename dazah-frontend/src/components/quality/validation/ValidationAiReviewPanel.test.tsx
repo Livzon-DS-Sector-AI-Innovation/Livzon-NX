@@ -116,6 +116,14 @@ function findButton(label: string): HTMLElement | undefined {
   )
 }
 
+function chooseFile(container: HTMLElement, name = 'VP-FT3-CV1902-01 方案.docx') {
+  const input = document.body.querySelector('input[type="file"]')
+  if (!input) return
+  const file = new File(['docx-content'], name)
+  Object.defineProperty(input, 'files', { value: [file] })
+  input.dispatchEvent(new Event('change', { bubbles: true }))
+}
+
 function setupMocks() {
   apiClient.fetchValidationReviews.mockResolvedValue({
     items: REVIEW_LIST,
@@ -176,7 +184,21 @@ describe('ValidationAiReviewPanel', () => {
     expect(bodyText()).toContain('已完成')
   })
 
-  it('打开详情抽屉并展示审核结论与发现问题', async () => {
+  it('打开详情抽屉并展示基准正文比对结果', async () => {
+    apiClient.fetchValidationReviewDetail.mockResolvedValue({
+      ...REVIEW_DETAIL,
+      basis_comparison: [
+        {
+          entry_id: 'entry-1',
+          code: 'SOP-FT3-017/04',
+          name: '方锥混合机操作规程',
+          reason: '清洁步骤来源',
+          content_length: 2000,
+          mismatch_count: 2,
+          status: 'completed',
+        },
+      ],
+    })
     act(() => {
       root.render(
         <QueryClientProvider client={new QueryClient()}>
@@ -201,6 +223,34 @@ describe('ValidationAiReviewPanel', () => {
     expect(bodyText()).toContain('本次 AI 审核共核对引用文件 1 项')
     expect(bodyText()).toContain('引用版本不一致')
     expect(bodyText()).toContain('SMP-QA-105/02')
+    expect(bodyText()).toContain('基准正文一致性核查')
+    expect(bodyText()).toContain('方锥混合机操作规程')
+    expect(bodyText()).toContain('2 处不一致')
+  })
+
+  it('未选择文件时点击创建给出提示且不创建', async () => {
+    act(() => {
+      root.render(
+        <QueryClientProvider client={new QueryClient()}>
+          <App>
+            <ValidationAiReviewPanel />
+          </App>
+        </QueryClientProvider>
+      )
+    })
+    await act(flushRenders)
+    const createButton = findButton('新建审核')
+    act(() => {
+      createButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await act(flushRenders)
+    const okButton = findButton('创建并上传文件')
+    act(() => {
+      okButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await act(flushRenders)
+    expect(bodyText()).toContain('请先选择要上传的验证方案 / 验证报告')
+    expect(reviewActions.createValidationReview).not.toHaveBeenCalled()
   })
 
   it('新建审核弹窗可打开并触发创建', async () => {
@@ -221,7 +271,8 @@ describe('ValidationAiReviewPanel', () => {
     })
     await act(flushRenders)
     expect(bodyText()).toContain('新建验证 AI 审核')
-    // 点击"创建并上传文件"提交（上传列表为空时仍可创建）
+    chooseFile(container)
+    await act(flushRenders)
     const okButton = findButton('创建并上传文件')
     act(() => {
       okButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
@@ -230,7 +281,121 @@ describe('ValidationAiReviewPanel', () => {
     expect(reviewActions.createValidationReview).toHaveBeenCalledWith({
       review_mode: 'upload',
       title: undefined,
+      focus_points: undefined,
     })
+  })
+
+  it('新建审核弹窗未选择文件时提示且不调用创建', async () => {
+    act(() => {
+      root.render(
+        <QueryClientProvider client={new QueryClient()}>
+          <App>
+            <ValidationAiReviewPanel />
+          </App>
+        </QueryClientProvider>
+      )
+    })
+    await act(flushRenders)
+    const createButton = findButton('新建审核')
+    act(() => {
+      createButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await act(flushRenders)
+    // 不选择文件直接点创建
+    const okButton = findButton('创建并上传文件')
+    act(() => {
+      okButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await act(flushRenders)
+    expect(bodyText()).toContain('请先选择要上传的验证方案 / 验证报告')
+    expect(reviewActions.createValidationReview).not.toHaveBeenCalled()
+  })
+
+  it('填写审核关注点后创建时传递 focus_points', async () => {
+    act(() => {
+      root.render(
+        <QueryClientProvider client={new QueryClient()}>
+          <App>
+            <ValidationAiReviewPanel />
+          </App>
+        </QueryClientProvider>
+      )
+    })
+    await act(flushRenders)
+    const createButton = findButton('新建审核')
+    act(() => {
+      createButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await act(flushRenders)
+    chooseFile(container)
+    await act(flushRenders)
+    const textarea = document.body.querySelector('textarea')
+    expect(textarea).toBeTruthy()
+    const valueSetter = Object.getOwnPropertyDescriptor(
+      window.HTMLTextAreaElement.prototype,
+      'value'
+    )?.set
+    act(() => {
+      valueSetter?.call(textarea, '重点核对清洁限度计算依据')
+      textarea?.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(flushRenders)
+    const okButton = findButton('创建并上传文件')
+    act(() => {
+      okButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await act(flushRenders)
+    expect(reviewActions.createValidationReview).toHaveBeenCalledWith({
+      review_mode: 'upload',
+      title: undefined,
+      focus_points: '重点核对清洁限度计算依据',
+    })
+  })
+
+  it('基准正文一致性核查展示不一致与空理由占位', async () => {
+    apiClient.fetchValidationReviewDetail.mockResolvedValue({
+      ...REVIEW_DETAIL,
+      basis_comparison: [
+        {
+          entry_id: 'basis-1',
+          name: '清洁验证管理程序',
+          code: 'SMP-QA-105/03',
+          reason: '',
+          mismatch_count: 2,
+        },
+        {
+          entry_id: 'basis-2',
+          name: '方锥混合机操作规程',
+          code: 'SOP-FT3-017/04',
+          reason: '覆盖混合机参数',
+          mismatch_count: 0,
+        },
+      ],
+    })
+    act(() => {
+      root.render(
+        <QueryClientProvider client={new QueryClient()}>
+          <App>
+            <ValidationAiReviewPanel />
+          </App>
+        </QueryClientProvider>
+      )
+    })
+    await act(flushRenders)
+    const row = [...container.querySelectorAll('tbody tr')].find((tr) =>
+      tr.textContent?.includes('清洁验证审核')
+    )
+    act(() => {
+      row?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await act(flushRenders)
+    await act(async () => {
+      await apiClient.fetchValidationReviewDetail.mock.results[0]?.value
+    })
+    expect(bodyText()).toContain('基准正文一致性核查')
+    expect(bodyText()).toContain('2 处不一致')
+    expect(bodyText()).toContain('一致')
+    expect(bodyText()).toContain('—')
   })
 
   it('详情抽屉中已完成记录可导出报告', async () => {
@@ -394,12 +559,13 @@ describe('ValidationAiReviewPanel', () => {
       createButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     await act(flushRenders)
+    chooseFile(container)
+    await act(flushRenders)
     const okButton = findButton('创建并上传文件')
     act(() => {
       okButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     await act(flushRenders)
-    // createValidationReview 被调用（未抛错到组件外部）
     expect(reviewActions.createValidationReview).toHaveBeenCalled()
   })
 
@@ -475,6 +641,116 @@ describe('ValidationAiReviewPanel', () => {
     expect(globalThis.fetch).toHaveBeenCalledWith(
       '/api/v1/quality/validation-reviews/review-1/export',
       { method: 'POST' }
+    )
+  })
+
+  it('输入搜索关键词后列表按 keyword 查询', async () => {
+    act(() => {
+      root.render(
+        <QueryClientProvider client={new QueryClient()}>
+          <App>
+            <ValidationAiReviewPanel />
+          </App>
+        </QueryClientProvider>
+      )
+    })
+    await act(flushRenders)
+    const input = document.querySelector('input[placeholder="按标题搜索"]') as HTMLInputElement
+    expect(input).toBeTruthy()
+    const setter = Object.getOwnPropertyDescriptor(
+      window.HTMLInputElement.prototype,
+      'value'
+    )?.set
+    act(() => {
+      setter?.call(input, '清洁验证')
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(flushRenders)
+    act(() => {
+      input.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true })
+      )
+    })
+    await act(flushRenders)
+    expect(apiClient.fetchValidationReviews).toHaveBeenLastCalledWith(
+      expect.objectContaining({ keyword: '清洁验证' })
+    )
+  })
+
+  it('状态下拉与来源下拉已渲染', async () => {
+    act(() => {
+      root.render(
+        <QueryClientProvider client={new QueryClient()}>
+          <App>
+            <ValidationAiReviewPanel />
+          </App>
+        </QueryClientProvider>
+      )
+    })
+    await act(flushRenders)
+    expect(document.body.textContent).toContain('已完成')
+    expect(document.body.textContent).toContain('页面上传')
+  })
+
+  it('选择状态下拉后按 status 查询', async () => {
+    act(() => {
+      root.render(
+        <QueryClientProvider client={new QueryClient()}>
+          <App>
+            <ValidationAiReviewPanel />
+          </App>
+        </QueryClientProvider>
+      )
+    })
+    await act(flushRenders)
+    const statusSelect = [...document.querySelectorAll('.ant-select')].find(
+      (el) => el.textContent?.includes('状态')
+    )
+    act(() => {
+      statusSelect?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    })
+    await act(flushRenders)
+    await act(flushRenders)
+    const option = [...document.body.querySelectorAll('.ant-select-item-option')].find(
+      (el) => el.textContent?.trim() === '已完成'
+    )
+    act(() => {
+      option?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await act(flushRenders)
+    expect(apiClient.fetchValidationReviews).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: 'completed' })
+    )
+  })
+
+  it('选择来源下拉后按 review_mode 查询', async () => {
+    act(() => {
+      root.render(
+        <QueryClientProvider client={new QueryClient()}>
+          <App>
+            <ValidationAiReviewPanel />
+          </App>
+        </QueryClientProvider>
+      )
+    })
+    await act(flushRenders)
+    const modeSelect = [...document.querySelectorAll('.ant-select')].find(
+      (el) => el.textContent?.includes('来源')
+    )
+    act(() => {
+      modeSelect?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    })
+    await act(flushRenders)
+    await act(flushRenders)
+    const option = [...document.body.querySelectorAll('.ant-select-item-option')].find(
+      (el) => el.textContent?.trim() === '页面上传'
+    )
+    act(() => {
+      option?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await act(flushRenders)
+    expect(apiClient.fetchValidationReviews).toHaveBeenLastCalledWith(
+      expect.objectContaining({ review_mode: 'upload' })
     )
   })
 })

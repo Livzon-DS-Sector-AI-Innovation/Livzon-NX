@@ -315,13 +315,16 @@ async def test_import_rows_with_mapping_creates_records_and_skips_blanks() -> No
         4: "remarks",
     }
     record_service: Any = AsyncMock()
-    record_service.create_many = AsyncMock(side_effect=lambda data_list: len(data_list))
+    record_service.create_many = AsyncMock(
+        side_effect=lambda data_list: (len(data_list), 0)
+    )
 
-    created = await api._import_rows_with_mapping(
+    created, trainee_matched = await api._import_rows_with_mapping(
         ws, 1, col_map, "质量部", record_service
     )
 
     assert created == 2
+    assert trainee_matched == 0  # 质量部非 201 家族，不做受训人员自动归属
     record_service.create_many.assert_awaited_once()
     batch = record_service.create_many.await_args.args[0]
     first, second = batch[0], batch[1]
@@ -392,6 +395,7 @@ def test_generate_department_ledger_excel_uses_expected_headers_and_dates() -> N
                 "duration_hours": 1.5,
                 "training_content": "GMP",
                 "instructor": "张三",
+                "attendance_count": 5,
             }
         ],
     )
@@ -402,6 +406,11 @@ def test_generate_department_ledger_excel_uses_expected_headers_and_dates() -> N
     assert ws["A2"].value == "培训时间"
     assert ws["B3"].value == "2026-08-20"
     assert ws["D3"].value == "GMP"
+    # 参训人员统计列：表头存在且数据行写入统计值
+    headers = [ws.cell(row=2, column=c).value for c in range(1, ws.max_column + 1)]
+    assert "参训人员统计" in headers
+    col_idx = headers.index("参训人员统计") + 1
+    assert ws.cell(row=3, column=col_idx).value == 5
 
 
 def test_generate_annual_plan_excel_pads_template_and_formats_confirmation() -> None:

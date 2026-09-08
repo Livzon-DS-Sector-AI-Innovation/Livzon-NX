@@ -1398,6 +1398,22 @@ async def pull_quality_records_from_feishu(
     if entity_code and entity_code not in QUALITY_PULL_ENTITY_LABELS:
         raise ValueError("不支持的飞书回拉实体")
 
+    if entity_code == "supplier_qualification":
+        # 供应商资质为镜像回拉（本地表），实现见质量模块镜像服务；
+        # 函数内导入避免模块级循环依赖。
+        from app.modules.quality.service.quality_feishu_supplier_mirror import (
+            pull_supplier_qualification_mirror,
+        )
+
+        mirror_result = await pull_supplier_qualification_mirror(db, full=True)
+        return {
+            "entity_code": entity_code,
+            "entity_label": QUALITY_PULL_ENTITY_LABELS.get(entity_code),
+            "synced": mirror_result["synced"],
+            "failed": mirror_result["failed"],
+            "conflicts": 0,
+        }
+
     synced = 0
     failed = 0
     conflicts = 0

@@ -109,6 +109,10 @@ disable_error_code = ["assignment"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+addopts = ["-p", "no:anyio"]
+markers = [
+    "anyio: 历史 anyio 标记；pytest-asyncio auto 统一处理所有 async 测试（anyio 插件已禁用）",
+]
 
 [tool.setuptools.packages.find]
 include = ["app*"]
@@ -119,6 +123,7 @@ dev = [
     "pytest>=9.0.3",
     "pytest-asyncio>=1.3.0",
     "pytest-cov>=7.0.0",
+    "pytest-timeout>=2.4.0",
 ]
 
 [tool.uv]

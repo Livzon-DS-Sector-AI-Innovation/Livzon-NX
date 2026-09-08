@@ -93,6 +93,7 @@ from app.modules.hr.schemas import (
     AnnualTrainingPlanUpdate,
     AttachmentPreview,
     AttachmentPreviewEnvelope,
+    BatchDeleteRequest,
     CandidateResponse,
     CandidateUpdate,
     CustomTrainingDepartmentCreate,
@@ -2452,6 +2453,44 @@ async def init_dept_approval_configs_from_departments(
 # ─── TrainingLedger Routes ───
 
 
+async def _attach_ledger_attendance(
+    db: AsyncSession, records: list[Any]
+) -> None:
+    """按培训会话参训名单统计参训人数并附加到台账记录。
+
+    有 session_id 的记录以会话真实名单（employee_names）长度为统计值；
+    无会话的手工台账按培训对象（trainees）文本的分隔片段计数；均不可数则为 None。
+    """
+    if not records:
+        return
+    session_ids = {r.session_id for r in records if r.session_id}
+    name_map: dict[UUID, int] = {}
+    if session_ids:
+        result = await db.execute(
+            select(TrainingSession.id, TrainingSession.employee_names).where(
+                TrainingSession.id.in_(session_ids)
+            )
+        )
+        for sid, names in result.all():
+            if names:
+                name_map[sid] = len(names)
+    for rec in records:
+        count: int | None = None
+        if rec.session_id and rec.session_id in name_map:
+            count = name_map[rec.session_id]
+        else:
+            text = (rec.trainees or "").strip()
+            if text:
+                parts = [
+                    part.strip()
+                    for part in re.split(r"[、,，;；\n\r]+", text)
+                    if part.strip()
+                ]
+                if len(parts) > 1:
+                    count = len(parts)
+        rec.attendance_count = count
+
+
 @router.get("/training-ledgers", summary="培训台账列表")
 async def list_training_ledgers(
     employee_number: str | None = Query(None, description="工号筛选"),
@@ -2471,6 +2510,7 @@ async def list_training_ledgers(
             page=page_params.page,
             page_size=page_params.page_size,
         )
+        await _attach_ledger_attendance(db, records)
         return success_response(
             data=[
                 TrainingLedgerResponse.model_validate(r).model_dump(mode="json")
@@ -2499,6 +2539,7 @@ async def list_training_ledgers(
             sort_order="asc",
             dept_alias_set=alias_set,
         )
+    await _attach_ledger_attendance(db, records)
     data = [
         TrainingLedgerResponse.model_validate(r).model_dump(mode="json")
         for r in records
@@ -3108,6 +3149,7 @@ _DEPT_LEDGER_HEADERS = [
     "一级/二级",
     "涉及部门",
     "培训对象",
+    "参训人员统计",
     "培训类型",
     "考核方式",
     "部门/公司计划",
@@ -3125,6 +3167,7 @@ _DEPT_LEDGER_FIELDS = [
     "level_category",
     "involved_depts",
     "trainees",
+    "attendance_count",
     "training_type",
     "ledger_assessment_method",
     "plan_source",
@@ -3356,6 +3399,7 @@ async def export_training_ledger_by_dept(
         ]
     if date_to:
         records = [r for r in records if r.training_date and r.training_date <= date_to]
+    await _attach_ledger_attendance(db, records)
     record_dicts = [
         TrainingLedgerResponse.model_validate(r).model_dump(mode="json")
         for r in records
@@ -3654,19 +3698,26 @@ async def import_training_ledger_by_dept(
         targets = recognized[:1]
 
     created = 0
+    trainee_matched = 0
     per_sheet: list[str] = []
     for sname, header_row, col_map in targets:
-        sheet_created = await _import_rows_with_mapping(
+        sheet_created, sheet_matched = await _import_rows_with_mapping(
             wb[sname], header_row, col_map, department, service
         )
         created += sheet_created
+        trainee_matched += sheet_matched
         per_sheet.append(f"[{sname}]{sheet_created}条")
 
     message = f"成功导入{created}条台账记录到{department}：{'、'.join(per_sheet)}"
+    if trainee_matched:
+        message += f"。已按受训人员自动识别归属{trainee_matched}条"
     if not all_sheets and len(recognized) > len(targets):
         others = "、".join(r[0] for r in recognized if r not in targets)
         message += f"。该文件还有其他可识别工作表：{others}，如需导入请指定工作表名"
-    return success_response(data={"created": created}, message=message)
+    return success_response(
+        data={"created": created, "trainee_matched": trainee_matched},
+        message=message,
+    )
 
 
 def _cell_text(v: Any) -> str | None:
@@ -3696,12 +3747,14 @@ async def _import_rows_with_mapping(
     col_map: dict[int, str],
     department: str,
     service: TrainingLedgerService,
-) -> int:
-    """按列映射导入工作表数据行，返回创建条数.
+) -> tuple[int, int]:
+    """按列映射导入工作表数据行，返回 (创建条数, 受训人员自动归属条数).
 
     AI 只做列映射，导入的每个值都来自 Excel 单元格原文。
     收集整表后一次性批量写入（service.create_many），避免逐行 create_record
     的 N 次 DB 往返拖垮导入（多 sheet 大文件尤其明显）。
+    201 二车间家族记录在 create_many 内按参训人员飞书部门补半边归属
+    （跨半边各建一条副本），未识别的行回退到所选 Tab。
     """
     data_list: list[TrainingLedgerCreate] = []
     for row in ws.iter_rows(min_row=header_row + 1, values_only=True):
@@ -3760,7 +3813,9 @@ async def _import_rows_with_mapping(
         data_list.append(data)
 
     if not data_list:
-        return 0
+        return 0, 0
+    # create_many 内完成：授课部门压平、半边归属修正、按参训人员飞书部门
+    # 补线（跨半边各建副本）、未识别回退所选 Tab
     return await service.create_many(data_list)
 
 
@@ -3946,6 +4001,7 @@ async def confirm_training_import(
     mapping_repo = _get_import_mapping_repo(session)
 
     created = 0
+    trainee_matched = 0
     per_sheet: list[str] = []
     for sheet_cfg in payload.sheets:
         if sheet_cfg.name not in wb.sheetnames:
@@ -3956,10 +4012,11 @@ async def confirm_training_import(
         col_map = {int(k): v for k, v in sheet_cfg.mapping.items() if v}
         if not col_map:
             continue
-        sheet_created = await _import_rows_with_mapping(
+        sheet_created, sheet_matched = await _import_rows_with_mapping(
             ws, sheet_cfg.header_row, col_map, department, service
         )
         created += sheet_created
+        trainee_matched += sheet_matched
         per_sheet.append(f"[{sheet_cfg.name}]{sheet_created}条")
 
         # 存入记忆表（表头指纹 → 映射）
@@ -3998,12 +4055,19 @@ async def confirm_training_import(
         raise AppException(
             status_code=400, message="未导入任何数据，请检查列映射与数据行"
         )
+    message = (
+        f"成功导入{created}条台账记录到{department}：{'、'.join(per_sheet)}。"
+        "格式已记住，下次同格式文件将自动识别"
+    )
+    if trainee_matched:
+        message += f"。已按受训人员自动识别归属{trainee_matched}条"
     return success_response(
         data={
             "created": created,
+            "trainee_matched": trainee_matched,
             "echo_sheets": [s.model_dump() for s in payload.sheets],
         },
-        message=f"成功导入{created}条台账记录到{department}：{'、'.join(per_sheet)}。格式已记住，下次同格式文件将自动识别",
+        message=message,
     )
 
 
@@ -4037,6 +4101,24 @@ async def clear_training_ledgers_by_dept(
         data={"deleted": deleted, "reset_content_used": reset},
         message=f"已清空{department}的{deleted}条培训台账记录",
     )
+
+
+@router.post(
+    "/training-ledgers/batch-delete", summary="批量删除培训台账记录（软删除）"
+)
+async def batch_delete_training_ledgers(
+    payload: BatchDeleteRequest,
+    service: TrainingLedgerService = Depends(get_training_ledger_service),
+    current_user: CurrentUser = None,
+) -> Any:
+    _require_user(current_user)
+    if not payload.ids:
+        raise AppException(status_code=400, message="请先选择要删除的记录")
+    result = await service.batch_delete_records(payload.ids)
+    message = f"已删除{result['deleted']}条培训台账记录"
+    if result["failed"]:
+        message += f"，{len(result['failed'])}条不存在或已删除"
+    return success_response(data=result, message=message)
 
 
 # ── 笔试成绩导入 ──────────────────────────────────────────

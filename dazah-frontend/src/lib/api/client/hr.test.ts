@@ -4,6 +4,7 @@ import {
   fetchDeptApprovalConfigNames,
   fetchEmployeeDepartments,
   fetchOnboardingAttachmentContent,
+  fetchTrainingDeptMappings,
 } from './hr'
 
 function jsonResponse(body: unknown, status = 200) {
@@ -102,5 +103,34 @@ describe('hr client onboarding/dept fetchers', () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ detail: '权限不足' }, 403))
     vi.stubGlobal('fetch', fetchMock)
     await expect(fetchEmployeeDepartments()).rejects.toThrow('权限不足')
+  })
+
+  it('parses dept mapping items including the person mapping type', async () => {
+    const item = {
+      id: 'map-1',
+      source_name: '质量部',
+      target_name: 'QA',
+      match_level: 'both',
+      mapping_type: 'person',
+      priority: 1,
+      enabled: true,
+      remark: null,
+      created_at: null,
+      updated_at: null,
+    }
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ data: [item] }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const mappings = await fetchTrainingDeptMappings()
+    expect(mappings).toHaveLength(1)
+    expect(mappings[0]).toMatchObject({
+      source_name: '质量部',
+      mapping_type: 'person',
+    })
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/hr/training/dept-mappings', {
+      cache: 'no-store',
+    })
   })
 })

@@ -34,6 +34,7 @@ from app.modules.quality.service import quality_feishu_sync as feishu_sync_servi
 from app.modules.quality.service import quality_management as service
 from app.platform.identity.models import User
 from app.platform.integrations.feishu import bitable as feishu_bitable
+from tests.modules.quality.ddl_lock_guard import execute_ddl_with_lock_timeout
 
 
 @pytest.fixture(autouse=True)
@@ -84,8 +85,7 @@ async def _ensure_quality_sync_columns(db_session: AsyncSession) -> AsyncIterato
         ADD COLUMN IF NOT EXISTS feishu_source_updated_at TIMESTAMPTZ
         """,
     ]
-    for statement in statements:
-        await db_session.execute(text(statement))
+    await execute_ddl_with_lock_timeout(db_session, statements)
     await db_session.execute(DepartmentContact.__table__.delete())  # type: ignore[attr-defined]
     await db_session.execute(
         text("DELETE FROM quality.deviation_investigation_push_records")

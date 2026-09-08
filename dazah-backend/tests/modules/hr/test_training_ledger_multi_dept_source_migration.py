@@ -25,6 +25,7 @@ def _make_session() -> AsyncMock:
     result = MagicMock()
     result.scalar_one_or_none.return_value = None
     result.scalars.return_value.all.return_value = []
+    result.all.return_value = []  # 飞书人员批量查询（半边归属收敛）返回空
     session.execute.return_value = result
     session.get.return_value = None
     return session

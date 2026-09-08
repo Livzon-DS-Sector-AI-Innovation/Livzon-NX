@@ -724,7 +724,11 @@ def _load_entries_from_workbook_bytes(
 def _load_seed_entries() -> list[RegistrationCertificateEntry]:
     workbook_path = _get_certificate_workbook_path()
     if not workbook_path.exists():
-        raise NotFoundException("药政证书台账文件", str(workbook_path))
+        logger.warning(
+            "药政证书台账种子文件不存在（%s），跳过种子加载；请先通过页面导入台账。",
+            workbook_path,
+        )
+        return []
     return _load_entries_from_workbook_bytes(workbook_path.read_bytes())
 
 
@@ -987,6 +991,19 @@ class CertificateWorkbookService:
             await self.session.rollback()
             raise
 
+        # 配置文件缺失时，将本次上传落盘到配置路径（create-if-missing，绝不覆盖）
+        config_path = _get_certificate_workbook_path()
+        if not config_path.exists():
+            try:
+                config_path.parent.mkdir(parents=True, exist_ok=True)
+                config_path.write_bytes(content)
+                logger.info("药政证书台账配置文件已从上传创建: %s", config_path)
+            except OSError as exc:
+                logger.warning(
+                    "药政证书台账配置文件落盘失败（%s），数据已入库但导出/种子将不可用",
+                    exc,
+                )
+
         return CertificateWorkbookImportResult(
             workbook_name=filename,
             imported_sheet_count=len(CERTIFICATE_SHEET_CONFIG),
@@ -998,7 +1015,10 @@ class CertificateWorkbookService:
         await self.ensure_seeded()
         workbook_path = _get_certificate_workbook_path()
         if not workbook_path.exists():
-            raise NotFoundException("药政证书台账文件", str(workbook_path))
+            raise NotFoundException(
+                "药政证书台账文件",
+                f"{workbook_path}（请先在页面导入台账文件后再导出）",
+            )
 
         temp_dir = Path(tempfile.mkdtemp(prefix="certificate-workbook-export-"))
         export_path = temp_dir / "药政证书台账-导出.xlsx"

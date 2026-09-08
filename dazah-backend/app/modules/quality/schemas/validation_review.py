@@ -18,16 +18,23 @@ FindingCategory = Literal[
     "content_consistency",
     "format_issue",
     "numeric_check",
+    "basis_content_mismatch",
 ]
 FindingSeverity = Literal["high", "medium", "low"]
 
 
 class ValidationReviewCreateRequest(BaseModel):
-    """新建一次 AI 审核会话。entry 模式需传 entry_id（文件管理目录条目）。"""
+    """新建一次 AI 审核会话（上传 VP/VR 文档，类型与编号自动识别）。"""
 
-    review_mode: ReviewMode = "upload"
-    entry_id: uuid.UUID | None = None
+    review_mode: Literal["upload"] = "upload"
     title: str | None = Field(default=None, max_length=255)
+    focus_points: str | None = Field(default=None, max_length=2000)
+
+
+class ValidationReviewRunRequest(BaseModel):
+    """发起审核：可选附用户特别关注点（与默认审核维度一并生效）。"""
+
+    focus_points: str | None = Field(default=None, max_length=2000)
 
 
 class ValidationReviewFileUploadRequest(BaseModel):
@@ -45,6 +52,9 @@ class ValidationReviewFindingOut(BaseModel):
     basis_source: str | None = None
     basis_match_type: str | None = None
     detail: str = ""
+    # 依据正文比对专用：两边原文对照
+    validation_quote: str = ""
+    basis_quote: str = ""
 
 
 class ValidationReviewFileOut(BaseModel):
@@ -81,6 +91,8 @@ class ValidationReviewOut(BaseModel):
     stats: ValidationReviewStatsOut | None = None
     findings: list[ValidationReviewFindingOut] = []
     basis_used: list[dict[str, Any]] = []
+    basis_comparison: list[dict[str, Any]] = []
+    focus_points: str | None = None
     job_id: str | None = None
     last_generated_at: datetime | None = None
     files: list[ValidationReviewFileOut] = []

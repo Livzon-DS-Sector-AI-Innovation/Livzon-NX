@@ -46,6 +46,14 @@ export default async function ProjectLedgerPage() {
 
   return (
     <Space orientation="vertical" size={16} style={{ width: '100%' }}>
+      {overview.total_records === 0 ? (
+        <Alert
+          type="info"
+          showIcon
+          title="暂无申报台账数据"
+          description="尚未配置注册台账文件，请点击页面右上角「导入申报台账」上传台账 Excel 完成初始化。"
+        />
+      ) : null}
       {failedCount > 0 ? (
         <Alert
           type="warning"

@@ -38,7 +38,7 @@ async def test_import_training_ledger_supports_all_sheets_and_reports_unknown_sh
         return 2, {1: "培训日期", 2: "培训内容", 3: "培训对象", 4: "授课人"}
 
     monkeypatch.setattr(api, "_read_excel_header_map", header_map)
-    import_rows = AsyncMock(side_effect=[2, 1])
+    import_rows = AsyncMock(side_effect=[(2, 0), (1, 0)])
     monkeypatch.setattr(api, "_import_rows_with_mapping", import_rows)
     service = SimpleNamespace()
 

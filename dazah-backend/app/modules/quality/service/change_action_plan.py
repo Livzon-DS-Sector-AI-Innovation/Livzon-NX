@@ -8,6 +8,7 @@ import logging
 import uuid
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,11 +30,17 @@ from app.modules.quality.schemas.change_action_plan import (
     CreateChangeActionPlanRequest,
     UpdateChangeActionPlanRequest,
 )
+from app.modules.quality.service.quality_notification_settings import (
+    ChangeActionPlanDueConfig,
+    load_change_action_plan_due_config,
+)
 from app.platform.integrations.feishu.bitable import BitableClient, _to_ms_timestamp
 from app.platform.integrations.feishu.contact import get_all_users
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
+
+_SHANGHAI_TZ = ZoneInfo("Asia/Shanghai")
 
 _FINISHED_STATUSES = {"已完成", "已关闭", "已确认"}
 
@@ -360,17 +367,44 @@ def _is_finished(plan: ChangeActionPlan) -> bool:
     return (plan.status or "").strip() in _FINISHED_STATUSES
 
 
-def _is_due_for_reminder(plan: ChangeActionPlan, *, today: date) -> bool:
+def _is_due_for_reminder(
+    plan: ChangeActionPlan,
+    *,
+    today: date,
+    lead_days: int = 3,
+) -> bool:
     effective_deadline = _get_effective_deadline(plan)
     if not effective_deadline:
         return False
-    return effective_deadline - timedelta(days=3) <= today
+    return effective_deadline - timedelta(days=lead_days) <= today
 
 
-def _was_reminded_today(plan: ChangeActionPlan, *, today: date) -> bool:
+def _was_reminded_within_interval(
+    plan: ChangeActionPlan,
+    *,
+    today: date,
+    interval_days: int = 1,
+) -> bool:
     if not plan.last_reminded_at:
         return False
-    return plan.last_reminded_at.astimezone(UTC).date() == today
+    reminded_date = plan.last_reminded_at.astimezone(UTC).date()
+    return (today - reminded_date).days < max(interval_days, 1)
+
+
+def _is_past_send_time(
+    send_time: str,
+    *,
+    now: datetime | None = None,
+) -> bool:
+    """当前上海时间是否已到当天发送时间。"""
+    current = now or datetime.now(_SHANGHAI_TZ)
+    try:
+        hour_text, minute_text = str(send_time).split(":")
+        hour, minute = int(hour_text), int(minute_text)
+    except (ValueError, AttributeError):
+        logger.warning("变更计划提醒发送时间格式非法：%r，按已到时间处理", send_time)
+        return True
+    return (current.hour, current.minute) >= (hour, minute)
 
 
 def _get_reminder_recipient(plan: ChangeActionPlan) -> tuple[str | None, str | None]:
@@ -389,7 +423,7 @@ def _build_reminder_confirm_url(plan_id: uuid.UUID) -> str:
     )
 
 
-def _build_reminder_markdown(plan: ChangeActionPlan) -> str:
+def _build_reminder_markdown(plan: ChangeActionPlan, *, lead_days: int = 3) -> str:
     deadline = _get_effective_deadline(plan)
     deadline_text = deadline.isoformat() if deadline else "未设置"
     owner_name = plan.owner_name or "未设置"
@@ -401,7 +435,7 @@ def _build_reminder_markdown(plan: ChangeActionPlan) -> str:
         f"**负责人：**{owner_name}\n"
         f"**部门负责人：**{director_name}\n"
         f"**截止日期：**{deadline_text}\n"
-        "当前已进入到期前 3 天提醒窗口，请及时处理并确认。"
+        f"当前已进入到期前 {lead_days} 天提醒窗口，请及时处理并确认。"
     )
 
 
@@ -410,8 +444,9 @@ def _build_reminder_card_payload(
     *,
     confirmed: bool,
     confirmed_by: str | None = None,
+    lead_days: int = 3,
 ) -> dict[str, Any]:
-    content = _build_reminder_markdown(plan)
+    content = _build_reminder_markdown(plan, lead_days=lead_days)
     if confirmed:
         confirmation_text = confirmed_by or "已确认"
         content = f"{content}\n\n**确认状态：**{confirmation_text}"
@@ -449,27 +484,50 @@ def _build_reminder_card_payload(
     }
 
 
-async def _send_reminder_card(plan: ChangeActionPlan) -> str | None:
+async def _send_reminder_card(
+    plan: ChangeActionPlan,
+    *,
+    fallback_recipients: list[dict[str, str | None]] | None = None,
+    lead_days: int = 3,
+) -> str | None:
     recipient_open_id, _ = _get_reminder_recipient(plan)
-    if not recipient_open_id:
+    if recipient_open_id:
+        targets: list[str] = [recipient_open_id]
+    else:
+        # 兜底：计划未配置负责人时，发送给通知设置中的默认接收人
+        targets = [
+            str(item.get("open_id")).strip()
+            for item in (fallback_recipients or [])
+            if str(item.get("open_id") or "").strip()
+        ]
+    if not targets:
         logger.warning("变更计划 %s 未配置负责人飞书账号，无法发送提醒", plan.id)
         return None
 
-    card = _build_reminder_card_payload(plan, confirmed=False)
-    try:
-        message_id = await send_user_card_with_message_id(
-            recipient_open_id,
-            title="变更计划到期提醒",
-            content=_build_reminder_markdown(plan),
-            elements=card["elements"][1:],
-        )
-        if not message_id:
-            logger.warning("变更计划 %s 飞书提醒发送失败（机器人可能无权限）", plan.id)
-            return None
-        return message_id
-    except Exception as e:
-        logger.warning("变更计划 %s 飞书提醒发送异常: %s", plan.id, e)
-        return None
+    card = _build_reminder_card_payload(plan, confirmed=False, lead_days=lead_days)
+    content = _build_reminder_markdown(plan, lead_days=lead_days)
+    first_message_id: str | None = None
+    for target in targets:
+        try:
+            message_id = await send_user_card_with_message_id(
+                target,
+                title="变更计划到期提醒",
+                content=content,
+                elements=card["elements"][1:],
+            )
+        except Exception as e:
+            logger.warning("变更计划 %s 飞书提醒发送异常: %s", plan.id, e)
+            continue
+        if message_id:
+            if first_message_id is None:
+                first_message_id = message_id
+        else:
+            logger.warning(
+                "变更计划 %s 飞书提醒发送失败（机器人可能无权限），接收人=%s",
+                plan.id,
+                target,
+            )
+    return first_message_id
 
 
 async def _patch_confirmation_card(plan: ChangeActionPlan) -> None:
@@ -516,8 +574,19 @@ async def find_due_change_action_plan_reminders(
     db: AsyncSession,
     *,
     today: date | None = None,
+    respect_send_time: bool = True,
+    config: ChangeActionPlanDueConfig | None = None,
 ) -> list[ChangeActionPlan]:
     today = today or datetime.now(UTC).date()
+    notification_config = config or await load_change_action_plan_due_config(db)
+    if not notification_config.is_enabled:
+        logger.info("变更计划到期提醒通知已停用，跳过扫描")
+        return []
+    if respect_send_time and not _is_past_send_time(notification_config.send_time):
+        return []
+
+    lead_days = notification_config.lead_days
+    interval_days = notification_config.repeat_interval_days
     items, _ = await repository.get_change_action_plans(
         db,
         page=1,
@@ -529,9 +598,11 @@ async def find_due_change_action_plan_reminders(
             continue
         if _is_finished(item):
             continue
-        if not _is_due_for_reminder(item, today=today):
+        if not _is_due_for_reminder(item, today=today, lead_days=lead_days):
             continue
-        if _was_reminded_today(item, today=today):
+        if _was_reminded_within_interval(
+            item, today=today, interval_days=interval_days
+        ):
             continue
         due_items.append(item)
     return due_items
@@ -542,8 +613,15 @@ async def send_change_action_plan_reminder(
     plan: ChangeActionPlan,
     *,
     force: bool = False,
+    config: ChangeActionPlanDueConfig | None = None,
 ) -> str | None:
     today = datetime.now(UTC).date()
+    notification_config = config or await load_change_action_plan_due_config(db)
+    if not notification_config.is_enabled:
+        logger.warning("变更计划提醒通知已停用，跳过发送 plan=%s", plan.id)
+        return None
+    lead_days = notification_config.lead_days
+    interval_days = notification_config.repeat_interval_days
     if not plan.reminder_enabled:
         logger.warning("变更计划 %s 未启用提醒", plan.id)
         return None
@@ -553,14 +631,20 @@ async def send_change_action_plan_reminder(
     if _is_finished(plan):
         logger.info("变更计划 %s 已完成，跳过提醒", plan.id)
         return None
-    if not force and not _is_due_for_reminder(plan, today=today):
-        logger.debug("变更计划 %s 尚未进入到期前 3 天提醒窗口", plan.id)
+    if not force and not _is_due_for_reminder(plan, today=today, lead_days=lead_days):
+        logger.debug("变更计划 %s 尚未进入到期前 %s 天提醒窗口", plan.id, lead_days)
         return None
-    if not force and _was_reminded_today(plan, today=today):
-        logger.debug("变更计划 %s 今日已发送提醒", plan.id)
+    if not force and _was_reminded_within_interval(
+        plan, today=today, interval_days=interval_days
+    ):
+        logger.debug("变更计划 %s 距上次提醒未超过间隔 %s 天", plan.id, interval_days)
         return None
 
-    message_id = await _send_reminder_card(plan)
+    message_id = await _send_reminder_card(
+        plan,
+        fallback_recipients=notification_config.fallback_recipients,
+        lead_days=lead_days,
+    )
     if not message_id:
         return None
 
@@ -581,7 +665,12 @@ async def run_change_action_plan_reminders(
     *,
     today: date | None = None,
 ) -> ChangeActionPlanReminderRunResult:
-    due_items = await find_due_change_action_plan_reminders(db, today=today)
+    # 手动批量执行：忽略每日发送时间窗（立即执行），但仍受开关与提醒窗口约束
+    due_items = await find_due_change_action_plan_reminders(
+        db,
+        today=today,
+        respect_send_time=False,
+    )
     reminded = 0
     failed = 0
 

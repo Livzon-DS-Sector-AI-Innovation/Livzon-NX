@@ -45,6 +45,17 @@ interface ApiEnvelope<T> {
   }
 }
 
+/** 后端请求失败（非 2xx）抛出的错误，携带 HTTP 状态码供调用方做降级分支。 */
+export class ServerApiError extends Error {
+  status: number
+
+  constructor(message: string, status: number) {
+    super(message)
+    this.name = 'ServerApiError'
+    this.status = status
+  }
+}
+
 async function serverApiFetch<T>(path: string): Promise<ApiEnvelope<T>> {
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), REGISTRATION_SERVER_REQUEST_TIMEOUT_MS)
@@ -67,7 +78,10 @@ async function serverApiFetch<T>(path: string): Promise<ApiEnvelope<T>> {
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => '')
-    throw new Error(errorText || `请求失败: ${response.status} ${response.statusText}`)
+    throw new ServerApiError(
+      errorText || `请求失败: ${response.status} ${response.statusText}`,
+      response.status
+    )
   }
 
   return (await response.json()) as ApiEnvelope<T>

@@ -122,13 +122,16 @@ def test_parse_workbook_definitions_and_seed_versions(
     assert versions[1].values_data[project_key] == "项目A"
 
 
-def test_parse_workbook_definitions_rejects_missing_file_and_skips_empty_sheets(
+def test_parse_workbook_definitions_handles_missing_file_and_skips_empty_sheets(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     missing = tmp_path / "missing.xlsx"
     monkeypatch.setattr(ledger, "_get_workbook_path", lambda: missing)
-    with pytest.raises(NotFoundException):
-        ledger._parse_workbook_definitions()
+    # 文件缺失时回退静态列定义（4 个子表），不再抛 404
+    definitions, updated_at = ledger._parse_workbook_definitions()
+    assert len(definitions) == len(ledger.PROJECT_LEDGER_SHEET_CONFIG)
+    assert updated_at is None
+    assert all(definition.columns for definition in definitions)
 
     path = tmp_path / "minimal.xlsx"
     workbook = Workbook()
@@ -161,7 +164,7 @@ def test_load_workbook_rejects_missing_and_unexpected_sheets(
     monkeypatch.setattr(
         ledger,
         "_parse_workbook_definitions",
-        lambda: ([definition], None),
+        lambda *args, **kwargs: ([definition], None),
     )
     missing_path = tmp_path / "missing-sheet.xlsx"
     Workbook().save(missing_path)
@@ -303,3 +306,53 @@ def test_reset_merges_ignores_ranges_outside_target() -> None:
         column_count=2,
     )
     assert {str(item) for item in worksheet.merged_cells.ranges} == {"A1:B1", "D3:E3"}
+
+
+def test_load_versions_falls_back_to_upload_definitions_when_config_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """配置文件缺失时，导入应回退用上传文件自身解析定义并成功建档。"""
+    config_path = tmp_path / "missing.xlsx"
+    monkeypatch.setattr(ledger, "_get_workbook_path", lambda: config_path)
+
+    upload_path = tmp_path / "upload.xlsx"
+    _save_workbook(upload_path)
+
+    versions = ledger._load_versions_from_workbook_path(upload_path)
+    assert versions
+    assert any(version.version_number == 2 for version in versions)
+
+
+@pytest.mark.asyncio
+async def test_import_workbook_creates_config_file_when_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """无源文件时导入建档成功，且上传内容落盘到配置路径（create-if-missing）。"""
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    config_path = tmp_path / "missing-config" / "1. 注册台账.xlsx"
+    monkeypatch.setattr(ledger, "_get_workbook_path", lambda: config_path)
+
+    upload_path = tmp_path / "upload.xlsx"
+    _save_workbook(upload_path)
+    content = upload_path.read_bytes()
+
+    session = SimpleNamespace(commit=AsyncMock(), rollback=AsyncMock())
+    service = ledger.ProjectLedgerWorkbookService(session)
+    service.repository = SimpleNamespace(
+        count_versions=AsyncMock(return_value=0),
+        replace_all_versions=AsyncMock(),
+    )
+
+    monkeypatch.setattr(
+        ledger,
+        "read_upload_secure",
+        AsyncMock(return_value=("1. 注册台账.xlsx", content)),
+    )
+    upload = SimpleNamespace(filename="1. 注册台账.xlsx")
+
+    result = await service.import_workbook(upload)
+    assert result.imported_records > 0
+    assert config_path.exists()
+    assert config_path.read_bytes() == content

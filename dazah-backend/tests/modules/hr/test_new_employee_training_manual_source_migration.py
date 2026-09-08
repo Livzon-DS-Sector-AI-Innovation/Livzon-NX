@@ -290,7 +290,7 @@ _201_MAPPINGS = [
     },
     {
         "source_name": "201三车间",
-        "target_name": "201二车间（MC）",
+        "target_name": "201二车间（DR）",
         "match_level": "both",
         "mapping_type": "special",
         "priority": 10,
@@ -325,13 +325,24 @@ async def test_training_dept_aliases_of_201_first_workshop(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_training_dept_aliases_of_201_second_mc_expands(monkeypatch):
-    """201二车间（MC）展开全部别名：裸名/霉酚酸/201三车间。"""
+    """201二车间（MC）展开全部别名：裸名/霉酚酸（201三车间 已改归 DR）。"""
     from app.modules.hr.training_dept_resolver import training_dept_aliases_of
 
     _patch_resolver_mappings(monkeypatch)
     aliases = await training_dept_aliases_of(MagicMock(), "201二车间（MC）")
     assert "201二车间" in aliases
     assert "201二车间（霉酚酸）" in aliases
+    assert "201三车间" not in aliases
+
+
+@pytest.mark.asyncio
+async def test_training_dept_aliases_of_201_second_dr_expands(monkeypatch):
+    """201二车间（DR）展开全部别名：多拉/201三车间。"""
+    from app.modules.hr.training_dept_resolver import training_dept_aliases_of
+
+    _patch_resolver_mappings(monkeypatch)
+    aliases = await training_dept_aliases_of(MagicMock(), "201二车间（DR）")
+    assert "201二车间（多拉）" in aliases
     assert "201三车间" in aliases
 
 
@@ -387,5 +398,33 @@ async def test_available_trainees_filter_201_second_mc(monkeypatch):
     assert "201二车间（MC）" in sql
     assert "201二车间" in sql
     assert "201二车间（霉酚酸）" in sql
-    assert "201三车间" in sql
+    # 201三车间 已改归 DR，不再属于 MC 别名
+    assert "201三车间" not in sql
     assert "201一车间" not in sql
+
+
+@pytest.mark.asyncio
+async def test_available_trainees_filter_201_second_dr(monkeypatch):
+    """201二车间（DR）计划：过滤条件展开全部别名（多拉/201三车间），
+    不包含 MC 专属别名（霉酚酸）。"""
+    from app.modules.hr.new_employee_training_repository import (
+        NewEmployeeTrainingRepository,
+    )
+
+    _patch_resolver_mappings(monkeypatch)
+    repo = NewEmployeeTrainingRepository(MagicMock())
+    captured = {}
+
+    async def fake_execute(stmt, *args, **kwargs):
+        captured["stmt"] = stmt
+        result_mock = MagicMock()
+        result_mock.scalars.return_value.all.return_value = []
+        return result_mock
+
+    repo.session.execute = fake_execute
+    await repo.list_available_trainees(department="201二车间（DR）")
+    sql = str(captured["stmt"].compile(compile_kwargs={"literal_binds": True}))
+    assert "201二车间（DR）" in sql
+    assert "201二车间（多拉）" in sql
+    assert "201三车间" in sql
+    assert "201二车间（霉酚酸）" not in sql

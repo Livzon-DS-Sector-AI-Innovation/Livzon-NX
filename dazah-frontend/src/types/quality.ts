@@ -1103,6 +1103,25 @@ export interface ValidationDashboardStats {
     count: number
   }>
   revalidationUpcoming: number
+  /** 按年度聚合：各年验证总数与已完成数（未绑定年度计数为 0） */
+  year_summaries: Array<{
+    year: number
+    total: number
+    completed: number
+  }>
+}
+
+/** 近期待再验证弹窗中的单条明细（验证主计划未完成且到期临近的记录） */
+export interface ValidationUpcomingItem {
+  record_id: string
+  title: string
+  validation_type: string
+  status: string
+  planned_end_date: string | null
+  department: string | null
+  equipment_code: string | null
+  plan_name: string | null
+  plan_code: string | null
 }
 
 // ============ Department Contact Types ============
@@ -1742,6 +1761,7 @@ export const VALIDATION_REVIEW_CATEGORY_LABELS: Record<string, string> = {
   content_consistency: '内容一致性',
   format_issue: '格式/编号问题',
   numeric_check: '数值核对',
+  basis_content_mismatch: '依据内容不一致',
 };
 
 export const VALIDATION_REVIEW_SEVERITY_LABELS: Record<string, string> = {
@@ -1754,3 +1774,41 @@ export const VALIDATION_REVIEW_MODE_LABELS: Record<string, string> = {
   upload: '页面上传',
   entry: '文件管理',
 };
+
+// ============ 质量通知设置 ============
+
+export interface QualityNotificationRecipient {
+  open_id?: string | null;
+  name: string;
+}
+
+export interface InspectionLineNotificationConfig {
+  entity_code: string;
+  entity_label?: string;
+  enabled: boolean;
+  recipients: QualityNotificationRecipient[];
+}
+
+export interface QualityNotificationSettingItem {
+  notification_type: string;
+  notification_label: string;
+  is_enabled: boolean;
+  lead_days: number;
+  repeat_interval_days: number;
+  send_time: string;
+  fallback_recipients: QualityNotificationRecipient[];
+  inspection_lines: InspectionLineNotificationConfig[];
+}
+
+export interface UpdateQualityNotificationSettingPayload {
+  is_enabled: boolean;
+  lead_days?: number;
+  repeat_interval_days?: number;
+  send_time?: string;
+  fallback_recipients?: QualityNotificationRecipient[];
+  inspection_lines?: {
+    entity_code: string;
+    enabled: boolean;
+    recipients: QualityNotificationRecipient[];
+  }[];
+}

@@ -431,7 +431,6 @@ async def test_training_ledger_repository_crud_lists_and_batch_updates(
                 "201二车间（MC）",
                 "201二车间",
                 "201二车间（霉酚酸）",
-                "201三车间",
             ]
         ),
     )

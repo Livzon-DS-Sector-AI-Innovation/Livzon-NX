@@ -181,6 +181,7 @@ describe('migrated pure helper contracts', () => {
     expect(parseFeishuBitableUrl('https://example.feishu.cn/base/app-token?table=tbl-1')).toEqual({
       app_token: 'app-token',
       table_id: 'tbl-1',
+      view_id: null,
     })
     expect(parseFeishuBitableUrl('not-a-url')).toBeNull()
     expect(parseFeishuBaseUrl('https://example.feishu.cn/base/app-token')).toBe('app-token')

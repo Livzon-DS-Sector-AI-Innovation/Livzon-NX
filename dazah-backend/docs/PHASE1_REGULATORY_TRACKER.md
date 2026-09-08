@@ -729,7 +729,6 @@ CDE_GUIDELINE_URL=https://www.cde.org.cn/zdyz/listpage/9cd8db3b7530c6fa0c86485e5
 
 CRAWLER_HEADLESS=true
 
-DAILY_SYNC_CRON=0 2 * * *
 ```
 
 ---

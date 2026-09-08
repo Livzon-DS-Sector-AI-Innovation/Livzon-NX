@@ -8,6 +8,9 @@ from __future__ import annotations
 
 import uuid
 
+import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.modules.quality.service.validation_basis_resolver import (
     BasisEntry,
     DocumentBasis,
@@ -173,3 +176,108 @@ class TestResolveReferences:
         assert data["matched"] is True
         assert data["entry_code"] == "SMP-QA-105/03"
         assert data["entry_id"] is not None
+
+
+class TestLoadBasisContentsV21:
+    @pytest.mark.anyio
+    async def test_live_extract_when_no_converted_md(
+        self, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """附件无转换产物时现场提取正文（soffice 管线）。"""
+        from datetime import date
+
+        from app.modules.quality.models import DocumentEntry
+        from app.modules.quality.service import validation_basis_resolver as br
+
+        await db_session.run_sync(
+            lambda sync_db: DocumentEntry.__table__.create(
+                sync_db.connection(), checkfirst=True
+            )
+        )
+        entry = DocumentEntry(
+            id=uuid.uuid4(),
+            department_id=uuid.uuid4(),
+            name="方锥混合机操作规程",
+            code="SOP-FT3-017/04",
+            effective_date=date(2026, 1, 1),
+            attachments=[
+                {
+                    "file_name": "sop.doc",
+                    "storage_key": "document-catalog/attachments/sop.doc",
+                    "converted_md_key": None,
+                }
+            ],
+        )
+        db_session.add(entry)
+        await db_session.commit()
+
+        # read_entry_md_contents 无转换产物 → 返回空
+        monkeypatch.setattr(
+            "app.modules.quality.service.document_catalog_attachment.read_entry_md_contents",
+            lambda e: [],
+        )
+        # 现场读取原文件 + 转换（_read_file 返回 (bytes, content_type)）
+        monkeypatch.setattr(
+            "app.modules.quality.service.document_catalog_attachment._read_file",
+            lambda key: (b"doc-bytes", "application/msword"),
+        )
+        monkeypatch.setattr(
+            "app.modules.quality.service.document_catalog_md.convert_word_attachment",
+            lambda name, content: ("# 现场提取正文\n转速 2-10rpm", []),
+        )
+
+        contents = await br.load_basis_contents(db_session, [entry.id])
+        assert entry.id in contents
+        assert "现场提取正文" in contents[entry.id]
+
+    @pytest.mark.anyio
+    async def test_live_extract_exception_skips(
+        self, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """现场提取抛异常 → 跳过该附件，不阻塞。"""
+        from datetime import date
+
+        from app.modules.quality.models import DocumentEntry
+        from app.modules.quality.service import validation_basis_resolver as br
+
+        await db_session.run_sync(
+            lambda sync_db: DocumentEntry.__table__.create(
+                sync_db.connection(), checkfirst=True
+            )
+        )
+        entry = DocumentEntry(
+            id=uuid.uuid4(),
+            department_id=uuid.uuid4(),
+            name="规程",
+            code="SOP-FT3-017/04",
+            effective_date=date(2026, 1, 1),
+            attachments=[
+                {
+                    "file_name": "sop.doc",
+                    "storage_key": "key1",
+                    "converted_md_key": None,
+                }
+            ],
+        )
+        db_session.add(entry)
+        await db_session.commit()
+
+        monkeypatch.setattr(
+            "app.modules.quality.service.document_catalog_attachment.read_entry_md_contents",
+            lambda e: [],
+        )
+        monkeypatch.setattr(
+            "app.modules.quality.service.document_catalog_attachment._read_file",
+            lambda key: b"x",
+        )
+
+        def _boom(name, content):
+            raise RuntimeError("convert fail")
+
+        monkeypatch.setattr(
+            "app.modules.quality.service.document_catalog_md.convert_word_attachment",
+            _boom,
+        )
+
+        contents = await br.load_basis_contents(db_session, [entry.id])
+        assert contents == {}

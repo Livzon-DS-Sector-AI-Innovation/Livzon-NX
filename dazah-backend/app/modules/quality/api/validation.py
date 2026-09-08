@@ -35,6 +35,7 @@ from app.modules.quality.service.quality_feishu_pages import (
     get_validation_record_from_feishu,
     get_validation_statistics_from_feishu,
     list_validation_records_from_feishu,
+    list_validation_revalidation_upcoming_from_feishu,
     pull_validation_records_from_feishu,
     update_validation_record_in_feishu,
 )
@@ -128,6 +129,35 @@ async def list_feishu_validations(
         record_code=record_code,
         department=department,
         year=year,
+        page=page,
+        page_size=page_size,
+    )
+    return paginated_response(
+        data=result["items"],
+        page=page,
+        page_size=page_size,
+        total=result["total"],
+    )
+
+
+@router.get(
+    "/feishu/validations/revalidation-upcoming",
+    summary="从飞书获取近期待再验证明细（未完成且到期临近）",
+    response_model=ApiResponseEnvelope[list[dict[str, Any]]],
+)
+async def list_feishu_validation_revalidation_upcoming(
+    days: int = Query(30, ge=1, le=365, description="近期待再验证天数阈值"),
+    year_from: int = Query(2024, ge=2000, le=2100, description="统计起始年份"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=500),
+    current_user: CurrentUser = None,
+    db: AsyncSession = Depends(get_db),
+) -> JSONResponse:
+    _require_user(current_user)
+    result = await list_validation_revalidation_upcoming_from_feishu(
+        db,
+        days=days,
+        year_from=year_from,
         page=page,
         page_size=page_size,
     )
@@ -421,9 +451,13 @@ async def get_validation_statistics_endpoint(
     response_model=ApiResponseEnvelope[dict[str, Any]],
 )
 async def get_feishu_validation_statistics_endpoint(
+    days: int = Query(30, ge=1, le=365, description="近期待再验证天数阈值"),
+    year_from: int = Query(2024, ge=2000, le=2100, description="统计起始年份"),
     current_user: CurrentUser = None,
     db: AsyncSession = Depends(get_db),
 ) -> JSONResponse:
     _require_user(current_user)
-    result = await get_validation_statistics_from_feishu(db)
+    result = await get_validation_statistics_from_feishu(
+        db, days=days, year_from=year_from
+    )
     return success_response(data=result)

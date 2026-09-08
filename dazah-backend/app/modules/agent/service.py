@@ -21,6 +21,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
+from app.core.llm import (
+    LLMConfigError,
+    LLMOutputError,
+    LLMProviderError,
+    LLMRateLimitError,
+    llm_client,
+)
 from app.modules.procurement.contract_generator import (
     TEMPLATE_DIR,
     TEMPLATE_FILES,
@@ -97,6 +104,54 @@ AGENT_ATTACHMENT_CONTENT_TYPES: dict[str, set[str]] = {
 }
 AGENT_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 AGENT_SESSION_RESET_COMMANDS = frozenset({"/new", "/restart", "/reset", "/新建会话"})
+DIRECT_VISION_MAX_OUTPUT_TOKENS = 4096
+DIRECT_VISION_ACTION_MARKERS = (
+    "查询",
+    "创建",
+    "新建",
+    "修改",
+    "更新",
+    "删除",
+    "发送",
+    "推送",
+    "通知",
+    "执行",
+    "调用",
+    "审批",
+    "批准",
+    "驳回",
+    "录入",
+    "入库",
+    "登记",
+    "提交",
+    "保存",
+    "同步",
+    "导出",
+    "下载",
+    "工作流",
+    "自动化",
+    "query",
+    "search",
+    "lookup",
+    "inventory",
+    "stock",
+    "warehouse",
+    "create",
+    "update",
+    "delete",
+    "send",
+    "approve",
+    "execute",
+    "workflow",
+    "automation",
+)
+DIRECT_VISION_CONFIG_ERROR = (
+    "当前未激活支持图片的视觉模型，请在系统设置中检测并激活视觉模型。"
+)
+DIRECT_VISION_RATE_LIMIT_ERROR = "视觉模型请求过于频繁，请稍后重试。"
+DIRECT_VISION_TIMEOUT_ERROR = "视觉模型响应超时，请稍后重试或适当增加模型超时时间。"
+DIRECT_VISION_PROVIDER_ERROR = "视觉模型服务暂不可用，请稍后重试。"
+DIRECT_VISION_OUTPUT_ERROR = "视觉模型未返回可读的分析结果，请稍后重试。"
 
 
 def normalize_agent_basic_command(message: str) -> str | None:
@@ -751,6 +806,132 @@ class AgentService:
             text_limit=AGENT_ATTACHMENT_TEXT_MAX_CHARS,
         )
 
+    @staticmethod
+    def _should_direct_vision_analyze(
+        message: str, attachments: list[dict[str, Any]]
+    ) -> bool:
+        """Use one direct vision call for image-only, analysis-only requests.
+
+        Requests that may require business data, tools, or writes stay on the
+        Hermes path so the existing permission and confirmation boundaries are
+        preserved.
+        """
+        if not attachments or any(
+            item.get("kind") != "image" for item in attachments
+        ):
+            return False
+        normalized = re.sub(r"\s+", "", message).casefold()
+        return not any(
+            marker.casefold() in normalized for marker in DIRECT_VISION_ACTION_MARKERS
+        )
+
+    @staticmethod
+    def _direct_vision_prompt(
+        message: str, attachments: list[dict[str, Any]]
+    ) -> str:
+        filenames = "、".join(
+            str(item.get("filename") or "未命名图片") for item in attachments
+        )
+        return (
+            "请直接分析用户提供的图片并回答问题。只依据图片中可确认的内容作答；"
+            "看不清或无法确认的信息请明确说明，不要猜测，不要调用工具或执行业务操作。\n"
+            f"用户问题：{message.strip()}\n"
+            f"图片文件：{filenames}"
+        )
+
+    @staticmethod
+    def _direct_vision_urls(attachments: list[dict[str, Any]]) -> list[str]:
+        return [
+            f"data:{item['content_type']};base64,{item['data_base64']}"
+            for item in attachments
+        ]
+
+    async def _call_direct_vision(
+        self, *, message: str, attachments: list[dict[str, Any]]
+    ) -> str:
+        try:
+            result = await llm_client.chat_vision(
+                self._direct_vision_prompt(message, attachments),
+                self._direct_vision_urls(attachments),
+                max_tokens=DIRECT_VISION_MAX_OUTPUT_TOKENS,
+            )
+        except LLMConfigError as exc:
+            raise HTTPException(
+                status.HTTP_503_SERVICE_UNAVAILABLE, DIRECT_VISION_CONFIG_ERROR
+            ) from exc
+        except LLMRateLimitError as exc:
+            raise HTTPException(
+                status.HTTP_429_TOO_MANY_REQUESTS, DIRECT_VISION_RATE_LIMIT_ERROR
+            ) from exc
+        except LLMOutputError as exc:
+            raise HTTPException(
+                status.HTTP_502_BAD_GATEWAY, DIRECT_VISION_OUTPUT_ERROR
+            ) from exc
+        except LLMProviderError as exc:
+            detail = (
+                DIRECT_VISION_TIMEOUT_ERROR
+                if exc.status_code == status.HTTP_504_GATEWAY_TIMEOUT
+                else DIRECT_VISION_PROVIDER_ERROR
+            )
+            error_status = (
+                status.HTTP_504_GATEWAY_TIMEOUT
+                if exc.status_code == status.HTTP_504_GATEWAY_TIMEOUT
+                else status.HTTP_502_BAD_GATEWAY
+            )
+            raise HTTPException(error_status, detail) from exc
+        except Exception as exc:
+            logger.exception("Direct vision analysis failed")
+            raise HTTPException(
+                status.HTTP_502_BAD_GATEWAY, DIRECT_VISION_PROVIDER_ERROR
+            ) from exc
+
+        answer = str(result or "").strip()
+        if not answer:
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, DIRECT_VISION_OUTPUT_ERROR)
+        return answer
+
+    async def _persist_direct_vision_response(
+        self,
+        db: AsyncSession,
+        *,
+        session_id: uuid.UUID,
+        current_user: User,
+        context: dict[str, Any],
+        memory_policy: Any,
+        answer: str,
+    ) -> AgentChatResponse:
+        assistant = await self.repo.add_message(
+            db,
+            session_id=session_id,
+            role="assistant",
+            content=answer,
+            metadata={
+                "source": "direct_vision",
+                "evidence": {
+                    "queried_at": datetime.now(UTC).isoformat(),
+                    "sources": [],
+                    "scope": context.get("scope") or [],
+                    "truncated": False,
+                },
+            },
+            user_id=current_user.id if current_user else None,
+        )
+        if memory_policy.notice_required:
+            await self.memory_policy_service.mark_notice_sent(db, user=current_user)
+        await db.commit()
+        return AgentChatResponse(
+            session_id=session_id,
+            message=AgentMessageOut(
+                id=assistant.id,
+                role="assistant",
+                content=assistant.content,
+                created_at=assistant.created_at,
+                metadata=assistant.message_metadata,
+            ),
+            pending_confirmations=[],
+            tool_trace=[],
+        )
+
     async def chat(
         self,
         db: AsyncSession,
@@ -819,6 +1000,19 @@ class AgentService:
 
         memory_policy = await self.memory_policy_service.resolve(db, user=current_user)
         await db.commit()
+        if self._should_direct_vision_analyze(request.message, attachments):
+            assistant_text = await self._call_direct_vision(
+                message=request.message,
+                attachments=attachments,
+            )
+            return await self._persist_direct_vision_response(
+                db,
+                session_id=session.id,
+                current_user=current_user,
+                context=request.context,
+                memory_policy=memory_policy,
+                answer=assistant_text,
+            )
         hermes_result = await self._call_hermes(
             session_id=session.id,
             user=current_user,
@@ -978,6 +1172,80 @@ class AgentService:
         terminal_event_received = False
         memory_policy = await self.memory_policy_service.resolve(db, user=current_user)
         await db.commit()
+        if self._should_direct_vision_analyze(request.message, attachments):
+            trace_id = uuid.uuid4()
+            run_id = uuid.uuid4()
+            sequence = 1
+            yield self._sse_backend_event(
+                AgentBackendV2Event(
+                    trace_id=trace_id,
+                    run_id=run_id,
+                    sequence=sequence,
+                    type="accepted",
+                    data={"session_id": str(session.id)},
+                )
+            )
+            sequence += 1
+            yield self._sse_backend_event(
+                AgentBackendV2Event(
+                    trace_id=trace_id,
+                    run_id=run_id,
+                    sequence=sequence,
+                    type="thinking",
+                    data={"status": "running", "mode": "direct_vision"},
+                )
+            )
+            try:
+                assistant_text = await self._call_direct_vision(
+                    message=request.message,
+                    attachments=attachments,
+                )
+            except HTTPException as exc:
+                error_code = (
+                    "agent.vision_timeout"
+                    if exc.status_code == status.HTTP_504_GATEWAY_TIMEOUT
+                    else "agent.vision_unavailable"
+                )
+                sequence += 1
+                yield self._sse_backend_event(
+                    AgentBackendV2Event(
+                        trace_id=trace_id,
+                        run_id=run_id,
+                        sequence=sequence,
+                        type="error",
+                        data={"code": error_code, "message": str(exc.detail)},
+                    )
+                )
+                return
+            sequence += 1
+            yield self._sse_backend_event(
+                AgentBackendV2Event(
+                    trace_id=trace_id,
+                    run_id=run_id,
+                    sequence=sequence,
+                    type="text_delta",
+                    data={"text": assistant_text},
+                )
+            )
+            response = await self._persist_direct_vision_response(
+                db,
+                session_id=session.id,
+                current_user=current_user,
+                context=request.context,
+                memory_policy=memory_policy,
+                answer=assistant_text,
+            )
+            sequence += 1
+            yield self._sse_backend_event(
+                AgentBackendV2Event(
+                    trace_id=trace_id,
+                    run_id=run_id,
+                    sequence=sequence,
+                    type="finished",
+                    data=response.model_dump(mode="json"),
+                )
+            )
+            return
         backend_stream = self._call_hermes_stream(
             session_id=session.id,
             user=current_user,

@@ -97,25 +97,25 @@ Server Action 示例见 `examples/server-actions.md`。
 pnpm install --frozen-lockfile
 pnpm lint
 pnpm typecheck
-pnpm test:unit
 pnpm test:coverage
-pnpm test:e2e:critical
 pnpm build
+pnpm test:e2e:critical
 docker build --file ../Dockerfile --target frontend --tag dazah-frontend:ci ..
 ```
 
-- `pnpm lint` 对应 CI `Lint` 中的 ESLint。新增和修改代码必须零 error，且不得增加 warning；历史 warning 渐进清理，不得通过放宽规则或批量忽略消除。
+- `pnpm lint` 对应 CI `Frontend Quality` 中的 ESLint。新增和修改代码必须零 error，且不得增加 warning；历史 warning 渐进清理，不得通过放宽规则或批量忽略消除。
 - `eslint-warning-baseline.json` 按规则记录历史 warning 上限；任一规则计数或总数增加都会使 `pnpm lint` 失败。完成清理后只允许同步下调对应计数和总数，禁止提高基线。
 - 禁止 `console.log` 和 `debugger`；确有运行故障需要记录时只使用受规则允许的 `console.warn`/`console.error`，不得输出敏感信息。
 - warning 按 `react-hooks/exhaustive-deps`、`@typescript-eslint/no-explicit-any` 和其他规则分批清理；修复 hooks 必须验证依赖稳定性，清理 `any` 必须替换为真实契约类型或经过收窄的 `unknown`。
-- `pnpm typecheck` 对应 `Type Check`，不得依赖 Next.js Build 间接发现类型错误。
-- `pnpm test:unit` 对应 `Unit Tests`；新增业务逻辑或缺陷修复必须有相关测试。
+- `pnpm typecheck` 对应 `Frontend Quality` 中的类型检查，不得依赖 Next.js Build 间接发现类型错误。
+- `pnpm test:unit` 用于定向单测；CI 通过 `pnpm test:coverage` 执行同一套测试，不重复运行；新增业务逻辑或缺陷修复必须有相关测试。
 - `pnpm test:coverage` 对整个 `src` 建立不可回退基线，PR 变更可执行行覆盖率
   不得低于 80%。
-- `pnpm test:e2e:critical` 对应 `Frontend E2E`，覆盖不依赖真实外部系统的关键
+- `pnpm test:e2e:critical` 对应 `Stable Frontend E2E`，覆盖不依赖真实外部系统的关键
   用户流程。
-- `pnpm build` 对应 `Frontend Build`，用于验证 Next.js 生产构建、Server/Client 边界和静态生成。
-- Docker 命令对应 `Docker Build`，涉及依赖、构建配置、运行时配置、standalone 输出或 Dockerfile 时必须本地执行。
-- 聚合任务 `Frontend Test` 只有在 `Lint`、`Type Check`、`Unit Tests`、`Frontend Build` 和 `Docker Build` 全部成功时才通过。
+- `pnpm build` 对应 `Frontend Quality` 中的构建步骤，用于验证 Next.js 生产构建、Server/Client 边界和静态生成。
+- Docker 命令对应 `Frontend Quality` 中的镜像构建步骤，涉及依赖、构建配置、运行时配置、standalone 输出或 Dockerfile 时必须本地执行。
+- `Stable Frontend E2E` 和隔离测试复用同次 CI 的 standalone 构建产物；生产 Docker 镜像独立构建并缓存构建层。
+- 统一 `CI Gate` 要求本次范围内的 `Frontend Quality` 和 `Stable Frontend E2E` 成功；未触发的项目允许跳过，隔离测试不阻断合并。
 
 交付时记录实际运行的命令、结果及其覆盖的变更表面；未运行完整门禁不等于未验证，但必须说明为何现有证据已经充分。页面和交互只需验证本次变化可能影响的主要操作及相关加载、空数据、失败、无权限、危险确认或窄屏状态。无法取得所需证据时必须说明原因、未验证范围和风险。

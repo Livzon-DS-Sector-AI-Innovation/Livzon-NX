@@ -58,6 +58,7 @@ desktop.ini
 !/scripts/tests/test_check_agent_instruction_bridges.py
 !/scripts/tests/test_check_test_impact.py
 !/scripts/tests/test_production_proxy_deployment.py
+!/scripts/tests/test_production_image_package.py
 !/scripts/tests/test_edbo_retirement.py
 !/scripts/tests/test_frontend_development_runtime.py
 !/scripts/wait-for-database.sh
@@ -104,14 +105,6 @@ desktop.ini
 /release/
 /.deploy-tmp/
 /.deploy-cache/
-
-# Local Docker and Compose deployment configuration
-**/Dockerfile
-**/Dockerfile.dev
-**/compose.yml
-**/compose.dev.yml
-**/docker-compose.yml
-**/docker-compose.yaml
 
 # Local environment and logs
 **/.env

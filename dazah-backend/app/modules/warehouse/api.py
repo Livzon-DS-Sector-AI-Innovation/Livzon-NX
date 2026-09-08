@@ -641,7 +641,12 @@ async def get_material_page(
     source: str | None = Query(
         None, description="可选 feishu 或 local；不传时由后端默认配置决定"
     ),
-    force: bool = Query(False, description="强制绕过缓存从飞书拉取最新数据"),
+    force: bool = Query(
+        False, description="强制绕过缓存全量拉取飞书最新数据（同步最新数据按钮）"
+    ),
+    incremental: bool = Query(
+        False, description="增量同步飞书变更后读取本地快照（刷新按钮）"
+    ),
     db: AsyncSession = Depends(get_db),
     service: WarehouseService = Depends(get_warehouse_service),
 ) -> Any:
@@ -654,6 +659,7 @@ async def get_material_page(
         keyword=keyword,
         source=source,
         force=force,
+        incremental=incremental,
         start_date=start_date,
         end_date=end_date,
         date_field=date_field,

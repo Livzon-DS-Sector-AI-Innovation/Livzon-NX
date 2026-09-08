@@ -134,27 +134,11 @@ class TestCreateRecord:
         record = await svc.create_review_record(
             db_session,
             user_id=uuid.uuid4(),
-            review_mode="upload",
-            entry_id=None,
             title="新建审核",
         )
         assert record.id is not None
         assert record.status == "draft"
         assert record.review_mode == "upload"
-
-    @pytest.mark.anyio
-    async def test_entry_mode_requires_entry_id(
-        self, db_session: AsyncSession
-    ) -> None:
-        with pytest.raises(AppException) as exc_info:
-            await svc.create_review_record(
-                db_session,
-                user_id=uuid.uuid4(),
-                review_mode="entry",
-                entry_id=None,
-                title="入口审核",
-            )
-        assert exc_info.value.status_code == 422
 
 
 class TestParseText:
@@ -540,45 +524,6 @@ class TestAddFiles:
             )
         assert exc_info.value.status_code == 422
 
-    @pytest.mark.anyio
-    async def test_add_entry_review_files(
-        self, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        record = await self._seed(db_session)
-        entry_id = await self._seed_entry(db_session)
-        monkeypatch.setattr(
-            svc,
-            "read_entry_md_contents",
-            lambda entry: [
-                {"file_name": "VP-FT3-01 方案.md", "md_text": "# 方案"},
-                {"file_name": "VR-FT3-01 报告.md", "md_text": "# 报告"},
-            ],
-        )
-        rows = await svc.add_entry_review_files(
-            db_session, record, entry_id=entry_id, user_id=record.created_by
-        )
-        await db_session.commit()
-        assert [row.doc_kind for row in rows] == ["plan", "report"]
-        assert rows[0].parse_status == "completed"
-        assert rows[0].parsed_text == "# 方案"
-
-    @pytest.mark.anyio
-    async def test_add_entry_review_files_no_content(
-        self, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        record = await self._seed(db_session)
-        entry_id = await self._seed_entry(db_session)
-        monkeypatch.setattr(svc, "read_entry_md_contents", lambda entry: [])
-        with pytest.raises(AppException) as exc_info:
-            await svc.add_entry_review_files(
-                db_session,
-                record,
-                entry_id=entry_id,
-                user_id=record.created_by,
-            )
-        assert exc_info.value.status_code == 422
-
-
 class TestDeleteAndList:
     @pytest.mark.anyio
     async def test_delete_review_record_soft_deletes(
@@ -719,3 +664,648 @@ class TestLoadDocumentBasis:
         items = sync_resolve(basis, "依据《清洁验证管理程序》（SMP-QA-105/02）执行")
         assert items[0].issue == "version_mismatch"
         assert items[0].current_revision == "03"
+
+
+class TestBasisContentPipeline:
+    @pytest.mark.anyio
+    async def test_select_key_bases_filters_unknown(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+
+        monkeypatch.setattr(
+            svc,
+            "get_config",
+            AsyncMock(return_value=SimpleNamespace(model_name="m")),
+        )
+        monkeypatch.setattr(
+            type(svc.llm_client),
+            "chat_json",
+            AsyncMock(
+                return_value={
+                    "selected": [
+                        {"code": "SOP-FT3-017/04", "reason": "清洁步骤来源"},
+                        {"code": "UNKNOWN-001/01", "reason": "不在候选中"},
+                    ]
+                }
+            ),
+        )
+        entry_id = uuid.uuid4()
+        candidates = [
+            {
+                "entry_id": entry_id,
+                "code": "SOP-FT3-017/04",
+                "name": "方锥混合机操作规程",
+                "length": 100,
+                "digest": "混合机参数",
+            }
+        ]
+        key_bases, model_name = await svc._select_key_bases(
+            "方案 VP-FT3-CV1902-01", candidates, None
+        )
+        assert model_name == "m"
+        assert len(key_bases) == 1
+        assert key_bases[0]["entry_id"] == entry_id
+        assert key_bases[0]["reason"] == "清洁步骤来源"
+
+    @pytest.mark.anyio
+    async def test_compare_basis_contents_builds_findings(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        entry_id = uuid.uuid4()
+        basis_text = "主轴转速 2-10rpm，最大装料 2000kg。"
+        validation_text = "验证方案规定主轴转速 5-15rpm。"
+        monkeypatch.setattr(
+            svc,
+            "get_config",
+            AsyncMock(return_value=SimpleNamespace(model_name="m")),
+        )
+        monkeypatch.setattr(
+            type(svc.llm_client),
+            "chat_json",
+            AsyncMock(
+                return_value={
+                    "findings": [
+                        {
+                            "validation_quote": "主轴转速 5-15rpm",
+                            "basis_quote": "主轴转速 2-10rpm",
+                            "dimension": "参数",
+                            "severity": "high",
+                            "detail": "转速范围与规程不一致",
+                        }
+                    ]
+                }
+            ),
+        )
+        key_bases = [
+            {
+                "entry_id": entry_id,
+                "code": "SOP-FT3-017/04",
+                "name": "方锥混合机操作规程",
+                "reason": "清洁步骤来源",
+            }
+        ]
+        findings = await svc._compare_basis_contents(
+            validation_text,
+            key_bases,
+            {entry_id: basis_text},
+            [],
+            None,
+        )
+        assert len(findings) == 1
+        row = findings[0]
+        assert row["category"] == "basis_content_mismatch"
+        assert row["severity"] == "high"
+        assert row["quote_verified"] is True
+        assert row["basis_quote_verified"] is True
+        assert row["validation_quote"] == "主轴转速 5-15rpm"
+        assert "方锥混合机操作规程" in row["basis_source"]
+
+    def test_build_basis_comparison_rows(self) -> None:
+        entry_id = uuid.uuid4()
+        key_bases = [
+            {
+                "entry_id": entry_id,
+                "code": "SOP-FT3-017/04",
+                "name": "方锥混合机操作规程",
+                "reason": "参数来源",
+            }
+        ]
+        comparison = svc._build_basis_comparison(
+            key_bases,
+            [
+                {
+                    "basis_entry_id": str(entry_id),
+                    "basis_source": "SOP-FT3-017/04 方锥混合机操作规程",
+                    "category": "basis_content_mismatch",
+                }
+            ],
+            {entry_id: "正文"},
+        )
+        assert len(comparison) == 1
+        assert comparison[0]["mismatch_count"] == 1
+        assert comparison[0]["status"] == "completed"
+
+
+class TestQualityDataLinkage:
+    @pytest.mark.anyio
+    async def test_collect_quality_data_summary(
+        self, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        async def _fake_deviations(db, *, keyword=None, page=1, page_size=5):
+            return (
+                [
+                    SimpleNamespace(
+                        deviation_code="PC-2604001",
+                        title="混合转速偏差",
+                        status="closed",
+                        level="minor",
+                        affected_items="霉酚酸",
+                    )
+                ],
+                1,
+            )
+
+        async def _fake_changes(db, **kwargs):
+            return (
+                [
+                    SimpleNamespace(
+                        change_code="BG-2603001",
+                        change_object="混合工艺",
+                        change_content="混合时间调整",
+                        closure_date=None,
+                    )
+                ],
+                1,
+            )
+
+        monkeypatch.setattr(svc, "get_deviations", _fake_deviations)
+        monkeypatch.setattr(svc, "get_changes", _fake_changes)
+        identities = {
+            "plan": {
+                "file_name": "VP-FT3-CV1902-01",
+                "doc_number": "VP-FT3-CV1902-01",
+            }
+        }
+        summary = await svc._collect_quality_data_summary(
+            db_session, identities, {"plan": "FT3 车间清洁验证"}
+        )
+        assert len(summary) == 2
+        assert {row["type"] for row in summary} == {"deviation", "change"}
+
+    @pytest.mark.anyio
+    async def test_collect_quality_data_summary_empty_keywords(
+        self, db_session: AsyncSession
+    ) -> None:
+        summary = await svc._collect_quality_data_summary(
+            db_session, {}, {"plan": "无关键词文本"}
+        )
+        assert summary == []
+
+
+class TestFullPipeline:
+    @pytest.mark.anyio
+    async def test_execute_review_with_basis_content_compare(
+        self, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """全管线：引用命中 → 拉依据正文 → 筛选 → 正文比对 → 汇总落库。"""
+        from app.modules.quality.service.validation_basis_resolver import (
+            BasisEntry,
+            DocumentBasis,
+        )
+
+        record = await _seed_record(db_session)
+        plan_text = (
+            "## 清洁步骤\n按《方锥混合机操作规程》（SOP-FT3-017/04）执行，"
+            "主轴转速 5-15rpm。"
+        )
+        row = ValidationReviewFile(
+            id=uuid.uuid4(),
+            review_id=record.id,
+            doc_kind="plan",
+            source="upload",
+            file_name="VP-FT3-CV1902-01 方案.md",
+            file_type="text/markdown",
+            file_size=100,
+            storage_key="",
+            parsed_text=plan_text,
+            parse_status="completed",
+            sort_order=0,
+        )
+        db_session.add(row)
+        await db_session.commit()
+
+        entry_id = uuid.uuid4()
+        basis = DocumentBasis(
+            entries=[
+                BasisEntry(
+                    id=entry_id,
+                    code="SOP-FT3-017/04",
+                    name="方锥混合机操作规程",
+                    effective_date=None,
+                    updated_at=None,
+                )
+            ],
+            prefixes={"SOP"},
+        )
+        monkeypatch.setattr(svc, "load_document_basis", AsyncMock(return_value=basis))
+        monkeypatch.setattr(
+            svc,
+            "load_basis_contents",
+            AsyncMock(return_value={entry_id: "主轴转速 2-10rpm，最大装料 2000kg。"}),
+        )
+        monkeypatch.setattr(
+            svc, "get_config", AsyncMock(return_value=SimpleNamespace(model_name="m"))
+        )
+        # 三次 LLM 调用顺序：P2 筛选 → P3 比对 → P1 总审核
+        call_results = [
+            {"selected": [{"code": "SOP-FT3-017/04", "reason": "清洁步骤来源"}]},
+            {
+                "findings": [
+                    {
+                        "validation_quote": "主轴转速 5-15rpm",
+                        "basis_quote": "主轴转速 2-10rpm",
+                        "dimension": "参数",
+                        "severity": "high",
+                        "detail": "转速范围与规程不一致",
+                    }
+                ]
+            },
+            {"findings": []},
+        ]
+        chat_mock = AsyncMock(side_effect=call_results)
+        monkeypatch.setattr(type(svc.llm_client), "chat_json", chat_mock)
+        monkeypatch.setattr(svc, "get_changes", AsyncMock(return_value=([], 0)))
+        monkeypatch.setattr(
+            svc, "get_deviations", AsyncMock(return_value=([], 0))
+        )
+
+        await svc._execute_review(
+            db_session, record, "job:p1", uuid.uuid4(), "重点核转速"
+        )
+        await db_session.commit()
+
+        payload = record.output_payload or {}
+        findings = payload.get("findings") or []
+        mismatch = [f for f in findings if f["category"] == "basis_content_mismatch"]
+        assert len(mismatch) == 1
+        assert mismatch[0]["validation_quote"] == "主轴转速 5-15rpm"
+        assert mismatch[0]["basis_quote"] == "主轴转速 2-10rpm"
+        assert mismatch[0]["basis_quote_verified"] is True
+        comparison = payload.get("basis_comparison") or []
+        assert len(comparison) == 1
+        assert comparison[0]["reason"] == "清洁步骤来源"
+        assert record.input_snapshot.get("focus_points") == "重点核转速"
+
+
+class TestExtractQualityKeywords:
+    def test_extracts_workshop_segment(self) -> None:
+        identities = {
+            "plan": {
+                "file_name": "VP-FT3-CV1902-01 方案",
+                "doc_number": "VP-FT3-CV1902-01",
+            }
+        }
+        assert svc._extract_quality_keywords(identities, {}) == ["FT3"]
+
+    def test_extracts_product_segment(self) -> None:
+        identities = {
+            "plan": {
+                "file_name": "VP-MC-PV1902-01 方案",
+                "doc_number": "VP-MC-PV1902-01",
+            }
+        }
+        assert svc._extract_quality_keywords(identities, {}) == ["MC"]
+
+    def test_no_keywords(self) -> None:
+        assert svc._extract_quality_keywords({}, {"plan": "普通文本"}) == []
+
+
+class TestBuildSummaryBasisBranch:
+    def test_summary_mentions_basis_comparison(self) -> None:
+        stats = {
+            "references_checked": 1,
+            "references_matched": 1,
+            "total_findings": 0,
+            "high": 0,
+            "medium": 0,
+            "low": 0,
+            "plan_report_checked": True,
+        }
+        summary = svc._build_summary(
+            stats,
+            [
+                {
+                    "code": "SOP-FT3-017/04",
+                    "name": "方锥混合机操作规程",
+                    "mismatch_count": 2,
+                }
+            ],
+        )
+        assert "依据文件正文比对" in summary
+        assert "方锥混合机操作规程" in summary
+
+
+class TestTimeoutProtection:
+    @pytest.mark.anyio
+    async def test_parse_timeout_marks_file_failed(
+        self, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """单文件解析超时 → 该文件 failed+"解析超时"，不阻塞整单。"""
+        record = await _seed_record(db_session)
+        row = ValidationReviewFile(
+            id=uuid.uuid4(),
+            review_id=record.id,
+            doc_kind="plan",
+            source="upload",
+            file_name="VP-test.md",
+            file_type="text/markdown",
+            file_size=3,
+            storage_key="validation-review/slow.md",
+            parse_status="pending",
+            sort_order=0,
+        )
+        db_session.add(row)
+        await db_session.commit()
+
+        async def _slow_extract(file_name, content):
+            raise RuntimeError("未实际调用")  # 不应走到
+
+        async def _read_slow(key):
+            return b"doc"
+
+        monkeypatch.setattr(svc, "_read_review_file", _read_slow)
+        # 让 _extract_upload_text 挂起超时
+        monkeypatch.setattr(svc, "_PARSE_FILE_TIMEOUT", 1)
+        import asyncio as _asyncio
+
+        async def _hang(file_name, content):
+            await _asyncio.sleep(30)
+
+        monkeypatch.setattr(svc, "_extract_upload_text", _hang)
+        # 后续步骤无 LLM（texts 空）直接完成
+        monkeypatch.setattr(
+            svc, "_call_llm_with_retry", AsyncMock(return_value=({}, "m"))
+        )
+
+        await svc._execute_review(db_session, record, "job:t1", uuid.uuid4())
+        await db_session.commit()
+        assert row.parse_status == "failed"
+        assert "超时" in (row.parse_error or "")
+
+    @pytest.mark.anyio
+    async def test_review_total_timeout_marks_failed(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """整单总超时 → _run_review_job 落 failed。"""
+
+        class _FakeSession:
+            async def __aenter__(self) -> _FakeSession:
+                return self
+
+            async def __aexit__(self, *args: object) -> bool:
+                return False
+
+            async def get(self, *args: object):
+                record = SimpleNamespace(
+                    id=uuid.uuid4(),
+                    title="T",
+                    review_mode="upload",
+                    status="processing",
+                    error_message=None,
+                    input_snapshot=None,
+                    output_payload=None,
+                    job_id=None,
+                    last_generated_at=None,
+                    model_name=None,
+                    created_at=None,
+                    updated_at=None,
+                )
+                return record
+
+            async def commit(self) -> None:
+                pass
+
+        fake = _FakeSession()
+        monkeypatch.setattr(svc, "async_session_factory", lambda: fake)
+        import asyncio as _asyncio
+
+        async def _hang_execute(*args, **kwargs):
+            await _asyncio.sleep(60)
+
+        monkeypatch.setattr(svc, "_execute_review", _hang_execute)
+        monkeypatch.setattr(svc, "_REVIEW_TOTAL_TIMEOUT", 1)
+
+        result = await svc._run_review_job(
+            record_id=uuid.uuid4(), job_id="job:t2", user_id=uuid.uuid4()
+        )
+        assert result["status"] == "failed"
+        assert "超时" in result["error"]
+
+
+class TestAutoTitle:
+    def test_auto_generate_title_plan_priority(self) -> None:
+        title = svc._auto_generate_title(
+            {
+                "plan": {
+                    "doc_number": "VP-FT3-CV1902-01",
+                    "content_title": "设备清洁验证方案",
+                },
+                "report": {
+                    "doc_number": "VR-FT3-CV1902-01",
+                    "content_title": "设备清洁验证报告",
+                },
+            }
+        )
+        assert title == "VP-FT3-CV1902-01 设备清洁验证方案"
+
+    def test_auto_generate_title_empty(self) -> None:
+        assert svc._auto_generate_title({}) == ""
+
+    def test_auto_generate_title_report_only(self) -> None:
+        title = svc._auto_generate_title(
+            {
+                "report": {
+                    "doc_number": "VR-MC-PV1902-01",
+                    "content_title": "生产验证报告",
+                }
+            }
+        )
+        assert title == "VR-MC-PV1902-01 生产验证报告"
+
+
+class TestRefineDocKind:
+    def test_filename_vp(self) -> None:
+        assert svc._refine_doc_kind("VP-FT3-CV1902-01 方案.doc", "正文") == "plan"
+
+    def test_filename_vr(self) -> None:
+        assert svc._refine_doc_kind("VR-FT3-CV1902-01 报告.doc", "正文") == "report"
+
+    def test_no_prefix_body_report(self) -> None:
+        assert (
+            svc._refine_doc_kind("清洁验证.doc", "## 验证报告\n结论符合")
+            == "report"
+        )
+
+    def test_no_prefix_body_plan(self) -> None:
+        assert svc._refine_doc_kind("清洁验证.doc", "## 验证方案\n目的") == "plan"
+
+    def test_no_prefix_body_unknown(self) -> None:
+        assert svc._refine_doc_kind("无名.doc", "普通内容") == "plan"
+
+
+class TestListFilters:
+    @pytest.mark.anyio
+    async def test_list_review_records_filters(
+        self, db_session: AsyncSession
+    ) -> None:
+        owner = uuid.uuid4()
+        for index, status_value in enumerate(["draft", "completed", "failed"]):
+            db_session.add(
+                ValidationReviewRecord(
+                    id=uuid.uuid4(),
+                    title=f"清洁验证{index}",
+                    review_mode="upload",
+                    status=status_value,
+                    created_by=owner,
+                )
+            )
+        await db_session.commit()
+        # keyword
+        records, total = await svc.list_review_records(
+            db_session, user_id=owner, page=1, page_size=10, keyword="清洁验证0"
+        )
+        assert total == 1
+        assert records[0].title == "清洁验证0"
+        # status
+        records, total = await svc.list_review_records(
+            db_session, user_id=owner, page=1, page_size=10, status="completed"
+        )
+        assert total == 1
+        assert records[0].status == "completed"
+        # review_mode
+        records, total = await svc.list_review_records(
+            db_session, user_id=owner, page=1, page_size=10, review_mode="upload"
+        )
+        assert total == 3
+
+
+class TestP2Degrade:
+    @pytest.mark.anyio
+    async def test_select_key_bases_llm_failure_degrade(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from app.core.llm.exceptions import LLMProviderError
+
+        monkeypatch.setattr(
+            type(svc.llm_client),
+            "chat_json",
+            AsyncMock(side_effect=LLMProviderError("boom")),
+        )
+        candidates = [
+            {
+                "entry_id": uuid.uuid4(),
+                "code": f"SOP-FT3-{i:03d}/01",
+                "name": f"规程{i}",
+                "length": 100,
+            }
+            for i in range(4)
+        ]
+        key_bases, model_name = await svc._select_key_bases("文档", candidates, None)
+        assert model_name is None
+        assert len(key_bases) == 4  # MAX_CONTENT_COMPARE_BASES=5，候选 4 → 全取
+        assert "AI 筛选不可用" in key_bases[0]["reason"]
+
+
+class TestBasisFetchRobustness:
+    @pytest.mark.anyio
+    async def test_load_basis_contents_skips_failed_entry(
+        self, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """条目读取/超时失败时跳过，不阻塞其他条目。"""
+        entry_id = uuid.uuid4()
+
+        async def _db_get(model, id_):
+            if str(id_) == str(entry_id):
+                raise RuntimeError("db boom")
+            return None
+
+        monkeypatch.setattr(db_session, "get", _db_get)
+        contents = await svc.load_basis_contents(db_session, [entry_id])
+        assert contents == {}
+
+    @pytest.mark.anyio
+    async def test_load_basis_contents_entry_fetch_timeout(
+        self, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from app.modules.quality.models import DocumentEntry
+
+        entry = DocumentEntry(
+            id=uuid.uuid4(),
+            department_id=uuid.uuid4(),
+            name="规程",
+            code="SOP-FT3-017/04",
+        )
+        async def _db_get(model, id_):
+            return entry
+
+        monkeypatch.setattr(db_session, "get", _db_get)
+        import asyncio as _asyncio
+
+        from app.modules.quality.service import validation_basis_resolver as _br
+
+        monkeypatch.setattr(_br, "_BASIS_FETCH_TIMEOUT", 1)
+
+        async def _hang(entry):
+            await _asyncio.sleep(30)
+            return "x"
+
+        monkeypatch.setattr(_br, "_load_entry_content", _hang)
+        contents = await svc.load_basis_contents(db_session, [entry.id])
+        assert contents == {}
+
+
+class TestMissingBasis:
+    @pytest.mark.anyio
+    async def test_execute_review_missing_basis_finding(
+        self, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """引用命中目录但无可用基准正文 → 补 missing_basis 提示不静默。"""
+        from app.modules.quality.service.validation_basis_resolver import (
+            BasisEntry,
+        )
+
+        record = await _seed_record(db_session)
+        plan_text = "依据（SMP-QA-105/03）执行"
+        row = ValidationReviewFile(
+            id=uuid.uuid4(),
+            review_id=record.id,
+            doc_kind="plan",
+            source="upload",
+            file_name="VP-FT3-CV1902-01 方案.md",
+            file_type="text/markdown",
+            file_size=100,
+            storage_key="",
+            parsed_text=plan_text,
+            parse_status="completed",
+            sort_order=0,
+        )
+        db_session.add(row)
+        await db_session.commit()
+
+        entry_id = uuid.uuid4()
+        basis = DocumentBasis(
+            entries=[
+                BasisEntry(
+                    id=entry_id,
+                    code="SMP-QA-105/03",
+                    name="清洁验证管理程序",
+                    effective_date=None,
+                    updated_at=None,
+                )
+            ],
+            prefixes={"SMP"},
+        )
+        monkeypatch.setattr(svc, "load_document_basis", AsyncMock(return_value=basis))
+        # 命中目录但无基准正文
+        monkeypatch.setattr(svc, "load_basis_contents", AsyncMock(return_value={}))
+        monkeypatch.setattr(
+            svc, "get_config", AsyncMock(return_value=SimpleNamespace(model_name="m"))
+        )
+        monkeypatch.setattr(
+            type(svc.llm_client),
+            "chat_json",
+            AsyncMock(return_value={"findings": []}),
+        )
+        monkeypatch.setattr(svc, "get_changes", AsyncMock(return_value=([], 0)))
+        monkeypatch.setattr(
+            svc, "get_deviations", AsyncMock(return_value=([], 0))
+        )
+
+        await svc._execute_review(db_session, record, "job:mb", uuid.uuid4())
+        await db_session.commit()
+
+        payload = record.output_payload or {}
+        findings = payload.get("findings") or []
+        mb = [f for f in findings if f.get("basis_match_type") == "missing_basis"]
+        assert len(mb) == 1
+        assert "未做正文一致性比对" in mb[0]["detail"]

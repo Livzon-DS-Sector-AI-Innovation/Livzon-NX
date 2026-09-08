@@ -942,15 +942,14 @@ def test_read_only_container_keeps_gateway_lock_in_private_tmpfs() -> None:
     workspace_root = project_root.parent
     dockerfile = (workspace_root / "Dockerfile").read_text(encoding="utf-8")
     compose = (workspace_root / "compose.yml").read_text(encoding="utf-8")
-    env_example = (project_root / ".env.example").read_text(encoding="utf-8")
 
     expected = "HERMES_GATEWAY_LOCK_DIR=/run/hermes-feishu/gateway-locks"
     assert expected in dockerfile
     assert "HERMES_GATEWAY_LOCK_DIR: /run/hermes-feishu/gateway-locks" in compose
     assert "- /run/hermes-feishu:mode=0700" in compose
     assert "read_only: true" in compose
-    assert "DAZAH_API_BASE_URL=http://app:8000/api/v1" in env_example
-    assert "DAZAH_LLM_BASE_URL=http://app:8000/api/v1/agent/llm" in env_example
+    assert "DAZAH_API_BASE_URL: http://app:8000/api/v1" in compose
+    assert "DAZAH_LLM_BASE_URL: http://app:8000/api/v1/agent/llm" in compose
 
 
 def test_runtime_upstream_info_requires_verified_provenance(tmp_path: Path) -> None:

@@ -27,12 +27,10 @@ Reuse the existing development images without rebuilding:
 .\scripts\dev.ps1 -NoBuild
 ```
 
-The root Docker stack polls source changes every 2000 ms. Set
-`DEV_WATCH_POLL_INTERVAL_MS` in the root `.env.local` to tune the interval, then
-recreate the application containers with `scripts/dev.ps1 -NoBuild`. This setting
-controls both Watchfiles and Watchpack; the legacy `WATCHPACK_POLLING` setting
-does not override it in the root stack. Compilation and application startup add
-to the roughly two-second change detection delay.
+The root Docker stack enables Watchfiles and Watchpack polling for source changes.
+`WATCHPACK_POLLING` controls the frontend polling interval; recreate the
+application containers with `scripts/dev.ps1 -NoBuild` after changing it.
+Compilation and application startup add to the change detection delay.
 
 Backend reload watches `dazah-backend/app`. Hermes watches its runtime Python
 directories and root Python modules, excluding the top-level virtual environment,

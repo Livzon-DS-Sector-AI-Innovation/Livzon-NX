@@ -1,8 +1,9 @@
 import { notFound } from 'next/navigation'
 
 import { ProjectLedgerSheetPage } from '@/components/registration'
-import { fetchProjectLedgerSheetDetailServer } from '@/lib/api/server/registration'
+import { ServerApiError, fetchProjectLedgerSheetDetailServer } from '@/lib/api/server/registration'
 import { isRegistrationProjectLedgerSheetKey } from '@/lib/registration-project-ledger'
+import type { ProjectLedgerSheetDetail } from '@/types/registration'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,7 +20,16 @@ export default async function ProjectLedgerSheetRoute({
     notFound()
   }
 
-  const detail = await fetchProjectLedgerSheetDetailServer(sheetKey)
+  let detail: ProjectLedgerSheetDetail
+  try {
+    detail = await fetchProjectLedgerSheetDetailServer(sheetKey)
+  } catch (error) {
+    if (error instanceof ServerApiError && error.status === 404) {
+      // 子表不存在 → 404 页面，而非渲染崩溃
+      notFound()
+    }
+    throw error
+  }
 
   return <ProjectLedgerSheetPage detail={detail} />
 }

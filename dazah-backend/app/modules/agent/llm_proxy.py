@@ -6,6 +6,7 @@ from fastapi import HTTPException, status
 from fastapi.responses import StreamingResponse
 
 from app.core.llm.config import get_config
+from app.core.llm.exceptions import LLMConfigError
 
 SUPPORTED_FIELDS = {
     "messages",
@@ -13,6 +14,7 @@ SUPPORTED_FIELDS = {
     "tool_choice",
     "temperature",
     "max_tokens",
+    "max_completion_tokens",
     "stream",
     "response_format",
     "parallel_tool_calls",
@@ -24,9 +26,23 @@ SUPPORTED_FIELDS = {
     "reasoning_effort",
 }
 
+_IMAGE_PART_TYPES = frozenset({"image", "image_url", "input_image"})
+_VISION_CONFIG_UNAVAILABLE_MESSAGE = (
+    "当前激活的模型未配置图片理解能力，请在系统设置中重新检测并激活支持图片的模型。"
+)
+_TEXT_CONFIG_UNAVAILABLE_MESSAGE = (
+    "当前未配置可用的 LLM 模型，请在系统设置中配置并激活模型。"
+)
+
 
 async def list_active_text_models() -> dict[str, Any]:
-    config = await get_config("text")
+    try:
+        config = await get_config("text")
+    except LLMConfigError as exc:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            _TEXT_CONFIG_UNAVAILABLE_MESSAGE,
+        ) from exc
     return {
         "object": "list",
         "data": [
@@ -41,7 +57,19 @@ async def list_active_text_models() -> dict[str, Any]:
 
 
 async def forward_chat_completion(payload: dict[str, Any]) -> Any:
-    config = await get_config("vision" if payload_has_images(payload) else "text")
+    has_images = payload_has_images(payload)
+    try:
+        config = await get_config("vision" if has_images else "text")
+    except LLMConfigError as exc:
+        detail = (
+            _VISION_CONFIG_UNAVAILABLE_MESSAGE
+            if has_images
+            else _TEXT_CONFIG_UNAVAILABLE_MESSAGE
+        )
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail,
+        ) from exc
     body = build_provider_body(payload, config.model_name, config.temperature)
     retry_without_thinking = should_retry_without_auto_thinking(
         payload, body, config.model_name
@@ -57,17 +85,34 @@ async def forward_chat_completion(payload: dict[str, Any]) -> Any:
             _stream_chat(url, headers, body, timeout, retry_without_thinking),
             media_type="text/event-stream",
         )
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        response = await client.post(url, headers=headers, json=body)
-        if response.status_code >= 400 and retry_without_thinking:
-            response = await client.post(
-                url,
-                headers=headers,
-                json=body_without_thinking(body),
-            )
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.post(url, headers=headers, json=body)
+            if response.status_code >= 400 and retry_without_thinking:
+                response = await client.post(
+                    url,
+                    headers=headers,
+                    json=body_without_thinking(body),
+                )
+    except httpx.TimeoutException as exc:
+        raise HTTPException(
+            status.HTTP_504_GATEWAY_TIMEOUT,
+            "LLM 上游服务响应超时，请稍后重试。",
+        ) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            "LLM 上游服务暂不可用，请稍后重试。",
+        ) from exc
     if response.status_code >= 400:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, response.text[:1000])
-    return response.json()
+    try:
+        return response.json()
+    except ValueError as exc:
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            "LLM 上游返回了无效响应，请稍后重试。",
+        ) from exc
 
 
 def payload_has_images(payload: dict[str, Any]) -> bool:
@@ -107,10 +152,64 @@ def build_provider_body(
         body.update(extra_body)
 
     body["model"] = model_name
-    if temperature > 0:
+    if (
+        _model_name_uses_completion_tokens(model_name)
+        and "max_completion_tokens" not in body
+        and "max_tokens" in body
+    ):
+        body["max_completion_tokens"] = body.pop("max_tokens")
+    if "messages" in body:
+        body["messages"] = _normalize_multimodal_messages(
+            body["messages"], model_name
+        )
+    if temperature > 0 and not _model_name_uses_completion_tokens(model_name):
         body.setdefault("temperature", temperature)
     apply_model_compatibility_defaults(body, model_name)
     return body
+
+
+def _normalize_multimodal_messages(messages: Any, model_name: str) -> Any:
+    """Apply provider-specific ordering without mutating the caller payload.
+
+    Hermes talks to this endpoint using the proxy model alias, so it cannot
+    apply model-specific message shaping itself. Kimi's multimodal adapter
+    expects image blocks before text blocks; other providers keep the
+    original OpenAI-compatible order.
+    """
+    if not model_name_suggests_kimi(model_name) or not isinstance(messages, list):
+        return messages
+
+    normalized_messages: list[Any] = []
+    changed = False
+    for message in messages:
+        if not isinstance(message, dict):
+            normalized_messages.append(message)
+            continue
+        content = message.get("content")
+        if not isinstance(content, list):
+            normalized_messages.append(message)
+            continue
+
+        image_parts = [
+            part
+            for part in content
+            if isinstance(part, dict) and part.get("type") in _IMAGE_PART_TYPES
+        ]
+        if not image_parts:
+            normalized_messages.append(message)
+            continue
+
+        other_parts = [
+            part
+            for part in content
+            if not (isinstance(part, dict) and part.get("type") in _IMAGE_PART_TYPES)
+        ]
+        normalized_message = dict(message)
+        normalized_message["content"] = image_parts + other_parts
+        normalized_messages.append(normalized_message)
+        changed = True
+
+    return normalized_messages if changed else messages
 
 
 def apply_model_compatibility_defaults(body: dict[str, Any], model_name: str) -> None:
@@ -133,6 +232,11 @@ def apply_model_compatibility_defaults(body: dict[str, Any], model_name: str) ->
 def model_name_suggests_kimi(model_name: str) -> bool:
     lower = model_name.strip().lower()
     return "kimi" in lower or "moonshot" in lower
+
+
+def _model_name_uses_completion_tokens(model_name: str) -> bool:
+    normalized = model_name.strip().lower().rsplit("/", 1)[-1]
+    return normalized.startswith("gpt-5")
 
 
 def should_retry_without_auto_thinking(

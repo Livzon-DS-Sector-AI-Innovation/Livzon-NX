@@ -52,7 +52,7 @@ class NewEmployeeTrainingRepository:
             )
         elif department:
             # 部门归一匹配：选中部门（培训规范名）展开为全部别名（如 201二车间（MC）→
-            # 裸名/霉酚酸/201三车间），
+            # 裸名/霉酚酸；DR：多拉/201三车间），
             # department 或 sub_department
             # 任一命中即算该部门（员工档案部门与培训部门名不同）
             dept_values = await training_dept_aliases_of(self.session, department)

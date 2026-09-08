@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { App, Alert, Button, Input, Select, Space, Table } from 'antd'
+import { App, Alert, Button, Input, Select, Space, Table, Tooltip } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, EyeOutlined, LinkOutlined, FileSyncOutlined } from '@ant-design/icons'
@@ -29,6 +29,16 @@ import {
 import { TableEmptyState } from './TableEmptyState'
 
 const QC_YEARS = [2026, 2027, 2028]
+
+/** 列表里压缩为一半宽度的字段（内容较长，悬停或进详情查看） */
+const QC_NARROW_FIELDS = new Set([
+  '验证原因',
+  '偏差情况',
+  '验证结果',
+  '再验证周期（年）',
+  '产品',
+  '人员',
+])
 
 function qcAttachmentUrlBuilder(year: number): FeishuAttachmentUrlBuilder {
   return (_entityCode, recordId, fileToken) =>
@@ -143,27 +153,43 @@ export function QcValidationPage() {
   const columns: ColumnsType<QcValidationRecord> = QC_LIST_FIELD_ORDER.map(
     (fieldName) => {
       const meta = fieldMetas.find((item) => item.field_name === fieldName)
-      return {
-        title: fieldName,
-        key: fieldName,
-        width: fieldName === '方案名称' ? 260 : 130,
-        fixed: fieldName === '方案名称' ? ('left' as const) : undefined,
-        render: (_: unknown, record: QcValidationRecord) =>
-          fieldName === '方案名称' ? (
-            <a onClick={() => openDetail(record)} style={{ whiteSpace: 'normal', wordBreak: 'break-all' }}>
-              {renderFeishuValue(record[fieldName], record, undefined, message, {
-                uiType: meta?.ui_type,
-                attachmentUrlBuilder: qcAttachmentUrlBuilder(year),
-              })}
-            </a>
+        return {
+          title: fieldName,
+          key: fieldName,
+          // 验证原因/偏差情况/验证结果/再验证周期/产品/人员 压缩为一半；
+          // 方案名称/方案编码/两个批准时间相应加宽
+          width: QC_NARROW_FIELDS.has(fieldName) ? '5%' : fieldName === '方案名称' ? '22%' : '11%',
+          ellipsis: fieldName !== '方案名称',
+        render: (_: unknown, record: QcValidationRecord) => {
+          // 长文本列（验证原因/偏差情况/验证结果等）省略显示时悬停可看全文
+          const text =
+            typeof record[fieldName] === 'string'
+              ? (record[fieldName] as string).trim()
+              : ''
+          const cell =
+            fieldName === '方案名称' ? (
+              <a onClick={() => openDetail(record)} style={{ whiteSpace: 'normal', wordBreak: 'break-all' }}>
+                {renderFeishuValue(record[fieldName], record, undefined, message, {
+                  uiType: meta?.ui_type,
+                  attachmentUrlBuilder: qcAttachmentUrlBuilder(year),
+                })}
+              </a>
+            ) : (
+              <div style={{ whiteSpace: 'normal', wordBreak: 'break-all' }}>
+                {renderFeishuValue(record[fieldName], record, undefined, message, {
+                  uiType: meta?.ui_type,
+                  attachmentUrlBuilder: qcAttachmentUrlBuilder(year),
+                })}
+              </div>
+            )
+          return text && fieldName !== '方案名称' ? (
+            <Tooltip title={text} placement="topLeft">
+              {cell}
+            </Tooltip>
           ) : (
-            <div style={{ whiteSpace: 'normal', wordBreak: 'break-all' }}>
-              {renderFeishuValue(record[fieldName], record, undefined, message, {
-                uiType: meta?.ui_type,
-                attachmentUrlBuilder: qcAttachmentUrlBuilder(year),
-              })}
-            </div>
-          ),
+            cell
+          )
+        },
       }
     },
   )
@@ -171,18 +197,19 @@ export function QcValidationPage() {
   columns.push({
     title: '操作',
     key: 'action',
-    fixed: 'right',
-    width: 190,
+    width: '13%',
     render: (_: unknown, record: QcValidationRecord) => (
-      <Space size="small">
+      <Space size={0} wrap>
         <Button
+          size="small"
           type="text"
           icon={<FileSyncOutlined />}
           title="打开飞书对应行"
           onClick={() => void openRowInFeishu(record)}
         />
-        <Button type="text" icon={<EyeOutlined />} onClick={() => openDetail(record)} />
+        <Button size="small" type="text" icon={<EyeOutlined />} onClick={() => openDetail(record)} />
         <Button
+          size="small"
           type="text"
           icon={<EditOutlined />}
           onClick={() => {
@@ -190,7 +217,7 @@ export function QcValidationPage() {
             setEditorOpen(true)
           }}
         />
-        <Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)} />
+        <Button size="small" type="text" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)} />
       </Space>
     ),
   })
@@ -211,7 +238,7 @@ export function QcValidationPage() {
           showIcon
           style={{ marginBottom: 12 }}
           message={`${year} 年 QC验证飞书表未配置`}
-          description={`请到 质量管理 → 飞书同步设置 中为「QC验证-${year}年」绑定 App Token 与表 ID 后刷新本页。`}
+          description={`请到 质量管理 → 质量设置 → 飞书设置 中为「QC验证-${year}年」绑定 App Token 与表 ID 后刷新本页。`}
         />
       )}
 
@@ -277,7 +304,7 @@ export function QcValidationPage() {
         loading={listQuery.isLoading}
         dataSource={records}
         columns={columns}
-        scroll={{ x: 1900 }}
+        tableLayout="fixed"
         locale={{
           emptyText: (
             <TableEmptyState hasFilters={Boolean(keyword) || page > 1} />

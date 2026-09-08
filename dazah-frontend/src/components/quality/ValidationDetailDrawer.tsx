@@ -103,7 +103,7 @@ export function ValidationDetailDrawer({
 }: ValidationDetailDrawerProps) {
   if (!record) {
     return (
-      <Drawer open={open} title="验证记录详情" width={640} onClose={onClose}>
+      <Drawer open={open} title="验证记录详情" size={640} onClose={onClose}>
         <span>-</span>
       </Drawer>
     )
@@ -171,7 +171,7 @@ export function ValidationDetailDrawer({
           <span>验证记录详情</span>
         </Tooltip>
       }
-      width={640}
+      size={640}
       onClose={onClose}
     >
       <Descriptions bordered size="small" column={1} styles={{ label: { width: 160 } }}>

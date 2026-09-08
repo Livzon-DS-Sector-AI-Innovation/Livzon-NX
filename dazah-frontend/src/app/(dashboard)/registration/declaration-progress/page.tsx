@@ -48,6 +48,14 @@ export default async function DeclarationProgressDashboardRoute() {
 
   return (
     <Space orientation="vertical" size={16} style={{ width: '100%' }}>
+      {overview.total_records === 0 ? (
+        <Alert
+          type="info"
+          showIcon
+          title="暂无申报进度数据"
+          description="尚未配置申报进度统计表，请点击页面右上角「导入原始统计表」上传 Excel 完成初始化。"
+        />
+      ) : null}
       {failedCount > 0 ? (
         <Alert
           type="warning"

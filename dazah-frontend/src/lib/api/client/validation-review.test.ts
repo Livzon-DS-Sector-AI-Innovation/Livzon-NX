@@ -94,3 +94,39 @@ describe('quality client - validation review', () => {
     await expect(fetchValidationReviews()).rejects.toThrow(/503|服务不可用/)
   })
 })
+
+describe('validation review list filters', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.clearAllMocks()
+  })
+
+  it('passes keyword/status/review_mode query params', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({ code: 200, data: [{ id: 'r1' }], meta: { total: 1 } })
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    await fetchValidationReviews({
+      page: 2,
+      page_size: 20,
+      keyword: '清洁验证',
+      status: 'completed',
+      review_mode: 'upload',
+    })
+    const url = fetchMock.mock.calls[0][0] as string
+    expect(url).toContain('page=2')
+    expect(url).toContain('keyword=%E6%B8%85%E6%B4%81%E9%AA%8C%E8%AF%81')
+    expect(url).toContain('status=completed')
+    expect(url).toContain('review_mode=upload')
+  })
+
+  it('omits empty filter params', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ code: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    await fetchValidationReviews({ page: 1, page_size: 20 })
+    const url = fetchMock.mock.calls[0][0] as string
+    expect(url).not.toContain('keyword')
+    expect(url).not.toContain('status')
+    expect(url).not.toContain('review_mode')
+  })
+})

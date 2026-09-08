@@ -29,7 +29,7 @@ from app.platform.identity.repository import RbacRepository
 
 TEST_USER_ID = "00000000-0000-0000-0000-0000000000bb"
 
-# .env.development 默认 DEV_BYPASS_AUTH=true；预览菜单组装逻辑依赖该开关，
+# 根目录 .env.local 默认 DEV_BYPASS_AUTH=false；预览菜单组装逻辑依赖该开关，
 # 测试统一用非绕过配置，走普通用户/超管的真实判定分支。
 TEST_SETTINGS = Settings(
     APP_ENV="test",

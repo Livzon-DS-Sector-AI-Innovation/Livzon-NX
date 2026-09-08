@@ -620,7 +620,7 @@ Hermes-Lite
 
 ```bash
 pip install -r requirements.txt
-cp .env.example .env
+# Dazah development uses the workspace root .env.local; see the workspace README.
 ```
 
 本地启动 Hermes 适配服务：

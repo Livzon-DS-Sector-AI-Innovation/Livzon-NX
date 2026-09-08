@@ -1,5 +1,9 @@
-import { QcValidationPage } from '@/components/quality'
+import { QcValidationPage, QualityQueryProvider } from '@/components/quality'
 
 export default function QualityQcValidationSubPage() {
-  return <QcValidationPage />
+  return (
+    <QualityQueryProvider>
+      <QcValidationPage />
+    </QualityQueryProvider>
+  )
 }
