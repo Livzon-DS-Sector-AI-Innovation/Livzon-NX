@@ -27,7 +27,14 @@ test.describe('页面最小授权', () => {
     await expect(drawer.getByRole('checkbox', { name: '作废生产批次', exact: true })).toBeVisible()
     await expect(drawer.getByRole('checkbox', { name: '作废生产批次', exact: true })).not.toBeChecked()
     await expect(drawer.getByRole('columnheader', { name: '数据范围', exact: true })).toHaveCount(0)
-    await drawer.getByRole('checkbox', { name: '查询', exact: true }).check()
+    const queryPermission = drawer.getByRole('checkbox', { name: '查询', exact: true })
+    await expect(queryPermission).not.toBeChecked()
+    // 受控 Checkbox.Group 的值会在 effect 中同步，点击后等待最终状态。
+    await queryPermission.click()
+    await expect(queryPermission).toBeChecked()
+    await expect(drawer.getByRole('checkbox', { name: '访问', exact: true })).toBeChecked()
+    await expect(drawer.getByRole('checkbox', { name: '操作', exact: true })).not.toBeChecked()
+    await expect(drawer.getByRole('checkbox', { name: '作废生产批次', exact: true })).not.toBeChecked()
     await drawer.getByPlaceholder('填写角色授权调整原因').fill('调整页面只读范围')
     await drawer.getByRole('button', { name: '预览并保存基线' }).click()
     const confirmation = page.getByRole('dialog').filter({ hasText: '确认调整页面授权测试角色的页面权限' })
@@ -35,7 +42,9 @@ test.describe('页面最小授权', () => {
     await expect(confirmation.getByRole('columnheader', { name: '调整后', exact: true })).toBeVisible()
     await confirmation.getByRole('button', { name: '确认保存', exact: true }).click()
     await expect(page.getByText(/授权版本冲突.*本地修改已保留/)).toBeVisible()
-    await expect(drawer.getByRole('checkbox', { name: '查询', exact: true })).toBeChecked()
+    await expect(queryPermission).toBeChecked()
+    await expect(drawer.getByRole('checkbox', { name: '访问', exact: true })).toBeChecked()
+    await expect(drawer.getByPlaceholder('填写角色授权调整原因')).toHaveValue('调整页面只读范围')
   })
 
   for (const token of ['page-denied', 'page-access']) {
