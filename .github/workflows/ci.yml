@@ -49,6 +49,11 @@ jobs:
       - name: Verify Claude Code instruction bridges
         run: python scripts/check-agent-instruction-bridges.py
 
+      - name: Test CI policies and repository scripts
+        run: |
+          python -m pip install pytest==9.0.3
+          python -m pytest .github/scripts/tests scripts/tests -q
+
       - name: Resolve changed scopes
         id: scope
         env:
@@ -115,7 +120,7 @@ jobs:
       run:
         working-directory: dazah-frontend
     env:
-      API_BASE_URL: http://127.0.0.1:8000
+      API_BASE_URL: http://127.0.0.1:4100
       COVERAGE_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
       COVERAGE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
@@ -166,15 +171,34 @@ jobs:
       - name: Build production application
         run: pnpm build
 
-      - name: Validate Compose and build frontend image
-        run: |
-          docker compose --env-file /dev/null \
-            -f ../compose.dev.yml config --no-interpolate --quiet
-          docker build \
-            --file ../Dockerfile \
-            --target frontend \
-            --tag "dazah-frontend:ci-${GITHUB_SHA}" \
-            ..
+      - name: Package frontend bundle for E2E
+        run: tar -czf "$RUNNER_TEMP/frontend-e2e-bundle.tar.gz" .next/standalone .next/static
+
+      - name: Upload frontend E2E bundle
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: frontend-e2e-bundle
+          path: ${{ runner.temp }}/frontend-e2e-bundle.tar.gz
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+
+      - name: Validate Compose
+        run: docker compose --env-file /dev/null -f ../compose.dev.yml config --no-interpolate --quiet
+
+      - name: Build frontend image with persistent cache
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
+        with:
+          context: .
+          file: Dockerfile
+          target: frontend
+          load: true
+          tags: dazah-frontend:ci-${{ github.sha }}
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
 
       - name: Upload frontend coverage
         if: ${{ always() && hashFiles('dazah-frontend/coverage/**') != '' }}
@@ -222,8 +246,14 @@ jobs:
       - name: Install Chromium
         run: pnpm exec playwright install --with-deps chromium
 
-      - name: Build production application
-        run: pnpm build
+      - name: Download frontend E2E bundle
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: frontend-e2e-bundle
+          path: dazah-frontend
+
+      - name: Restore frontend E2E bundle
+        run: tar -xzf frontend-e2e-bundle.tar.gz
 
       - name: Run stable critical Playwright tests
         run: pnpm test:e2e:critical --grep-invert @flaky
@@ -292,9 +322,16 @@ jobs:
           pnpm install --frozen-lockfile
           pnpm exec playwright install --with-deps chromium
 
-      - name: Build production application
+      - name: Download frontend E2E bundle
         if: ${{ steps.flaky.outputs.found == 'true' }}
-        run: pnpm build
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: frontend-e2e-bundle
+          path: dazah-frontend
+
+      - name: Restore frontend E2E bundle
+        if: ${{ steps.flaky.outputs.found == 'true' }}
+        run: tar -xzf frontend-e2e-bundle.tar.gz
 
       - name: Run quarantined Playwright tests
         if: ${{ steps.flaky.outputs.found == 'true' }}
@@ -319,41 +356,9 @@ jobs:
           needs.change-scope.outputs.shared_changed == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 35
-    services:
-      postgres:
-        image: postgres:17
-        command: postgres -c max_connections=300 -c idle_in_transaction_session_timeout=60000 -c idle_session_timeout=180000
-        env:
-          POSTGRES_USER: dazah_ci
-          POSTGRES_PASSWORD: dazah_ci_test
-          POSTGRES_DB: dazah_ci_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U dazah_ci -d dazah_ci_test"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 12
     env:
       CI_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
       CI_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-      PGHOST: localhost
-      PGPORT: "5432"
-      PGUSER: dazah_ci
-      PGPASSWORD: dazah_ci_test
-      PGDATABASE: dazah_ci_test
-      APP_ENV: test
-      DATABASE_URL: postgresql+asyncpg://dazah_ci:dazah_ci_test@localhost:5432/dazah_ci_test
-      TEST_DATABASE_URL: postgresql+asyncpg://dazah_ci:dazah_ci_test@localhost:5432/dazah_ci_test
-      REDIS_URL: redis://localhost:6379/0
-      SECRET_KEY: ci-only-secret-key
-      ENCRYPTION_KEY: MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=
-      FRONTEND_URL: http://localhost:3000
-      FEISHU_WS_ENABLED: "false"
-      EQUIPMENT_FEISHU_WS_ENABLED: "false"
-      LIVZON_FEISHU_CARD_CALLBACK_WS_ENABLED: "false"
-      LIVZON_FEISHU_EVENT_WS_ENABLED: "false"
-      MINIO_ENABLED: "false"
     steps:
       - name: Check out repository with full history
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -371,20 +376,8 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install PostgreSQL client
-        run: sudo apt-get update && sudo apt-get install --yes postgresql-client
-
       - name: Run backend quality checks
         run: bash dazah-backend/scripts/ci.sh quality
-
-      - name: Upload backend quality report
-        if: ${{ always() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: backend-quality-report
-          path: dazah-backend/.pytest_cache/backend-quality-junit.xml
-          if-no-files-found: ignore
-          retention-days: 14
 
   backend-integration:
     name: Backend Integration
@@ -403,9 +396,9 @@ jobs:
           POSTGRES_USER: dazah_ci
           POSTGRES_PASSWORD: dazah_ci_test
           POSTGRES_DB: dazah_ci_test
+          POSTGRES_INITDB_ARGS: "-c max_connections=300 -c idle_in_transaction_session_timeout=60000 -c idle_session_timeout=180000"
         ports:
           - 5432:5432
-        command: postgres -c max_connections=300 -c idle_in_transaction_session_timeout=60000 -c idle_session_timeout=180000
         options: >-
           --health-cmd "pg_isready -U dazah_ci -d dazah_ci_test"
           --health-interval 5s
@@ -694,9 +687,9 @@ jobs:
           POSTGRES_USER: dazah_ci
           POSTGRES_PASSWORD: dazah_ci_test
           POSTGRES_DB: dazah_ci_test
+          POSTGRES_INITDB_ARGS: "-c max_connections=300 -c idle_in_transaction_session_timeout=60000 -c idle_session_timeout=180000"
         ports:
           - 5432:5432
-        command: postgres -c max_connections=300 -c idle_in_transaction_session_timeout=60000 -c idle_session_timeout=180000
         options: >-
           --health-cmd "pg_isready -U dazah_ci -d dazah_ci_test"
           --health-interval 5s

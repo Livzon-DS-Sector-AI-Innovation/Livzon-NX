@@ -19,6 +19,29 @@ def load_checker() -> ModuleType:
 checker = load_checker()
 
 
+def test_business_llm_changes_require_backend_tests_without_hermes_coupling() -> None:
+    actual = checker.load_policy(Path(__file__).parents[2] / ".ci/test-impact-policy.toml")
+    sources = {"dazah-backend/app/core/llm/client.py"}
+    violations, unmatched = checker.evaluate(actual, sources, set())
+    assert not unmatched
+    assert {r.rule_id for r, _ in violations} == {"backend-core", "agent-backend-contract"}
+    violations, unmatched = checker.evaluate(
+        actual, sources, {"dazah-backend/tests/unit/test_llm_client.py"}
+    )
+    assert not violations and not unmatched
+
+
+def test_agent_boundary_still_requires_hermes_tests() -> None:
+    actual = checker.load_policy(Path(__file__).parents[2] / ".ci/test-impact-policy.toml")
+    violations, unmatched = checker.evaluate(
+        actual,
+        {"dazah-backend/app/modules/agent/schemas.py"},
+        {"dazah-backend/tests/modules/agent/test_agent_v2_contracts.py"},
+    )
+    assert not unmatched
+    assert {r.rule_id for r, _ in violations} == {"agent-hermes-contract"}
+
+
 def policy() -> dict:
     return {
         "version": 1,

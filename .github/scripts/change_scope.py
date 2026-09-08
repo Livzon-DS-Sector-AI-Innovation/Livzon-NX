@@ -22,7 +22,8 @@ SHARED_CONTRACTS = {
     "dazah-backend/openapi.json",
     "dazah-frontend/src/types/generated/schema.ts",
 }
-SHARED_PREFIXES = (".ci/", ".github/", "scripts/")
+# These files control repository collaboration, not application execution.
+REPOSITORY_METADATA = {".github/CODEOWNERS", "CODEOWNERS"}
 
 
 def _git(*args: str) -> bytes:
@@ -71,10 +72,12 @@ def collect_changed_paths(base: str | None, head: str | None) -> set[str]:
             base or "",
             resolved_head,
         )
+    elif base:
+        # An explicit but invalid base cannot safely identify an incremental range.
+        output = _git("ls-tree", "-r", "--name-only", "-z", resolved_head)
     else:
-        # 无 PR 上下文（workflow_dispatch）：回退到 origin/main 作为 base（与
-        # PR 的 base.sha 一致），覆盖整条分支相对主线的改动；无法解析时退回
-        # HEAD^，仍不行则用完整树，绝不跳过检查。
+        # 本地未指定 base 时比较 origin/main；手动 CI 的全量选择由 main() 处理。
+        # 无主线引用时退回 HEAD^，首个提交则检查完整树。
         resolved_base = origin_main_head()
         if resolved_base is None and revision_exists(f"{resolved_head}^"):
             resolved_base = f"{resolved_head}^"
@@ -116,11 +119,13 @@ def is_docker_path(path: str) -> bool:
 
 
 def classify_paths(paths: set[str]) -> dict[str, bool]:
-    code_paths = {path for path in paths if not is_documentation(path)}
+    code_paths = {
+        path for path in paths
+        if not is_documentation(path) and path not in REPOSITORY_METADATA
+    }
     shared = any(
-        "/" not in path
+        not path.startswith(("dazah-frontend/", "dazah-backend/", "Hermes-Lite/"))
         or path in SHARED_CONTRACTS
-        or path.startswith(SHARED_PREFIXES)
         for path in code_paths
     )
     return {
@@ -135,7 +140,7 @@ def classify_paths(paths: set[str]) -> dict[str, bool]:
         ),
         "docker_changed": any(is_docker_path(path) for path in code_paths),
         "shared_changed": shared,
-        "docs_only": bool(paths) and not code_paths,
+        "docs_only": bool(paths) and all(is_documentation(path) for path in paths),
     }
 
 
@@ -158,6 +163,13 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     paths = collect_changed_paths(args.base, args.head)
+    # A manual run is an explicit full verification, including on main itself.
+    if os.getenv("GITHUB_EVENT_NAME") == "workflow_dispatch":
+        paths = {
+            item.decode("utf-8")
+            for item in _git("ls-tree", "-r", "--name-only", "-z", resolve_head(args.head)).split(b"\0")
+            if item
+        }
     scopes = classify_paths(paths)
     write_outputs(scopes, args.github_output)
     print(json.dumps({"paths": sorted(paths), **scopes}, ensure_ascii=False, indent=2))
