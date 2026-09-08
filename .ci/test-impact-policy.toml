@@ -99,8 +99,8 @@ tests = [
 
 [[rules]]
 id = "agent-hermes-contract"
-description = "Agent/LLM 契约变更必须同步 Hermes 适配测试"
-source = "^dazah-backend/app/(modules/[^/]+/agent_tools\\.py|modules/agent/|core/llm/)"
+description = "Agent 契约变更必须同步 Hermes 适配测试；普通业务 LLM 由后端测试覆盖"
+source = "^dazah-backend/app/(modules/[^/]+/agent_tools\\.py|modules/agent/)"
 tests = [
   "^Hermes-Lite/tests/test_.*\\.py$",
 ]

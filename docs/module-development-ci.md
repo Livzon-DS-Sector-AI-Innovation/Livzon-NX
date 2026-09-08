@@ -8,21 +8,15 @@
 
 ## 分支与合并路径
 
-```text
-feature/*、fix/*、refactor/*、test/* 等
-                    │
-                    ▼
-                  dev
-                    │
-                    ▼
-                  main
-```
+默认目标分支为 `main`，开发分支通过 PR 合并；若任务明确使用其他目标分支，
+整个流程使用该目标。Git 写操作授权和同步要求以根目录 `AGENTS.md` 为准。
+工作流兼容 `main`、`dev`，不强制旧的“开发分支 → dev → main”路径。
 
-- 开发分支只能通过 PR 合并到 `dev`。
-- `main` 只接受来自 `dev` 的 PR。
-- GitHub 的 `CI Gate` 是唯一稳定的 Required Status Check；它汇总分支策略、
-  测试影响、前后端质量、集成、构建、容器、关键 E2E 和 Hermes 检查。
-- 任一子检查失败、取消或跳过，`CI Gate` 都失败。
+- `CI Gate` 是稳定的聚合检查名称，分支保护应绑定实际已上报的该 context。
+- 本次范围内的必需任务必须成功；不适用的任务允许跳过，失败或取消不能当作成功。
+- `.github/CODEOWNERS` / 根目录 `CODEOWNERS` 单独修改只执行范围、策略和源码安全检查。
+- CI、策略、共享脚本、未知目录和根目录运行配置变更保守触发全项目；不以忽略未知路径提速。
+- 手动 `workflow_dispatch` 执行全量验证，即使当前分支与 `origin/main` 相同。
 
 ## 变更与测试映射
 
@@ -32,7 +26,7 @@ feature/*、fix/*、refactor/*、test/* 等
 | `dazah-backend/app/core/` | `tests/core/` 或后端 unit 测试 |
 | `dazah-backend/app/platform/<area>/` | 对应 platform、unit 或 integration 测试 |
 | `dazah-backend/alembic/` | 名称包含 migration、schema 或 alembic 的测试 |
-| 后端 Agent 工具、Agent 模块、LLM 代理 | 所属业务模块测试、后端 Agent/LLM 测试、Hermes 测试三组 |
+| 后端 Agent 工具、Agent 模块（含其 LLM 代理） | 所属业务模块测试、后端 Agent/LLM 测试、Hermes 测试三组 |
 | `dazah-frontend/src/components/<module>/` | 同模块 `*.test.ts(x)` 或 `e2e/<module>/*.spec.ts` |
 | `dazah-frontend/src/app/(dashboard)/<module>/` | 同模块单测或 E2E |
 | 前端 actions、stores、API client | 文件所属领域的单测或 E2E |
@@ -42,6 +36,8 @@ feature/*、fix/*、refactor/*、test/* 等
 权威机器规则位于 `.ci/test-impact-policy.toml`。规则可以叠加，例如修改
 `quality/agent_tools.py` 不能只补一个无关后端测试，而是需要质量模块、Agent
 契约和 Hermes 适配测试。
+
+普通业务 `app/core/llm/` 变更要求后端 core/unit 和 Agent/LLM 测试，不无条件要求修改 Hermes 测试；实际跨服务契约变化仍需对应适配测试。
 
 ## 测试层级
 
@@ -60,13 +56,13 @@ feature/*、fix/*、refactor/*、test/* 等
 
 ## 开发流程
 
-1. 从最新 `dev` 创建符合命名规范的开发分支。
+1. 在获得 Git 操作授权后，按根目录规范从确认的目标分支准备开发分支。
 2. 先确定所属模块和风险路径，再编写或更新测试。
 3. 实现生产代码，运行定向测试。
 4. 提交前运行测试影响检查：
 
    ```bash
-   python scripts/check-test-impact.py --base origin/dev --head HEAD
+   python scripts/check-test-impact.py --base origin/main --head HEAD
    ```
 
 5. 按风险执行子项目门禁：
@@ -93,7 +89,7 @@ feature/*、fix/*、refactor/*、test/* 等
 
 ## GitHub 分支保护
 
-管理员先让工作流成功运行一次，然后为 `dev` 和 `main` 配置：
+管理员先让工作流成功运行一次，然后为实际使用的目标分支配置（以根目录规范为准）：
 
 - 禁止直接 Push 和 Force Push；
 - 必须通过 PR，至少一名审批人；
@@ -101,3 +97,12 @@ feature/*、fix/*、refactor/*、test/* 等
 - PR 必须基于最新目标分支；
 - Required Status Check 只绑定实际已上报的 `CI Gate` context；
 - 管理员同样遵守保护规则，不允许 Force merge 绕过。
+
+## 执行成本与验证责任
+
+- 前端 Quality 执行 lint、类型、全量单测覆盖率、构建与 Docker 验证。E2E 和隔离测试下载同次运行的 tar 包，保留隐藏目录、权限及链接，不重复构建 Next.js。
+- 镜像仍通过真实 Dockerfile 独立构建；前端 Buildx 使用专用缓存 scope，避免与后端缓存互相覆盖。
+- Backend Quality 仅承担静态检查；Integration 保留全量单测、接口测试、迁移、契约与覆盖率，消除 Quality 中重复的 unit/core 测试及数据库启动。
+- 源码安全、镜像安全、覆盖率阈值和 Agent/Hermes 契约验证保持启用。构建产物仅保留一天，缺失必须失败，不能跳过 E2E。
+- 优化效果应比较同类 PR 的任务和步骤耗时；本地静态验证不能替代 GitHub 上的 Linux 构建、产物传递与 E2E 实测。
+- PostgreSQL service 使用 `POSTGRES_INITDB_ARGS` 传递 [PostgreSQL 17 的 `initdb -c` 参数](https://www.postgresql.org/docs/17/app-initdb.html)，保留连接数和会话超时配置；不使用 GitHub Actions 不支持的 `services.command`。

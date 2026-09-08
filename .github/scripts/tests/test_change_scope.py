@@ -5,6 +5,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 SCRIPT = Path(__file__).parents[1] / "change_scope.py"
@@ -16,6 +17,41 @@ SPEC.loader.exec_module(change_scope)
 
 
 class ChangeScopeTests(unittest.TestCase):
+    def test_manual_run_verifies_full_tree_even_with_empty_diff(self) -> None:
+        import argparse
+
+        args = argparse.Namespace(base=None, head="HEAD", github_output=None)
+        with (
+            patch.object(change_scope, "parse_args", return_value=args),
+            patch.object(change_scope, "collect_changed_paths", return_value=set()),
+            patch.object(change_scope, "resolve_head", return_value="HEAD"),
+            patch.object(change_scope, "_git", return_value=b"Dockerfile\0"),
+            patch.object(change_scope, "write_outputs") as output,
+            patch.dict("os.environ", {"GITHUB_EVENT_NAME": "workflow_dispatch"}),
+        ):
+            self.assertEqual(change_scope.main(), 0)
+        self.assertTrue(output.call_args.args[0]["shared_changed"])
+
+    def test_codeowners_only_does_not_run_application_suites(self) -> None:
+        scopes = change_scope.classify_paths({".github/CODEOWNERS"})
+        self.assertFalse(any(scopes.values()))
+
+    def test_metadata_does_not_hide_mixed_application_changes(self) -> None:
+        scopes = change_scope.classify_paths(
+            {".github/CODEOWNERS", "dazah-backend/app/main.py"}
+        )
+        self.assertTrue(scopes["backend_changed"])
+        self.assertFalse(scopes["shared_changed"])
+
+    def test_unknown_and_ci_paths_fail_safe_to_all_projects(self) -> None:
+        for path in (
+            ".github/workflows/ci.yml", ".ci/test-impact-policy.toml",
+            "scripts/check-test-impact.py", "docker/hermes-entrypoint.sh",
+            "new-runtime/main.py", "compose.dev.yml",
+        ):
+            with self.subTest(path=path):
+                self.assertTrue(change_scope.classify_paths({path})["shared_changed"])
+
     def test_classifies_each_module_and_docker(self) -> None:
         scopes = change_scope.classify_paths(
             {
