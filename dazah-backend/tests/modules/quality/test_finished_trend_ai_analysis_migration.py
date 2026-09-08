@@ -55,10 +55,10 @@ _COLUMNS = {
 
 
 def test_migration_revision_chain() -> None:
-    """迁移文件必须接在 head c9d400000022 之后，revision 唯一。"""
+    """迁移文件必须接在当前 head b1c2d3e4f5a6 之后，revision 唯一。"""
     source = MIGRATION_PATH.read_text(encoding="utf-8")
     assert 'revision: str = "c9d400000023"' in source
-    assert 'down_revision: str | None = "c9d400000022"' in source
+    assert 'down_revision: str | None = "b1c2d3e4f5a6"' in source
 
 
 def test_table_schema_and_columns() -> None:
