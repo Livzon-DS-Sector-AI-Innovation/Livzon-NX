@@ -363,7 +363,10 @@ async def test_update_and_test_entity_setting_success_and_failure(
 
 
 async def test_ensure_keeps_supplier_qualification_pull_enabled() -> None:
-    """supplier_qualification 依赖镜像回拉，ensure 不得再按 push-only 强制关闭其拉取开关。"""
+    """supplier_qualification 依赖镜像回拉。
+
+    ensure 不得再按 push-only 强制关闭其拉取开关。
+    """
     entity = _entity_model("supplier_qualification")
     entity.enable_pull_from_feishu = True
     db = _db()
@@ -434,8 +437,14 @@ def test_finished_product_anomaly_entities_seeded_and_prefilled() -> None:
     assert prefill_2026["table_id"] == "tblYanzll8A5rGro"
     assert prefill_2026["table_name"] == "2026年"
     # 2027/2028 未预填：由用户在同步设置中自行绑定
-    assert "finished_product_anomaly_2027" not in service.QUALITY_FEISHU_ENTITY_ENV_PREFILLS
-    assert "finished_product_anomaly_2028" not in service.QUALITY_FEISHU_ENTITY_ENV_PREFILLS
+    assert (
+        "finished_product_anomaly_2027"
+        not in service.QUALITY_FEISHU_ENTITY_ENV_PREFILLS
+    )
+    assert (
+        "finished_product_anomaly_2028"
+        not in service.QUALITY_FEISHU_ENTITY_ENV_PREFILLS
+    )
 
     # 直读直写实体：默认双向开关开启（非 push-only）
     assert service._get_default_sync_directions("finished_product_anomaly_2025") == (

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -23,7 +23,7 @@ class _FakeResult:
     def __init__(self, values: list) -> None:
         self._values = values
 
-    def scalars(self) -> "_FakeResult":
+    def scalars(self) -> _FakeResult:
         return self
 
     def all(self) -> list:
@@ -67,7 +67,7 @@ def _cached_row(
             "reason": "测试依据",
         },
         status=status,
-        created_at=datetime(2026, 9, 8, tzinfo=timezone.utc),
+        created_at=datetime(2026, 9, 8, tzinfo=UTC),
     )
 
 
@@ -206,7 +206,15 @@ async def test_rate_limit_retry_then_success(
         AsyncMock(
             side_effect=[
                 LLMRateLimitError("429"),
-                {"items": [{"id": "rec-1", "product": "霉酚酸", "anomaly_type": "杂质异常"}]},
+                {
+                    "items": [
+                        {
+                            "id": "rec-1",
+                            "product": "霉酚酸",
+                            "anomaly_type": "杂质异常",
+                        }
+                    ]
+                },
             ]
         ),
     )
@@ -256,19 +264,25 @@ async def test_dashboard_aggregation_counts_product_and_type(
         return []
 
     monkeypatch.setattr(svc, "_list_year_items", _items)
-    cached_2026 = [
-        _cached_row(2026, items_2026[0], product="霉酚酸", anomaly_type="杂质异常")
-    ]
-
     async def _load(db, year, ids):
-        return {i["record_id"]: {"content_hash": "", "payload": {}, "status": "x", "created_at": None} for i in []} if year != 2026 else {
+        if year != 2026:
+            return {
+                i["record_id"]: {
+                    "content_hash": "",
+                    "payload": {},
+                    "status": "x",
+                    "created_at": None,
+                }
+                for i in []
+            }
+        return {
             "rec-1": {
                 "content_hash": svc._content_hash(
                     svc._record_snapshot(items_2026[0], 2026)
                 ),
                 "payload": {"product": "霉酚酸", "anomaly_type": "杂质异常"},
                 "status": "completed",
-                "created_at": datetime(2026, 9, 8, tzinfo=timezone.utc),
+                "created_at": datetime(2026, 9, 8, tzinfo=UTC),
             }
         }
 

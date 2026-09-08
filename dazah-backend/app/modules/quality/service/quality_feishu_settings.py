@@ -369,7 +369,8 @@ QUALITY_FEISHU_ENTITY_ENV_PREFILLS: dict[str, dict[str, str]] = {
         "table_id": "tblivbUvnYDjATiL",
         "table_name": "2025年",
         "source_note": (
-            "成品异常报告按年分表，2025 年已固定绑定飞书源表；其余年份请在同步设置中配置。"
+            "成品异常报告按年分表，2025 年已固定绑定飞书源表；"
+            "其余年份请在同步设置中配置。"
         ),
     },
     "finished_product_anomaly_2026": {
@@ -377,7 +378,8 @@ QUALITY_FEISHU_ENTITY_ENV_PREFILLS: dict[str, dict[str, str]] = {
         "table_id": "tblYanzll8A5rGro",
         "table_name": "2026年",
         "source_note": (
-            "成品异常报告按年分表，2026 年已固定绑定飞书源表；其余年份请在同步设置中配置。"
+            "成品异常报告按年分表，2026 年已固定绑定飞书源表；"
+            "其余年份请在同步设置中配置。"
         ),
     },
     # OOS/OOT 管理（复用主 Base QUALITY_FEISHU_APP_TOKEN）

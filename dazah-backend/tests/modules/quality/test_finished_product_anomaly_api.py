@@ -82,7 +82,9 @@ def _patch_success(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.mark.anyio
 async def test_invalid_year_returns_400(client: AsyncClient) -> None:
-    resp = await client.get("/api/v1/quality/finished-product-anomaly/records?year=2030")
+    resp = await client.get(
+        "/api/v1/quality/finished-product-anomaly/records?year=2030"
+    )
     assert resp.status_code == 400
     assert "不支持的成品异常报告年份" in resp.json().get("message", "")
 
@@ -134,7 +136,9 @@ async def test_records_list_success_with_mapped_fields(
             ]
         ),
     )
-    resp = await client.get("/api/v1/quality/finished-product-anomaly/records?year=2026")
+    resp = await client.get(
+        "/api/v1/quality/finished-product-anomaly/records?year=2026"
+    )
     assert resp.status_code == 200
     data = resp.json()["data"]
     assert data["table_configured"] is True
@@ -492,7 +496,9 @@ async def test_analysis_status_endpoint(
     monkeypatch.setattr(
         api_mod,
         "get_job_status",
-        AsyncMock(return_value={"state": "running", "progress": "2025 年分类进度 30/274"}),
+        AsyncMock(
+            return_value={"state": "running", "progress": "2025 年分类进度 30/274"}
+        ),
     )
     resp = await client.get(
         "/api/v1/quality/finished-product-anomaly/analysis/status?job_id=job:x"

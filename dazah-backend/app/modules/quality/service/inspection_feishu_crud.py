@@ -18,13 +18,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import AppException, NotFoundException
 from app.core.llm.exceptions import LLMConfigError
 from app.modules.quality.service import quality_feishu_sync as feishu_sync_service
+from app.modules.quality.service.feishu_attachment_preview import (
+    resolve_preview_content,
+)
 from app.modules.quality.service.inspection_finished_material import (
     FINISHED_PRODUCT_GROUP_ENTITY_MAP,
 )
 from app.modules.quality.service.inspection_helpers import _base_map, _pull_count
-from app.modules.quality.service.feishu_attachment_preview import (
-    resolve_preview_content,
-)
 from app.modules.quality.service.quality_feishu_material_groups import (
     MATERIAL_ENTITY_CODES,
 )
@@ -330,7 +330,9 @@ async def get_inspection_feishu_record(
     except RuntimeError as exc:
         # 飞书 1254043：记录不存在或已被删除（含飞书侧删除与平台删除竞态）
         if "1254043" in str(exc) or "RecordIdNotFound" in str(exc):
-            raise NotFoundException(resource="飞书记录", resource_id=str(record_id)) from exc
+            raise NotFoundException(
+                resource="飞书记录", resource_id=str(record_id)
+            ) from exc
         raise
     if not record or not record.get("record_id"):
         raise NotFoundException(resource="飞书记录", resource_id=str(record_id))

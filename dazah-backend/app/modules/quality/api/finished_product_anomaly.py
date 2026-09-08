@@ -127,7 +127,11 @@ async def api_list_anomaly_records(
     _require_user(current_user)
     return success_response(
         data=await list_bitable_feishu_records(
-            db, _anomaly_entity_code(year), keyword=keyword, page=page, page_size=page_size
+            db,
+            _anomaly_entity_code(year),
+            keyword=keyword,
+            page=page,
+            page_size=page_size,
         )
     )
 
@@ -144,7 +148,9 @@ async def api_get_anomaly_record(
 ) -> Any:
     _require_user(current_user)
     return success_response(
-        data=await get_inspection_feishu_record(db, _anomaly_entity_code(year), record_id)
+        data=await get_inspection_feishu_record(
+            db, _anomaly_entity_code(year), record_id
+        )
     )
 
 
@@ -192,7 +198,11 @@ async def api_update_anomaly_record(
     )
     return success_response(
         data=await update_inspection_feishu_record(
-            db, _anomaly_entity_code(year), record_id, body.fields, actor_user_id=user_id
+            db,
+            _anomaly_entity_code(year),
+            record_id,
+            body.fields,
+            actor_user_id=user_id,
         ),
         message="更新成功，已同步飞书",
     )
@@ -278,7 +288,9 @@ async def api_get_anomaly_attachment_content(
     summary="成品异常仪表盘聚合（按产品×异常类型，AI 分类结果关联）",
 )
 async def api_get_anomaly_dashboard(
-    year: int | None = Query(None, description="年份；不传则聚合 2025-2028 全部已配置年份"),
+    year: int | None = Query(
+        None, description="年份；不传则聚合 2025-2028 全部已配置年份"
+    ),
     current_user: CurrentUser = None,
     db: AsyncSession = Depends(get_db),
 ) -> Any:

@@ -37,16 +37,16 @@ from app.core.llm import (
 )
 from app.core.llm.config import get_config
 from app.modules.quality.models.ai_analysis_log import QualityAiAnalysisLog
-from app.modules.quality.service.inspection_feishu_crud import (
-    list_bitable_feishu_records,
-)
 from app.modules.quality.service.finished_product_anomaly_analysis_prompt import (
-    ANOMALY_TYPE_OTHER,
     ANOMALY_TYPE_OPTIONS,
-    PRODUCT_OTHER,
+    ANOMALY_TYPE_OTHER,
     PRODUCT_OPTIONS,
+    PRODUCT_OTHER,
     PRODUCT_PREFIX_HINTS,
     build_classification_prompt,
+)
+from app.modules.quality.service.inspection_feishu_crud import (
+    list_bitable_feishu_records,
 )
 
 logger = logging.getLogger(__name__)
@@ -129,7 +129,7 @@ def _canonicalize_product(text: str) -> str:
 
 
 def _product_hint(item: dict[str, Any], year: int) -> str:
-    """结构化产品线索：2026 用涉及产品字段；2025 用非空的产品附件列。结果为标准产品名。"""
+    """结构化产品线索：2026 用涉及产品字段；2025 用产品附件列。结果为标准产品名。"""
     product_field = _field_text(item.get("涉及产品"))
     if product_field:
         canonical = _canonicalize_product(product_field)
@@ -247,7 +247,7 @@ async def _call_llm_batch(
             return None, model_name, "invalid_output"
         except LLMProviderError:
             return None, model_name, "provider_error"
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return None, model_name, "timeout"
     if error_code is not None:
         return None, model_name, error_code
@@ -391,7 +391,11 @@ async def run_analysis_job(
             except AppException as exc:
                 logger.warning(
                     "成品异常分类跳过年份",
-                    extra={"module_name": "quality", "year": year, "error": exc.message},
+                    extra={
+                        "module_name": "quality",
+                        "year": year,
+                        "error": exc.message,
+                    },
                 )
                 summaries.append(
                     {
@@ -412,7 +416,9 @@ async def run_analysis_job(
     }
 
 
-async def get_dashboard_aggregation(db: AsyncSession, year: int | None) -> dict[str, Any]:
+async def get_dashboard_aggregation(
+    db: AsyncSession, year: int | None
+) -> dict[str, Any]:
     """仪表盘聚合：记录实时读飞书，分类关联本地缓存，Python 侧聚合。"""
     years = [year] if year in ANALYSIS_YEARS else list(ANALYSIS_YEARS)
     try:

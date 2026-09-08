@@ -35,7 +35,6 @@ from app.modules.quality.schemas.inspection_dashboard import (
     InspectionDashboardResponse,
     TrendAIReanalyzeRequest,
 )
-from app.modules.quality.service.inspection_dashboard_calc import reanalyze_trend_ai
 from app.modules.quality.service import (
     ensure_finished_entity_in_group,
     ensure_material_entity_in_group,
@@ -78,6 +77,7 @@ from app.modules.quality.service import (
     pull_outbounds,
     pull_repairs,
 )
+from app.modules.quality.service.inspection_dashboard_calc import reanalyze_trend_ai
 from app.shared.schemas import ApiResponseEnvelope
 
 logger = logging.getLogger(__name__)
