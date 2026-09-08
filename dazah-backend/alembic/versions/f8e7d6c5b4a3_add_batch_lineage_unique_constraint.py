@@ -1,7 +1,7 @@
 """add unique constraint on batch_lineage link pair
 
 Revision ID: f8e7d6c5b4a3
-Revises: a7c100000021
+Revises: c9d400000022
 Create Date: 2026-09-07 12:00:00.000000
 """
 
@@ -11,7 +11,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "f8e7d6c5b4a3"
-down_revision: str | None = "a7c100000021"
+down_revision: str | None = "c9d400000022"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
