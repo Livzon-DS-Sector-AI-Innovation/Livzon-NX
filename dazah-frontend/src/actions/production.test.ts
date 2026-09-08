@@ -454,7 +454,10 @@ describe('production actions', () => {
   })
 
   it('uploads a schedule excel archive with multipart body and no JSON content type', async () => {
-    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: { id: 'arc-1' } }))
+    const fetchMock = vi.fn(
+      (_input: RequestInfo | URL, _init?: RequestInit) =>
+        jsonResponse({ code: 200, data: { id: 'arc-1' } }),
+    )
     vi.stubGlobal('fetch', fetchMock)
     const formData = new FormData()
     formData.append('file', new Blob(['excel'], { type: 'application/vnd.ms-excel' }), 'plan.xlsx')
@@ -464,7 +467,7 @@ describe('production actions', () => {
       `${API_BASE}/api/v1/production/schedule-excel`,
       expect.objectContaining({ method: 'POST', body: formData }),
     )
-    const headers = fetchMock.mock.calls[0][1].headers as Record<string, string>
+    const headers = fetchMock.mock.calls[0][1]?.headers as Record<string, string>
     expect(headers.Authorization).toBe('Bearer test-token')
     expect(headers['Content-Type']).toBeUndefined()
   })
@@ -520,15 +523,18 @@ describe('production actions', () => {
   })
 
   it('marks and removes tank maintenance', async () => {
-    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: null }))
+    const fetchMock = vi.fn(
+      (_input: RequestInfo | URL, _init?: RequestInit) =>
+        jsonResponse({ code: 200, data: null }),
+    )
     vi.stubGlobal('fetch', fetchMock)
 
     await expect(markTankMaintenance('F-1', '搅拌桨检修')).resolves.toMatchObject({ code: 200 })
     const [url, init] = fetchMock.mock.calls[0]
     expect(url).toBe(`${API_BASE}/api/v1/production/tank-maintenance`)
-    expect(init.method).toBe('POST')
-    expect(JSON.parse(init.body as string)).toEqual({ tank_no: 'F-1', reason: '搅拌桨检修' })
-    expect((init.headers as Record<string, string>)['Content-Type']).toBe('application/json')
+    expect(init?.method).toBe('POST')
+    expect(JSON.parse(init?.body as string)).toEqual({ tank_no: 'F-1', reason: '搅拌桨检修' })
+    expect(((init?.headers ?? {}) as Record<string, string>)['Content-Type']).toBe('application/json')
 
     await expect(removeTankMaintenance('m-1')).resolves.toMatchObject({ code: 200 })
     expect(fetchMock).toHaveBeenLastCalledWith(
