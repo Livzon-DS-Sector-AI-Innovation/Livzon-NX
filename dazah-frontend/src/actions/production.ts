@@ -25,6 +25,7 @@ import type {
   PlanQueryParams,
   ProcessSpecQueryParams,
   ApiResponse,
+  ScheduleExcelArchive,
 } from '@/types/production'
 
 const API_BASE = process.env.API_BASE_URL || 'http://localhost:8000'
@@ -374,4 +375,74 @@ export async function deleteFermentationRecord(id: string) {
   })
   revalidatePath('/production/fermentation')
   return response
+}
+// ============ 排产计划 Excel 存档 Actions ============
+
+export async function uploadScheduleExcel(formData: FormData) {
+  const authHeaders = await getAuthHeaders()
+  // multipart boundary 必须由运行时生成，剔除通用 JSON Content-Type
+  delete authHeaders['Content-Type']
+  const response = await fetch(`${API_BASE}/api/v1/production/schedule-excel`, {
+    method: 'POST',
+    headers: authHeaders,
+    body: formData,
+  })
+  return response.json()
+}
+
+export async function getScheduleExcelArchives(page = 1, pageSize = 50) {
+  const queryString = new URLSearchParams({
+    page: String(page),
+    page_size: String(pageSize),
+  }).toString()
+  return fetchApi<ScheduleExcelArchive[]>(
+    `/api/v1/production/schedule-excel?${queryString}`,
+  )
+}
+
+export async function getScheduleExcelArchive(id: string) {
+  return fetchApi<ScheduleExcelArchive>(
+    `/api/v1/production/schedule-excel/${id}`,
+  )
+}
+
+export async function deleteScheduleExcelArchive(id: string) {
+  const response = await fetch(
+    `${API_BASE}/api/v1/production/schedule-excel/${id}`,
+    {
+      method: 'DELETE',
+      headers: await getAuthHeaders(),
+    },
+  )
+  return response.json()
+}
+
+// ============ 发酵车间看板 Actions ============
+
+export async function getFermentationBoard() {
+  const response = await fetch(
+    `${API_BASE}/api/v1/production/fermentation-board`,
+    { headers: await getAuthHeaders(), cache: 'no-store' },
+  )
+  return response.json()
+}
+
+export async function markTankMaintenance(tankNo: string, reason: string) {
+  const response = await fetch(
+    `${API_BASE}/api/v1/production/tank-maintenance`,
+    {
+      method: 'POST',
+      headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tank_no: tankNo, reason }),
+    },
+  )
+  return response.json()
+}
+
+export async function removeTankMaintenance(itemId: string) {
+  const response = await fetch(
+    `${API_BASE}/api/v1/production/tank-maintenance/${itemId}`,
+    { method: 'DELETE', headers: await getAuthHeaders() },
+  )
+  return response.json()
 }

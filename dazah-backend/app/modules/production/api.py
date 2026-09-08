@@ -1026,3 +1026,21 @@ async def delete_sales_plan_detail(
     detail.is_deleted = True
     await session.commit()
     return ApiResponse(message="删除成功")
+
+
+from app.modules.production.schedule_excel_api import (  # noqa: E402
+    router as schedule_excel_router,
+)
+
+router.include_router(
+    schedule_excel_router, tags=["生产管理 - 排产计划存档"]
+)
+
+
+from app.modules.production.fermentation_board_api import (  # noqa: E402
+    router as fermentation_board_router,
+)
+
+router.include_router(
+    fermentation_board_router, tags=["生产管理 - 发酵车间看板"]
+)

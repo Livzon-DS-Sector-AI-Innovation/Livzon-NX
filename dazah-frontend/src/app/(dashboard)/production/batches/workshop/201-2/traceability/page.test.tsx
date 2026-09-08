@@ -411,7 +411,28 @@ describe('TraceabilityPage (201-2)', () => {
     if (aiBtn) {
       await act(async () => { aiBtn.click(); await new Promise((r) => setTimeout(r, 200)) })
     }
-    expect(document.body.textContent || '').toContain('AI 分析失败，请重试')
+    expect(document.body.textContent || '').toContain('AI 服务暂不可用，请确认已配置模型后重试')
+  })
+
+  it('shows a timeout toast when the analysis stream aborts', async () => {
+    const abortMock = (url: string) => {
+      if (url.includes('ai-analysis-stream')) {
+        return Promise.reject(new DOMException('The operation was aborted.', 'AbortError'))
+      }
+      return fetchMock(url)
+    }
+    vi.stubGlobal('fetch', vi.fn(abortMock))
+    act(() => {
+      root.render(<App><TraceabilityPage /></App>)
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 100))
+    })
+    const aiBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('AI 分析')) as HTMLElement | undefined
+    if (aiBtn) {
+      await act(async () => { aiBtn.click(); await new Promise((r) => setTimeout(r, 200)) })
+    }
+    expect(document.body.textContent || '').toContain('AI 分析超时，请稍后重试')
   })
 
   it('sends a follow-up chat message and streams the assistant reply into the chat', async () => {

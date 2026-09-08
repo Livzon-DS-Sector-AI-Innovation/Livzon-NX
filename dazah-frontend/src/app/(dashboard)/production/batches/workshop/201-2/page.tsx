@@ -35,8 +35,7 @@ export default function Workshop2012Page() {
   const fetchData = useCallback(async (monthStr: string) => {
     setLoading(true)
     try {
-      const API = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'
-      const r = await fetch(`${API}/api/v1/production/mc/dashboard/summary?month=${monthStr}`)
+      const r = await fetch(`/api/v1/production/mc/dashboard/summary?month=${monthStr}`)
       const json = await r.json()
       if (json.code === 200) setData(json.data)
     } catch (e) { console.error('加载仪表盘失败', e) }
