@@ -10,9 +10,9 @@ import {
 import type { RoleItem } from "@/lib/api/client/admin"
 import type { DepartmentItem } from "@/lib/api/server/admin"
 import { getPermissionModuleName } from "@/lib/menu-config"
-import { changePageLevels, highRiskPageKeys, PAGE_DATA_SCOPE_VISIBLE, pageGrantChanges } from "@/lib/page-permission-editor"
+import { PAGE_DATA_SCOPE_VISIBLE, pageGrantChanges } from "@/lib/page-permission-editor"
 import type { ColumnsType } from "antd/es/table"
-import type { components } from "@/types/generated/schema"
+import { buildPermissionTree, changeTreePermission, filterAuthorizedTree, type PermissionTreeNode } from "./rolePagePermissionTree"
 import { PagePermissionDiff } from "@/components/shared/PagePermissionDiff"
 
 type Level = "access" | "query" | "operate"
@@ -88,7 +88,8 @@ export function RolePagePermissionsDrawer({ role, departments, open, onClose }: 
         if (next.role_id !== roleId) throw new Error("角色授权返回对象不一致，请重新加载")
         setResult(next)
         setEditable(editableState(next))
-        setExpandedKeys(highRiskPageKeys(next.definitions || []))
+        setExpandedKeys([])
+        setAuthorizedOnly(false)
         if (next.definitions?.[0]) setModuleCode(next.definitions[0].module_code)
         setReason("")
         setErrorMessage("")
@@ -101,10 +102,12 @@ export function RolePagePermissionsDrawer({ role, departments, open, onClose }: 
   const modules = useMemo(() => Array.from(new Set(
     (result?.definitions || []).map((definition) => definition.module_code),
   )), [result])
-  const definitions = (result?.definitions || []).filter(
-    (definition) => result?.role_id === role?.id && definition.module_code === moduleCode
-      && (!authorizedOnly || Boolean(editable[definition.page_key]?.permissions.length)),
-  )
+  const tree = useMemo(() => buildPermissionTree((result?.definitions || []).filter(
+    (definition) => result?.role_id === roleId && definition.module_code === moduleCode,
+  )), [result, roleId, moduleCode])
+  const definitions = authorizedOnly ? filterAuthorizedTree(tree, editable) : tree
+  const allGroupKeys = (nodes: PermissionTreeNode[]): string[] => nodes.flatMap((node) =>
+    node.children?.length ? [node.page_key, ...allGroupKeys(node.children)] : [])
   const update = (pageKey: string, patch: Partial<Grant>) => setEditable((current) => ({
     ...current, [pageKey]: { ...current[pageKey], ...patch },
   }))
@@ -191,8 +194,8 @@ export function RolePagePermissionsDrawer({ role, departments, open, onClose }: 
         onOk: inCurrentSession(() => { setLoading(true); setRefreshVersion((version) => version + 1) }),
       })}>重新加载</Button>} />}
     <ConfigProvider componentDisabled={loading || saving || result?.role_id !== roleId}>
-    <Segmented className="mb-4" value={moduleCode} onChange={(value) => setModuleCode(String(value))}
-      options={modules.map((code) => ({ value: code, label: getPermissionModuleName(code) }))} />
+    <div className="mb-4 overflow-x-auto"><Segmented value={moduleCode} onChange={(value) => setModuleCode(String(value))}
+      options={modules.map((code) => ({ value: code, label: getPermissionModuleName(code) }))} /></div>
     <Space wrap className="mb-4">
       <Checkbox checked={authorizedOnly} onChange={(event) => setAuthorizedOnly(event.target.checked)}>只看已授权页面</Checkbox>
       <Typography.Text type="secondary">当前模块内页面批量设置：</Typography.Text>
@@ -204,17 +207,38 @@ export function RolePagePermissionsDrawer({ role, departments, open, onClose }: 
         {level === 'none' ? '清空基线' : level === 'access' ? '仅访问' : level === 'query' ? '只读' : '可操作'}
       </Button>)}
     </Space>
-    <Table rowKey="page_key" dataSource={definitions} pagination={{ pageSize: 20 }} scroll={{ x: 850 }}
+    <div className="mb-3 flex flex-wrap items-center gap-3">
+      <Button size="small" onClick={() => setExpandedKeys(allGroupKeys(tree))}>展开全部菜单</Button>
+      <Button size="small" onClick={() => setExpandedKeys([])}>折叠全部菜单</Button>
+      <Typography.Text type="secondary">父级勾选或取消会递归应用到全部下级（含筛选隐藏项）；高风险动作需单独勾选。</Typography.Text>
+    </div>
+    <Table<PermissionTreeNode> rowKey="page_key" dataSource={definitions} pagination={false} size="small"
+      scroll={{ x: 720 }} locale={{ emptyText: authorizedOnly ? "当前模块没有已授权页面" : "当前模块暂无可配置页面" }}
       columns={([
-        { title: "菜单页面", dataIndex: "page_name", key: "page_name", width: 200 },
-        { title: "权限", key: "permissions", width: 260, render: (_, definition) => {
-          const state = editable[definition.page_key]
-          return <Checkbox.Group value={state?.permissions || []} onChange={(values) => {
-            const permissions = changePageLevels(state?.permissions || [], values as Level[])
-            update(definition.page_key, { permissions, sensitiveActions: permissions.includes("operate") ? state.sensitiveActions : [] })
-          }}><Space>{order.map((level) => <Checkbox key={level} value={level}>{labels[level]}</Checkbox>)}</Space></Checkbox.Group>
-        } },
-        { title: "数据范围", key: "scope", render: (_, definition) => {
+        { title: "菜单页面", key: "page_name", width: 420, render: (_, node) => <span>
+          <Typography.Text strong={Boolean(node.children?.length)}>{node.page_name}</Typography.Text>
+          {node.children?.length ? <Typography.Text type="secondary" className="ml-2">{node.pageKeys.length} 个页面</Typography.Text> : null}
+          {!!node.definition?.sensitive_actions?.length && <details className="ml-6 my-2">
+            <summary className="cursor-pointer">高风险动作（已选 {editable[node.page_key]?.sensitiveActions.length || 0}/{node.definition.sensitive_actions.length}）</summary>
+            <Checkbox.Group className="mt-2" value={editable[node.page_key]?.sensitiveActions || []}
+              onChange={(values) => update(node.page_key, {
+                sensitiveActions: values as string[],
+                permissions: values.length ? normalize(["operate"]) : editable[node.page_key]?.permissions || [],
+              })}><Space direction="vertical">{node.definition.sensitive_actions.map((action) => <Checkbox key={action.key} value={action.key}
+                title={action.description}>{action.name}</Checkbox>)}</Space></Checkbox.Group>
+          </details>}
+        </span> },
+        { title: "权限", key: "permissions", width: 280, render: (_, node) => <Space>{order.map((level) => {
+          const count = node.pageKeys.filter((key) => editable[key]?.permissions.includes(level)).length
+          return <Checkbox key={level} aria-label={`${node.page_name}：${labels[level]}`}
+            checked={count === node.pageKeys.length} indeterminate={count > 0 && count < node.pageKeys.length}
+            onChange={(event) => setEditable((current) => changeTreePermission(current, node.pageKeys, level, event.target.checked))}>
+            {labels[level]}
+          </Checkbox>
+        })}</Space> },
+        { title: "数据范围", key: "scope", render: (_, node) => {
+          const definition = node.definition
+          if (!definition) return null
           const state = editable[definition.page_key]
           return <div className="flex gap-2"><Select className="min-w-40" value={state?.scopeType}
             options={(definition.supported_scope_types || []).map((value) => ({ value, label: scopeNames[value] || value }))}
@@ -224,19 +248,9 @@ export function RolePagePermissionsDrawer({ role, departments, open, onClose }: 
                 value: department.feishu_department_id, label: department.name,
               }))} onChange={(departmentIds) => update(definition.page_key, { departmentIds })} />}</div>
         } },
-      ] satisfies ColumnsType<components['schemas']['PagePermissionDefinitionOut']>).filter((column) => PAGE_DATA_SCOPE_VISIBLE || column.key !== 'scope')}
-      expandable={{ expandedRowKeys: expandedKeys, onExpandedRowsChange: (keys) => setExpandedKeys(keys.map(String)),
-        rowExpandable: (definition) => Boolean(definition.sensitive_actions?.length), expandedRowRender: (definition) => {
-        const actions = definition.sensitive_actions || []
-        const state = editable[definition.page_key]
-        return actions.length ? <Checkbox.Group value={state?.sensitiveActions || []}
-          onChange={(values) => update(definition.page_key, {
-            sensitiveActions: values as string[],
-            permissions: values.length ? normalize([...(state?.permissions || []), "operate"]) : state?.permissions || [],
-          })}>{actions.map((action) => <Checkbox key={action.key} value={action.key}
-            title={action.description}>{action.name}</Checkbox>)}</Checkbox.Group>
-          : <Typography.Text type="secondary">此页面没有独立高风险动作。</Typography.Text>
-      } }} />
+      ] satisfies ColumnsType<PermissionTreeNode>).filter((column) => PAGE_DATA_SCOPE_VISIBLE || column.key !== 'scope')}
+      expandable={{ expandedRowKeys: expandedKeys, indentSize: 24,
+        onExpandedRowsChange: (keys) => setExpandedKeys(keys.map(String)) }} />
     </ConfigProvider>
   </Drawer>
 }

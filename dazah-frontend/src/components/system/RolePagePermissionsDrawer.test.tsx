@@ -31,7 +31,7 @@ function deferred<T>() {
   return { promise, resolve }
 }
 
-it('opens high risk actions automatically and retains hidden scope on save', async () => {
+it('collapses high risk actions and retains hidden scope on save', async () => {
   const data = result('A')
   data.definitions![0].sensitive_actions = [{ key: 'delete', name: '删除员工档案', category: 'destructive', description: '删除员工记录' }]
   data.grants = [{ page_key: 'hr:employee-management:profile', module_code: 'hr', source: 'role', permissions: ['access'],
@@ -39,6 +39,9 @@ it('opens high risk actions automatically and retains hidden scope on save', asy
   mocks.get.mockResolvedValue(data)
   mocks.replace.mockResolvedValue({ ok: true, data })
   await show('A')
+  expect(document.querySelector('details')).toBeNull()
+  await act(async () => button('展开全部菜单').click())
+  expect(document.querySelector('details')!.open).toBe(false)
   expect(document.body.textContent).toContain('删除员工档案')
   expect(document.body.textContent).not.toContain('数据范围')
   expect(document.querySelector<HTMLInputElement>('input[value="delete"]')!.checked).toBe(false)
@@ -91,6 +94,7 @@ it('disables saving during initial loading and ignores a previous role response'
   expect(button('预览并保存基线').disabled).toBe(true)
   await show('B')
   await act(async () => first.resolve(result('A')))
+  await act(async () => button('展开全部菜单').click())
   expect(document.body.textContent).toContain('员工档案B')
   expect(document.body.textContent).not.toContain('员工档案A')
 })
@@ -115,6 +119,7 @@ it('does not replace the new role state with a late save response', async () => 
   expect(mocks.replace).toHaveBeenCalledWith('A', expect.objectContaining({ expected_grant_version: 3, reason: '岗位调整' }))
   await show('B')
   await act(async () => { pending.resolve({ ok: true, data: result('A') }); await save })
+  await act(async () => button('展开全部菜单').click())
   expect(document.body.textContent).toContain('员工档案B')
   expect(button('预览并保存基线').disabled).toBe(false)
   expect(mocks.message.success).not.toHaveBeenCalled()
@@ -153,4 +158,24 @@ it('saves the current role once and clears the successful adjustment', async () 
   expect(button('只读').disabled).toBe(false)
   expect(document.querySelector<HTMLInputElement>('input[placeholder="填写角色授权调整原因"]')!.value).toBe('')
   expect(mocks.message.success).toHaveBeenCalledTimes(1)
+})
+
+it('recursively selects collapsed descendants and shows partial selection', async () => {
+  const data = result('A')
+  data.definitions!.push({ ...data.definitions![0], page_key: 'hr:employee-management:other', page_name: '其他档案' })
+  mocks.get.mockResolvedValue(data)
+  await show('A')
+  const checkbox = (label: string) => document.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!
+  await act(async () => checkbox('员工管理：查询').click())
+  await act(async () => button('展开全部菜单').click())
+  expect(checkbox('员工档案A：访问').checked).toBe(true)
+  expect(checkbox('其他档案：查询').checked).toBe(true)
+  await act(async () => checkbox('其他档案：查询').click())
+  expect(checkbox('员工管理：查询').indeterminate).toBe(true)
+  await act(async () => button('折叠全部菜单').click())
+  expect(checkbox('其他档案：查询')).toBeNull()
+  await act(async () => checkbox('员工管理：访问').click())
+  await act(async () => button('展开全部菜单').click())
+  expect(checkbox('员工档案A：查询').checked).toBe(false)
+  expect(checkbox('其他档案：访问').checked).toBe(false)
 })

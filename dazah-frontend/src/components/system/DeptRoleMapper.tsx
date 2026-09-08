@@ -1,10 +1,9 @@
 "use client"
 
 import { useState } from "react"
-import { App, Button, Form, Input, Popconfirm, Select, Table, Tag } from "antd"
-import { PlusOutlined } from "@ant-design/icons"
+import { Button, Form, Input, Select } from "antd"
 import type { DeptRuleItem, RoleItem } from "@/lib/api/client/admin"
-import { createDeptRule, deleteDeptRule } from "@/actions/admin"
+import { BatchApplyDeptRoles } from "./BatchApplyDeptRoles"
 
 interface DeptRoleMapperProps {
   initialRules: DeptRuleItem[]
@@ -12,99 +11,44 @@ interface DeptRoleMapperProps {
   initialDepartments: unknown[]
 }
 
-type RuleFormValues = {
-  role_id: string
-  feishu_department_id?: string
-  department_name?: string
-}
+type DepartmentSelection = { role_id: string; department_id?: string; department_name?: string }
 
-export function DeptRoleMapper({ initialRules, initialRoles }: DeptRoleMapperProps) {
-  const { message } = App.useApp()
-  const [rules, setRules] = useState<DeptRuleItem[]>(initialRules)
-  const [saving, setSaving] = useState(false)
-  const [form] = Form.useForm<RuleFormValues>()
+export function DeptRoleMapper({ initialRoles }: DeptRoleMapperProps) {
+  const [selection, setSelection] = useState<DepartmentSelection | null>(null)
+  const [running, setRunning] = useState(false)
+  const [form] = Form.useForm<DepartmentSelection>()
+  const role = initialRoles.find((item) => item.id === selection?.role_id)
 
-  const handleCreate = async () => {
-    const values = await form.validateFields()
-    if (!values.feishu_department_id && !values.department_name) {
-      message.error("飞书部门 ID 与部门名至少填一个")
-      return
-    }
-    setSaving(true)
-    try {
-      await createDeptRule({
+  return <div className="space-y-4">
+    <Form form={form} layout="vertical" disabled={running}
+      onValuesChange={() => setSelection(null)}
+      onFinish={(values) => setSelection({
         role_id: values.role_id,
-        feishu_department_id: values.feishu_department_id || null,
-        department_name: values.department_name || null,
-      })
-      message.success("映射规则已创建")
-      form.resetFields()
-      window.location.reload()
-    } catch (e) {
-      message.error(e instanceof Error ? e.message : "创建失败")
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const handleDelete = async (rule: DeptRuleItem) => {
-    try {
-      await deleteDeptRule(rule.id)
-      message.success("规则已删除")
-      setRules((prev) => prev.filter((r) => r.id !== rule.id))
-    } catch (e) {
-      message.error(e instanceof Error ? e.message : "删除失败")
-    }
-  }
-
-  const columns = [
-    {
-      title: "角色",
-      dataIndex: "role_name",
-      key: "role_name",
-      render: (v: string | undefined, record: DeptRuleItem) =>
-        v ? <Tag color="blue">{v}</Tag> : record.role_code ?? "-",
-    },
-    { title: "飞书部门 ID", dataIndex: "feishu_department_id", key: "feishu_department_id" },
-    { title: "部门名称", dataIndex: "department_name", key: "department_name" },
-    {
-      title: "操作",
-      key: "actions",
-      render: (_: unknown, record: DeptRuleItem) => (
-        <Popconfirm title="确认删除该映射规则？" onConfirm={() => handleDelete(record)}>
-          <Button size="small" danger>
-            删除
-          </Button>
-        </Popconfirm>
-      ),
-    },
-  ]
-
-  return (
-    <div className="space-y-4">
-      <Form form={form} layout="inline" className="flex flex-wrap gap-2">
-        <Form.Item
-          name="role_id"
-          rules={[{ required: true, message: "请选择角色" }]}
-        >
-          <Select
-            placeholder="选择角色"
-            style={{ width: 220 }}
-            options={initialRoles.map((r) => ({ value: r.id, label: `${r.name}（${r.code}）` }))}
-          />
+        department_id: values.department_id?.trim() || undefined,
+        department_name: values.department_name?.trim() || undefined,
+      })}>
+      <div className="flex flex-wrap items-start gap-3">
+        <Form.Item name="role_id" label="已有角色" rules={[{ required: true, message: "请选择角色" }]}>
+          <Select placeholder="选择角色" showSearch optionFilterProp="label" style={{ width: 240 }}
+            options={initialRoles.map((item) => ({ value: item.id, label: item.name }))} />
         </Form.Item>
-        <Form.Item name="feishu_department_id">
-          <Input placeholder="飞书部门 ID（如 od-xxx）" style={{ width: 220 }} />
+        <Form.Item name="department_id" label="飞书部门 ID" dependencies={["department_name"]} rules={[
+          { validator: (_, value: string | undefined) => value?.trim() || form.getFieldValue("department_name")?.trim()
+            ? Promise.resolve() : Promise.reject(new Error("飞书部门 ID 或部门名称至少填写一个")) },
+        ]}>
+          <Input placeholder="输入飞书部门 ID" maxLength={255} style={{ width: 240 }} />
         </Form.Item>
-        <Form.Item name="department_name">
-          <Input placeholder="部门名称（如 质量管理部）" style={{ width: 220 }} />
+        <Form.Item name="department_name" label="部门名称">
+          <Input placeholder="输入部门名称" maxLength={255} style={{ width: 240 }} />
         </Form.Item>
-        <Button type="primary" icon={<PlusOutlined />} loading={saving} onClick={handleCreate}>
-          新增规则
-        </Button>
-      </Form>
-
-      <Table rowKey="id" columns={columns} dataSource={rules} pagination={false} size="middle" />
-    </div>
-  )
+        <Form.Item label={<span aria-hidden="true">&nbsp;</span>} colon={false}>
+          <Button htmlType="submit" disabled={running}>查询部门用户</Button>
+        </Form.Item>
+      </div>
+    </Form>
+    {selection && role && <BatchApplyDeptRoles
+      key={JSON.stringify(selection)} role={role}
+      departmentId={selection.department_id} departmentName={selection.department_name}
+      onRunningChange={setRunning} />}
+  </div>
 }
