@@ -8,5 +8,21 @@ CLAUDE.md       @ddlllooo
 /.github/      @ddlllooo
 /.ci/          @ddlllooo
 
+# Protect Docker build and Compose files at every directory level.
+Dockerfile*          @ddlllooo
+*.Dockerfile         @ddlllooo
+*.dockerignore       @ddlllooo
+compose*.yml         @ddlllooo
+compose*.yaml        @ddlllooo
+docker-compose*.yml  @ddlllooo
+docker-compose*.yaml @ddlllooo
+
+# Protect container deployment templates and build/start/deploy entry points.
+/deploy/                             @ddlllooo
+/scripts/deploy-production.ps1       @ddlllooo
+/scripts/deploy-production-remote.sh @ddlllooo
+/scripts/dev.ps1                     @ddlllooo
+/scripts/dev-native.ps1              @ddlllooo
+
 # Protect the entire Hermes-Lite subproject.
 /Hermes-Lite/  @ddlllooo
